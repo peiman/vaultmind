@@ -27,6 +27,9 @@ const (
 	KeyAppCheckTiming           = "app.check.timing"            // Show duration for each check in the output
 	KeyAppIndexVault            = "app.index.vault"             // Path to the vault root directory
 	KeyAppIndexJson             = "app.index.json"              // Output in JSON format
+	KeyAppNoteVault             = "app.note.vault"              // Path to vault root
+	KeyAppNoteJson              = "app.note.json"               // Output in JSON format
+	KeyAppNoteFrontmatterOnly   = "app.note.frontmatter_only"   // Omit body, headings, blocks
 	KeyAppPingOutputMessage     = "app.ping.output_message"     // Default message to display for the ping command
 	KeyAppPingOutputColor       = "app.ping.output_color"       // Text color for ping command output (white, red, green, blue, cyan, yellow, ma...
 	KeyAppPingUi                = "app.ping.ui"                 // Enable interactive UI for the ping command

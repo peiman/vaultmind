@@ -90,3 +90,43 @@ func TestQueryNotesByAlias_Normalized(t *testing.T) {
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(rows), 1)
 }
+
+func TestQueryFullNote_Found(t *testing.T) {
+	db := rebuildAndOpenDB(t)
+
+	note, err := db.QueryFullNote("concept-act-r")
+	require.NoError(t, err)
+	require.NotNil(t, note)
+	assert.Equal(t, "concept-act-r", note.ID)
+	assert.Equal(t, "concept", note.Type)
+	assert.Equal(t, "ACT-R", note.Title)
+	assert.NotEmpty(t, note.Body)
+	assert.True(t, note.IsDomain)
+}
+
+func TestQueryFullNote_WithHeadings(t *testing.T) {
+	db := rebuildAndOpenDB(t)
+
+	note, err := db.QueryFullNote("concept-act-r")
+	require.NoError(t, err)
+	require.NotNil(t, note)
+	assert.NotEmpty(t, note.Headings)
+}
+
+func TestQueryFullNote_WithFrontmatter(t *testing.T) {
+	db := rebuildAndOpenDB(t)
+
+	note, err := db.QueryFullNote("concept-act-r")
+	require.NoError(t, err)
+	require.NotNil(t, note)
+	assert.NotEmpty(t, note.Aliases)
+	assert.NotEmpty(t, note.Tags)
+}
+
+func TestQueryFullNote_NotFound(t *testing.T) {
+	db := rebuildAndOpenDB(t)
+
+	note, err := db.QueryFullNote("nonexistent")
+	require.NoError(t, err)
+	assert.Nil(t, note)
+}
