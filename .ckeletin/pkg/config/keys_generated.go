@@ -27,6 +27,9 @@ const (
 	KeyAppCheckTiming           = "app.check.timing"            // Show duration for each check in the output
 	KeyAppIndexVault            = "app.index.vault"             // Path to the vault root directory
 	KeyAppIndexJson             = "app.index.json"              // Output in JSON format
+	KeyAppLinksVault            = "app.links.vault"             // Path to vault root
+	KeyAppLinksJson             = "app.links.json"              // Output in JSON format
+	KeyAppLinksEdgeType         = "app.links.edge_type"         // Filter by edge type
 	KeyAppNoteVault             = "app.note.vault"              // Path to vault root
 	KeyAppNoteJson              = "app.note.json"               // Output in JSON format
 	KeyAppNoteFrontmatterOnly   = "app.note.frontmatter_only"   // Omit body, headings, blocks
