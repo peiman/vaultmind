@@ -68,6 +68,9 @@ bench-results.txt
 bench-old.txt
 bench-new.txt
 
+# Git worktrees
+.worktrees/
+
 # Aider
 .aider*
 
