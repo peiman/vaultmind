@@ -8,7 +8,9 @@ import (
 )
 
 // Core fields required on all domain notes.
-var coreFields = []string{"id", "type", "created", "vm_updated"}
+// `updated` is human/Obsidian-managed, `vm_updated` is VaultMind-managed.
+// Both are recognized as core fields.
+var coreFields = []string{"id", "type", "created", "updated", "vm_updated"}
 
 // Graph-tier fields recognized on any type.
 var graphFields = []string{"title", "status", "aliases", "tags", "parent_id", "related_ids", "source_ids"}
