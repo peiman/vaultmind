@@ -25,6 +25,8 @@ const (
 	KeyAppCheckParallel         = "app.check.parallel"          // Run checks within each category in parallel (disable with --parallel=false)
 	KeyAppCheckCategory         = "app.check.category"          // Filter to specific categories (comma-separated: environment,quality,architect...
 	KeyAppCheckTiming           = "app.check.timing"            // Show duration for each check in the output
+	KeyAppDoctorVault           = "app.doctor.vault"            // Path to vault root
+	KeyAppDoctorJson            = "app.doctor.json"             // Output in JSON format
 	KeyAppIndexVault            = "app.index.vault"             // Path to the vault root directory
 	KeyAppIndexJson             = "app.index.json"              // Output in JSON format
 	KeyAppLinksVault            = "app.links.vault"             // Path to vault root
