@@ -24,14 +24,14 @@ func ExtractFrontmatter(content []byte) (fm map[string]interface{}, body string,
 		return nil, s, nil
 	}
 
-	// Find the closing delimiter
+	// Find the closing delimiter — must be "---" on its own line
 	rest := s[len(frontmatterDelimiter):]
-	closeIdx := strings.Index(rest, "\n"+frontmatterDelimiter)
+	closeIdx := findClosingDelimiter(rest)
 	if closeIdx < 0 {
 		return nil, s, nil
 	}
 
-	yamlBlock := rest[1 : closeIdx+1]
+	yamlBlock := rest[1 : closeIdx+1] // skip leading \n, up to closing ---
 	afterClose := rest[closeIdx+1+len(frontmatterDelimiter):]
 
 	body = strings.TrimPrefix(afterClose, "\r\n")
@@ -47,6 +47,33 @@ func ExtractFrontmatter(content []byte) (fm map[string]interface{}, body string,
 	}
 
 	return parsed, body, nil
+}
+
+// findClosingDelimiter searches for "\n---" that is a standalone line
+// (followed by \n, \r\n, or end of string). Returns the index of the \n
+// before --- in rest, or -1 if not found.
+func findClosingDelimiter(rest string) int {
+	searchFrom := 0
+	for {
+		idx := strings.Index(rest[searchFrom:], "\n"+frontmatterDelimiter)
+		if idx < 0 {
+			return -1
+		}
+		absIdx := searchFrom + idx
+		afterDashes := absIdx + 1 + len(frontmatterDelimiter)
+
+		// Check what follows "---": must be \n, \r\n, or end of string
+		if afterDashes >= len(rest) {
+			return absIdx // --- at end of string
+		}
+		ch := rest[afterDashes]
+		if ch == '\n' || ch == '\r' {
+			return absIdx
+		}
+
+		// Not a standalone line — keep searching
+		searchFrom = absIdx + 1
+	}
 }
 
 // ClassifyNote determines whether a note is a domain note (has both id and type

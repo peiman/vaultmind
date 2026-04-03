@@ -139,6 +139,30 @@ func TestClassifyNote_EmptyStringID(t *testing.T) {
 	assert.Empty(t, noteType)
 }
 
+func TestExtractFrontmatter_DashesInValue(t *testing.T) {
+	// B1 regression: "---more stuff" should NOT close frontmatter
+	input := []byte("---\nid: test\nvalue: ---more stuff\n---\n\nBody here.")
+
+	fm, body, err := parser.ExtractFrontmatter(input)
+	require.NoError(t, err)
+
+	assert.Equal(t, "test", fm["id"])
+	assert.Equal(t, "---more stuff", fm["value"])
+	assert.Contains(t, body, "Body here.")
+}
+
+func TestExtractFrontmatter_FourDashesNotDelimiter(t *testing.T) {
+	// "----" (four dashes) should NOT close frontmatter — the real close is the "---" after
+	input := []byte("---\nid: test\ntitle: My Note\n---\n\n----\n\nBody with horizontal rule.")
+
+	fm, body, err := parser.ExtractFrontmatter(input)
+	require.NoError(t, err)
+
+	assert.Equal(t, "test", fm["id"])
+	assert.Contains(t, body, "----")
+	assert.Contains(t, body, "Body with horizontal rule.")
+}
+
 func TestExtractFrontmatter_RealVaultNote(t *testing.T) {
 	input := []byte("---\nid: concept-act-r\ntype: concept\ntitle: ACT-R\ncreated: 2026-04-03\nvm_updated: 2026-04-03\naliases:\n  - Adaptive Control of Thought-Rational\n  - ACT-R Architecture\ntags:\n  - cognitive-science\n  - cognitive-architecture\nrelated_ids:\n  - concept-spreading-activation\n  - concept-forgetting-curve\nsource_ids:\n  - source-anderson-1983\n---\n\n## Overview\n\nACT-R is a cognitive architecture.\n\n## Connections\n\nSee [[Context Pack]] and [[Spreading Activation]].")
 

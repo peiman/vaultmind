@@ -98,6 +98,17 @@ func TestExtractLinks_MultipleLinksOnOneLine(t *testing.T) {
 	assert.Equal(t, "Spreading Activation", links[1].Target)
 }
 
+func TestExtractLinks_ConsecutiveWikilinks(t *testing.T) {
+	// B2 regression: [[A]][[B]] must extract both links
+	body := "[[A]][[B]][[C]]"
+	links := parser.ExtractLinks(body)
+
+	require.Len(t, links, 3)
+	assert.Equal(t, "A", links[0].Target)
+	assert.Equal(t, "B", links[1].Target)
+	assert.Equal(t, "C", links[2].Target)
+}
+
 func TestExtractLinks_LinksInCodeBlocksSkipped(t *testing.T) {
 	body := "Normal [[Linked Note]] is extracted.\n" +
 		"```\n[[Code Block Link]] is NOT extracted.\n```\n" +

@@ -49,7 +49,15 @@ func TestParse_UnstructuredNote(t *testing.T) {
 
 	assert.False(t, note.IsDomain)
 	assert.Empty(t, note.ID)
-	assert.Greater(t, len(note.Links), 0)
+	assert.Empty(t, note.NoteType)
+	assert.Empty(t, note.Frontmatter)
+
+	targets := make([]string, len(note.Links))
+	for i, l := range note.Links {
+		targets[i] = l.Target
+	}
+	assert.Contains(t, targets, "create a link")
+	assert.Contains(t, targets, "https://help.obsidian.md/Plugins/Importer")
 }
 
 func TestParse_NoteWithIDButNoType(t *testing.T) {
@@ -59,6 +67,16 @@ func TestParse_NoteWithIDButNoType(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, note.IsDomain)
 	assert.Empty(t, note.ID)
+}
+
+func TestParse_NoteWithTypeButNoID(t *testing.T) {
+	content := []byte("---\ntype: project\ntitle: No ID Project\n---\n\nThis note has a type but no id.")
+
+	note, err := parser.Parse(content)
+	require.NoError(t, err)
+	assert.False(t, note.IsDomain)
+	assert.Empty(t, note.ID)
+	assert.Empty(t, note.NoteType)
 }
 
 func TestParse_InvalidFrontmatter(t *testing.T) {
@@ -103,6 +121,33 @@ func TestParse_RealVaultConceptNote(t *testing.T) {
 	assert.Contains(t, targets, "Spreading Activation")
 	assert.Contains(t, note.FTSBody, "cognitive architecture")
 	assert.NotContains(t, note.FTSBody, "[[")
+}
+
+func TestParse_RealVaultProjectNote(t *testing.T) {
+	content, err := os.ReadFile("../../vaultmind-vault/projects/proj-memory-research.md")
+	require.NoError(t, err)
+
+	note, err := parser.Parse(content)
+	require.NoError(t, err)
+
+	assert.True(t, note.IsDomain)
+	assert.Equal(t, "proj-memory-research", note.ID)
+	assert.Equal(t, "project", note.NoteType)
+	assert.Greater(t, len(note.Links), 5)
+}
+
+func TestParse_RealVaultDecisionNote(t *testing.T) {
+	content, err := os.ReadFile("../../vaultmind-vault/decisions/decision-bfs-with-visited-set.md")
+	require.NoError(t, err)
+
+	note, err := parser.Parse(content)
+	require.NoError(t, err)
+
+	assert.True(t, note.IsDomain)
+	assert.Equal(t, "decision-bfs-with-visited-set", note.ID)
+	assert.Equal(t, "decision", note.NoteType)
+	assert.GreaterOrEqual(t, len(note.Headings), 3)
+	assert.NotContains(t, note.FTSBody, "id:")
 }
 
 func TestParse_RealVaultAllNotes(t *testing.T) {

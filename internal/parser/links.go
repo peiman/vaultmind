@@ -37,8 +37,10 @@ type ExtractedLink struct {
 }
 
 var (
-	reEmbed     = regexp.MustCompile(`!\[\[([^\[\]]+)\]\]`)
-	reWikilink  = regexp.MustCompile(`(?:^|[^!])\[\[([^\[\]]+)\]\]`)
+	reEmbed = regexp.MustCompile(`!\[\[([^\[\]]+)\]\]`)
+	// Wikilinks: [[...]] — embeds are already stripped before this regex runs,
+	// so no need for the [^!] guard that dropped consecutive links like [[A]][[B]].
+	reWikilink  = regexp.MustCompile(`\[\[([^\[\]]+)\]\]`)
 	reMarkdown  = regexp.MustCompile(`\[([^\[\]]+)\]\(([^)]+)\)`)
 	reCodeFence = regexp.MustCompile("^```")
 )
