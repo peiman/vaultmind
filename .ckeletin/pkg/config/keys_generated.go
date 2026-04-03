@@ -30,4 +30,6 @@ const (
 	KeyAppPingOutputMessage     = "app.ping.output_message"     // Default message to display for the ping command
 	KeyAppPingOutputColor       = "app.ping.output_color"       // Text color for ping command output (white, red, green, blue, cyan, yellow, ma...
 	KeyAppPingUi                = "app.ping.ui"                 // Enable interactive UI for the ping command
+	KeyAppResolveVault          = "app.resolve.vault"           // Path to the vault root directory
+	KeyAppResolveJson           = "app.resolve.json"            // Output in JSON format
 )
