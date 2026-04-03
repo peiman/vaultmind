@@ -1,0 +1,44 @@
+# .lefthook.yml
+#
+# ============================================================================
+# OWNERSHIP MODEL (Framework Separation)
+# ============================================================================
+#
+# This file EXTENDS the framework's base hooks configuration.
+# Framework hooks are in: .ckeletin/configs/lefthook.base.yml
+#
+# FRAMEWORK-MANAGED (via extends):
+#   - Standard quality checks (format, lint, test, secrets, vuln)
+#   - Pre-commit and pre-push hook structure
+#
+# PROJECT CUSTOMIZATION:
+#   - Add project-specific hooks below the extends
+#   - Override framework hooks by redefining them here
+#   - Add new hook types (e.g., commit-msg)
+#
+# When running `task ckeletin:update`:
+# - Framework hooks (.ckeletin/configs/lefthook.base.yml) are automatically updated
+# - This file is NOT updated (project customizations preserved)
+#
+# Use `lefthook dump` to see the merged configuration.
+#
+# ============================================================================
+
+# Extend framework base hooks
+extends:
+  - .ckeletin/configs/lefthook.base.yml
+
+# Project-specific hooks (add below)
+commit-msg:
+  commands:
+    conventional-commit:
+      run: |
+        MSG=$(head -1 {1})
+        if ! echo "$MSG" | grep -qE '^(feat|fix|docs|test|refactor|style|perf|build|ci|chore)(\(.+\))?: .+'; then
+          echo "❌ Commit message must follow Conventional Commits format:"
+          echo "   <type>[optional scope]: <description>"
+          echo ""
+          echo "   Types: feat, fix, docs, test, refactor, style, perf, build, ci, chore"
+          echo "   Your message: $MSG"
+          exit 1
+        fi

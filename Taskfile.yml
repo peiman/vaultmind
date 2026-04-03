@@ -1,0 +1,390 @@
+# Taskfile.yml - Project tasks
+# This file includes the ckeletin framework and adds project-specific tasks.
+version: '3'
+
+vars:
+  # Project configuration - customize these for your CLI
+  BINARY_NAME: vaultmind
+  MODULE_PATH:
+    sh: go list -m
+
+includes:
+  ckeletin:
+    taskfile: .ckeletin/Taskfile.yml
+    vars:
+      BINARY_NAME: '{{.BINARY_NAME}}'
+      MODULE_PATH: '{{.MODULE_PATH}}'
+
+tasks:
+  default:
+    cmds:
+      - task --list
+    silent: true
+
+  # === Convenience Aliases ===
+  # These let you run `task check` instead of `task ckeletin:check`
+
+  setup:
+    desc: Install development tools
+    cmds: [task: ckeletin:setup]
+
+  setup:pinned:
+    desc: Install pinned dev tools (cacheable in CI)
+    cmds: [task: ckeletin:setup:pinned]
+
+  setup:latest:
+    desc: Install @latest tools (security tools, always fresh)
+    cmds: [task: ckeletin:setup:latest]
+
+  doctor:
+    desc: Check development environment
+    cmds: [task: ckeletin:doctor]
+
+  ckeletin-version:
+    desc: Show ckeletin framework version
+    cmds: [task: ckeletin:version]
+
+  format:
+    desc: Format all Go code
+    cmds: [task: ckeletin:format]
+
+  lint:
+    desc: Run all linters
+    cmds: [task: ckeletin:lint]
+
+  test:
+    desc: Run tests with coverage
+    cmds: [task: ckeletin:test]
+
+  build:
+    desc: Build the binary
+    cmds: [task: ckeletin:build]
+
+  check:
+    desc: Run all quality checks
+    cmds: [task: ckeletin:check]
+
+  check:fast:
+    desc: Run fast quality checks
+    cmds: [task: ckeletin:check:fast]
+
+  check:deps:
+    desc: Run all dependency checks
+    cmds: [task: ckeletin:check:deps]
+
+  check:deps:checksum:
+    desc: Verify go.sum checksums against checksum database
+    cmds: [task: ckeletin:check:deps:checksum]
+
+  check:deps:outdated:
+    desc: Check for outdated dependencies
+    cmds: [task: ckeletin:check:deps:outdated]
+
+  check:license:
+    desc: Check all license compliance
+    cmds: [task: ckeletin:check:license]
+
+  check:license:source:
+    desc: Check dependency licenses from source (fast, for development)
+    cmds: [task: ckeletin:check:license:source]
+
+  check:license:binary:
+    desc: Check licenses in compiled binary (accurate, for releases)
+    cmds: [task: ckeletin:check:license:binary]
+
+  check:release:
+    desc: Check if GoReleaser is installed
+    cmds: [task: ckeletin:check:release]
+
+  check:sast:
+    desc: Run static analysis (SAST) with semgrep
+    cmds: [task: ckeletin:check:sast]
+
+  check:sast:full:
+    desc: Run full SAST with registry rules (requires network)
+    cmds: [task: ckeletin:check:sast:full]
+
+  check:sbom:vulns:
+    desc: Scan SBOM for vulnerabilities using grype
+    cmds: [task: ckeletin:check:sbom:vulns]
+
+  check:secrets:
+    desc: Scan for hardcoded secrets (full repository scan)
+    cmds: [task: ckeletin:check:secrets]
+
+  check:tools:installed:
+    desc: Check that required development tools are installed
+    cmds: [task: ckeletin:check:tools:installed]
+
+  check:vuln:
+    desc: Check for vulnerabilities
+    cmds: [task: ckeletin:check:vuln]
+
+  tidy:
+    desc: Ensure go.mod and go.sum are up to date
+    cmds: [task: ckeletin:tidy]
+
+  run:
+    desc: Run the application
+    cmds: [task: ckeletin:run]
+
+  install:
+    desc: Install the application
+    cmds: [task: ckeletin:install]
+
+  clean:
+    desc: Clean all artifacts
+    cmds: [task: ckeletin:clean]
+
+  clean:local:
+    desc: Clean local build artifacts
+    cmds: [task: ckeletin:clean:local]
+
+  clean:release:
+    desc: Clean GoReleaser artifacts
+    cmds: [task: ckeletin:clean:release]
+
+  # === Validate Aliases ===
+
+  validate:constants:
+    desc: Validate config constants are in sync with registry
+    cmds: [task: ckeletin:validate:constants]
+
+  validate:commands:
+    desc: Validate command files follow ultra-thin patterns
+    cmds: [task: ckeletin:validate:commands]
+
+  validate:defaults:
+    desc: Validate no unauthorized viper.SetDefault() calls
+    cmds: [task: ckeletin:validate:defaults]
+
+  validate:layering:
+    desc: Validate 4-layer architecture dependency rules
+    cmds: [task: ckeletin:validate:layering]
+
+  validate:security:
+    desc: Validate security patterns
+    cmds: [task: ckeletin:validate:security]
+
+  validate:architecture:
+    desc: Validate architecture documentation follows SSOT pattern
+    cmds: [task: ckeletin:validate:architecture]
+
+  validate:package-organization:
+    desc: Validate package organization follows CLI-first strategy
+    cmds: [task: ckeletin:validate:package-organization]
+
+  validate:config-consumption:
+    desc: Validate type-safe config consumption pattern
+    cmds: [task: ckeletin:validate:config-consumption]
+
+  validate:output:
+    desc: Validate output patterns
+    cmds: [task: ckeletin:validate:output]
+
+  validate:task-naming:
+    desc: Validate task names follow action:target pattern
+    cmds: [task: ckeletin:validate:task-naming]
+
+  # === Hook Aliases (used by .lefthook.yml) ===
+
+  format:staged:
+    cmds: [task: ckeletin:format:staged]
+
+  check:deps:verify:
+    cmds: [task: ckeletin:check:deps:verify]
+
+  check:secrets:staged:
+    cmds: [task: ckeletin:check:secrets:staged]
+
+  check:vuln:fast:
+    cmds: [task: ckeletin:check:vuln:fast]
+
+  test:coverage:
+    cmds: [task: ckeletin:test:coverage]
+
+  test:unit:
+    desc: Run unit tests only (fast, skips integration tests)
+    cmds: [task: ckeletin:test:unit]
+
+  test:race:
+    desc: Run tests with race detection
+    cmds: [task: ckeletin:test:race]
+
+  test:dev:
+    desc: Run tests with dev commands
+    cmds: [task: ckeletin:test:dev]
+
+  test:prod:
+    desc: Run tests without dev commands
+    cmds: [task: ckeletin:test:prod]
+
+  test:integration:
+    desc: Run integration tests
+    cmds: [task: ckeletin:test:integration]
+
+  test:golden:
+    desc: Test CLI output against golden files
+    cmds: [task: ckeletin:test:golden]
+
+  test:golden:update:
+    desc: Update golden files (review changes before committing!)
+    cmds: [task: ckeletin:test:golden:update]
+
+  test:full:
+    desc: Run all tests with both race detection and coverage
+    cmds: [task: ckeletin:test:full]
+
+  test:watch:
+    desc: Run tests in watch mode
+    cmds: [task: ckeletin:test:watch]
+
+  test:fuzz:
+    desc: Run all fuzz tests (default 10s per function)
+    cmds: [task: ckeletin:test:fuzz]
+
+  test:release:
+    desc: Test GoReleaser configuration (snapshot build, no release)
+    cmds: [task: ckeletin:test:release]
+
+  test:coverage:html:
+    desc: Generate HTML coverage report and open in browser
+    cmds: [task: ckeletin:test:coverage:html]
+
+  build:dev:
+    desc: Build the binary with dev commands
+    cmds: [task: ckeletin:build:dev]
+
+  build:prod:
+    desc: Build production binary without dev commands
+    cmds: [task: ckeletin:build:prod]
+
+  build:release:
+    desc: Build release artifacts locally (requires git tag)
+    cmds: [task: ckeletin:build:release]
+
+  # === Bench Aliases ===
+
+  bench:
+    desc: Run all benchmarks
+    cmds: [task: ckeletin:bench]
+
+  # === Generate Aliases ===
+
+  generate:config:key-constants:
+    desc: Generate type-safe config key constants
+    cmds: [task: ckeletin:generate:config:key-constants]
+
+  generate:license:
+    desc: Generate all license artifacts
+    cmds: [task: ckeletin:generate:license]
+
+  generate:license:report:
+    desc: Generate license report (CSV format)
+    cmds: [task: ckeletin:generate:license:report]
+
+  generate:license:files:
+    desc: Save license files to third_party/ for distribution
+    cmds: [task: ckeletin:generate:license:files]
+
+  generate:attribution:
+    desc: Generate NOTICE file with attribution
+    cmds: [task: ckeletin:generate:attribution]
+
+  generate:sbom:
+    desc: Generate SBOM in both SPDX and CycloneDX formats
+    cmds: [task: ckeletin:generate:sbom]
+
+  # === Framework Update ===
+
+  ckeletin-health:
+    desc: Check framework health and update status
+    cmds: [task: ckeletin:health]
+
+  ckeletin-update-dry-run:
+    desc: Preview framework update without applying
+    cmds: [task: ckeletin:update:dry-run]
+
+  ckeletin-update-check:
+    desc: Check if latest framework update is compatible
+    cmds: [task: ckeletin:update:check-compatibility]
+
+  # === Project-Specific Tasks ===
+
+  init:
+    desc: Initialize scaffold with custom name and module
+    summary: |
+      Automates scaffold customization by updating module path and binary name
+      throughout the codebase. This is the first command you run after cloning.
+
+      Usage:
+        task init name=<name> module=<module>
+
+      Example:
+        task init name=myapp module=github.com/myuser/myapp
+    vars:
+      NAME: "{{.name}}"
+      MODULE: "{{.module}}"
+      OLD_MODULE: "github.com/peiman/ckeletin-go"
+      OLD_NAME: "ckeletin-go"
+    preconditions:
+      - sh: '[ -n "{{.NAME}}" ]'
+        msg: "Binary name is required. Usage: task init name=<name> module=<module>"
+      - sh: '[ -n "{{.MODULE}}" ]'
+        msg: "Module path is required. Usage: task init name=<name> module=<module>"
+      - sh: '[ "{{.MODULE}}" != "{{.OLD_MODULE}}" ]'
+        msg: "Module path must be different from {{.OLD_MODULE}}"
+    cmds:
+      - echo "🚀 Initializing scaffold..."
+      - go run ./.ckeletin/scripts/scaffold/ "{{.OLD_MODULE}}" "{{.MODULE}}" "{{.OLD_NAME}}" "{{.NAME}}"
+      - go mod tidy
+      - |
+        # Create initial version tag for clean --version output
+        if ! git tag | grep -q "^v"; then
+          git tag -a v0.0.0 -m "Initial version"
+          echo "  ✓ Created initial version tag v0.0.0"
+        fi
+      - echo ""
+      - echo "✅ Scaffold initialized successfully!"
+      - echo "   Binary{{":"}} {{.NAME}}"
+      - echo "   Module{{":"}} {{.MODULE}}"
+      - echo "   Version{{":"}} v0.0.0"
+      - echo ""
+      - echo "Next steps{{":"}}"
+      - echo "  1. Format code{{":"}} task format"
+      - echo "  2. Review changes{{":"}} git diff"
+      - echo "  3. Run quality checks{{":"}} task check"
+      - echo "  4. Build binary{{":"}} task build"
+      - echo "  5. Test binary{{":"}} ./{{.NAME}} --version"
+
+  generate:command:
+    desc: Generate a new command with full pattern (cmd + internal + tests + config)
+    cmds:
+      - go run ./.ckeletin/scripts/generate-command/ {{.CLI_ARGS}}
+      - task: generate:config:key-constants
+      - task: format
+
+  generate:docs:config:
+    desc: Generate configuration documentation
+    cmds:
+      - echo "Generating configuration documentation..."
+      - mkdir -p docs
+      - ./{{.BINARY_NAME}} docs config --output=docs/configuration.md
+      - echo "Configuration documentation saved to docs/configuration.md"
+    deps: [build]
+
+  generate:config:template:
+    desc: Generate YAML configuration template
+    cmds:
+      - echo "Generating YAML configuration template..."
+      - mkdir -p docs
+      - ./{{.BINARY_NAME}} docs config --format=yaml --output=docs/config-template.yaml
+      - echo "YAML template saved to docs/config-template.yaml"
+    deps: [build]
+
+  generate:docs:
+    desc: Generate all documentation
+    cmds:
+      - task: generate:docs:config
+      - task: generate:config:template
+    silent: true

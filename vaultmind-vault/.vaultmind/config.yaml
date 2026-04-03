@@ -1,0 +1,50 @@
+vault:
+  exclude:
+    - ".git"
+    - ".obsidian"
+    - ".trash"
+    - ".vaultmind"
+    - "templates"
+
+types:
+  concept:
+    required: [title]
+    optional: [aliases, tags, related_ids, source_ids, parent_id]
+    statuses: []
+    template: templates/concept.md
+  source:
+    required: [title, url]
+    optional: [aliases, tags, related_ids]
+    statuses: []
+    template: templates/source.md
+  person:
+    required: [title]
+    optional: [aliases, tags, related_ids, url]
+    statuses: []
+    template: templates/person.md
+  project:
+    required: [status, title]
+    optional: [owner_id, due, area, tags, aliases, related_ids, source_ids]
+    statuses: [active, paused, completed, cancelled]
+    template: templates/project.md
+  decision:
+    required: [title, status]
+    optional: [related_ids, source_ids, tags]
+    statuses: [proposed, accepted, rejected, superseded]
+    template: templates/decision.md
+
+git:
+  policy:
+    dirty_unrelated: warn
+    dirty_target: refuse
+    detached_head: warn
+    merge_in_progress: refuse
+    no_repo: warn
+
+index:
+  db_path: .vaultmind/index.db
+
+memory:
+  alias_min_length: 3
+  tag_overlap_threshold: 1.0
+  context_pack_default_budget: 4096

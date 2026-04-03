@@ -1,0 +1,340 @@
+# ADR-010: Package Organization Strategy
+
+## Status
+Accepted
+
+## Context
+
+### The Problem: Where Should Code Live?
+
+Go projects have flexibility in how they organize packages, particularly around:
+- **`pkg/`** - Traditionally for public APIs meant to be imported by external projects
+- **`internal/`** - Private packages that cannot be imported externally
+- **`cmd/`** - Command-line applications
+- **Root directory** - Where application entry points live
+
+This flexibility creates questions:
+- Should we expose a public API via `pkg/`?
+- Where do we draw the boundary between public and private?
+- How do we communicate project intent through structure?
+- What prevents accidental API surface expansion?
+
+### Why This Matters for ckeletin-go
+
+**ckeletin-go is a production-ready Go CLI scaffold powered by an updatable framework layer.** It is primarily a CLI tool, but it also hosts public reusable packages in `pkg/` (e.g., `checkmate` for beautiful terminal output). This dual nature should be:
+1. **Visible** - Structure shows "CLI-first, with optional public packages"
+2. **Enforced** - `pkg/` packages must be standalone (no `internal/` imports)
+3. **Documented** - Clear criteria for what belongs in `pkg/`
+4. **Validated** - Automated checks enforce boundaries
+
+Without clear organization:
+- Business logic might leak into root directory
+- `pkg/` packages might depend on `internal/`, breaking standalone reusability
+- Framework code (`.ckeletin/`) might get mixed with project code
+- New developers won't know where code belongs
+
+### Alternatives Considered
+
+**1. Traditional Go Project Layout (cmd/, pkg/, internal/)**
+```
+project/
+├── cmd/           # CLI applications
+├── pkg/           # Public library code
+└── internal/      # Private implementation
+```
+- **Pros**: Well-known pattern, supports both CLI and library
+- **Cons**: Maintenance burden for public API packages
+- **Why chosen**: ckeletin-go is CLI-first but also provides public packages (e.g., `pkg/checkmate/`). This layout matches our actual use case.
+
+**2. Library-First Layout (pkg/, cmd/ optional)**
+```
+project/
+├── pkg/           # Primary public API
+├── internal/      # Private helpers
+└── cmd/           # Optional CLI wrapper
+```
+- **Pros**: Clear library intent, common for SDK projects
+- **Cons**: Wrong signal - we're a CLI tool first
+- **Why not**: Inverts our actual priority (CLI is the product)
+
+**3. Flat Structure (everything at root)**
+```
+project/
+├── command1.go
+├── command2.go
+└── utils.go
+```
+- **Pros**: Simple, no directory overhead
+- **Cons**: Scales poorly, no boundaries, everything public
+- **Why not**: Doesn't scale, exposes everything
+
+**4. Monorepo Style (apps/, libs/, packages/)**
+```
+project/
+├── apps/ckeletin/     # CLI application
+├── libs/config/       # Shared libraries
+└── packages/utils/    # Common utilities
+```
+- **Pros**: Supports multiple apps, clear separation
+- **Cons**: Overkill for single CLI, encourages premature abstraction
+- **Why not**: We're one CLI tool, not multiple apps
+
+## Decision
+
+We adopt a **CLI-first package organization** with optional public packages:
+
+```
+ckeletin-go/
+├── main.go                    # Entry point (only root-level .go file)
+│
+├── cmd/                       # CLI command implementations
+│   ├── root.go                # Root command + global setup
+│   ├── ping.go                # Feature commands
+│   ├── docs.go
+│   └── *.go                   # Additional commands
+│
+├── internal/                  # Private implementation
+│   ├── ping/                  # Business logic packages
+│   ├── docs/
+│   ├── config/                # Infrastructure packages
+│   ├── logger/
+│   └── ui/
+│
+├── pkg/                       # (Optional) Standalone reusable packages
+│   └── <package>/             # Must NOT import from internal/
+│
+├── scripts/                   # Build and validation scripts
+├── test/integration/          # Integration tests
+└── docs/                      # Documentation
+```
+
+### Key Principles
+
+**1. Optional `pkg/` Directory**
+- `pkg/` MAY be used for standalone, reusable packages
+- Packages in `pkg/` must NOT import from `internal/` (enforced by validation)
+- These are truly standalone libraries useful to external Go projects
+- Requires conscious decision: you're committing to maintain a public API
+
+**Criteria for `pkg/` packages:**
+1. No dependencies on `internal/` packages
+2. Useful to external Go projects (not just this CLI)
+3. Complete documentation (`doc.go`)
+4. Comprehensive tests
+5. You're willing to maintain API compatibility
+
+**If your project is purely a CLI tool**, omit `pkg/` to signal "CLI only" intent.
+
+**2. `internal/` for Private Implementation**
+- Go's `internal/` visibility rules prevent external imports
+- Freedom to refactor without breaking external consumers
+- No semantic versioning burden for internal APIs
+- CLI-specific business logic belongs here
+
+**3. `cmd/` for CLI Interface**
+- Only public interface is the command-line tool itself
+- Cobra commands live here (framework isolation)
+- Ultra-thin wrappers (~20-30 lines, see [ADR-001](001-ultra-thin-command-pattern.md))
+- No business logic in this layer
+
+**4. `main.go` at Root**
+- Single entry point at project root
+- Only root-level `.go` file allowed
+- Keeps root directory clean
+- Conventional Go application pattern
+
+**5. Auxiliary Directories Allowed**
+- `scripts/` - Build, validation, and utility scripts
+- `test/` - Integration and E2E tests
+- `docs/` - Documentation (ADRs, guides)
+- `testdata/` - Test fixtures
+- `.github/` - CI/CD configuration
+- These do NOT contain production Go packages
+
+### Enforcement Rules
+
+**✅ Allowed:**
+- `main.go` at root (entry point)
+- All packages in `cmd/`, `internal/`, or `pkg/`
+- Go files in `scripts/` (build tools, not packages)
+- Test files anywhere (`*_test.go`)
+- `pkg/` packages that are standalone (no `internal/` imports)
+
+**❌ Forbidden:**
+- `.go` files at root except `main.go` and `main_test.go`
+- Business logic in root directory
+- `pkg/` packages that import from `internal/` (they must be standalone)
+
+### Enforcement
+
+**1. Filesystem Checks**
+```bash
+task validate:package-organization
+```
+Validates:
+- No `.go` files at root except `main.go` and `main_test.go`
+- All packages in `cmd/`, `internal/`, `pkg/`, `scripts/`, or `test/`
+- `pkg/` packages do NOT import from `internal/` (standalone requirement)
+
+**2. Integrated into Quality Pipeline**
+```bash
+task check  # Includes package organization validation
+```
+
+**3. CI Enforcement**
+- Runs on every PR
+- Fails if organization rules violated
+- Prevents architectural drift
+
+## Consequences
+
+### Positive
+
+**1. Clear Project Identity**
+- File structure immediately shows "CLI-first, with optional public packages"
+- Clear intent: CLI is the product, `pkg/` packages are bonus reusable components
+- Onboarding faster (no question about where code goes)
+
+**2. Internal Freedom**
+- Can refactor `internal/` without breaking external consumers
+- No semantic versioning burden for internal APIs
+- Rapid iteration without fear
+
+**3. Intentional Public API**
+- `pkg/` packages require conscious decision and criteria checklist
+- Forces quality commitment: docs, tests, API stability
+- Maintains focus on CLI while allowing reusable components (e.g., `checkmate`)
+
+**4. Enforcement Automation**
+- `task validate:package-organization` catches violations
+- CI prevents architectural drift
+- No reliance on code review alone
+
+**5. Go Ecosystem Alignment**
+- `internal/` uses Go's visibility rules
+- Conventional `cmd/` and `main.go` placement
+- Familiar to Go developers
+
+### Negative
+
+**1. API Maintenance Burden (active cost)**
+- Packages in `pkg/` require API stability commitment (e.g., `checkmate` is actively maintained)
+- Semantic versioning applies to public packages
+- Must maintain backwards compatibility — this is an intentional trade-off
+
+**2. Strict Structure**
+- Cannot "just add a package at root"
+- Must think about placement (cmd/ vs internal/ vs pkg/)
+- More structure than flat layout
+
+**3. Potential Over-Engineering**
+- For tiny projects, this might be overkill
+- Adds directory overhead for single-file utilities
+
+### Mitigations
+
+**1. Documentation**
+- This ADR explains the organization strategy
+- [ARCHITECTURE.md](ARCHITECTURE.md) shows HOW packages organize
+- Clear guidance for contributors
+
+**2. Standalone Enforcement**
+- `pkg/` packages cannot import `internal/` - enforced by validation
+- This ensures `pkg/` packages are truly reusable
+- Prevents tight coupling between public and private code
+
+**3. Examples**
+- Current codebase demonstrates pattern
+- Template files guide new code placement
+- `scripts/validate-package-organization.sh` gives instant feedback
+
+## Implementation Details
+
+### Current State Validation
+
+The current project **follows this pattern**:
+- ✅ `pkg/` contains only standalone packages (no `internal/` imports)
+- ✅ CLI-specific implementation in `internal/` and `cmd/`
+- ✅ Only `main.go` and `main_test.go` at root
+- ✅ Auxiliary directories (`scripts/`, `test/`, `docs/`) present
+
+This ADR **documents the organization strategy** and adds enforcement.
+
+### Directory Purposes
+
+```
+ckeletin-go/
+│
+├── main.go                    # Bootstrap, execute root command
+├── main_test.go               # Entry point tests
+│
+├── cmd/                       # Layer 2: CLI Commands (see ADR-009)
+│   └── *.go                   # Cobra commands, ultra-thin (ADR-001)
+│
+├── internal/                  # Layers 3-4: Business + Infrastructure (ADR-009)
+│   ├── ping/, docs/           # Business logic packages
+│   ├── config/, logger/, ui/  # Infrastructure packages
+│   └── */                     # Additional internal packages
+│
+├── pkg/                       # (Optional) Standalone reusable packages
+│   └── <package>/             # Must NOT import from internal/
+│
+├── scripts/                   # Build and validation tooling
+│   ├── *.sh                   # Bash scripts
+│   └── *.go                   # Go build tools (not packages)
+│
+├── test/integration/          # Integration tests
+├── docs/                      # ADRs, guides, documentation
+├── testdata/                  # Test fixtures
+└── .github/                   # CI/CD workflows
+```
+
+### When to Use `pkg/`
+
+Create packages in `pkg/` when you want to expose a public Go API.
+
+**Questions to ask first:**
+1. Is this package useful to external Go projects?
+2. Can it work standalone (no `internal/` dependencies)?
+3. Are you willing to maintain API compatibility?
+4. Does it have complete documentation and tests?
+
+**If yes to all:** Create the package in `pkg/`, document the public API, commit to stability.
+
+**If no:** Keep everything in `internal/`, users interact via CLI binary.
+
+**Key rule:** `pkg/` packages must NOT import from `internal/`. This ensures they are truly standalone and reusable. The validation script enforces this.
+
+### Adding New Packages
+
+**For new CLI features:**
+1. Create business logic in `internal/<feature>/`
+2. Create command in `cmd/<feature>.go`
+3. No need to update validation (automatically covered)
+
+**For new commands:**
+1. Follow [ADR-001](001-ultra-thin-command-pattern.md) (ultra-thin pattern)
+2. Follow [ADR-009](009-layered-architecture-pattern.md) (layering rules)
+3. Run `task validate:package-organization` to verify
+
+**For new reusable packages:**
+1. Create package in `pkg/<package>/`
+2. Ensure NO imports from `internal/` (standalone requirement)
+3. Add `doc.go` with package documentation
+4. Add comprehensive tests
+5. Run `task validate:package-organization` to verify standalone status
+
+## Related ADRs
+
+- [ADR-009](009-layered-architecture-pattern.md) - Defines what goes in cmd/ vs internal/
+- [ADR-001](001-ultra-thin-command-pattern.md) - Pattern for cmd/ packages
+- [ADR-002](002-centralized-configuration-registry.md) - Config belongs in internal/config
+- [ADR-006](006-structured-logging-with-zerolog.md) - Logger belongs in internal/logger
+- [ADR-007](007-bubble-tea-for-interactive-ui.md) - UI belongs in internal/ui
+
+## References
+
+- [Go Project Layout](https://github.com/golang-standards/project-layout) - Community conventions
+- [Go `internal/` packages](https://go.dev/doc/go1.4#internalpackages) - Visibility rules
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Complete system architecture
+- `scripts/validate-package-organization.sh` - Enforcement script
