@@ -35,4 +35,10 @@ const (
 	KeyAppPingUi                = "app.ping.ui"                 // Enable interactive UI for the ping command
 	KeyAppResolveVault          = "app.resolve.vault"           // Path to the vault root directory
 	KeyAppResolveJson           = "app.resolve.json"            // Output in JSON format
+	KeyAppSearchVault           = "app.search.vault"            // Path to vault root
+	KeyAppSearchJson            = "app.search.json"             // Output in JSON format
+	KeyAppSearchLimit           = "app.search.limit"            // Maximum results to return
+	KeyAppSearchOffset          = "app.search.offset"           // Skip first N results
+	KeyAppSearchType            = "app.search.type"             // Filter by note type
+	KeyAppSearchTag             = "app.search.tag"              // Filter by tag
 )
