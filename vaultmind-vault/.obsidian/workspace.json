@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Welcome.md",
+                "file": "decisions/decision-vm-updated-field.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Welcome"
+              "title": "decision-vm-updated-field"
             }
           }
         ]
@@ -31,10 +31,14 @@
             "id": "2ecfa72b1b4e4c8c",
             "type": "leaf",
             "state": {
-              "type": "graph",
-              "state": {},
-              "icon": "lucide-git-fork",
-              "title": "Graph view"
+              "type": "markdown",
+              "state": {
+                "file": "concepts/memgpt.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "memgpt"
             }
           }
         ]
@@ -110,7 +114,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "Welcome.md",
+                "file": "decisions/decision-vm-updated-field.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -120,7 +124,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for Welcome"
+              "title": "Backlinks for decision-vm-updated-field"
             }
           },
           {
@@ -129,12 +133,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "Welcome.md",
+                "file": "decisions/decision-vm-updated-field.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links from Welcome"
+              "title": "Outgoing links from decision-vm-updated-field"
             }
           },
           {
@@ -172,13 +176,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "Welcome.md",
+                "file": "decisions/decision-vm-updated-field.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of Welcome"
+              "title": "Outline of decision-vm-updated-field"
             }
           }
         ]
@@ -199,23 +203,39 @@
       "bases:Create new base": false
     }
   },
-  "active": "b4e06515b23a00fe",
+  "active": "953bb5cedb5e68c8",
   "lastOpenFiles": [
-    "concepts/semantic-networks.md",
-    "concepts/forgetting-curve.md",
-    "concepts/associative-memory.md",
+    "decisions/decision-structured-over-embeddings.md",
+    "decisions/decision-immutable-ids.md",
+    "decisions/decision-confidence-as-provenance.md",
     "concepts/spreading-activation.md",
-    "templates/decision.md",
-    "templates/project.md",
-    "templates/person.md",
-    "templates/source.md",
-    "templates/concept.md",
+    "concepts/working-memory.md",
+    "concepts/act-r.md",
+    "concepts/associative-memory.md",
+    "concepts/context-pack.md",
+    "concepts/embedding-based-retrieval.md",
+    "concepts/encoding-specificity.md",
+    "concepts/entity-resolution.md",
+    "concepts/forgetting-curve.md",
+    "concepts/generative-agents.md",
+    "decisions/decision-bfs-with-visited-set.md",
+    "Welcome.md",
+    "concepts/memgpt.md",
+    "Context Pack.md",
+    "sources/source-ebbinghaus-1885.md",
+    "sources/source-collins-quillian-1969.md",
+    "sources/source-collins-loftus-1975.md",
+    "decisions/decision-vm-updated-field.md",
+    "sources/source-tulving-thomson-1973.md",
+    "people/person-patrick-lewis.md",
+    "sources/source-anderson-schooler-1991.md",
+    "people/person-noah-shinn.md",
+    "people/person-charles-packer.md",
     "templates",
     "decisions",
     "projects",
     "people",
     "sources",
-    "concepts",
-    "Welcome.md"
+    "concepts"
   ]
 }
