@@ -70,7 +70,7 @@ func StoreNote(d *DB, rec NoteRecord) error {
 	noteID := rec.ID
 
 	// Delete dependent rows first
-	for _, table := range []string{"aliases", "tags", "frontmatter_kv", "blocks", "headings"} {
+	for _, table := range []string{"aliases", "tags", "frontmatter_kv", "blocks", "headings", "generated_sections"} {
 		if _, err := tx.Exec(fmt.Sprintf("DELETE FROM %s WHERE note_id = ?", table), noteID); err != nil {
 			return fmt.Errorf("deleting from %s: %w", table, err)
 		}

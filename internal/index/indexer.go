@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/peiman/vaultmind/internal/parser"
 	"github.com/peiman/vaultmind/internal/vault"
@@ -12,11 +13,14 @@ import (
 
 // IndexResult holds the outcome of an index rebuild.
 type IndexResult struct {
-	Indexed           int `json:"indexed"`
-	DomainNotes       int `json:"domain_notes"`
-	UnstructuredNotes int `json:"unstructured_notes"`
-	Errors            int `json:"errors"`
-	Skipped           int `json:"skipped"`
+	DBPath            string `json:"db_path"`
+	Indexed           int    `json:"indexed"`
+	DomainNotes       int    `json:"domain_notes"`
+	UnstructuredNotes int    `json:"unstructured_notes"`
+	Errors            int    `json:"errors"`
+	Skipped           int    `json:"skipped"`
+	DurationMs        int64  `json:"duration_ms"`
+	CompletedAt       string `json:"completed_at"`
 }
 
 // Indexer orchestrates vault scanning, parsing, and SQLite storage.
@@ -37,6 +41,8 @@ func NewIndexer(vaultRoot, dbPath string, cfg *vault.Config) *Indexer {
 
 // Rebuild performs a full rebuild: scan all .md files, parse, and store.
 func (idx *Indexer) Rebuild() (*IndexResult, error) {
+	start := time.Now()
+
 	db, err := Open(idx.dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("opening index database: %w", err)
@@ -48,7 +54,7 @@ func (idx *Indexer) Rebuild() (*IndexResult, error) {
 		return nil, fmt.Errorf("scanning vault: %w", err)
 	}
 
-	result := &IndexResult{}
+	result := &IndexResult{DBPath: idx.dbPath}
 
 	for _, file := range files {
 		content, readErr := os.ReadFile(file.AbsPath)
@@ -81,7 +87,22 @@ func (idx *Indexer) Rebuild() (*IndexResult, error) {
 		}
 	}
 
+	result.DurationMs = time.Since(start).Milliseconds()
+	result.CompletedAt = time.Now().UTC().Format(time.RFC3339)
+
 	return result, nil
+}
+
+// parserLinkTypeToEdgeType maps parser link types to SRS-05 edge type names.
+func parserLinkTypeToEdgeType(lt parser.LinkType) string {
+	switch lt {
+	case parser.LinkTypeWikilink, parser.LinkTypeMarkdown:
+		return "explicit_link"
+	case parser.LinkTypeEmbed:
+		return "explicit_embed"
+	default:
+		return string(lt)
+	}
 }
 
 // buildNoteRecord transforms parser output + file info into a NoteRecord.
@@ -130,11 +151,11 @@ func buildNoteRecord(file vault.ScannedFile, content []byte, parsed *parser.Pars
 		}
 	}
 
-	// Convert parser links to LinkRecords
+	// Convert parser links to LinkRecords using SRS edge type names
 	for _, link := range parsed.Links {
 		rec.Links = append(rec.Links, LinkRecord{
 			DstRaw:     link.Target,
-			EdgeType:   string(link.LinkType),
+			EdgeType:   parserLinkTypeToEdgeType(link.LinkType),
 			TargetKind: string(link.TargetKind),
 			Heading:    link.Heading,
 			BlockID:    link.BlockID,

@@ -142,6 +142,53 @@ func TestRebuild_PopulatesFTS(t *testing.T) {
 	assert.Contains(t, noteIDs, "concept-act-r")
 }
 
+func TestRebuild_UsesCorrectEdgeTypes(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "index.db")
+
+	cfg, err := vault.LoadConfig(testVaultPath)
+	require.NoError(t, err)
+
+	idxr := index.NewIndexer(testVaultPath, dbPath, cfg)
+	_, err = idxr.Rebuild()
+	require.NoError(t, err)
+
+	db, err := index.Open(dbPath)
+	require.NoError(t, err)
+	defer db.Close()
+
+	// Body wikilinks should be stored as "explicit_link", not "wikilink"
+	var explicitLinkCount int
+	require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM links WHERE edge_type = 'explicit_link'").Scan(&explicitLinkCount))
+	assert.Greater(t, explicitLinkCount, 0, "body wikilinks must use edge_type 'explicit_link'")
+
+	// Frontmatter relations should be stored as "explicit_relation"
+	var explicitRelationCount int
+	require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM links WHERE edge_type = 'explicit_relation'").Scan(&explicitRelationCount))
+	assert.Greater(t, explicitRelationCount, 0, "frontmatter relations must use edge_type 'explicit_relation'")
+
+	// No parser-native edge types should exist
+	var wikilinkCount int
+	require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM links WHERE edge_type = 'wikilink'").Scan(&wikilinkCount))
+	assert.Equal(t, 0, wikilinkCount, "parser 'wikilink' type must be mapped to 'explicit_link'")
+}
+
+func TestRebuild_ResultContainsTimingInfo(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "index.db")
+
+	cfg, err := vault.LoadConfig(testVaultPath)
+	require.NoError(t, err)
+
+	idxr := index.NewIndexer(testVaultPath, dbPath, cfg)
+	result, err := idxr.Rebuild()
+	require.NoError(t, err)
+
+	assert.NotEmpty(t, result.DBPath)
+	assert.Greater(t, result.DurationMs, int64(0))
+	assert.NotEmpty(t, result.CompletedAt)
+}
+
 func TestRebuild_Idempotent(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "index.db")
