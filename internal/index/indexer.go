@@ -225,11 +225,17 @@ func fmString(fm map[string]interface{}, key string) string {
 	if !ok {
 		return ""
 	}
-	s, ok := v.(string)
-	if !ok {
+	switch val := v.(type) {
+	case string:
+		return val
+	case time.Time:
+		if val.Hour() == 0 && val.Minute() == 0 && val.Second() == 0 {
+			return val.Format("2006-01-02")
+		}
+		return val.Format(time.RFC3339)
+	default:
 		return fmt.Sprintf("%v", v)
 	}
-	return s
 }
 
 func fmStringList(fm map[string]interface{}, key string) []string {
