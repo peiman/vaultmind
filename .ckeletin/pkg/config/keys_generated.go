@@ -27,6 +27,8 @@ const (
 	KeyAppCheckTiming           = "app.check.timing"            // Show duration for each check in the output
 	KeyAppDoctorVault           = "app.doctor.vault"            // Path to vault root
 	KeyAppDoctorJson            = "app.doctor.json"             // Output in JSON format
+	KeyAppFrontmatterVault      = "app.frontmatter.vault"       // Path to vault root
+	KeyAppFrontmatterJson       = "app.frontmatter.json"        // Output in JSON format
 	KeyAppIndexVault            = "app.index.vault"             // Path to the vault root directory
 	KeyAppIndexJson             = "app.index.json"              // Output in JSON format
 	KeyAppLinksVault            = "app.links.vault"             // Path to vault root
