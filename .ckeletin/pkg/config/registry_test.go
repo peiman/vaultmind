@@ -5,8 +5,8 @@ package config_test
 import (
 	"testing"
 
-	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
-	_ "github.com/peiman/vaultmind/.ckeletin/pkg/config/commands" // Import to trigger init() registration
+	"github.com/peiman/ckeletin-go/.ckeletin/pkg/config"
+	_ "github.com/peiman/ckeletin-go/.ckeletin/pkg/config/commands" // Import to trigger init() registration
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

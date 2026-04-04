@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
+	"github.com/peiman/ckeletin-go/.ckeletin/pkg/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
