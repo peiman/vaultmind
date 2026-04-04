@@ -7,24 +7,32 @@ import (
 	"github.com/peiman/vaultmind/internal/index"
 )
 
-// LinkResult represents a single edge in link query results.
-type LinkResult struct {
+// OutLink represents a single outbound edge (for links out).
+type OutLink struct {
 	TargetID    *string `json:"target_id"`
 	TargetTitle string  `json:"target_title,omitempty"`
 	TargetPath  string  `json:"target_path,omitempty"`
 	TargetRaw   string  `json:"target_raw,omitempty"`
-	SourceID    string  `json:"source_id,omitempty"`
-	SourceTitle string  `json:"source_title,omitempty"`
-	SourcePath  string  `json:"source_path,omitempty"`
 	EdgeType    string  `json:"edge_type"`
 	Confidence  string  `json:"confidence"`
 	Origin      string  `json:"origin,omitempty"`
 	Resolved    bool    `json:"resolved"`
 }
 
+// InLink represents a single inbound edge (for links in).
+type InLink struct {
+	SourceID    string `json:"source_id"`
+	SourceTitle string `json:"source_title,omitempty"`
+	SourcePath  string `json:"source_path,omitempty"`
+	EdgeType    string `json:"edge_type"`
+	Confidence  string `json:"confidence"`
+	Origin      string `json:"origin,omitempty"`
+	Resolved    bool   `json:"resolved"`
+}
+
 // LinksOut returns all outbound edges from the given note.
 // If edgeTypeFilter is non-empty, only edges of that type are returned.
-func LinksOut(db *index.DB, noteID, edgeTypeFilter string) ([]LinkResult, error) {
+func LinksOut(db *index.DB, noteID, edgeTypeFilter string) ([]OutLink, error) {
 	q := `SELECT l.dst_note_id, n.title, n.path, l.dst_raw, l.edge_type,
 		l.confidence, l.origin, l.resolved
 		FROM links l
@@ -43,9 +51,9 @@ func LinksOut(db *index.DB, noteID, edgeTypeFilter string) ([]LinkResult, error)
 	}
 	defer func() { _ = rows.Close() }()
 
-	var results []LinkResult
+	var results []OutLink
 	for rows.Next() {
-		var r LinkResult
+		var r OutLink
 		var dstID, title, path, origin sql.NullString
 		if scanErr := rows.Scan(&dstID, &title, &path, &r.TargetRaw, &r.EdgeType,
 			&r.Confidence, &origin, &r.Resolved); scanErr != nil {
@@ -64,7 +72,7 @@ func LinksOut(db *index.DB, noteID, edgeTypeFilter string) ([]LinkResult, error)
 
 // LinksIn returns all inbound edges pointing to the given note.
 // Uses dst_raw matching for unresolved edges and dst_note_id for resolved ones.
-func LinksIn(db *index.DB, noteID, edgeTypeFilter string) ([]LinkResult, error) {
+func LinksIn(db *index.DB, noteID, edgeTypeFilter string) ([]InLink, error) {
 	// Match on dst_note_id (resolved) OR dst_raw (for explicit_relation edges
 	// where dst_raw stores the target note's stable ID before resolution).
 	q := `SELECT l.src_note_id, n.title, n.path, l.dst_raw, l.edge_type,
@@ -85,11 +93,12 @@ func LinksIn(db *index.DB, noteID, edgeTypeFilter string) ([]LinkResult, error) 
 	}
 	defer func() { _ = rows.Close() }()
 
-	var results []LinkResult
+	var results []InLink
 	for rows.Next() {
-		var r LinkResult
+		var r InLink
+		var dstRaw string
 		var origin sql.NullString
-		if scanErr := rows.Scan(&r.SourceID, &r.SourceTitle, &r.SourcePath, &r.TargetRaw,
+		if scanErr := rows.Scan(&r.SourceID, &r.SourceTitle, &r.SourcePath, &dstRaw,
 			&r.EdgeType, &r.Confidence, &origin, &r.Resolved); scanErr != nil {
 			return nil, fmt.Errorf("scanning inbound link: %w", scanErr)
 		}

@@ -38,45 +38,58 @@ func RunLinks(db *index.DB, cfg LinksConfig, w io.Writer) error {
 	noteID := resolved.Matches[0].ID
 	cmdName := "links " + cfg.Direction
 
-	var links []graph.LinkResult
 	if cfg.Direction == "out" {
-		links, err = graph.LinksOut(db, noteID, cfg.EdgeType)
-	} else {
-		links, err = graph.LinksIn(db, noteID, cfg.EdgeType)
+		return runLinksOut(db, noteID, cfg, cmdName, w)
 	}
+	return runLinksIn(db, noteID, cfg, cmdName, w)
+}
+
+func runLinksOut(db *index.DB, noteID string, cfg LinksConfig, cmdName string, w io.Writer) error {
+	links, err := graph.LinksOut(db, noteID, cfg.EdgeType)
 	if err != nil {
 		return fmt.Errorf("querying links: %w", err)
 	}
 
 	if cfg.JSONOutput {
-		type linksResult struct {
-			SourceID string             `json:"source_id,omitempty"`
-			TargetID string             `json:"target_id,omitempty"`
-			Links    []graph.LinkResult `json:"links"`
+		type outResult struct {
+			SourceID string          `json:"source_id"`
+			Links    []graph.OutLink `json:"links"`
 		}
-		r := linksResult{Links: links}
-		if cfg.Direction == "out" {
-			r.SourceID = noteID
-		} else {
-			r.TargetID = noteID
-		}
-		env := envelope.OK(cmdName, r)
+		env := envelope.OK(cmdName, outResult{SourceID: noteID, Links: links})
 		env.Meta.VaultPath = cfg.VaultPath
 		return json.NewEncoder(w).Encode(env)
 	}
 
 	for _, l := range links {
-		var id string
-		if cfg.Direction == "out" {
-			if l.TargetID != nil {
-				id = *l.TargetID
-			} else {
-				id = l.TargetRaw
-			}
-		} else {
-			id = l.SourceID
+		id := l.TargetRaw
+		if l.TargetID != nil {
+			id = *l.TargetID
 		}
 		if _, err := fmt.Fprintf(w, "%-20s %-20s %s\n", id, l.EdgeType, l.Confidence); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func runLinksIn(db *index.DB, noteID string, cfg LinksConfig, cmdName string, w io.Writer) error {
+	links, err := graph.LinksIn(db, noteID, cfg.EdgeType)
+	if err != nil {
+		return fmt.Errorf("querying links: %w", err)
+	}
+
+	if cfg.JSONOutput {
+		type inResult struct {
+			TargetID string         `json:"target_id"`
+			Links    []graph.InLink `json:"links"`
+		}
+		env := envelope.OK(cmdName, inResult{TargetID: noteID, Links: links})
+		env.Meta.VaultPath = cfg.VaultPath
+		return json.NewEncoder(w).Encode(env)
+	}
+
+	for _, l := range links {
+		if _, err := fmt.Fprintf(w, "%-20s %-20s %s\n", l.SourceID, l.EdgeType, l.Confidence); err != nil {
 			return err
 		}
 	}
