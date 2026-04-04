@@ -2,9 +2,11 @@
 package cmdutil
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 
 	"github.com/peiman/vaultmind/internal/envelope"
@@ -18,6 +20,7 @@ type VaultDB struct {
 	DB     *index.DB
 	Config *vault.Config
 	Reg    *schema.Registry
+	dbPath string
 }
 
 // Close releases the database connection.
@@ -44,7 +47,18 @@ func OpenVaultDB(vaultPath string) (*VaultDB, error) {
 		DB:     db,
 		Config: cfg,
 		Reg:    schema.NewRegistry(cfg.Types),
+		dbPath: dbPath,
 	}, nil
+}
+
+// IndexHash computes the SHA-256 hash of the SQLite database file.
+func (v *VaultDB) IndexHash() string {
+	data, err := os.ReadFile(v.dbPath)
+	if err != nil {
+		return ""
+	}
+	h := sha256.Sum256(data)
+	return fmt.Sprintf("%x", h[:])
 }
 
 // WriteJSON writes a JSON envelope to the writer.

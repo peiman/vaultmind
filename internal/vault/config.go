@@ -25,10 +25,10 @@ type VaultConfig struct {
 
 // TypeDef defines a note type in the registry.
 type TypeDef struct {
-	Required []string `yaml:"required"`
-	Optional []string `yaml:"optional"`
-	Statuses []string `yaml:"statuses"`
-	Template string   `yaml:"template"`
+	Required []string `yaml:"required" json:"required"`
+	Optional []string `yaml:"optional" json:"optional"`
+	Statuses []string `yaml:"statuses" json:"statuses"`
+	Template string   `yaml:"template" json:"template"`
 }
 
 // GitPolicyConfig holds git policy overrides.

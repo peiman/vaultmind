@@ -42,7 +42,7 @@ var (
 	// so no need for the [^!] guard that dropped consecutive links like [[A]][[B]].
 	reWikilink  = regexp.MustCompile(`\[\[([^\[\]]+)\]\]`)
 	reMarkdown  = regexp.MustCompile(`\[([^\[\]]+)\]\(([^)]+)\)`)
-	reCodeFence = regexp.MustCompile("^```")
+	reCodeFence = regexp.MustCompile("^(```|~~~)")
 )
 
 // ExtractLinks scans body text for all outbound links.

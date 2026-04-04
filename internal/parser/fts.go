@@ -55,7 +55,8 @@ func removeFencedCodeBlocks(body string) string {
 	inFence := false
 
 	for _, line := range lines {
-		if strings.HasPrefix(strings.TrimSpace(line), "```") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
 			inFence = !inFence
 			continue
 		}

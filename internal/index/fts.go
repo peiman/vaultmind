@@ -30,6 +30,11 @@ func SearchFTS(d *DB, query string, limit, offset int, filters ...SearchFilters)
 		return nil, nil
 	}
 
+	// Sanitize query for FTS5: wrap each word in double quotes for literal matching.
+	// This prevents FTS5 syntax characters (", (, ), :, *, AND, OR, NOT) from
+	// being interpreted as operators.
+	query = sanitizeFTSQuery(query)
+
 	// Build query with optional filters
 	var f SearchFilters
 	if len(filters) > 0 {
@@ -37,7 +42,7 @@ func SearchFTS(d *DB, query string, limit, offset int, filters ...SearchFilters)
 	}
 
 	q := `SELECT f.note_id, n.type, n.title, n.path,
-		snippet(fts_notes, 1, '...', '...', '', 32), rank, n.is_domain
+		snippet(fts_notes, -1, '...', '...', '', 32), rank, n.is_domain
 		FROM fts_notes f
 		JOIN notes n ON n.id = f.note_id
 		WHERE fts_notes MATCH ?`
@@ -78,8 +83,29 @@ func SearchFTS(d *DB, query string, limit, offset int, filters ...SearchFilters)
 		if path != nil {
 			r.Path = *path
 		}
+		// Normalize score: SQLite BM25 rank is negative (lower = better).
+		// Negate to make higher = better, matching SRS-09 convention.
+		if r.Score < 0 {
+			r.Score = -r.Score
+		}
 		results = append(results, r)
 	}
 
 	return results, rows.Err()
+}
+
+// sanitizeFTSQuery wraps each word in double quotes for literal FTS5 matching.
+// This prevents special characters from being interpreted as FTS5 operators.
+func sanitizeFTSQuery(query string) string {
+	words := strings.Fields(query)
+	var quoted []string
+	for _, w := range words {
+		// Strip existing quotes to avoid double-quoting
+		w = strings.ReplaceAll(w, `"`, "")
+		if w == "" {
+			continue
+		}
+		quoted = append(quoted, `"`+w+`"`)
+	}
+	return strings.Join(quoted, " ")
 }
