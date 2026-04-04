@@ -60,6 +60,7 @@ type BlockRecord struct {
 
 // StoreNote deletes all existing rows for the note, then inserts fresh rows
 // into every table within a single transaction (delete-before-reinsert).
+// StoreNote stores a note within its own transaction.
 func StoreNote(d *DB, rec NoteRecord) error {
 	tx, err := d.Begin()
 	if err != nil {
@@ -67,6 +68,15 @@ func StoreNote(d *DB, rec NoteRecord) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	if err := StoreNoteInTx(tx, rec); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// StoreNoteInTx stores a note within an existing transaction.
+// Used by Rebuild for batch transactions.
+func StoreNoteInTx(tx *sql.Tx, rec NoteRecord) error {
 	noteID := rec.ID
 
 	// Delete dependent rows first
@@ -172,7 +182,7 @@ func StoreNote(d *DB, rec NoteRecord) error {
 		return fmt.Errorf("inserting fts_notes: %w", err)
 	}
 
-	return tx.Commit()
+	return nil
 }
 
 func upsertNote(tx *sql.Tx, rec NoteRecord) error {

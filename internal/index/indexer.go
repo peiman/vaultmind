@@ -58,6 +58,13 @@ func (idx *Indexer) Rebuild() (*IndexResult, error) {
 	result := &IndexResult{DBPath: idx.dbPath}
 	seenIDs := make(map[string]string) // id → first path
 
+	// Parse all files first, then store in a single batch transaction
+	type parsedFile struct {
+		rec  NoteRecord
+		path string
+	}
+	var records []parsedFile
+
 	for _, file := range files {
 		content, readErr := os.ReadFile(file.AbsPath)
 		if readErr != nil {
@@ -88,18 +95,33 @@ func (idx *Indexer) Rebuild() (*IndexResult, error) {
 			seenIDs[rec.ID] = file.RelPath
 		}
 
-		if storeErr := StoreNote(db, rec); storeErr != nil {
-			log.Debug().Err(storeErr).Str("path", file.RelPath).Msg("skipping file with store error")
+		records = append(records, parsedFile{rec: rec, path: file.RelPath})
+	}
+
+	// Batch store in a single transaction for performance
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("beginning batch transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	for _, pf := range records {
+		if storeErr := StoreNoteInTx(tx, pf.rec); storeErr != nil {
+			log.Debug().Err(storeErr).Str("path", pf.path).Msg("skipping file with store error")
 			result.Errors++
 			continue
 		}
 
 		result.Indexed++
-		if rec.IsDomain {
+		if pf.rec.IsDomain {
 			result.DomainNotes++
 		} else {
 			result.UnstructuredNotes++
 		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("committing batch transaction: %w", err)
 	}
 
 	// Post-index: resolve body wikilinks against the notes table
