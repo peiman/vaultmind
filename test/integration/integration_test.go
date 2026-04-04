@@ -42,7 +42,7 @@ func getExitCode(err error) int {
 // TestMain builds the binary before running tests
 func TestMain(m *testing.M) {
 	// Build the binary with platform-specific name
-	binaryName := "ckeletin-go-test"
+	binaryName := "vaultmind-test"
 	if runtime.GOOS == "windows" {
 		binaryName += ".exe"
 	}
@@ -393,7 +393,7 @@ func TestEnvironmentVariables(t *testing.T) {
 		{
 			name: "Set message via env var",
 			envVars: map[string]string{
-				"CKELETIN_GO_APP_PING_OUTPUT_MESSAGE": "Env Var Message",
+				"VAULTMIND_APP_PING_OUTPUT_MESSAGE": "Env Var Message",
 			},
 			args:               []string{"ping"},
 			wantExitCode:       0,
@@ -402,7 +402,7 @@ func TestEnvironmentVariables(t *testing.T) {
 		{
 			name: "Set log level via env var",
 			envVars: map[string]string{
-				"CKELETIN_GO_APP_LOG_LEVEL": "debug",
+				"VAULTMIND_APP_LOG_LEVEL": "debug",
 			},
 			args:         []string{"ping"},
 			wantExitCode: 0,
@@ -411,8 +411,8 @@ func TestEnvironmentVariables(t *testing.T) {
 		{
 			name: "Multiple env vars",
 			envVars: map[string]string{
-				"CKELETIN_GO_APP_PING_OUTPUT_MESSAGE": "Multi Env Test",
-				"CKELETIN_GO_APP_PING_OUTPUT_COLOR":   "cyan",
+				"VAULTMIND_APP_PING_OUTPUT_MESSAGE": "Multi Env Test",
+				"VAULTMIND_APP_PING_OUTPUT_COLOR":   "cyan",
 			},
 			args:               []string{"ping"},
 			wantExitCode:       0,
@@ -482,7 +482,7 @@ func TestConfigPrecedence(t *testing.T) {
 		{
 			name: "Env var overrides config file",
 			envVars: map[string]string{
-				"CKELETIN_GO_APP_PING_OUTPUT_MESSAGE": "Env Var Message",
+				"VAULTMIND_APP_PING_OUTPUT_MESSAGE": "Env Var Message",
 			},
 			args:               []string{"--config", configFile, "ping"},
 			wantOutputContains: "Env Var Message",
@@ -490,7 +490,7 @@ func TestConfigPrecedence(t *testing.T) {
 		{
 			name: "CLI flag overrides env var and config file",
 			envVars: map[string]string{
-				"CKELETIN_GO_APP_PING_OUTPUT_MESSAGE": "Env Var Message",
+				"VAULTMIND_APP_PING_OUTPUT_MESSAGE": "Env Var Message",
 			},
 			args:               []string{"--config", configFile, "ping", "--message", "CLI Flag Message"},
 			wantOutputContains: "CLI Flag Message",

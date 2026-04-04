@@ -77,6 +77,13 @@ components:
       - internal/config/commands/**
       - internal/ui/**
       - internal/xdg/**
+      # VaultMind infrastructure (shared services used by business logic):
+      - internal/vault/**
+      - internal/parser/**
+      - internal/schema/**
+      - internal/envelope/**
+      - internal/index/**
+      - internal/graph/**
 
   # -------------------------------------------------------------------------
   # PROJECT-MANAGED: Business Logic Layer
@@ -96,21 +103,12 @@ components:
       - internal/dev/**
       - internal/progress/**
       - internal/check/**
-      # Add your business logic packages below:
-      # - internal/yourpackage/**
+      # VaultMind business logic:
+      - internal/query/**
+      - internal/cmdutil/**
 
-  # -------------------------------------------------------------------------
-  # PUBLIC PACKAGES: Standalone Reusable Libraries
-  # -------------------------------------------------------------------------
-  # pkg/ contains standalone packages that:
-  # - Do NOT import from internal/ (enforced by validate-package-organization.sh)
-  # - Can be imported by external Go projects
-  # - Are independent of the CLI architecture
-  #
-  # See ADR-010 for guidance on when to use pkg/
-  public:
-    in:
-      - pkg/**
+  # pkg/ was cleaned by task init (checkmate is now an external dependency).
+  # Re-add this section if you create new public packages in pkg/.
 
 # External dependencies (vendors from go.mod)
 vendors:
@@ -125,7 +123,6 @@ vendors:
 # Common components available to all layers
 commonComponents:
   - infrastructure
-  - public  # Public packages can be used by any layer
 
 # -------------------------------------------------------------------------
 # FRAMEWORK-MANAGED: Dependency Rules
@@ -165,8 +162,3 @@ deps:
     canUse:
       - viper
 
-  # Public packages are completely standalone
-  # Cannot depend on any internal packages (enforced by validation script too)
-  # Can use any external vendor dependencies
-  public:
-    anyVendorDeps: true  # Allow external dependencies (lipgloss, etc.)

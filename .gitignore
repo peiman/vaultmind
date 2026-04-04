@@ -94,3 +94,7 @@ reports/sbom/
 
 # Lichen cache (if applicable)
 .lichen-cache/
+
+# VaultMind index (derived, rebuildable)
+vaultmind-vault/.vaultmind/index.db
+coverage.raw.txt

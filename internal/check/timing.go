@@ -31,7 +31,7 @@ func timingFilePath() string {
 	path, err := xdg.CacheFile("check-timings.json")
 	if err != nil {
 		// Fallback to temp dir if XDG not configured
-		return filepath.Join(os.TempDir(), "ckeletin-go-check-timings.json")
+		return filepath.Join(os.TempDir(), "vaultmind-check-timings.json")
 	}
 	return path
 }

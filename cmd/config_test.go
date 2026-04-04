@@ -150,7 +150,7 @@ func TestRunConfigValidate_DefaultXDGPath(t *testing.T) {
 		validateConfigFile = ""
 	}()
 
-	binaryName = "ckeletin-go"
+	binaryName = "vaultmind"
 	configFileUsed = ""
 	cfgFile = ""
 

@@ -44,7 +44,7 @@ func CoreOptions() []ConfigOption {
 		},
 		{
 			Key:          "app.log.file_path",
-			DefaultValue: "./logs/ckeletin-go.log",
+			DefaultValue: "./logs/vaultmind.log",
 			Description:  "Path to the log file (created with secure 0600 permissions)",
 			Type:         "string",
 			Required:     false,

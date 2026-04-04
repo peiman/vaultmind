@@ -25,7 +25,31 @@ const (
 	KeyAppCheckParallel         = "app.check.parallel"          // Run checks within each category in parallel (disable with --parallel=false)
 	KeyAppCheckCategory         = "app.check.category"          // Filter to specific categories (comma-separated: environment,quality,architect...
 	KeyAppCheckTiming           = "app.check.timing"            // Show duration for each check in the output
+	KeyAppDoctorVault           = "app.doctor.vault"            // Path to vault root
+	KeyAppDoctorJson            = "app.doctor.json"             // Output in JSON format
+	KeyAppFrontmatterVault      = "app.frontmatter.vault"       // Path to vault root
+	KeyAppFrontmatterJson       = "app.frontmatter.json"        // Output in JSON format
+	KeyAppIndexVault            = "app.index.vault"             // Path to the vault root directory
+	KeyAppIndexJson             = "app.index.json"              // Output in JSON format
+	KeyAppLinksVault            = "app.links.vault"             // Path to vault root
+	KeyAppLinksJson             = "app.links.json"              // Output in JSON format
+	KeyAppLinksEdgeType         = "app.links.edge_type"         // Filter by edge type
+	KeyAppNoteVault             = "app.note.vault"              // Path to vault root
+	KeyAppNoteJson              = "app.note.json"               // Output in JSON format
+	KeyAppNoteFrontmatterOnly   = "app.note.frontmatter_only"   // Omit body, headings, blocks
 	KeyAppPingOutputMessage     = "app.ping.output_message"     // Default message to display for the ping command
 	KeyAppPingOutputColor       = "app.ping.output_color"       // Text color for ping command output (white, red, green, blue, cyan, yellow, ma...
 	KeyAppPingUi                = "app.ping.ui"                 // Enable interactive UI for the ping command
+	KeyAppResolveVault          = "app.resolve.vault"           // Path to the vault root directory
+	KeyAppResolveJson           = "app.resolve.json"            // Output in JSON format
+	KeyAppSchemaVault           = "app.schema.vault"            // Path to vault root
+	KeyAppSchemaJson            = "app.schema.json"             // Output in JSON format
+	KeyAppSearchVault           = "app.search.vault"            // Path to vault root
+	KeyAppSearchJson            = "app.search.json"             // Output in JSON format
+	KeyAppSearchLimit           = "app.search.limit"            // Maximum results to return
+	KeyAppSearchOffset          = "app.search.offset"           // Skip first N results
+	KeyAppSearchType            = "app.search.type"             // Filter by note type
+	KeyAppSearchTag             = "app.search.tag"              // Filter by tag
+	KeyAppVaultstatusVault      = "app.vaultstatus.vault"       // Path to vault root
+	KeyAppVaultstatusJson       = "app.vaultstatus.json"        // Output in JSON format
 )

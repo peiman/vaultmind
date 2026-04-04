@@ -9,7 +9,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/peiman/ckeletin-go/pkg/checkmate"
+	"github.com/peiman/ckeletin-go/pkg/checkmate" // External dependency (published package)
 )
 
 // shouldUseTUI determines whether to use the interactive TUI or simple output.
@@ -102,7 +102,7 @@ func (e *Executor) buildCategories(methods *checkMethods) []categoryDef {
 			{"vuln", methods.checkVuln, "Update vulnerable dependencies"},
 			{"outdated", methods.shellCheck("check-deps-outdated.sh"), "Run: go get -u"},
 			{"license-source", methods.shellCheck("check-licenses-source.sh"), "Check dependency licenses"},
-			{"license-binary", methods.shellCheck("check-licenses-binary.sh"), "Check binary licenses"},
+			{"license-binary", methods.shellCheck("check-licenses-binary.sh", "./vaultmind"), "Check binary licenses"},
 			{"sbom-vulns", methods.shellCheck("check-sbom-vulns.sh"), "Fix SBOM vulnerabilities"},
 		}},
 		{name: "Tests", checks: []checkItem{
