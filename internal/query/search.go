@@ -18,19 +18,31 @@ type SearchResult struct {
 	Total  int               `json:"total"`
 }
 
+// SearchConfig holds search parameters.
+type SearchConfig struct {
+	Query      string
+	Limit      int
+	Offset     int
+	TypeFilter string
+	TagFilter  string
+	JSONOutput bool
+	VaultPath  string
+}
+
 // RunSearch executes the search command logic.
-func RunSearch(db *index.DB, queryStr, vaultPath string, limit, offset int, jsonOut bool, w io.Writer) error {
-	results, err := index.SearchFTS(db, queryStr, limit, offset)
+func RunSearch(db *index.DB, cfg SearchConfig, w io.Writer) error {
+	filters := index.SearchFilters{Type: cfg.TypeFilter, Tag: cfg.TagFilter}
+	results, err := index.SearchFTS(db, cfg.Query, cfg.Limit, cfg.Offset, filters)
 	if err != nil {
 		return fmt.Errorf("searching: %w", err)
 	}
 
-	if jsonOut {
+	if cfg.JSONOutput {
 		env := envelope.OK("search", SearchResult{
-			Query: queryStr, Offset: offset, Limit: limit,
+			Query: cfg.Query, Offset: cfg.Offset, Limit: cfg.Limit,
 			Hits: results, Total: len(results),
 		})
-		env.Meta.VaultPath = vaultPath
+		env.Meta.VaultPath = cfg.VaultPath
 		return json.NewEncoder(w).Encode(env)
 	}
 

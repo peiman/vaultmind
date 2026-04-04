@@ -27,8 +27,13 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	}
 	defer vdb.Close()
 
-	return query.RunSearch(vdb.DB, args[0], vaultPath,
-		getConfigValueWithFlags[int](cmd, "limit", config.KeyAppSearchLimit),
-		getConfigValueWithFlags[int](cmd, "offset", config.KeyAppSearchOffset),
-		getConfigValueWithFlags[bool](cmd, "json", config.KeyAppSearchJson), cmd.OutOrStdout())
+	return query.RunSearch(vdb.DB, query.SearchConfig{
+		Query:      args[0],
+		Limit:      getConfigValueWithFlags[int](cmd, "limit", config.KeyAppSearchLimit),
+		Offset:     getConfigValueWithFlags[int](cmd, "offset", config.KeyAppSearchOffset),
+		TypeFilter: getConfigValueWithFlags[string](cmd, "type", config.KeyAppSearchType),
+		TagFilter:  getConfigValueWithFlags[string](cmd, "tag", config.KeyAppSearchTag),
+		JSONOutput: getConfigValueWithFlags[bool](cmd, "json", config.KeyAppSearchJson),
+		VaultPath:  vaultPath,
+	}, cmd.OutOrStdout())
 }
