@@ -173,3 +173,16 @@ func TestExtractLinks_RealVaultNoteBody(t *testing.T) {
 	assert.Contains(t, targets, "VaultMind")
 	assert.Len(t, links, 8)
 }
+
+func TestExtractLinks_TildeFenceSkipped(t *testing.T) {
+	body := "Normal [[Linked Note]].\n~~~\n[[Hidden Link]]\n~~~\nAnother [[Visible]]."
+	links := parser.ExtractLinks(body)
+
+	targets := make([]string, len(links))
+	for i, l := range links {
+		targets[i] = l.Target
+	}
+	assert.Contains(t, targets, "Linked Note")
+	assert.Contains(t, targets, "Visible")
+	assert.NotContains(t, targets, "Hidden Link")
+}

@@ -168,7 +168,7 @@ func TestStoreNote_UnstructuredNote(t *testing.T) {
 	assert.False(t, isDomain)
 }
 
-func TestStoreNote_DuplicateResolvedLinksCauseError(t *testing.T) {
+func TestStoreNote_DuplicateLinksDeduped(t *testing.T) {
 	db := openTestDB(t)
 
 	// Create target note for FK
@@ -182,10 +182,10 @@ func TestStoreNote_DuplicateResolvedLinksCauseError(t *testing.T) {
 		{DstNoteID: "concept-target", DstRaw: "target", EdgeType: "explicit_link", Confidence: "high", Resolved: true},
 	}
 
-	err := index.StoreNote(db, rec)
-	assert.Error(t, err, "duplicate resolved links should trigger UNIQUE constraint error")
+	// Duplicates are silently ignored (INSERT OR IGNORE), not errors
+	require.NoError(t, index.StoreNote(db, rec))
 
-	var count int
-	require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM notes WHERE id = ?", "concept-dup").Scan(&count))
-	assert.Equal(t, 0, count, "rolled-back note must not appear")
+	var linkCount int
+	require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM links WHERE src_note_id = ?", "concept-dup").Scan(&linkCount))
+	assert.Equal(t, 1, linkCount, "duplicate links should be deduped to one")
 }

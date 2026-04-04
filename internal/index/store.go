@@ -137,7 +137,7 @@ func StoreNoteInTx(tx *sql.Tx, rec NoteRecord) error {
 			dstNoteID = link.DstNoteID
 		}
 		if _, err := tx.Exec(`
-			INSERT INTO links
+			INSERT OR IGNORE INTO links
 			  (src_note_id, dst_note_id, dst_raw, edge_type, target_kind, heading,
 			   block_id, resolved, confidence, origin, weight)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,

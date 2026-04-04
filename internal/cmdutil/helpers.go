@@ -52,13 +52,19 @@ func OpenVaultDB(vaultPath string) (*VaultDB, error) {
 }
 
 // IndexHash computes the SHA-256 hash of the SQLite database file.
+// Uses streaming hash to avoid loading the entire file into memory.
 func (v *VaultDB) IndexHash() string {
-	data, err := os.ReadFile(v.dbPath)
+	f, err := os.Open(v.dbPath)
 	if err != nil {
 		return ""
 	}
-	h := sha256.Sum256(data)
-	return fmt.Sprintf("%x", h[:])
+	defer func() { _ = f.Close() }()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
 // WriteJSON writes a JSON envelope to the writer.

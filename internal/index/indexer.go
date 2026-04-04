@@ -143,7 +143,7 @@ func (idx *Indexer) Rebuild() (*IndexResult, error) {
 func ResolveLinks(db *DB) (int, error) {
 	// Resolve by exact ID match
 	res1, err := db.Exec(`
-		UPDATE links SET dst_note_id = dst_raw, resolved = TRUE
+		UPDATE OR IGNORE links SET dst_note_id = dst_raw, resolved = TRUE
 		WHERE resolved = FALSE AND dst_note_id IS NULL
 		AND dst_raw IN (SELECT id FROM notes)`)
 	if err != nil {
@@ -153,7 +153,7 @@ func ResolveLinks(db *DB) (int, error) {
 
 	// Resolve by exact title match
 	res2, err := db.Exec(`
-		UPDATE links SET dst_note_id = (
+		UPDATE OR IGNORE links SET dst_note_id = (
 			SELECT id FROM notes WHERE title = links.dst_raw LIMIT 1
 		), resolved = TRUE
 		WHERE resolved = FALSE AND dst_note_id IS NULL
@@ -165,7 +165,7 @@ func ResolveLinks(db *DB) (int, error) {
 
 	// Resolve by alias match
 	res3, err := db.Exec(`
-		UPDATE links SET dst_note_id = (
+		UPDATE OR IGNORE links SET dst_note_id = (
 			SELECT note_id FROM aliases WHERE alias = links.dst_raw LIMIT 1
 		), resolved = TRUE
 		WHERE resolved = FALSE AND dst_note_id IS NULL
