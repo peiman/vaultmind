@@ -19,6 +19,7 @@ type IndexResult struct {
 	UnstructuredNotes int    `json:"unstructured_notes"`
 	Errors            int    `json:"errors"`
 	Skipped           int    `json:"skipped"`
+	DuplicateIDs      int    `json:"duplicate_ids"`
 	DurationMs        int64  `json:"duration_ms"`
 	CompletedAt       string `json:"completed_at"`
 }
@@ -55,6 +56,7 @@ func (idx *Indexer) Rebuild() (*IndexResult, error) {
 	}
 
 	result := &IndexResult{DBPath: idx.dbPath}
+	seenIDs := make(map[string]string) // id → first path
 
 	for _, file := range files {
 		content, readErr := os.ReadFile(file.AbsPath)
@@ -72,6 +74,19 @@ func (idx *Indexer) Rebuild() (*IndexResult, error) {
 		}
 
 		rec := buildNoteRecord(file, content, parsed)
+
+		// Check for duplicate IDs
+		if rec.IsDomain {
+			if firstPath, seen := seenIDs[rec.ID]; seen {
+				log.Warn().
+					Str("id", rec.ID).
+					Str("path", file.RelPath).
+					Str("first_path", firstPath).
+					Msg("duplicate ID detected — second file overwrites first")
+				result.DuplicateIDs++
+			}
+			seenIDs[rec.ID] = file.RelPath
+		}
 
 		if storeErr := StoreNote(db, rec); storeErr != nil {
 			log.Debug().Err(storeErr).Str("path", file.RelPath).Msg("skipping file with store error")
