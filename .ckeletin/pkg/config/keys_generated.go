@@ -50,4 +50,6 @@ const (
 	KeyAppSearchOffset          = "app.search.offset"           // Skip first N results
 	KeyAppSearchType            = "app.search.type"             // Filter by note type
 	KeyAppSearchTag             = "app.search.tag"              // Filter by tag
+	KeyAppVaultstatusVault      = "app.vaultstatus.vault"       // Path to vault root
+	KeyAppVaultstatusJson       = "app.vaultstatus.json"        // Output in JSON format
 )
