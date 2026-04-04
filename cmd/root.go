@@ -249,7 +249,7 @@ func init() {
 	// Fallback for development/testing when ldflags aren't injected
 	// Production builds MUST inject binaryName via ldflags (see Taskfile.yml LDFLAGS)
 	if binaryName == "" {
-		binaryName = "ckeletin-go"
+		binaryName = "vaultmind"
 	}
 
 	// Initialize XDG paths with app name (single source of truth)
@@ -259,7 +259,7 @@ func init() {
 	// Package-level var declarations capture binaryName="" before init() runs,
 	// so we need to set these after the fallback is applied.
 	RootCmd.Use = binaryName
-	RootCmd.Long = fmt.Sprintf(`%s is a production-ready Go CLI application built with ckeletin-go.
+	RootCmd.Long = fmt.Sprintf(`%s is an associative memory system for AI agents over Git-backed Obsidian vaults.
 Powered by Cobra, Viper, Zerolog, and Bubble Tea with enforced architecture patterns.`, binaryName)
 
 	configPaths := ConfigPaths()
@@ -290,7 +290,7 @@ Powered by Cobra, Viper, Zerolog, and Bubble Tea with enforced architecture patt
 	// Dual logging configuration flags
 	RootCmd.PersistentFlags().String("log-console-level", "", "Console log level (trace, debug, info, warn, error, fatal, panic). If empty, uses --log-level.")
 	RootCmd.PersistentFlags().Bool("log-file-enabled", false, "Enable file logging to capture detailed logs")
-	RootCmd.PersistentFlags().String("log-file-path", "./logs/ckeletin-go.log", "Path to the log file")
+	RootCmd.PersistentFlags().String("log-file-path", "./logs/vaultmind.log", "Path to the log file")
 	RootCmd.PersistentFlags().String("log-file-level", "debug", "File log level (trace, debug, info, warn, error, fatal, panic)")
 	RootCmd.PersistentFlags().String("log-color", "auto", "Enable colored console output (auto, true, false)")
 

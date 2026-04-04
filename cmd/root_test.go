@@ -1097,7 +1097,7 @@ func TestConfigPriorityCurrentDirFirst(t *testing.T) {
 	os.MkdirAll(currentDir, 0755)
 
 	xdgConfigHome := filepath.Join(homeDir, ".config")
-	xdgConfigDir := filepath.Join(xdgConfigHome, "ckeletin-go")
+	xdgConfigDir := filepath.Join(xdgConfigHome, "vaultmind")
 	os.MkdirAll(xdgConfigDir, 0700)
 
 	// Write config to XDG directory with "info" level
@@ -1174,7 +1174,7 @@ func TestConfigFromXDGDirectory(t *testing.T) {
 	os.MkdirAll(currentDir, 0755)
 
 	xdgConfigHome := filepath.Join(homeDir, ".config")
-	xdgConfigDir := filepath.Join(xdgConfigHome, "ckeletin-go")
+	xdgConfigDir := filepath.Join(xdgConfigHome, "vaultmind")
 	os.MkdirAll(xdgConfigDir, 0700)
 
 	// Write config to XDG directory (not current directory)

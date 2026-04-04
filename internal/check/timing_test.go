@@ -85,7 +85,7 @@ func TestTimingFilePath(t *testing.T) {
 		path := timingFilePath()
 
 		// Should fall back to os.TempDir()
-		assert.Contains(t, path, "ckeletin-go-check-timings.json",
+		assert.Contains(t, path, "vaultmind-check-timings.json",
 			"fallback path should contain the expected filename")
 		assert.True(t, strings.HasPrefix(path, os.TempDir()),
 			"fallback path should start with os.TempDir(), got: %s", path)
