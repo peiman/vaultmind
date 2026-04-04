@@ -5,12 +5,15 @@ import (
 	"strings"
 )
 
-// FTSResult represents a single full-text search hit.
+// FTSResult represents a single full-text search hit per SRS-09.
 type FTSResult struct {
-	NoteID  string  `json:"note_id"`
-	Title   string  `json:"title"`
-	Snippet string  `json:"snippet"`
-	Rank    float64 `json:"rank"`
+	ID       string  `json:"id"`
+	Type     string  `json:"type"`
+	Title    string  `json:"title"`
+	Path     string  `json:"path"`
+	Snippet  string  `json:"snippet"`
+	Score    float64 `json:"score"`
+	IsDomain bool    `json:"is_domain_note"`
 }
 
 // SearchFTS performs a full-text search against the fts_notes table.
@@ -22,7 +25,8 @@ func SearchFTS(d *DB, query string, limit, offset int) ([]FTSResult, error) {
 	}
 
 	rows, err := d.Query(`
-		SELECT f.note_id, n.title, snippet(fts_notes, 2, '...', '...', '', 32), rank
+		SELECT f.note_id, n.type, n.title, n.path,
+			snippet(fts_notes, 1, '...', '...', '', 32), rank, n.is_domain
 		FROM fts_notes f
 		JOIN notes n ON n.id = f.note_id
 		WHERE fts_notes MATCH ?
@@ -38,12 +42,19 @@ func SearchFTS(d *DB, query string, limit, offset int) ([]FTSResult, error) {
 	var results []FTSResult
 	for rows.Next() {
 		var r FTSResult
-		var title *string
-		if scanErr := rows.Scan(&r.NoteID, &title, &r.Snippet, &r.Rank); scanErr != nil {
+		var noteType, title, path *string
+		if scanErr := rows.Scan(&r.ID, &noteType, &title, &path,
+			&r.Snippet, &r.Score, &r.IsDomain); scanErr != nil {
 			return nil, fmt.Errorf("scanning FTS result: %w", scanErr)
+		}
+		if noteType != nil {
+			r.Type = *noteType
 		}
 		if title != nil {
 			r.Title = *title
+		}
+		if path != nil {
+			r.Path = *path
 		}
 		results = append(results, r)
 	}

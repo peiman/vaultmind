@@ -37,7 +37,7 @@ func TestSearchFTS_FindsByContent(t *testing.T) {
 
 	ids := make([]string, len(results))
 	for i, r := range results {
-		ids[i] = r.NoteID
+		ids[i] = r.ID
 	}
 	assert.Contains(t, ids, "concept-act-r")
 }
@@ -51,7 +51,7 @@ func TestSearchFTS_FindsByTitle(t *testing.T) {
 
 	ids := make([]string, len(results))
 	for i, r := range results {
-		ids[i] = r.NoteID
+		ids[i] = r.ID
 	}
 	assert.Contains(t, ids, "concept-spreading-activation")
 }
@@ -81,7 +81,7 @@ func TestSearchFTS_LimitAndOffset(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotEmpty(t, offset)
 		// Offset results should differ from first page
-		assert.NotEqual(t, limited[0].NoteID, offset[0].NoteID)
+		assert.NotEqual(t, limited[0].ID, offset[0].ID)
 	}
 }
 

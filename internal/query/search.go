@@ -35,7 +35,7 @@ func RunSearch(db *index.DB, queryStr, vaultPath string, limit, offset int, json
 	}
 
 	for _, r := range results {
-		if _, err := fmt.Fprintf(w, "%s  %s\n", r.NoteID, r.Title); err != nil {
+		if _, err := fmt.Fprintf(w, "%s  %s\n", r.ID, r.Title); err != nil {
 			return err
 		}
 	}
