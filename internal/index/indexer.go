@@ -87,10 +87,58 @@ func (idx *Indexer) Rebuild() (*IndexResult, error) {
 		}
 	}
 
+	// Post-index: resolve body wikilinks against the notes table
+	resolved, resolveErr := ResolveLinks(db)
+	if resolveErr != nil {
+		log.Debug().Err(resolveErr).Msg("link resolution pass failed")
+	} else {
+		log.Debug().Int("resolved", resolved).Msg("link resolution complete")
+	}
+
 	result.DurationMs = time.Since(start).Milliseconds()
 	result.CompletedAt = time.Now().UTC().Format(time.RFC3339)
 
 	return result, nil
+}
+
+// ResolveLinks updates unresolved links by matching dst_raw against note IDs,
+// titles, and aliases. Sets dst_note_id and resolved=TRUE for matches.
+func ResolveLinks(db *DB) (int, error) {
+	// Resolve by exact ID match
+	res1, err := db.Exec(`
+		UPDATE links SET dst_note_id = dst_raw, resolved = TRUE
+		WHERE resolved = FALSE AND dst_note_id IS NULL
+		AND dst_raw IN (SELECT id FROM notes)`)
+	if err != nil {
+		return 0, fmt.Errorf("resolving by ID: %w", err)
+	}
+	count1, _ := res1.RowsAffected()
+
+	// Resolve by exact title match
+	res2, err := db.Exec(`
+		UPDATE links SET dst_note_id = (
+			SELECT id FROM notes WHERE title = links.dst_raw LIMIT 1
+		), resolved = TRUE
+		WHERE resolved = FALSE AND dst_note_id IS NULL
+		AND dst_raw IN (SELECT title FROM notes)`)
+	if err != nil {
+		return int(count1), fmt.Errorf("resolving by title: %w", err)
+	}
+	count2, _ := res2.RowsAffected()
+
+	// Resolve by alias match
+	res3, err := db.Exec(`
+		UPDATE links SET dst_note_id = (
+			SELECT note_id FROM aliases WHERE alias = links.dst_raw LIMIT 1
+		), resolved = TRUE
+		WHERE resolved = FALSE AND dst_note_id IS NULL
+		AND dst_raw IN (SELECT alias FROM aliases)`)
+	if err != nil {
+		return int(count1 + count2), fmt.Errorf("resolving by alias: %w", err)
+	}
+	count3, _ := res3.RowsAffected()
+
+	return int(count1 + count2 + count3), nil
 }
 
 // parserLinkTypeToEdgeType maps parser link types to SRS-05 edge type names.
