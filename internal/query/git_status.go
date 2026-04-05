@@ -2,6 +2,7 @@ package query
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/peiman/vaultmind/internal/git"
 )
@@ -39,6 +40,25 @@ func GitStatus(detector git.RepoStateDetector, vaultPath string) (*GitStatusResu
 	}
 
 	return result, nil
+}
+
+// FormatGitStatus writes a human-readable summary to w.
+func FormatGitStatus(result *GitStatusResult, w io.Writer) error {
+	status := "clean"
+	if !result.WorkingTreeClean {
+		status = fmt.Sprintf("dirty (%d unstaged, %d staged, %d untracked)",
+			len(result.UnstagedFiles), len(result.StagedFiles), len(result.UntrackedFiles))
+	}
+	merge := "none"
+	if result.MergeInProgress {
+		merge = "merge in progress"
+	} else if result.RebaseInProgress {
+		merge = "rebase in progress"
+	}
+
+	_, err := fmt.Fprintf(w, "Branch:  %s\nStatus:  %s\nMerge:   %s\n",
+		result.Branch, status, merge)
+	return err
 }
 
 // ensureSlice returns an empty slice if s is nil (for JSON [] instead of null).

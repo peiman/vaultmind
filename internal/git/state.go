@@ -62,12 +62,14 @@ func (d *GoGitDetector) Detect(vaultPath string) (RepoState, error) {
 
 	state.WorkingTreeClean = status.IsClean()
 	for filePath, fileStatus := range status {
-		switch {
-		case fileStatus.Staging == gogit.Untracked && fileStatus.Worktree == gogit.Untracked:
+		if fileStatus.Staging == gogit.Untracked && fileStatus.Worktree == gogit.Untracked {
 			state.UntrackedFiles = append(state.UntrackedFiles, filePath)
-		case fileStatus.Staging != gogit.Unmodified && fileStatus.Staging != gogit.Untracked:
+			continue
+		}
+		if fileStatus.Staging != gogit.Unmodified && fileStatus.Staging != gogit.Untracked {
 			state.StagedFiles = append(state.StagedFiles, filePath)
-		case fileStatus.Worktree != gogit.Unmodified && fileStatus.Worktree != gogit.Untracked:
+		}
+		if fileStatus.Worktree != gogit.Unmodified && fileStatus.Worktree != gogit.Untracked {
 			state.UnstagedFiles = append(state.UnstagedFiles, filePath)
 		}
 	}

@@ -34,19 +34,5 @@ func runGitStatus(cmd *cobra.Command, _ []string) error {
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(env)
 	}
 
-	status := "clean"
-	if !result.WorkingTreeClean {
-		status = fmt.Sprintf("dirty (%d unstaged, %d staged, %d untracked)",
-			len(result.UnstagedFiles), len(result.StagedFiles), len(result.UntrackedFiles))
-	}
-	merge := "none"
-	if result.MergeInProgress {
-		merge = "merge in progress"
-	} else if result.RebaseInProgress {
-		merge = "rebase in progress"
-	}
-
-	_, err = fmt.Fprintf(cmd.OutOrStdout(), "Branch:  %s\nStatus:  %s\nMerge:   %s\n",
-		result.Branch, status, merge)
-	return err
+	return query.FormatGitStatus(result, cmd.OutOrStdout())
 }

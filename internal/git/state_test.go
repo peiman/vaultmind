@@ -188,6 +188,28 @@ func TestGoGitDetector_Subdirectory(t *testing.T) {
 	assert.True(t, state.RepoDetected)
 }
 
+func TestGoGitDetector_DualStatus(t *testing.T) {
+	dir, repo := initTestRepo(t)
+
+	// Stage a change
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "README.md"), []byte("staged"), 0o644))
+	wt, err := repo.Worktree()
+	require.NoError(t, err)
+	_, err = wt.Add("README.md")
+	require.NoError(t, err)
+
+	// Make another change after staging
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "README.md"), []byte("modified after staging"), 0o644))
+
+	d := &GoGitDetector{}
+	state, err := d.Detect(dir)
+	require.NoError(t, err)
+
+	// File should appear in BOTH staged and unstaged
+	assert.Contains(t, state.StagedFiles, "README.md")
+	assert.Contains(t, state.UnstagedFiles, "README.md")
+}
+
 func TestGoGitDetector_NewBranch(t *testing.T) {
 	dir, repo := initTestRepo(t)
 

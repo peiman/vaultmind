@@ -5,7 +5,6 @@ import (
 	"time"
 
 	gogit "github.com/go-git/go-git/v5"
-	gogitconfig "github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
@@ -48,17 +47,11 @@ func (c *Committer) CommitFiles(repoPath string, paths []string, message string)
 }
 
 // authorSignature reads the author from git config, falling back to defaults.
+// repo.Config() returns the merged config with correct precedence (local > global > system).
 func authorSignature(repo *gogit.Repository) (*object.Signature, error) {
 	name, email := "VaultMind", "vaultmind@local"
 
-	if cfg, err := repo.ConfigScoped(gogitconfig.GlobalScope); err == nil {
-		if cfg.User.Name != "" {
-			name = cfg.User.Name
-		}
-		if cfg.User.Email != "" {
-			email = cfg.User.Email
-		}
-	} else if cfg, err := repo.Config(); err == nil {
+	if cfg, err := repo.Config(); err == nil {
 		if cfg.User.Name != "" {
 			name = cfg.User.Name
 		}

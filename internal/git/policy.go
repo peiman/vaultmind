@@ -110,6 +110,13 @@ func NewPolicyChecker(cfg vault.GitPolicyConfig) (*PolicyChecker, error) {
 // Check evaluates all policy rules for the given state and operation.
 // targetPath identifies the file being mutated (empty for read-only operations).
 func (pc *PolicyChecker) Check(state RepoState, op OperationType, targetPath string) PolicyResult {
+	if op < OpRead || op > OpWriteCommit {
+		return PolicyResult{
+			Decision: Refuse,
+			Reasons:  []PolicyReason{{Rule: "invalid_operation", Message: fmt.Sprintf("unknown operation type: %d", op)}},
+		}
+	}
+
 	result := PolicyResult{Decision: Allow}
 
 	for _, rule := range pc.rules {

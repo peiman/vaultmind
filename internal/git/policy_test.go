@@ -255,6 +255,16 @@ func TestPolicyChecker_MultipleRules_StrictestWins(t *testing.T) {
 	assert.GreaterOrEqual(t, len(result.Reasons), 2)
 }
 
+func TestPolicyChecker_InvalidOperationType(t *testing.T) {
+	pc, err := NewPolicyChecker(vault.GitPolicyConfig{})
+	require.NoError(t, err)
+
+	state := RepoState{RepoDetected: true, WorkingTreeClean: true}
+	result := pc.Check(state, OperationType(99), "notes/test.md")
+	assert.Equal(t, Refuse, result.Decision)
+	assert.Equal(t, "invalid_operation", result.Reasons[0].Rule)
+}
+
 func TestPolicyChecker_ReadOps_NoTarget(t *testing.T) {
 	pc, err := NewPolicyChecker(vault.GitPolicyConfig{})
 	require.NoError(t, err)

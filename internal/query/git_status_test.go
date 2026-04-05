@@ -1,6 +1,7 @@
 package query_test
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/git"
@@ -97,4 +98,51 @@ func TestGitStatus_NilSlicesBecomEmptyArrays(t *testing.T) {
 	assert.NotNil(t, result.StagedFiles)
 	assert.NotNil(t, result.UnstagedFiles)
 	assert.NotNil(t, result.UntrackedFiles)
+}
+
+func TestFormatGitStatus_CleanRepo(t *testing.T) {
+	result := &query.GitStatusResult{
+		Branch:           "main",
+		WorkingTreeClean: true,
+	}
+	var buf bytes.Buffer
+	require.NoError(t, query.FormatGitStatus(result, &buf))
+	out := buf.String()
+	assert.Contains(t, out, "Branch:  main")
+	assert.Contains(t, out, "Status:  clean")
+	assert.Contains(t, out, "Merge:   none")
+}
+
+func TestFormatGitStatus_DirtyRepo(t *testing.T) {
+	result := &query.GitStatusResult{
+		Branch:           "feature",
+		WorkingTreeClean: false,
+		UnstagedFiles:    []string{"a.md", "b.md"},
+		StagedFiles:      []string{"c.md"},
+		UntrackedFiles:   []string{"d.md"},
+	}
+	var buf bytes.Buffer
+	require.NoError(t, query.FormatGitStatus(result, &buf))
+	out := buf.String()
+	assert.Contains(t, out, "dirty (2 unstaged, 1 staged, 1 untracked)")
+}
+
+func TestFormatGitStatus_MergeInProgress(t *testing.T) {
+	result := &query.GitStatusResult{
+		Branch:          "main",
+		MergeInProgress: true,
+	}
+	var buf bytes.Buffer
+	require.NoError(t, query.FormatGitStatus(result, &buf))
+	assert.Contains(t, buf.String(), "Merge:   merge in progress")
+}
+
+func TestFormatGitStatus_RebaseInProgress(t *testing.T) {
+	result := &query.GitStatusResult{
+		Branch:           "main",
+		RebaseInProgress: true,
+	}
+	var buf bytes.Buffer
+	require.NoError(t, query.FormatGitStatus(result, &buf))
+	assert.Contains(t, buf.String(), "Merge:   rebase in progress")
 }
