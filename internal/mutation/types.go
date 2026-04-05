@@ -38,23 +38,29 @@ type MutationRequest struct {
 	Diff       bool
 	Commit     bool
 	AllowExtra bool
-	Force      bool
 	StripTime  bool
 }
 
 // MutationResult is the JSON response for all mutation commands.
 type MutationResult struct {
-	Path            string      `json:"path"`
-	ID              string      `json:"id"`
-	Operation       string      `json:"operation"`
-	Key             string      `json:"key,omitempty"`
-	OldValue        interface{} `json:"old_value,omitempty"`
-	NewValue        interface{} `json:"new_value,omitempty"`
-	DryRun          bool        `json:"dry_run"`
-	Diff            string      `json:"diff,omitempty"`
-	WriteHash       string      `json:"write_hash,omitempty"`
-	Git             GitInfo     `json:"git"`
-	ReindexRequired bool        `json:"reindex_required"`
+	Path            string          `json:"path"`
+	ID              string          `json:"id"`
+	Operation       string          `json:"operation"`
+	Key             string          `json:"key,omitempty"`
+	OldValue        interface{}     `json:"old_value,omitempty"`
+	NewValue        interface{}     `json:"new_value,omitempty"`
+	DryRun          bool            `json:"dry_run"`
+	Diff            string          `json:"diff,omitempty"`
+	WriteHash       string          `json:"write_hash,omitempty"`
+	Git             GitInfo         `json:"git"`
+	ReindexRequired bool            `json:"reindex_required"`
+	Warnings        []PolicyWarning `json:"warnings,omitempty"`
+}
+
+// PolicyWarning describes a git policy warning that was triggered but didn't block.
+type PolicyWarning struct {
+	Rule    string `json:"rule"`
+	Message string `json:"message"`
 }
 
 // GitInfo reports git state in mutation responses.

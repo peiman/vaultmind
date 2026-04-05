@@ -126,3 +126,12 @@ func TestValidateMutation_MergeUnknownKey(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, "unknown_key", err.(*MutationError).Code)
 }
+
+func TestValidateMutation_UnsetImmutableField(t *testing.T) {
+	reg := testRegistry()
+	note := ParsedNoteInfo{ID: "proj-1", Type: "project", IsDomain: true, Keys: []string{"id", "type", "status"}}
+	req := MutationRequest{Op: OpUnset, Key: "id"}
+	err := ValidateMutation(req, note, reg)
+	require.Error(t, err)
+	assert.Equal(t, "immutable_field", err.(*MutationError).Code)
+}

@@ -239,3 +239,39 @@ func TestGenerateDiff_NoDifference(t *testing.T) {
 	diff := GenerateDiff("notes/test.md", content, content)
 	assert.Empty(t, diff)
 }
+
+func TestSetKey_NonMappingNode(t *testing.T) {
+	node := &yaml.Node{Kind: yaml.ScalarNode, Value: "scalar"}
+	err := SetKey(node, "key", "value")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "expected mapping node")
+}
+
+func TestUnsetKey_NonMappingNode(t *testing.T) {
+	node := &yaml.Node{Kind: yaml.ScalarNode, Value: "scalar"}
+	removed := UnsetKey(node, "key")
+	assert.False(t, removed)
+}
+
+func TestParseFrontmatterNode_NoClosingDelimiter(t *testing.T) {
+	raw := []byte("---\nid: test\ntitle: No closing\n")
+	_, _, err := ParseFrontmatterNode(raw)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "closing --- not found")
+}
+
+func TestParseFrontmatterNode_NoNewlineAfterOpening(t *testing.T) {
+	raw := []byte("---")
+	_, _, err := ParseFrontmatterNode(raw)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no newline")
+}
+
+func TestSpliceFile_NoBody(t *testing.T) {
+	original := []byte("---\nid: test\n---\n")
+	newFM := []byte("---\nid: test\nstatus: active\n---\n")
+	_, bodyOffset, err := ParseFrontmatterNode(original)
+	require.NoError(t, err)
+	result := SpliceFile(original, newFM, bodyOffset)
+	assert.True(t, bytes.HasPrefix(result, []byte("---\nid: test\nstatus: active\n---\n")))
+}

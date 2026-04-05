@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 func TestSortKeys_CanonicalOrder(t *testing.T) {
@@ -169,4 +170,38 @@ func TestSnakeCaseKeys_PreservesValues(t *testing.T) {
 	out, err := SerializeFrontmatter(node, "\n")
 	require.NoError(t, err)
 	assert.Contains(t, string(out), "owner_id: person-alice")
+}
+
+func TestScalarToList_NonMappingNode(t *testing.T) {
+	node := &yaml.Node{Kind: yaml.ScalarNode, Value: "scalar"}
+	changed := ScalarToList(node, "aliases")
+	assert.False(t, changed)
+}
+
+func TestNormalizeDates_NonMappingNode(t *testing.T) {
+	// Should be a no-op for non-mapping nodes
+	node := &yaml.Node{Kind: yaml.ScalarNode, Value: "scalar"}
+	NormalizeDates(node, false) // should not panic
+}
+
+func TestNormalizeDates_ListValueSkipped(t *testing.T) {
+	// Date field with a sequence value (not scalar) should be skipped
+	raw := []byte("---\nid: test\ncreated:\n  - 2026-01-01\n---\n")
+	node, _, err := ParseFrontmatterNode(raw)
+	require.NoError(t, err)
+	NormalizeDates(node.Content[0], false)
+	out, err := SerializeFrontmatter(node, "\n")
+	require.NoError(t, err)
+	assert.Contains(t, string(out), "- 2026-01-01") // unchanged
+}
+
+func TestSortKeys_NonMappingNode(t *testing.T) {
+	node := &yaml.Node{Kind: yaml.ScalarNode, Value: "scalar"}
+	SortKeys(node) // should not panic
+}
+
+func TestSnakeCaseKeys_NonMappingNode(t *testing.T) {
+	node := &yaml.Node{Kind: yaml.ScalarNode, Value: "scalar"}
+	renames := SnakeCaseKeys(node)
+	assert.Nil(t, renames)
 }

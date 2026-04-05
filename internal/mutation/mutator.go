@@ -108,23 +108,11 @@ func (m *Mutator) Run(req MutationRequest) (*MutationResult, error) {
 	}
 
 	// Step 6: Check git policy and atomic write
-	state, err := m.Detector.Detect(m.VaultPath)
+	warnings, err := m.checkGitPolicy(req.Commit, relPath)
 	if err != nil {
-		return nil, &MutationError{Code: "git_detect_error", Message: fmt.Sprintf("detecting git state: %v", err)}
+		return nil, err
 	}
-
-	op := git.OpWrite
-	if req.Commit {
-		op = git.OpWriteCommit
-	}
-	policyResult := m.Checker.Check(state, op, relPath)
-	if policyResult.Decision == git.Refuse {
-		reason := "git policy refused"
-		if len(policyResult.Reasons) > 0 {
-			reason = policyResult.Reasons[0].Rule
-		}
-		return nil, &MutationError{Code: reason, Message: fmt.Sprintf("git policy refuses %s on %s", op, relPath)}
-	}
+	result.Warnings = warnings
 
 	// Conflict detection: re-read file and verify hash unchanged.
 	reread, err := os.ReadFile(absPath)
@@ -162,7 +150,7 @@ func (m *Mutator) Run(req MutationRequest) (*MutationResult, error) {
 
 	// Step 7: Post-write — commit if requested
 	if req.Commit && m.Committer != nil {
-		msg := commitMessage(req, noteInfo.ID)
+		msg := CommitMessage(req, noteInfo.ID)
 		sha, err := m.Committer.CommitFiles(m.VaultPath, []string{relPath}, msg)
 		if err != nil {
 			return nil, &MutationError{Code: "commit_error", Message: fmt.Sprintf("committing: %v", err)}
@@ -253,6 +241,37 @@ func getNodeValue(mapping *yaml.Node, key string) interface{} {
 	return nil
 }
 
+// checkGitPolicy detects the repo state, evaluates the policy matrix for the
+// given operation, and returns any policy warnings. Returns a *MutationError
+// on Refuse or detection failure.
+func (m *Mutator) checkGitPolicy(commit bool, relPath string) ([]PolicyWarning, error) {
+	state, err := m.Detector.Detect(m.VaultPath)
+	if err != nil {
+		return nil, &MutationError{Code: "git_detect_error", Message: fmt.Sprintf("detecting git state: %v", err)}
+	}
+
+	op := git.OpWrite
+	if commit {
+		op = git.OpWriteCommit
+	}
+	policyResult := m.Checker.Check(state, op, relPath)
+	if policyResult.Decision == git.Refuse {
+		reason := "git policy refused"
+		if len(policyResult.Reasons) > 0 {
+			reason = policyResult.Reasons[0].Rule
+		}
+		return nil, &MutationError{Code: reason, Message: fmt.Sprintf("git policy refuses %s on %s", op, relPath)}
+	}
+
+	var warnings []PolicyWarning
+	if policyResult.Decision == git.Warn {
+		for _, r := range policyResult.Reasons {
+			warnings = append(warnings, PolicyWarning{Rule: r.Rule, Message: r.Message})
+		}
+	}
+	return warnings, nil
+}
+
 // gitInfo builds a GitInfo from the detector state.
 func (m *Mutator) gitInfo(targetPath string) GitInfo {
 	state, err := m.Detector.Detect(m.VaultPath)
@@ -287,8 +306,8 @@ func fileHash(data []byte) string {
 	return fmt.Sprintf("%x", h)
 }
 
-// commitMessage generates a structured commit message based on the operation.
-func commitMessage(req MutationRequest, id string) string {
+// CommitMessage generates a structured commit message based on the operation.
+func CommitMessage(req MutationRequest, id string) string {
 	switch req.Op {
 	case OpSet:
 		return fmt.Sprintf("vaultmind: frontmatter set %s %s=%v \u2014 updated %s", id, req.Key, req.Value, req.Key)
