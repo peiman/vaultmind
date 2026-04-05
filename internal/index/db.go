@@ -63,6 +63,39 @@ func (d *DB) Begin() (*sql.Tx, error) {
 	return d.db.Begin()
 }
 
+// NoteHashInfo holds the content hash and modification time for a note.
+type NoteHashInfo struct {
+	Hash  string
+	MTime int64
+}
+
+// NoteHashes returns a map of note path → NoteHashInfo for all notes in the
+// database. Used by the incremental indexer to detect changed and deleted notes.
+func (d *DB) NoteHashes() (map[string]NoteHashInfo, error) {
+	rows, err := d.Query("SELECT path, hash, mtime FROM notes")
+	if err != nil {
+		return nil, fmt.Errorf("querying note hashes: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	result := make(map[string]NoteHashInfo)
+	for rows.Next() {
+		var path, hash string
+		var mtime int64
+		if err := rows.Scan(&path, &hash, &mtime); err != nil {
+			return nil, fmt.Errorf("scanning note hash: %w", err)
+		}
+		result[path] = NoteHashInfo{Hash: hash, MTime: mtime}
+	}
+	return result, rows.Err()
+}
+
+// UpdateMTime updates the mtime column for the note at the given path.
+// Used when a file's content hash is unchanged but its mtime has changed.
+func (d *DB) UpdateMTime(path string, mtime int64) error {
+	_, err := d.Exec("UPDATE notes SET mtime = ? WHERE path = ?", mtime, path)
+	return err
+}
+
 func (d *DB) applySchema() error {
 	pragmas := []string{
 		"PRAGMA journal_mode=WAL",

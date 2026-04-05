@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/index"
+	"github.com/peiman/vaultmind/internal/vault"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -137,4 +138,66 @@ func openTestDB(t *testing.T) *index.DB {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	return db
+}
+
+// buildIndexedDB indexes the test vault into a fresh temp DB and returns the
+// open *index.DB. The caller should not close it — t.Cleanup handles that.
+func buildIndexedDB(t *testing.T) *index.DB {
+	t.Helper()
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "index.db")
+
+	cfg, err := vault.LoadConfig(testVaultPath)
+	require.NoError(t, err)
+
+	idxr := index.NewIndexer(testVaultPath, dbPath, cfg)
+	_, err = idxr.Rebuild()
+	require.NoError(t, err)
+
+	db, err := index.Open(dbPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	return db
+}
+
+func TestNoteHashes_ReturnsAllNotes(t *testing.T) {
+	db := buildIndexedDB(t)
+	hashes, err := db.NoteHashes()
+	require.NoError(t, err)
+	assert.Greater(t, len(hashes), 0)
+	for path, info := range hashes {
+		assert.NotEmpty(t, path)
+		assert.NotEmpty(t, info.Hash)
+		assert.Greater(t, info.MTime, int64(0))
+	}
+}
+
+func TestNoteHashes_EmptyDB(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "empty.db")
+	db, err := index.Open(dbPath)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	hashes, err := db.NoteHashes()
+	require.NoError(t, err)
+	assert.Empty(t, hashes)
+}
+
+func TestUpdateMTime(t *testing.T) {
+	db := buildIndexedDB(t)
+	hashes, err := db.NoteHashes()
+	require.NoError(t, err)
+	var path string
+	var origMTime int64
+	for p, info := range hashes {
+		path = p
+		origMTime = info.MTime
+		break
+	}
+	newMTime := origMTime + 1000
+	err = db.UpdateMTime(path, newMTime)
+	require.NoError(t, err)
+	hashes2, err := db.NoteHashes()
+	require.NoError(t, err)
+	assert.Equal(t, newMTime, hashes2[path].MTime)
 }
