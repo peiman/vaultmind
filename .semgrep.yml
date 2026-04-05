@@ -52,6 +52,7 @@ rules:
         - internal/index/indexer.go  # Reads vault files during indexing (user-provided vault path)
         - internal/mutation/mutator.go  # Reads/writes vault note files during mutation (user-provided vault path)
         - internal/marker/render.go  # Reads/writes vault note files and section templates (user-provided vault path)
+        - internal/plan/executor.go  # Reads vault note files for backup/rollback (user-provided vault path, validated by safePath)
         - cmd/frontmatter_merge.go  # Reads user-specified YAML merge file (--file flag)
         - cmd/dataview_lint.go  # Reads vault .md files via paths from vault scanner (user-provided vault path)
     message: "Potential path traversal. Validate and sanitize file paths."
