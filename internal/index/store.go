@@ -205,6 +205,48 @@ func upsertNote(tx *sql.Tx, rec NoteRecord) error {
 	return nil
 }
 
+// DeleteNoteByPath removes a note and all its dependent rows from every table
+// within a single transaction. It is used by the incremental indexer to clean
+// up notes whose source files no longer exist on disk.
+func DeleteNoteByPath(d *DB, path string) error {
+	var noteID string
+	err := d.QueryRow("SELECT id FROM notes WHERE path = ?", path).Scan(&noteID)
+	if err != nil {
+		return fmt.Errorf("finding note by path %q: %w", path, err)
+	}
+	tx, err := d.Begin()
+	if err != nil {
+		return fmt.Errorf("beginning delete transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	dependentDeletes := []struct {
+		stmt  string
+		label string
+	}{
+		{"DELETE FROM aliases WHERE note_id = ?", "aliases"},
+		{"DELETE FROM tags WHERE note_id = ?", "tags"},
+		{"DELETE FROM frontmatter_kv WHERE note_id = ?", "frontmatter_kv"},
+		{"DELETE FROM blocks WHERE note_id = ?", "blocks"},
+		{"DELETE FROM headings WHERE note_id = ?", "headings"},
+		{"DELETE FROM fts_notes WHERE note_id = ?", "fts_notes"},
+	}
+	for _, dep := range dependentDeletes {
+		if _, err := tx.Exec(dep.stmt, noteID); err != nil {
+			return fmt.Errorf("deleting from %s: %w", dep.label, err)
+		}
+	}
+	if _, err := tx.Exec("DELETE FROM links WHERE src_note_id = ?", noteID); err != nil {
+		return fmt.Errorf("deleting outbound links: %w", err)
+	}
+	if _, err := tx.Exec("DELETE FROM links WHERE dst_note_id = ?", noteID); err != nil {
+		return fmt.Errorf("deleting inbound links: %w", err)
+	}
+	if _, err := tx.Exec("DELETE FROM notes WHERE id = ?", noteID); err != nil {
+		return fmt.Errorf("deleting note: %w", err)
+	}
+	return tx.Commit()
+}
+
 func normalizeAlias(alias string) string {
 	return strings.Join(strings.Fields(strings.ToLower(alias)), " ")
 }

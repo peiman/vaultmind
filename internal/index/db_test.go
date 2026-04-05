@@ -201,3 +201,23 @@ func TestUpdateMTime(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, newMTime, hashes2[path].MTime)
 }
+
+func TestDeleteNoteByPath(t *testing.T) {
+	db := buildIndexedDB(t)
+	hashes, err := db.NoteHashes()
+	require.NoError(t, err)
+	initialCount := len(hashes)
+	require.Greater(t, initialCount, 0)
+	var pathToDelete string
+	for p := range hashes {
+		pathToDelete = p
+		break
+	}
+	err = index.DeleteNoteByPath(db, pathToDelete)
+	require.NoError(t, err)
+	hashes2, err := db.NoteHashes()
+	require.NoError(t, err)
+	assert.Equal(t, initialCount-1, len(hashes2))
+	_, exists := hashes2[pathToDelete]
+	assert.False(t, exists)
+}
