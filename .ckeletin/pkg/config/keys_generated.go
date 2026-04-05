@@ -29,6 +29,8 @@ const (
 	KeyAppDoctorJson            = "app.doctor.json"             // Output in JSON format
 	KeyAppFrontmatterVault      = "app.frontmatter.vault"       // Path to vault root
 	KeyAppFrontmatterJson       = "app.frontmatter.json"        // Output in JSON format
+	KeyAppGitstatusVault        = "app.gitstatus.vault"         // Path to vault root
+	KeyAppGitstatusJson         = "app.gitstatus.json"          // Output in JSON format
 	KeyAppIndexVault            = "app.index.vault"             // Path to the vault root directory
 	KeyAppIndexJson             = "app.index.json"              // Output in JSON format
 	KeyAppLinksVault            = "app.links.vault"             // Path to vault root
