@@ -25,6 +25,15 @@ const (
 	KeyAppCheckParallel                 = "app.check.parallel"                  // Run checks within each category in parallel (disable with --parallel=false)
 	KeyAppCheckCategory                 = "app.check.category"                  // Filter to specific categories (comma-separated: environment,quality,architect...
 	KeyAppCheckTiming                   = "app.check.timing"                    // Show duration for each check in the output
+	KeyAppDataviewrenderVault           = "app.dataviewrender.vault"            // Path to vault root
+	KeyAppDataviewrenderJson            = "app.dataviewrender.json"             // Output in JSON format
+	KeyAppDataviewrenderDryRun          = "app.dataviewrender.dry_run"          // Preview without writing
+	KeyAppDataviewrenderDiff            = "app.dataviewrender.diff"             // Show unified diff
+	KeyAppDataviewrenderCommit          = "app.dataviewrender.commit"           // Stage and commit
+	KeyAppDataviewrenderForce           = "app.dataviewrender.force"            // Override checksum mismatch
+	KeyAppDataviewrenderSectionKey      = "app.dataviewrender.section_key"      // Section key to render
+	KeyAppDataviewlintVault             = "app.dataviewlint.vault"              // Path to vault root
+	KeyAppDataviewlintJson              = "app.dataviewlint.json"               // Output in JSON format
 	KeyAppDoctorVault                   = "app.doctor.vault"                    // Path to vault root
 	KeyAppDoctorJson                    = "app.doctor.json"                     // Output in JSON format
 	KeyAppFrontmatterVault              = "app.frontmatter.vault"               // Path to vault root
