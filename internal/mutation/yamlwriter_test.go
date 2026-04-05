@@ -104,3 +104,72 @@ func TestRoundTrip_PreservesKeyOrder(t *testing.T) {
 	idIdx := bytes.Index(out, []byte("id:"))
 	assert.Less(t, statusIdx, idIdx, "key order should be preserved")
 }
+
+func TestSetKey_ExistingKey(t *testing.T) {
+	raw := []byte("---\nid: test\nstatus: active\n---\n")
+	node, _, err := ParseFrontmatterNode(raw)
+	require.NoError(t, err)
+	err = SetKey(node.Content[0], "status", "paused")
+	require.NoError(t, err)
+	out, err := SerializeFrontmatter(node, "\n")
+	require.NoError(t, err)
+	assert.Contains(t, string(out), "status: paused")
+	assert.NotContains(t, string(out), "status: active")
+}
+
+func TestSetKey_NewKey(t *testing.T) {
+	raw := []byte("---\nid: test\ntype: project\n---\n")
+	node, _, err := ParseFrontmatterNode(raw)
+	require.NoError(t, err)
+	err = SetKey(node.Content[0], "status", "active")
+	require.NoError(t, err)
+	out, err := SerializeFrontmatter(node, "\n")
+	require.NoError(t, err)
+	assert.Contains(t, string(out), "status: active")
+}
+
+func TestSetKey_ListValue(t *testing.T) {
+	raw := []byte("---\nid: test\n---\n")
+	node, _, err := ParseFrontmatterNode(raw)
+	require.NoError(t, err)
+	err = SetKey(node.Content[0], "tags", []interface{}{"billing", "payments"})
+	require.NoError(t, err)
+	out, err := SerializeFrontmatter(node, "\n")
+	require.NoError(t, err)
+	assert.Contains(t, string(out), "tags:")
+	assert.Contains(t, string(out), "- billing")
+	assert.Contains(t, string(out), "- payments")
+}
+
+func TestSetKey_PreservesOtherKeys(t *testing.T) {
+	raw := []byte("---\nid: test\ntype: project\nstatus: active\n---\n")
+	node, _, err := ParseFrontmatterNode(raw)
+	require.NoError(t, err)
+	err = SetKey(node.Content[0], "status", "paused")
+	require.NoError(t, err)
+	out, err := SerializeFrontmatter(node, "\n")
+	require.NoError(t, err)
+	assert.Contains(t, string(out), "id: test")
+	assert.Contains(t, string(out), "type: project")
+}
+
+func TestUnsetKey_ExistingKey(t *testing.T) {
+	raw := []byte("---\nid: test\nstatus: active\ntags:\n  - billing\n---\n")
+	node, _, err := ParseFrontmatterNode(raw)
+	require.NoError(t, err)
+	removed := UnsetKey(node.Content[0], "tags")
+	assert.True(t, removed)
+	out, err := SerializeFrontmatter(node, "\n")
+	require.NoError(t, err)
+	assert.NotContains(t, string(out), "tags")
+	assert.Contains(t, string(out), "id: test")
+	assert.Contains(t, string(out), "status: active")
+}
+
+func TestUnsetKey_NonExistentKey(t *testing.T) {
+	raw := []byte("---\nid: test\n---\n")
+	node, _, err := ParseFrontmatterNode(raw)
+	require.NoError(t, err)
+	removed := UnsetKey(node.Content[0], "nonexistent")
+	assert.False(t, removed)
+}
