@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/peiman/vaultmind/internal/parser"
@@ -20,6 +21,10 @@ type IndexResult struct {
 	Errors            int    `json:"errors"`
 	Skipped           int    `json:"skipped"`
 	DuplicateIDs      int    `json:"duplicate_ids"`
+	Added             int    `json:"added"`
+	Updated           int    `json:"updated"`
+	Deleted           int    `json:"deleted"`
+	FullRebuild       bool   `json:"full_rebuild"`
 	DurationMs        int64  `json:"duration_ms"`
 	CompletedAt       string `json:"completed_at"`
 }
@@ -136,6 +141,42 @@ func (idx *Indexer) Rebuild() (*IndexResult, error) {
 	result.CompletedAt = time.Now().UTC().Format(time.RFC3339)
 
 	return result, nil
+}
+
+// IndexFile re-indexes a single file by its vault-relative path.
+func (idx *Indexer) IndexFile(relPath string) error {
+	absPath := filepath.Join(idx.vaultRoot, relPath)
+
+	content, err := os.ReadFile(absPath) //nolint:gosec // absPath is built from vaultRoot (trusted) + relPath (vault-relative)
+	if err != nil {
+		return fmt.Errorf("reading file %q: %w", relPath, err)
+	}
+
+	parsed, err := parser.Parse(content)
+	if err != nil {
+		return fmt.Errorf("parsing file %q: %w", relPath, err)
+	}
+
+	info, err := os.Stat(absPath)
+	if err != nil {
+		return fmt.Errorf("stat file %q: %w", relPath, err)
+	}
+
+	file := vault.ScannedFile{
+		RelPath: relPath,
+		AbsPath: absPath,
+		ModTime: info.ModTime(),
+	}
+
+	rec := buildNoteRecord(file, content, parsed)
+
+	db, err := Open(idx.dbPath)
+	if err != nil {
+		return fmt.Errorf("opening index: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	return StoreNote(db, rec)
 }
 
 // ResolveLinks updates unresolved links by matching dst_raw against note IDs,

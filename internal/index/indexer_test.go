@@ -205,3 +205,37 @@ func TestRebuild_Idempotent(t *testing.T) {
 
 	assert.Equal(t, result1.Indexed, result2.Indexed)
 }
+
+func TestIndexFile_UpdatesExistingNote(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
+	cfg, err := vault.LoadConfig(testVaultPath)
+	require.NoError(t, err)
+	idxr := index.NewIndexer(testVaultPath, dbPath, cfg)
+	_, err = idxr.Rebuild()
+	require.NoError(t, err)
+
+	err = idxr.IndexFile("projects/proj-vaultmind.md")
+	require.NoError(t, err)
+
+	db, err := index.Open(dbPath)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	hashes, err := db.NoteHashes()
+	require.NoError(t, err)
+	_, exists := hashes["projects/proj-vaultmind.md"]
+	assert.True(t, exists)
+}
+
+func TestIndexFile_NonExistentFile(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
+	cfg, err := vault.LoadConfig(testVaultPath)
+	require.NoError(t, err)
+	idxr := index.NewIndexer(testVaultPath, dbPath, cfg)
+	_, err = idxr.Rebuild()
+	require.NoError(t, err)
+
+	err = idxr.IndexFile("nonexistent/file.md")
+	assert.Error(t, err)
+}
