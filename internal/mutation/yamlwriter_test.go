@@ -173,3 +173,69 @@ func TestUnsetKey_NonExistentKey(t *testing.T) {
 	removed := UnsetKey(node.Content[0], "nonexistent")
 	assert.False(t, removed)
 }
+
+func TestSpliceFile_Basic(t *testing.T) {
+	original := []byte("---\nid: test\nstatus: active\n---\n# Hello World\n\nSome content.\n")
+	newFM := []byte("---\nid: test\nstatus: paused\n---\n")
+	_, bodyOffset, err := ParseFrontmatterNode(original)
+	require.NoError(t, err)
+	result := SpliceFile(original, newFM, bodyOffset)
+	assert.True(t, bytes.HasPrefix(result, []byte("---\nid: test\nstatus: paused\n---\n")))
+	assert.Contains(t, string(result), "# Hello World")
+	assert.Contains(t, string(result), "Some content.")
+}
+
+func TestSpliceFile_PreservesBodyBytesExactly(t *testing.T) {
+	body := "# Title\n\n  indented line  \n\ttab line\ntrailing spaces   \n"
+	original := []byte("---\nid: test\n---\n" + body)
+	newFM := []byte("---\nid: test\nstatus: active\n---\n")
+	_, bodyOffset, err := ParseFrontmatterNode(original)
+	require.NoError(t, err)
+	result := SpliceFile(original, newFM, bodyOffset)
+	resultBody := string(result[len(newFM):])
+	assert.Equal(t, body, resultBody)
+}
+
+func TestSpliceFile_NormalizesGap(t *testing.T) {
+	original := []byte("---\nid: test\n---\n\n\n\n# Body\n")
+	newFM := []byte("---\nid: test\nstatus: active\n---\n")
+	_, bodyOffset, err := ParseFrontmatterNode(original)
+	require.NoError(t, err)
+	result := SpliceFile(original, newFM, bodyOffset)
+	expected := "---\nid: test\nstatus: active\n---\n\n# Body\n"
+	assert.Equal(t, expected, string(result))
+}
+
+func TestSpliceFile_PreservesTrailingNewline(t *testing.T) {
+	original := []byte("---\nid: test\n---\n# Body\n")
+	newFM := []byte("---\nid: test\n---\n")
+	_, bodyOffset, err := ParseFrontmatterNode(original)
+	require.NoError(t, err)
+	result := SpliceFile(original, newFM, bodyOffset)
+	assert.True(t, DetectTrailingNewline(result))
+}
+
+func TestSpliceFile_PreservesNoTrailingNewline(t *testing.T) {
+	original := []byte("---\nid: test\n---\n# Body")
+	newFM := []byte("---\nid: test\n---\n")
+	_, bodyOffset, err := ParseFrontmatterNode(original)
+	require.NoError(t, err)
+	result := SpliceFile(original, newFM, bodyOffset)
+	assert.False(t, DetectTrailingNewline(result))
+}
+
+func TestGenerateDiff_ShowsChanges(t *testing.T) {
+	original := "---\nid: test\nstatus: active\n---\n# Body\n"
+	modified := "---\nid: test\nstatus: paused\n---\n# Body\n"
+	diff := GenerateDiff("notes/test.md", original, modified)
+	assert.Contains(t, diff, "-status: active")
+	assert.Contains(t, diff, "+status: paused")
+	assert.Contains(t, diff, "--- a/notes/test.md")
+	assert.Contains(t, diff, "+++ b/notes/test.md")
+}
+
+func TestGenerateDiff_NoDifference(t *testing.T) {
+	content := "---\nid: test\n---\n# Body\n"
+	diff := GenerateDiff("notes/test.md", content, content)
+	assert.Empty(t, diff)
+}

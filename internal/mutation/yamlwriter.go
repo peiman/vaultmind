@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sergi/go-diff/diffmatchpatch"
 	"gopkg.in/yaml.v3"
 )
 
@@ -166,4 +167,63 @@ func SerializeFrontmatter(doc *yaml.Node, lineEnding string) ([]byte, error) {
 	out.WriteString(lineEnding)
 
 	return out.Bytes(), nil
+}
+
+// SpliceFile replaces the frontmatter section in original bytes with newFrontmatter,
+// preserving body bytes untouched. Normalizes gap to exactly one blank line when
+// body has leading blank lines; otherwise preserves body as-is from its first character.
+func SpliceFile(original []byte, newFrontmatter []byte, bodyOffset int) []byte {
+	hadTrailingNewline := DetectTrailingNewline(original)
+	body := original[bodyOffset:]
+
+	// Strip all leading newlines, then add exactly one if there were any.
+	trimmedBody := bytes.TrimLeft(body, "\n\r")
+	hasLeadingNewlines := len(trimmedBody) < len(body)
+
+	var result bytes.Buffer
+	result.Write(newFrontmatter)
+	if hasLeadingNewlines && len(trimmedBody) > 0 {
+		result.WriteByte('\n')
+		result.Write(trimmedBody)
+	} else {
+		result.Write(body)
+	}
+
+	out := result.Bytes()
+	if hadTrailingNewline && !DetectTrailingNewline(out) {
+		out = append(out, '\n')
+	} else if !hadTrailingNewline && DetectTrailingNewline(out) {
+		out = bytes.TrimRight(out, "\n")
+	}
+	return out
+}
+
+// GenerateDiff produces a unified diff string between original and modified.
+func GenerateDiff(path string, original, modified string) string {
+	if original == modified {
+		return ""
+	}
+	dmp := diffmatchpatch.New()
+	a, b, c := dmp.DiffLinesToChars(original, modified)
+	diffs := dmp.DiffMain(a, b, false)
+	diffs = dmp.DiffCharsToLines(diffs, c)
+	diffs = dmp.DiffCleanupSemantic(diffs)
+
+	var buf bytes.Buffer
+	fmt.Fprintf(&buf, "--- a/%s\n", path)
+	fmt.Fprintf(&buf, "+++ b/%s\n", path)
+	for _, d := range diffs {
+		lines := strings.Split(strings.TrimRight(d.Text, "\n"), "\n")
+		for _, line := range lines {
+			switch d.Type {
+			case diffmatchpatch.DiffDelete:
+				fmt.Fprintf(&buf, "-%s\n", line)
+			case diffmatchpatch.DiffInsert:
+				fmt.Fprintf(&buf, "+%s\n", line)
+			case diffmatchpatch.DiffEqual:
+				fmt.Fprintf(&buf, " %s\n", line)
+			}
+		}
+	}
+	return buf.String()
 }
