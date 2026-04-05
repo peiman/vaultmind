@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/internal/config/commands"
@@ -26,7 +27,7 @@ func runFrontmatterMerge(cmd *cobra.Command, args []string) error {
 	if filePath == "" {
 		return fmt.Errorf("--file flag is required")
 	}
-	data, err := os.ReadFile(filePath)
+	data, err := os.ReadFile(filepath.Clean(filePath))
 	if err != nil {
 		return fmt.Errorf("reading merge file: %w", err)
 	}

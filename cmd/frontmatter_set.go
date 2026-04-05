@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
@@ -65,7 +66,8 @@ func runMutation(cmd *cobra.Command, req mutation.MutationRequest,
 	result, err := m.Run(req)
 	if err != nil {
 		if getConfigValueWithFlags[bool](cmd, "json", jsonKey) {
-			if me, ok := err.(*mutation.MutationError); ok {
+			var me *mutation.MutationError
+			if errors.As(err, &me) {
 				return cmdutil.WriteJSONError(cmd.OutOrStdout(), cmdName, me.Code, me.Message)
 			}
 		}
@@ -79,11 +81,11 @@ func runMutation(cmd *cobra.Command, req mutation.MutationRequest,
 	}
 
 	if result.DryRun && result.Diff != "" {
-		fmt.Fprint(cmd.OutOrStdout(), result.Diff)
+		_, err = fmt.Fprint(cmd.OutOrStdout(), result.Diff)
 	} else if result.DryRun {
-		fmt.Fprintf(cmd.OutOrStdout(), "Dry run: %s %s (no changes written)\n", result.Operation, result.Path)
+		_, err = fmt.Fprintf(cmd.OutOrStdout(), "Dry run: %s %s (no changes written)\n", result.Operation, result.Path)
 	} else {
-		fmt.Fprintf(cmd.OutOrStdout(), "%s %s: %s\n", result.Operation, result.Path, result.ID)
+		_, err = fmt.Fprintf(cmd.OutOrStdout(), "%s %s: %s\n", result.Operation, result.Path, result.ID)
 	}
-	return nil
+	return err
 }
