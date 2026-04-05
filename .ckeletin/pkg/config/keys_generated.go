@@ -57,6 +57,7 @@ const (
 	KeyAppGitstatusJson                 = "app.gitstatus.json"                  // Output in JSON format
 	KeyAppIndexVault                    = "app.index.vault"                     // Path to the vault root directory
 	KeyAppIndexJson                     = "app.index.json"                      // Output in JSON format
+	KeyAppIndexFull                     = "app.index.full"                      // Force full rebuild instead of incremental index
 	KeyAppLinksVault                    = "app.links.vault"                     // Path to vault root
 	KeyAppLinksJson                     = "app.links.json"                      // Output in JSON format
 	KeyAppLinksEdgeType                 = "app.links.edge_type"                 // Filter by edge type

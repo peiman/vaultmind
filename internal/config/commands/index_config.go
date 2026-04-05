@@ -5,14 +5,15 @@ import "github.com/peiman/vaultmind/.ckeletin/pkg/config"
 // IndexMetadata defines the metadata for the index command.
 var IndexMetadata = config.CommandMetadata{
 	Use:   "index",
-	Short: "Build or rebuild the vault index",
-	Long: `Scan the vault, parse all .md files, and populate the SQLite index.
-This is a full rebuild — all notes are re-parsed and re-indexed.
-The index can always be rebuilt from the vault content.`,
+	Short: "Build or update the vault index",
+	Long: `Scan the vault and update the SQLite index.
+By default, uses incremental indexing — only re-parses files whose content has changed.
+Use --full to force a complete rebuild from scratch.`,
 	ConfigPrefix: "app.index",
 	FlagOverrides: map[string]string{
 		"app.index.vault": "vault",
 		"app.index.json":  "json",
+		"app.index.full":  "full",
 	},
 }
 
@@ -31,6 +32,14 @@ func IndexOptions() []config.ConfigOption {
 			Key:          "app.index.json",
 			DefaultValue: false,
 			Description:  "Output in JSON format",
+			Type:         "bool",
+			Required:     false,
+			Example:      "true",
+		},
+		{
+			Key:          "app.index.full",
+			DefaultValue: false,
+			Description:  "Force full rebuild instead of incremental index",
 			Type:         "bool",
 			Required:     false,
 			Example:      "true",
