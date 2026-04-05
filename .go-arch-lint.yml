@@ -86,6 +86,7 @@ components:
       - internal/graph/**
       - internal/git/**
       - internal/mutation/**
+      - internal/marker/**
 
   # -------------------------------------------------------------------------
   # PROJECT-MANAGED: Business Logic Layer
