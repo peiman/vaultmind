@@ -20,6 +20,11 @@ const (
 	KeyAppLogSamplingThereafter         = "app.log.sampling_thereafter"         // Number of messages to log thereafter per second
 	KeyAppDocsOutputFormat              = "app.docs.output_format"              // Output format for documentation (markdown, yaml)
 	KeyAppDocsOutputFile                = "app.docs.output_file"                // Output file for documentation (defaults to stdout)
+	KeyAppApplyVault                    = "app.apply.vault"                     // Path to vault root
+	KeyAppApplyJson                     = "app.apply.json"                      // Output in JSON format
+	KeyAppApplyDryRun                   = "app.apply.dry_run"                   // Preview without executing
+	KeyAppApplyDiff                     = "app.apply.diff"                      // Show unified diffs
+	KeyAppApplyCommit                   = "app.apply.commit"                    // Stage and commit all changes
 	KeyAppCheckFailFast                 = "app.check.fail_fast"                 // Stop on first failed check
 	KeyAppCheckVerbose                  = "app.check.verbose"                   // Show verbose output including command details
 	KeyAppCheckParallel                 = "app.check.parallel"                  // Run checks within each category in parallel (disable with --parallel=false)
