@@ -1,3 +1,6 @@
+// Package mutation provides utilities for reading and writing YAML frontmatter
+// in Markdown note files while preserving key order, scalar styles, and line
+// ending conventions.
 package mutation
 
 import (
