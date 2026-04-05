@@ -228,6 +228,7 @@ func DeleteNoteByPath(d *DB, path string) error {
 		{"DELETE FROM frontmatter_kv WHERE note_id = ?", "frontmatter_kv"},
 		{"DELETE FROM blocks WHERE note_id = ?", "blocks"},
 		{"DELETE FROM headings WHERE note_id = ?", "headings"},
+		{"DELETE FROM generated_sections WHERE note_id = ?", "generated_sections"},
 		{"DELETE FROM fts_notes WHERE note_id = ?", "fts_notes"},
 	}
 	for _, dep := range dependentDeletes {

@@ -345,3 +345,40 @@ func TestIncremental_DetectsDeletedFile(t *testing.T) {
 	assert.Equal(t, 1, result.Deleted)
 	assert.Equal(t, 1, result.Skipped)
 }
+
+func TestIncremental_MtimeOnlyChange(t *testing.T) {
+	vaultDir := t.TempDir()
+	configDir := filepath.Join(vaultDir, ".vaultmind")
+	require.NoError(t, os.MkdirAll(configDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "config.yaml"),
+		[]byte("types:\n  concept:\n    required: [title]\n    statuses: []\n"), 0o644))
+
+	notePath := filepath.Join(vaultDir, "note.md")
+	content := []byte("---\nid: test\ntype: concept\ntitle: Test\n---\n# Body\n")
+	require.NoError(t, os.WriteFile(notePath, content, 0o644))
+
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	cfg, err := vault.LoadConfig(vaultDir)
+	require.NoError(t, err)
+	idxr := index.NewIndexer(vaultDir, dbPath, cfg)
+
+	_, err = idxr.Rebuild()
+	require.NoError(t, err)
+
+	// Touch mtime without changing content (simulates git checkout)
+	futureTime := time.Now().Add(10 * time.Second)
+	require.NoError(t, os.Chtimes(notePath, futureTime, futureTime))
+
+	result, err := idxr.Incremental()
+	require.NoError(t, err)
+	assert.Equal(t, 0, result.Updated, "should not re-parse unchanged content")
+	assert.Equal(t, 1, result.Skipped, "should skip after hash comparison")
+
+	// Verify mtime was updated in DB
+	db, err := index.Open(dbPath)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	hashes, err := db.NoteHashes()
+	require.NoError(t, err)
+	assert.Equal(t, futureTime.Unix(), hashes["note.md"].MTime)
+}

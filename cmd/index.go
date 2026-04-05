@@ -36,12 +36,15 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 	var result *index.IndexResult
 	if fullRebuild {
 		result, err = idxr.Rebuild()
+		if err != nil {
+			return fmt.Errorf("rebuilding index: %w", err)
+		}
 		result.FullRebuild = true
 	} else {
 		result, err = idxr.Incremental()
-	}
-	if err != nil {
-		return fmt.Errorf("indexing: %w", err)
+		if err != nil {
+			return fmt.Errorf("incremental index: %w", err)
+		}
 	}
 
 	if jsonOut {
