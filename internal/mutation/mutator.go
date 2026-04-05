@@ -45,8 +45,14 @@ func (m *Mutator) Run(req MutationRequest) (*MutationResult, error) {
 		return nil, &MutationError{Code: "parse_error", Message: fmt.Sprintf("parsing frontmatter: %v", err)}
 	}
 
-	// Get the mapping node from the document node.
+	// R1: Guard against empty or non-mapping frontmatter.
+	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 {
+		return nil, &MutationError{Code: "parse_error", Message: "frontmatter produced empty document node"}
+	}
 	mapping := doc.Content[0]
+	if mapping.Kind != yaml.MappingNode {
+		return nil, &MutationError{Code: "parse_error", Message: "frontmatter is not a YAML mapping"}
+	}
 
 	// Step 3: Validate
 	if err := ValidateMutation(req, noteInfo, m.Registry); err != nil {
@@ -59,35 +65,11 @@ func (m *Mutator) Run(req MutationRequest) (*MutationResult, error) {
 		ID:        noteInfo.ID,
 		Operation: req.Op.String(),
 		DryRun:    req.DryRun,
+		Warnings:  []PolicyWarning{}, // AX3: Always emit warnings array, never null.
 	}
 
-	switch req.Op {
-	case OpSet:
-		result.Key = req.Key
-		result.OldValue = getNodeValue(mapping, req.Key)
-		if err := SetKey(mapping, req.Key, req.Value); err != nil {
-			return nil, &MutationError{Code: "set_error", Message: fmt.Sprintf("setting key %q: %v", req.Key, err)}
-		}
-		result.NewValue = req.Value
-
-	case OpUnset:
-		result.Key = req.Key
-		result.OldValue = getNodeValue(mapping, req.Key)
-		UnsetKey(mapping, req.Key)
-
-	case OpMerge:
-		for key, value := range req.Fields {
-			if err := SetKey(mapping, key, value); err != nil {
-				return nil, &MutationError{Code: "merge_error", Message: fmt.Sprintf("setting key %q: %v", key, err)}
-			}
-		}
-
-	case OpNormalize:
-		SortKeys(mapping)
-		ScalarToList(mapping, "aliases")
-		ScalarToList(mapping, "tags")
-		NormalizeDates(mapping, req.StripTime)
-		SnakeCaseKeys(mapping)
+	if err := applyOperation(req, mapping, result); err != nil {
+		return nil, err
 	}
 
 	// Step 5: Generate diff
@@ -112,37 +94,10 @@ func (m *Mutator) Run(req MutationRequest) (*MutationResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	result.Warnings = warnings
+	result.Warnings = append(result.Warnings, warnings...)
 
-	// Conflict detection: re-read file and verify hash unchanged.
-	reread, err := os.ReadFile(absPath)
-	if err != nil {
-		return nil, &MutationError{Code: "read_error", Message: fmt.Sprintf("re-reading %s for conflict check: %v", relPath, err)}
-	}
-	if fileHash(reread) != preHash {
-		return nil, &MutationError{Code: "conflict", Message: fmt.Sprintf("file %s was modified concurrently", relPath)}
-	}
-
-	// Atomic write: write to temp file, then rename.
-	dir := filepath.Dir(absPath)
-	tmp, err := os.CreateTemp(dir, ".vaultmind-*.tmp")
-	if err != nil {
-		return nil, &MutationError{Code: "write_error", Message: fmt.Sprintf("creating temp file: %v", err)}
-	}
-	tmpName := tmp.Name()
-
-	if _, err := tmp.Write(newContent); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(tmpName)
-		return nil, &MutationError{Code: "write_error", Message: fmt.Sprintf("writing temp file: %v", err)}
-	}
-	if err := tmp.Close(); err != nil {
-		_ = os.Remove(tmpName)
-		return nil, &MutationError{Code: "write_error", Message: fmt.Sprintf("closing temp file: %v", err)}
-	}
-	if err := os.Rename(tmpName, absPath); err != nil {
-		_ = os.Remove(tmpName)
-		return nil, &MutationError{Code: "write_error", Message: fmt.Sprintf("renaming temp file: %v", err)}
+	if err := atomicWrite(absPath, relPath, newContent, preHash); err != nil {
+		return nil, err
 	}
 
 	result.WriteHash = fileHash(newContent)
@@ -162,6 +117,91 @@ func (m *Mutator) Run(req MutationRequest) (*MutationResult, error) {
 	return result, nil
 }
 
+// applyOperation dispatches the mutation operation on the YAML mapping and populates
+// the result fields (Key, OldValue, NewValue, Warnings).
+func applyOperation(req MutationRequest, mapping *yaml.Node, result *MutationResult) error {
+	switch req.Op {
+	case OpSet:
+		result.Key = req.Key
+		result.OldValue = getNodeValue(mapping, req.Key)
+		if err := SetKey(mapping, req.Key, req.Value); err != nil {
+			return &MutationError{Code: "set_error", Message: fmt.Sprintf("setting key %q: %v", req.Key, err)}
+		}
+		result.NewValue = req.Value
+
+	case OpUnset:
+		result.Key = req.Key
+		result.OldValue = getNodeValue(mapping, req.Key)
+		removed := UnsetKey(mapping, req.Key)
+		if !removed {
+			result.Warnings = append(result.Warnings, PolicyWarning{
+				Rule:    "key_not_found",
+				Message: fmt.Sprintf("key %q was not present in frontmatter", req.Key),
+			})
+		}
+
+	case OpMerge:
+		for key, value := range req.Fields {
+			if err := SetKey(mapping, key, value); err != nil {
+				return &MutationError{Code: "merge_error", Message: fmt.Sprintf("setting key %q: %v", key, err)}
+			}
+		}
+
+	case OpNormalize:
+		SortKeys(mapping)
+		ScalarToList(mapping, "aliases")
+		ScalarToList(mapping, "tags")
+		NormalizeDates(mapping, req.StripTime)
+		SnakeCaseKeys(mapping)
+	}
+	return nil
+}
+
+// atomicWrite performs conflict detection, writes content to a temp file, renames
+// it into place, and restores the original file permissions.
+func atomicWrite(absPath, relPath string, newContent []byte, preHash string) error {
+	// Conflict detection: re-read file and verify hash unchanged.
+	// absPath is validated against path traversal in resolveTarget before reaching here.
+	reread, err := os.ReadFile(absPath) //nolint:gosec // path validated in resolveTarget
+	if err != nil {
+		return &MutationError{Code: "read_error", Message: fmt.Sprintf("re-reading %s for conflict check: %v", relPath, err)}
+	}
+	if fileHash(reread) != preHash {
+		return &MutationError{Code: "conflict", Message: fmt.Sprintf("file %s was modified concurrently", relPath)}
+	}
+
+	// S2: Preserve file permissions during atomic write.
+	origInfo, err := os.Stat(absPath)
+	if err != nil {
+		return &MutationError{Code: "write_error", Message: fmt.Sprintf("stat original: %v", err)}
+	}
+
+	dir := filepath.Dir(absPath)
+	tmp, err := os.CreateTemp(dir, ".vaultmind-*.tmp")
+	if err != nil {
+		return &MutationError{Code: "write_error", Message: fmt.Sprintf("creating temp file: %v", err)}
+	}
+	tmpName := tmp.Name()
+
+	if _, err := tmp.Write(newContent); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return &MutationError{Code: "write_error", Message: fmt.Sprintf("writing temp file: %v", err)}
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpName)
+		return &MutationError{Code: "write_error", Message: fmt.Sprintf("closing temp file: %v", err)}
+	}
+	if err := os.Rename(tmpName, absPath); err != nil {
+		_ = os.Remove(tmpName)
+		return &MutationError{Code: "write_error", Message: fmt.Sprintf("renaming temp file: %v", err)}
+	}
+	if err := os.Chmod(absPath, origInfo.Mode().Perm()); err != nil {
+		return &MutationError{Code: "write_error", Message: fmt.Sprintf("restoring permissions: %v", err)}
+	}
+	return nil
+}
+
 // resolveTarget handles path-based targets (contains "/" or ends in ".md").
 // For non-path targets (bare id/alias), returns unresolved_target for now.
 func (m *Mutator) resolveTarget(target string) (string, ParsedNoteInfo, error) {
@@ -173,6 +213,17 @@ func (m *Mutator) resolveTarget(target string) (string, ParsedNoteInfo, error) {
 	}
 
 	absPath := filepath.Clean(filepath.Join(m.VaultPath, target))
+
+	// S1: Validate resolved path stays within vault directory.
+	cleanVault := filepath.Clean(m.VaultPath)
+	cleanAbs := filepath.Clean(absPath)
+	if !strings.HasPrefix(cleanAbs, cleanVault+string(filepath.Separator)) && cleanAbs != cleanVault {
+		return "", ParsedNoteInfo{}, &MutationError{
+			Code:    "path_traversal",
+			Message: fmt.Sprintf("target path %q escapes vault directory", target),
+		}
+	}
+
 	if _, err := os.Stat(absPath); err != nil {
 		return "", ParsedNoteInfo{}, &MutationError{
 			Code:    "unresolved_target",
@@ -196,7 +247,21 @@ func (m *Mutator) resolveTarget(target string) (string, ParsedNoteInfo, error) {
 		}
 	}
 
+	// R1: Guard against empty or non-mapping frontmatter in resolveTarget.
+	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 {
+		return "", ParsedNoteInfo{}, &MutationError{
+			Code:    "parse_error",
+			Message: fmt.Sprintf("frontmatter of %s produced empty document node", target),
+		}
+	}
 	mapping := doc.Content[0]
+	if mapping.Kind != yaml.MappingNode {
+		return "", ParsedNoteInfo{}, &MutationError{
+			Code:    "parse_error",
+			Message: fmt.Sprintf("frontmatter of %s is not a YAML mapping", target),
+		}
+	}
+
 	info := extractNoteInfo(mapping)
 	return target, info, nil
 }

@@ -52,6 +52,8 @@ func runMutation(cmd *cobra.Command, req mutation.MutationRequest,
 			if errors.As(err, &me) {
 				return cmdutil.WriteJSONError(cmd.OutOrStdout(), cmdName, me.Code, me.Message)
 			}
+			// AX2: Fallback JSON error for non-MutationError.
+			return cmdutil.WriteJSONError(cmd.OutOrStdout(), cmdName, "internal_error", err.Error())
 		}
 		return fmt.Errorf("%s: %w", cmdName, err)
 	}
@@ -59,6 +61,7 @@ func runMutation(cmd *cobra.Command, req mutation.MutationRequest,
 	if getConfigValueWithFlags[bool](cmd, "json", jsonKey) {
 		env := envelope.OK(cmdName, result)
 		env.Meta.VaultPath = vaultPath
+		env.Meta.IndexStale = true // AX1: Mutations always stale the index.
 		for _, w := range result.Warnings {
 			env.AddWarning(w.Rule, w.Message, "")
 		}

@@ -54,7 +54,7 @@ type MutationResult struct {
 	WriteHash       string          `json:"write_hash,omitempty"`
 	Git             GitInfo         `json:"git"`
 	ReindexRequired bool            `json:"reindex_required"`
-	Warnings        []PolicyWarning `json:"warnings,omitempty"`
+	Warnings        []PolicyWarning `json:"warnings"`
 }
 
 // PolicyWarning describes a git policy warning that was triggered but didn't block.

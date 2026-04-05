@@ -193,7 +193,7 @@ func SpliceFile(original []byte, newFrontmatter []byte, bodyOffset int) []byte {
 	if hadTrailingNewline && !DetectTrailingNewline(out) {
 		out = append(out, '\n')
 	} else if !hadTrailingNewline && DetectTrailingNewline(out) {
-		out = bytes.TrimRight(out, "\n")
+		out = bytes.TrimSuffix(out, []byte("\n"))
 	}
 	return out
 }

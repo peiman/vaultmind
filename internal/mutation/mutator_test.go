@@ -575,3 +575,45 @@ func TestMutator_Set_CommitFlag_NilCommitter(t *testing.T) {
 	assert.NotEmpty(t, result.WriteHash)
 	assert.Empty(t, result.Git.CommitSHA)
 }
+
+func TestMutator_PathTraversal(t *testing.T) {
+	vaultPath := setupTestVault(t)
+	m := newTestMutator(t, vaultPath)
+
+	_, err := m.Run(mutation.MutationRequest{
+		Op: mutation.OpSet, Target: "../../etc/passwd",
+		Key: "status", Value: "hacked",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "path_traversal")
+}
+
+func TestMutator_EmptyFrontmatter(t *testing.T) {
+	vaultPath := setupTestVault(t)
+	dir := filepath.Join(vaultPath, "notes")
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	emptyFM := "---\n---\n# Body\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "empty-fm.md"), []byte(emptyFM), 0o644))
+
+	m := newTestMutator(t, vaultPath)
+	_, err := m.Run(mutation.MutationRequest{
+		Op: mutation.OpSet, Target: "notes/empty-fm.md",
+		Key: "status", Value: "active",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "parse_error")
+}
+
+func TestMutator_Unset_MissingKeyWarns(t *testing.T) {
+	vaultPath := setupTestVault(t)
+	m := newTestMutator(t, vaultPath)
+
+	result, err := m.Run(mutation.MutationRequest{
+		Op: mutation.OpUnset, Target: "projects/test-project.md",
+		Key: "owner_id", // not present in frontmatter
+	})
+	require.NoError(t, err)
+	require.Len(t, result.Warnings, 1)
+	assert.Equal(t, "key_not_found", result.Warnings[0].Rule)
+	assert.Contains(t, result.Warnings[0].Message, "owner_id")
+}
