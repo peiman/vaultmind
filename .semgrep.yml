@@ -50,6 +50,7 @@ rules:
         - internal/vault/config.go  # Reads config from vault root (user-provided but intentional)
         - internal/cmdutil/helpers.go  # Reads DB file for index hash (user-provided vault path)
         - internal/index/indexer.go  # Reads vault files during indexing (user-provided vault path)
+        - internal/mutation/mutator.go  # Reads/writes vault note files during mutation (user-provided vault path)
     message: "Potential path traversal. Validate and sanitize file paths."
     languages: [go]
     severity: WARNING
