@@ -84,6 +84,7 @@ components:
       - internal/envelope/**
       - internal/index/**
       - internal/graph/**
+      - internal/git/**
 
   # -------------------------------------------------------------------------
   # PROJECT-MANAGED: Business Logic Layer
