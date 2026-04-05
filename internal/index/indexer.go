@@ -179,6 +179,103 @@ func (idx *Indexer) IndexFile(relPath string) error {
 	return StoreNote(db, rec)
 }
 
+// Incremental scans the vault and only indexes files that are new or changed
+// (detected via content hash). Deleted files are removed from the index.
+func (idx *Indexer) Incremental() (*IndexResult, error) {
+	start := time.Now()
+
+	db, err := Open(idx.dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("opening index database: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	stored, err := db.NoteHashes()
+	if err != nil {
+		return nil, fmt.Errorf("loading stored hashes: %w", err)
+	}
+
+	files, err := vault.Scan(idx.vaultRoot, idx.cfg.Vault.Exclude)
+	if err != nil {
+		return nil, fmt.Errorf("scanning vault: %w", err)
+	}
+
+	result := &IndexResult{DBPath: idx.dbPath}
+	diskPaths := make(map[string]bool, len(files))
+
+	for _, file := range files {
+		diskPaths[file.RelPath] = true
+
+		info, ok := stored[file.RelPath]
+
+		content, readErr := os.ReadFile(file.AbsPath)
+		if readErr != nil {
+			log.Debug().Err(readErr).Str("path", file.RelPath).Msg("skipping unreadable file")
+			result.Errors++
+			continue
+		}
+
+		h := sha256.Sum256(content)
+		hash := fmt.Sprintf("%x", h[:])
+
+		// Skip if content is unchanged (fast-path: mtime same → skip without hashing;
+		// fallback: mtime differs but hash same → update mtime and skip).
+		if ok && hash == info.Hash {
+			if file.ModTime.Unix() != info.MTime {
+				if mtErr := db.UpdateMTime(file.RelPath, file.ModTime.Unix()); mtErr != nil {
+					log.Debug().Err(mtErr).Str("path", file.RelPath).Msg("failed to update mtime")
+				}
+			}
+			result.Skipped++
+			continue
+		}
+
+		parsed, parseErr := parser.Parse(content)
+		if parseErr != nil {
+			log.Debug().Err(parseErr).Str("path", file.RelPath).Msg("skipping unparseable file")
+			result.Errors++
+			continue
+		}
+
+		rec := buildNoteRecord(file, content, parsed)
+		if storeErr := StoreNote(db, rec); storeErr != nil {
+			log.Debug().Err(storeErr).Str("path", file.RelPath).Msg("skipping file with store error")
+			result.Errors++
+			continue
+		}
+
+		if ok {
+			result.Updated++
+		} else {
+			result.Added++
+		}
+		result.Indexed++
+	}
+
+	for storedPath := range stored {
+		if !diskPaths[storedPath] {
+			if delErr := DeleteNoteByPath(db, storedPath); delErr != nil {
+				log.Debug().Err(delErr).Str("path", storedPath).Msg("failed to delete orphaned note")
+				result.Errors++
+				continue
+			}
+			result.Deleted++
+		}
+	}
+
+	resolved, resolveErr := ResolveLinks(db)
+	if resolveErr != nil {
+		log.Debug().Err(resolveErr).Msg("link resolution failed")
+	} else {
+		log.Debug().Int("resolved", resolved).Msg("link resolution complete")
+	}
+
+	result.DurationMs = time.Since(start).Milliseconds()
+	result.CompletedAt = time.Now().UTC().Format(time.RFC3339)
+
+	return result, nil
+}
+
 // ResolveLinks updates unresolved links by matching dst_raw against note IDs,
 // titles, and aliases. Sets dst_note_id and resolved=TRUE for matches.
 func ResolveLinks(db *DB) (int, error) {

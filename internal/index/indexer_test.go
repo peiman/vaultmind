@@ -1,8 +1,10 @@
 package index_test
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/vault"
@@ -238,4 +240,106 @@ func TestIndexFile_NonExistentFile(t *testing.T) {
 
 	err = idxr.IndexFile("nonexistent/file.md")
 	assert.Error(t, err)
+}
+
+func TestIncremental_SkipsUnchangedFiles(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
+	cfg, err := vault.LoadConfig(testVaultPath)
+	require.NoError(t, err)
+	idxr := index.NewIndexer(testVaultPath, dbPath, cfg)
+
+	fullResult, err := idxr.Rebuild()
+	require.NoError(t, err)
+	require.Greater(t, fullResult.Indexed, 0)
+
+	incResult, err := idxr.Incremental()
+	require.NoError(t, err)
+	assert.Equal(t, fullResult.Indexed, incResult.Skipped)
+	assert.Equal(t, 0, incResult.Updated)
+	assert.Equal(t, 0, incResult.Added)
+	assert.Equal(t, 0, incResult.Deleted)
+	assert.False(t, incResult.FullRebuild)
+}
+
+func TestIncremental_DetectsModifiedFile(t *testing.T) {
+	vaultDir := t.TempDir()
+	configDir := filepath.Join(vaultDir, ".vaultmind")
+	require.NoError(t, os.MkdirAll(configDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "config.yaml"),
+		[]byte("types:\n  project:\n    required: [title]\n    statuses: []\n"), 0o644))
+
+	notePath := filepath.Join(vaultDir, "note.md")
+	require.NoError(t, os.WriteFile(notePath, []byte("---\nid: test\ntype: project\ntitle: Test\n---\n# Body\n"), 0o644))
+
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	cfg, err := vault.LoadConfig(vaultDir)
+	require.NoError(t, err)
+	idxr := index.NewIndexer(vaultDir, dbPath, cfg)
+
+	_, err = idxr.Rebuild()
+	require.NoError(t, err)
+
+	time.Sleep(10 * time.Millisecond)
+	require.NoError(t, os.WriteFile(notePath, []byte("---\nid: test\ntype: project\ntitle: Modified\n---\n# Body\n"), 0o644))
+
+	result, err := idxr.Incremental()
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Updated)
+	assert.Equal(t, 0, result.Skipped)
+}
+
+func TestIncremental_DetectsNewFile(t *testing.T) {
+	vaultDir := t.TempDir()
+	configDir := filepath.Join(vaultDir, ".vaultmind")
+	require.NoError(t, os.MkdirAll(configDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "config.yaml"),
+		[]byte("types:\n  concept:\n    required: [title]\n    statuses: []\n"), 0o644))
+
+	note1 := filepath.Join(vaultDir, "note1.md")
+	require.NoError(t, os.WriteFile(note1, []byte("---\nid: n1\ntype: concept\ntitle: Note 1\n---\n"), 0o644))
+
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	cfg, err := vault.LoadConfig(vaultDir)
+	require.NoError(t, err)
+	idxr := index.NewIndexer(vaultDir, dbPath, cfg)
+
+	_, err = idxr.Rebuild()
+	require.NoError(t, err)
+
+	note2 := filepath.Join(vaultDir, "note2.md")
+	require.NoError(t, os.WriteFile(note2, []byte("---\nid: n2\ntype: concept\ntitle: Note 2\n---\n"), 0o644))
+
+	result, err := idxr.Incremental()
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Added)
+	assert.Equal(t, 1, result.Skipped)
+}
+
+func TestIncremental_DetectsDeletedFile(t *testing.T) {
+	vaultDir := t.TempDir()
+	configDir := filepath.Join(vaultDir, ".vaultmind")
+	require.NoError(t, os.MkdirAll(configDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "config.yaml"),
+		[]byte("types:\n  concept:\n    required: [title]\n    statuses: []\n"), 0o644))
+
+	note1 := filepath.Join(vaultDir, "note1.md")
+	note2 := filepath.Join(vaultDir, "note2.md")
+	require.NoError(t, os.WriteFile(note1, []byte("---\nid: n1\ntype: concept\ntitle: Note 1\n---\n"), 0o644))
+	require.NoError(t, os.WriteFile(note2, []byte("---\nid: n2\ntype: concept\ntitle: Note 2\n---\n"), 0o644))
+
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	cfg, err := vault.LoadConfig(vaultDir)
+	require.NoError(t, err)
+	idxr := index.NewIndexer(vaultDir, dbPath, cfg)
+
+	_, err = idxr.Rebuild()
+	require.NoError(t, err)
+
+	require.NoError(t, os.Remove(note2))
+
+	result, err := idxr.Incremental()
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Deleted)
+	assert.Equal(t, 1, result.Skipped)
 }
