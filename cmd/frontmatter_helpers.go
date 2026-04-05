@@ -4,11 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 
 	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/envelope"
 	"github.com/peiman/vaultmind/internal/git"
+	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/mutation"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -58,10 +61,21 @@ func runMutation(cmd *cobra.Command, req mutation.MutationRequest,
 		return fmt.Errorf("%s: %w", cmdName, err)
 	}
 
+	// Post-mutation re-index: update the index for the affected file
+	if result.ReindexRequired && !req.DryRun {
+		dbPath := filepath.Join(vaultPath, vdb.Config.Index.DBPath)
+		idxr := index.NewIndexer(vaultPath, dbPath, vdb.Config)
+		if idxErr := idxr.IndexFile(result.Path); idxErr != nil {
+			log.Debug().Err(idxErr).Str("path", result.Path).Msg("post-mutation re-index failed")
+		} else {
+			result.ReindexRequired = false
+		}
+	}
+
 	if getConfigValueWithFlags[bool](cmd, "json", jsonKey) {
 		env := envelope.OK(cmdName, result)
 		env.Meta.VaultPath = vaultPath
-		env.Meta.IndexStale = true // AX1: Mutations always stale the index.
+		env.Meta.IndexStale = result.ReindexRequired // false if re-index succeeded
 		for _, w := range result.Warnings {
 			env.AddWarning(w.Rule, w.Message, "")
 		}
