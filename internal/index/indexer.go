@@ -208,7 +208,14 @@ func (idx *Indexer) Incremental() (*IndexResult, error) {
 
 		info, ok := stored[file.RelPath]
 
-		content, readErr := os.ReadFile(file.AbsPath)
+		// Mtime fast path: skip file read entirely if mtime unchanged
+		if ok && file.ModTime.Unix() == info.MTime {
+			result.Skipped++
+			continue
+		}
+
+		// Mtime changed or new file — must read and hash
+		content, readErr := os.ReadFile(file.AbsPath) //nolint:gosec // vault path is trusted
 		if readErr != nil {
 			log.Debug().Err(readErr).Str("path", file.RelPath).Msg("skipping unreadable file")
 			result.Errors++
@@ -218,13 +225,10 @@ func (idx *Indexer) Incremental() (*IndexResult, error) {
 		h := sha256.Sum256(content)
 		hash := fmt.Sprintf("%x", h[:])
 
-		// Skip if content is unchanged (fast-path: mtime same → skip without hashing;
-		// fallback: mtime differs but hash same → update mtime and skip).
+		// Hash unchanged — just update mtime, skip parse
 		if ok && hash == info.Hash {
-			if file.ModTime.Unix() != info.MTime {
-				if mtErr := db.UpdateMTime(file.RelPath, file.ModTime.Unix()); mtErr != nil {
-					log.Debug().Err(mtErr).Str("path", file.RelPath).Msg("failed to update mtime")
-				}
+			if mtErr := db.UpdateMTime(file.RelPath, file.ModTime.Unix()); mtErr != nil {
+				log.Debug().Err(mtErr).Str("path", file.RelPath).Msg("failed to update mtime")
 			}
 			result.Skipped++
 			continue

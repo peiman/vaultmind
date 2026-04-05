@@ -280,8 +280,10 @@ func TestIncremental_DetectsModifiedFile(t *testing.T) {
 	_, err = idxr.Rebuild()
 	require.NoError(t, err)
 
-	time.Sleep(10 * time.Millisecond)
+	// Write new content and explicitly set mtime to future (filesystem mtime granularity can be 1s)
 	require.NoError(t, os.WriteFile(notePath, []byte("---\nid: test\ntype: project\ntitle: Modified\n---\n# Body\n"), 0o644))
+	futureTime := time.Now().Add(10 * time.Second)
+	require.NoError(t, os.Chtimes(notePath, futureTime, futureTime))
 
 	result, err := idxr.Incremental()
 	require.NoError(t, err)
