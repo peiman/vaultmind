@@ -85,6 +85,7 @@ components:
       - internal/index/**
       - internal/graph/**
       - internal/git/**
+      - internal/mutation/**
 
   # -------------------------------------------------------------------------
   # PROJECT-MANAGED: Business Logic Layer
