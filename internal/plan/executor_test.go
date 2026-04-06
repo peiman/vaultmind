@@ -323,3 +323,188 @@ func TestApply_RollbackNoteCreate(t *testing.T) {
 	_, err = os.Stat(filepath.Join(vaultPath, "decisions/rollback-test.md"))
 	assert.True(t, os.IsNotExist(err), "created file should be deleted during rollback")
 }
+
+// TestApply_Unset covers the OpFrontmatterUnset dispatch path.
+func TestApply_Unset(t *testing.T) {
+	vaultPath, reg, checker := setupPlanVault(t)
+	exec := newTestExecutor(t, vaultPath, reg, checker)
+
+	// alpha.md has a "tags" optional field — safe to unset
+	p := plan.Plan{
+		Version:     1,
+		Description: "unset tags",
+		Operations: []plan.Operation{
+			{Op: plan.OpFrontmatterUnset, Target: "projects/alpha.md", Key: "tags"},
+		},
+	}
+	result, err := exec.Apply(p, false, false, false)
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.OperationsCompleted)
+	assert.Equal(t, "ok", result.Operations[0].Status)
+
+	content, err := os.ReadFile(filepath.Join(vaultPath, "projects/alpha.md"))
+	require.NoError(t, err)
+	assert.NotContains(t, string(content), "tags:")
+}
+
+// TestApply_Merge covers the OpFrontmatterMerge dispatch path.
+func TestApply_Merge(t *testing.T) {
+	vaultPath, reg, checker := setupPlanVault(t)
+	exec := newTestExecutor(t, vaultPath, reg, checker)
+
+	p := plan.Plan{
+		Version:     1,
+		Description: "merge fields",
+		Operations: []plan.Operation{
+			{
+				Op:     plan.OpFrontmatterMerge,
+				Target: "projects/alpha.md",
+				Fields: map[string]interface{}{"status": "paused"},
+			},
+		},
+	}
+	result, err := exec.Apply(p, false, false, false)
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.OperationsCompleted)
+	assert.Equal(t, "ok", result.Operations[0].Status)
+
+	content, err := os.ReadFile(filepath.Join(vaultPath, "projects/alpha.md"))
+	require.NoError(t, err)
+	assert.Contains(t, string(content), "status: paused")
+}
+
+// TestApply_WithDiff covers the diff=true output path in Apply.
+func TestApply_WithDiff(t *testing.T) {
+	vaultPath, reg, checker := setupPlanVault(t)
+	exec := newTestExecutor(t, vaultPath, reg, checker)
+
+	p := plan.Plan{
+		Version:     1,
+		Description: "diff test",
+		Operations: []plan.Operation{
+			{Op: plan.OpFrontmatterSet, Target: "projects/alpha.md", Key: "status", Value: "paused"},
+		},
+	}
+	result, err := exec.Apply(p, false, true, false)
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.OperationsCompleted)
+	assert.Equal(t, "ok", result.Operations[0].Status)
+}
+
+// TestApply_MutationError covers the errors.As(MutationError) branch in toOpError.
+func TestApply_MutationError(t *testing.T) {
+	vaultPath, reg, checker := setupPlanVault(t)
+	exec := newTestExecutor(t, vaultPath, reg, checker)
+
+	// Setting "id" is immutable — mutation.ValidateMutation returns a MutationError
+	p := plan.Plan{
+		Version:     1,
+		Description: "immutable field",
+		Operations: []plan.Operation{
+			{Op: plan.OpFrontmatterSet, Target: "projects/alpha.md", Key: "id", Value: "new-id"},
+		},
+	}
+	result, err := exec.Apply(p, false, false, false)
+	require.NoError(t, err)
+	assert.Equal(t, 0, result.OperationsCompleted)
+	assert.Equal(t, "error", result.Operations[0].Status)
+	require.NotNil(t, result.Operations[0].Error)
+	assert.Equal(t, "immutable_field", result.Operations[0].Error.Code)
+}
+
+// TestApply_EmptyPlan covers the edge case of a plan with no operations.
+func TestApply_EmptyPlan(t *testing.T) {
+	vaultPath, reg, checker := setupPlanVault(t)
+	exec := newTestExecutor(t, vaultPath, reg, checker)
+
+	p := plan.Plan{Version: 1, Description: "empty", Operations: []plan.Operation{}}
+	result, err := exec.Apply(p, false, false, false)
+	require.NoError(t, err)
+	assert.Equal(t, 0, result.OperationsTotal)
+	assert.Equal(t, 0, result.OperationsCompleted)
+}
+
+// TestApply_Render covers the OpGeneratedRegion / execRender dispatch path.
+func TestApply_Render(t *testing.T) {
+	vaultPath, reg, checker := setupPlanVault(t)
+
+	// Create a section template that RenderRegion can load
+	sectionDir := filepath.Join(vaultPath, ".vaultmind", "sections", "project")
+	require.NoError(t, os.MkdirAll(sectionDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(sectionDir, "tasks.md"), []byte("## Tasks\n\n- [ ] TODO\n"), 0o644))
+
+	// Create a project note with a VAULTMIND marker (blank line required between START and END)
+	renderNote := "---\nid: proj-render\ntype: project\nstatus: active\ntitle: Render Test\ncreated: 2026-03-01\nupdated: 2026-03-01\n---\n# Render Test\n\n<!-- VAULTMIND:GENERATED:tasks:START -->\n\n<!-- VAULTMIND:GENERATED:tasks:END -->\n"
+	require.NoError(t, os.WriteFile(filepath.Join(vaultPath, "projects", "render.md"), []byte(renderNote), 0o644))
+
+	exec := newTestExecutor(t, vaultPath, reg, checker)
+
+	p := plan.Plan{
+		Version:     1,
+		Description: "render region",
+		Operations: []plan.Operation{
+			{Op: plan.OpGeneratedRegion, Target: "projects/render.md", SectionKey: "tasks", Template: "tasks"},
+		},
+	}
+	result, err := exec.Apply(p, false, false, false)
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.OperationsCompleted)
+	assert.Equal(t, "ok", result.Operations[0].Status)
+}
+
+// TestApply_NoteCreate_DryRun covers the dry-run branch in execNoteCreate.
+func TestApply_NoteCreate_DryRun(t *testing.T) {
+	vaultPath, reg, checker := setupPlanVault(t)
+	exec := newTestExecutor(t, vaultPath, reg, checker)
+
+	p := plan.Plan{
+		Version:     1,
+		Description: "dry-run note create",
+		Operations: []plan.Operation{
+			{
+				Op: plan.OpNoteCreate, Path: "decisions/dry-run.md", Type: "decision",
+				Frontmatter: map[string]interface{}{"title": "Dry Run Note", "status": "proposed"},
+			},
+		},
+	}
+	result, err := exec.Apply(p, true, false, false) // dryRun=true
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.OperationsCompleted)
+	assert.Equal(t, "ok", result.Operations[0].Status)
+
+	// Verify file was NOT created
+	_, err = os.Stat(filepath.Join(vaultPath, "decisions/dry-run.md"))
+	assert.True(t, os.IsNotExist(err), "dry-run should not create the file")
+}
+
+// TestApply_CommitPath covers collectPaths via commit=true (Committer non-nil).
+// The commit itself will fail (no real git repo), but collectPaths is still exercised.
+func TestApply_CommitPath(t *testing.T) {
+	vaultPath, reg, checker := setupPlanVault(t)
+	cfg, err := vault.LoadConfig(vaultPath)
+	require.NoError(t, err)
+
+	committer := &git.Committer{}
+	detector := &fakeDetector{state: git.RepoState{RepoDetected: true, WorkingTreeClean: true}}
+	exec := &plan.Executor{
+		VaultPath: vaultPath,
+		Detector:  detector,
+		Checker:   checker,
+		Committer: committer,
+		Registry:  reg,
+		Config:    cfg,
+	}
+
+	p := plan.Plan{
+		Version:     1,
+		Description: "commit path test",
+		Operations: []plan.Operation{
+			{Op: plan.OpFrontmatterSet, Target: "projects/alpha.md", Key: "status", Value: "paused"},
+		},
+	}
+	// commit=true triggers collectPaths; CommitFiles will error (no git repo in temp dir)
+	_, err = exec.Apply(p, false, false, true)
+	// We expect an error from CommitFiles since the temp dir is not a git repo
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "committing plan")
+}
