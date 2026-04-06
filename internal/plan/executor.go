@@ -8,10 +8,12 @@ import (
 	"strings"
 
 	"github.com/peiman/vaultmind/internal/git"
+	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/marker"
 	"github.com/peiman/vaultmind/internal/mutation"
 	"github.com/peiman/vaultmind/internal/schema"
 	"github.com/peiman/vaultmind/internal/vault"
+	"github.com/rs/zerolog/log"
 )
 
 // Executor orchestrates plan execution: validate, git policy check,
@@ -60,7 +62,7 @@ func (e *Executor) Apply(p Plan, dryRun, diff, commit bool) (*ApplyResult, error
 
 	// Step 2: Git policy check (skip for dry-run)
 	if !dryRun {
-		if err := e.checkGitPolicy(p.Operations); err != nil {
+		if err := e.checkGitPolicy(p.Operations, commit); err != nil {
 			return nil, err
 		}
 	}
@@ -108,13 +110,24 @@ func (e *Executor) Apply(p Plan, dryRun, diff, commit bool) (*ApplyResult, error
 	if commit && !dryRun && e.Committer != nil {
 		paths := collectPaths(result.Operations)
 		if len(paths) > 0 {
-			msg := fmt.Sprintf("vaultmind: plan apply — %s", p.Description)
+			msg := fmt.Sprintf("vaultmind: apply — %s", p.Description)
 			sha, err := e.Committer.CommitFiles(e.VaultPath, paths, msg)
 			if err != nil {
 				return nil, fmt.Errorf("committing plan: %w", err)
 			}
 			result.Committed = true
 			result.CommitSHA = sha
+		}
+	}
+
+	// Step 6: Post-apply re-index each modified file so the index stays current.
+	if !dryRun && result.OperationsCompleted > 0 && e.Config != nil {
+		dbPath := filepath.Join(e.VaultPath, e.Config.Index.DBPath)
+		idxr := index.NewIndexer(e.VaultPath, dbPath, e.Config)
+		for _, p := range collectPaths(result.Operations) {
+			if idxErr := idxr.IndexFile(p); idxErr != nil {
+				log.Debug().Err(idxErr).Str("path", p).Msg("post-apply re-index failed")
+			}
 		}
 	}
 
@@ -271,7 +284,8 @@ func rollback(vaultPath string, backups []backup) {
 }
 
 // checkGitPolicy evaluates git policy for each operation target in the plan.
-func (e *Executor) checkGitPolicy(ops []Operation) error {
+// When commit is true, OpWriteCommit is used so commit-specific policy rules fire.
+func (e *Executor) checkGitPolicy(ops []Operation, commit bool) error {
 	if e.Detector == nil || e.Checker == nil {
 		return nil
 	}
@@ -279,6 +293,11 @@ func (e *Executor) checkGitPolicy(ops []Operation) error {
 	state, err := e.Detector.Detect(e.VaultPath)
 	if err != nil {
 		return fmt.Errorf("git detect error: %w", err)
+	}
+
+	opType := git.OpWrite
+	if commit {
+		opType = git.OpWriteCommit
 	}
 
 	// Check each operation target individually so dirty_target rules fire correctly.
@@ -290,7 +309,7 @@ func (e *Executor) checkGitPolicy(ops []Operation) error {
 		}
 		checked[target] = true
 
-		policyResult := e.Checker.Check(state, git.OpWrite, target)
+		policyResult := e.Checker.Check(state, opType, target)
 		if policyResult.Decision == git.Refuse {
 			reason := "git policy refused"
 			if len(policyResult.Reasons) > 0 {

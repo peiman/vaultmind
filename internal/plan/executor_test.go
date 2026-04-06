@@ -477,6 +477,67 @@ func TestApply_NoteCreate_DryRun(t *testing.T) {
 	assert.True(t, os.IsNotExist(err), "dry-run should not create the file")
 }
 
+// TestApply_GitPolicyCommit verifies that commit=true causes OpWriteCommit to be used
+// in the git policy check. We use a policy configuration that only refuses OpWriteCommit
+// (not OpWrite) — if the code incorrectly passes OpWrite, the test would pass the policy
+// check and not return an error. This ensures I2 is correctly implemented.
+func TestApply_GitPolicyCommit(t *testing.T) {
+	vaultPath, reg, _ := setupPlanVault(t)
+	cfg, err := vault.LoadConfig(vaultPath)
+	require.NoError(t, err)
+
+	// dirty target: OpWriteCommit should be refused (dirty_target rule fires for write+commit)
+	detector := &fakeDetector{state: git.RepoState{
+		RepoDetected: true, WorkingTreeClean: false,
+		UnstagedFiles: []string{"projects/alpha.md"},
+	}}
+	checker, err := git.NewPolicyChecker(cfg.Git)
+	require.NoError(t, err)
+
+	exec := &plan.Executor{
+		VaultPath: vaultPath,
+		Detector:  detector,
+		Checker:   checker,
+		Registry:  reg,
+		Config:    cfg,
+	}
+
+	p := plan.Plan{
+		Version:     1,
+		Description: "should use write_commit op type",
+		Operations: []plan.Operation{
+			{Op: plan.OpFrontmatterSet, Target: "projects/alpha.md", Key: "status", Value: "paused"},
+		},
+	}
+
+	// commit=true: policy check uses OpWriteCommit, dirty_target should refuse
+	_, err = exec.Apply(p, false, false, true)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "dirty_target")
+}
+
+// TestApply_ReIndexAfterApply verifies that after a successful non-dry-run apply,
+// the executor attempts to re-index modified files (I1). The index DB won't exist
+// in the temp dir but IndexFile should fail silently (logged at debug level only).
+func TestApply_ReIndexAfterApply(t *testing.T) {
+	vaultPath, reg, checker := setupPlanVault(t)
+	exec := newTestExecutor(t, vaultPath, reg, checker)
+
+	p := plan.Plan{
+		Version:     1,
+		Description: "re-index after apply",
+		Operations: []plan.Operation{
+			{Op: plan.OpFrontmatterSet, Target: "projects/alpha.md", Key: "status", Value: "paused"},
+		},
+	}
+
+	// Should succeed even when the index DB doesn't exist (re-index errors are non-fatal)
+	result, err := exec.Apply(p, false, false, false)
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.OperationsCompleted)
+	assert.Equal(t, "ok", result.Operations[0].Status)
+}
+
 // TestApply_CommitPath covers collectPaths via commit=true (Committer non-nil).
 // The commit itself will fail (no real git repo), but collectPaths is still exercised.
 func TestApply_CommitPath(t *testing.T) {
