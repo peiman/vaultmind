@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "concepts/context-pack.md",
+                "file": "concepts/working-memory.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "context-pack"
+              "title": "working-memory"
             }
           }
         ]
@@ -31,10 +31,14 @@
             "id": "e7543398b8bc2305",
             "type": "leaf",
             "state": {
-              "type": "graph",
-              "state": {},
-              "icon": "lucide-git-fork",
-              "title": "Graph view"
+              "type": "markdown",
+              "state": {
+                "file": "concepts/spreading-activation.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "spreading-activation"
             }
           }
         ]
@@ -110,7 +114,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "concepts/context-pack.md",
+                "file": "concepts/spreading-activation.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -120,7 +124,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for context-pack"
+              "title": "Backlinks for spreading-activation"
             }
           },
           {
@@ -129,12 +133,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "concepts/context-pack.md",
+                "file": "concepts/spreading-activation.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links from context-pack"
+              "title": "Outgoing links from spreading-activation"
             }
           },
           {
@@ -172,13 +176,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "concepts/context-pack.md",
+                "file": "concepts/spreading-activation.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of context-pack"
+              "title": "Outline of spreading-activation"
             }
           }
         ]
@@ -199,11 +203,26 @@
       "bases:Create new base": false
     }
   },
-  "active": "c44809233719c76a",
+  "active": "e7543398b8bc2305",
   "lastOpenFiles": [
-    "Welcome.md",
+    "Memory Recall.md",
+    "sources/source-gao-2023.md",
+    "concepts/spreading-activation.md",
+    "sources/source-khattab-zaharia-2020.md",
     "concepts/working-memory.md",
+    "sources/source-xu-2024.md",
+    "sources/source-liu-2023-ring.md",
+    "sources/source-bai-2023.md",
+    "sources/source-munkhdalai-2024.md",
+    "concepts/interference-theory.md",
+    "concepts/hyde.md",
+    "concepts/rag-vs-long-context.md",
+    "concepts/colbert.md",
+    "concepts/longbench.md",
+    "concepts/ring-attention.md",
+    "concepts/infini-attention.md",
     "concepts/context-pack.md",
+    "Welcome.md",
     "Context Pack.md",
     "concepts/base-level-activation.md",
     "concepts/augmented-language-models.md",
@@ -212,21 +231,6 @@
     "concepts/rag.md",
     "Base-Level Activation.md",
     "concepts/realm.md",
-    "concepts/lost-in-the-middle.md",
-    "sources/source-craik-lockhart-1972.md",
-    "templates/source.md",
-    "concepts/spreading-activation.md",
-    "sources/source-izacard-grave-2021.md",
-    "sources/source-asai-2023.md",
-    "sources/source-guu-2020.md",
-    "sources/source-liu-2023-lost.md",
-    "sources/source-mialon-2023.md",
-    "sources/source-karpukhin-2020.md",
-    "sources/source-edge-2024.md",
-    "sources/source-wang-2023-voyager.md",
-    "sources/source-wu-2022.md",
-    "concepts/fusion-in-decoder.md",
-    "sources/source-borgeaud-2022.md",
     "tmp",
     "templates",
     "decisions",
