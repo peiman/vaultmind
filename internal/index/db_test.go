@@ -67,6 +67,8 @@ func TestOpen_CreatesAllIndexes(t *testing.T) {
 		"idx_links_unique",
 		"idx_notes_type",
 		"idx_aliases_note",
+		"idx_notes_title",
+		"idx_aliases_alias",
 	}
 	for _, idx := range expectedIndexes {
 		var name string
@@ -219,6 +221,21 @@ func TestMigrations_FreshDB(t *testing.T) {
 		var name string
 		err := db.QueryRow("SELECT name FROM sqlite_master WHERE type IN ('table','view') AND name = ?", tbl).Scan(&name)
 		require.NoError(t, err, "table %s should exist", tbl)
+	}
+}
+
+func TestMigrations_TitleAliasIndexes(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
+	db, err := index.Open(dbPath)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	indexes := []string{"idx_notes_title", "idx_aliases_alias"}
+	for _, idx := range indexes {
+		var name string
+		err := db.QueryRow("SELECT name FROM sqlite_master WHERE type='index' AND name = ?", idx).Scan(&name)
+		require.NoError(t, err, "index %s should exist", idx)
 	}
 }
 
