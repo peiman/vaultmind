@@ -202,6 +202,26 @@ func TestUpdateMTime(t *testing.T) {
 	assert.Equal(t, newMTime, hashes2[path].MTime)
 }
 
+func TestMigrations_FreshDB(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
+	db, err := index.Open(dbPath)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	var version int64
+	err = db.QueryRow("SELECT MAX(version_id) FROM goose_db_version WHERE is_applied = 1").Scan(&version)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, version, int64(1))
+
+	tables := []string{"notes", "aliases", "tags", "frontmatter_kv", "links", "blocks", "headings", "fts_notes", "generated_sections"}
+	for _, tbl := range tables {
+		var name string
+		err := db.QueryRow("SELECT name FROM sqlite_master WHERE type IN ('table','view') AND name = ?", tbl).Scan(&name)
+		require.NoError(t, err, "table %s should exist", tbl)
+	}
+}
+
 func TestDeleteNoteByPath(t *testing.T) {
 	db := buildIndexedDB(t)
 	hashes, err := db.NoteHashes()
