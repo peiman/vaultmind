@@ -4,9 +4,17 @@ import "github.com/peiman/vaultmind/.ckeletin/pkg/config"
 
 // DataviewRenderMetadata defines metadata for the dataview render command.
 var DataviewRenderMetadata = config.CommandMetadata{
-	Use:          "render",
-	Short:        "Render a generated region",
-	Long:         "Replace content between VAULTMIND:GENERATED markers with section template content.",
+	Use:   "render <note-id-or-path>",
+	Short: "Render a generated region",
+	Long: `Replace content between VAULTMIND:GENERATED markers with section template content.
+
+Arguments:
+  note-id-or-path   Note ID, title, or file path (resolved via entity resolution)
+
+Markers have the format: <!-- VAULTMIND:GENERATED:{key}:START/END -->
+Section templates are loaded from .vaultmind/sections/{type}/{key}.md.
+Use --section-key to render a specific section (default: all sections).
+Use --force to override checksum mismatch (hand-edited content).`,
 	ConfigPrefix: "app.dataviewrender",
 	FlagOverrides: map[string]string{
 		"app.dataviewrender.vault":       "vault",

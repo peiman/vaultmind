@@ -18,7 +18,13 @@ import (
 var noteMgetCmd = &cobra.Command{
 	Use:   "mget",
 	Short: "Batch read multiple notes by ID",
-	RunE:  runNoteMget,
+	Long: `Batch read multiple notes in a single call. Returns found notes and lists not-found IDs separately.
+
+Provide IDs via --ids (comma-separated) or --stdin (one ID per line).
+Use --include-body to include full note body text in the response.
+
+With --json, returns: {"result": {"notes": [...], "not_found": ["id1", ...]}}`,
+	RunE: runNoteMget,
 }
 
 func init() {

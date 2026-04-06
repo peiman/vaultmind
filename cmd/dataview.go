@@ -4,7 +4,7 @@ import "github.com/spf13/cobra"
 
 var dataviewCmd = &cobra.Command{
 	Use:   "dataview",
-	Short: "Managed generated regions",
+	Short: "Manage generated regions (lint, render)",
 }
 
 func init() {
