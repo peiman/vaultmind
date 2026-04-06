@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	codeFenceRe   = regexp.MustCompile("(?s)```[^`]*```")
+	codeFenceRe   = regexp.MustCompile("(?s)(```[^`]*```|~~~[^~]*~~~)")
 	inlineCodeRe  = regexp.MustCompile("`[^`]+`")
 	wikilinkRe    = regexp.MustCompile(`\[\[([^\]|]+)\|([^\]]+)\]\]|\[\[([^\]]+)\]\]`)
 	htmlCommentRe = regexp.MustCompile(`<!--[\s\S]*?-->`)

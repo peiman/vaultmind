@@ -56,6 +56,14 @@ func TestStripForAliasMatch_LanguageFence(t *testing.T) {
 	assert.NotContains(t, result, "Retry Engine")
 }
 
+func TestStripForAliasMatch_TildeFence(t *testing.T) {
+	body := "before\n~~~python\nMachine Learning code here\n~~~\nafter"
+	result := index.StripForAliasMatch(body)
+	assert.NotContains(t, result, "Machine Learning code")
+	assert.Contains(t, result, "before")
+	assert.Contains(t, result, "after")
+}
+
 func TestComputeAliasMentions_Basic(t *testing.T) {
 	db := buildIndexedDB(t)
 	count, err := index.ComputeAliasMentions(db, 3)
