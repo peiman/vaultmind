@@ -125,3 +125,39 @@ func TestSearchFTS_SingleResult_ScoreIsOne(t *testing.T) {
 		assert.Equal(t, 1.0, results[0].Score, "single result should have score 1.0")
 	}
 }
+
+func TestCountFTS_ReturnsTotal(t *testing.T) {
+	db := rebuildTestIndex(t)
+	allResults, err := index.SearchFTS(db, "memory", 100, 0)
+	require.NoError(t, err)
+	totalExpected := len(allResults)
+	require.Greater(t, totalExpected, 3, "need more than 3 results for this test")
+
+	count, err := index.CountFTS(db, "memory")
+	require.NoError(t, err)
+	assert.Equal(t, totalExpected, count)
+
+	limited, err := index.SearchFTS(db, "memory", 2, 0)
+	require.NoError(t, err)
+	assert.LessOrEqual(t, len(limited), 2)
+
+	count2, err := index.CountFTS(db, "memory")
+	require.NoError(t, err)
+	assert.Equal(t, totalExpected, count2)
+}
+
+func TestCountFTS_EmptyQuery(t *testing.T) {
+	db := rebuildTestIndex(t)
+	count, err := index.CountFTS(db, "")
+	require.NoError(t, err)
+	assert.Equal(t, 0, count)
+}
+
+func TestCountFTS_WithFilters(t *testing.T) {
+	db := rebuildTestIndex(t)
+	countAll, err := index.CountFTS(db, "memory")
+	require.NoError(t, err)
+	countFiltered, err := index.CountFTS(db, "memory", index.SearchFilters{Type: "concept"})
+	require.NoError(t, err)
+	assert.LessOrEqual(t, countFiltered, countAll)
+}

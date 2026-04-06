@@ -118,6 +118,41 @@ func SearchFTS(d *DB, query string, limit, offset int, filters ...SearchFilters)
 	return results, rows.Err()
 }
 
+// CountFTS returns the total number of documents matching the query and filters,
+// independent of any limit/offset. Used for pagination totals.
+func CountFTS(d *DB, query string, filters ...SearchFilters) (int, error) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return 0, nil
+	}
+	query = sanitizeFTSQuery(query)
+
+	var f SearchFilters
+	if len(filters) > 0 {
+		f = filters[0]
+	}
+
+	q := `SELECT COUNT(*) FROM fts_notes f
+		  JOIN notes n ON n.id = f.note_id
+		  WHERE fts_notes MATCH ?`
+	args := []interface{}{query}
+
+	if f.Type != "" {
+		q += " AND n.type = ?"
+		args = append(args, f.Type)
+	}
+	if f.Tag != "" {
+		q += " AND n.id IN (SELECT note_id FROM tags WHERE tag = ?)"
+		args = append(args, f.Tag)
+	}
+
+	var count int
+	if err := d.QueryRow(q, args...).Scan(&count); err != nil {
+		return 0, fmt.Errorf("FTS count: %w", err)
+	}
+	return count, nil
+}
+
 // sanitizeFTSQuery wraps each word in double quotes for literal FTS5 matching.
 // This prevents special characters from being interpreted as FTS5 operators.
 func sanitizeFTSQuery(query string) string {

@@ -41,10 +41,15 @@ func RunSearch(db *index.DB, cfg SearchConfig, w io.Writer) error {
 		results = []index.FTSResult{}
 	}
 
+	total, err := index.CountFTS(db, cfg.Query, filters)
+	if err != nil {
+		return fmt.Errorf("counting results: %w", err)
+	}
+
 	if cfg.JSONOutput {
 		env := envelope.OK("search", SearchResult{
 			Query: cfg.Query, Offset: cfg.Offset, Limit: cfg.Limit,
-			Hits: results, Total: len(results),
+			Hits: results, Total: total,
 		})
 		env.Meta.VaultPath = cfg.VaultPath
 		return json.NewEncoder(w).Encode(env)
