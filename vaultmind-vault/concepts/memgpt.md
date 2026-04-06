@@ -40,4 +40,4 @@ A memory manager (implemented as LLM function calls) moves information between t
 
 VaultMind maps to MemGPT's **archival storage tier** — it provides structured, persistent, searchable long-term memory over a knowledge graph. However, VaultMind lacks MemGPT's memory management layer: there is no component that decides what to page in/out of an agent's context window.
 
-The [[Context Pack]] command partially bridges this gap by assembling token-budgeted retrieval payloads, but the agent must explicitly request them. A future integration could have VaultMind serve as a MemGPT archival backend, with MemGPT's memory manager orchestrating retrieval and eviction.
+The [[context-pack|Context Pack]] command partially bridges this gap by assembling token-budgeted retrieval payloads, but the agent must explicitly request them. A future integration could have VaultMind serve as a MemGPT archival backend, with MemGPT's memory manager orchestrating retrieval and eviction.

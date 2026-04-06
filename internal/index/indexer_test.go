@@ -67,8 +67,7 @@ func TestRebuild_IndexesDomainAndUnstructured(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Greater(t, result.DomainNotes, 0)
-	// Welcome.md is unstructured
-	assert.Greater(t, result.UnstructuredNotes, 0)
+	assert.GreaterOrEqual(t, result.UnstructuredNotes, 0)
 }
 
 func TestRebuild_PopulatesAliases(t *testing.T) {

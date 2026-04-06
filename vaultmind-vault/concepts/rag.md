@@ -46,4 +46,4 @@ VaultMind represents an alternative to traditional RAG: structured graph retriev
 
 ## Connections
 
-VaultMind's [[Context Pack]] serves the same role as RAG's retrieval step — selecting relevant content to inject into an agent's context window. The key difference is that VaultMind traverses typed graph edges rather than computing vector similarity. The expert panel (Session 02, Hoffmann) recommended a hybrid approach: structured-first retrieval with optional [[Embedding-Based Retrieval]] as a fallback for cold-start queries.
+VaultMind's [[context-pack|Context Pack]] serves the same role as RAG's retrieval step — selecting relevant content to inject into an agent's context window. The key difference is that VaultMind traverses typed graph edges rather than computing vector similarity. The expert panel (Session 02, Hoffmann) recommended a hybrid approach: structured-first retrieval with optional [[embedding-based-retrieval|Embedding-Based Retrieval]] as a fallback for cold-start queries.

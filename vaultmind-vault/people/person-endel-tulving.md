@@ -18,7 +18,7 @@ url: "https://en.wikipedia.org/wiki/Endel_Tulving"
 
 ## About
 
-Endel Tulving was an Estonian-Canadian cognitive psychologist best known for distinguishing episodic memory (personal events) from semantic memory (general knowledge) and for formulating the principle of [[Encoding Specificity]]. His 1973 paper with Thomson established that retrieval success depends critically on the match between encoding context and retrieval cues.
+Endel Tulving was an Estonian-Canadian cognitive psychologist best known for distinguishing episodic memory (personal events) from semantic memory (general knowledge) and for formulating the principle of [[encoding-specificity|Encoding Specificity]]. His 1973 paper with Thomson established that retrieval success depends critically on the match between encoding context and retrieval cues.
 
 ## Key Contributions
 

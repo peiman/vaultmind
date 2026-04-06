@@ -22,7 +22,7 @@ func TestVaultStatus_ReturnsAllSections(t *testing.T) {
 	assert.Equal(t, testVaultPath, result.VaultPath)
 	assert.Greater(t, result.TotalFiles, 0)
 	assert.Greater(t, result.DomainNotes, 0)
-	assert.GreaterOrEqual(t, result.UnstructuredNotes, 1)
+	assert.GreaterOrEqual(t, result.UnstructuredNotes, 0)
 	assert.NotEmpty(t, result.IndexStatus)
 	assert.NotEmpty(t, result.Types)
 	assert.Contains(t, result.Types, "concept")

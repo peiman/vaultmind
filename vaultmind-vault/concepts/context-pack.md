@@ -35,6 +35,6 @@ The packing algorithm prioritizes by edge confidence: explicit relations first, 
 
 ## Connections
 
-Context packing is VaultMind's bridge between archival long-term memory and an agent's working memory (see [[Working Memory]]). It is analogous to the retrieval step in [[RAG]] — selecting relevant documents to inject into the prompt — but operates over a structured graph rather than vector embeddings.
+Context packing is VaultMind's bridge between archival long-term memory and an agent's working memory (see [[working-memory|Working Memory]]). It is analogous to the retrieval step in [[rag|RAG]] — selecting relevant documents to inject into the prompt — but operates over a structured graph rather than vector embeddings.
 
-The expert panel identified that sorting by `vm_updated` alone is a weak relevance signal. Future versions should incorporate edge weight and potentially an [[ACT-R]]-inspired accessibility score combining recency with retrieval frequency.
+The expert panel identified that sorting by `vm_updated` alone is a weak relevance signal. Future versions should incorporate edge weight and potentially an [[act-r|ACT-R]]-inspired accessibility score combining recency with retrieval frequency.

@@ -117,8 +117,10 @@ func TestParse_RealVaultConceptNote(t *testing.T) {
 	for i, l := range note.Links {
 		targets[i] = l.Target
 	}
-	assert.Contains(t, targets, "Context Pack")
-	assert.Contains(t, targets, "Spreading Activation")
+	// Wikilinks use Obsidian-compatible format: [[filename|Display Text]]
+	// Parser extracts the target (before |), which is the filename stem
+	assert.Contains(t, targets, "context-pack")
+	assert.Contains(t, targets, "spreading-activation")
 	assert.Contains(t, note.FTSBody, "cognitive architecture")
 	assert.NotContains(t, note.FTSBody, "[[")
 }

@@ -34,6 +34,6 @@ Unlike weight-based learning (fine-tuning), Reflexion uses linguistic feedback s
 
 ## Connections
 
-VaultMind has no built-in reflection mechanism. The expert panel (Session 02, Hoffmann) recommended a `reflection` note type with `source_ids` pointing to the notes that prompted the reflection. This would formalize the Reflexion pattern within VaultMind's type system — agents could write reflection notes via `note create --type reflection` and VaultMind could give them elevated traversal priority during [[Context Pack]] assembly.
+VaultMind has no built-in reflection mechanism. The expert panel (Session 02, Hoffmann) recommended a `reflection` note type with `source_ids` pointing to the notes that prompted the reflection. This would formalize the Reflexion pattern within VaultMind's type system — agents could write reflection notes via `note create --type reflection` and VaultMind could give them elevated traversal priority during [[context-pack|Context Pack]] assembly.
 
-The key difference from [[Generative Agents]]' reflection: Generative Agents reflect on observations to produce insights. Reflexion reflects on actions to produce error corrections. Both are valuable for different agent tasks.
+The key difference from [[generative-agents|Generative Agents]]' reflection: Generative Agents reflect on observations to produce insights. Reflexion reflects on actions to produce error corrections. Both are valuable for different agent tasks.

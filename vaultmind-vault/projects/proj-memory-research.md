@@ -22,13 +22,13 @@ This project tracks research on human and AI memory systems that informs VaultMi
 
 The research spans three areas:
 
-- **Cognitive science** — human memory models such as [[Forgetting Curve]], [[Spacing Effect]], [[Encoding Specificity]], [[Base-Level Activation]], and [[ACT-R]].
-- **AI memory architectures** — systems that give language models persistent memory, including [[MemGPT]] and [[Generative Agents]].
-- **Retrieval techniques** — approaches such as [[RAG]] and [[Embedding-Based Retrieval]] that inform VaultMind's retrieval layer.
+- **Cognitive science** — human memory models such as [[forgetting-curve|Forgetting Curve]], [[spacing-effect|Spacing Effect]], [[encoding-specificity|Encoding Specificity]], [[base-level-activation|Base-Level Activation]], and [[act-r|ACT-R]].
+- **AI memory architectures** — systems that give language models persistent memory, including [[memgpt|MemGPT]] and [[generative-agents|Generative Agents]].
+- **Retrieval techniques** — approaches such as [[rag|RAG]] and [[embedding-based-retrieval|Embedding-Based Retrieval]] that inform VaultMind's retrieval layer.
 
 ## How It Feeds VaultMind
 
-Findings from this base directly shape VaultMind's scoring weights, decay functions, and retrieval strategy. See [[VaultMind]] for how the research is applied.
+Findings from this base directly shape VaultMind's scoring weights, decay functions, and retrieval strategy. See [[proj-vaultmind|VaultMind]] for how the research is applied.
 
 ## Status
 

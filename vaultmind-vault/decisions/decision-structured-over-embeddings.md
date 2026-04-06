@@ -16,7 +16,7 @@ source_ids: []
 
 ## Decision
 
-VaultMind v1 retrieves notes by traversing the explicit relationship graph, not by computing vector similarity with [[Embedding-Based Retrieval]].
+VaultMind v1 retrieves notes by traversing the explicit relationship graph, not by computing vector similarity with [[embedding-based-retrieval|Embedding-Based Retrieval]].
 
 ## Rationale
 
@@ -26,7 +26,7 @@ VaultMind v1 retrieves notes by traversing the explicit relationship graph, not 
 
 **Explicit edges are already present.** Vault notes link to each other via wikilinks and `related_ids`. These edges encode human-curated relatedness that embeddings would only approximate.
 
-**Extension point for v2.** The retrieval interface is designed so an embedding-based scorer can be layered on top of graph traversal in v2, combining structural proximity with semantic similarity. See [[RAG]] for prior art on hybrid approaches.
+**Extension point for v2.** The retrieval interface is designed so an embedding-based scorer can be layered on top of graph traversal in v2, combining structural proximity with semantic similarity. See [[rag|RAG]] for prior art on hybrid approaches.
 
 ## Trade-offs Accepted
 

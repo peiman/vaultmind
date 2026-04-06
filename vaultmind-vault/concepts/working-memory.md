@@ -34,6 +34,6 @@ In LLM agents, working memory maps to the context window — the tokens currentl
 
 ## Connections
 
-VaultMind serves as long-term archival memory — it does not manage what's currently in an agent's context window. The [[Context Pack]] mechanism bridges archival → working memory by assembling token-budgeted payloads, but there is no feedback loop: VaultMind doesn't track what the agent has already loaded or what it's currently reasoning about.
+VaultMind serves as long-term archival memory — it does not manage what's currently in an agent's context window. The [[context-pack|Context Pack]] mechanism bridges archival → working memory by assembling token-budgeted payloads, but there is no feedback loop: VaultMind doesn't track what the agent has already loaded or what it's currently reasoning about.
 
-The [[MemGPT]] architecture explicitly models this tier boundary with a memory manager that moves information between working memory (context window) and archival storage. VaultMind could serve as MemGPT's archival backend.
+The [[memgpt|MemGPT]] architecture explicitly models this tier boundary with a memory manager that moves information between working memory (context window) and archival storage. VaultMind could serve as MemGPT's archival backend.

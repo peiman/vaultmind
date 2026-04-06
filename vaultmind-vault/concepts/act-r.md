@@ -36,6 +36,6 @@ Its memory model is the most mathematically precise formalization of human retri
 
 ## Connections
 
-ACT-R's base-level activation equation is the strongest theoretical basis for adding temporal decay to VaultMind. The expert panel discussed this: the `vm_updated` timestamp provides recency signal, but VaultMind lacks retrieval frequency tracking. Adding `recall_count` and `last_recalled_at` to the notes table (deferred to v2) would enable an ACT-R-inspired accessibility score for [[Context Pack]] ordering.
+ACT-R's base-level activation equation is the strongest theoretical basis for adding temporal decay to VaultMind. The expert panel discussed this: the `vm_updated` timestamp provides recency signal, but VaultMind lacks retrieval frequency tracking. Adding `recall_count` and `last_recalled_at` to the notes table (deferred to v2) would enable an ACT-R-inspired accessibility score for [[context-pack|Context Pack]] ordering.
 
-The [[Spreading Activation]] mechanism in ACT-R is more sophisticated than VaultMind's BFS traversal — it uses continuous activation levels rather than discrete depth-bounded hops.
+The [[spreading-activation|Spreading Activation]] mechanism in ACT-R is more sophisticated than VaultMind's BFS traversal — it uses continuous activation levels rather than discrete depth-bounded hops.

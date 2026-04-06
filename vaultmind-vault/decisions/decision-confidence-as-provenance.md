@@ -29,7 +29,7 @@ The `confidence` field on graph edges encodes how the edge was established (its 
 
 **From expert panel review.** Early prototypes used `confidence` as a free-form epistemic score (0.0–1.0). Reviewers found this ambiguous: does 0.7 mean "probably related" or "inferred, not confirmed"? Provenance tiers are discrete, unambiguous, and actionable.
 
-**[[Spreading Activation]] weights map cleanly to tiers.** Activation decays across edges; the decay multiplier can be set per tier (`high` = 1.0, `medium` = 0.8, `low` = 0.5) without any floating-point guesswork.
+**[[spreading-activation|Spreading Activation]] weights map cleanly to tiers.** Activation decays across edges; the decay multiplier can be set per tier (`high` = 1.0, `medium` = 0.8, `low` = 0.5) without any floating-point guesswork.
 
 **Agents need a clear contract.** When an agent writes a new edge, it must know what `confidence` value to assign. Provenance tiers give a deterministic rule: agent-written edges are always `low` until a human promotes them.
 

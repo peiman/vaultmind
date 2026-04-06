@@ -347,7 +347,24 @@ func ResolveLinks(db *DB) (int, error) {
 	}
 	count3, _ := res3.RowsAffected()
 
-	return int(count1 + count2 + count3), nil
+	// Resolve by filename stem (Obsidian convention).
+	// Obsidian wikilinks like [[context-pack|Context Pack]] store dst_raw as
+	// the filename stem ("context-pack"). Match against path with directory
+	// stripped and .md removed.
+	res4, err := db.Exec(`
+		UPDATE OR IGNORE links SET dst_note_id = (
+			SELECT id FROM notes
+			WHERE REPLACE(path, '.md', '') LIKE '%/' || links.dst_raw
+			   OR REPLACE(path, '.md', '') = links.dst_raw
+			LIMIT 1
+		), resolved = TRUE
+		WHERE resolved = FALSE AND dst_note_id IS NULL`)
+	if err != nil {
+		return int(count1 + count2 + count3), fmt.Errorf("resolving by filename: %w", err)
+	}
+	count4, _ := res4.RowsAffected()
+
+	return int(count1 + count2 + count3 + count4), nil
 }
 
 // parserLinkTypeToEdgeType maps parser link types to SRS-05 edge type names.

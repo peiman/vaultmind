@@ -13,12 +13,28 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "projects/proj-memory-research.md",
+                "file": "concepts/context-pack.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "proj-memory-research"
+              "title": "context-pack"
+            }
+          }
+        ]
+      },
+      {
+        "id": "507b97cf87e9bf96",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "e7543398b8bc2305",
+            "type": "leaf",
+            "state": {
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "Graph view"
             }
           }
         ]
@@ -94,7 +110,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "projects/proj-memory-research.md",
+                "file": "concepts/context-pack.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,7 +120,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for proj-memory-research"
+              "title": "Backlinks for context-pack"
             }
           },
           {
@@ -113,12 +129,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "projects/proj-memory-research.md",
+                "file": "concepts/context-pack.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links from proj-memory-research"
+              "title": "Outgoing links from context-pack"
             }
           },
           {
@@ -156,13 +172,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "projects/proj-memory-research.md",
+                "file": "concepts/context-pack.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of proj-memory-research"
+              "title": "Outline of context-pack"
             }
           }
         ]
@@ -185,33 +201,33 @@
   },
   "active": "c44809233719c76a",
   "lastOpenFiles": [
-    "tmp/test-date-note.md",
-    "tmp",
-    "projects/test-expert.md",
-    "concepts/act-r.md",
-    "concepts/associative-memory.md",
-    "decisions/decision-structured-over-embeddings.md",
-    "decisions/decision-immutable-ids.md",
-    "decisions/decision-bfs-with-visited-set.md",
-    "concepts/forgetting-curve.md",
-    "concepts/generative-agents.md",
     "Welcome.md",
-    "templates/concept.md",
-    "templates/person.md",
-    "templates/project.md",
-    "sources/source-tulving-thomson-1973.md",
-    "sources/source-park-2023.md",
-    "sources/source-anderson-schooler-1991.md",
-    "sources/source-anderson-1983.md",
-    "projects/proj-memory-research.md",
-    "projects/proj-vaultmind.md",
-    "decisions/decision-vm-updated-field.md",
-    "concepts/embedding-based-retrieval.md",
-    "concepts/encoding-specificity.md",
+    "concepts/working-memory.md",
     "concepts/context-pack.md",
-    "concepts/entity-resolution.md",
-    "decisions/decision-confidence-as-provenance.md",
+    "Context Pack.md",
+    "concepts/base-level-activation.md",
+    "concepts/augmented-language-models.md",
+    "concepts/associative-memory.md",
+    "concepts/memory-consolidation.md",
+    "concepts/rag.md",
+    "Base-Level Activation.md",
+    "concepts/realm.md",
+    "concepts/lost-in-the-middle.md",
+    "sources/source-craik-lockhart-1972.md",
+    "templates/source.md",
     "concepts/spreading-activation.md",
+    "sources/source-izacard-grave-2021.md",
+    "sources/source-asai-2023.md",
+    "sources/source-guu-2020.md",
+    "sources/source-liu-2023-lost.md",
+    "sources/source-mialon-2023.md",
+    "sources/source-karpukhin-2020.md",
+    "sources/source-edge-2024.md",
+    "sources/source-wang-2023-voyager.md",
+    "sources/source-wu-2022.md",
+    "concepts/fusion-in-decoder.md",
+    "sources/source-borgeaud-2022.md",
+    "tmp",
     "templates",
     "decisions",
     "projects",

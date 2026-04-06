@@ -35,6 +35,6 @@ In computer science, associative memory has formal implementations: Hopfield net
 
 ## Connections
 
-VaultMind uses the term "associative memory" to describe its graph-based retrieval system. Strictly speaking, VaultMind implements **structured graph traversal** rather than true associative memory — it requires a fully specified seed note (an ID), not a partial content cue. The [[Spreading Activation]] metaphor is closer to VaultMind's actual behavior.
+VaultMind uses the term "associative memory" to describe its graph-based retrieval system. Strictly speaking, VaultMind implements **structured graph traversal** rather than true associative memory — it requires a fully specified seed note (an ID), not a partial content cue. The [[spreading-activation|Spreading Activation]] metaphor is closer to VaultMind's actual behavior.
 
-True associative memory in the AI sense would require [[Embedding-Based Retrieval]] — using vector similarity to find semantically related content from partial cues.
+True associative memory in the AI sense would require [[embedding-based-retrieval|Embedding-Based Retrieval]] — using vector similarity to find semantically related content from partial cues.

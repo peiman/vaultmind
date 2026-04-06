@@ -44,4 +44,4 @@ VaultMind currently implements **none** of these three retrieval signals in a pr
 - **Importance:** No salience/importance scoring. Deferred to v2 (optional frontmatter field).
 - **Relevance:** No embedding-based similarity. Structured graph traversal is the proxy.
 
-The reflection mechanism maps to the expert panel's recommendation for a `reflection` note type — a second-order memory that synthesizes insights from multiple source notes, with elevated retrieval priority. See [[Reflexion]] for a related but distinct approach.
+The reflection mechanism maps to the expert panel's recommendation for a `reflection` note type — a second-order memory that synthesizes insights from multiple source notes, with elevated retrieval priority. See [[reflexion|Reflexion]] for a related but distinct approach.

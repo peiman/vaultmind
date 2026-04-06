@@ -19,9 +19,9 @@ All graph traversal in VaultMind — retrieval, activation spreading, context pa
 
 ## Rationale
 
-**Cycle prevention.** The [[Semantic Networks]] graph is not guaranteed to be a DAG. Notes may link to each other (A → B → A). Without a visited set, DFS would loop infinitely or require an arbitrary depth cap that silently truncates results.
+**Cycle prevention.** The [[semantic-networks|Semantic Networks]] graph is not guaranteed to be a DAG. Notes may link to each other (A → B → A). Without a visited set, DFS would loop infinitely or require an arbitrary depth cap that silently truncates results.
 
-**Distance tracking requires BFS.** [[Spreading Activation]] weights decay with hop distance. BFS guarantees that the first time a node is reached, it is via the shortest path, so its distance-based activation score is maximal and correct. DFS would assign arbitrary distances depending on traversal order.
+**Distance tracking requires BFS.** [[spreading-activation|Spreading Activation]] weights decay with hop distance. BFS guarantees that the first time a node is reached, it is via the shortest path, so its distance-based activation score is maximal and correct. DFS would assign arbitrary distances depending on traversal order.
 
 **Determinism.** BFS over a sorted adjacency list produces a deterministic traversal order for a given seed, making test output stable and results reproducible across runs.
 

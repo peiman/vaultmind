@@ -33,6 +33,6 @@ The strength of activation decreases with distance from the source and is modula
 
 ## Connections
 
-Spreading activation is the primary computational metaphor behind VaultMind's [[Memory Recall|memory recall]] command. The `--depth` parameter controls how far activation spreads, and `--min-confidence` acts as a threshold filter. However, VaultMind's implementation is a deterministic BFS traversal, not a continuous activation model — see [[Associative Memory]] for the distinction.
+Spreading activation is the primary computational metaphor behind VaultMind's [[Memory Recall|memory recall]] command. The `--depth` parameter controls how far activation spreads, and `--min-confidence` acts as a threshold filter. However, VaultMind's implementation is a deterministic BFS traversal, not a continuous activation model — see [[associative-memory|Associative Memory]] for the distinction.
 
-The [[ACT-R]] architecture formalizes spreading activation with precise mathematical equations for base-level activation, associative strength, and decay.
+The [[act-r|ACT-R]] architecture formalizes spreading activation with precise mathematical equations for base-level activation, associative strength, and decay.

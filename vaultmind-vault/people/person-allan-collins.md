@@ -21,7 +21,7 @@ url: "https://en.wikipedia.org/wiki/Allan_Collins_(cognitive_scientist)"
 
 ## About
 
-Allan M. Collins is a cognitive scientist whose collaborations with M. Ross Quillian and Elizabeth Loftus produced two landmark models of human semantic memory. The 1969 Quillian paper introduced hierarchical [[Semantic Networks]] as a psychological model, and the 1975 Loftus paper replaced that hierarchy with [[Spreading Activation]] across a continuous associative network, where link strength reflects semantic relatedness rather than taxonomic distance.
+Allan M. Collins is a cognitive scientist whose collaborations with M. Ross Quillian and Elizabeth Loftus produced two landmark models of human semantic memory. The 1969 Quillian paper introduced hierarchical [[semantic-networks|Semantic Networks]] as a psychological model, and the 1975 Loftus paper replaced that hierarchy with [[spreading-activation|Spreading Activation]] across a continuous associative network, where link strength reflects semantic relatedness rather than taxonomic distance.
 
 ## Key Contributions
 

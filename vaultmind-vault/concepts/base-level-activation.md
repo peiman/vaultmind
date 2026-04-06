@@ -23,7 +23,7 @@ source_ids:
 
 Base-level activation is the ACT-R mechanism that determines how accessible a memory chunk is based on its history of use. The equation: `B_i = ln(sum(t_j^(-d)))` captures the principle that memories used more often and more recently are more accessible.
 
-This is the mathematical formalization of what the [[Forgetting Curve]] describes qualitatively: memories decay with time but are strengthened by retrieval practice.
+This is the mathematical formalization of what the [[forgetting-curve|Forgetting Curve]] describes qualitatively: memories decay with time but are strengthened by retrieval practice.
 
 ## Key Properties
 
@@ -34,6 +34,6 @@ This is the mathematical formalization of what the [[Forgetting Curve]] describe
 
 ## Connections
 
-This is the strongest theoretical basis for adding retrieval frequency tracking to VaultMind. Currently, all notes have equal accessibility regardless of how often they've been queried. Adding `recall_count` and `last_recalled_at` fields (deferred to v2) would enable base-level activation scoring in [[Context Pack]] assembly.
+This is the strongest theoretical basis for adding retrieval frequency tracking to VaultMind. Currently, all notes have equal accessibility regardless of how often they've been queried. Adding `recall_count` and `last_recalled_at` fields (deferred to v2) would enable base-level activation scoring in [[context-pack|Context Pack]] assembly.
 
 The environmental regularity finding is particularly relevant: Anderson & Schooler showed that the statistical pattern of word appearance in newspapers, library book checkouts, and email frequency all follow the same power-law decay — the same pattern the activation equation captures.

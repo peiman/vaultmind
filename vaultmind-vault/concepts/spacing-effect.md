@@ -33,4 +33,4 @@ This is one of the most robust findings in cognitive psychology, replicated acro
 
 ## Connections
 
-While VaultMind is not a spaced repetition system, the spacing effect is relevant to how agents should interact with their memory. An agent that retrieves the same note repeatedly in quick succession gains less than one that retrieves it across different contexts and time periods. This supports the case for [[Base-Level Activation]] tracking — retrieval frequency matters, but so does the distribution of retrievals over time.
+While VaultMind is not a spaced repetition system, the spacing effect is relevant to how agents should interact with their memory. An agent that retrieves the same note repeatedly in quick succession gains less than one that retrieves it across different contexts and time periods. This supports the case for [[base-level-activation|Base-Level Activation]] tracking — retrieval frequency matters, but so does the distribution of retrievals over time.

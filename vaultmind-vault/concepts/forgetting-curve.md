@@ -34,6 +34,6 @@ The mathematical form is typically: `R(t) = e^(-t/S)` where R is retention, t is
 
 ## Connections
 
-VaultMind v1 has no forgetting mechanism — all indexed content remains equally accessible regardless of age or access frequency. The expert panel (Session 02) debated whether to add temporal decay to retrieval ranking. The consensus was to defer decay to v2, but the [[Context Pack]] algorithm's reliance on `vm_updated` timestamps introduces an implicit recency bias.
+VaultMind v1 has no forgetting mechanism — all indexed content remains equally accessible regardless of age or access frequency. The expert panel (Session 02) debated whether to add temporal decay to retrieval ranking. The consensus was to defer decay to v2, but the [[context-pack|Context Pack]] algorithm's reliance on `vm_updated` timestamps introduces an implicit recency bias.
 
-The [[ACT-R]] architecture implements forgetting via base-level activation decay: `B_i = ln(sum(t_j^(-d)))` where t_j are the times since each prior retrieval and d is a decay parameter.
+The [[act-r|ACT-R]] architecture implements forgetting via base-level activation decay: `B_i = ln(sum(t_j^(-d)))` where t_j are the times since each prior retrieval and d is a decay parameter.

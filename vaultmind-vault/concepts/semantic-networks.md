@@ -37,4 +37,4 @@ In AI, semantic networks evolved into knowledge graphs (Freebase, Wikidata, Goog
 
 VaultMind's graph model is a semantic network where note types correspond to node categories and edge types (`explicit_link`, `explicit_relation`, `tag_overlap`, etc.) provide typed relationships. Unlike classical semantic networks, VaultMind distinguishes between author-explicit edges (high confidence) and system-inferred edges (medium/low confidence).
 
-The [[Entity Resolution]] system maps human-readable references (titles, aliases) to canonical node IDs — analogous to how semantic networks resolve surface-form descriptions to concept nodes.
+The [[entity-resolution|Entity Resolution]] system maps human-readable references (titles, aliases) to canonical node IDs — analogous to how semantic networks resolve surface-form descriptions to concept nodes.

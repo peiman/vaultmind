@@ -41,9 +41,23 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		env.Meta.IndexHash = vdb.GetIndexHash()
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(env)
 	}
-	_, err = fmt.Fprintf(cmd.OutOrStdout(),
+	w := cmd.OutOrStdout()
+	if _, err = fmt.Fprintf(w,
 		"Vault: %s\nNotes: %d (%d domain, %d unstructured)\nUnresolved links: %d\n",
 		result.VaultPath, result.TotalFiles, result.DomainNotes,
-		result.UnstructuredNotes, result.Issues.UnresolvedLinks)
-	return err
+		result.UnstructuredNotes, result.Issues.UnresolvedLinks); err != nil {
+		return err
+	}
+	if result.Issues.ObsidianIncompatibleLinks > 0 {
+		if _, err = fmt.Fprintf(w, "Obsidian-incompatible links: %d\n", result.Issues.ObsidianIncompatibleLinks); err != nil {
+			return err
+		}
+		for _, il := range result.Issues.IncompatibleLinkDetails {
+			if _, err = fmt.Fprintf(w, "  %s: [[%s]] → [[%s|%s]]\n",
+				il.SourcePath, il.TargetRaw, il.SuggestedFix, il.TargetRaw); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

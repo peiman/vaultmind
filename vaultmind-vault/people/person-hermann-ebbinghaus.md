@@ -19,7 +19,7 @@ url: "https://en.wikipedia.org/wiki/Hermann_Ebbinghaus"
 
 ## About
 
-Hermann Ebbinghaus was a German psychologist who conducted the first systematic experimental studies of memory on himself. His 1885 monograph introduced both the [[Forgetting Curve]] — the exponential decay of retention over time without rehearsal — and the [[Spacing Effect]], the finding that distributed practice produces far stronger long-term retention than massed repetition.
+Hermann Ebbinghaus was a German psychologist who conducted the first systematic experimental studies of memory on himself. His 1885 monograph introduced both the [[forgetting-curve|Forgetting Curve]] — the exponential decay of retention over time without rehearsal — and the [[spacing-effect|Spacing Effect]], the finding that distributed practice produces far stronger long-term retention than massed repetition.
 
 ## Key Contributions
 
