@@ -137,6 +137,21 @@ func (idx *Indexer) Rebuild() (*IndexResult, error) {
 		log.Debug().Int("resolved", resolved).Msg("link resolution complete")
 	}
 
+	// Compute inferred edges
+	aliasCount, aliasErr := ComputeAliasMentions(db, idx.cfg.Memory.AliasMinLength)
+	if aliasErr != nil {
+		log.Debug().Err(aliasErr).Msg("alias mention detection failed")
+	} else {
+		log.Debug().Int("edges", aliasCount).Msg("alias mention detection complete")
+	}
+
+	tagCount, tagErr := ComputeTagOverlap(db, idx.cfg.Memory.TagOverlapThreshold)
+	if tagErr != nil {
+		log.Debug().Err(tagErr).Msg("tag overlap detection failed")
+	} else {
+		log.Debug().Int("edges", tagCount).Msg("tag overlap detection complete")
+	}
+
 	result.DurationMs = time.Since(start).Milliseconds()
 	result.CompletedAt = time.Now().UTC().Format(time.RFC3339)
 
@@ -272,6 +287,21 @@ func (idx *Indexer) Incremental() (*IndexResult, error) {
 		log.Debug().Err(resolveErr).Msg("link resolution failed")
 	} else {
 		log.Debug().Int("resolved", resolved).Msg("link resolution complete")
+	}
+
+	// Compute inferred edges
+	aliasCount, aliasErr := ComputeAliasMentions(db, idx.cfg.Memory.AliasMinLength)
+	if aliasErr != nil {
+		log.Debug().Err(aliasErr).Msg("alias mention detection failed")
+	} else {
+		log.Debug().Int("edges", aliasCount).Msg("alias mention detection complete")
+	}
+
+	tagCount, tagErr := ComputeTagOverlap(db, idx.cfg.Memory.TagOverlapThreshold)
+	if tagErr != nil {
+		log.Debug().Err(tagErr).Msg("tag overlap detection failed")
+	} else {
+		log.Debug().Int("edges", tagCount).Msg("tag overlap detection complete")
 	}
 
 	result.DurationMs = time.Since(start).Milliseconds()

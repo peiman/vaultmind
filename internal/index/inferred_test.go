@@ -1,9 +1,11 @@
 package index_test
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/index"
+	"github.com/peiman/vaultmind/internal/vault"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -131,4 +133,53 @@ func TestComputeTagOverlap_WeightStored(t *testing.T) {
 	err = db.QueryRow("SELECT weight FROM links WHERE edge_type = 'tag_overlap' LIMIT 1").Scan(&weight)
 	require.NoError(t, err)
 	assert.Greater(t, weight, 0.0)
+}
+
+func TestInferredEdges_AfterRebuild(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
+	cfg, err := vault.LoadConfig(testVaultPath)
+	require.NoError(t, err)
+
+	idxr := index.NewIndexer(testVaultPath, dbPath, cfg)
+	result, err := idxr.Rebuild()
+	require.NoError(t, err)
+	assert.Greater(t, result.Indexed, 0)
+
+	db, err := index.Open(dbPath)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	var aliasCount int
+	err = db.QueryRow("SELECT COUNT(*) FROM links WHERE edge_type = 'alias_mention'").Scan(&aliasCount)
+	require.NoError(t, err)
+
+	var tagCount int
+	err = db.QueryRow("SELECT COUNT(*) FROM links WHERE edge_type = 'tag_overlap'").Scan(&tagCount)
+	require.NoError(t, err)
+
+	assert.Greater(t, aliasCount+tagCount, 0, "test vault should produce at least one inferred edge")
+}
+
+func TestInferredEdges_AfterIncremental(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
+	cfg, err := vault.LoadConfig(testVaultPath)
+	require.NoError(t, err)
+
+	idxr := index.NewIndexer(testVaultPath, dbPath, cfg)
+	_, err = idxr.Rebuild()
+	require.NoError(t, err)
+
+	_, err = idxr.Incremental()
+	require.NoError(t, err)
+
+	db, err := index.Open(dbPath)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	var total int
+	err = db.QueryRow("SELECT COUNT(*) FROM links WHERE edge_type IN ('alias_mention', 'tag_overlap')").Scan(&total)
+	require.NoError(t, err)
+	assert.Greater(t, total, 0)
 }
