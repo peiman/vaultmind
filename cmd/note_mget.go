@@ -3,6 +3,7 @@ package cmd
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -31,8 +32,11 @@ func init() {
 
 func runNoteMget(cmd *cobra.Command, _ []string) error {
 	vaultPath := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppNoteVault)
-	vdb, err := cmdutil.OpenVaultDB(vaultPath)
+	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, "note mget")
 	if err != nil {
+		if errors.Is(err, cmdutil.ErrAlreadyWritten) {
+			return nil
+		}
 		return err
 	}
 	defer vdb.Close()

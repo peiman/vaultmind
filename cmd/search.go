@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
@@ -21,8 +22,11 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("usage: vaultmind search <query>")
 	}
 	vaultPath := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppSearchVault)
-	vdb, err := cmdutil.OpenVaultDB(vaultPath)
+	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, "search")
 	if err != nil {
+		if errors.Is(err, cmdutil.ErrAlreadyWritten) {
+			return nil
+		}
 		return err
 	}
 	defer vdb.Close()

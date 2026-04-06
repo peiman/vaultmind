@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
@@ -22,8 +23,11 @@ func runLinksIn(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("usage: vaultmind links in <id-or-path>")
 	}
 	vaultPath := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppLinksVault)
-	vdb, err := cmdutil.OpenVaultDB(vaultPath)
+	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, "links in")
 	if err != nil {
+		if errors.Is(err, cmdutil.ErrAlreadyWritten) {
+			return nil
+		}
 		return err
 	}
 	defer vdb.Close()

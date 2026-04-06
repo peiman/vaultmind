@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 
@@ -39,8 +40,11 @@ func runDataviewLint(cmd *cobra.Command, _ []string) error {
 	vaultPath := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppDataviewlintVault)
 	useJSON := getConfigValueWithFlags[bool](cmd, "json", config.KeyAppDataviewlintJson)
 
-	result, indexHash, err := executeDataviewLint(vaultPath)
+	result, indexHash, err := executeDataviewLint(cmd, vaultPath)
 	if err != nil {
+		if errors.Is(err, cmdutil.ErrAlreadyWritten) {
+			return nil
+		}
 		return err
 	}
 	if useJSON {
@@ -49,8 +53,8 @@ func runDataviewLint(cmd *cobra.Command, _ []string) error {
 	return dataviewLintText(cmd, result)
 }
 
-func executeDataviewLint(vaultPath string) (dataviewLintResult, string, error) {
-	vdb, err := cmdutil.OpenVaultDB(vaultPath)
+func executeDataviewLint(cmd *cobra.Command, vaultPath string) (dataviewLintResult, string, error) {
+	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, "dataview lint")
 	if err != nil {
 		return dataviewLintResult{}, "", err
 	}

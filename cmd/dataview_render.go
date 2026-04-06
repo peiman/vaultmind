@@ -29,6 +29,9 @@ func runDataviewRender(cmd *cobra.Command, args []string) error {
 
 	result, indexHash, err := executeDataviewRender(cmd, vaultPath, args[0])
 	if err != nil {
+		if errors.Is(err, cmdutil.ErrAlreadyWritten) {
+			return nil
+		}
 		return dataviewRenderError(cmd, useJSON, err)
 	}
 	if useJSON {
@@ -38,7 +41,7 @@ func runDataviewRender(cmd *cobra.Command, args []string) error {
 }
 
 func executeDataviewRender(cmd *cobra.Command, vaultPath, target string) (*marker.RenderResult, string, error) {
-	vdb, err := cmdutil.OpenVaultDB(vaultPath)
+	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, "dataview render")
 	if err != nil {
 		return nil, "", err
 	}

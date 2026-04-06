@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
@@ -22,8 +23,11 @@ func runNoteGet(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("usage: vaultmind note get <id-or-path>")
 	}
 	vaultPath := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppNoteVault)
-	vdb, err := cmdutil.OpenVaultDB(vaultPath)
+	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, "note get")
 	if err != nil {
+		if errors.Is(err, cmdutil.ErrAlreadyWritten) {
+			return nil
+		}
 		return err
 	}
 	defer vdb.Close()

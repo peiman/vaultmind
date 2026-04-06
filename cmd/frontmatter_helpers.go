@@ -28,8 +28,11 @@ func runMutation(cmd *cobra.Command, req mutation.MutationRequest,
 		req.AllowExtra = getConfigValueWithFlags[bool](cmd, "allow-extra", allowExtraKey)
 	}
 
-	vdb, err := cmdutil.OpenVaultDB(vaultPath)
+	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, cmdName)
 	if err != nil {
+		if errors.Is(err, cmdutil.ErrAlreadyWritten) {
+			return nil
+		}
 		return err
 	}
 	defer vdb.Close()

@@ -4,6 +4,7 @@ package cmdutil
 import (
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/schema"
 	"github.com/peiman/vaultmind/internal/vault"
+	"github.com/spf13/cobra"
 )
 
 // VaultDB bundles the commonly needed vault resources.
@@ -92,4 +94,26 @@ func WriteJSON(w io.Writer, command string, result interface{}, vaultPath, index
 func WriteJSONError(w io.Writer, command, code, message string) error {
 	env := envelope.Error(command, code, message, "")
 	return json.NewEncoder(w).Encode(env)
+}
+
+// ErrAlreadyWritten signals that a JSON error envelope was already written.
+var ErrAlreadyWritten = errors.New("error already written to output")
+
+func isJSONOutput(cmd *cobra.Command) bool {
+	jsonFlag, _ := cmd.Flags().GetBool("json")
+	return jsonFlag
+}
+
+// OpenVaultDBOrWriteErr opens the vault DB. On failure with --json set,
+// writes a JSON error envelope and returns ErrAlreadyWritten.
+func OpenVaultDBOrWriteErr(cmd *cobra.Command, vaultPath, commandName string) (*VaultDB, error) {
+	vdb, err := OpenVaultDB(vaultPath)
+	if err != nil {
+		if isJSONOutput(cmd) {
+			_ = WriteJSONError(cmd.OutOrStdout(), commandName, "vault_error", err.Error())
+			return nil, ErrAlreadyWritten
+		}
+		return nil, err
+	}
+	return vdb, nil
 }
