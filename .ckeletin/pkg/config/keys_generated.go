@@ -80,6 +80,17 @@ const (
 	KeyAppLinksneighborsDepth           = "app.linksneighbors.depth"            // Maximum traversal depth
 	KeyAppLinksneighborsMinConfidence   = "app.linksneighbors.min_confidence"   // Minimum edge confidence (low, medium, high)
 	KeyAppLinksneighborsMaxNodes        = "app.linksneighbors.max_nodes"        // Maximum nodes to return
+	KeyAppMemoryrecallVault             = "app.memoryrecall.vault"              // Path to vault root
+	KeyAppMemoryrecallJson              = "app.memoryrecall.json"               // Output in JSON format
+	KeyAppMemoryrecallDepth             = "app.memoryrecall.depth"              // Maximum traversal depth
+	KeyAppMemoryrecallMinConfidence     = "app.memoryrecall.min_confidence"     // Minimum edge confidence (low, medium, high)
+	KeyAppMemoryrecallMaxNodes          = "app.memoryrecall.max_nodes"          // Maximum nodes to return
+	KeyAppMemoryrelatedVault            = "app.memoryrelated.vault"             // Path to vault root
+	KeyAppMemoryrelatedJson             = "app.memoryrelated.json"              // Output in JSON format
+	KeyAppMemoryrelatedMode             = "app.memoryrelated.mode"              // Filter mode (explicit, inferred, mixed)
+	KeyAppMemorycontextpackVault        = "app.memorycontextpack.vault"         // Path to vault root
+	KeyAppMemorycontextpackJson         = "app.memorycontextpack.json"          // Output in JSON format
+	KeyAppMemorycontextpackBudget       = "app.memorycontextpack.budget"        // Token budget
 	KeyAppNoteVault                     = "app.note.vault"                      // Path to vault root
 	KeyAppNoteJson                      = "app.note.json"                       // Output in JSON format
 	KeyAppNoteFrontmatterOnly           = "app.note.frontmatter_only"           // Omit body, headings, blocks
