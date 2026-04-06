@@ -47,7 +47,8 @@ type contextCandidate struct {
 	noteID     string
 	edgeType   string
 	confidence string
-	priority   int // lower = higher priority
+	priority   int    // lower = higher priority
+	updated    string // ISO date string from frontmatter; used for secondary sort (desc)
 }
 
 // edgePriority returns the sort priority for an edge type and confidence.
@@ -56,7 +57,7 @@ func edgePriority(edgeType, confidence string) int {
 	if edgeType == "explicit_relation" {
 		return 0
 	}
-	if edgeType == "explicit_link" || edgeType == "embed" {
+	if edgeType == "explicit_link" || edgeType == "explicit_embed" {
 		return 1
 	}
 	if confidence == "medium" {
@@ -79,7 +80,7 @@ func ContextPack(resolver *graph.Resolver, db *index.DB, cfg ContextPackConfig) 
 	targetID := resolved.Matches[0].ID
 
 	result := &ContextPackResult{
-		TargetID:     cfg.Input,
+		TargetID:     targetID,
 		BudgetTokens: cfg.Budget,
 		Context:      []ContextItem{},
 	}
@@ -94,6 +95,65 @@ func ContextPack(resolver *graph.Resolver, db *index.DB, cfg ContextPackConfig) 
 	}
 
 	// Step 3: Estimate target tokens and fill budget.
+	target, remaining := packTargetContent(full, cfg.Budget, result)
+	result.Target = target
+
+	if remaining <= 0 {
+		return result, nil
+	}
+
+	// Step 4: Collect direct edge candidates.
+	candidates, err := collectEdgeCandidates(db, targetID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Step 5: Enrich with updated date and sort by (priority ASC, updated DESC).
+	if err := enrichAndSortCandidates(db, candidates); err != nil {
+		return nil, err
+	}
+
+	// Step 6: Pack context items until budget exhausted.
+	for _, c := range candidates {
+		noteFull, qErr := db.QueryFullNote(c.noteID)
+		if qErr != nil {
+			return nil, fmt.Errorf("querying context note %q: %w", c.noteID, qErr)
+		}
+
+		var fm map[string]interface{}
+		if noteFull != nil {
+			fm = noteFull.Frontmatter
+		} else {
+			fm = map[string]interface{}{}
+		}
+
+		fmBytes, _ := json.Marshal(fm)
+		tokens := EstimateTokens(string(fmBytes))
+
+		if tokens > remaining {
+			result.BudgetExhausted = true
+			break
+		}
+
+		result.Context = append(result.Context, ContextItem{
+			ID:           c.noteID,
+			EdgeType:     c.edgeType,
+			Confidence:   c.confidence,
+			Frontmatter:  fm,
+			BodyIncluded: false,
+		})
+
+		remaining -= tokens
+		result.UsedTokens += tokens
+	}
+
+	return result, nil
+}
+
+// packTargetContent fills the token budget with the target note's frontmatter and body.
+// It always accounts for frontmatter tokens in UsedTokens and returns the target and
+// the remaining token budget after packing.
+func packTargetContent(full *index.FullNote, budget int, result *ContextPackResult) (*ContextPackTarget, int) {
 	fmJSON, _ := json.Marshal(full.Frontmatter)
 	fmTokens := EstimateTokens(string(fmJSON))
 	bodyTokens := EstimateTokens(full.Body)
@@ -103,49 +163,48 @@ func ContextPack(resolver *graph.Resolver, db *index.DB, cfg ContextPackConfig) 
 		Frontmatter: full.Frontmatter,
 	}
 
-	remaining := cfg.Budget
+	// Always account for frontmatter tokens, even if they exceed the budget.
+	result.UsedTokens += fmTokens
+	remaining := budget - fmTokens
 
-	// Always include frontmatter if it fits, else we still try to fill it.
-	if fmTokens <= remaining {
-		remaining -= fmTokens
-		result.UsedTokens += fmTokens
+	if fmTokens > budget {
+		// Frontmatter alone exceeds budget — count it, mark truncated, omit body.
+		result.Truncated = true
+		return target, remaining
+	}
 
-		// Include body if budget allows.
-		if bodyTokens <= remaining {
-			target.Body = full.Body
-			remaining -= bodyTokens
-			result.UsedTokens += bodyTokens
-		} else {
-			// Truncate body to fit remaining budget (4 chars per token).
-			maxChars := remaining * 4
-			if maxChars > 0 && len(full.Body) > 0 {
-				body := full.Body
-				if len(body) > maxChars {
-					body = body[:maxChars]
-					result.Truncated = true
-				}
-				target.Body = body
-				used := EstimateTokens(body)
-				remaining -= used
-				result.UsedTokens += used
-			} else {
-				result.Truncated = true
-			}
+	if bodyTokens <= remaining {
+		target.Body = full.Body
+		remaining -= bodyTokens
+		result.UsedTokens += bodyTokens
+		return target, remaining
+	}
+
+	// Truncate body to fit remaining budget (4 chars per token).
+	maxChars := remaining * 4
+	if maxChars > 0 && len(full.Body) > 0 {
+		body := full.Body
+		if len(body) > maxChars {
+			body = body[:maxChars]
+			result.Truncated = true
 		}
+		target.Body = body
+		used := EstimateTokens(body)
+		remaining -= used
+		result.UsedTokens += used
 	} else {
-		// Frontmatter alone exceeds budget — include nothing more, mark truncated.
 		result.Truncated = true
 	}
-	result.Target = target
+	return target, remaining
+}
 
-	if remaining <= 0 {
-		return result, nil
-	}
-
-	// Step 4: Query direct edges for context candidates.
-	var candidates []contextCandidate
+// collectEdgeCandidates queries outbound and inbound resolved edges for targetID
+// and returns deduplicated candidates ranked by edgePriority.
+func collectEdgeCandidates(db *index.DB, targetID string) ([]contextCandidate, error) {
 	seen := make(map[string]bool)
 	seen[targetID] = true // exclude the target itself
+
+	var candidates []contextCandidate
 
 	outRows, err := db.Query(
 		`SELECT dst_note_id, edge_type, confidence
@@ -199,44 +258,30 @@ func ContextPack(resolver *graph.Resolver, db *index.DB, cfg ContextPackConfig) 
 		return nil, fmt.Errorf("iterating inbound edges: %w", err)
 	}
 
-	// Step 5: Sort candidates by priority.
-	sort.Slice(candidates, func(i, j int) bool {
-		return candidates[i].priority < candidates[j].priority
-	})
+	return candidates, nil
+}
 
-	// Step 6: Pack context items until budget exhausted.
-	for _, c := range candidates {
-		noteFull, err := db.QueryFullNote(c.noteID)
+// enrichAndSortCandidates loads the updated date for each candidate from the DB
+// and sorts candidates by (priority ASC, updated DESC).
+func enrichAndSortCandidates(db *index.DB, candidates []contextCandidate) error {
+	for i := range candidates {
+		noteFull, err := db.QueryFullNote(candidates[i].noteID)
 		if err != nil {
-			return nil, fmt.Errorf("querying context note %q: %w", c.noteID, err)
+			return fmt.Errorf("querying context note %q for sort: %w", candidates[i].noteID, err)
 		}
-
-		var fm map[string]interface{}
 		if noteFull != nil {
-			fm = noteFull.Frontmatter
-		} else {
-			fm = map[string]interface{}{}
+			if u, ok := noteFull.Frontmatter["updated"].(string); ok {
+				candidates[i].updated = u
+			}
 		}
-
-		fmBytes, _ := json.Marshal(fm)
-		tokens := EstimateTokens(string(fmBytes))
-
-		if tokens > remaining {
-			result.BudgetExhausted = true
-			break
-		}
-
-		result.Context = append(result.Context, ContextItem{
-			ID:           c.noteID,
-			EdgeType:     c.edgeType,
-			Confidence:   c.confidence,
-			Frontmatter:  fm,
-			BodyIncluded: false,
-		})
-
-		remaining -= tokens
-		result.UsedTokens += tokens
 	}
 
-	return result, nil
+	sort.SliceStable(candidates, func(i, j int) bool {
+		if candidates[i].priority != candidates[j].priority {
+			return candidates[i].priority < candidates[j].priority
+		}
+		return candidates[i].updated > candidates[j].updated // desc: newer first
+	})
+
+	return nil
 }

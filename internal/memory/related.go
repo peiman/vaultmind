@@ -104,7 +104,7 @@ func Related(resolver *graph.Resolver, db *index.DB, cfg RelatedConfig) (*Relate
 	// Step 4: Filter by mode and deduplicate by note ID (keep first occurrence).
 	seen := make(map[string]bool)
 	result := &RelatedResult{
-		TargetID: cfg.Input,
+		TargetID: targetID,
 		Mode:     cfg.Mode,
 		Related:  []RelatedItem{},
 	}

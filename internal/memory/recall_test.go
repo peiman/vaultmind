@@ -86,3 +86,15 @@ func TestRecall_DepthZero(t *testing.T) {
 	assert.Len(t, result.Nodes, 1)
 	assert.Empty(t, result.Edges)
 }
+
+// TestRecall_UnresolvableInput verifies an error is returned when the input
+// cannot be resolved to a known note.
+func TestRecall_UnresolvableInput(t *testing.T) {
+	db := buildTestDB(t)
+	resolver := graph.NewResolver(db)
+	result, err := memory.Recall(resolver, db, memory.RecallConfig{
+		Input: "does-not-exist-xyz", Depth: 1, MinConfidence: "low", MaxNodes: 200,
+	})
+	assert.Error(t, err)
+	assert.Nil(t, result)
+}
