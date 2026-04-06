@@ -75,6 +75,11 @@ const (
 	KeyAppLinksVault                    = "app.links.vault"                     // Path to vault root
 	KeyAppLinksJson                     = "app.links.json"                      // Output in JSON format
 	KeyAppLinksEdgeType                 = "app.links.edge_type"                 // Filter by edge type
+	KeyAppLinksneighborsVault           = "app.linksneighbors.vault"            // Path to vault root
+	KeyAppLinksneighborsJson            = "app.linksneighbors.json"             // Output in JSON format
+	KeyAppLinksneighborsDepth           = "app.linksneighbors.depth"            // Maximum traversal depth
+	KeyAppLinksneighborsMinConfidence   = "app.linksneighbors.min_confidence"   // Minimum edge confidence (low, medium, high)
+	KeyAppLinksneighborsMaxNodes        = "app.linksneighbors.max_nodes"        // Maximum nodes to return
 	KeyAppNoteVault                     = "app.note.vault"                      // Path to vault root
 	KeyAppNoteJson                      = "app.note.json"                       // Output in JSON format
 	KeyAppNoteFrontmatterOnly           = "app.note.frontmatter_only"           // Omit body, headings, blocks
