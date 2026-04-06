@@ -189,3 +189,28 @@ func TestStoreNote_DuplicateLinksDeduped(t *testing.T) {
 	require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM links WHERE src_note_id = ?", "concept-dup").Scan(&linkCount))
 	assert.Equal(t, 1, linkCount, "duplicate links should be deduped to one")
 }
+
+func TestStoreNote_DuplicateUnresolvedLinksDeduped(t *testing.T) {
+	db := openTestDB(t)
+
+	// Unresolved duplicate wikilinks: same dst_raw, both dst_note_id = NULL.
+	// SQLite treats NULL as distinct in unique indexes, so INSERT OR IGNORE
+	// stores BOTH. During ResolveLinks, only the first gets resolved (the second
+	// hits the unique constraint on UPDATE). This leaves a permanently unresolved
+	// phantom link.
+	rec := buildTestRecord("concept-src", "concepts/src.md")
+	rec.Links = []index.LinkRecord{
+		{DstRaw: "SomeTarget", EdgeType: "explicit_link", Confidence: "high"},
+		{DstRaw: "SomeTarget", EdgeType: "explicit_link", Confidence: "high"},
+	}
+
+	require.NoError(t, index.StoreNote(db, rec))
+
+	var linkCount int
+	require.NoError(t, db.QueryRow(
+		"SELECT COUNT(*) FROM links WHERE src_note_id = ? AND dst_raw = ?",
+		"concept-src", "SomeTarget",
+	).Scan(&linkCount))
+	assert.Equal(t, 1, linkCount,
+		"duplicate unresolved links (NULL dst_note_id) must be deduped to one")
+}

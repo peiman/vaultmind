@@ -13,7 +13,7 @@ import (
 func TestSearchFTS_SnippetContainsBodyText(t *testing.T) {
 	db := rebuildTestIndex(t)
 
-	results, err := index.SearchFTS(db, "cognitive architecture", 5, 0)
+	results, err := index.SearchFTS(db, "cognitive architecture", 20, 0)
 	require.NoError(t, err)
 	require.NotEmpty(t, results)
 

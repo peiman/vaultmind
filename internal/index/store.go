@@ -130,8 +130,18 @@ func StoreNoteInTx(tx *sql.Tx, rec NoteRecord) error {
 		}
 	}
 
-	// Links
+	// Links — deduplicate by (dst_raw, edge_type) to prevent NULL dst_note_id
+	// duplicates that SQLite's unique index treats as distinct (NULL != NULL).
+	// Without dedup, ResolveLinks can only resolve one copy, leaving phantom
+	// unresolved links.
+	seenLinks := make(map[string]bool)
 	for _, link := range rec.Links {
+		linkKey := link.DstRaw + "\x00" + link.EdgeType
+		if seenLinks[linkKey] {
+			continue
+		}
+		seenLinks[linkKey] = true
+
 		var dstNoteID interface{}
 		if link.DstNoteID != "" {
 			dstNoteID = link.DstNoteID
