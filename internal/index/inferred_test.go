@@ -143,6 +143,69 @@ func TestComputeTagOverlap_WeightStored(t *testing.T) {
 	assert.Greater(t, weight, 0.0)
 }
 
+func TestComputeTagOverlap_Bidirectional(t *testing.T) {
+	db := openTestDB(t)
+
+	_, err := db.Exec("INSERT INTO notes (id, path, title, hash, mtime, is_domain) VALUES (?, ?, ?, ?, ?, ?)",
+		"note-a", "concepts/note-a.md", "Note A", "abc", 0, true)
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO notes (id, path, title, hash, mtime, is_domain) VALUES (?, ?, ?, ?, ?, ?)",
+		"note-b", "concepts/note-b.md", "Note B", "def", 0, true)
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO tags (note_id, tag) VALUES (?, ?)", "note-a", "rare-topic")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO tags (note_id, tag) VALUES (?, ?)", "note-b", "rare-topic")
+	require.NoError(t, err)
+
+	count, err := index.ComputeTagOverlap(db, 0.0)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, count, 2, "should create edges in BOTH directions")
+
+	var ab int
+	require.NoError(t, db.QueryRow(
+		"SELECT COUNT(*) FROM links WHERE src_note_id = ? AND dst_note_id = ? AND edge_type = 'tag_overlap'",
+		"note-a", "note-b").Scan(&ab))
+	assert.Equal(t, 1, ab, "should have A→B tag_overlap edge")
+
+	var ba int
+	require.NoError(t, db.QueryRow(
+		"SELECT COUNT(*) FROM links WHERE src_note_id = ? AND dst_note_id = ? AND edge_type = 'tag_overlap'",
+		"note-b", "note-a").Scan(&ba))
+	assert.Equal(t, 1, ba, "should have B→A tag_overlap edge")
+}
+
+func TestComputeAliasMentions_CollisionHandled(t *testing.T) {
+	db := openTestDB(t)
+
+	_, err := db.Exec("INSERT INTO notes (id, path, title, hash, mtime, is_domain, body_text) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		"note-api-guide", "concepts/api-guide.md", "API Guide", "a1", 0, true, "")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO aliases (note_id, alias, alias_normalized) VALUES (?, ?, ?)",
+		"note-api-guide", "API", "api")
+	require.NoError(t, err)
+
+	_, err = db.Exec("INSERT INTO notes (id, path, title, hash, mtime, is_domain, body_text) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		"note-api-ref", "concepts/api-ref.md", "api reference", "a2", 0, true, "")
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO aliases (note_id, alias, alias_normalized) VALUES (?, ?, ?)",
+		"note-api-ref", "api", "api")
+	require.NoError(t, err)
+
+	_, err = db.Exec("INSERT INTO notes (id, path, title, hash, mtime, is_domain, body_text) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		"note-mentions", "concepts/mentions.md", "Mentions", "a3", 0, true, "We use the api extensively in production")
+	require.NoError(t, err)
+
+	count, err := index.ComputeAliasMentions(db, 2)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, count, 2, "should create edges to BOTH notes with colliding aliases")
+
+	var edgeCount int
+	require.NoError(t, db.QueryRow(
+		"SELECT COUNT(*) FROM links WHERE src_note_id = 'note-mentions' AND edge_type = 'alias_mention'",
+	).Scan(&edgeCount))
+	assert.Equal(t, 2, edgeCount, "should have alias_mention edges to both api notes")
+}
+
 func TestInferredEdges_AfterRebuild(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")

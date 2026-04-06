@@ -56,7 +56,7 @@ func ComputeAliasMentions(db *DB, minAliasLen int) (int, error) {
 	defer func() { _ = rows.Close() }()
 
 	var entries []aliasEntry
-	aliasToNoteID := make(map[string]string)
+	aliasToNoteIDs := make(map[string][]string)
 	for rows.Next() {
 		var e aliasEntry
 		if err := rows.Scan(&e.noteID, &e.text); err != nil {
@@ -66,7 +66,8 @@ func ComputeAliasMentions(db *DB, minAliasLen int) (int, error) {
 			continue
 		}
 		entries = append(entries, e)
-		aliasToNoteID[strings.ToLower(e.text)] = e.noteID
+		key := strings.ToLower(e.text)
+		aliasToNoteIDs[key] = append(aliasToNoteIDs[key], e.noteID)
 	}
 	if err := rows.Err(); err != nil {
 		return 0, err
@@ -102,11 +103,16 @@ func ComputeAliasMentions(db *DB, minAliasLen int) (int, error) {
 		stripped := StripForAliasMatch(body)
 		matches := re.FindAllString(stripped, -1)
 		for _, match := range matches {
-			targetID, ok := aliasToNoteID[strings.ToLower(match)]
-			if !ok || targetID == noteID {
+			targetIDs, ok := aliasToNoteIDs[strings.ToLower(match)]
+			if !ok {
 				continue
 			}
-			edgeSet[edge{src: noteID, dst: targetID}] = true
+			for _, targetID := range targetIDs {
+				if targetID == noteID {
+					continue
+				}
+				edgeSet[edge{src: noteID, dst: targetID}] = true
+			}
 		}
 	}
 
@@ -184,11 +190,22 @@ func ComputeTagOverlap(db *DB, threshold float64) (int, error) {
 		if score < threshold {
 			continue
 		}
+		// A→B
 		_, err := db.Exec(`
 			INSERT OR IGNORE INTO links
 			  (src_note_id, dst_note_id, dst_raw, edge_type, resolved, confidence, origin, weight)
 			VALUES (?, ?, ?, 'tag_overlap', TRUE, 'low', 'tag_overlap_scan', ?)`,
 			p.a, p.b, p.b, score)
+		if err != nil {
+			continue
+		}
+		count++
+		// B→A (symmetric)
+		_, err = db.Exec(`
+			INSERT OR IGNORE INTO links
+			  (src_note_id, dst_note_id, dst_raw, edge_type, resolved, confidence, origin, weight)
+			VALUES (?, ?, ?, 'tag_overlap', TRUE, 'low', 'tag_overlap_scan', ?)`,
+			p.b, p.a, p.a, score)
 		if err != nil {
 			continue
 		}
