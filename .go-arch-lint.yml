@@ -110,6 +110,7 @@ components:
       # VaultMind business logic:
       - internal/query/**
       - internal/cmdutil/**
+      - internal/memory/**
 
   # pkg/ was cleaned by task init (checkmate is now an external dependency).
   # Re-add this section if you create new public packages in pkg/.
