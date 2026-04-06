@@ -17,10 +17,11 @@ import (
 
 // VaultDB bundles the commonly needed vault resources.
 type VaultDB struct {
-	DB     *index.DB
-	Config *vault.Config
-	Reg    *schema.Registry
-	dbPath string
+	DB        *index.DB
+	Config    *vault.Config
+	Reg       *schema.Registry
+	dbPath    string
+	indexHash string
 }
 
 // Close releases the database connection.
@@ -28,6 +29,11 @@ func (v *VaultDB) Close() {
 	if v.DB != nil {
 		_ = v.DB.Close()
 	}
+}
+
+// GetIndexHash returns the cached SHA-256 hash of the SQLite database file.
+func (v *VaultDB) GetIndexHash() string {
+	return v.indexHash
 }
 
 // OpenVaultDB loads config, opens the index DB, and creates the type registry.
@@ -48,12 +54,14 @@ func OpenVaultDB(vaultPath string) (*VaultDB, error) {
 		return nil, fmt.Errorf("opening index: %w", err)
 	}
 
-	return &VaultDB{
+	vdb := &VaultDB{
 		DB:     db,
 		Config: cfg,
 		Reg:    schema.NewRegistry(cfg.Types),
 		dbPath: dbPath,
-	}, nil
+	}
+	vdb.indexHash = vdb.IndexHash()
+	return vdb, nil
 }
 
 // IndexHash computes the SHA-256 hash of the SQLite database file.
@@ -73,9 +81,10 @@ func (v *VaultDB) IndexHash() string {
 }
 
 // WriteJSON writes a JSON envelope to the writer.
-func WriteJSON(w io.Writer, command string, result interface{}, vaultPath string) error {
+func WriteJSON(w io.Writer, command string, result interface{}, vaultPath, indexHash string) error {
 	env := envelope.OK(command, result)
 	env.Meta.VaultPath = vaultPath
+	env.Meta.IndexHash = indexHash
 	return json.NewEncoder(w).Encode(env)
 }
 

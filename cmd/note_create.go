@@ -168,6 +168,7 @@ func executeNoteCreate(cmd *cobra.Command, notePath string) error {
 	if jsonOut {
 		env := envelope.OK("note create", out)
 		env.Meta.VaultPath = vaultPath
+		env.Meta.IndexHash = vdb.GetIndexHash()
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(env)
 	}
 

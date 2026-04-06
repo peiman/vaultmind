@@ -89,6 +89,7 @@ func executeApply(cmd *cobra.Command, planArg string) error {
 	if jsonOut {
 		env := envelope.OK("apply", result)
 		env.Meta.VaultPath = vaultPath
+		env.Meta.IndexHash = vdb.GetIndexHash()
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(env)
 	}
 

@@ -48,6 +48,7 @@ func runMemoryRelated(cmd *cobra.Command, args []string) error {
 	if jsonOut {
 		env := envelope.OK("memory related", result)
 		env.Meta.VaultPath = vaultPath
+		env.Meta.IndexHash = vdb.GetIndexHash()
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(env)
 	}
 	return formatRelated(result, cmd.OutOrStdout())

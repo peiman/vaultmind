@@ -48,6 +48,7 @@ func runMemoryContextPack(cmd *cobra.Command, args []string) error {
 	if jsonOut {
 		env := envelope.OK("memory context-pack", result)
 		env.Meta.VaultPath = vaultPath
+		env.Meta.IndexHash = vdb.GetIndexHash()
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(env)
 	}
 	return formatContextPack(result, cmd.OutOrStdout())

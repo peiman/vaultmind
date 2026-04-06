@@ -75,6 +75,7 @@ func runMutation(cmd *cobra.Command, req mutation.MutationRequest,
 	if getConfigValueWithFlags[bool](cmd, "json", jsonKey) {
 		env := envelope.OK(cmdName, result)
 		env.Meta.VaultPath = vaultPath
+		env.Meta.IndexHash = vdb.GetIndexHash()
 		env.Meta.IndexStale = result.ReindexRequired // false if re-index succeeded
 		for _, w := range result.Warnings {
 			env.AddWarning(w.Rule, w.Message, "")

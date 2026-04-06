@@ -32,5 +32,6 @@ func runLinksOut(cmd *cobra.Command, args []string) error {
 		Input: args[0], Direction: "out", VaultPath: vaultPath,
 		EdgeType:   getConfigValueWithFlags[string](cmd, "edge-type", config.KeyAppLinksEdgeType),
 		JSONOutput: getConfigValueWithFlags[bool](cmd, "json", config.KeyAppLinksJson),
+		IndexHash:  vdb.GetIndexHash(),
 	}, cmd.OutOrStdout())
 }

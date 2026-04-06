@@ -45,6 +45,7 @@ func runLinksNeighbors(cmd *cobra.Command, args []string) error {
 	if getConfigValueWithFlags[bool](cmd, "json", config.KeyAppLinksneighborsJson) {
 		env := envelope.OK("links neighbors", result)
 		env.Meta.VaultPath = vaultPath
+		env.Meta.IndexHash = vdb.GetIndexHash()
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(env)
 	}
 

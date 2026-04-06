@@ -38,6 +38,7 @@ func runFrontmatterValidate(cmd *cobra.Command, _ []string) error {
 			env.Status = "warning"
 		}
 		env.Meta.VaultPath = vaultPath
+		env.Meta.IndexHash = vdb.GetIndexHash()
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(env)
 	}
 

@@ -51,6 +51,7 @@ func runNoteMget(cmd *cobra.Command, _ []string) error {
 	if jsonOut {
 		env := envelope.OK("note mget", result)
 		env.Meta.VaultPath = vaultPath
+		env.Meta.IndexHash = vdb.GetIndexHash()
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(env)
 	}
 	for _, n := range result.Notes {

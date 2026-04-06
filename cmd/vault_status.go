@@ -35,6 +35,7 @@ func runVaultStatus(cmd *cobra.Command, _ []string) error {
 	if getConfigValueWithFlags[bool](cmd, "json", config.KeyAppVaultstatusJson) {
 		env := envelope.OK("vault status", result)
 		env.Meta.VaultPath = vaultPath
+		env.Meta.IndexHash = vdb.GetIndexHash()
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(env)
 	}
 	_, err = fmt.Fprintf(cmd.OutOrStdout(),

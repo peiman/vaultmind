@@ -50,6 +50,7 @@ func runMemoryRecall(cmd *cobra.Command, args []string) error {
 	if jsonOut {
 		env := envelope.OK("memory recall", result)
 		env.Meta.VaultPath = vaultPath
+		env.Meta.IndexHash = vdb.GetIndexHash()
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(env)
 	}
 	return formatRecall(result, cmd.OutOrStdout())

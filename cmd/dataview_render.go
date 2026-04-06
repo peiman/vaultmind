@@ -27,29 +27,29 @@ func runDataviewRender(cmd *cobra.Command, args []string) error {
 	vaultPath := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppDataviewrenderVault)
 	useJSON := getConfigValueWithFlags[bool](cmd, "json", config.KeyAppDataviewrenderJson)
 
-	result, err := executeDataviewRender(cmd, vaultPath, args[0])
+	result, indexHash, err := executeDataviewRender(cmd, vaultPath, args[0])
 	if err != nil {
 		return dataviewRenderError(cmd, useJSON, err)
 	}
 	if useJSON {
-		return cmdutil.WriteJSON(cmd.OutOrStdout(), "dataview render", result, vaultPath)
+		return cmdutil.WriteJSON(cmd.OutOrStdout(), "dataview render", result, vaultPath, indexHash)
 	}
 	return dataviewRenderText(cmd, result)
 }
 
-func executeDataviewRender(cmd *cobra.Command, vaultPath, target string) (*marker.RenderResult, error) {
+func executeDataviewRender(cmd *cobra.Command, vaultPath, target string) (*marker.RenderResult, string, error) {
 	vdb, err := cmdutil.OpenVaultDB(vaultPath)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	defer vdb.Close()
 
 	checker, err := git.NewPolicyChecker(vdb.Config.Git)
 	if err != nil {
-		return nil, fmt.Errorf("creating policy checker: %w", err)
+		return nil, "", fmt.Errorf("creating policy checker: %w", err)
 	}
 
-	return marker.RenderRegion(marker.RenderConfig{
+	result, err := marker.RenderRegion(marker.RenderConfig{
 		VaultPath:  vaultPath,
 		Target:     target,
 		SectionKey: getConfigValueWithFlags[string](cmd, "section-key", config.KeyAppDataviewrenderSectionKey),
@@ -61,6 +61,7 @@ func executeDataviewRender(cmd *cobra.Command, vaultPath, target string) (*marke
 		Checker:    checker,
 		Committer:  &git.Committer{},
 	})
+	return result, vdb.GetIndexHash(), err
 }
 
 func dataviewRenderError(cmd *cobra.Command, useJSON bool, err error) error {

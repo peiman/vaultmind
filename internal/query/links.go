@@ -17,6 +17,7 @@ type LinksConfig struct {
 	EdgeType   string
 	JSONOutput bool
 	VaultPath  string
+	IndexHash  string
 }
 
 // RunLinks executes the links out or links in logic.
@@ -57,6 +58,7 @@ func runLinksOut(db *index.DB, noteID string, cfg LinksConfig, cmdName string, w
 		}
 		env := envelope.OK(cmdName, outResult{SourceID: noteID, Links: links})
 		env.Meta.VaultPath = cfg.VaultPath
+		env.Meta.IndexHash = cfg.IndexHash
 		return json.NewEncoder(w).Encode(env)
 	}
 
@@ -85,6 +87,7 @@ func runLinksIn(db *index.DB, noteID string, cfg LinksConfig, cmdName string, w 
 		}
 		env := envelope.OK(cmdName, inResult{TargetID: noteID, Links: links})
 		env.Meta.VaultPath = cfg.VaultPath
+		env.Meta.IndexHash = cfg.IndexHash
 		return json.NewEncoder(w).Encode(env)
 	}
 

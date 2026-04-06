@@ -39,26 +39,26 @@ func runDataviewLint(cmd *cobra.Command, _ []string) error {
 	vaultPath := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppDataviewlintVault)
 	useJSON := getConfigValueWithFlags[bool](cmd, "json", config.KeyAppDataviewlintJson)
 
-	result, err := executeDataviewLint(vaultPath)
+	result, indexHash, err := executeDataviewLint(vaultPath)
 	if err != nil {
 		return err
 	}
 	if useJSON {
-		return dataviewLintJSON(cmd, result, vaultPath)
+		return dataviewLintJSON(cmd, result, vaultPath, indexHash)
 	}
 	return dataviewLintText(cmd, result)
 }
 
-func executeDataviewLint(vaultPath string) (dataviewLintResult, error) {
+func executeDataviewLint(vaultPath string) (dataviewLintResult, string, error) {
 	vdb, err := cmdutil.OpenVaultDB(vaultPath)
 	if err != nil {
-		return dataviewLintResult{}, err
+		return dataviewLintResult{}, "", err
 	}
 	defer vdb.Close()
 
 	files, err := vault.Scan(vaultPath, vdb.Config.Vault.Exclude)
 	if err != nil {
-		return dataviewLintResult{}, fmt.Errorf("scanning vault: %w", err)
+		return dataviewLintResult{}, "", fmt.Errorf("scanning vault: %w", err)
 	}
 
 	result := dataviewLintResult{Issues: []dataviewIssue{}}
@@ -81,15 +81,16 @@ func executeDataviewLint(vaultPath string) (dataviewLintResult, error) {
 			})
 		}
 	}
-	return result, nil
+	return result, vdb.GetIndexHash(), nil
 }
 
-func dataviewLintJSON(cmd *cobra.Command, result dataviewLintResult, vaultPath string) error {
+func dataviewLintJSON(cmd *cobra.Command, result dataviewLintResult, vaultPath, indexHash string) error {
 	env := envelope.OK("dataview lint", result)
 	if len(result.Issues) > 0 {
 		env.Status = "warning"
 	}
 	env.Meta.VaultPath = vaultPath
+	env.Meta.IndexHash = indexHash
 	return json.NewEncoder(cmd.OutOrStdout()).Encode(env)
 }
 

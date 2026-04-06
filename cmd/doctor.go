@@ -34,6 +34,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 	if getConfigValueWithFlags[bool](cmd, "json", config.KeyAppDoctorJson) {
 		env := envelope.OK("doctor", result)
 		env.Meta.VaultPath = vaultPath
+		env.Meta.IndexHash = vdb.GetIndexHash()
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(env)
 	}
 	_, err = fmt.Fprintf(cmd.OutOrStdout(),
