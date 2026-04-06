@@ -80,7 +80,7 @@ func SubstituteVars(content string, vars map[string]string) (string, []string) {
 func Process(cfg ProcessConfig) (*ProcessResult, error) {
 	now := time.Now().UTC()
 	dateStr := now.Format("2006-01-02")
-	datetimeStr := now.Format(time.RFC3339)
+	datetimeStr := now.Format("2006-01-02T15:04:05Z")
 
 	// Determine the effective ID (may be overridden by a Fields["id"] later).
 	generatedID := GenerateID(cfg.Path, cfg.Type)
@@ -99,8 +99,8 @@ func Process(cfg ProcessConfig) (*ProcessResult, error) {
 		"type":       cfg.Type,
 		"title":      title,
 		"created":    dateStr,
-		"updated":    datetimeStr,
-		"vm_updated": datetimeStr,
+		"updated":    dateStr,
+		"vm_updated": dateStr,
 		"date":       dateStr,
 		"datetime":   datetimeStr,
 		"path":       cfg.Path,
@@ -155,7 +155,7 @@ func Process(cfg ProcessConfig) (*ProcessResult, error) {
 		fm["created"] = dateStr
 	}
 	if _, ok := fm["vm_updated"]; !ok {
-		fm["vm_updated"] = datetimeStr
+		fm["vm_updated"] = dateStr
 	}
 
 	// Apply body override if provided.

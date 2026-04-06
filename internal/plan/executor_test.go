@@ -413,6 +413,7 @@ func TestApply_MutationError(t *testing.T) {
 }
 
 // TestApply_EmptyPlan covers the edge case of a plan with no operations.
+// ValidatePlan should catch this and return an empty_plan error without panicking.
 func TestApply_EmptyPlan(t *testing.T) {
 	vaultPath, reg, checker := setupPlanVault(t)
 	exec := newTestExecutor(t, vaultPath, reg, checker)
@@ -422,6 +423,21 @@ func TestApply_EmptyPlan(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 0, result.OperationsTotal)
 	assert.Equal(t, 0, result.OperationsCompleted)
+	// No operations, so Operations slice should be empty — no panic
+	assert.Empty(t, result.Operations)
+}
+
+// TestApply_NilOperations covers the nil operations edge case.
+func TestApply_NilOperations(t *testing.T) {
+	vaultPath, reg, checker := setupPlanVault(t)
+	exec := newTestExecutor(t, vaultPath, reg, checker)
+
+	p := plan.Plan{Version: 1, Description: "nil ops"}
+	result, err := exec.Apply(p, false, false, false)
+	require.NoError(t, err)
+	assert.Equal(t, 0, result.OperationsTotal)
+	assert.Equal(t, 0, result.OperationsCompleted)
+	assert.Empty(t, result.Operations)
 }
 
 // TestApply_Render covers the OpGeneratedRegion / execRender dispatch path.

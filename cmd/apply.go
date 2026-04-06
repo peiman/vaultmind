@@ -43,11 +43,17 @@ func executeApply(cmd *cobra.Command, planArg string) error {
 		planData, err = os.ReadFile(planArg) //nolint:gosec // user-provided plan file
 	}
 	if err != nil {
+		if jsonOut {
+			return cmdutil.WriteJSONError(cmd.OutOrStdout(), "apply", "read_error", fmt.Sprintf("reading plan: %v", err))
+		}
 		return fmt.Errorf("reading plan: %w", err)
 	}
 
 	var p plan.Plan
 	if err := json.Unmarshal(planData, &p); err != nil {
+		if jsonOut {
+			return cmdutil.WriteJSONError(cmd.OutOrStdout(), "apply", "parse_error", fmt.Sprintf("invalid plan JSON: %v", err))
+		}
 		return fmt.Errorf("parsing plan JSON: %w", err)
 	}
 

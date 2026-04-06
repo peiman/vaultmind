@@ -32,6 +32,7 @@ func runMemoryRecall(cmd *cobra.Command, args []string) error {
 	}
 	defer vdb.Close()
 
+	jsonOut := getConfigValueWithFlags[bool](cmd, "json", config.KeyAppMemoryrecallJson)
 	resolver := graph.NewResolver(vdb.DB)
 	result, err := memory.Recall(resolver, vdb.DB, memory.RecallConfig{
 		Input:         args[0],
@@ -40,10 +41,13 @@ func runMemoryRecall(cmd *cobra.Command, args []string) error {
 		MaxNodes:      getConfigValueWithFlags[int](cmd, "max-nodes", config.KeyAppMemoryrecallMaxNodes),
 	})
 	if err != nil {
+		if jsonOut {
+			return cmdutil.WriteJSONError(cmd.OutOrStdout(), "memory recall", "recall_error", err.Error())
+		}
 		return fmt.Errorf("recall: %w", err)
 	}
 
-	if getConfigValueWithFlags[bool](cmd, "json", config.KeyAppMemoryrecallJson) {
+	if jsonOut {
 		env := envelope.OK("memory recall", result)
 		env.Meta.VaultPath = vaultPath
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(env)

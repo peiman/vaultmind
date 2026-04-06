@@ -79,6 +79,24 @@ func (d *DB) QueryNotesByTitle(title string, caseInsensitive bool) ([]NoteRow, e
 	return scanNoteRows(rows)
 }
 
+// QueryNotesByNormalized searches for notes whose title or alias, when hyphens and
+// underscores are replaced with spaces and lowercased, matches the given normalized input.
+func (d *DB) QueryNotesByNormalized(normalized string) ([]NoteRow, error) {
+	q := `SELECT ` + noteColumns + ` FROM notes
+		WHERE LOWER(REPLACE(REPLACE(title, '-', ' '), '_', ' ')) = ?
+		UNION
+		SELECT ` + noteColumns + ` FROM notes
+		WHERE id IN (
+			SELECT note_id FROM aliases
+			WHERE LOWER(REPLACE(REPLACE(alias, '-', ' '), '_', ' ')) = ?
+		)`
+	rows, err := d.Query(q, normalized, normalized)
+	if err != nil {
+		return nil, fmt.Errorf("querying notes by normalized: %w", err)
+	}
+	return scanNoteRows(rows)
+}
+
 // QueryNotesByAlias returns notes whose aliases match the given string.
 // If normalized is true, compares against alias_normalized (lowercase, whitespace-collapsed).
 func (d *DB) QueryNotesByAlias(alias string, normalized bool) ([]NoteRow, error) {

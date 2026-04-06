@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
@@ -24,6 +25,11 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 	vaultPath := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppIndexVault)
 	jsonOut := getConfigValueWithFlags[bool](cmd, "json", config.KeyAppIndexJson)
 	fullRebuild := getConfigValueWithFlags[bool](cmd, "full", config.KeyAppIndexFull)
+
+	info, err := os.Stat(vaultPath)
+	if err != nil || !info.IsDir() {
+		return fmt.Errorf("vault path %q does not exist or is not a directory", vaultPath)
+	}
 
 	cfg, err := vault.LoadConfig(vaultPath)
 	if err != nil {

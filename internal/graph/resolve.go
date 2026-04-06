@@ -87,8 +87,26 @@ func (r *Resolver) Resolve(input string) (*ResolveResult, error) {
 		return r.buildResult(result, rows, "normalized"), nil
 	}
 
+	// Tier 4b: hyphen/underscore normalization — replace hyphens and underscores
+	// with spaces and try matching against titles and aliases.
+	normalized := normalizeForLookup(input)
+	if normalized != strings.ToLower(input) {
+		if rows, err := r.db.QueryNotesByNormalized(normalized); err != nil {
+			return nil, err
+		} else if len(rows) > 0 {
+			return r.buildResult(result, rows, "normalized"), nil
+		}
+	}
+
 	// Tier 5: unresolved
 	return result, nil
+}
+
+// normalizeForLookup replaces hyphens and underscores with spaces and lowercases the string.
+func normalizeForLookup(s string) string {
+	s = strings.ReplaceAll(s, "-", " ")
+	s = strings.ReplaceAll(s, "_", " ")
+	return strings.ToLower(s)
 }
 
 func (r *Resolver) buildResult(result *ResolveResult, rows []index.NoteRow, tier string) *ResolveResult {

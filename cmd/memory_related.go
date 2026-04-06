@@ -32,16 +32,20 @@ func runMemoryRelated(cmd *cobra.Command, args []string) error {
 	}
 	defer vdb.Close()
 
+	jsonOut := getConfigValueWithFlags[bool](cmd, "json", config.KeyAppMemoryrelatedJson)
 	resolver := graph.NewResolver(vdb.DB)
 	result, err := memory.Related(resolver, vdb.DB, memory.RelatedConfig{
 		Input: args[0],
 		Mode:  getConfigValueWithFlags[string](cmd, "mode", config.KeyAppMemoryrelatedMode),
 	})
 	if err != nil {
+		if jsonOut {
+			return cmdutil.WriteJSONError(cmd.OutOrStdout(), "memory related", "related_error", err.Error())
+		}
 		return fmt.Errorf("related: %w", err)
 	}
 
-	if getConfigValueWithFlags[bool](cmd, "json", config.KeyAppMemoryrelatedJson) {
+	if jsonOut {
 		env := envelope.OK("memory related", result)
 		env.Meta.VaultPath = vaultPath
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(env)

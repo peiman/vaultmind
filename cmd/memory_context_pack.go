@@ -32,16 +32,20 @@ func runMemoryContextPack(cmd *cobra.Command, args []string) error {
 	}
 	defer vdb.Close()
 
+	jsonOut := getConfigValueWithFlags[bool](cmd, "json", config.KeyAppMemorycontextpackJson)
 	resolver := graph.NewResolver(vdb.DB)
 	result, err := memory.ContextPack(resolver, vdb.DB, memory.ContextPackConfig{
 		Input:  args[0],
 		Budget: getConfigValueWithFlags[int](cmd, "budget", config.KeyAppMemorycontextpackBudget),
 	})
 	if err != nil {
+		if jsonOut {
+			return cmdutil.WriteJSONError(cmd.OutOrStdout(), "memory context-pack", "context_pack_error", err.Error())
+		}
 		return fmt.Errorf("context-pack: %w", err)
 	}
 
-	if getConfigValueWithFlags[bool](cmd, "json", config.KeyAppMemorycontextpackJson) {
+	if jsonOut {
 		env := envelope.OK("memory context-pack", result)
 		env.Meta.VaultPath = vaultPath
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(env)

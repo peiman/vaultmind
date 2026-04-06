@@ -151,6 +151,10 @@ func executeNoteCreate(cmd *cobra.Command, notePath string) error {
 	h := sha256.Sum256(result.Content)
 	writeHash := fmt.Sprintf("sha256:%x", h)
 
+	warnings := result.Warnings
+	if warnings == nil {
+		warnings = []string{}
+	}
 	out := noteCreateResult{
 		Path:      notePath,
 		ID:        result.ID,
@@ -158,7 +162,7 @@ func executeNoteCreate(cmd *cobra.Command, notePath string) error {
 		Created:   true,
 		WriteHash: writeHash,
 		CommitSHA: commitSHA,
-		Warnings:  result.Warnings,
+		Warnings:  warnings,
 	}
 
 	if jsonOut {

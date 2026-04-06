@@ -118,7 +118,7 @@ func NormalizeDates(mapping *yaml.Node, stripTime bool) {
 			}
 			isMidnight := t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0
 			if stripTime || isMidnight {
-				valNode.Value = t.Format("2006-01-02")
+				valNode.Value = t.UTC().Format("2006-01-02")
 				valNode.Tag = "!!str"
 				valNode.Style = yaml.DoubleQuotedStyle
 			}

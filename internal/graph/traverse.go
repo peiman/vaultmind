@@ -65,7 +65,7 @@ type neighbor struct {
 // respecting cfg.MinConfidence and cfg.MaxNodes limits.
 // Both outbound and inbound resolved edges are followed (bidirectional).
 func (r *Resolver) Traverse(cfg TraverseConfig) (*TraverseResult, error) {
-	result := &TraverseResult{StartID: cfg.StartID}
+	result := &TraverseResult{StartID: cfg.StartID, Nodes: []TraverseNode{}}
 
 	visited := make(map[string]bool)
 	visited[cfg.StartID] = true

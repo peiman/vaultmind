@@ -26,7 +26,8 @@ func TestContextPack_IncludesContext(t *testing.T) {
 	result, err := memory.ContextPack(resolver, db, memory.ContextPackConfig{Input: "proj-vaultmind", Budget: 8192})
 	require.NoError(t, err)
 	assert.Greater(t, len(result.Context), 0)
-	assert.False(t, result.Context[0].BodyIncluded)
+	// With body backfill, context items may have bodies included if budget allows.
+	// We only verify that context items exist; body inclusion is tested separately.
 }
 
 func TestContextPack_SmallBudget_Truncates(t *testing.T) {
@@ -89,6 +90,27 @@ func TestContextPack_FrontmatterExceedsBudget(t *testing.T) {
 	assert.True(t, result.Truncated)
 	// UsedTokens must be > 0 (frontmatter cost counted even when it exceeds budget)
 	assert.Greater(t, result.UsedTokens, 0)
+}
+
+// TestContextPack_BodyBackfill verifies that with a large budget, some context items
+// have body_included: true after the body backfill pass.
+func TestContextPack_BodyBackfill(t *testing.T) {
+	db := buildTestDB(t)
+	resolver := graph.NewResolver(db)
+	result, err := memory.ContextPack(resolver, db, memory.ContextPackConfig{Input: "proj-vaultmind", Budget: 100000})
+	require.NoError(t, err)
+
+	// With a very large budget, at least one context item should have its body included
+	bodyIncludedCount := 0
+	for _, item := range result.Context {
+		if item.BodyIncluded {
+			bodyIncludedCount++
+			assert.NotEmpty(t, item.Body, "body_included is true but body is empty for %s", item.ID)
+		}
+	}
+	if len(result.Context) > 0 {
+		assert.Greater(t, bodyIncludedCount, 0, "with large budget, at least one context item should have body included")
+	}
 }
 
 // TestEdgePriority_AllEdgeTypes exercises edgePriority via ContextPack to verify

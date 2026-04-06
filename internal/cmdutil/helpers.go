@@ -32,6 +32,11 @@ func (v *VaultDB) Close() {
 
 // OpenVaultDB loads config, opens the index DB, and creates the type registry.
 func OpenVaultDB(vaultPath string) (*VaultDB, error) {
+	info, err := os.Stat(vaultPath)
+	if err != nil || !info.IsDir() {
+		return nil, fmt.Errorf("vault path %q does not exist or is not a directory", vaultPath)
+	}
+
 	cfg, err := vault.LoadConfig(vaultPath)
 	if err != nil {
 		return nil, fmt.Errorf("loading config: %w", err)

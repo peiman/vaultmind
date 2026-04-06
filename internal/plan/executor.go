@@ -44,18 +44,13 @@ func (e *Executor) Apply(p Plan, dryRun, diff, commit bool) (*ApplyResult, error
 
 	// Step 1: Validate
 	if errs := ValidatePlan(p, e.Registry); len(errs) > 0 {
-		result.Operations[0] = OpResult{
-			Op:     firstOpName(p.Operations),
-			Target: firstOpTarget(p.Operations),
-			Status: "error",
-			Error:  &errs[0],
+		// Mark all ops as skipped, first as error
+		for i := range result.Operations {
+			result.Operations[i] = OpResult{Op: p.Operations[i].Op, Target: opTarget(p.Operations[i]), Status: "skipped"}
 		}
-		for i := 1; i < len(p.Operations); i++ {
-			result.Operations[i] = OpResult{
-				Op:     p.Operations[i].Op,
-				Target: opTarget(p.Operations[i]),
-				Status: "skipped",
-			}
+		if len(result.Operations) > 0 {
+			result.Operations[0].Status = "error"
+			result.Operations[0].Error = &errs[0]
 		}
 		return result, nil
 	}
@@ -368,20 +363,4 @@ func opTarget(op Operation) string {
 		return op.Target
 	}
 	return op.Path
-}
-
-// firstOpName returns the op name of the first operation, or empty.
-func firstOpName(ops []Operation) string {
-	if len(ops) == 0 {
-		return ""
-	}
-	return ops[0].Op
-}
-
-// firstOpTarget returns the target of the first operation, or empty.
-func firstOpTarget(ops []Operation) string {
-	if len(ops) == 0 {
-		return ""
-	}
-	return opTarget(ops[0])
 }

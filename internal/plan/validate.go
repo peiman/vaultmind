@@ -15,6 +15,10 @@ func ValidatePlan(p Plan, reg *schema.Registry) []OpError {
 		errs = append(errs, OpError{Code: "unsupported_version", Message: fmt.Sprintf("version %d not supported", p.Version)})
 		return errs
 	}
+	if len(p.Operations) == 0 {
+		errs = append(errs, OpError{Code: "empty_plan", Message: "plan has no operations"})
+		return errs
+	}
 	for i, op := range p.Operations {
 		pf := fmt.Sprintf("operation[%d]", i)
 		if !KnownOps[op.Op] {

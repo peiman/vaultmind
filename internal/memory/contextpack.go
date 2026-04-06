@@ -29,6 +29,7 @@ type ContextItem struct {
 	Confidence   string                 `json:"confidence"`
 	Frontmatter  map[string]interface{} `json:"frontmatter"`
 	BodyIncluded bool                   `json:"body_included"`
+	Body         string                 `json:"body,omitempty"`
 }
 
 // ContextPackResult is the full output of a ContextPack operation.
@@ -145,6 +146,24 @@ func ContextPack(resolver *graph.Resolver, db *index.DB, cfg ContextPackConfig) 
 
 		remaining -= tokens
 		result.UsedTokens += tokens
+	}
+
+	// Body backfill pass: fill remaining budget with context item bodies in priority order.
+	for i := range result.Context {
+		if remaining <= 0 {
+			break
+		}
+		fullNote, err := db.QueryFullNote(result.Context[i].ID)
+		if err != nil || fullNote == nil || fullNote.Body == "" {
+			continue
+		}
+		bodyTokens := EstimateTokens(fullNote.Body)
+		if bodyTokens <= remaining {
+			result.Context[i].BodyIncluded = true
+			result.Context[i].Body = fullNote.Body
+			remaining -= bodyTokens
+			result.UsedTokens += bodyTokens
+		}
 	}
 
 	return result, nil

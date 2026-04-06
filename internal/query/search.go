@@ -37,6 +37,10 @@ func RunSearch(db *index.DB, cfg SearchConfig, w io.Writer) error {
 		return fmt.Errorf("searching: %w", err)
 	}
 
+	if results == nil {
+		results = []index.FTSResult{}
+	}
+
 	if cfg.JSONOutput {
 		env := envelope.OK("search", SearchResult{
 			Query: cfg.Query, Offset: cfg.Offset, Limit: cfg.Limit,

@@ -145,3 +145,49 @@ func TestResolve_Input(t *testing.T) {
 
 	assert.Equal(t, "concept-act-r", result.Input)
 }
+
+func TestResolve_HyphenNormalization(t *testing.T) {
+	// Build a temp DB with a note whose title contains spaces
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
+	db, err := index.Open(dbPath)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	rec := index.NoteRecord{
+		ID: "concept-context-pack", Path: "concepts/context-pack.md",
+		Title: "Context Pack", Type: "concept", Hash: "aaa", MTime: 1, IsDomain: true,
+	}
+	require.NoError(t, index.StoreNote(db, rec))
+
+	r := graph.NewResolver(db)
+
+	// "context-pack" should resolve to "concept-context-pack" via hyphen normalization
+	result, err := r.Resolve("context-pack")
+	require.NoError(t, err)
+
+	assert.True(t, result.Resolved, "hyphen-to-space normalization should resolve 'context-pack' to 'Context Pack'")
+	assert.Equal(t, "normalized", *result.ResolutionTier)
+	assert.Equal(t, "concept-context-pack", result.Matches[0].ID)
+}
+
+func TestResolve_UnderscoreNormalization(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
+	db, err := index.Open(dbPath)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	rec := index.NoteRecord{
+		ID: "concept-note-create", Path: "concepts/note-create.md",
+		Title: "Note Create", Type: "concept", Hash: "bbb", MTime: 1, IsDomain: true,
+	}
+	require.NoError(t, index.StoreNote(db, rec))
+
+	r := graph.NewResolver(db)
+	result, err := r.Resolve("note_create")
+	require.NoError(t, err)
+
+	assert.True(t, result.Resolved, "underscore-to-space normalization should resolve 'note_create' to 'Note Create'")
+	assert.Equal(t, "concept-note-create", result.Matches[0].ID)
+}

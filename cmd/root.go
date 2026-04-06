@@ -305,6 +305,13 @@ Powered by Cobra, Viper, Zerolog, and Bubble Tea with enforced architecture patt
 	RootCmd.PersistentFlags().Int("log-sampling-initial", 100, "Number of messages to log per second before sampling")
 
 	RootCmd.PersistentFlags().Int("log-sampling-thereafter", 100, "Number of messages to log thereafter per second")
+
+	// Hide logging flags from --help to reduce noise. They still work when explicitly passed.
+	RootCmd.PersistentFlags().VisitAll(func(f *pflag.Flag) {
+		if strings.HasPrefix(f.Name, "log-") {
+			f.Hidden = true
+		}
+	})
 }
 
 // bindFlags binds all persistent flags to viper configuration keys.

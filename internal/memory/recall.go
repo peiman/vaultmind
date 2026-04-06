@@ -74,6 +74,7 @@ func Recall(resolver *graph.Resolver, db *index.DB, cfg RecallConfig) (*RecallRe
 		Depth:           cfg.Depth,
 		MaxNodes:        cfg.MaxNodes,
 		MaxNodesReached: traversal.MaxNodesReached,
+		Nodes:           []RecallNode{},
 		Edges:           []RecallEdge{},
 	}
 

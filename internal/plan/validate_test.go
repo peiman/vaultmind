@@ -76,3 +76,17 @@ func TestValidatePlan_MultipleErrors(t *testing.T) {
 	p := Plan{Version: 1, Operations: []Operation{{Op: "bad"}, {Op: OpFrontmatterSet, Target: "x"}}}
 	assert.GreaterOrEqual(t, len(ValidatePlan(p, testRegistry())), 2)
 }
+
+func TestValidatePlan_EmptyOperations(t *testing.T) {
+	p := Plan{Version: 1, Operations: []Operation{}}
+	errs := ValidatePlan(p, testRegistry())
+	assert.Len(t, errs, 1)
+	assert.Equal(t, "empty_plan", errs[0].Code)
+}
+
+func TestValidatePlan_NilOperations(t *testing.T) {
+	p := Plan{Version: 1}
+	errs := ValidatePlan(p, testRegistry())
+	assert.Len(t, errs, 1)
+	assert.Equal(t, "empty_plan", errs[0].Code)
+}
