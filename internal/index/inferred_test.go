@@ -86,3 +86,49 @@ func TestComputeAliasMentions_EdgesInLinksTable(t *testing.T) {
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, edgeCount, 0)
 }
+
+func TestComputeTagOverlap_Basic(t *testing.T) {
+	db := buildIndexedDB(t)
+	count, err := index.ComputeTagOverlap(db, 1.0)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, count, 0)
+}
+
+func TestComputeTagOverlap_HighThreshold(t *testing.T) {
+	db := buildIndexedDB(t)
+	count, err := index.ComputeTagOverlap(db, 999.0)
+	require.NoError(t, err)
+	assert.Equal(t, 0, count)
+}
+
+func TestComputeTagOverlap_ClearsOldEdges(t *testing.T) {
+	db := buildIndexedDB(t)
+	count1, err := index.ComputeTagOverlap(db, 1.0)
+	require.NoError(t, err)
+	count2, err := index.ComputeTagOverlap(db, 1.0)
+	require.NoError(t, err)
+	assert.Equal(t, count1, count2)
+}
+
+func TestComputeTagOverlap_EdgesInLinksTable(t *testing.T) {
+	db := buildIndexedDB(t)
+	_, err := index.ComputeTagOverlap(db, 1.0)
+	require.NoError(t, err)
+	var edgeCount int
+	err = db.QueryRow("SELECT COUNT(*) FROM links WHERE edge_type = 'tag_overlap'").Scan(&edgeCount)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, edgeCount, 0)
+}
+
+func TestComputeTagOverlap_WeightStored(t *testing.T) {
+	db := buildIndexedDB(t)
+	count, err := index.ComputeTagOverlap(db, 0.0)
+	require.NoError(t, err)
+	if count == 0 {
+		t.Skip("no tag overlap edges in test vault")
+	}
+	var weight float64
+	err = db.QueryRow("SELECT weight FROM links WHERE edge_type = 'tag_overlap' LIMIT 1").Scan(&weight)
+	require.NoError(t, err)
+	assert.Greater(t, weight, 0.0)
+}

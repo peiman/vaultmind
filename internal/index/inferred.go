@@ -2,6 +2,7 @@ package index
 
 import (
 	"fmt"
+	"math"
 	"regexp"
 	"strings"
 )
@@ -116,6 +117,78 @@ func ComputeAliasMentions(db *DB, minAliasLen int) (int, error) {
 			  (src_note_id, dst_note_id, dst_raw, edge_type, resolved, confidence, origin)
 			VALUES (?, ?, ?, 'alias_mention', TRUE, 'medium', 'body:alias_scan')`,
 			e.src, e.dst, e.dst)
+		if err != nil {
+			continue
+		}
+		count++
+	}
+	return count, nil
+}
+
+// ComputeTagOverlap scans the tags table for notes sharing common tags and
+// writes tag_overlap edges into the links table weighted by TF-IDF-style tag
+// specificity. Only pairs whose combined score meets threshold are inserted.
+// Calling this function clears any previous tag_overlap edges before computing
+// fresh ones.
+func ComputeTagOverlap(db *DB, threshold float64) (int, error) {
+	if _, err := db.Exec("DELETE FROM links WHERE edge_type = 'tag_overlap'"); err != nil {
+		return 0, fmt.Errorf("clearing old tag_overlap edges: %w", err)
+	}
+
+	var totalNotes int
+	if err := db.QueryRow("SELECT COUNT(*) FROM notes WHERE is_domain = TRUE").Scan(&totalNotes); err != nil {
+		return 0, fmt.Errorf("counting domain notes: %w", err)
+	}
+	if totalNotes == 0 {
+		return 0, nil
+	}
+
+	tagRows, err := db.Query("SELECT tag, COUNT(*) FROM tags GROUP BY tag")
+	if err != nil {
+		return 0, fmt.Errorf("counting tags: %w", err)
+	}
+	defer func() { _ = tagRows.Close() }()
+
+	specificity := make(map[string]float64)
+	for tagRows.Next() {
+		var tag string
+		var count int
+		if err := tagRows.Scan(&tag, &count); err != nil {
+			continue
+		}
+		if count > 0 {
+			specificity[tag] = math.Log(float64(totalNotes) / float64(count))
+		}
+	}
+
+	pairRows, err := db.Query(`
+		SELECT a.note_id, b.note_id, a.tag
+		FROM tags a JOIN tags b ON a.tag = b.tag AND a.note_id < b.note_id`)
+	if err != nil {
+		return 0, fmt.Errorf("finding tag pairs: %w", err)
+	}
+	defer func() { _ = pairRows.Close() }()
+
+	type pair struct{ a, b string }
+	scores := make(map[pair]float64)
+	for pairRows.Next() {
+		var noteA, noteB, tag string
+		if err := pairRows.Scan(&noteA, &noteB, &tag); err != nil {
+			continue
+		}
+		scores[pair{a: noteA, b: noteB}] += specificity[tag]
+	}
+
+	count := 0
+	for p, score := range scores {
+		if score < threshold {
+			continue
+		}
+		_, err := db.Exec(`
+			INSERT OR IGNORE INTO links
+			  (src_note_id, dst_note_id, dst_raw, edge_type, resolved, confidence, origin, weight)
+			VALUES (?, ?, ?, 'tag_overlap', TRUE, 'low', 'tag_overlap_scan', ?)`,
+			p.a, p.b, p.b, score)
 		if err != nil {
 			continue
 		}
