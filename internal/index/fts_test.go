@@ -100,3 +100,28 @@ func TestSearchFTS_EmptyQuery(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, results)
 }
+
+func TestSearchFTS_ScoresNormalized(t *testing.T) {
+	db := rebuildTestIndex(t)
+	results, err := index.SearchFTS(db, "memory", 100, 0)
+	require.NoError(t, err)
+	require.Greater(t, len(results), 1, "need multiple results to test normalization")
+
+	for _, r := range results {
+		assert.GreaterOrEqual(t, r.Score, 0.0, "score should be >= 0")
+		assert.LessOrEqual(t, r.Score, 1.0, "score should be <= 1")
+	}
+	assert.Equal(t, 1.0, results[0].Score, "top result should have score 1.0")
+	if len(results) > 1 {
+		assert.Equal(t, 0.0, results[len(results)-1].Score, "worst result should have score 0.0")
+	}
+}
+
+func TestSearchFTS_SingleResult_ScoreIsOne(t *testing.T) {
+	db := rebuildTestIndex(t)
+	results, err := index.SearchFTS(db, "Ebbinghaus", 100, 0)
+	require.NoError(t, err)
+	if len(results) == 1 {
+		assert.Equal(t, 1.0, results[0].Score, "single result should have score 1.0")
+	}
+}

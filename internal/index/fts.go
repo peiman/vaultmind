@@ -91,6 +91,30 @@ func SearchFTS(d *DB, query string, limit, offset int, filters ...SearchFilters)
 		results = append(results, r)
 	}
 
+	// Min-max normalize scores to [0, 1] range.
+	if len(results) > 0 {
+		minScore := results[0].Score
+		maxScore := results[0].Score
+		for _, r := range results[1:] {
+			if r.Score < minScore {
+				minScore = r.Score
+			}
+			if r.Score > maxScore {
+				maxScore = r.Score
+			}
+		}
+		spread := maxScore - minScore
+		if spread > 0 {
+			for i := range results {
+				results[i].Score = (results[i].Score - minScore) / spread
+			}
+		} else {
+			for i := range results {
+				results[i].Score = 1.0
+			}
+		}
+	}
+
 	return results, rows.Err()
 }
 

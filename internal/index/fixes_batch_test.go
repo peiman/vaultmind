@@ -27,7 +27,7 @@ func TestSearchFTS_SnippetContainsBodyText(t *testing.T) {
 	assert.True(t, found, "snippet should contain body context, not just title")
 }
 
-func TestSearchFTS_ScoreIsPositive(t *testing.T) {
+func TestSearchFTS_ScoreIsNonNegative(t *testing.T) {
 	db := rebuildTestIndex(t)
 
 	results, err := index.SearchFTS(db, "memory", 5, 0)
@@ -35,7 +35,8 @@ func TestSearchFTS_ScoreIsPositive(t *testing.T) {
 	require.NotEmpty(t, results)
 
 	for _, r := range results {
-		assert.Greater(t, r.Score, float64(0), "score must be positive (normalized), not raw negative BM25")
+		assert.GreaterOrEqual(t, r.Score, float64(0), "score must be >= 0 (normalized), not raw negative BM25")
+		assert.LessOrEqual(t, r.Score, float64(1), "score must be <= 1 after min-max normalization")
 	}
 }
 
