@@ -226,3 +226,108 @@ Body text.
 	assert.Contains(t, content, "created:")
 	assert.Contains(t, content, "vm_updated:")
 }
+
+// ─── FinalFrontmatter ─────────────────────────────────────────────────────────
+
+func TestProcess_FinalFrontmatterPopulated(t *testing.T) {
+	tmplContent := `---
+id: <%=id%>
+type: <%=type%>
+title: <%=title%>
+created: <%=created%>
+vm_updated: <%=vm_updated%>
+status: draft
+---
+Body.
+`
+	tmplPath := writeTempTemplate(t, tmplContent)
+	cfg := ProcessConfig{
+		VaultPath:    "/vault",
+		Path:         "projects/my-project.md",
+		Type:         "project",
+		Fields:       map[string]string{"title": "My Project", "status": "active"},
+		Body:         "",
+		TemplatePath: tmplPath,
+	}
+	result, err := Process(cfg)
+	require.NoError(t, err)
+	require.NotNil(t, result.FinalFrontmatter, "FinalFrontmatter must not be nil")
+	assert.Equal(t, "active", result.FinalFrontmatter["status"])
+	assert.Equal(t, "project", result.FinalFrontmatter["type"])
+}
+
+// ─── I4: RequiredFields in minimal template fallback ──────────────────────────
+
+func TestProcess_MinimalFallback_IncludesRequiredFields(t *testing.T) {
+	// I4: When template is missing, required fields should appear in output.
+	cfg := ProcessConfig{
+		VaultPath:      "/vault",
+		Path:           "projects/my-project.md",
+		Type:           "project",
+		Fields:         map[string]string{},
+		Body:           "",
+		TemplatePath:   "/nonexistent/template.md",
+		RequiredFields: []string{"goal", "status"},
+	}
+	result, err := Process(cfg)
+	require.NoError(t, err)
+	require.NotNil(t, result.FinalFrontmatter, "FinalFrontmatter must not be nil")
+	assert.Contains(t, result.FinalFrontmatter, "goal", "required field 'goal' should be present in minimal fallback")
+	assert.Contains(t, result.FinalFrontmatter, "status", "required field 'status' should be present in minimal fallback")
+}
+
+func TestProcess_MinimalFallback_RequiredFieldsDoNotOverrideUserValues(t *testing.T) {
+	// I4: User-provided values must not be overwritten by empty defaults.
+	cfg := ProcessConfig{
+		VaultPath:      "/vault",
+		Path:           "projects/my-project.md",
+		Type:           "project",
+		Fields:         map[string]string{"goal": "ship it"},
+		Body:           "",
+		TemplatePath:   "/nonexistent/template.md",
+		RequiredFields: []string{"goal"},
+	}
+	result, err := Process(cfg)
+	require.NoError(t, err)
+	require.NotNil(t, result.FinalFrontmatter)
+	assert.Equal(t, "ship it", result.FinalFrontmatter["goal"], "user-provided value must not be overwritten")
+}
+
+// ─── I5: Title fallback uses filename, not generated ID ───────────────────────
+
+func TestProcess_TitleFallback_UsesFilename(t *testing.T) {
+	// I5: When no title override is given, title should derive from filename.
+	cfg := ProcessConfig{
+		VaultPath:    "/vault",
+		Path:         "projects/payment-retries.md",
+		Type:         "project",
+		Fields:       map[string]string{},
+		Body:         "",
+		TemplatePath: "/nonexistent/template.md",
+	}
+	result, err := Process(cfg)
+	require.NoError(t, err)
+	require.NotNil(t, result.FinalFrontmatter)
+	// Title should be derived from filename "payment-retries", not "project-payment-retries"
+	title, ok := result.FinalFrontmatter["title"]
+	require.True(t, ok, "title must be present in frontmatter")
+	titleStr, ok := title.(string)
+	require.True(t, ok, "title must be a string")
+	assert.Equal(t, "payment-retries", titleStr, "title should be filename without extension, not type-prefixed generated ID")
+}
+
+func TestProcess_TitleFallback_ExplicitTitleOverridesFilename(t *testing.T) {
+	// I5: Explicit title via Fields must take precedence over filename fallback.
+	cfg := ProcessConfig{
+		VaultPath:    "/vault",
+		Path:         "projects/payment-retries.md",
+		Type:         "project",
+		Fields:       map[string]string{"title": "Payment Retries"},
+		Body:         "",
+		TemplatePath: "/nonexistent/template.md",
+	}
+	result, err := Process(cfg)
+	require.NoError(t, err)
+	require.NotNil(t, result.FinalFrontmatter)
+	assert.Equal(t, "Payment Retries", result.FinalFrontmatter["title"])
+}

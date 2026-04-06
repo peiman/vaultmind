@@ -3,6 +3,7 @@ package template
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -28,20 +29,22 @@ var varPattern = regexp.MustCompile(`<%=(\w+)%>`)
 
 // ProcessConfig holds all inputs needed to process a note template.
 type ProcessConfig struct {
-	VaultPath    string            // absolute path to vault root (for metadata)
-	Path         string            // vault-relative path of the new note
-	Type         string            // note type (e.g. "project", "decision")
-	Fields       map[string]string // field overrides (includes optional "title", "id", …)
-	Body         string            // explicit body override; empty means use template body
-	TemplatePath string            // absolute path to the template file
+	VaultPath      string            // absolute path to vault root (for metadata)
+	Path           string            // vault-relative path of the new note
+	Type           string            // note type (e.g. "project", "decision")
+	Fields         map[string]string // field overrides (includes optional "title", "id", …)
+	Body           string            // explicit body override; empty means use template body
+	TemplatePath   string            // absolute path to the template file
+	RequiredFields []string          // type-specific required fields (for minimal fallback)
 }
 
 // ProcessResult is the output of a successful Process call.
 type ProcessResult struct {
-	Content  []byte   // serialized YAML-frontmatter + body
-	ID       string   // final note ID
-	Path     string   // echoes ProcessConfig.Path
-	Warnings []string // non-fatal issues (e.g. unknown template vars, missing template)
+	Content          []byte                 // serialized YAML-frontmatter + body
+	ID               string                 // final note ID
+	Path             string                 // echoes ProcessConfig.Path
+	Warnings         []string               // non-fatal issues (e.g. unknown template vars, missing template)
+	FinalFrontmatter map[string]interface{} // the final frontmatter map after all substitutions and overrides
 }
 
 // SubstituteVars replaces <%=name%> placeholders in content using vars.
@@ -82,10 +85,12 @@ func Process(cfg ProcessConfig) (*ProcessResult, error) {
 	// Determine the effective ID (may be overridden by a Fields["id"] later).
 	generatedID := GenerateID(cfg.Path, cfg.Type)
 
-	// Resolve title.
+	// Resolve title: prefer explicit override, fall back to filename without extension.
 	title := cfg.Fields["title"]
 	if title == "" {
-		title = generatedID
+		base := filepath.Base(cfg.Path)
+		base = strings.TrimSuffix(base, filepath.Ext(base))
+		title = base
 	}
 
 	// Build variable substitution map.
@@ -107,9 +112,9 @@ func Process(cfg ProcessConfig) (*ProcessResult, error) {
 	rawBytes, err := os.ReadFile(cfg.TemplatePath)
 	var templateContent string
 	if err != nil {
-		// Template not found — generate a minimal fallback.
+		// Template not found — generate a minimal fallback (includes required fields).
 		warnings = append(warnings, fmt.Sprintf("template not found at %q: using minimal fallback", cfg.TemplatePath))
-		templateContent = buildMinimalTemplate()
+		templateContent = buildMinimalTemplate(cfg.RequiredFields)
 	} else {
 		templateContent = string(rawBytes)
 	}
@@ -165,16 +170,32 @@ func Process(cfg ProcessConfig) (*ProcessResult, error) {
 	}
 
 	return &ProcessResult{
-		Content:  content,
-		ID:       finalID,
-		Path:     cfg.Path,
-		Warnings: warnings,
+		Content:          content,
+		ID:               finalID,
+		Path:             cfg.Path,
+		Warnings:         warnings,
+		FinalFrontmatter: fm,
 	}, nil
 }
 
 // buildMinimalTemplate returns a bare-bones template string with all core fields.
-func buildMinimalTemplate() string {
-	return "---\nid: <%=id%>\ntype: <%=type%>\ntitle: <%=title%>\ncreated: <%=created%>\nvm_updated: <%=vm_updated%>\n---\n"
+// requiredFields lists any additional type-specific required fields to include
+// with empty string defaults.
+func buildMinimalTemplate(requiredFields []string) string {
+	var sb strings.Builder
+	sb.WriteString("---\nid: <%=id%>\ntype: <%=type%>\ntitle: <%=title%>\ncreated: <%=created%>\nvm_updated: <%=vm_updated%>\n")
+	for _, f := range requiredFields {
+		// Only add fields that are not already core fields in the template.
+		switch f {
+		case "id", "type", "title", "created", "vm_updated", "updated":
+			// already included
+		default:
+			sb.WriteString(f)
+			sb.WriteString(": \n")
+		}
+	}
+	sb.WriteString("---\n")
+	return sb.String()
 }
 
 // parseFrontmatterAndBody splits content on YAML frontmatter delimiters.

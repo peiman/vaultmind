@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -66,6 +67,17 @@ func executeNoteCreate(cmd *cobra.Command, notePath string) error {
 	}
 
 	absPath := filepath.Join(vaultPath, notePath)
+
+	// C1: Reject paths that escape the vault directory.
+	cleanVault := filepath.Clean(vaultPath)
+	cleanAbs := filepath.Clean(absPath)
+	if !strings.HasPrefix(cleanAbs, cleanVault+string(filepath.Separator)) && cleanAbs != cleanVault {
+		if jsonOut {
+			return cmdutil.WriteJSONError(cmd.OutOrStdout(), "note create", "path_traversal", fmt.Sprintf("path %q escapes vault", notePath))
+		}
+		return fmt.Errorf("path traversal: %q escapes vault directory", notePath)
+	}
+
 	if _, err := os.Stat(absPath); err == nil {
 		return fmt.Errorf("note already exists: %s", notePath)
 	}
@@ -76,15 +88,25 @@ func executeNoteCreate(cmd *cobra.Command, notePath string) error {
 	templatePath := filepath.Join(vaultPath, td.Template)
 
 	result, err := tmpl.Process(tmpl.ProcessConfig{
-		VaultPath:    vaultPath,
-		Path:         notePath,
-		Type:         noteType,
-		Fields:       fields,
-		Body:         body,
-		TemplatePath: templatePath,
+		VaultPath:      vaultPath,
+		Path:           notePath,
+		Type:           noteType,
+		Fields:         fields,
+		Body:           body,
+		TemplatePath:   templatePath,
+		RequiredFields: td.Required,
 	})
 	if err != nil {
 		return fmt.Errorf("processing template: %w", err)
+	}
+
+	// I1: Validate that type-specific required fields are present and non-empty in the processed frontmatter.
+	for _, reqField := range td.Required {
+		val, exists := result.FinalFrontmatter[reqField]
+		empty := !exists || val == nil || val == ""
+		if empty {
+			return fmt.Errorf("required field %q is missing or empty; provide it with --field %s=<value>", reqField, reqField)
+		}
 	}
 
 	if existing, err := vdb.DB.QueryNoteByID(result.ID); err != nil {
@@ -125,12 +147,16 @@ func executeNoteCreate(cmd *cobra.Command, notePath string) error {
 		}
 	}
 
+	// C2: write_hash is SHA-256 of the written note content (not the DB file hash).
+	h := sha256.Sum256(result.Content)
+	writeHash := fmt.Sprintf("sha256:%x", h)
+
 	out := noteCreateResult{
 		Path:      notePath,
 		ID:        result.ID,
 		Type:      noteType,
 		Created:   true,
-		WriteHash: vdb.IndexHash(),
+		WriteHash: writeHash,
 		CommitSHA: commitSHA,
 		Warnings:  result.Warnings,
 	}
