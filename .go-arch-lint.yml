@@ -88,6 +88,7 @@ components:
       - internal/mutation/**
       - internal/marker/**
       - internal/plan/**
+      - internal/template/**
 
   # -------------------------------------------------------------------------
   # PROJECT-MANAGED: Business Logic Layer
