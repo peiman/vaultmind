@@ -58,7 +58,7 @@ type neighbor struct {
 	edgeType   string
 	confidence string
 	weight     float64
-	sourceID   string // the node we came from
+	sourceID   string // outbound: the BFS expansion node; inbound: the actual src_note_id
 }
 
 // Traverse performs a BFS from cfg.StartID up to cfg.MaxDepth hops,
@@ -172,10 +172,10 @@ func (r *Resolver) queryNeighbors(nodeID, minConfidence string) ([]neighbor, err
 
 	for inRows.Next() {
 		var nb neighbor
-		nb.sourceID = nodeID
 		if err := inRows.Scan(&nb.id, &nb.edgeType, &nb.confidence, &nb.weight); err != nil {
 			return nil, fmt.Errorf("scanning inbound row: %w", err)
 		}
+		nb.sourceID = nb.id // actual src_note_id from DB, not BFS parent
 		if MeetsConfidence(nb.confidence, minConfidence) {
 			results = append(results, nb)
 		}

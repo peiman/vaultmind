@@ -87,6 +87,40 @@ func TestTraverse_UnknownStartID(t *testing.T) {
 	assert.Len(t, result.Nodes, 1)
 }
 
+func TestTraverse_InboundEdgeSourceID(t *testing.T) {
+	db := buildTestDB(t)
+	r := graph.NewResolver(db)
+
+	// "concept-spreading-activation" has multiple inbound links from other notes.
+	// We traverse with depth=1 so all discovered nodes are direct neighbors.
+	result, err := r.Traverse(graph.TraverseConfig{
+		StartID:       "concept-spreading-activation",
+		MaxDepth:      1,
+		MinConfidence: "low",
+		MaxNodes:      200,
+	})
+	require.NoError(t, err)
+	require.Greater(t, len(result.Nodes), 1, "expected neighbors of concept-spreading-activation")
+
+	// Collect nodes that were reached via inbound edges.
+	// For inbound-discovered nodes, EdgeFrom.SourceID must be the node that
+	// pointed TO the start node — not the start node itself.
+	// In other words: SourceID should NOT equal result.StartID for nodes
+	// that are inbound sources (they are the source, start is the destination).
+	// A correctly-fixed traversal will have: EdgeFrom.SourceID == nb.id
+	// (the neighbor's own ID, because it is the src_note_id in the links table).
+	foundInbound := false
+	for _, n := range result.Nodes[1:] {
+		require.NotNil(t, n.EdgeFrom, "node %s missing EdgeFrom", n.ID)
+		if n.EdgeFrom.SourceID == n.ID {
+			foundInbound = true
+		}
+	}
+	assert.True(t, foundInbound,
+		"expected at least one inbound-discovered node with SourceID == its own ID; "+
+			"pre-fix bug set SourceID = startID for all inbound nodes")
+}
+
 func TestMeetsConfidence(t *testing.T) {
 	assert.True(t, graph.MeetsConfidence("high", "low"))
 	assert.True(t, graph.MeetsConfidence("high", "high"))
