@@ -94,6 +94,11 @@ const (
 	KeyAppNoteVault                     = "app.note.vault"                      // Path to vault root
 	KeyAppNoteJson                      = "app.note.json"                       // Output in JSON format
 	KeyAppNoteFrontmatterOnly           = "app.note.frontmatter_only"           // Omit body, headings, blocks
+	KeyAppNotecreateVault               = "app.notecreate.vault"                // Path to vault root
+	KeyAppNotecreateJson                = "app.notecreate.json"                 // Output in JSON format
+	KeyAppNotecreateType                = "app.notecreate.type"                 // Note type (required)
+	KeyAppNotecreateBody                = "app.notecreate.body"                 // Body text (overrides template body)
+	KeyAppNotecreateCommit              = "app.notecreate.commit"               // Stage and commit
 	KeyAppPingOutputMessage             = "app.ping.output_message"             // Default message to display for the ping command
 	KeyAppPingOutputColor               = "app.ping.output_color"               // Text color for ping command output (white, red, green, blue, cyan, yellow, ma...
 	KeyAppPingUi                        = "app.ping.ui"                         // Enable interactive UI for the ping command
