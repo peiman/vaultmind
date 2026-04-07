@@ -58,7 +58,22 @@ func TestOpenVaultDBOrWriteErr_JSONOutput(t *testing.T) {
 	assert.Equal(t, "error", env.Status)
 	assert.Equal(t, "test-command", env.Command)
 	require.Len(t, env.Errors, 1)
-	assert.Equal(t, "vault_error", env.Errors[0].Code)
+	assert.Equal(t, "vault_not_found", env.Errors[0].Code)
+}
+
+func TestOpenVaultDBOrWriteErr_VaultNotFoundCode(t *testing.T) {
+	cmd := &cobra.Command{}
+	cmd.Flags().Bool("json", true, "")
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+
+	_, err := cmdutil.OpenVaultDBOrWriteErr(cmd, "/nonexistent/path", "test")
+	require.True(t, errors.Is(err, cmdutil.ErrAlreadyWritten))
+
+	var env envelope.Envelope
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &env))
+	assert.Equal(t, "vault_not_found", env.Errors[0].Code,
+		"non-existent path should produce vault_not_found code")
 }
 
 func TestOpenVaultDBOrWriteErr_TextOutput(t *testing.T) {

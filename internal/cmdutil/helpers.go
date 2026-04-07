@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/peiman/vaultmind/internal/envelope"
 	"github.com/peiman/vaultmind/internal/index"
@@ -104,13 +105,32 @@ func isJSONOutput(cmd *cobra.Command) bool {
 	return jsonFlag
 }
 
+// classifyVaultError returns a specific error code based on the error type.
+func classifyVaultError(err error) string {
+	if os.IsNotExist(err) {
+		return "vault_not_found"
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "does not exist or is not a directory") {
+		return "vault_not_found"
+	}
+	if strings.Contains(msg, "loading config") {
+		return "config_error"
+	}
+	if strings.Contains(msg, "locked") || strings.Contains(msg, "SQLITE_BUSY") {
+		return "database_locked"
+	}
+	return "vault_error"
+}
+
 // OpenVaultDBOrWriteErr opens the vault DB. On failure with --json set,
 // writes a JSON error envelope and returns ErrAlreadyWritten.
 func OpenVaultDBOrWriteErr(cmd *cobra.Command, vaultPath, commandName string) (*VaultDB, error) {
 	vdb, err := OpenVaultDB(vaultPath)
 	if err != nil {
 		if isJSONOutput(cmd) {
-			_ = WriteJSONError(cmd.OutOrStdout(), commandName, "vault_error", err.Error())
+			code := classifyVaultError(err)
+			_ = WriteJSONError(cmd.OutOrStdout(), commandName, code, err.Error())
 			return nil, ErrAlreadyWritten
 		}
 		return nil, err
