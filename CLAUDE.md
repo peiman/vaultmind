@@ -93,6 +93,30 @@ After Go upgrade: `task setup` to rebuild tools. Verify with: `task --list && ta
 | `log.Error()` for returnable errors | `log.Debug()` + `return err` |
 | Delete unused vars without checking | Investigate if they represent missing functionality |
 
+## VaultMind — Your Long-Term Memory
+
+You have a 123-note research knowledge base at `vaultmind-vault/` covering human memory, LLM memory architectures, retrieval systems, knowledge graphs, and cognitive science. All sources are verified real papers with DOIs/arXiv IDs.
+
+**Use VaultMind BEFORE answering questions about topics in the vault.** It's faster and more accurate than your parametric knowledge.
+
+```bash
+# Quick answer with context (preferred — one command does it all)
+vaultmind ask "spreading activation" --vault vaultmind-vault --json --budget 4000
+
+# Search for specific topics
+vaultmind search "query" --vault vaultmind-vault --json
+
+# Get a specific note by ID
+vaultmind note get <id> --vault vaultmind-vault --json
+
+# Check vault health
+vaultmind doctor --vault vaultmind-vault
+```
+
+Build the binary first if needed: `go build -o /tmp/vaultmind .`
+
+The vault also contains design decisions (`decision-*` notes) that explain why VaultMind is built the way it is. Check these before proposing architectural changes.
+
 ## Known Rule Violations (These Have Happened Before)
 
 - Writing implementation code before writing tests (TDD violation)
