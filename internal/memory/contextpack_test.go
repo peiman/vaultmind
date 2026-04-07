@@ -113,6 +113,26 @@ func TestContextPack_BodyBackfill(t *testing.T) {
 	}
 }
 
+// TestContextPack_BodyBackfillConsistency verifies that cached note data is
+// consistent: items with BodyIncluded=true have non-empty bodies, and all
+// context item Frontmatter maps are non-nil (cache refactor correctness).
+func TestContextPack_BodyBackfillConsistency(t *testing.T) {
+	db := buildTestDB(t)
+	resolver := graph.NewResolver(db)
+	result, err := memory.ContextPack(resolver, db, memory.ContextPackConfig{Input: "proj-vaultmind", Budget: 100000})
+	require.NoError(t, err)
+
+	for _, item := range result.Context {
+		assert.NotNil(t, item.Frontmatter, "Frontmatter should never be nil for context item %s", item.ID)
+		if item.BodyIncluded {
+			assert.NotEmpty(t, item.Body, "BodyIncluded=true but Body is empty for context item %s", item.ID)
+		}
+		if !item.BodyIncluded {
+			assert.Empty(t, item.Body, "BodyIncluded=false but Body is non-empty for context item %s", item.ID)
+		}
+	}
+}
+
 // TestEdgePriority_AllEdgeTypes exercises edgePriority via ContextPack to verify
 // explicit_embed is treated the same as explicit_link (C1 fix) and all
 // priority tiers are covered.

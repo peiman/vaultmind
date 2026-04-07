@@ -86,8 +86,24 @@ func ContextPack(resolver *graph.Resolver, db *index.DB, cfg ContextPackConfig) 
 		Context:      []ContextItem{},
 	}
 
+	// noteCache avoids redundant DB round-trips: QueryFullNote fires 5 sequential
+	// queries per call, so caching halves the query count when a note appears in
+	// both the frontmatter packing pass and the body backfill pass.
+	noteCache := make(map[string]*index.FullNote)
+	loadNote := func(id string) (*index.FullNote, error) {
+		if cached, ok := noteCache[id]; ok {
+			return cached, nil
+		}
+		fullN, loadErr := db.QueryFullNote(id)
+		if loadErr != nil {
+			return nil, loadErr
+		}
+		noteCache[id] = fullN
+		return fullN, nil
+	}
+
 	// Step 2: Load target note.
-	full, err := db.QueryFullNote(targetID)
+	full, err := loadNote(targetID)
 	if err != nil {
 		return nil, fmt.Errorf("querying full note %q: %w", targetID, err)
 	}
@@ -110,13 +126,13 @@ func ContextPack(resolver *graph.Resolver, db *index.DB, cfg ContextPackConfig) 
 	}
 
 	// Step 5: Enrich with updated date and sort by (priority ASC, updated DESC).
-	if err := enrichAndSortCandidates(db, candidates); err != nil {
+	if err := enrichAndSortCandidates(loadNote, candidates); err != nil {
 		return nil, err
 	}
 
 	// Step 6: Pack context items until budget exhausted.
 	for _, c := range candidates {
-		noteFull, qErr := db.QueryFullNote(c.noteID)
+		noteFull, qErr := loadNote(c.noteID)
 		if qErr != nil {
 			return nil, fmt.Errorf("querying context note %q: %w", c.noteID, qErr)
 		}
@@ -153,7 +169,7 @@ func ContextPack(resolver *graph.Resolver, db *index.DB, cfg ContextPackConfig) 
 		if remaining <= 0 {
 			break
 		}
-		fullNote, err := db.QueryFullNote(result.Context[i].ID)
+		fullNote, err := loadNote(result.Context[i].ID)
 		if err != nil || fullNote == nil || fullNote.Body == "" {
 			continue
 		}
@@ -280,11 +296,12 @@ func collectEdgeCandidates(db *index.DB, targetID string) ([]contextCandidate, e
 	return candidates, nil
 }
 
-// enrichAndSortCandidates loads the updated date for each candidate from the DB
-// and sorts candidates by (priority ASC, updated DESC).
-func enrichAndSortCandidates(db *index.DB, candidates []contextCandidate) error {
+// enrichAndSortCandidates loads the updated date for each candidate using the
+// provided loader (which may be cache-backed) and sorts candidates by
+// (priority ASC, updated DESC).
+func enrichAndSortCandidates(loader func(string) (*index.FullNote, error), candidates []contextCandidate) error {
 	for i := range candidates {
-		noteFull, err := db.QueryFullNote(candidates[i].noteID)
+		noteFull, err := loader(candidates[i].noteID)
 		if err != nil {
 			return fmt.Errorf("querying context note %q for sort: %w", candidates[i].noteID, err)
 		}
