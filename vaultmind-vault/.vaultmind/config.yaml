@@ -51,5 +51,5 @@ index:
 
 memory:
   alias_min_length: 3
-  tag_overlap_threshold: 1.0
+  tag_overlap_threshold: 2.0
   context_pack_default_budget: 4096

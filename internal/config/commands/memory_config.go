@@ -49,9 +49,9 @@ func MemoryRecallOptions() []config.ConfigOption {
 	return []config.ConfigOption{
 		{Key: "app.memoryrecall.vault", DefaultValue: ".", Description: "Path to vault root", Type: "string"},
 		{Key: "app.memoryrecall.json", DefaultValue: false, Description: "Output in JSON format", Type: "bool"},
-		{Key: "app.memoryrecall.depth", DefaultValue: 2, Description: "Maximum traversal depth", Type: "int"},
-		{Key: "app.memoryrecall.min_confidence", DefaultValue: "low", Description: "Minimum edge confidence (low, medium, high)", Type: "string"},
-		{Key: "app.memoryrecall.max_nodes", DefaultValue: 200, Description: "Maximum nodes to return", Type: "int"},
+		{Key: "app.memoryrecall.depth", DefaultValue: 1, Description: "Maximum traversal depth", Type: "int"},
+		{Key: "app.memoryrecall.min_confidence", DefaultValue: "high", Description: "Minimum edge confidence (low, medium, high)", Type: "string"},
+		{Key: "app.memoryrecall.max_nodes", DefaultValue: 50, Description: "Maximum nodes to return", Type: "int"},
 	}
 }
 
