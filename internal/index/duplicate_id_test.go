@@ -32,7 +32,7 @@ func TestRebuild_DetectsDuplicateIDs(t *testing.T) {
 	// Must detect and report the duplicate
 	assert.Greater(t, result.DuplicateIDs, 0, "must detect duplicate IDs")
 
-	// Both files should still be indexed (last one wins, but warning emitted)
+	// Only the first file is indexed; the second is skipped with a warning
 	db, err := index.Open(dbPath)
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()

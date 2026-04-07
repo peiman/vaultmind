@@ -105,11 +105,10 @@ func isJSONOutput(cmd *cobra.Command) bool {
 	return jsonFlag
 }
 
-// classifyVaultError returns a specific error code based on the error type.
+// classifyVaultError returns a specific error code based on the error message.
+// OpenVaultDB wraps errors with fmt.Errorf (not %w), so the original syscall
+// error is lost — classification is by string matching on the message.
 func classifyVaultError(err error) string {
-	if os.IsNotExist(err) {
-		return "vault_not_found"
-	}
 	msg := err.Error()
 	if strings.Contains(msg, "does not exist or is not a directory") {
 		return "vault_not_found"
