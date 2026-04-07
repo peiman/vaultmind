@@ -68,6 +68,47 @@ func TestScan_NestedDirectories(t *testing.T) {
 	assert.Equal(t, filepath.Join("a", "b", "c", "deep.md"), files[0].RelPath)
 }
 
+func TestScan_ExcludeByPath(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create directory structure
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "concepts"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "archive", "old"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "concepts", "note.md"), []byte("content"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "archive", "old", "note.md"), []byte("content"), 0o644))
+
+	// Exclude "archive/old" by path
+	files, err := vault.Scan(dir, []string{"archive/old"})
+	require.NoError(t, err)
+
+	paths := make([]string, len(files))
+	for i, f := range files {
+		paths[i] = f.RelPath
+	}
+
+	assert.Contains(t, paths, filepath.Join("concepts", "note.md"))
+	assert.NotContains(t, paths, filepath.Join("archive", "old", "note.md"),
+		"archive/old should be excluded by path pattern")
+}
+
+func TestScan_ExcludeByName(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "concepts"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "templates"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "concepts", "note.md"), []byte("c"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "templates", "tmpl.md"), []byte("t"), 0o644))
+
+	files, err := vault.Scan(dir, []string{"templates"})
+	require.NoError(t, err)
+
+	paths := make([]string, len(files))
+	for i, f := range files {
+		paths[i] = f.RelPath
+	}
+	assert.Contains(t, paths, filepath.Join("concepts", "note.md"))
+	assert.NotContains(t, paths, filepath.Join("templates", "tmpl.md"))
+}
+
 func testExcludes() []string {
 	return []string{".git", ".obsidian", ".trash", ".vaultmind", "templates"}
 }

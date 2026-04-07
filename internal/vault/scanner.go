@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -35,8 +36,22 @@ func Scan(vaultRoot string, excludes []string) ([]ScannedFile, error) {
 		}
 
 		if d.IsDir() {
+			// Check directory name (existing behavior: "templates", ".obsidian", etc.)
 			if excludeSet[d.Name()] {
 				return filepath.SkipDir
+			}
+			// Check relative path prefix (new: supports "archive/old" style patterns)
+			relDir, relErr := filepath.Rel(absRoot, path)
+			if relErr == nil {
+				for pattern := range excludeSet {
+					if strings.Contains(pattern, string(filepath.Separator)) || strings.Contains(pattern, "/") {
+						// Path-style pattern: match against relative path
+						cleanPattern := filepath.Clean(pattern)
+						if relDir == cleanPattern || strings.HasPrefix(relDir, cleanPattern+string(filepath.Separator)) {
+							return filepath.SkipDir
+						}
+					}
+				}
 			}
 			return nil
 		}

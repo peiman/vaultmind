@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // NoteRow is a lightweight note record returned by query methods.
@@ -145,12 +146,20 @@ type BlockRow struct {
 }
 
 // QueryFullNote returns complete note data including body, headings, blocks, aliases, tags.
+// Uses GROUP_CONCAT subqueries to fold aliases and tags into the main note query,
+// reducing the number of DB round-trips from 6 to 4.
 func (d *DB) QueryFullNote(id string) (*FullNote, error) {
 	var n FullNote
 	var noteType, title, status, created, updated, body sql.NullString
-	err := d.QueryRow(
-		"SELECT id, type, title, path, status, created, updated, body_text, is_domain FROM notes WHERE id = ?", id,
-	).Scan(&n.ID, &noteType, &title, &n.Path, &status, &created, &updated, &body, &n.IsDomain)
+	var aliasesCSV, tagsCSV sql.NullString
+	err := d.QueryRow(`
+		SELECT n.id, n.type, n.title, n.path, n.status, n.created, n.updated, n.body_text, n.is_domain,
+			(SELECT GROUP_CONCAT(alias, '|') FROM aliases WHERE note_id = n.id) AS aliases_csv,
+			(SELECT GROUP_CONCAT(tag, '|') FROM tags WHERE note_id = n.id) AS tags_csv
+		FROM notes n
+		WHERE n.id = ?`, id,
+	).Scan(&n.ID, &noteType, &title, &n.Path, &status, &created, &updated, &body, &n.IsDomain,
+		&aliasesCSV, &tagsCSV)
 	if err == sql.ErrNoRows {
 		return nil, nil //nolint:nilnil // not found
 	}
@@ -172,13 +181,12 @@ func (d *DB) QueryFullNote(id string) (*FullNote, error) {
 		n.Frontmatter["updated"] = updated.String
 	}
 
-	n.Aliases = d.queryStringList("SELECT alias FROM aliases WHERE note_id = ?", id)
-	if len(n.Aliases) > 0 {
+	if aliasesCSV.Valid && aliasesCSV.String != "" {
+		n.Aliases = strings.Split(aliasesCSV.String, "|")
 		n.Frontmatter["aliases"] = n.Aliases
 	}
-
-	n.Tags = d.queryStringList("SELECT tag FROM tags WHERE note_id = ?", id)
-	if len(n.Tags) > 0 {
+	if tagsCSV.Valid && tagsCSV.String != "" {
+		n.Tags = strings.Split(tagsCSV.String, "|")
 		n.Frontmatter["tags"] = n.Tags
 	}
 
@@ -187,22 +195,6 @@ func (d *DB) QueryFullNote(id string) (*FullNote, error) {
 	d.loadBlocks(&n)
 
 	return &n, nil
-}
-
-func (d *DB) queryStringList(query, noteID string) []string {
-	rows, err := d.Query(query, noteID)
-	if err != nil {
-		return nil
-	}
-	defer func() { _ = rows.Close() }()
-	var result []string
-	for rows.Next() {
-		var s string
-		if scanErr := rows.Scan(&s); scanErr == nil {
-			result = append(result, s)
-		}
-	}
-	return result
 }
 
 func (d *DB) loadFrontmatterKV(n *FullNote) {
