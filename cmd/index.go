@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
+	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/config/commands"
 	"github.com/peiman/vaultmind/internal/envelope"
 	"github.com/peiman/vaultmind/internal/index"
@@ -28,11 +29,19 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 
 	info, err := os.Stat(vaultPath)
 	if err != nil || !info.IsDir() {
+		if jsonOut {
+			return cmdutil.WriteJSONError(cmd.OutOrStdout(), "index", "vault_not_found",
+				fmt.Sprintf("vault path %q does not exist or is not a directory", vaultPath))
+		}
 		return fmt.Errorf("vault path %q does not exist or is not a directory", vaultPath)
 	}
 
 	cfg, err := vault.LoadConfig(vaultPath)
 	if err != nil {
+		if jsonOut {
+			return cmdutil.WriteJSONError(cmd.OutOrStdout(), "index", "config_error",
+				fmt.Sprintf("loading config: %v", err))
+		}
 		return fmt.Errorf("loading config: %w", err)
 	}
 
