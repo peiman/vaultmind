@@ -95,6 +95,8 @@ const (
 	KeyAppMemorycontextpackJson         = "app.memorycontextpack.json"          // Output in JSON format
 	KeyAppMemorycontextpackBudget       = "app.memorycontextpack.budget"        // Token budget
 	KeyAppMemorycontextpackDepth        = "app.memorycontextpack.depth"         // BFS traversal depth (1 = direct neighbors only)
+	KeyAppMemorycontextpackMaxItems     = "app.memorycontextpack.max_items"     // Max context items (0 = unlimited)
+	KeyAppMemorycontextpackSlim         = "app.memorycontextpack.slim"          // Slim frontmatter (type, title, status only)
 	KeyAppMemorysummarizeVault          = "app.memorysummarize.vault"           // Path to vault root
 	KeyAppMemorysummarizeJson           = "app.memorysummarize.json"            // Output in JSON format
 	KeyAppMemorysummarizeIds            = "app.memorysummarize.ids"             // Comma-separated note IDs (alternative to positional args)

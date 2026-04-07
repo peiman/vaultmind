@@ -37,10 +37,12 @@ var MemoryContextPackMetadata = config.CommandMetadata{
 	Long:         "Assemble a bounded retrieval payload for agent consumption.",
 	ConfigPrefix: "app.memorycontextpack",
 	FlagOverrides: map[string]string{
-		"app.memorycontextpack.vault":  "vault",
-		"app.memorycontextpack.json":   "json",
-		"app.memorycontextpack.budget": "budget",
-		"app.memorycontextpack.depth":  "depth",
+		"app.memorycontextpack.vault":     "vault",
+		"app.memorycontextpack.json":      "json",
+		"app.memorycontextpack.budget":    "budget",
+		"app.memorycontextpack.depth":     "depth",
+		"app.memorycontextpack.max_items": "max-items",
+		"app.memorycontextpack.slim":      "slim",
 	},
 }
 
@@ -71,6 +73,8 @@ func MemoryContextPackOptions() []config.ConfigOption {
 		{Key: "app.memorycontextpack.json", DefaultValue: false, Description: "Output in JSON format", Type: "bool"},
 		{Key: "app.memorycontextpack.budget", DefaultValue: 4096, Description: "Token budget", Type: "int"},
 		{Key: "app.memorycontextpack.depth", DefaultValue: 1, Description: "BFS traversal depth (1 = direct neighbors only)", Type: "int"},
+		{Key: "app.memorycontextpack.max_items", DefaultValue: 0, Description: "Max context items (0 = unlimited)", Type: "int"},
+		{Key: "app.memorycontextpack.slim", DefaultValue: false, Description: "Slim frontmatter (type, title, status only)", Type: "bool"},
 	}
 }
 

@@ -39,9 +39,11 @@ func runMemoryContextPack(cmd *cobra.Command, args []string) error {
 	jsonOut := getConfigValueWithFlags[bool](cmd, "json", config.KeyAppMemorycontextpackJson)
 	resolver := graph.NewResolver(vdb.DB)
 	result, err := memory.ContextPack(resolver, vdb.DB, memory.ContextPackConfig{
-		Input:  args[0],
-		Budget: getConfigValueWithFlags[int](cmd, "budget", config.KeyAppMemorycontextpackBudget),
-		Depth:  getConfigValueWithFlags[int](cmd, "depth", config.KeyAppMemorycontextpackDepth),
+		Input:    args[0],
+		Budget:   getConfigValueWithFlags[int](cmd, "budget", config.KeyAppMemorycontextpackBudget),
+		Depth:    getConfigValueWithFlags[int](cmd, "depth", config.KeyAppMemorycontextpackDepth),
+		MaxItems: getConfigValueWithFlags[int](cmd, "max-items", config.KeyAppMemorycontextpackMaxItems),
+		Slim:     getConfigValueWithFlags[bool](cmd, "slim", config.KeyAppMemorycontextpackSlim),
 	})
 	if err != nil {
 		if jsonOut {

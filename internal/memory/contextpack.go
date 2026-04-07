@@ -11,9 +11,11 @@ import (
 
 // ContextPackConfig holds parameters for a ContextPack operation.
 type ContextPackConfig struct {
-	Input  string
-	Budget int // token budget
-	Depth  int // BFS traversal depth; 0 or 1 = direct neighbors only (default)
+	Input    string
+	Budget   int  // token budget
+	Depth    int  // BFS traversal depth; 0 or 1 = direct neighbors only (default)
+	MaxItems int  // max context items to return; 0 = unlimited (default, backward-compat)
+	Slim     bool // reduce context item frontmatter to {type, title, status} only
 }
 
 // ContextPackTarget holds the fully-loaded target note.
@@ -137,42 +139,110 @@ func ContextPack(resolver *graph.Resolver, db *index.DB, cfg ContextPackConfig) 
 	}
 
 	// Step 6: Pack context items until budget exhausted.
+	if cfg.MaxItems > 0 {
+		packBodyFirst(candidates, cfg, result, &remaining, loadNote)
+	} else {
+		if err := packTwoPass(candidates, cfg, result, &remaining, loadNote); err != nil {
+			return nil, err
+		}
+	}
+
+	return result, nil
+}
+
+// packBodyFirst packs frontmatter + body together for each candidate (body-first single-pass).
+// This yields fewer but richer items instead of many frontmatter-only skeletons.
+// Used when MaxItems > 0.
+func packBodyFirst(
+	candidates []contextCandidate,
+	cfg ContextPackConfig,
+	result *ContextPackResult,
+	remaining *int,
+	loadNote func(string) (*index.FullNote, error),
+) {
+	for _, c := range candidates {
+		if len(result.Context) >= cfg.MaxItems {
+			break
+		}
+
+		noteFull, qErr := loadNote(c.noteID)
+		if qErr != nil {
+			// Non-fatal: skip unavailable notes rather than propagating error
+			// (body-first mode is best-effort for agent consumption).
+			continue
+		}
+
+		fm := extractFrontmatter(noteFull, cfg.Slim)
+		fmBytes, _ := json.Marshal(fm)
+		fmTokens := EstimateTokens(string(fmBytes))
+
+		if fmTokens > *remaining {
+			result.BudgetExhausted = true
+			break
+		}
+
+		item := ContextItem{
+			ID:          c.noteID,
+			EdgeType:    c.edgeType,
+			Confidence:  c.confidence,
+			Frontmatter: fm,
+		}
+		*remaining -= fmTokens
+		result.UsedTokens += fmTokens
+
+		// Try to include body within remaining budget.
+		if noteFull != nil && noteFull.Body != "" {
+			bodyTokens := EstimateTokens(noteFull.Body)
+			if bodyTokens <= *remaining {
+				item.BodyIncluded = true
+				item.Body = noteFull.Body
+				*remaining -= bodyTokens
+				result.UsedTokens += bodyTokens
+			}
+		}
+
+		result.Context = append(result.Context, item)
+	}
+}
+
+// packTwoPass packs all frontmatter first, then backfills bodies with remaining budget.
+// This is the backward-compatible default behavior (MaxItems == 0).
+func packTwoPass(
+	candidates []contextCandidate,
+	cfg ContextPackConfig,
+	result *ContextPackResult,
+	remaining *int,
+	loadNote func(string) (*index.FullNote, error),
+) error {
 	for _, c := range candidates {
 		noteFull, qErr := loadNote(c.noteID)
 		if qErr != nil {
-			return nil, fmt.Errorf("querying context note %q: %w", c.noteID, qErr)
+			return fmt.Errorf("querying context note %q: %w", c.noteID, qErr)
 		}
 
-		var fm map[string]interface{}
-		if noteFull != nil {
-			fm = noteFull.Frontmatter
-		} else {
-			fm = map[string]interface{}{}
-		}
-
+		fm := extractFrontmatter(noteFull, cfg.Slim)
 		fmBytes, _ := json.Marshal(fm)
 		tokens := EstimateTokens(string(fmBytes))
 
-		if tokens > remaining {
+		if tokens > *remaining {
 			result.BudgetExhausted = true
 			break
 		}
 
 		result.Context = append(result.Context, ContextItem{
-			ID:           c.noteID,
-			EdgeType:     c.edgeType,
-			Confidence:   c.confidence,
-			Frontmatter:  fm,
-			BodyIncluded: false,
+			ID:          c.noteID,
+			EdgeType:    c.edgeType,
+			Confidence:  c.confidence,
+			Frontmatter: fm,
 		})
 
-		remaining -= tokens
+		*remaining -= tokens
 		result.UsedTokens += tokens
 	}
 
 	// Body backfill pass: fill remaining budget with context item bodies in priority order.
 	for i := range result.Context {
-		if remaining <= 0 {
+		if *remaining <= 0 {
 			break
 		}
 		fullNote, err := loadNote(result.Context[i].ID)
@@ -180,15 +250,44 @@ func ContextPack(resolver *graph.Resolver, db *index.DB, cfg ContextPackConfig) 
 			continue
 		}
 		bodyTokens := EstimateTokens(fullNote.Body)
-		if bodyTokens <= remaining {
+		if bodyTokens <= *remaining {
 			result.Context[i].BodyIncluded = true
 			result.Context[i].Body = fullNote.Body
-			remaining -= bodyTokens
+			*remaining -= bodyTokens
 			result.UsedTokens += bodyTokens
 		}
 	}
+	return nil
+}
 
-	return result, nil
+// extractFrontmatter returns the note's frontmatter, optionally slimmed.
+// Returns an empty map if the note is nil.
+func extractFrontmatter(noteFull *index.FullNote, slim bool) map[string]interface{} {
+	if noteFull == nil {
+		return map[string]interface{}{}
+	}
+	fm := noteFull.Frontmatter
+	if slim {
+		var noteType, noteTitle string
+		if t, ok := fm["type"].(string); ok {
+			noteType = t
+		}
+		if t, ok := fm["title"].(string); ok {
+			noteTitle = t
+		}
+		return slimFrontmatter(fm, noteType, noteTitle)
+	}
+	return fm
+}
+
+// slimFrontmatter returns a reduced frontmatter map containing only type, title,
+// and status. This saves tokens in body-first packing mode.
+func slimFrontmatter(fm map[string]interface{}, noteType, title string) map[string]interface{} {
+	slim := map[string]interface{}{"type": noteType, "title": title}
+	if s, ok := fm["status"]; ok {
+		slim["status"] = s
+	}
+	return slim
 }
 
 // packTargetContent fills the token budget with the target note's frontmatter and body.

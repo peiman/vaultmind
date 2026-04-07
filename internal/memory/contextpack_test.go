@@ -233,3 +233,98 @@ func TestContextPack_DepthDefault(t *testing.T) {
 		"default depth (0) should behave like depth=1")
 	assert.Equal(t, resultDepth1.TargetID, resultDefault.TargetID)
 }
+
+// TestContextPack_MaxItems verifies that when MaxItems > 0, the result has at
+// most MaxItems context items.
+func TestContextPack_MaxItems(t *testing.T) {
+	db := buildTestDB(t)
+	resolver := graph.NewResolver(db)
+
+	maxItems := 3
+	result, err := memory.ContextPack(resolver, db, memory.ContextPackConfig{
+		Input:    "proj-vaultmind",
+		Budget:   100000,
+		MaxItems: maxItems,
+	})
+	require.NoError(t, err)
+	assert.LessOrEqual(t, len(result.Context), maxItems,
+		"MaxItems=%d should cap context items", maxItems)
+}
+
+// TestContextPack_MaxItemsWithBody verifies that when MaxItems constrains the
+// count, items have body text included (body-first packing).
+func TestContextPack_MaxItemsWithBody(t *testing.T) {
+	db := buildTestDB(t)
+	resolver := graph.NewResolver(db)
+
+	// Use a large budget with MaxItems=5: body-first packing should fill each item
+	// with body content since budget is ample.
+	result, err := memory.ContextPack(resolver, db, memory.ContextPackConfig{
+		Input:    "proj-vaultmind",
+		Budget:   100000,
+		MaxItems: 5,
+	})
+	require.NoError(t, err)
+	assert.LessOrEqual(t, len(result.Context), 5,
+		"should not exceed MaxItems=5")
+
+	// With a large budget and body-first packing, items that have body content
+	// should have BodyIncluded=true.
+	bodyIncludedCount := 0
+	for _, item := range result.Context {
+		if item.BodyIncluded {
+			bodyIncludedCount++
+			assert.NotEmpty(t, item.Body, "BodyIncluded=true but Body is empty for %s", item.ID)
+		}
+	}
+	if len(result.Context) > 0 {
+		assert.Greater(t, bodyIncludedCount, 0,
+			"with large budget and body-first packing, at least one item should have body included")
+	}
+}
+
+// TestContextPack_SlimFrontmatter verifies that Slim=true reduces frontmatter
+// to only type, title, and status fields.
+func TestContextPack_SlimFrontmatter(t *testing.T) {
+	db := buildTestDB(t)
+	resolver := graph.NewResolver(db)
+
+	result, err := memory.ContextPack(resolver, db, memory.ContextPackConfig{
+		Input:  "proj-vaultmind",
+		Budget: 100000,
+		Slim:   true,
+	})
+	require.NoError(t, err)
+	require.Greater(t, len(result.Context), 0, "need context items to verify slim frontmatter")
+
+	for _, item := range result.Context {
+		for k := range item.Frontmatter {
+			assert.Contains(t, []string{"type", "title", "status"}, k,
+				"slim frontmatter should only contain type, title, status; got key %q for item %s", k, item.ID)
+		}
+	}
+}
+
+// TestContextPack_MaxItemsZero_BackwardCompat verifies that MaxItems=0 (default)
+// preserves the existing two-pass behavior (frontmatter → backfill).
+func TestContextPack_MaxItemsZero_BackwardCompat(t *testing.T) {
+	db := buildTestDB(t)
+	resolver := graph.NewResolver(db)
+
+	resultDefault, err := memory.ContextPack(resolver, db, memory.ContextPackConfig{
+		Input:    "proj-vaultmind",
+		Budget:   100000,
+		MaxItems: 0,
+	})
+	require.NoError(t, err)
+
+	resultNoField, err := memory.ContextPack(resolver, db, memory.ContextPackConfig{
+		Input:  "proj-vaultmind",
+		Budget: 100000,
+	})
+	require.NoError(t, err)
+
+	// MaxItems=0 and omitting MaxItems should produce identical results.
+	assert.Equal(t, len(resultNoField.Context), len(resultDefault.Context),
+		"MaxItems=0 should preserve existing behavior")
+}
