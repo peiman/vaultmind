@@ -30,6 +30,8 @@ type DoctorIssues struct {
 	UnresolvedLinkDetails     []UnresolvedLink   `json:"unresolved_link_details,omitempty"`
 	ObsidianIncompatibleLinks int                `json:"obsidian_incompatible_links"`
 	IncompatibleLinkDetails   []IncompatibleLink `json:"incompatible_link_details,omitempty"`
+	PathPseudoIDLinks         int                `json:"path_pseudo_id_links"`
+	PathPseudoIDDetails       []UnresolvedLink   `json:"path_pseudo_id_details,omitempty"`
 }
 
 // UnresolvedLink describes a single unresolved link with source and target info.
@@ -99,6 +101,30 @@ func Doctor(db *index.DB, vaultPath string) (*DoctorResult, error) {
 	if err := db.QueryRow("SELECT COUNT(*) FROM (SELECT id FROM notes GROUP BY id HAVING COUNT(*) > 1)").Scan(&result.Issues.DuplicateIDs); err != nil {
 		return nil, fmt.Errorf("counting duplicate IDs: %w", err)
 	}
+
+	// Links resolved to _path: pseudo-IDs (files that don't exist in the vault)
+	pseudoRows, err := db.Query(`
+    SELECT l.src_note_id, COALESCE(sn.path, ''), l.dst_raw
+    FROM links l
+    LEFT JOIN notes sn ON sn.id = l.src_note_id
+    WHERE l.resolved = TRUE AND l.dst_note_id LIKE '_path:%'`)
+	if err != nil {
+		return nil, fmt.Errorf("querying pseudo-ID links: %w", err)
+	}
+	defer func() { _ = pseudoRows.Close() }()
+
+	result.Issues.PathPseudoIDDetails = []UnresolvedLink{}
+	for pseudoRows.Next() {
+		var pl UnresolvedLink
+		if scanErr := pseudoRows.Scan(&pl.SourceID, &pl.SourcePath, &pl.TargetRaw); scanErr != nil {
+			return nil, fmt.Errorf("scanning pseudo-ID link: %w", scanErr)
+		}
+		result.Issues.PathPseudoIDDetails = append(result.Issues.PathPseudoIDDetails, pl)
+	}
+	if err := pseudoRows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating pseudo-ID links: %w", err)
+	}
+	result.Issues.PathPseudoIDLinks = len(result.Issues.PathPseudoIDDetails)
 
 	// Obsidian-incompatible links: resolved wikilinks where dst_raw doesn't
 	// match the target note's filename stem. Obsidian resolves [[X]] by matching

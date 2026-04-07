@@ -54,6 +54,33 @@ func TestDoctor_ReportsUnresolvedLinks(t *testing.T) {
 	assert.GreaterOrEqual(t, result.Issues.UnresolvedLinks, 0)
 }
 
+func TestDoctor_DetectsPathPseudoIDLinks(t *testing.T) {
+	db := buildIndexedDB(t)
+
+	_, err := db.Exec("INSERT INTO notes (id, path, title, hash, mtime, is_domain) VALUES (?, ?, ?, ?, ?, ?)",
+		"test-src-pseudo", "concepts/test-src-pseudo.md", "Source", "abc", 0, true)
+	require.NoError(t, err)
+
+	_, err = db.Exec(`INSERT INTO links (src_note_id, dst_note_id, dst_raw, edge_type, resolved, confidence)
+		VALUES (?, ?, ?, ?, ?, ?)`,
+		"test-src-pseudo", "_path:NonExistent.md", "NonExistent", "explicit_link", true, "high")
+	require.NoError(t, err)
+
+	result, docErr := query.Doctor(db, testVaultPath)
+	require.NoError(t, docErr)
+
+	assert.Greater(t, result.Issues.PathPseudoIDLinks, 0,
+		"should detect links resolved to _path: pseudo-IDs")
+
+	found := false
+	for _, pl := range result.Issues.PathPseudoIDDetails {
+		if pl.TargetRaw == "NonExistent" {
+			found = true
+		}
+	}
+	assert.True(t, found, "should include the pseudo-ID link in details")
+}
+
 func TestDoctor_DetectsObsidianIncompatibleLinks(t *testing.T) {
 	db := buildIndexedDB(t)
 

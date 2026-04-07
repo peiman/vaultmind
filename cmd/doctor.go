@@ -59,5 +59,16 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 			}
 		}
 	}
+	if result.Issues.PathPseudoIDLinks > 0 {
+		if _, err = fmt.Fprintf(w, "Dead link references: %d\n", result.Issues.PathPseudoIDLinks); err != nil {
+			return err
+		}
+		for _, pl := range result.Issues.PathPseudoIDDetails {
+			if _, err = fmt.Fprintf(w, "  %s: [[%s]] → target file does not exist\n",
+				pl.SourcePath, pl.TargetRaw); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
