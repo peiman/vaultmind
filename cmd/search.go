@@ -31,7 +31,8 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	}
 	defer vdb.Close()
 
-	return query.RunSearch(vdb.DB, query.SearchConfig{
+	retriever := &query.FTSRetriever{DB: vdb.DB}
+	return query.RunSearch(retriever, query.SearchConfig{
 		Query:      args[0],
 		Limit:      getConfigValueWithFlags[int](cmd, "limit", config.KeyAppSearchLimit),
 		Offset:     getConfigValueWithFlags[int](cmd, "offset", config.KeyAppSearchOffset),

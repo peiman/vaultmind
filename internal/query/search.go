@@ -1,6 +1,7 @@
 package query
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,11 +12,11 @@ import (
 
 // SearchResult is the JSON response for search.
 type SearchResult struct {
-	Query  string            `json:"query"`
-	Offset int               `json:"offset"`
-	Limit  int               `json:"limit"`
-	Hits   []index.FTSResult `json:"hits"`
-	Total  int               `json:"total"`
+	Query  string         `json:"query"`
+	Offset int            `json:"offset"`
+	Limit  int            `json:"limit"`
+	Hits   []ScoredResult `json:"hits"`
+	Total  int            `json:"total"`
 }
 
 // SearchConfig holds search parameters.
@@ -30,20 +31,17 @@ type SearchConfig struct {
 }
 
 // RunSearch executes the search command logic.
-func RunSearch(db *index.DB, cfg SearchConfig, w io.Writer) error {
-	filters := index.SearchFilters{Type: cfg.TypeFilter, Tag: cfg.TagFilter}
-	results, err := index.SearchFTS(db, cfg.Query, cfg.Limit, cfg.Offset, filters)
+func RunSearch(retriever Retriever, cfg SearchConfig, w io.Writer) error {
+	results, total, err := retriever.Search(
+		context.Background(), cfg.Query, cfg.Limit, cfg.Offset,
+		index.SearchFilters{Type: cfg.TypeFilter, Tag: cfg.TagFilter},
+	)
 	if err != nil {
 		return fmt.Errorf("searching: %w", err)
 	}
 
 	if results == nil {
-		results = []index.FTSResult{}
-	}
-
-	total, err := index.CountFTS(db, cfg.Query, filters)
-	if err != nil {
-		return fmt.Errorf("counting results: %w", err)
+		results = []ScoredResult{}
 	}
 
 	if cfg.JSONOutput {
