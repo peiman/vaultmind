@@ -1,6 +1,7 @@
 package index_test
 
 import (
+	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
@@ -122,6 +123,34 @@ func TestOpen_EnablesForeignKeys(t *testing.T) {
 	err := db.QueryRow("PRAGMA foreign_keys").Scan(&fkEnabled)
 	require.NoError(t, err)
 	assert.Equal(t, 1, fkEnabled)
+}
+
+func TestMigrations_EmbeddingColumn(t *testing.T) {
+	db := openTestDB(t)
+	// Verify embedding column exists by inserting a note with it
+	_, err := db.Exec("INSERT INTO notes (id, path, hash, mtime, embedding) VALUES (?, ?, ?, ?, ?)",
+		"test-emb", "test-emb.md", "abc", 0, []byte{1, 2, 3})
+	require.NoError(t, err)
+
+	var emb []byte
+	require.NoError(t, db.QueryRow("SELECT embedding FROM notes WHERE id = ?", "test-emb").Scan(&emb))
+	assert.Equal(t, []byte{1, 2, 3}, emb)
+}
+
+func TestMigrations_AccessTracking(t *testing.T) {
+	db := openTestDB(t)
+	_, err := db.Exec("INSERT INTO notes (id, path, hash, mtime, access_count) VALUES (?, ?, ?, ?, ?)",
+		"test-access", "test-access.md", "abc", 0, 5)
+	require.NoError(t, err)
+
+	var count int
+	require.NoError(t, db.QueryRow("SELECT access_count FROM notes WHERE id = ?", "test-access").Scan(&count))
+	assert.Equal(t, 5, count)
+
+	// last_accessed_at should be NULL by default
+	var accessedAt sql.NullString
+	require.NoError(t, db.QueryRow("SELECT last_accessed_at FROM notes WHERE id = ?", "test-access").Scan(&accessedAt))
+	assert.False(t, accessedAt.Valid, "last_accessed_at should be NULL initially")
 }
 
 func TestDB_QueryRow_Accessible(t *testing.T) {
