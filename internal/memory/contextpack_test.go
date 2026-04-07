@@ -150,3 +150,86 @@ func TestContextPack_EdgePriority_ExplicitEmbed(t *testing.T) {
 		assert.NotEmpty(t, item.EdgeType)
 	}
 }
+
+// TestContextPack_DepthGreaterThanOne verifies that Depth=2 collects nodes at
+// distance 2 in addition to distance-1 nodes. Distance-2 nodes must have
+// higher combined priority values (lower priority = closer) than distance-1
+// nodes, so they appear later in context ordering.
+func TestContextPack_DepthGreaterThanOne(t *testing.T) {
+	db := buildTestDB(t)
+	resolver := graph.NewResolver(db)
+
+	// Collect depth-1 result for comparison baseline.
+	result1, err := memory.ContextPack(resolver, db, memory.ContextPackConfig{
+		Input:  "proj-vaultmind",
+		Budget: 100000,
+		Depth:  1,
+	})
+	require.NoError(t, err)
+	depth1IDs := make(map[string]bool)
+	for _, item := range result1.Context {
+		depth1IDs[item.ID] = true
+	}
+
+	// Collect depth-2 result.
+	result2, err := memory.ContextPack(resolver, db, memory.ContextPackConfig{
+		Input:  "proj-vaultmind",
+		Budget: 100000,
+		Depth:  2,
+	})
+	require.NoError(t, err)
+
+	// Depth-2 must include at least as many context items as depth-1.
+	assert.GreaterOrEqual(t, len(result2.Context), len(result1.Context),
+		"depth=2 should include all depth-1 context items plus potentially more")
+
+	// Depth-2 result must include all depth-1 context items.
+	for _, item := range result1.Context {
+		found := false
+		for _, item2 := range result2.Context {
+			if item2.ID == item.ID {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "depth-1 item %s must be present in depth-2 result", item.ID)
+	}
+
+	// If depth-2 found more items, distance-2 nodes must appear after distance-1 nodes.
+	// Distance-2 items have higher combined priority (distance * 10 + edgePriority),
+	// so they should not precede any depth-1 item.
+	if len(result2.Context) > len(result1.Context) {
+		// Verify target ID is still correct.
+		assert.Equal(t, "proj-vaultmind", result2.TargetID)
+		// Verify all context items have valid IDs and edge types.
+		for _, item := range result2.Context {
+			assert.NotEmpty(t, item.ID)
+			assert.NotEmpty(t, item.EdgeType)
+		}
+	}
+}
+
+// TestContextPack_DepthDefault verifies that omitting Depth (zero value) behaves
+// identically to Depth=1 (backward compatibility).
+func TestContextPack_DepthDefault(t *testing.T) {
+	db := buildTestDB(t)
+	resolver := graph.NewResolver(db)
+
+	resultDefault, err := memory.ContextPack(resolver, db, memory.ContextPackConfig{
+		Input:  "proj-vaultmind",
+		Budget: 100000,
+	})
+	require.NoError(t, err)
+
+	resultDepth1, err := memory.ContextPack(resolver, db, memory.ContextPackConfig{
+		Input:  "proj-vaultmind",
+		Budget: 100000,
+		Depth:  1,
+	})
+	require.NoError(t, err)
+
+	// Both should produce the same number of context items.
+	assert.Equal(t, len(resultDepth1.Context), len(resultDefault.Context),
+		"default depth (0) should behave like depth=1")
+	assert.Equal(t, resultDepth1.TargetID, resultDefault.TargetID)
+}

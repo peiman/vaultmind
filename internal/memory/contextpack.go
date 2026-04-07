@@ -13,6 +13,7 @@ import (
 type ContextPackConfig struct {
 	Input  string
 	Budget int // token budget
+	Depth  int // BFS traversal depth; 0 or 1 = direct neighbors only (default)
 }
 
 // ContextPackTarget holds the fully-loaded target note.
@@ -119,8 +120,13 @@ func ContextPack(resolver *graph.Resolver, db *index.DB, cfg ContextPackConfig) 
 		return result, nil
 	}
 
-	// Step 4: Collect direct edge candidates.
-	candidates, err := collectEdgeCandidates(db, targetID)
+	// Step 4: Collect candidates — depth-1 (direct edges) or multi-hop BFS.
+	var candidates []contextCandidate
+	if cfg.Depth > 1 {
+		candidates, err = collectTraverseCandidates(resolver, targetID, cfg.Depth)
+	} else {
+		candidates, err = collectEdgeCandidates(db, targetID)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -293,6 +299,42 @@ func collectEdgeCandidates(db *index.DB, targetID string) ([]contextCandidate, e
 		return nil, fmt.Errorf("iterating inbound edges: %w", err)
 	}
 
+	return candidates, nil
+}
+
+// collectTraverseCandidates uses BFS traversal to collect candidates up to maxDepth hops.
+// Priority is distance*10 + edgePriority so that closer nodes always rank higher than
+// farther ones, with edge type as a tiebreaker within the same distance band.
+func collectTraverseCandidates(resolver *graph.Resolver, targetID string, maxDepth int) ([]contextCandidate, error) {
+	tResult, err := resolver.Traverse(graph.TraverseConfig{
+		StartID:       targetID,
+		MaxDepth:      maxDepth,
+		MinConfidence: "low",
+		MaxNodes:      200,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("BFS traversal from %q: %w", targetID, err)
+	}
+
+	var candidates []contextCandidate
+	for _, node := range tResult.Nodes {
+		if node.ID == targetID || node.Distance == 0 {
+			continue // skip the start node itself
+		}
+		edgeType := ""
+		confidence := ""
+		if node.EdgeFrom != nil {
+			edgeType = node.EdgeFrom.EdgeType
+			confidence = node.EdgeFrom.Confidence
+		}
+		combined := node.Distance*10 + edgePriority(edgeType, confidence)
+		candidates = append(candidates, contextCandidate{
+			noteID:     node.ID,
+			edgeType:   edgeType,
+			confidence: confidence,
+			priority:   combined,
+		})
+	}
 	return candidates, nil
 }
 

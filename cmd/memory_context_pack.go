@@ -41,6 +41,7 @@ func runMemoryContextPack(cmd *cobra.Command, args []string) error {
 	result, err := memory.ContextPack(resolver, vdb.DB, memory.ContextPackConfig{
 		Input:  args[0],
 		Budget: getConfigValueWithFlags[int](cmd, "budget", config.KeyAppMemorycontextpackBudget),
+		Depth:  getConfigValueWithFlags[int](cmd, "depth", config.KeyAppMemorycontextpackDepth),
 	})
 	if err != nil {
 		if jsonOut {

@@ -94,6 +94,7 @@ const (
 	KeyAppMemorycontextpackVault        = "app.memorycontextpack.vault"         // Path to vault root
 	KeyAppMemorycontextpackJson         = "app.memorycontextpack.json"          // Output in JSON format
 	KeyAppMemorycontextpackBudget       = "app.memorycontextpack.budget"        // Token budget
+	KeyAppMemorycontextpackDepth        = "app.memorycontextpack.depth"         // BFS traversal depth (1 = direct neighbors only)
 	KeyAppNoteVault                     = "app.note.vault"                      // Path to vault root
 	KeyAppNoteJson                      = "app.note.json"                       // Output in JSON format
 	KeyAppNoteFrontmatterOnly           = "app.note.frontmatter_only"           // Omit body, headings, blocks

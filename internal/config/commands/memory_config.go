@@ -40,6 +40,7 @@ var MemoryContextPackMetadata = config.CommandMetadata{
 		"app.memorycontextpack.vault":  "vault",
 		"app.memorycontextpack.json":   "json",
 		"app.memorycontextpack.budget": "budget",
+		"app.memorycontextpack.depth":  "depth",
 	},
 }
 
@@ -69,6 +70,7 @@ func MemoryContextPackOptions() []config.ConfigOption {
 		{Key: "app.memorycontextpack.vault", DefaultValue: ".", Description: "Path to vault root", Type: "string"},
 		{Key: "app.memorycontextpack.json", DefaultValue: false, Description: "Output in JSON format", Type: "bool"},
 		{Key: "app.memorycontextpack.budget", DefaultValue: 4096, Description: "Token budget", Type: "int"},
+		{Key: "app.memorycontextpack.depth", DefaultValue: 1, Description: "BFS traversal depth (1 = direct neighbors only)", Type: "int"},
 	}
 }
 
