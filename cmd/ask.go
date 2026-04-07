@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/internal/cmdutil"
@@ -46,73 +45,10 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("ask: %w", err)
 	}
 	if !getConfigValueWithFlags[bool](cmd, "json", config.KeyAppAskJson) {
-		return formatAsk(result, cmd.OutOrStdout())
+		return query.FormatAsk(result, cmd.OutOrStdout())
 	}
 	env := envelope.OK("ask", result)
 	env.Meta.VaultPath = vaultPath
 	env.Meta.IndexHash = vdb.GetIndexHash()
 	return json.NewEncoder(cmd.OutOrStdout()).Encode(env)
-}
-
-func formatAsk(result *query.AskResult, w io.Writer) error {
-	if _, err := fmt.Fprintf(w, "Search: %q (%d hits)\n", result.Query, len(result.TopHits)); err != nil {
-		return err
-	}
-	for _, h := range result.TopHits {
-		if _, err := fmt.Fprintf(w, "  %.2f  %-40s  %s\n", h.Score, h.ID, h.Title); err != nil {
-			return err
-		}
-	}
-	if result.Context == nil {
-		return nil
-	}
-	if _, err := fmt.Fprintf(w, "\nContext from: %s (%d items, %d/%d tokens)\n",
-		result.Context.TargetID, len(result.Context.Context),
-		result.Context.UsedTokens, result.Context.BudgetTokens); err != nil {
-		return err
-	}
-	if result.Context.Target != nil {
-		noteType := ""
-		if t, ok := result.Context.Target.Frontmatter["type"].(string); ok {
-			noteType = t
-		}
-		title := ""
-		if t, ok := result.Context.Target.Frontmatter["title"].(string); ok {
-			title = t
-		}
-		if _, err := fmt.Fprintf(w, "  [%s] %s\n", noteType, title); err != nil {
-			return err
-		}
-		if result.Context.Target.Body != "" {
-			if _, err := fmt.Fprintf(w, "    %s\n", truncate(result.Context.Target.Body, 120)); err != nil {
-				return err
-			}
-		}
-	}
-	for _, item := range result.Context.Context {
-		noteType := ""
-		if t, ok := item.Frontmatter["type"].(string); ok {
-			noteType = t
-		}
-		title := ""
-		if t, ok := item.Frontmatter["title"].(string); ok {
-			title = t
-		}
-		if _, err := fmt.Fprintf(w, "  [%s] %s\n", noteType, title); err != nil {
-			return err
-		}
-		if item.BodyIncluded && item.Body != "" {
-			if _, err := fmt.Fprintf(w, "    %s\n", truncate(item.Body, 120)); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
 }
