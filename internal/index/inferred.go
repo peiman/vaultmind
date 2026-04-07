@@ -191,25 +191,21 @@ func ComputeTagOverlap(db *DB, threshold float64) (int, error) {
 			continue
 		}
 		// A→B
-		_, err := db.Exec(`
+		if _, err := db.Exec(`
 			INSERT OR IGNORE INTO links
 			  (src_note_id, dst_note_id, dst_raw, edge_type, resolved, confidence, origin, weight)
 			VALUES (?, ?, ?, 'tag_overlap', TRUE, 'low', 'tag_overlap_scan', ?)`,
-			p.a, p.b, p.b, score)
-		if err != nil {
-			continue
+			p.a, p.b, p.b, score); err == nil {
+			count++
 		}
-		count++
 		// B→A (symmetric)
-		_, err = db.Exec(`
+		if _, err := db.Exec(`
 			INSERT OR IGNORE INTO links
 			  (src_note_id, dst_note_id, dst_raw, edge_type, resolved, confidence, origin, weight)
 			VALUES (?, ?, ?, 'tag_overlap', TRUE, 'low', 'tag_overlap_scan', ?)`,
-			p.b, p.a, p.a, score)
-		if err != nil {
-			continue
+			p.b, p.a, p.a, score); err == nil {
+			count++
 		}
-		count++
 	}
 	return count, nil
 }

@@ -104,10 +104,10 @@ func Doctor(db *index.DB, vaultPath string) (*DoctorResult, error) {
 
 	// Links resolved to _path: pseudo-IDs (files that don't exist in the vault)
 	pseudoRows, err := db.Query(`
-    SELECT l.src_note_id, COALESCE(sn.path, ''), l.dst_raw
-    FROM links l
-    LEFT JOIN notes sn ON sn.id = l.src_note_id
-    WHERE l.resolved = TRUE AND l.dst_note_id LIKE '_path:%'`)
+		SELECT l.src_note_id, COALESCE(sn.path, ''), l.dst_raw
+		FROM links l
+		LEFT JOIN notes sn ON sn.id = l.src_note_id
+		WHERE l.resolved = TRUE AND SUBSTR(l.dst_note_id, 1, 6) = '_path:'`)
 	if err != nil {
 		return nil, fmt.Errorf("querying pseudo-ID links: %w", err)
 	}
