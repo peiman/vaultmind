@@ -33,12 +33,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "concepts/spreading-activation.md",
+                "file": "concepts/working-memory.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "spreading-activation"
+              "title": "working-memory"
             }
           }
         ]
@@ -114,7 +114,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "concepts/spreading-activation.md",
+                "file": "concepts/working-memory.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -124,7 +124,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for spreading-activation"
+              "title": "Backlinks for working-memory"
             }
           },
           {
@@ -133,12 +133,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "concepts/spreading-activation.md",
+                "file": "concepts/working-memory.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links from spreading-activation"
+              "title": "Outgoing links from working-memory"
             }
           },
           {
@@ -176,13 +176,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "concepts/spreading-activation.md",
+                "file": "concepts/working-memory.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of spreading-activation"
+              "title": "Outline of working-memory"
             }
           }
         ]
@@ -205,32 +205,32 @@
   },
   "active": "e7543398b8bc2305",
   "lastOpenFiles": [
+    "sources/source-izacard-2022.md",
+    "concepts/reciprocal-rank-fusion.md",
+    "concepts/contriever.md",
+    "concepts/kv-cache.md",
+    "sources/source-schick-2023.md",
+    "concepts/toolformer.md",
+    "concepts/metamemory.md",
+    "sources/source-johnson-1993.md",
+    "sources/source-yao-2023.md",
+    "concepts/source-monitoring.md",
+    "concepts/react.md",
+    "sources/source-bjork-1994.md",
+    "concepts/desirable-difficulties.md",
+    "sources/source-yan-2024.md",
+    "sources/source-sweller-1988.md",
+    "concepts/corrective-rag.md",
+    "concepts/cognitive-load-theory.md",
+    "sources/source-wang-2023-longmem.md",
+    "concepts/longmem.md",
+    "concepts/test-reflection.md",
+    "templates/reflection.md",
+    "concepts/context-pack.md",
+    "concepts/working-memory.md",
+    "concepts/spreading-activation.md",
     "Memory Recall.md",
     "sources/source-gao-2023.md",
-    "concepts/spreading-activation.md",
-    "sources/source-khattab-zaharia-2020.md",
-    "concepts/working-memory.md",
-    "sources/source-xu-2024.md",
-    "sources/source-liu-2023-ring.md",
-    "sources/source-bai-2023.md",
-    "sources/source-munkhdalai-2024.md",
-    "concepts/interference-theory.md",
-    "concepts/hyde.md",
-    "concepts/rag-vs-long-context.md",
-    "concepts/colbert.md",
-    "concepts/longbench.md",
-    "concepts/ring-attention.md",
-    "concepts/infini-attention.md",
-    "concepts/context-pack.md",
-    "Welcome.md",
-    "Context Pack.md",
-    "concepts/base-level-activation.md",
-    "concepts/augmented-language-models.md",
-    "concepts/associative-memory.md",
-    "concepts/memory-consolidation.md",
-    "concepts/rag.md",
-    "Base-Level Activation.md",
-    "concepts/realm.md",
     "tmp",
     "templates",
     "decisions",
