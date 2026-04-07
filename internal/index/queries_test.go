@@ -130,3 +130,34 @@ func TestQueryFullNote_NotFound(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, note)
 }
+
+func rebuildAndOpenBenchDB(b *testing.B) *index.DB {
+	b.Helper()
+	dir := b.TempDir()
+	dbPath := filepath.Join(dir, "index.db")
+
+	cfg, err := vault.LoadConfig(testVaultPath)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	idxr := index.NewIndexer(testVaultPath, dbPath, cfg)
+	if _, err = idxr.Rebuild(); err != nil {
+		b.Fatal(err)
+	}
+
+	db, err := index.Open(dbPath)
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.Cleanup(func() { _ = db.Close() })
+	return db
+}
+
+func BenchmarkQueryFullNote(b *testing.B) {
+	db := rebuildAndOpenBenchDB(b)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = db.QueryFullNote("concept-act-r")
+	}
+}
