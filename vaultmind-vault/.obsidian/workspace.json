@@ -31,14 +31,10 @@
             "id": "e7543398b8bc2305",
             "type": "leaf",
             "state": {
-              "type": "markdown",
-              "state": {
-                "file": "concepts/working-memory.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "working-memory"
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "Graph view"
             }
           }
         ]
@@ -114,7 +110,6 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "concepts/working-memory.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -124,7 +119,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for working-memory"
+              "title": "Backlinks"
             }
           },
           {
@@ -133,12 +128,11 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "concepts/working-memory.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links from working-memory"
+              "title": "Outgoing links"
             }
           },
           {
@@ -176,13 +170,12 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "concepts/working-memory.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of working-memory"
+              "title": "Outline"
             }
           }
         ]
@@ -205,6 +198,25 @@
   },
   "active": "e7543398b8bc2305",
   "lastOpenFiles": [
+    "concepts/sparse-retrieval.md",
+    "sources/source-huang-2023.md",
+    "concepts/retrieval-evaluation-metrics.md",
+    "concepts/hallucination-grounding.md",
+    "concepts/dual-coding.md",
+    "concepts/query-expansion.md",
+    "concepts/clarion.md",
+    "concepts/chunking-strategies.md",
+    "sources/source-ahrens-2017.md",
+    "concepts/zettelkasten.md",
+    "sources/source-jeong-2024.md",
+    "concepts/memory-replay.md",
+    "concepts/adaptive-rag.md",
+    "concepts/prospective-memory.md",
+    "sources/source-nogueira-2019.md",
+    "concepts/reranking.md",
+    "templates/person.md",
+    "sources/source-edge-2024.md",
+    "concepts/working-memory.md",
     "sources/source-izacard-2022.md",
     "concepts/reciprocal-rank-fusion.md",
     "concepts/contriever.md",
@@ -212,25 +224,6 @@
     "sources/source-schick-2023.md",
     "concepts/toolformer.md",
     "concepts/metamemory.md",
-    "sources/source-johnson-1993.md",
-    "sources/source-yao-2023.md",
-    "concepts/source-monitoring.md",
-    "concepts/react.md",
-    "sources/source-bjork-1994.md",
-    "concepts/desirable-difficulties.md",
-    "sources/source-yan-2024.md",
-    "sources/source-sweller-1988.md",
-    "concepts/corrective-rag.md",
-    "concepts/cognitive-load-theory.md",
-    "sources/source-wang-2023-longmem.md",
-    "concepts/longmem.md",
-    "concepts/test-reflection.md",
-    "templates/reflection.md",
-    "concepts/context-pack.md",
-    "concepts/working-memory.md",
-    "concepts/spreading-activation.md",
-    "Memory Recall.md",
-    "sources/source-gao-2023.md",
     "tmp",
     "templates",
     "decisions",
