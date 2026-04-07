@@ -25,6 +25,11 @@ const (
 	KeyAppApplyDryRun                   = "app.apply.dry_run"                   // Preview without executing
 	KeyAppApplyDiff                     = "app.apply.diff"                      // Show unified diffs
 	KeyAppApplyCommit                   = "app.apply.commit"                    // Stage and commit all changes
+	KeyAppAskVault                      = "app.ask.vault"                       // Path to vault root
+	KeyAppAskJson                       = "app.ask.json"                        // Output in JSON format
+	KeyAppAskBudget                     = "app.ask.budget"                      // Token budget for context-pack
+	KeyAppAskMaxItems                   = "app.ask.max_items"                   // Max context items
+	KeyAppAskSearchLimit                = "app.ask.search_limit"                // Max search hits
 	KeyAppCheckFailFast                 = "app.check.fail_fast"                 // Stop on first failed check
 	KeyAppCheckVerbose                  = "app.check.verbose"                   // Show verbose output including command details
 	KeyAppCheckParallel                 = "app.check.parallel"                  // Run checks within each category in parallel (disable with --parallel=false)
