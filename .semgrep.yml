@@ -57,6 +57,7 @@ rules:
         - cmd/apply.go  # Reads user-specified plan JSON file (positional arg)
         - cmd/frontmatter_merge.go  # Reads user-specified YAML merge file (--file flag)
         - cmd/dataview_lint.go  # Reads vault .md files via paths from vault scanner (user-provided vault path)
+        - internal/mutation/lint.go  # Reads/writes vault .md files via WalkDir (user-provided vault path, paths from filesystem walk)
     message: "Potential path traversal. Validate and sanitize file paths."
     languages: [go]
     severity: WARNING

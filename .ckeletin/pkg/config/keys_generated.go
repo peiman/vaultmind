@@ -80,6 +80,9 @@ const (
 	KeyAppLinksneighborsDepth           = "app.linksneighbors.depth"            // Maximum traversal depth
 	KeyAppLinksneighborsMinConfidence   = "app.linksneighbors.min_confidence"   // Minimum edge confidence (low, medium, high)
 	KeyAppLinksneighborsMaxNodes        = "app.linksneighbors.max_nodes"        // Maximum nodes to return
+	KeyAppLintfixlinksVault             = "app.lintfixlinks.vault"              // Path to vault root
+	KeyAppLintfixlinksJson              = "app.lintfixlinks.json"               // Output in JSON format
+	KeyAppLintfixlinksFix               = "app.lintfixlinks.fix"                // Apply fixes (default is dry-run)
 	KeyAppMemoryrecallVault             = "app.memoryrecall.vault"              // Path to vault root
 	KeyAppMemoryrecallJson              = "app.memoryrecall.json"               // Output in JSON format
 	KeyAppMemoryrecallDepth             = "app.memoryrecall.depth"              // Maximum traversal depth
