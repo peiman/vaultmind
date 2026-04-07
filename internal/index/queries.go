@@ -154,8 +154,8 @@ func (d *DB) QueryFullNote(id string) (*FullNote, error) {
 	var aliasesCSV, tagsCSV sql.NullString
 	err := d.QueryRow(`
 		SELECT n.id, n.type, n.title, n.path, n.status, n.created, n.updated, n.body_text, n.is_domain,
-			(SELECT GROUP_CONCAT(alias, '|') FROM aliases WHERE note_id = n.id) AS aliases_csv,
-			(SELECT GROUP_CONCAT(tag, '|') FROM tags WHERE note_id = n.id) AS tags_csv
+			(SELECT GROUP_CONCAT(alias, char(31)) FROM aliases WHERE note_id = n.id) AS aliases_csv,
+			(SELECT GROUP_CONCAT(tag, char(31)) FROM tags WHERE note_id = n.id) AS tags_csv
 		FROM notes n
 		WHERE n.id = ?`, id,
 	).Scan(&n.ID, &noteType, &title, &n.Path, &status, &created, &updated, &body, &n.IsDomain,
@@ -182,11 +182,11 @@ func (d *DB) QueryFullNote(id string) (*FullNote, error) {
 	}
 
 	if aliasesCSV.Valid && aliasesCSV.String != "" {
-		n.Aliases = strings.Split(aliasesCSV.String, "|")
+		n.Aliases = strings.Split(aliasesCSV.String, "\x1F")
 		n.Frontmatter["aliases"] = n.Aliases
 	}
 	if tagsCSV.Valid && tagsCSV.String != "" {
-		n.Tags = strings.Split(tagsCSV.String, "|")
+		n.Tags = strings.Split(tagsCSV.String, "\x1F")
 		n.Frontmatter["tags"] = n.Tags
 	}
 
