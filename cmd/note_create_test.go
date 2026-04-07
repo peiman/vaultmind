@@ -44,6 +44,7 @@ func newNoteCreateCmd(t *testing.T) *cobra.Command {
 	c.Flags().String("body", "", "body override")
 	c.Flags().Bool("commit", false, "commit")
 	c.Flags().StringSlice("field", nil, "frontmatter field overrides")
+	c.Flags().Bool("body-stdin", false, "read body from stdin")
 	return c
 }
 
@@ -231,4 +232,49 @@ func TestExecuteNoteCreate_RequiredFieldProvided_Succeeds(t *testing.T) {
 	err := executeNoteCreate(cmd, "projects/with-goal.md")
 	require.NoError(t, err)
 	assert.Contains(t, outBuf.String(), "projects/with-goal.md")
+}
+
+// ─── --body-stdin flag ────────────────────────────────────────────────────────
+
+func TestExecuteNoteCreate_BodyStdin_ReplacesTemplateBody(t *testing.T) {
+	vaultCfg := `types:
+  concept:
+    required: []
+    optional: []
+    template: .vaultmind/templates/concept.md
+`
+	// Template has a static body section that should be replaced by stdin content.
+	tmplContent := "---\nid: <%=id%>\ntype: <%=type%>\ntitle: <%=title%>\ncreated: <%=created%>\nvm_updated: <%=vm_updated%>\n---\n## Overview\n\n\n## Key Properties\n\n"
+	dir := setupNoteCreateVault(t, vaultCfg, map[string]string{
+		".vaultmind/templates/concept.md": tmplContent,
+	})
+
+	viper.Reset()
+	defer viper.Reset()
+	viper.Set("app.notecreate.vault", dir)
+	viper.Set("app.notecreate.json", false)
+	viper.Set("app.notecreate.type", "concept")
+	viper.Set("app.notecreate.body", "")
+	viper.Set("app.notecreate.commit", false)
+
+	stdinContent := "## Overview\n\nContent injected via stdin.\n"
+	stdinReader := strings.NewReader(stdinContent)
+
+	cmd := newNoteCreateCmd(t)
+	outBuf := &bytes.Buffer{}
+	cmd.SetOut(outBuf)
+	cmd.SetIn(stdinReader)
+
+	require.NoError(t, cmd.Flags().Set("body-stdin", "true"))
+
+	err := executeNoteCreate(cmd, "concepts/foo.md")
+	require.NoError(t, err)
+	assert.Contains(t, outBuf.String(), "concepts/foo.md")
+
+	// Verify the written file has the stdin body, not the template body.
+	written, readErr := os.ReadFile(filepath.Join(dir, "concepts/foo.md"))
+	require.NoError(t, readErr)
+	content := string(written)
+	assert.Contains(t, content, "Content injected via stdin.")
+	assert.NotContains(t, content, "## Key Properties")
 }

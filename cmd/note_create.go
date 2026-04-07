@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,6 +26,7 @@ func init() {
 	noteCmd.AddCommand(noteCreateCmd)
 	setupCommandConfig(noteCreateCmd)
 	noteCreateCmd.Flags().StringSlice("field", nil, "Set frontmatter field (key=value, repeatable)")
+	noteCreateCmd.Flags().Bool("body-stdin", false, "Read body content from stdin (replaces template body)")
 }
 
 func runNoteCreate(cmd *cobra.Command, args []string) error {
@@ -52,6 +54,15 @@ func executeNoteCreate(cmd *cobra.Command, notePath string) error {
 	body := getConfigValueWithFlags[string](cmd, "body", config.KeyAppNotecreateBody)
 	commit := getConfigValueWithFlags[bool](cmd, "commit", config.KeyAppNotecreateCommit)
 	fieldSlice, _ := cmd.Flags().GetStringSlice("field")
+	bodyStdin, _ := cmd.Flags().GetBool("body-stdin")
+
+	if bodyStdin {
+		stdinBytes, err := io.ReadAll(cmd.InOrStdin())
+		if err != nil {
+			return fmt.Errorf("reading stdin: %w", err)
+		}
+		body = string(stdinBytes)
+	}
 
 	if noteType == "" {
 		return fmt.Errorf("--type is required")
