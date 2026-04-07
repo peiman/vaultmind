@@ -94,8 +94,9 @@ func (idx *Indexer) Rebuild() (*IndexResult, error) {
 					Str("id", rec.ID).
 					Str("path", file.RelPath).
 					Str("first_path", firstPath).
-					Msg("duplicate ID detected — second file overwrites first")
+					Msg("duplicate ID detected — second file skipped")
 				result.DuplicateIDs++
+				continue // skip the duplicate — first file wins
 			}
 			seenIDs[rec.ID] = file.RelPath
 		}
