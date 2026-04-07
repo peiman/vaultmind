@@ -11,6 +11,7 @@ Expert panel reviews of the VaultMind SRS and implementation. Each session uses 
 | [Session 03](session-03/) | 2026-04-04 | Phase 1 implementation | 7 experts | Complete |
 | [Session 04](session-04/) | 2026-04-06 | Full v1 implementation (Phase 1–3) | 7 experts | Complete |
 | [Session 05](session-05/) | 2026-04-06 | Session 04 fix verification | 7 experts | Complete |
+| [Session 06](session-06/) | 2026-04-07 | v1.1 implementation + research KB | 7 experts | Complete |
 
 ## Session Structure
 
@@ -43,5 +44,5 @@ session-NN/
 6. Sam Torres → **Kai Nakamura** — AX (AI Experience) designer *(replaced: agent-facing tool needs AX, not CLI/DX)*
 7. **Dr. Lena Hoffmann** — AI/LLM memory systems researcher *(added: complements human memory with machine memory perspective)*
 
-### Session 03–05 Panel (stable)
-Same 7-expert roster as Session 02. Session 03 reviewed Phase 1. Session 04 reviewed complete v1. Session 05 verified the Session 04 fixes — **unanimous: v1 ready for agent deployment.**
+### Session 03–06 Panel (stable)
+Same 7-expert roster as Session 02. Session 03 reviewed Phase 1. Session 04 reviewed complete v1. Session 05 verified Session 04 fixes. Session 06 reviewed v1.1 + research knowledge base — **unanimous: v1.1 production-ready, 18/18 Session 03 findings resolved or documented.**
