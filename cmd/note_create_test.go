@@ -277,4 +277,9 @@ func TestExecuteNoteCreate_BodyStdin_ReplacesTemplateBody(t *testing.T) {
 	content := string(written)
 	assert.Contains(t, content, "Content injected via stdin.")
 	assert.NotContains(t, content, "## Key Properties")
+
+	// Frontmatter must be preserved from template
+	assert.Contains(t, content, "id:")
+	assert.Contains(t, content, "type: concept")
+	assert.Contains(t, content, "---")
 }
