@@ -95,6 +95,11 @@ const (
 	KeyAppMemorycontextpackJson         = "app.memorycontextpack.json"          // Output in JSON format
 	KeyAppMemorycontextpackBudget       = "app.memorycontextpack.budget"        // Token budget
 	KeyAppMemorycontextpackDepth        = "app.memorycontextpack.depth"         // BFS traversal depth (1 = direct neighbors only)
+	KeyAppMemorysummarizeVault          = "app.memorysummarize.vault"           // Path to vault root
+	KeyAppMemorysummarizeJson           = "app.memorysummarize.json"            // Output in JSON format
+	KeyAppMemorysummarizeIds            = "app.memorysummarize.ids"             // Comma-separated note IDs (alternative to positional args)
+	KeyAppMemorysummarizeIncludeBody    = "app.memorysummarize.include_body"    // Include body text excerpts
+	KeyAppMemorysummarizeMaxBodyLen     = "app.memorysummarize.max_body_len"    // Max body chars per note (0 = full)
 	KeyAppNoteVault                     = "app.note.vault"                      // Path to vault root
 	KeyAppNoteJson                      = "app.note.json"                       // Output in JSON format
 	KeyAppNoteFrontmatterOnly           = "app.note.frontmatter_only"           // Omit body, headings, blocks

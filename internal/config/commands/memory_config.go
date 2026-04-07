@@ -74,8 +74,35 @@ func MemoryContextPackOptions() []config.ConfigOption {
 	}
 }
 
+// MemorySummarizeMetadata defines metadata for the memory summarize command.
+var MemorySummarizeMetadata = config.CommandMetadata{
+	Use:          "summarize [id1 id2 ...]",
+	Short:        "Assemble note material for agent synthesis",
+	Long:         "Load frontmatter and body excerpts from a set of notes. Agents use this output to create reflection notes. Not an LLM call — data assembly only.",
+	ConfigPrefix: "app.memorysummarize",
+	FlagOverrides: map[string]string{
+		"app.memorysummarize.vault":        "vault",
+		"app.memorysummarize.json":         "json",
+		"app.memorysummarize.ids":          "ids",
+		"app.memorysummarize.include_body": "include-body",
+		"app.memorysummarize.max_body_len": "max-body-len",
+	},
+}
+
+// MemorySummarizeOptions returns config options for memory summarize.
+func MemorySummarizeOptions() []config.ConfigOption {
+	return []config.ConfigOption{
+		{Key: "app.memorysummarize.vault", DefaultValue: ".", Description: "Path to vault root", Type: "string"},
+		{Key: "app.memorysummarize.json", DefaultValue: false, Description: "Output in JSON format", Type: "bool"},
+		{Key: "app.memorysummarize.ids", DefaultValue: "", Description: "Comma-separated note IDs (alternative to positional args)", Type: "string"},
+		{Key: "app.memorysummarize.include_body", DefaultValue: false, Description: "Include body text excerpts", Type: "bool"},
+		{Key: "app.memorysummarize.max_body_len", DefaultValue: 0, Description: "Max body chars per note (0 = full)", Type: "int"},
+	}
+}
+
 func init() {
 	config.RegisterOptionsProvider(MemoryRecallOptions)
 	config.RegisterOptionsProvider(MemoryRelatedOptions)
 	config.RegisterOptionsProvider(MemoryContextPackOptions)
+	config.RegisterOptionsProvider(MemorySummarizeOptions)
 }

@@ -32,6 +32,11 @@ types:
     optional: [related_ids, source_ids, tags]
     statuses: [proposed, accepted, rejected, superseded]
     template: templates/decision.md
+  reflection:
+    required: [title]
+    optional: [aliases, tags, source_ids, trigger, insight]
+    statuses: []
+    template: templates/reflection.md
 
 git:
   policy:
