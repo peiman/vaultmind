@@ -37,8 +37,8 @@ func NewBGEM3Embedder(cfg HugotConfig) (*BGEM3Embedder, error) {
 		return nil, fmt.Errorf("downloading BGE-M3: %w", err)
 	}
 
-	// Create hugot session + pipeline
-	session, err := hugot.NewGoSession()
+	// Create hugot session (ORT if built with -tags ORT, pure Go otherwise)
+	session, err := newBGEM3Session()
 	if err != nil {
 		return nil, fmt.Errorf("creating hugot session: %w", err)
 	}
