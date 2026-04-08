@@ -35,6 +35,25 @@ func DefaultHugotConfig() HugotConfig {
 	}
 }
 
+// BGE-M3 model configuration.
+const (
+	BGEM3ModelName    = "BAAI/bge-m3"
+	BGEM3Dims         = 1024
+	BGEM3MaxTokens    = 8190 // 8192 minus 2 for CLS/SEP
+	BGEM3OnnxFilePath = "onnx/model.onnx"
+)
+
+// BGEM3Config returns the HugotConfig for BGE-M3.
+func BGEM3Config() HugotConfig {
+	return HugotConfig{
+		ModelName:    BGEM3ModelName,
+		CacheDir:     DefaultCacheDir(),
+		Dims:         BGEM3Dims,
+		MaxTokens:    BGEM3MaxTokens,
+		OnnxFilePath: BGEM3OnnxFilePath,
+	}
+}
+
 // Embedder converts text into dense vector representations.
 type Embedder interface {
 	// Embed produces a single embedding vector for the given text.
