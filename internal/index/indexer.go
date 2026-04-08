@@ -44,9 +44,16 @@ type IndexAndEmbedResult struct {
 	Embed *EmbedResult `json:"embed,omitempty"`
 }
 
-// RunEmbed creates an embedder with default config, runs EmbedNotes, and cleans up.
-func (idx *Indexer) RunEmbed(ctx context.Context, dbPath string) (*EmbedResult, error) {
-	embedder, err := embedding.NewHugotEmbedder(embedding.DefaultHugotConfig())
+// RunEmbed creates an embedder for the given model, runs EmbedNotes, and cleans up.
+func (idx *Indexer) RunEmbed(ctx context.Context, dbPath, model string) (*EmbedResult, error) {
+	var embedder embedding.Embedder
+	var err error
+	switch model {
+	case "bge-m3":
+		embedder, err = embedding.NewBGEM3Embedder(embedding.BGEM3Config())
+	default:
+		embedder, err = embedding.NewHugotEmbedder(embedding.DefaultHugotConfig())
+	}
 	if err != nil {
 		return nil, fmt.Errorf("creating embedder: %w", err)
 	}
@@ -398,42 +405,89 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 			texts[j] = nt.body
 		}
 
-		vectors, embedErr := embedder.EmbedBatch(ctx, texts)
-		if embedErr != nil {
-			log.Debug().Err(embedErr).Int("batch_start", i).Msg("embedding batch failed")
-			result.Errors += len(batch)
-			continue
-		}
-
-		tx, txErr := db.Begin()
-		if txErr != nil {
-			return nil, fmt.Errorf("beginning embedding transaction: %w", txErr)
-		}
-
-		storeErr := false
-		for j, vec := range vectors {
-			encoded := EncodeEmbedding(vec)
-			if _, err := tx.Exec("UPDATE notes SET embedding = ? WHERE id = ?", encoded, batch[j].id); err != nil {
-				log.Debug().Err(err).Str("id", batch[j].id).Msg("failed to store embedding")
-				storeErr = true
-				break
+		fullEmbedder, isFull := embedder.(embedding.FullEmbedder)
+		if isFull {
+			// BGE-M3 path: store dense + sparse + ColBERT
+			fullOutputs, embedErr := fullEmbedder.EmbedFullBatch(ctx, texts)
+			if embedErr != nil {
+				log.Debug().Err(embedErr).Int("batch_start", i).Msg("embedding batch failed")
+				result.Errors += len(batch)
+				continue
 			}
-		}
 
-		if storeErr {
-			_ = tx.Rollback()
-			result.Errors += len(batch)
-			continue
-		}
+			tx, txErr := db.Begin()
+			if txErr != nil {
+				return nil, fmt.Errorf("beginning embedding transaction: %w", txErr)
+			}
 
-		if err := tx.Commit(); err != nil {
-			_ = tx.Rollback()
-			log.Debug().Err(err).Int("batch_start", i).Msg("committing embedding batch failed")
-			result.Errors += len(batch)
-			continue
-		}
+			storeErr := false
+			for j, out := range fullOutputs {
+				noteID := batch[j].id
+				if _, err := tx.Exec("UPDATE notes SET embedding = ? WHERE id = ?", EncodeEmbedding(out.Dense), noteID); err != nil {
+					log.Debug().Err(err).Str("id", noteID).Msg("storing dense failed")
+					storeErr = true
+					break
+				}
+				if _, err := tx.Exec("UPDATE notes SET sparse_embedding = ? WHERE id = ?", EncodeSparseEmbedding(out.Sparse), noteID); err != nil {
+					log.Debug().Err(err).Str("id", noteID).Msg("storing sparse failed")
+					storeErr = true
+					break
+				}
+				if _, err := tx.Exec("UPDATE notes SET colbert_embedding = ? WHERE id = ?", EncodeColBERTEmbedding(out.ColBERT), noteID); err != nil {
+					log.Debug().Err(err).Str("id", noteID).Msg("storing ColBERT failed")
+					storeErr = true
+					break
+				}
+			}
 
-		result.Embedded += len(batch)
+			if storeErr {
+				_ = tx.Rollback()
+				result.Errors += len(batch)
+				continue
+			}
+			if err := tx.Commit(); err != nil {
+				_ = tx.Rollback()
+				result.Errors += len(batch)
+				continue
+			}
+			result.Embedded += len(batch)
+		} else {
+			// MiniLM path: dense only
+			vectors, embedErr := embedder.EmbedBatch(ctx, texts)
+			if embedErr != nil {
+				log.Debug().Err(embedErr).Int("batch_start", i).Msg("embedding batch failed")
+				result.Errors += len(batch)
+				continue
+			}
+
+			tx, txErr := db.Begin()
+			if txErr != nil {
+				return nil, fmt.Errorf("beginning embedding transaction: %w", txErr)
+			}
+
+			storeErr := false
+			for j, vec := range vectors {
+				encoded := EncodeEmbedding(vec)
+				if _, err := tx.Exec("UPDATE notes SET embedding = ? WHERE id = ?", encoded, batch[j].id); err != nil {
+					log.Debug().Err(err).Str("id", batch[j].id).Msg("failed to store embedding")
+					storeErr = true
+					break
+				}
+			}
+
+			if storeErr {
+				_ = tx.Rollback()
+				result.Errors += len(batch)
+				continue
+			}
+			if err := tx.Commit(); err != nil {
+				_ = tx.Rollback()
+				log.Debug().Err(err).Int("batch_start", i).Msg("committing embedding batch failed")
+				result.Errors += len(batch)
+				continue
+			}
+			result.Embedded += len(batch)
+		}
 	}
 
 	return result, nil

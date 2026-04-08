@@ -68,3 +68,9 @@ type Embedder interface {
 	// Close releases resources (model session, etc.).
 	Close() error
 }
+
+// FullEmbedder extends Embedder with multi-output capability (BGE-M3).
+type FullEmbedder interface {
+	Embedder
+	EmbedFullBatch(ctx context.Context, texts []string) ([]*BGEM3Output, error)
+}

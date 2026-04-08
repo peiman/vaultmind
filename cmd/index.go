@@ -65,7 +65,7 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 
 	var embedResult *index.EmbedResult
 	if embed {
-		embedResult, err = idxr.RunEmbed(cmd.Context(), dbPath)
+		embedResult, err = idxr.RunEmbed(cmd.Context(), dbPath, "minilm")
 		if err != nil {
 			return fmt.Errorf("embedding notes: %w", err)
 		}
