@@ -189,3 +189,136 @@ func HasEmbeddings(d *DB) (bool, error) {
 	}
 	return true, nil
 }
+
+// NoteSparseEmbedding pairs a note ID with its sparse vector and metadata.
+type NoteSparseEmbedding struct {
+	NoteID   string
+	Sparse   map[int32]float32
+	Type     string
+	Title    string
+	Path     string
+	IsDomain bool
+}
+
+// NoteColBERTEmbedding pairs a note ID with its ColBERT matrix and metadata.
+type NoteColBERTEmbedding struct {
+	NoteID   string
+	ColBERT  [][]float32
+	Type     string
+	Title    string
+	Path     string
+	IsDomain bool
+}
+
+// StoreSparseEmbedding writes a sparse embedding BLOB for a note.
+func StoreSparseEmbedding(d *DB, noteID string, sparse map[int32]float32) error {
+	result, err := d.Exec("UPDATE notes SET sparse_embedding = ? WHERE id = ?", EncodeSparseEmbedding(sparse), noteID)
+	if err != nil {
+		return fmt.Errorf("storing sparse embedding for %q: %w", noteID, err)
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("no note found with id %q", noteID)
+	}
+	return nil
+}
+
+// StoreColBERTEmbedding writes a ColBERT embedding BLOB for a note.
+func StoreColBERTEmbedding(d *DB, noteID string, colbert [][]float32) error {
+	result, err := d.Exec("UPDATE notes SET colbert_embedding = ? WHERE id = ?", EncodeColBERTEmbedding(colbert), noteID)
+	if err != nil {
+		return fmt.Errorf("storing ColBERT embedding for %q: %w", noteID, err)
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("no note found with id %q", noteID)
+	}
+	return nil
+}
+
+// LoadAllSparseEmbeddings returns all notes that have stored sparse embeddings.
+func LoadAllSparseEmbeddings(d *DB) ([]NoteSparseEmbedding, error) {
+	rows, err := d.Query(`SELECT id, sparse_embedding, type, title, path, is_domain
+		FROM notes WHERE sparse_embedding IS NOT NULL`)
+	if err != nil {
+		return nil, fmt.Errorf("loading sparse embeddings: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var result []NoteSparseEmbedding
+	for rows.Next() {
+		var ne NoteSparseEmbedding
+		var data []byte
+		var noteType, title, path sql.NullString
+		if err := rows.Scan(&ne.NoteID, &data, &noteType, &title, &path, &ne.IsDomain); err != nil {
+			return nil, fmt.Errorf("scanning sparse row: %w", err)
+		}
+		sparse, decErr := DecodeSparseEmbedding(data)
+		if decErr != nil {
+			return nil, fmt.Errorf("decoding sparse for %q: %w", ne.NoteID, decErr)
+		}
+		ne.Sparse = sparse
+		ne.Type = noteType.String
+		ne.Title = title.String
+		ne.Path = path.String
+		result = append(result, ne)
+	}
+	return result, rows.Err()
+}
+
+// LoadAllColBERTEmbeddings returns all notes that have stored ColBERT embeddings.
+// dims is the embedding dimensionality for decoding.
+func LoadAllColBERTEmbeddings(d *DB, dims int) ([]NoteColBERTEmbedding, error) {
+	rows, err := d.Query(`SELECT id, colbert_embedding, type, title, path, is_domain
+		FROM notes WHERE colbert_embedding IS NOT NULL`)
+	if err != nil {
+		return nil, fmt.Errorf("loading ColBERT embeddings: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var result []NoteColBERTEmbedding
+	for rows.Next() {
+		var ne NoteColBERTEmbedding
+		var data []byte
+		var noteType, title, path sql.NullString
+		if err := rows.Scan(&ne.NoteID, &data, &noteType, &title, &path, &ne.IsDomain); err != nil {
+			return nil, fmt.Errorf("scanning ColBERT row: %w", err)
+		}
+		colbert, decErr := DecodeColBERTEmbedding(data, dims)
+		if decErr != nil {
+			return nil, fmt.Errorf("decoding ColBERT for %q: %w", ne.NoteID, decErr)
+		}
+		ne.ColBERT = colbert
+		ne.Type = noteType.String
+		ne.Title = title.String
+		ne.Path = path.String
+		result = append(result, ne)
+	}
+	return result, rows.Err()
+}
+
+// HasSparseEmbeddings returns true if any note has a stored sparse embedding.
+func HasSparseEmbeddings(d *DB) (bool, error) {
+	var exists int
+	err := d.QueryRow("SELECT 1 FROM notes WHERE sparse_embedding IS NOT NULL LIMIT 1").Scan(&exists)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, fmt.Errorf("checking for sparse embeddings: %w", err)
+	}
+	return true, nil
+}
+
+// HasColBERTEmbeddings returns true if any note has a stored ColBERT embedding.
+func HasColBERTEmbeddings(d *DB) (bool, error) {
+	var exists int
+	err := d.QueryRow("SELECT 1 FROM notes WHERE colbert_embedding IS NOT NULL LIMIT 1").Scan(&exists)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, fmt.Errorf("checking for ColBERT embeddings: %w", err)
+	}
+	return true, nil
+}

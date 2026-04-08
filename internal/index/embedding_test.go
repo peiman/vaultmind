@@ -174,3 +174,65 @@ func TestHasEmbeddings(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, has)
 }
+
+func TestStoreSparseEmbedding(t *testing.T) {
+	db := buildEmbeddingTestDB(t)
+	row, err := db.QueryNoteByPath("concepts/spreading-activation.md")
+	require.NoError(t, err)
+	require.NotNil(t, row)
+
+	sparse := map[int32]float32{100: 1.0, 500: 0.5}
+	err = index.StoreSparseEmbedding(db, row.ID, sparse)
+	require.NoError(t, err)
+
+	all, err := index.LoadAllSparseEmbeddings(db)
+	require.NoError(t, err)
+	require.Len(t, all, 1)
+	assert.Equal(t, row.ID, all[0].NoteID)
+	assert.InDelta(t, 1.0, all[0].Sparse[100], 1e-6)
+}
+
+func TestStoreColBERTEmbedding(t *testing.T) {
+	db := buildEmbeddingTestDB(t)
+	row, err := db.QueryNoteByPath("concepts/spreading-activation.md")
+	require.NoError(t, err)
+	require.NotNil(t, row)
+
+	colbert := [][]float32{{0.1, 0.2}, {0.3, 0.4}}
+	err = index.StoreColBERTEmbedding(db, row.ID, colbert)
+	require.NoError(t, err)
+
+	all, err := index.LoadAllColBERTEmbeddings(db, 2)
+	require.NoError(t, err)
+	require.Len(t, all, 1)
+	assert.Equal(t, row.ID, all[0].NoteID)
+	assert.InDelta(t, 0.1, all[0].ColBERT[0][0], 1e-6)
+}
+
+func TestHasSparseEmbeddings(t *testing.T) {
+	db := buildEmbeddingTestDB(t)
+	has, err := index.HasSparseEmbeddings(db)
+	require.NoError(t, err)
+	assert.False(t, has)
+
+	row, _ := db.QueryNoteByPath("concepts/spreading-activation.md")
+	_ = index.StoreSparseEmbedding(db, row.ID, map[int32]float32{1: 0.5})
+
+	has, err = index.HasSparseEmbeddings(db)
+	require.NoError(t, err)
+	assert.True(t, has)
+}
+
+func TestHasColBERTEmbeddings(t *testing.T) {
+	db := buildEmbeddingTestDB(t)
+	has, err := index.HasColBERTEmbeddings(db)
+	require.NoError(t, err)
+	assert.False(t, has)
+
+	row, _ := db.QueryNoteByPath("concepts/spreading-activation.md")
+	_ = index.StoreColBERTEmbedding(db, row.ID, [][]float32{{0.1}})
+
+	has, err = index.HasColBERTEmbeddings(db)
+	require.NoError(t, err)
+	assert.True(t, has)
+}
