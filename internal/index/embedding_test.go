@@ -140,7 +140,7 @@ func TestEncodeColBERTEmbedding_RoundTrip(t *testing.T) {
 		{0.4, 0.5, 0.6},
 	}
 	encoded := index.EncodeColBERTEmbedding(original)
-	assert.Equal(t, 24, len(encoded))
+	assert.Equal(t, 28, len(encoded), "4-byte header + 2*3*4 bytes data")
 
 	decoded, err := index.DecodeColBERTEmbedding(encoded, 3)
 	require.NoError(t, err)

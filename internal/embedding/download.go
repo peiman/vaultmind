@@ -6,7 +6,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 )
+
+// downloadClient is an HTTP client with a generous timeout for large model downloads.
+var downloadClient = &http.Client{Timeout: 30 * time.Minute}
 
 const bgem3Repo = "BAAI/bge-m3"
 
@@ -49,7 +53,7 @@ func DownloadBGEM3(cacheDir string) (string, error) {
 }
 
 func downloadFile(url, dest string) error {
-	resp, err := http.Get(url) //nolint:gosec,noctx // trusted HuggingFace URL
+	resp, err := downloadClient.Get(url) //nolint:gosec,noctx // trusted HuggingFace URL
 	if err != nil {
 		return err
 	}

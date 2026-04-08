@@ -47,7 +47,8 @@ func (r *SparseRetriever) Search(ctx context.Context, query string, limit, offse
 		results = append(results, scored{
 			result: ScoredResult{
 				ID: ne.NoteID, Type: ne.Type, Title: ne.Title,
-				Path: ne.Path, Score: sim, IsDomain: ne.IsDomain,
+				Path: ne.Path, Snippet: truncate(ne.BodyText, snippetMaxLen),
+				Score: sim, IsDomain: ne.IsDomain,
 			},
 			score: sim,
 		})

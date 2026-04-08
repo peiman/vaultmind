@@ -68,14 +68,16 @@ func DecodeSparseEmbedding(data []byte) (map[int32]float32, error) {
 	return sparse, nil
 }
 
-// EncodeColBERTEmbedding serializes a per-token embedding matrix as flat float32 bytes.
+// EncodeColBERTEmbedding serializes a per-token embedding matrix with a 4-byte dims header.
+// Format: [uint32 dims][float32 data...] where data is tokens*dims floats.
 func EncodeColBERTEmbedding(colbert [][]float32) []byte {
 	if len(colbert) == 0 {
 		return nil
 	}
 	dims := len(colbert[0])
-	buf := make([]byte, len(colbert)*dims*4)
-	offset := 0
+	buf := make([]byte, 4+len(colbert)*dims*4) // 4-byte header + data
+	binary.LittleEndian.PutUint32(buf[0:], uint32(dims)) //nolint:gosec // dims is always positive and small (e.g., 1024)
+	offset := 4
 	for _, vec := range colbert {
 		for _, v := range vec {
 			binary.LittleEndian.PutUint32(buf[offset:], math.Float32bits(v))
@@ -85,23 +87,31 @@ func EncodeColBERTEmbedding(colbert [][]float32) []byte {
 	return buf
 }
 
-// DecodeColBERTEmbedding deserializes flat float32 bytes back to a per-token matrix.
-// dims is the embedding dimensionality (e.g., 1024 for BGE-M3).
-func DecodeColBERTEmbedding(data []byte, dims int) ([][]float32, error) {
+// DecodeColBERTEmbedding deserializes a ColBERT BLOB back to a per-token matrix.
+// The dims are read from the 4-byte header; the dims parameter is ignored (kept for API compat).
+func DecodeColBERTEmbedding(data []byte, _ int) ([][]float32, error) {
 	if len(data) == 0 {
 		return nil, nil
 	}
-	bytesPerVec := dims * 4
-	if len(data)%bytesPerVec != 0 {
-		return nil, fmt.Errorf("invalid ColBERT embedding data: length %d not divisible by %d", len(data), bytesPerVec)
+	if len(data) < 4 {
+		return nil, fmt.Errorf("invalid ColBERT embedding data: too short (%d bytes)", len(data))
 	}
-	nTokens := len(data) / bytesPerVec
+	dims := int(binary.LittleEndian.Uint32(data[0:4]))
+	if dims <= 0 {
+		return nil, fmt.Errorf("invalid ColBERT embedding dims: %d", dims)
+	}
+	payload := data[4:]
+	bytesPerVec := dims * 4
+	if len(payload)%bytesPerVec != 0 {
+		return nil, fmt.Errorf("invalid ColBERT embedding data: length %d not divisible by %d", len(payload), bytesPerVec)
+	}
+	nTokens := len(payload) / bytesPerVec
 	result := make([][]float32, nTokens)
 	for i := 0; i < nTokens; i++ {
 		vec := make([]float32, dims)
 		for j := 0; j < dims; j++ {
-			offset := (i*dims + j) * 4
-			vec[j] = math.Float32frombits(binary.LittleEndian.Uint32(data[offset:]))
+			off := (i*dims + j) * 4
+			vec[j] = math.Float32frombits(binary.LittleEndian.Uint32(payload[off:]))
 		}
 		result[i] = vec
 	}
@@ -211,6 +221,7 @@ type NoteSparseEmbedding struct {
 	Type     string
 	Title    string
 	Path     string
+	BodyText string
 	IsDomain bool
 }
 
@@ -221,6 +232,7 @@ type NoteColBERTEmbedding struct {
 	Type     string
 	Title    string
 	Path     string
+	BodyText string
 	IsDomain bool
 }
 
@@ -252,7 +264,7 @@ func StoreColBERTEmbedding(d *DB, noteID string, colbert [][]float32) error {
 
 // LoadAllSparseEmbeddings returns all notes that have stored sparse embeddings.
 func LoadAllSparseEmbeddings(d *DB) ([]NoteSparseEmbedding, error) {
-	rows, err := d.Query(`SELECT id, sparse_embedding, type, title, path, is_domain
+	rows, err := d.Query(`SELECT id, sparse_embedding, type, title, path, body_text, is_domain
 		FROM notes WHERE sparse_embedding IS NOT NULL`)
 	if err != nil {
 		return nil, fmt.Errorf("loading sparse embeddings: %w", err)
@@ -263,8 +275,8 @@ func LoadAllSparseEmbeddings(d *DB) ([]NoteSparseEmbedding, error) {
 	for rows.Next() {
 		var ne NoteSparseEmbedding
 		var data []byte
-		var noteType, title, path sql.NullString
-		if err := rows.Scan(&ne.NoteID, &data, &noteType, &title, &path, &ne.IsDomain); err != nil {
+		var noteType, title, path, bodyText sql.NullString
+		if err := rows.Scan(&ne.NoteID, &data, &noteType, &title, &path, &bodyText, &ne.IsDomain); err != nil {
 			return nil, fmt.Errorf("scanning sparse row: %w", err)
 		}
 		sparse, decErr := DecodeSparseEmbedding(data)
@@ -275,6 +287,7 @@ func LoadAllSparseEmbeddings(d *DB) ([]NoteSparseEmbedding, error) {
 		ne.Type = noteType.String
 		ne.Title = title.String
 		ne.Path = path.String
+		ne.BodyText = bodyText.String
 		result = append(result, ne)
 	}
 	return result, rows.Err()
@@ -283,7 +296,7 @@ func LoadAllSparseEmbeddings(d *DB) ([]NoteSparseEmbedding, error) {
 // LoadAllColBERTEmbeddings returns all notes that have stored ColBERT embeddings.
 // dims is the embedding dimensionality for decoding.
 func LoadAllColBERTEmbeddings(d *DB, dims int) ([]NoteColBERTEmbedding, error) {
-	rows, err := d.Query(`SELECT id, colbert_embedding, type, title, path, is_domain
+	rows, err := d.Query(`SELECT id, colbert_embedding, type, title, path, body_text, is_domain
 		FROM notes WHERE colbert_embedding IS NOT NULL`)
 	if err != nil {
 		return nil, fmt.Errorf("loading ColBERT embeddings: %w", err)
@@ -294,8 +307,8 @@ func LoadAllColBERTEmbeddings(d *DB, dims int) ([]NoteColBERTEmbedding, error) {
 	for rows.Next() {
 		var ne NoteColBERTEmbedding
 		var data []byte
-		var noteType, title, path sql.NullString
-		if err := rows.Scan(&ne.NoteID, &data, &noteType, &title, &path, &ne.IsDomain); err != nil {
+		var noteType, title, path, bodyText sql.NullString
+		if err := rows.Scan(&ne.NoteID, &data, &noteType, &title, &path, &bodyText, &ne.IsDomain); err != nil {
 			return nil, fmt.Errorf("scanning ColBERT row: %w", err)
 		}
 		colbert, decErr := DecodeColBERTEmbedding(data, dims)
@@ -306,6 +319,7 @@ func LoadAllColBERTEmbeddings(d *DB, dims int) ([]NoteColBERTEmbedding, error) {
 		ne.Type = noteType.String
 		ne.Title = title.String
 		ne.Path = path.String
+		ne.BodyText = bodyText.String
 		result = append(result, ne)
 	}
 	return result, rows.Err()

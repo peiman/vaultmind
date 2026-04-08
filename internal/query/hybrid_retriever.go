@@ -68,6 +68,10 @@ func (h *HybridRetriever) Search(ctx context.Context, query string, limit, offse
 			rrfScore := 1.0 / float64(k+rank+1) // rank is 0-based, RRF uses 1-based
 			if entry, ok := rrfScores[result.ID]; ok {
 				entry.score += rrfScore
+				// Prefer result with non-empty snippet for display
+				if entry.result.Snippet == "" && result.Snippet != "" {
+					entry.result.Snippet = result.Snippet
+				}
 			} else {
 				rrfScores[result.ID] = &rrfEntry{
 					result: result,

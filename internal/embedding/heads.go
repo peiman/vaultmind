@@ -107,13 +107,14 @@ func SparseDotProduct(a, b map[int32]float32) float64 {
 }
 
 // MaxSimScore computes the ColBERT MaxSim score between query and document token matrices.
-// For each query token, finds max cosine similarity across all doc tokens, then sums.
+// For each query token, finds max similarity across all doc tokens, then sums.
+// Assumes both query and doc tokens are L2-normalized (from ColBERTHead), so dot product = cosine.
 func MaxSimScore(queryTokens, docTokens [][]float32) float64 {
 	var total float64
 	for _, qVec := range queryTokens {
 		var maxSim float64 = -1
 		for _, dVec := range docTokens {
-			sim := cosineF32(qVec, dVec)
+			sim := dotProductF32(qVec, dVec)
 			if sim > maxSim {
 				maxSim = sim
 			}
@@ -125,18 +126,15 @@ func MaxSimScore(queryTokens, docTokens [][]float32) float64 {
 	return total
 }
 
-func cosineF32(a, b []float32) float64 {
-	var dot, normA, normB float64
+// dotProductF32 computes the dot product of two float32 vectors.
+// For L2-normalized vectors this equals cosine similarity.
+func dotProductF32(a, b []float32) float64 {
+	var dot float64
 	for i := range a {
 		if i >= len(b) {
 			break
 		}
 		dot += float64(a[i]) * float64(b[i])
-		normA += float64(a[i]) * float64(a[i])
-		normB += float64(b[i]) * float64(b[i])
 	}
-	if normA == 0 || normB == 0 {
-		return 0
-	}
-	return dot / (math.Sqrt(normA) * math.Sqrt(normB))
+	return dot
 }
