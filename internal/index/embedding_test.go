@@ -106,6 +106,58 @@ func TestStoreEmbedding_NonexistentNote(t *testing.T) {
 	assert.Contains(t, err.Error(), "no note found")
 }
 
+func TestEncodeSparseEmbedding_RoundTrip(t *testing.T) {
+	original := map[int32]float32{100: 1.0, 500: 0.5, 9999: 0.001}
+	encoded := index.EncodeSparseEmbedding(original)
+	assert.Equal(t, len(original)*8, len(encoded), "each entry is 8 bytes")
+
+	decoded, err := index.DecodeSparseEmbedding(encoded)
+	require.NoError(t, err)
+	assert.Len(t, decoded, 3)
+	assert.InDelta(t, 1.0, decoded[100], 1e-6)
+	assert.InDelta(t, 0.5, decoded[500], 1e-6)
+	assert.InDelta(t, 0.001, decoded[9999], 1e-6)
+}
+
+func TestEncodeSparseEmbedding_Empty(t *testing.T) {
+	assert.Nil(t, index.EncodeSparseEmbedding(nil))
+}
+
+func TestDecodeSparseEmbedding_Empty(t *testing.T) {
+	decoded, err := index.DecodeSparseEmbedding(nil)
+	require.NoError(t, err)
+	assert.Empty(t, decoded, "empty input returns empty map")
+}
+
+func TestDecodeSparseEmbedding_InvalidLength(t *testing.T) {
+	_, err := index.DecodeSparseEmbedding([]byte{1, 2, 3})
+	assert.Error(t, err)
+}
+
+func TestEncodeColBERTEmbedding_RoundTrip(t *testing.T) {
+	original := [][]float32{
+		{0.1, 0.2, 0.3},
+		{0.4, 0.5, 0.6},
+	}
+	encoded := index.EncodeColBERTEmbedding(original)
+	assert.Equal(t, 24, len(encoded))
+
+	decoded, err := index.DecodeColBERTEmbedding(encoded, 3)
+	require.NoError(t, err)
+	require.Len(t, decoded, 2)
+	assert.InDelta(t, 0.1, decoded[0][0], 1e-6)
+	assert.InDelta(t, 0.6, decoded[1][2], 1e-6)
+}
+
+func TestEncodeColBERTEmbedding_Empty(t *testing.T) {
+	assert.Nil(t, index.EncodeColBERTEmbedding(nil))
+}
+
+func TestDecodeColBERTEmbedding_InvalidLength(t *testing.T) {
+	_, err := index.DecodeColBERTEmbedding([]byte{1, 2, 3, 4, 5}, 3)
+	assert.Error(t, err)
+}
+
 func TestHasEmbeddings(t *testing.T) {
 	db := buildEmbeddingTestDB(t)
 

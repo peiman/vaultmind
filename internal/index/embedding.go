@@ -35,6 +35,79 @@ func DecodeEmbedding(data []byte) ([]float32, error) {
 	return vec, nil
 }
 
+// EncodeSparseEmbedding serializes a sparse vector as packed (int32 token_id, float32 weight) pairs.
+func EncodeSparseEmbedding(sparse map[int32]float32) []byte {
+	if len(sparse) == 0 {
+		return nil
+	}
+	buf := make([]byte, len(sparse)*8)
+	i := 0
+	for id, w := range sparse {
+		binary.LittleEndian.PutUint32(buf[i:], uint32(id)) //nolint:gosec // G115: intentional bit-pattern reinterpretation, not arithmetic
+		binary.LittleEndian.PutUint32(buf[i+4:], math.Float32bits(w))
+		i += 8
+	}
+	return buf
+}
+
+// DecodeSparseEmbedding deserializes packed (int32, float32) pairs back to a sparse map.
+// Returns an empty map (not nil) when data is empty.
+func DecodeSparseEmbedding(data []byte) (map[int32]float32, error) {
+	if len(data) == 0 {
+		return map[int32]float32{}, nil
+	}
+	if len(data)%8 != 0 {
+		return nil, fmt.Errorf("invalid sparse embedding data: length %d not divisible by 8", len(data))
+	}
+	sparse := make(map[int32]float32, len(data)/8)
+	for i := 0; i < len(data); i += 8 {
+		id := int32(binary.LittleEndian.Uint32(data[i:])) //nolint:gosec // G115: intentional bit-pattern reinterpretation, not arithmetic
+		w := math.Float32frombits(binary.LittleEndian.Uint32(data[i+4:]))
+		sparse[id] = w
+	}
+	return sparse, nil
+}
+
+// EncodeColBERTEmbedding serializes a per-token embedding matrix as flat float32 bytes.
+func EncodeColBERTEmbedding(colbert [][]float32) []byte {
+	if len(colbert) == 0 {
+		return nil
+	}
+	dims := len(colbert[0])
+	buf := make([]byte, len(colbert)*dims*4)
+	offset := 0
+	for _, vec := range colbert {
+		for _, v := range vec {
+			binary.LittleEndian.PutUint32(buf[offset:], math.Float32bits(v))
+			offset += 4
+		}
+	}
+	return buf
+}
+
+// DecodeColBERTEmbedding deserializes flat float32 bytes back to a per-token matrix.
+// dims is the embedding dimensionality (e.g., 1024 for BGE-M3).
+func DecodeColBERTEmbedding(data []byte, dims int) ([][]float32, error) {
+	if len(data) == 0 {
+		return nil, nil
+	}
+	bytesPerVec := dims * 4
+	if len(data)%bytesPerVec != 0 {
+		return nil, fmt.Errorf("invalid ColBERT embedding data: length %d not divisible by %d", len(data), bytesPerVec)
+	}
+	nTokens := len(data) / bytesPerVec
+	result := make([][]float32, nTokens)
+	for i := 0; i < nTokens; i++ {
+		vec := make([]float32, dims)
+		for j := 0; j < dims; j++ {
+			offset := (i*dims + j) * 4
+			vec[j] = math.Float32frombits(binary.LittleEndian.Uint32(data[offset:]))
+		}
+		result[i] = vec
+	}
+	return result, nil
+}
+
 // NoteEmbedding pairs a note ID with its embedding vector and metadata.
 type NoteEmbedding struct {
 	NoteID    string
