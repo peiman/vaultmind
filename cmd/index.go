@@ -27,6 +27,7 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 	jsonOut := getConfigValueWithFlags[bool](cmd, "json", config.KeyAppIndexJson)
 	fullRebuild := getConfigValueWithFlags[bool](cmd, "full", config.KeyAppIndexFull)
 	embed := getConfigValueWithFlags[bool](cmd, "embed", config.KeyAppIndexEmbed)
+	model := getConfigValueWithFlags[string](cmd, "model", config.KeyAppIndexModel)
 
 	info, err := os.Stat(vaultPath)
 	if err != nil || !info.IsDir() {
@@ -65,7 +66,7 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 
 	var embedResult *index.EmbedResult
 	if embed {
-		embedResult, err = idxr.RunEmbed(cmd.Context(), dbPath, "minilm")
+		embedResult, err = idxr.RunEmbed(cmd.Context(), dbPath, model)
 		if err != nil {
 			return fmt.Errorf("embedding notes: %w", err)
 		}

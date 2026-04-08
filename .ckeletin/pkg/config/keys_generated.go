@@ -78,6 +78,7 @@ const (
 	KeyAppIndexJson                     = "app.index.json"                      // Output in JSON format
 	KeyAppIndexFull                     = "app.index.full"                      // Force full rebuild instead of incremental index
 	KeyAppIndexEmbed                    = "app.index.embed"                     // Compute and store embeddings for note bodies
+	KeyAppIndexModel                    = "app.index.model"                     // Embedding model: minilm (384d, fast) or bge-m3 (1024d, 3-in-1)
 	KeyAppLinksVault                    = "app.links.vault"                     // Path to vault root
 	KeyAppLinksJson                     = "app.links.json"                      // Output in JSON format
 	KeyAppLinksEdgeType                 = "app.links.edge_type"                 // Filter by edge type

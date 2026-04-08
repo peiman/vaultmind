@@ -17,26 +17,48 @@ func BuildRetriever(mode string, db *index.DB) (Retriever, func(), error) {
 		if err := requireEmbeddings(db); err != nil {
 			return nil, nil, err
 		}
-		embedder, err := newDefaultEmbedder()
+		embedder, cleanup, err := detectEmbedderForDB(db)
 		if err != nil {
 			return nil, nil, err
 		}
-		return &EmbeddingRetriever{DB: db, Embedder: embedder}, func() { _ = embedder.Close() }, nil
+		return &EmbeddingRetriever{DB: db, Embedder: embedder}, cleanup, nil
 	case "hybrid":
 		if err := requireEmbeddings(db); err != nil {
 			return nil, nil, err
 		}
-		embedder, err := newDefaultEmbedder()
+		embedder, embedderCleanup, err := detectEmbedderForDB(db)
 		if err != nil {
 			return nil, nil, err
 		}
-		return &HybridRetriever{
-			Retrievers: []Retriever{
-				&FTSRetriever{DB: db},
-				&EmbeddingRetriever{DB: db, Embedder: embedder},
-			},
-			K: 60,
-		}, func() { _ = embedder.Close() }, nil
+		retrievers := []Retriever{
+			&FTSRetriever{DB: db},
+			&EmbeddingRetriever{DB: db, Embedder: embedder},
+		}
+		cleanupFuncs := []func(){embedderCleanup}
+
+		// Auto-detect BGE-M3 columns for 4-way hybrid
+		hasSparse, _ := index.HasSparseEmbeddings(db)
+		hasColBERT, _ := index.HasColBERTEmbeddings(db)
+		if hasSparse || hasColBERT {
+			bgem3, bgem3Err := embedding.NewBGEM3Embedder(embedding.BGEM3Config())
+			if bgem3Err == nil {
+				cleanupFuncs = append(cleanupFuncs, func() { _ = bgem3.Close() })
+				if hasSparse {
+					retrievers = append(retrievers, &SparseRetriever{DB: db, EmbedSparse: bgem3.EmbedSparse})
+				}
+				if hasColBERT {
+					retrievers = append(retrievers, &ColBERTRetriever{DB: db, EmbedColBERT: bgem3.EmbedColBERT, Dims: embedding.BGEM3Dims})
+				}
+			}
+			// If BGE-M3 embedder fails, fall back to 2-way hybrid
+		}
+
+		cleanup := func() {
+			for _, f := range cleanupFuncs {
+				f()
+			}
+		}
+		return &HybridRetriever{Retrievers: retrievers, K: 60}, cleanup, nil
 	default:
 		return nil, nil, fmt.Errorf("unknown search mode %q (use keyword, semantic, or hybrid)", mode)
 	}
@@ -73,4 +95,26 @@ func newDefaultEmbedder() (*embedding.HugotEmbedder, error) {
 		return nil, fmt.Errorf("creating embedder: %w", err)
 	}
 	return embedder, nil
+}
+
+// detectEmbedderForDB inspects stored embeddings to determine the correct embedder.
+// If embeddings are 1024-dim (BGE-M3), creates a BGE-M3 embedder; otherwise MiniLM.
+// Returns the embedder and a cleanup function.
+func detectEmbedderForDB(db *index.DB) (embedding.Embedder, func(), error) {
+	all, err := index.LoadAllEmbeddings(db)
+	if err == nil && len(all) > 0 {
+		dims := len(all[0].Embedding)
+		if dims == embedding.BGEM3Dims {
+			bgem3, bgem3Err := embedding.NewBGEM3Embedder(embedding.BGEM3Config())
+			if bgem3Err != nil {
+				return nil, nil, fmt.Errorf("creating BGE-M3 embedder: %w", bgem3Err)
+			}
+			return bgem3, func() { _ = bgem3.Close() }, nil
+		}
+	}
+	embedder, err := newDefaultEmbedder()
+	if err != nil {
+		return nil, nil, err
+	}
+	return embedder, func() { _ = embedder.Close() }, nil
 }
