@@ -2,7 +2,7 @@
 id: decision-bge-m3-implementation
 type: decision
 status: accepted
-title: "BGE-M3 3-in-1 via hugot ORT bypass with Go heads"
+title: "BGE-M3 3-in-1 via hugot pure Go backend with Go heads"
 created: 2026-04-08
 tags:
   - architecture
@@ -18,7 +18,17 @@ related_ids:
 
 ## Decision
 
-Implement BGE-M3's three retrieval modes (dense, sparse, ColBERT) by bypassing hugot's FeatureExtractionPipeline to access raw per-token hidden states, then applying the three heads as pure Go matrix operations. Load sparse_linear.pt and colbert_linear.pt weights directly.
+Implement BGE-M3's three retrieval modes (dense, sparse, ColBERT) using hugot's pure Go backend (no CGO, no ORT). Bypass hugot's FeatureExtractionPipeline to access raw per-token hidden states, then apply the three heads as pure Go matrix operations. Load sparse_linear.pt and colbert_linear.pt weights via a Go torch loader.
+
+## Performance Verification (2026-04-08)
+
+Tested BGE-M3 (568M params) with hugot pure Go backend on Apple Silicon:
+- Embedder init: 10s (one-time model load)
+- 2 short texts: 1.9s (~950ms/text)
+- 1 longer text (3000 chars): 15s
+- Full vault (129 notes): estimated 2-3 minutes
+
+Acceptable for a personal vault. No ORT/CGO needed.
 
 ## Context
 
@@ -53,7 +63,8 @@ Three BLOB columns in notes table: `embedding` (dense, existing), `sparse_embedd
 
 ## Consequences
 
-- CGO required at build time (`-tags ORT` build tag)
-- Must ship `libonnxruntime` alongside binary
-- Must load two PyTorch weight files (sparse_linear.pt, colbert_linear.pt) from model cache
+- No CGO required — pure Go backend handles BGE-M3 (verified)
+- Must handle model.onnx_data download (hugot's DownloadModel misses it)
+- Must load two PyTorch weight files (sparse_linear.pt, colbert_linear.pt) from model cache via Go torch loader
 - Three new Retriever implementations plug into existing N-way RRF HybridRetriever
+- Query-time embedding ~1s per query (noticeable but tolerable for CLI)
