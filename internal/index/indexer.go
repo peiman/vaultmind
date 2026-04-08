@@ -1,12 +1,14 @@
 package index
 
 import (
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/peiman/vaultmind/internal/embedding"
 	"github.com/peiman/vaultmind/internal/parser"
 	"github.com/peiman/vaultmind/internal/vault"
 	"github.com/rs/zerolog/log"
@@ -27,6 +29,13 @@ type IndexResult struct {
 	FullRebuild       bool   `json:"full_rebuild"`
 	DurationMs        int64  `json:"duration_ms"`
 	CompletedAt       string `json:"completed_at"`
+}
+
+// EmbedResult holds the outcome of an embedding pass.
+type EmbedResult struct {
+	Embedded int `json:"embedded"`
+	Skipped  int `json:"skipped"`
+	Errors   int `json:"errors"`
 }
 
 // Indexer orchestrates vault scanning, parsing, and SQLite storage.
@@ -307,6 +316,108 @@ func (idx *Indexer) Incremental() (*IndexResult, error) {
 
 	result.DurationMs = time.Since(start).Milliseconds()
 	result.CompletedAt = time.Now().UTC().Format(time.RFC3339)
+
+	return result, nil
+}
+
+// EmbedNotes computes and stores embeddings for all notes that don't have one yet.
+// It opens its own DB connection (like Rebuild/Incremental) so it can be called
+// after the indexer has closed its connection.
+func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embedding.Embedder) (*EmbedResult, error) {
+	db, err := Open(dbPath) //nolint:contextcheck // Open does not accept a context; ctx is for the embedder calls
+	if err != nil {
+		return nil, fmt.Errorf("opening index database for embedding: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	result := &EmbedResult{}
+
+	// Count notes that already have embeddings (skipped).
+	var skippedCount int
+	err = db.QueryRow("SELECT COUNT(*) FROM notes WHERE embedding IS NOT NULL").Scan(&skippedCount)
+	if err != nil {
+		return nil, fmt.Errorf("counting existing embeddings: %w", err)
+	}
+	result.Skipped = skippedCount
+
+	// Fetch notes that need embeddings.
+	rows, err := db.Query("SELECT id, body_text FROM notes WHERE embedding IS NULL")
+	if err != nil {
+		return nil, fmt.Errorf("querying unembedded notes: %w", err)
+	}
+
+	type noteText struct {
+		id   string
+		body string
+	}
+	var pending []noteText
+	for rows.Next() {
+		var nt noteText
+		if err := rows.Scan(&nt.id, &nt.body); err != nil {
+			_ = rows.Close()
+			return nil, fmt.Errorf("scanning unembedded note: %w", err)
+		}
+		pending = append(pending, nt)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("closing unembedded rows: %w", err)
+	}
+
+	if len(pending) == 0 {
+		return result, nil
+	}
+
+	// Process in batches of 32.
+	const batchSize = 32
+	for i := 0; i < len(pending); i += batchSize {
+		end := i + batchSize
+		if end > len(pending) {
+			end = len(pending)
+		}
+		batch := pending[i:end]
+
+		texts := make([]string, len(batch))
+		for j, nt := range batch {
+			texts[j] = nt.body
+		}
+
+		vectors, embedErr := embedder.EmbedBatch(ctx, texts)
+		if embedErr != nil {
+			log.Debug().Err(embedErr).Int("batch_start", i).Msg("embedding batch failed")
+			result.Errors += len(batch)
+			continue
+		}
+
+		tx, txErr := db.Begin()
+		if txErr != nil {
+			return nil, fmt.Errorf("beginning embedding transaction: %w", txErr)
+		}
+
+		storeErr := false
+		for j, vec := range vectors {
+			encoded := EncodeEmbedding(vec)
+			if _, err := tx.Exec("UPDATE notes SET embedding = ? WHERE id = ?", encoded, batch[j].id); err != nil {
+				log.Debug().Err(err).Str("id", batch[j].id).Msg("failed to store embedding")
+				storeErr = true
+				break
+			}
+		}
+
+		if storeErr {
+			_ = tx.Rollback()
+			result.Errors += len(batch)
+			continue
+		}
+
+		if err := tx.Commit(); err != nil {
+			_ = tx.Rollback()
+			log.Debug().Err(err).Int("batch_start", i).Msg("committing embedding batch failed")
+			result.Errors += len(batch)
+			continue
+		}
+
+		result.Embedded += len(batch)
+	}
 
 	return result, nil
 }

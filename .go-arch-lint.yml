@@ -83,6 +83,7 @@ components:
       - internal/schema/**
       - internal/envelope/**
       - internal/index/**
+      - internal/embedding/**
       - internal/graph/**
       - internal/git/**
       - internal/mutation/**
