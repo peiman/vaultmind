@@ -109,6 +109,9 @@ func newDefaultEmbedder() (*embedding.HugotEmbedder, error) {
 // Uses a single-row LENGTH query instead of loading all embeddings (C3 fix).
 func detectEmbedderForDB(db *index.DB) (embedding.Embedder, func(), error) {
 	dims, err := index.DetectEmbeddingDims(db)
+	if err != nil {
+		log.Debug().Err(err).Msg("failed to detect embedding dims, falling back to MiniLM")
+	}
 	if err == nil && dims == embedding.BGEM3Dims {
 		bgem3, bgem3Err := embedding.NewBGEM3Embedder(embedding.BGEM3Config())
 		if bgem3Err != nil {

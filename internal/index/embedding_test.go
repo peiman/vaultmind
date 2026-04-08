@@ -175,6 +175,41 @@ func TestHasEmbeddings(t *testing.T) {
 	assert.True(t, has)
 }
 
+func TestDetectEmbeddingDims_NoEmbeddings(t *testing.T) {
+	db := buildEmbeddingTestDB(t)
+	dims, err := index.DetectEmbeddingDims(db)
+	require.NoError(t, err)
+	assert.Equal(t, 0, dims, "no embeddings should return 0")
+}
+
+func TestDetectEmbeddingDims_MiniLM(t *testing.T) {
+	db := buildEmbeddingTestDB(t)
+	row, _ := db.QueryNoteByPath("concepts/spreading-activation.md")
+	require.NotNil(t, row)
+
+	vec384 := make([]float32, 384)
+	vec384[0] = 1.0
+	require.NoError(t, index.StoreEmbedding(db, row.ID, vec384))
+
+	dims, err := index.DetectEmbeddingDims(db)
+	require.NoError(t, err)
+	assert.Equal(t, 384, dims)
+}
+
+func TestDetectEmbeddingDims_BGEM3(t *testing.T) {
+	db := buildEmbeddingTestDB(t)
+	row, _ := db.QueryNoteByPath("concepts/spreading-activation.md")
+	require.NotNil(t, row)
+
+	vec1024 := make([]float32, 1024)
+	vec1024[0] = 1.0
+	require.NoError(t, index.StoreEmbedding(db, row.ID, vec1024))
+
+	dims, err := index.DetectEmbeddingDims(db)
+	require.NoError(t, err)
+	assert.Equal(t, 1024, dims)
+}
+
 func TestStoreSparseEmbedding(t *testing.T) {
 	db := buildEmbeddingTestDB(t)
 	row, err := db.QueryNoteByPath("concepts/spreading-activation.md")
