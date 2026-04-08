@@ -11,6 +11,7 @@ import (
 const (
 	DefaultModelName    = "sentence-transformers/all-MiniLM-L6-v2"
 	DefaultDims         = 384
+	DefaultMaxTokens    = 510 // MiniLM max is 512 minus 2 for CLS/SEP tokens
 	DefaultOnnxFilePath = "onnx/model.onnx"
 )
 
@@ -29,6 +30,7 @@ func DefaultHugotConfig() HugotConfig {
 		ModelName:    DefaultModelName,
 		CacheDir:     DefaultCacheDir(),
 		Dims:         DefaultDims,
+		MaxTokens:    DefaultMaxTokens,
 		OnnxFilePath: DefaultOnnxFilePath,
 	}
 }

@@ -3,6 +3,7 @@ package embedding_test
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/embedding"
@@ -73,6 +74,62 @@ func TestHugotEmbedder_SimilarTextsCloser(t *testing.T) {
 
 	assert.Greater(t, simAB, simAC,
 		"similar texts (memory+sleep) should have higher cosine than unrelated (memory+flour): AB=%.3f AC=%.3f", simAB, simAC)
+}
+
+func TestTruncateForEmbedding(t *testing.T) {
+	tests := []struct {
+		name      string
+		text      string
+		maxTokens int
+		wantLen   int // 0 means check <= maxTokens * approxCharsPerToken
+	}{
+		{
+			name:      "short text unchanged",
+			text:      "hello world",
+			maxTokens: 512,
+		},
+		{
+			name:      "long text truncated",
+			text:      strings.Repeat("word ", 1000), // 5000 chars
+			maxTokens: 512,
+		},
+		{
+			name:      "zero maxTokens returns empty",
+			text:      "some text",
+			maxTokens: 0,
+		},
+		{
+			name:      "empty text unchanged",
+			text:      "",
+			maxTokens: 512,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := embedding.TruncateForEmbedding(tt.text, tt.maxTokens)
+			if tt.maxTokens == 0 {
+				assert.Empty(t, result)
+				return
+			}
+			maxChars := tt.maxTokens * 3 // approx 3 chars per token
+			assert.LessOrEqual(t, len(result), maxChars,
+				"result should be at most maxTokens*4 chars")
+			if len(tt.text) <= maxChars {
+				assert.Equal(t, tt.text, result, "short text should be unchanged")
+			}
+		})
+	}
+}
+
+func TestTruncateForEmbedding_BreaksAtSpace(t *testing.T) {
+	// 20 tokens * 3 chars = 60 char limit
+	text := strings.Repeat("abcdefgh ", 20) // 180 chars, 9 chars per word+space
+	result := embedding.TruncateForEmbedding(text, 20)
+	assert.LessOrEqual(t, len(result), 60)
+	// Should not end mid-word
+	assert.NotContains(t, result[len(result)-5:], "abcde",
+		"should break at space, not mid-word")
 }
 
 // cosine computes cosine similarity between two vectors.
