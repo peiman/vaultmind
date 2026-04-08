@@ -10,6 +10,7 @@ import (
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/config/commands"
+	"github.com/peiman/vaultmind/internal/embedding"
 	"github.com/peiman/vaultmind/internal/envelope"
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/vault"
@@ -26,6 +27,7 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 	vaultPath := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppIndexVault)
 	jsonOut := getConfigValueWithFlags[bool](cmd, "json", config.KeyAppIndexJson)
 	fullRebuild := getConfigValueWithFlags[bool](cmd, "full", config.KeyAppIndexFull)
+	embed := getConfigValueWithFlags[bool](cmd, "embed", config.KeyAppIndexEmbed)
 
 	info, err := os.Stat(vaultPath)
 	if err != nil || !info.IsDir() {
@@ -62,13 +64,44 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
+	var embedResult *index.EmbedResult
+	if embed {
+		embedder, embErr := embedding.NewHugotEmbedder(embedding.HugotConfig{
+			ModelName:    "sentence-transformers/all-MiniLM-L6-v2",
+			CacheDir:     filepath.Join(os.Getenv("HOME"), ".vaultmind", "models"),
+			Dims:         384,
+			OnnxFilePath: "onnx/model.onnx",
+		})
+		if embErr != nil {
+			return fmt.Errorf("creating embedder: %w", embErr)
+		}
+		defer func() { _ = embedder.Close() }()
+
+		embedResult, err = idxr.EmbedNotes(cmd.Context(), dbPath, embedder)
+		if err != nil {
+			return fmt.Errorf("embedding notes: %w", err)
+		}
+	}
+
 	if jsonOut {
-		env := envelope.OK("index", result)
+		type indexResponse struct {
+			Index *index.IndexResult `json:"index"`
+			Embed *index.EmbedResult `json:"embed,omitempty"`
+		}
+		env := envelope.OK("index", indexResponse{Index: result, Embed: embedResult})
 		env.Meta.VaultPath = vaultPath
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(env)
 	}
 
-	return formatIndexResult(result, cmd.OutOrStdout())
+	if err := formatIndexResult(result, cmd.OutOrStdout()); err != nil {
+		return err
+	}
+	if embedResult != nil {
+		_, err := fmt.Fprintf(cmd.OutOrStdout(), "Embedded %d notes (%d skipped, %d errors)\n",
+			embedResult.Embedded, embedResult.Skipped, embedResult.Errors)
+		return err
+	}
+	return nil
 }
 
 func formatIndexResult(result *index.IndexResult, w io.Writer) error {
