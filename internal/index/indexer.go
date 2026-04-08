@@ -38,6 +38,23 @@ type EmbedResult struct {
 	Errors   int `json:"errors"`
 }
 
+// IndexAndEmbedResult combines index and optional embed results for command output.
+type IndexAndEmbedResult struct {
+	Index *IndexResult `json:"index"`
+	Embed *EmbedResult `json:"embed,omitempty"`
+}
+
+// RunEmbed creates an embedder with default config, runs EmbedNotes, and cleans up.
+func (idx *Indexer) RunEmbed(ctx context.Context, dbPath string) (*EmbedResult, error) {
+	embedder, err := embedding.NewHugotEmbedder(embedding.DefaultHugotConfig())
+	if err != nil {
+		return nil, fmt.Errorf("creating embedder: %w", err)
+	}
+	defer func() { _ = embedder.Close() }()
+
+	return idx.EmbedNotes(ctx, dbPath, embedder)
+}
+
 // Indexer orchestrates vault scanning, parsing, and SQLite storage.
 type Indexer struct {
 	vaultRoot string

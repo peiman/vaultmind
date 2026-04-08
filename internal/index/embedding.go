@@ -35,10 +35,15 @@ func DecodeEmbedding(data []byte) ([]float32, error) {
 	return vec, nil
 }
 
-// NoteEmbedding pairs a note ID with its embedding vector.
+// NoteEmbedding pairs a note ID with its embedding vector and metadata.
 type NoteEmbedding struct {
 	NoteID    string
 	Embedding []float32
+	Type      string
+	Title     string
+	Path      string
+	BodyText  string
+	IsDomain  bool
 }
 
 // StoreEmbedding writes an embedding BLOB for a note that already exists in the index.
@@ -67,9 +72,11 @@ func LoadEmbedding(d *DB, noteID string) ([]float32, error) {
 	return DecodeEmbedding(data)
 }
 
-// LoadAllEmbeddings returns all notes that have stored embeddings.
+// LoadAllEmbeddings returns all notes that have stored embeddings, including metadata.
+// This is a single query that avoids N+1 lookups when scoring and filtering results.
 func LoadAllEmbeddings(d *DB) ([]NoteEmbedding, error) {
-	rows, err := d.Query("SELECT id, embedding FROM notes WHERE embedding IS NOT NULL")
+	rows, err := d.Query(`SELECT id, embedding, type, title, path, body_text, is_domain
+		FROM notes WHERE embedding IS NOT NULL`)
 	if err != nil {
 		return nil, fmt.Errorf("loading all embeddings: %w", err)
 	}
@@ -79,7 +86,8 @@ func LoadAllEmbeddings(d *DB) ([]NoteEmbedding, error) {
 	for rows.Next() {
 		var ne NoteEmbedding
 		var data []byte
-		if err := rows.Scan(&ne.NoteID, &data); err != nil {
+		var noteType, title, path, bodyText sql.NullString
+		if err := rows.Scan(&ne.NoteID, &data, &noteType, &title, &path, &bodyText, &ne.IsDomain); err != nil {
 			return nil, fmt.Errorf("scanning embedding row: %w", err)
 		}
 		vec, decErr := DecodeEmbedding(data)
@@ -87,6 +95,10 @@ func LoadAllEmbeddings(d *DB) ([]NoteEmbedding, error) {
 			return nil, fmt.Errorf("decoding embedding for %q: %w", ne.NoteID, decErr)
 		}
 		ne.Embedding = vec
+		ne.Type = noteType.String
+		ne.Title = title.String
+		ne.Path = path.String
+		ne.BodyText = bodyText.String
 		result = append(result, ne)
 	}
 	return result, rows.Err()

@@ -32,9 +32,12 @@ func (h *HybridRetriever) Search(ctx context.Context, query string, limit, offse
 	}
 
 	// Fetch a generous number of results from each retriever for good fusion.
+	// minFusionCandidates ensures enough overlap between retriever result sets
+	// for RRF to produce meaningful combined rankings.
+	const minFusionCandidates = 100
 	fetchLimit := limit + offset
-	if fetchLimit < 100 {
-		fetchLimit = 100
+	if fetchLimit < minFusionCandidates {
+		fetchLimit = minFusionCandidates
 	}
 
 	type retrieverResult struct {

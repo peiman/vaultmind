@@ -99,6 +99,13 @@ func TestLoadAllEmbeddings(t *testing.T) {
 	assert.True(t, ids[row2.ID])
 }
 
+func TestStoreEmbedding_NonexistentNote(t *testing.T) {
+	db := buildEmbeddingTestDB(t)
+	err := index.StoreEmbedding(db, "nonexistent-note-id", []float32{0.1, 0.2})
+	assert.Error(t, err, "should error when note ID does not exist")
+	assert.Contains(t, err.Error(), "no note found")
+}
+
 func TestHasEmbeddings(t *testing.T) {
 	db := buildEmbeddingTestDB(t)
 

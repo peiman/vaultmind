@@ -16,7 +16,11 @@ const (
 
 // DefaultCacheDir returns the default model cache directory (~/.vaultmind/models).
 func DefaultCacheDir() string {
-	return filepath.Join(os.Getenv("HOME"), ".vaultmind", "models")
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = "."
+	}
+	return filepath.Join(home, ".vaultmind", "models")
 }
 
 // DefaultHugotConfig returns the standard HugotConfig for all-MiniLM-L6-v2.

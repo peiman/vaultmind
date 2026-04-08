@@ -10,7 +10,6 @@ import (
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/config/commands"
-	"github.com/peiman/vaultmind/internal/embedding"
 	"github.com/peiman/vaultmind/internal/envelope"
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/vault"
@@ -66,47 +65,40 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 
 	var embedResult *index.EmbedResult
 	if embed {
-		embedder, embErr := embedding.NewHugotEmbedder(embedding.DefaultHugotConfig())
-		if embErr != nil {
-			return fmt.Errorf("creating embedder: %w", embErr)
-		}
-		defer func() { _ = embedder.Close() }()
-
-		embedResult, err = idxr.EmbedNotes(cmd.Context(), dbPath, embedder)
+		embedResult, err = idxr.RunEmbed(cmd.Context(), dbPath)
 		if err != nil {
 			return fmt.Errorf("embedding notes: %w", err)
 		}
 	}
 
+	combined := index.IndexAndEmbedResult{Index: result, Embed: embedResult}
 	if jsonOut {
-		type indexResponse struct {
-			Index *index.IndexResult `json:"index"`
-			Embed *index.EmbedResult `json:"embed,omitempty"`
-		}
-		env := envelope.OK("index", indexResponse{Index: result, Embed: embedResult})
+		env := envelope.OK("index", combined)
 		env.Meta.VaultPath = vaultPath
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(env)
 	}
 
-	if err := formatIndexResult(result, cmd.OutOrStdout()); err != nil {
-		return err
-	}
-	if embedResult != nil {
-		_, err := fmt.Fprintf(cmd.OutOrStdout(), "Embedded %d notes (%d skipped, %d errors)\n",
-			embedResult.Embedded, embedResult.Skipped, embedResult.Errors)
-		return err
-	}
-	return nil
+	return formatIndexResult(combined, cmd.OutOrStdout())
 }
 
-func formatIndexResult(result *index.IndexResult, w io.Writer) error {
-	if result.FullRebuild {
-		_, err := fmt.Fprintf(w, "Indexed %d notes (%d domain, %d unstructured, %d errors)\n",
-			result.Indexed, result.DomainNotes, result.UnstructuredNotes, result.Errors)
-		return err
+func formatIndexResult(r index.IndexAndEmbedResult, w io.Writer) error {
+	if r.Index.FullRebuild {
+		if _, err := fmt.Fprintf(w, "Indexed %d notes (%d domain, %d unstructured, %d errors)\n",
+			r.Index.Indexed, r.Index.DomainNotes, r.Index.UnstructuredNotes, r.Index.Errors); err != nil {
+			return err
+		}
+	} else {
+		total := r.Index.Skipped + r.Index.Updated + r.Index.Added
+		if _, err := fmt.Fprintf(w, "Indexed %d notes (%d skipped, %d updated, %d added, %d deleted)\n",
+			total, r.Index.Skipped, r.Index.Updated, r.Index.Added, r.Index.Deleted); err != nil {
+			return err
+		}
 	}
-	total := result.Skipped + result.Updated + result.Added
-	_, err := fmt.Fprintf(w, "Indexed %d notes (%d skipped, %d updated, %d added, %d deleted)\n",
-		total, result.Skipped, result.Updated, result.Added, result.Deleted)
-	return err
+	if r.Embed != nil {
+		if _, err := fmt.Fprintf(w, "Embedded %d notes (%d skipped, %d errors)\n",
+			r.Embed.Embedded, r.Embed.Skipped, r.Embed.Errors); err != nil {
+			return err
+		}
+	}
+	return nil
 }

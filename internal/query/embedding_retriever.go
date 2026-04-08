@@ -15,10 +15,8 @@ type EmbeddingRetriever struct {
 	Embedder embedding.Embedder
 }
 
-type scoredNote struct {
-	noteID string
-	score  float64
-}
+// snippetMaxLen is the maximum length of a body text snippet in search results.
+const snippetMaxLen = 200
 
 // Search embeds the query, computes cosine similarity against all stored embeddings,
 // and returns the top results sorted by score descending.
@@ -36,62 +34,95 @@ func (r *EmbeddingRetriever) Search(ctx context.Context, query string, limit, of
 		return nil, 0, nil
 	}
 
-	// Score all notes
-	scored := make([]scoredNote, len(all))
-	for i, ne := range all {
-		scored[i] = scoredNote{
-			noteID: ne.NoteID,
-			score:  CosineSimilarity(queryVec, ne.Embedding),
+	// Build tag lookup if tag filter is active (one query instead of N)
+	var noteTags map[string]bool
+	if filters.Tag != "" {
+		noteTags, err = r.noteIDsWithTag(filters.Tag)
+		if err != nil {
+			return nil, 0, fmt.Errorf("loading tags: %w", err)
 		}
 	}
 
-	// Sort by score descending
-	sort.Slice(scored, func(i, j int) bool {
-		return scored[i].score > scored[j].score
-	})
-
-	// Look up metadata and apply filters
-	var filtered []ScoredResult
-	for _, sn := range scored {
-		row, err := r.DB.QueryNoteByID(sn.noteID)
-		if err != nil || row == nil {
+	// Score, filter, and build results in one pass
+	type scored struct {
+		result ScoredResult
+		score  float64
+	}
+	var results []scored
+	for _, ne := range all {
+		if filters.Type != "" && ne.Type != filters.Type {
 			continue
 		}
-		if filters.Type != "" && row.Type != filters.Type {
+		if filters.Tag != "" && !noteTags[ne.NoteID] {
 			continue
 		}
-		if filters.Tag != "" {
-			hasTag, tagErr := r.noteHasTag(sn.noteID, filters.Tag)
-			if tagErr != nil || !hasTag {
-				continue
-			}
-		}
-		filtered = append(filtered, ScoredResult{
-			ID:       row.ID,
-			Type:     row.Type,
-			Title:    row.Title,
-			Path:     row.Path,
-			Score:    sn.score,
-			IsDomain: row.IsDomain,
+		sim := CosineSimilarity(queryVec, ne.Embedding)
+		results = append(results, scored{
+			result: ScoredResult{
+				ID:       ne.NoteID,
+				Type:     ne.Type,
+				Title:    ne.Title,
+				Path:     ne.Path,
+				Snippet:  truncate(ne.BodyText, snippetMaxLen),
+				Score:    sim,
+				IsDomain: ne.IsDomain,
+			},
+			score: sim,
 		})
 	}
 
-	total := len(filtered)
+	// Sort by score descending
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].score > results[j].score
+	})
+
+	total := len(results)
 
 	// Apply offset/limit
-	if offset >= len(filtered) {
+	if offset >= len(results) {
 		return nil, total, nil
 	}
-	filtered = filtered[offset:]
-	if limit > 0 && len(filtered) > limit {
-		filtered = filtered[:limit]
+	results = results[offset:]
+	if limit > 0 && len(results) > limit {
+		results = results[:limit]
 	}
 
-	return filtered, total, nil
+	out := make([]ScoredResult, len(results))
+	for i, s := range results {
+		out[i] = s.result
+	}
+	return out, total, nil
 }
 
-func (r *EmbeddingRetriever) noteHasTag(noteID, tag string) (bool, error) {
-	var count int
-	err := r.DB.QueryRow("SELECT COUNT(*) FROM tags WHERE note_id = ? AND tag = ?", noteID, tag).Scan(&count)
-	return count > 0, err
+// noteIDsWithTag returns the set of note IDs that have the given tag.
+func (r *EmbeddingRetriever) noteIDsWithTag(tag string) (map[string]bool, error) {
+	rows, err := r.DB.Query("SELECT note_id FROM tags WHERE tag = ?", tag)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	ids := make(map[string]bool)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids[id] = true
+	}
+	return ids, rows.Err()
+}
+
+// truncate returns the first n bytes of s, breaking at a space boundary if possible.
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	// Find last space within limit for clean break
+	cut := s[:n]
+	for i := len(cut) - 1; i > n-30; i-- {
+		if cut[i] == ' ' {
+			return cut[:i] + "..."
+		}
+	}
+	return cut + "..."
 }

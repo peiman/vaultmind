@@ -10,7 +10,6 @@ import (
 	"github.com/peiman/vaultmind/internal/config/commands"
 	"github.com/peiman/vaultmind/internal/envelope"
 	"github.com/peiman/vaultmind/internal/graph"
-	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/query"
 	"github.com/spf13/cobra"
 )
@@ -35,18 +34,9 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	}
 	defer vdb.Close()
 
-	// Auto-detect: use hybrid if embeddings exist, otherwise keyword
-	var retriever query.Retriever
-	var cleanup func()
-	has, hasErr := index.HasEmbeddings(vdb.DB)
-	if hasErr == nil && has {
-		retriever, cleanup, err = query.BuildRetriever("hybrid", vdb.DB)
-		if err != nil {
-			// Fall back to keyword on embedder init failure
-			retriever = &query.FTSRetriever{DB: vdb.DB}
-		}
-	} else {
-		retriever = &query.FTSRetriever{DB: vdb.DB}
+	retriever, cleanup, err := query.BuildAutoRetriever(vdb.DB)
+	if err != nil {
+		return err
 	}
 	if cleanup != nil {
 		defer cleanup()

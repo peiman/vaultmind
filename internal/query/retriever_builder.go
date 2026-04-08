@@ -53,6 +53,20 @@ func requireEmbeddings(db *index.DB) error {
 	return nil
 }
 
+// BuildAutoRetriever returns a hybrid retriever if embeddings exist, otherwise keyword.
+// Embedder initialization failure falls back to keyword silently.
+func BuildAutoRetriever(db *index.DB) (Retriever, func(), error) {
+	has, err := index.HasEmbeddings(db)
+	if err != nil || !has {
+		return &FTSRetriever{DB: db}, nil, nil //nolint:nilerr // intentional fallback to keyword
+	}
+	ret, cleanup, err := BuildRetriever("hybrid", db)
+	if err != nil {
+		return &FTSRetriever{DB: db}, nil, nil //nolint:nilerr // intentional fallback to keyword
+	}
+	return ret, cleanup, nil
+}
+
 func newDefaultEmbedder() (*embedding.HugotEmbedder, error) {
 	embedder, err := embedding.NewHugotEmbedder(embedding.DefaultHugotConfig())
 	if err != nil {
