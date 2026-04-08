@@ -177,6 +177,20 @@ func LoadAllEmbeddings(d *DB) ([]NoteEmbedding, error) {
 	return result, rows.Err()
 }
 
+// DetectEmbeddingDims returns the dimensionality of stored embeddings, or 0 if none exist.
+// Uses a single-row query — does not load all embeddings.
+func DetectEmbeddingDims(d *DB) (int, error) {
+	var length int
+	err := d.QueryRow("SELECT LENGTH(embedding) FROM notes WHERE embedding IS NOT NULL LIMIT 1").Scan(&length)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("detecting embedding dims: %w", err)
+	}
+	return length / 4, nil // each float32 is 4 bytes
+}
+
 // HasEmbeddings returns true if any note in the index has a stored embedding.
 func HasEmbeddings(d *DB) (bool, error) {
 	var exists int

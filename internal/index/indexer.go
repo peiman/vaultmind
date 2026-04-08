@@ -356,16 +356,29 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 
 	result := &EmbedResult{}
 
-	// Count notes that already have embeddings (skipped).
+	// Determine skip/pending query based on embedder type.
+	// For FullEmbedder (BGE-M3): a note needs embedding if ANY of the three columns is NULL.
+	// For dense-only (MiniLM): a note needs embedding if the dense column is NULL.
+	fullEmbedder, isFull := embedder.(embedding.FullEmbedder)
+
+	var skipQuery, pendingQuery string
+	if isFull {
+		// BGE-M3: need notes where any of the 3 embeddings are missing
+		pendingQuery = "SELECT id, body_text FROM notes WHERE embedding IS NULL OR sparse_embedding IS NULL OR colbert_embedding IS NULL"
+		skipQuery = "SELECT COUNT(*) FROM notes WHERE embedding IS NOT NULL AND sparse_embedding IS NOT NULL AND colbert_embedding IS NOT NULL"
+	} else {
+		pendingQuery = "SELECT id, body_text FROM notes WHERE embedding IS NULL"
+		skipQuery = "SELECT COUNT(*) FROM notes WHERE embedding IS NOT NULL"
+	}
+
 	var skippedCount int
-	err = db.QueryRow("SELECT COUNT(*) FROM notes WHERE embedding IS NOT NULL").Scan(&skippedCount)
+	err = db.QueryRow(skipQuery).Scan(&skippedCount)
 	if err != nil {
 		return nil, fmt.Errorf("counting existing embeddings: %w", err)
 	}
 	result.Skipped = skippedCount
 
-	// Fetch notes that need embeddings.
-	rows, err := db.Query("SELECT id, body_text FROM notes WHERE embedding IS NULL")
+	rows, err := db.Query(pendingQuery)
 	if err != nil {
 		return nil, fmt.Errorf("querying unembedded notes: %w", err)
 	}
@@ -404,8 +417,6 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 		for j, nt := range batch {
 			texts[j] = nt.body
 		}
-
-		fullEmbedder, isFull := embedder.(embedding.FullEmbedder)
 		if isFull {
 			// BGE-M3 path: store dense + sparse + ColBERT
 			fullOutputs, embedErr := fullEmbedder.EmbedFullBatch(ctx, texts)

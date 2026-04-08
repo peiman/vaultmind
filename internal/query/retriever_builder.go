@@ -5,6 +5,7 @@ import (
 
 	"github.com/peiman/vaultmind/internal/embedding"
 	"github.com/peiman/vaultmind/internal/index"
+	"github.com/rs/zerolog/log"
 )
 
 // BuildRetriever creates the appropriate retriever for the given search mode.
@@ -36,13 +37,19 @@ func BuildRetriever(mode string, db *index.DB) (Retriever, func(), error) {
 		}
 		cleanupFuncs := []func(){embedderCleanup}
 
-		// Auto-detect BGE-M3 columns for 4-way hybrid
-		hasSparse, _ := index.HasSparseEmbeddings(db)
-		hasColBERT, _ := index.HasColBERTEmbeddings(db)
+		// Auto-detect BGE-M3 columns for 4-way hybrid.
+		// Reuse the existing embedder if it's already a BGEM3Embedder (C1 fix).
+		hasSparse, sparseErr := index.HasSparseEmbeddings(db)
+		if sparseErr != nil {
+			log.Debug().Err(sparseErr).Msg("failed to check sparse embeddings")
+		}
+		hasColBERT, colbertErr := index.HasColBERTEmbeddings(db)
+		if colbertErr != nil {
+			log.Debug().Err(colbertErr).Msg("failed to check ColBERT embeddings")
+		}
 		if hasSparse || hasColBERT {
-			bgem3, bgem3Err := embedding.NewBGEM3Embedder(embedding.BGEM3Config())
-			if bgem3Err == nil {
-				cleanupFuncs = append(cleanupFuncs, func() { _ = bgem3.Close() })
+			if bgem3, ok := embedder.(*embedding.BGEM3Embedder); ok {
+				// Reuse the already-loaded BGE-M3 embedder — no double init
 				if hasSparse {
 					retrievers = append(retrievers, &SparseRetriever{DB: db, EmbedSparse: bgem3.EmbedSparse})
 				}
@@ -50,7 +57,8 @@ func BuildRetriever(mode string, db *index.DB) (Retriever, func(), error) {
 					retrievers = append(retrievers, &ColBERTRetriever{DB: db, EmbedColBERT: bgem3.EmbedColBERT, Dims: embedding.BGEM3Dims})
 				}
 			}
-			// If BGE-M3 embedder fails, fall back to 2-way hybrid
+			// If embedder is MiniLM but sparse/ColBERT columns exist, ignore them
+			// (would need BGE-M3 to query-embed sparse/ColBERT)
 		}
 
 		cleanup := func() {
@@ -97,24 +105,20 @@ func newDefaultEmbedder() (*embedding.HugotEmbedder, error) {
 	return embedder, nil
 }
 
-// detectEmbedderForDB inspects stored embeddings to determine the correct embedder.
-// If embeddings are 1024-dim (BGE-M3), creates a BGE-M3 embedder; otherwise MiniLM.
-// Returns the embedder and a cleanup function.
+// detectEmbedderForDB inspects stored embedding dimensions to determine the correct embedder.
+// Uses a single-row LENGTH query instead of loading all embeddings (C3 fix).
 func detectEmbedderForDB(db *index.DB) (embedding.Embedder, func(), error) {
-	all, err := index.LoadAllEmbeddings(db)
-	if err == nil && len(all) > 0 {
-		dims := len(all[0].Embedding)
-		if dims == embedding.BGEM3Dims {
-			bgem3, bgem3Err := embedding.NewBGEM3Embedder(embedding.BGEM3Config())
-			if bgem3Err != nil {
-				return nil, nil, fmt.Errorf("creating BGE-M3 embedder: %w", bgem3Err)
-			}
-			return bgem3, func() { _ = bgem3.Close() }, nil
+	dims, err := index.DetectEmbeddingDims(db)
+	if err == nil && dims == embedding.BGEM3Dims {
+		bgem3, bgem3Err := embedding.NewBGEM3Embedder(embedding.BGEM3Config())
+		if bgem3Err != nil {
+			return nil, nil, fmt.Errorf("creating BGE-M3 embedder: %w", bgem3Err)
 		}
+		return bgem3, func() { _ = bgem3.Close() }, nil
 	}
-	embedder, err := newDefaultEmbedder()
-	if err != nil {
-		return nil, nil, err
+	embedder, defaultErr := newDefaultEmbedder()
+	if defaultErr != nil {
+		return nil, nil, defaultErr
 	}
 	return embedder, func() { _ = embedder.Close() }, nil
 }
