@@ -43,9 +43,13 @@ type NoteEmbedding struct {
 
 // StoreEmbedding writes an embedding BLOB for a note that already exists in the index.
 func StoreEmbedding(d *DB, noteID string, vec []float32) error {
-	_, err := d.Exec("UPDATE notes SET embedding = ? WHERE id = ?", EncodeEmbedding(vec), noteID)
+	result, err := d.Exec("UPDATE notes SET embedding = ? WHERE id = ?", EncodeEmbedding(vec), noteID)
 	if err != nil {
 		return fmt.Errorf("storing embedding for %q: %w", noteID, err)
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("no note found with id %q", noteID)
 	}
 	return nil
 }

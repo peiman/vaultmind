@@ -1,7 +1,33 @@
 // Package embedding provides text embedding infrastructure for VaultMind.
 package embedding
 
-import "context"
+import (
+	"context"
+	"os"
+	"path/filepath"
+)
+
+// Default model configuration for the all-MiniLM-L6-v2 embedder.
+const (
+	DefaultModelName    = "sentence-transformers/all-MiniLM-L6-v2"
+	DefaultDims         = 384
+	DefaultOnnxFilePath = "onnx/model.onnx"
+)
+
+// DefaultCacheDir returns the default model cache directory (~/.vaultmind/models).
+func DefaultCacheDir() string {
+	return filepath.Join(os.Getenv("HOME"), ".vaultmind", "models")
+}
+
+// DefaultHugotConfig returns the standard HugotConfig for all-MiniLM-L6-v2.
+func DefaultHugotConfig() HugotConfig {
+	return HugotConfig{
+		ModelName:    DefaultModelName,
+		CacheDir:     DefaultCacheDir(),
+		Dims:         DefaultDims,
+		OnnxFilePath: DefaultOnnxFilePath,
+	}
+}
 
 // Embedder converts text into dense vector representations.
 type Embedder interface {

@@ -40,7 +40,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	var cleanup func()
 	has, hasErr := index.HasEmbeddings(vdb.DB)
 	if hasErr == nil && has {
-		retriever, cleanup, err = buildRetriever("hybrid", vdb.DB)
+		retriever, cleanup, err = query.BuildRetriever("hybrid", vdb.DB)
 		if err != nil {
 			// Fall back to keyword on embedder init failure
 			retriever = &query.FTSRetriever{DB: vdb.DB}

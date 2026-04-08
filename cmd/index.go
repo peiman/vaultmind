@@ -66,12 +66,7 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 
 	var embedResult *index.EmbedResult
 	if embed {
-		embedder, embErr := embedding.NewHugotEmbedder(embedding.HugotConfig{
-			ModelName:    "sentence-transformers/all-MiniLM-L6-v2",
-			CacheDir:     filepath.Join(os.Getenv("HOME"), ".vaultmind", "models"),
-			Dims:         384,
-			OnnxFilePath: "onnx/model.onnx",
-		})
+		embedder, embErr := embedding.NewHugotEmbedder(embedding.DefaultHugotConfig())
 		if embErr != nil {
 			return fmt.Errorf("creating embedder: %w", embErr)
 		}
