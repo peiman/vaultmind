@@ -14,6 +14,7 @@ Use --full to force a complete rebuild from scratch.`,
 		"app.index.vault": "vault",
 		"app.index.json":  "json",
 		"app.index.full":  "full",
+		"app.index.embed": "embed",
 	},
 }
 
@@ -40,6 +41,14 @@ func IndexOptions() []config.ConfigOption {
 			Key:          "app.index.full",
 			DefaultValue: false,
 			Description:  "Force full rebuild instead of incremental index",
+			Type:         "bool",
+			Required:     false,
+			Example:      "true",
+		},
+		{
+			Key:          "app.index.embed",
+			DefaultValue: false,
+			Description:  "Compute and store embeddings for note bodies",
 			Type:         "bool",
 			Required:     false,
 			Example:      "true",

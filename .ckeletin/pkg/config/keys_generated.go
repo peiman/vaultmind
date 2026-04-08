@@ -77,6 +77,7 @@ const (
 	KeyAppIndexVault                    = "app.index.vault"                     // Path to the vault root directory
 	KeyAppIndexJson                     = "app.index.json"                      // Output in JSON format
 	KeyAppIndexFull                     = "app.index.full"                      // Force full rebuild instead of incremental index
+	KeyAppIndexEmbed                    = "app.index.embed"                     // Compute and store embeddings for note bodies
 	KeyAppLinksVault                    = "app.links.vault"                     // Path to vault root
 	KeyAppLinksJson                     = "app.links.json"                      // Output in JSON format
 	KeyAppLinksEdgeType                 = "app.links.edge_type"                 // Filter by edge type
@@ -128,6 +129,7 @@ const (
 	KeyAppSearchOffset                  = "app.search.offset"                   // Skip first N results
 	KeyAppSearchType                    = "app.search.type"                     // Filter by note type
 	KeyAppSearchTag                     = "app.search.tag"                      // Filter by tag
+	KeyAppSearchMode                    = "app.search.mode"                     // Search mode: keyword, semantic, or hybrid
 	KeyAppVaultstatusVault              = "app.vaultstatus.vault"               // Path to vault root
 	KeyAppVaultstatusJson               = "app.vaultstatus.json"                // Output in JSON format
 )
