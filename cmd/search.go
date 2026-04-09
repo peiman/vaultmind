@@ -7,6 +7,7 @@ import (
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/config/commands"
+	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/query"
 	"github.com/spf13/cobra"
 )
@@ -31,8 +32,9 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	}
 	defer vdb.Close()
 
+	mode := "fts"
 	retriever := &query.FTSRetriever{DB: vdb.DB}
-	return query.RunSearch(retriever, query.SearchConfig{
+	err = query.RunSearch(retriever, query.SearchConfig{
 		Query:      args[0],
 		Limit:      getConfigValueWithFlags[int](cmd, "limit", config.KeyAppSearchLimit),
 		Offset:     getConfigValueWithFlags[int](cmd, "offset", config.KeyAppSearchOffset),
@@ -41,4 +43,16 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		JSONOutput: getConfigValueWithFlags[bool](cmd, "json", config.KeyAppSearchJson),
 		VaultPath:  vaultPath,
 	}, cmd.OutOrStdout())
+
+	// Log experiment event (non-blocking)
+	if session := experiment.FromContext(cmd.Context()); session != nil {
+		session.VaultPath = vaultPath
+		_, _ = session.LogSearchEvent(args[0], mode, map[string]any{
+			"variants": map[string]any{
+				"none": map[string]any{"results": []any{}},
+			},
+		})
+	}
+
+	return err
 }
