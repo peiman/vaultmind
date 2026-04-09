@@ -12,10 +12,10 @@ import (
 // ContextPackConfig holds parameters for a ContextPack operation.
 type ContextPackConfig struct {
 	Input            string
-	Budget           int               // token budget
-	Depth            int               // BFS traversal depth; 0 or 1 = direct neighbors only (default)
-	MaxItems         int               // max context items to return; 0 = unlimited (default, backward-compat)
-	Slim             bool              // reduce context item frontmatter to {type, title, status} only
+	Budget           int                // token budget
+	Depth            int                // BFS traversal depth; 0 or 1 = direct neighbors only (default)
+	MaxItems         int                // max context items to return; 0 = unlimited (default, backward-compat)
+	Slim             bool               // reduce context item frontmatter to {type, title, status} only
 	ActivationScores map[string]float64 // optional activation scores keyed by note ID
 }
 

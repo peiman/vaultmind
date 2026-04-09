@@ -75,7 +75,7 @@ func EncodeColBERTEmbedding(colbert [][]float32) []byte {
 		return nil
 	}
 	dims := len(colbert[0])
-	buf := make([]byte, 4+len(colbert)*dims*4) // 4-byte header + data
+	buf := make([]byte, 4+len(colbert)*dims*4)           // 4-byte header + data
 	binary.LittleEndian.PutUint32(buf[0:], uint32(dims)) //nolint:gosec // dims is always positive and small (e.g., 1024)
 	offset := 4
 	for _, vec := range colbert {

@@ -9,9 +9,9 @@ import (
 func TestParseExperiments_Basic(t *testing.T) {
 	raw := map[string]any{
 		"retrieval_mode": map[string]any{
-			"enabled":  true,
-			"primary":  "hybrid",
-			"shadows":  []any{"dense", "sparse"},
+			"enabled": true,
+			"primary": "hybrid",
+			"shadows": []any{"dense", "sparse"},
 		},
 	}
 	got := ParseExperiments(raw)
@@ -84,9 +84,9 @@ func TestParseExperiments_SkipsReservedKeys(t *testing.T) {
 
 func TestAllVariants(t *testing.T) {
 	exp := ExperimentDef{
-		Enabled:  true,
-		Primary:  "control",
-		Shadows:  []string{"variant_a", "variant_b"},
+		Enabled: true,
+		Primary: "control",
+		Shadows: []string{"variant_a", "variant_b"},
 	}
 	got := exp.AllVariants()
 	assert.Equal(t, []string{"control", "variant_a", "variant_b"}, got)
