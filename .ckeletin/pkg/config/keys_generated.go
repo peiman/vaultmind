@@ -46,6 +46,9 @@ const (
 	KeyAppDataviewlintJson              = "app.dataviewlint.json"               // Output in JSON format
 	KeyAppDoctorVault                   = "app.doctor.vault"                    // Path to vault root
 	KeyAppDoctorJson                    = "app.doctor.json"                     // Output in JSON format
+	KeyAppExperimentreportExperiment    = "app.experimentreport.experiment"     // Experiment name to report on
+	KeyAppExperimentreportJson          = "app.experimentreport.json"           // Output in JSON format
+	KeyAppExperimentreportK             = "app.experimentreport.k"              // K value for Hit@K metric
 	KeyAppFrontmatterVault              = "app.frontmatter.vault"               // Path to vault root
 	KeyAppFrontmatterJson               = "app.frontmatter.json"                // Output in JSON format
 	KeyAppFrontmattersetVault           = "app.frontmatterset.vault"            // Path to vault root

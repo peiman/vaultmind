@@ -10,6 +10,7 @@ import (
 	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/config/commands"
 	"github.com/peiman/vaultmind/internal/envelope"
+	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/graph"
 	memory "github.com/peiman/vaultmind/internal/memory"
 	"github.com/spf13/cobra"
@@ -50,6 +51,20 @@ func runMemoryContextPack(cmd *cobra.Command, args []string) error {
 			return cmdutil.WriteJSONError(cmd.OutOrStdout(), "memory context-pack", "context_pack_error", err.Error())
 		}
 		return fmt.Errorf("context-pack: %w", err)
+	}
+
+	// Log experiment event (non-blocking)
+	if session := experiment.FromContext(cmd.Context()); session != nil {
+		session.VaultPath = vaultPath
+		_, _ = session.LogContextPackEvent(map[string]any{
+			"target_id":     result.TargetID,
+			"budget":        result.BudgetTokens,
+			"used_tokens":   result.UsedTokens,
+			"context_items": len(result.Context),
+			"variants": map[string]any{
+				"none": map[string]any{"results": []any{}},
+			},
+		})
 	}
 
 	if jsonOut {

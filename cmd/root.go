@@ -23,6 +23,7 @@ import (
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/.ckeletin/pkg/logger"
+	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/xdg"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -31,15 +32,16 @@ import (
 )
 
 var (
-	cfgFile          string
-	configPathMode   = ConfigPathModeXDG
-	configPathFlag   *pflag.Flag
-	Version          = "dev"
-	Commit           = ""
-	Date             = ""
-	binaryName       = "" // MUST be injected via ldflags (see Taskfile.yml LDFLAGS)
-	configFileStatus string
-	configFileUsed   string
+	cfgFile           string
+	configPathMode    = ConfigPathModeXDG
+	configPathFlag    *pflag.Flag
+	Version           = "dev"
+	Commit            = ""
+	Date              = ""
+	binaryName        = "" // MUST be injected via ldflags (see Taskfile.yml LDFLAGS)
+	configFileStatus  string
+	configFileUsed    string
+	experimentSession *experiment.Session
 
 	// Compiled regex patterns for EnvPrefix()
 	// Compiled once at package initialization for better performance
@@ -233,6 +235,33 @@ var RootCmd = &cobra.Command{
 			}
 		}
 
+		// Initialize experiment session (non-blocking)
+		if expDB, expErr := openExperimentDB(); expErr != nil {
+			log.Debug().Err(expErr).Msg("Experiment DB unavailable")
+		} else {
+			if recovered, recErr := expDB.RecoverOrphans(); recErr != nil {
+				log.Debug().Err(recErr).Msg("Failed to recover orphan sessions")
+			} else if recovered > 0 {
+				log.Debug().Int("recovered", recovered).Msg("Recovered orphan experiment sessions")
+			}
+			sid, startErr := expDB.StartSession("")
+			if startErr != nil {
+				log.Debug().Err(startErr).Msg("Failed to start experiment session")
+				_ = expDB.Close()
+			} else {
+				experimentSession = &experiment.Session{DB: expDB, ID: sid}
+				cmd.SetContext(experiment.WithSession(cmd.Context(), experimentSession))
+			}
+		}
+
+		return nil
+	},
+	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
+		if experimentSession != nil {
+			_ = experimentSession.DB.EndSession(experimentSession.ID)
+			_ = experimentSession.DB.Close()
+			experimentSession = nil
+		}
 		return nil
 	},
 }
@@ -558,6 +587,17 @@ func getConfigValueWithFlags[T any](cmd *cobra.Command, flagName string, viperKe
 	}
 
 	return value
+}
+
+// openExperimentDB resolves the XDG data path for the experiment database and
+// opens (or creates) the SQLite file. It returns an error only if the path
+// cannot be resolved or the database cannot be opened.
+func openExperimentDB() (*experiment.DB, error) {
+	dbPath, err := xdg.DataFile("experiments.db")
+	if err != nil {
+		return nil, fmt.Errorf("resolving experiment db path: %w", err)
+	}
+	return experiment.Open(dbPath)
 }
 
 // getKeyValue retrieves a configuration value from Viper by key only.

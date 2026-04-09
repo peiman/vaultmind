@@ -11,6 +11,7 @@ import (
 	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/config/commands"
 	"github.com/peiman/vaultmind/internal/envelope"
+	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/vault"
 	"github.com/spf13/cobra"
@@ -70,6 +71,31 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 		if err != nil {
 			return fmt.Errorf("embedding notes: %w", err)
 		}
+	}
+
+	// Log experiment event (non-blocking)
+	if session := experiment.FromContext(cmd.Context()); session != nil {
+		session.VaultPath = vaultPath
+		data := map[string]any{
+			"full_rebuild": result.FullRebuild,
+			"indexed":      result.Indexed,
+			"added":        result.Added,
+			"updated":      result.Updated,
+			"deleted":      result.Deleted,
+			"errors":       result.Errors,
+		}
+		if embed && embedResult != nil {
+			data["model"] = model
+			data["embedded"] = embedResult.Embedded
+			data["embed_skipped"] = embedResult.Skipped
+			data["embed_errors"] = embedResult.Errors
+		}
+		_, _ = session.DB.LogEvent(experiment.Event{
+			SessionID: session.ID,
+			Type:      experiment.EventIndexEmbed,
+			VaultPath: vaultPath,
+			Data:      data,
+		})
 	}
 
 	combined := index.IndexAndEmbedResult{Index: result, Embed: embedResult}

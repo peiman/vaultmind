@@ -10,6 +10,7 @@ import (
 	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/config/commands"
 	"github.com/peiman/vaultmind/internal/envelope"
+	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/graph"
 	memory "github.com/peiman/vaultmind/internal/memory"
 	"github.com/spf13/cobra"
@@ -49,6 +50,12 @@ func runMemoryRecall(cmd *cobra.Command, args []string) error {
 			return cmdutil.WriteJSONError(cmd.OutOrStdout(), "memory recall", "recall_error", err.Error())
 		}
 		return fmt.Errorf("recall: %w", err)
+	}
+
+	// Log note access for experiment outcome linkage (non-blocking)
+	if session := experiment.FromContext(cmd.Context()); session != nil {
+		session.VaultPath = vaultPath
+		_, _ = session.LogNoteAccessEvent(args[0], "recall")
 	}
 
 	if jsonOut {
