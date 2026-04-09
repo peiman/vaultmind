@@ -57,6 +57,10 @@ CREATE TABLE sessions (
 
 On startup: generate UUID session ID, insert with `started_at`. On exit (via defer): update `ended_at`. This provides the active/idle time partitioning needed for compressed idle time activation scoring.
 
+**Crash safety:** If the process is killed before `ended_at` is set, the session row has `ended_at = NULL`. On next startup, detect orphaned sessions and set their `ended_at` to their last event timestamp (or `started_at + 1 minute` if no events).
+
+**Outcome window:** Configurable via `experiments.outcome_window_sessions` (default: 2). An outcome is linked to events from the current session plus the N-1 previous sessions. This controls how far back we look for "what was the user responding to."
+
 ## Component 2: Event Logging
 
 Each instrumented command logs a structured event.
@@ -209,6 +213,10 @@ Metrics:
 - **MRR** (Mean Reciprocal Rank): average of 1/rank for the first accessed result per event
 
 ## Implementation Strategy
+
+### Experiment DB Migrations
+
+The experiment DB (`~/.vaultmind/experiments.db`) uses its own schema versioning — NOT goose (which manages the vault index DB). On open, check a `schema_version` pragma or `meta` table, apply migrations sequentially. Simple versioned SQL since the schema is small and stable.
 
 ### What to build now (Phase 1)
 
