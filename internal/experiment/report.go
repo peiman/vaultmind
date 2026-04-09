@@ -1,6 +1,9 @@
 package experiment
 
-import "fmt"
+import (
+	"database/sql"
+	"fmt"
+)
 
 // VariantMetrics holds computed metrics for a single variant.
 type VariantMetrics struct {
@@ -107,21 +110,22 @@ func (d *DB) computeVariantMetrics(variant string, k, totalEvents int) (VariantM
 	reciprocalRankSum := 0.0
 
 	for _, eventID := range eventIDs {
-		var bestRank int
+		var bestRank sql.NullInt64
 		err := d.db.QueryRow(
 			`SELECT MIN(rank) FROM outcomes WHERE event_id = ? AND variant = ?`,
 			eventID, variant,
 		).Scan(&bestRank)
 		if err != nil {
-			// No outcome for this event+variant: bestRank stays 0, treat as miss.
-			continue
+			return VariantMetrics{}, fmt.Errorf("querying best rank for event %s: %w", eventID, err)
 		}
-		if bestRank > 0 {
-			if bestRank <= k {
-				hitCount++
-			}
-			reciprocalRankSum += 1.0 / float64(bestRank)
+		if !bestRank.Valid || bestRank.Int64 <= 0 {
+			continue // no outcome for this event+variant
 		}
+		rank := int(bestRank.Int64)
+		if rank <= k {
+			hitCount++
+		}
+		reciprocalRankSum += 1.0 / float64(rank)
 	}
 
 	metrics := VariantMetrics{

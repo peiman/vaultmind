@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
@@ -101,7 +102,13 @@ func formatExperimentReport(report *experiment.ReportResult, expName string, w i
 	if _, err := fmt.Fprintln(w, strings.Repeat("-", 60)); err != nil {
 		return err
 	}
-	for variant, metrics := range report.Variants {
+	sortedVariants := make([]string, 0, len(report.Variants))
+	for v := range report.Variants {
+		sortedVariants = append(sortedVariants, v)
+	}
+	sort.Strings(sortedVariants)
+	for _, variant := range sortedVariants {
+		metrics := report.Variants[variant]
 		if _, err := fmt.Fprintf(w, "%-25s %-9.2f %-7.2f %d\n",
 			variant, metrics.HitAtK, metrics.MRR, metrics.EventCount); err != nil {
 			return err

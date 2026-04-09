@@ -55,22 +55,27 @@ func (d *DB) LinkOutcomes(currentSessionID, noteID string, outcomeWindow int) (i
 	return count, nil
 }
 
-// recentSessionIDs returns the IDs of the N most recent sessions ending with
-// currentSessionID. The current session is always included; up to window-1
-// prior sessions are added, ordered by started_at descending.
+// recentSessionIDs returns the current session plus up to window-1 prior
+// sessions, ordered by started_at descending. The current session is always
+// included regardless of ordering.
 func (d *DB) recentSessionIDs(currentSessionID string, window int) ([]string, error) {
+	ids := []string{currentSessionID}
+	if window <= 1 {
+		return ids, nil
+	}
+
 	rows, err := d.db.Query(
 		`SELECT session_id FROM sessions
+		 WHERE session_id != ?
 		 ORDER BY started_at DESC
 		 LIMIT ?`,
-		window,
+		currentSessionID, window-1,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("querying recent sessions: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
-	var ids []string
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
