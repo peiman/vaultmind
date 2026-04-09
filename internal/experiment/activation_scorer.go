@@ -2,6 +2,10 @@ package experiment
 
 import "time"
 
+// maxSessionWindowLimit is the maximum number of recent sessions to consider
+// when partitioning time into active/idle periods.
+const maxSessionWindowLimit = 100
+
 // ActivationParams holds tunable parameters for activation scoring.
 type ActivationParams struct {
 	Gamma float64 // idle time compression (0.0-1.0)
@@ -31,11 +35,8 @@ func VariantGamma(variant string) (float64, bool) {
 // ComputeBatchScores computes activation scores for a batch of notes.
 // Returns noteID->score and noteID->features maps.
 func ComputeBatchScores(db *DB, noteIDs []string, params ActivationParams) (map[string]float64, map[string]map[string]float64, error) {
-	scores := make(map[string]float64, len(noteIDs))
-	features := make(map[string]map[string]float64, len(noteIDs))
-
 	if len(noteIDs) == 0 {
-		return scores, features, nil
+		return make(map[string]float64), make(map[string]map[string]float64), nil
 	}
 
 	accessMap, err := db.BatchNoteAccessTimes(noteIDs)
@@ -43,12 +44,22 @@ func ComputeBatchScores(db *DB, noteIDs []string, params ActivationParams) (map[
 		return nil, nil, err
 	}
 
-	windows, err := db.RecentSessionWindows(100)
+	windows, err := db.RecentSessionWindows(maxSessionWindowLimit)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	now := time.Now().UTC()
+	scores, features := ScoreFromData(noteIDs, accessMap, windows, now, params)
+	return scores, features, nil
+}
+
+// ScoreFromData computes activation scores from pre-fetched data.
+// Returns (scores, features). Use this to avoid redundant DB queries when
+// computing multiple variants over the same data.
+func ScoreFromData(noteIDs []string, accessMap map[string][]time.Time, windows []SessionWindow, now time.Time, params ActivationParams) (map[string]float64, map[string]map[string]float64) {
+	scores := make(map[string]float64, len(noteIDs))
+	features := make(map[string]map[string]float64, len(noteIDs))
 
 	for _, noteID := range noteIDs {
 		accessTimes := accessMap[noteID]
@@ -74,5 +85,5 @@ func ComputeBatchScores(db *DB, noteIDs []string, params ActivationParams) (map[
 		}
 	}
 
-	return scores, features, nil
+	return scores, features
 }

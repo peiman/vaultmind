@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/internal/cmdutil"
@@ -79,11 +80,14 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		exps := experiment.ParseExperiments(expMap)
 		if actDef, ok := exps["activation"]; ok && actDef.Enabled && result.Context != nil {
 			accessedNotes, _ := session.DB.AccessedNoteIDs()
+			accessMap, _ := session.DB.BatchNoteAccessTimes(accessedNotes)
+			windows, _ := session.DB.RecentSessionWindows(100)
+			now := time.Now().UTC()
 			variantResults := make(map[string]any, len(actDef.AllVariants()))
 			for _, variant := range actDef.AllVariants() {
 				gamma, _ := experiment.VariantGamma(variant)
 				params := experiment.DefaultActivationParams(gamma)
-				_, feats, _ := experiment.ComputeBatchScores(session.DB, accessedNotes, params)
+				_, feats := experiment.ScoreFromData(accessedNotes, accessMap, windows, now, params)
 				results := make([]any, 0, len(result.Context.Context))
 				for rank, item := range result.Context.Context {
 					r := map[string]any{"note_id": item.ID, "rank": rank + 1}

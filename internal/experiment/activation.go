@@ -24,7 +24,20 @@ func PartitionTime(start, end time.Time, windows []SessionWindow) (active, idle 
 	sort.Slice(sorted, func(i, j int) bool {
 		return sorted[i].Start.Before(sorted[j].Start)
 	})
+
+	// Merge overlapping windows to avoid double-counting.
+	merged := make([]SessionWindow, 0, len(sorted))
 	for _, w := range sorted {
+		if len(merged) > 0 && !w.Start.After(merged[len(merged)-1].End) {
+			if w.End.After(merged[len(merged)-1].End) {
+				merged[len(merged)-1].End = w.End
+			}
+		} else {
+			merged = append(merged, w)
+		}
+	}
+
+	for _, w := range merged {
 		wStart := w.Start
 		if wStart.Before(start) {
 			wStart = start
@@ -74,7 +87,11 @@ func ComputeRetrieval(accessTimes []time.Time, now time.Time, windows []SessionW
 }
 
 // ComputeStorage returns Si = ln(1 + access_count). Never decays.
+// Returns 0.0 for non-positive counts.
 func ComputeStorage(accessCount int) float64 {
+	if accessCount <= 0 {
+		return 0.0
+	}
 	return math.Log(1.0 + float64(accessCount))
 }
 

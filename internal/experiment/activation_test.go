@@ -71,6 +71,18 @@ func TestPartitionTime_ZeroDuration(t *testing.T) {
 	assert.Equal(t, time.Duration(0), idle)
 }
 
+func TestPartitionTime_OverlappingWindows(t *testing.T) {
+	start := time.Date(2026, 4, 9, 10, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 4, 9, 12, 0, 0, 0, time.UTC)
+	windows := []SessionWindow{
+		{Start: time.Date(2026, 4, 9, 10, 0, 0, 0, time.UTC), End: time.Date(2026, 4, 9, 11, 0, 0, 0, time.UTC)},
+		{Start: time.Date(2026, 4, 9, 10, 30, 0, 0, time.UTC), End: time.Date(2026, 4, 9, 11, 30, 0, 0, time.UTC)},
+	}
+	active, idle := PartitionTime(start, end, windows)
+	assert.Equal(t, 90*time.Minute, active)
+	assert.Equal(t, 30*time.Minute, idle)
+}
+
 // CompressedElapsed tests
 func TestCompressedElapsed_Active(t *testing.T) {
 	d := CompressedElapsed(30*time.Minute, 0, 0.2)
@@ -126,6 +138,11 @@ func TestComputeStorage(t *testing.T) {
 	assert.InDelta(t, 0.693, ComputeStorage(1), 0.01)
 	assert.InDelta(t, 1.099, ComputeStorage(2), 0.01)
 	assert.InDelta(t, 2.398, ComputeStorage(10), 0.01)
+}
+
+func TestComputeStorage_Negative(t *testing.T) {
+	assert.Equal(t, 0.0, ComputeStorage(-1))
+	assert.Equal(t, 0.0, ComputeStorage(-100))
 }
 
 func TestCombinedScore(t *testing.T) {
