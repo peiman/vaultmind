@@ -15,7 +15,6 @@ import (
 	"github.com/peiman/vaultmind/internal/graph"
 	memory "github.com/peiman/vaultmind/internal/memory"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var memoryContextPackCmd = MustNewCommand(commands.MemoryContextPackMetadata, runMemoryContextPack)
@@ -45,8 +44,7 @@ func runMemoryContextPack(cmd *cobra.Command, args []string) error {
 	// Compute activation scores if experiment is enabled
 	var activationScores map[string]float64
 	if session := experiment.FromContext(cmd.Context()); session != nil {
-		expMap := viper.GetStringMap("experiments")
-		exps := experiment.ParseExperiments(expMap)
+		exps := loadExperimentDefs()
 		if actDef, ok := exps["activation"]; ok && actDef.Enabled {
 			gamma, _ := experiment.VariantGamma(actDef.Primary)
 			params := experiment.DefaultActivationParams(gamma)
@@ -75,8 +73,7 @@ func runMemoryContextPack(cmd *cobra.Command, args []string) error {
 	// Log experiment event with shadow variant scores
 	if session := experiment.FromContext(cmd.Context()); session != nil {
 		session.SetVaultPath(vaultPath)
-		expMap := viper.GetStringMap("experiments")
-		exps := experiment.ParseExperiments(expMap)
+		exps := loadExperimentDefs()
 		if actDef, ok := exps["activation"]; ok && actDef.Enabled {
 			accessedNotes, _ := session.DB.AccessedNoteIDs()
 			accessMap, _ := session.DB.BatchNoteAccessTimes(accessedNotes)

@@ -237,7 +237,7 @@ var RootCmd = &cobra.Command{
 		}
 
 		// Initialize experiment session (non-blocking)
-		telemetry := viper.GetString("experiments.telemetry")
+		telemetry := viper.GetString(config.KeyExperimentsTelemetry)
 		if telemetry == experiment.TelemetryOff {
 			log.Debug().Msg("Experiments disabled (telemetry: off)")
 		} else if expDB, expErr := openExperimentDB(); expErr != nil {
@@ -248,7 +248,7 @@ var RootCmd = &cobra.Command{
 				if firstRun, _ := expDB.IsFirstRun(); firstRun {
 					if isatty.IsTerminal(os.Stdin.Fd()) {
 						telemetry = experiment.PromptTelemetry(os.Stdin, cmd.ErrOrStderr())
-						viper.Set("experiments.telemetry", telemetry)
+						viper.Set(config.KeyExperimentsTelemetry, telemetry)
 						if telemetry == experiment.TelemetryOff {
 							log.Debug().Msg("User chose telemetry: off")
 							_ = expDB.Close()
@@ -270,7 +270,7 @@ var RootCmd = &cobra.Command{
 				log.Debug().Err(startErr).Msg("Failed to start experiment session")
 				_ = expDB.Close()
 			} else {
-				outcomeWindow := viper.GetInt("experiments.outcome_window_sessions")
+				outcomeWindow := viper.GetInt(config.KeyExperimentsOutcomeWindowSessions)
 				if outcomeWindow <= 0 {
 					outcomeWindow = 2
 				}
@@ -646,6 +646,12 @@ func openExperimentDB() (*experiment.DB, error) {
 //
 // Returns:
 //   - The configuration value of type T, or zero value if not found/conversion fails
+
+// loadExperimentDefs reads the experiments map from config and returns parsed definitions.
+func loadExperimentDefs() map[string]experiment.ExperimentDef {
+	return experiment.ParseExperiments(viper.GetStringMap(config.KeyExperiments))
+}
+
 func getKeyValue[T any](viperKey string) T {
 	var zero T
 	if v := viper.Get(viperKey); v != nil {

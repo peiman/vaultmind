@@ -49,6 +49,9 @@ const (
 	KeyAppExperimentreportExperiment    = "app.experimentreport.experiment"     // Experiment name to report on
 	KeyAppExperimentreportJson          = "app.experimentreport.json"           // Output in JSON format
 	KeyAppExperimentreportK             = "app.experimentreport.k"              // K value for Hit@K metric
+	KeyExperiments                      = "experiments"                         // Top-level experiment definitions map
+	KeyExperimentsTelemetry             = "experiments.telemetry"               // Telemetry level: anonymous, full, off
+	KeyExperimentsOutcomeWindowSessions = "experiments.outcome_window_sessions" // Sessions to look back for outcome linkage
 	KeyAppFrontmatterVault              = "app.frontmatter.vault"               // Path to vault root
 	KeyAppFrontmatterJson               = "app.frontmatter.json"                // Output in JSON format
 	KeyAppFrontmattersetVault           = "app.frontmatterset.vault"            // Path to vault root
