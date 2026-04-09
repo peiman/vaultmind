@@ -210,3 +210,9 @@ Based on the analysis and expert discussion:
 - Pavlik, P.I. & Anderson, J.R. (2005). Practice and Forgetting Effects on Vocabulary Memory. Cognitive Science, 29(4), 559-586. DOI: 10.1207/s15516709cog0000_14
 - Pavlik, P.I. & Anderson, J.R. (2008). Using a model to compute the optimal schedule of practice. J. Exp. Psych: Applied, 14(2), 101-117. DOI: 10.1037/1076-898X.14.2.101
 - Wixted, J.T. & Ebbesen, E.B. (1991). On the form of forgetting. Psychological Science, 2(6), 409-415. DOI: 10.1111/j.1467-9280.1991.tb00175.x
+
+## Closest Prior Art
+
+[[source-pavlik-anderson-2005|Pavlik & Anderson (2005)]] modified ACT-R's base-level learning with a time-scaling factor of 0.025 for between-experiment intervals. This is conceptually the closest prior art to the compressed idle time approach described here. The key differences: (1) Pavlik & Anderson use a binary scaling (in-experiment vs between-experiment), while VaultMind uses continuous session-based partitioning. (2) Their scaling is embedded in a variable decay-rate mechanism; VaultMind modifies the time variable directly, preserving the power-law form. (3) Their work targets vocabulary learning in laboratory settings; VaultMind targets information retrieval in intermittent-use CLI tools.
+
+[[source-honda-2024|Honda et al. (2024)]] validated ACT-R activation for LLM agent memory but used standard wall-clock time without session awareness. VaultMind extends their approach with the gamma parameter.
