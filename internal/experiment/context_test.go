@@ -31,3 +31,67 @@ func TestFromContext_NilWhenMissing(t *testing.T) {
 	got := experiment.FromContext(context.Background())
 	assert.Nil(t, got)
 }
+
+func TestSession_LogSearchEvent(t *testing.T) {
+	db := openTestExpDB(t)
+	sessionID, err := db.StartSession("/vault")
+	require.NoError(t, err)
+
+	session := &experiment.Session{DB: db, ID: sessionID, VaultPath: "/vault"}
+	eventID, err := session.LogSearchEvent("test query", "hybrid", nil)
+	require.NoError(t, err)
+	assert.NotEmpty(t, eventID)
+
+	var eventType string
+	err = db.QueryRow("SELECT event_type FROM events WHERE event_id = ?", eventID).Scan(&eventType)
+	require.NoError(t, err)
+	assert.Equal(t, "search", eventType)
+}
+
+func TestSession_LogAskEvent(t *testing.T) {
+	db := openTestExpDB(t)
+	sessionID, err := db.StartSession("/vault")
+	require.NoError(t, err)
+
+	session := &experiment.Session{DB: db, ID: sessionID, VaultPath: "/vault"}
+	eventID, err := session.LogAskEvent("what is activation?", nil)
+	require.NoError(t, err)
+	assert.NotEmpty(t, eventID)
+
+	var eventType string
+	err = db.QueryRow("SELECT event_type FROM events WHERE event_id = ?", eventID).Scan(&eventType)
+	require.NoError(t, err)
+	assert.Equal(t, "ask", eventType)
+}
+
+func TestSession_LogContextPackEvent(t *testing.T) {
+	db := openTestExpDB(t)
+	sessionID, err := db.StartSession("/vault")
+	require.NoError(t, err)
+
+	session := &experiment.Session{DB: db, ID: sessionID, VaultPath: "/vault"}
+	eventID, err := session.LogContextPackEvent(map[string]any{"items": 5})
+	require.NoError(t, err)
+	assert.NotEmpty(t, eventID)
+
+	var eventType string
+	err = db.QueryRow("SELECT event_type FROM events WHERE event_id = ?", eventID).Scan(&eventType)
+	require.NoError(t, err)
+	assert.Equal(t, "context_pack", eventType)
+}
+
+func TestSession_LogNoteAccessEvent(t *testing.T) {
+	db := openTestExpDB(t)
+	sessionID, err := db.StartSession("/vault")
+	require.NoError(t, err)
+
+	session := &experiment.Session{DB: db, ID: sessionID, VaultPath: "/vault"}
+	eventID, err := session.LogNoteAccessEvent("note-a", "note_get")
+	require.NoError(t, err)
+	assert.NotEmpty(t, eventID)
+
+	var eventType string
+	err = db.QueryRow("SELECT event_type FROM events WHERE event_id = ?", eventID).Scan(&eventType)
+	require.NoError(t, err)
+	assert.Equal(t, "note_access", eventType)
+}
