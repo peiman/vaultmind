@@ -7,6 +7,7 @@ import (
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/config/commands"
+	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/query"
 	"github.com/spf13/cobra"
 )
@@ -31,6 +32,12 @@ func runNoteGet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	defer vdb.Close()
+
+	// Log note access for experiment outcome linkage (non-blocking)
+	if session := experiment.FromContext(cmd.Context()); session != nil {
+		session.VaultPath = vaultPath
+		_, _ = session.LogNoteAccessEvent(args[0], "note_get")
+	}
 
 	return query.RunNoteGet(vdb.DB, query.NoteGetConfig{
 		Input:           args[0],

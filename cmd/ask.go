@@ -9,6 +9,7 @@ import (
 	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/config/commands"
 	"github.com/peiman/vaultmind/internal/envelope"
+	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/graph"
 	"github.com/peiman/vaultmind/internal/query"
 	"github.com/spf13/cobra"
@@ -44,6 +45,18 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("ask: %w", err)
 	}
+
+	// Log experiment event (non-blocking)
+	if session := experiment.FromContext(cmd.Context()); session != nil {
+		session.VaultPath = vaultPath
+		_, _ = session.LogAskEvent(args[0], map[string]any{
+			"top_hits": len(result.TopHits),
+			"variants": map[string]any{
+				"none": map[string]any{"results": []any{}},
+			},
+		})
+	}
+
 	if !getConfigValueWithFlags[bool](cmd, "json", config.KeyAppAskJson) {
 		return query.FormatAsk(result, cmd.OutOrStdout())
 	}
