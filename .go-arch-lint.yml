@@ -92,6 +92,8 @@ components:
       - internal/template/**
       # VaultMind data assembly (used by business layer and cmd layer):
       - internal/memory/**
+      # VaultMind experiment framework (session tracking, activation scoring):
+      - internal/experiment/**
 
   # -------------------------------------------------------------------------
   # PROJECT-MANAGED: Business Logic Layer
