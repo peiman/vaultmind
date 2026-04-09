@@ -34,6 +34,16 @@ func (d *DB) StartSession(vaultPath string) (string, error) {
 	return id, nil
 }
 
+// UpdateSessionVaultPath sets the vault_path for the given session.
+// Called when the vault path becomes known (after command flag resolution).
+func (d *DB) UpdateSessionVaultPath(sessionID, vaultPath string) error {
+	_, err := d.db.Exec(
+		`UPDATE sessions SET vault_path = ? WHERE session_id = ?`,
+		vaultPath, sessionID,
+	)
+	return err
+}
+
 // EndSession sets ended_at for the given session to the current time.
 func (d *DB) EndSession(sessionID string) error {
 	endedAt := time.Now().UTC().Format(time.RFC3339)

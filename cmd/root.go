@@ -21,6 +21,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/mattn/go-isatty"
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/.ckeletin/pkg/logger"
 	"github.com/peiman/vaultmind/internal/experiment"
@@ -236,9 +237,29 @@ var RootCmd = &cobra.Command{
 		}
 
 		// Initialize experiment session (non-blocking)
-		if expDB, expErr := openExperimentDB(); expErr != nil {
+		telemetry := viper.GetString("experiments.telemetry")
+		if telemetry == experiment.TelemetryOff {
+			log.Debug().Msg("Experiments disabled (telemetry: off)")
+		} else if expDB, expErr := openExperimentDB(); expErr != nil {
 			log.Debug().Err(expErr).Msg("Experiment DB unavailable")
 		} else {
+			// Prompt for telemetry on first run (interactive TTY only)
+			if telemetry == "" {
+				if firstRun, _ := expDB.IsFirstRun(); firstRun {
+					if isatty.IsTerminal(os.Stdin.Fd()) {
+						telemetry = experiment.PromptTelemetry(os.Stdin, cmd.ErrOrStderr())
+						viper.Set("experiments.telemetry", telemetry)
+						if telemetry == experiment.TelemetryOff {
+							log.Debug().Msg("User chose telemetry: off")
+							_ = expDB.Close()
+							return nil
+						}
+					} else {
+						log.Debug().Msg("Non-interactive session, defaulting to anonymous telemetry")
+					}
+				}
+			}
+
 			if recovered, recErr := expDB.RecoverOrphans(); recErr != nil {
 				log.Debug().Err(recErr).Msg("Failed to recover orphan sessions")
 			} else if recovered > 0 {
@@ -249,7 +270,11 @@ var RootCmd = &cobra.Command{
 				log.Debug().Err(startErr).Msg("Failed to start experiment session")
 				_ = expDB.Close()
 			} else {
-				experimentSession = &experiment.Session{DB: expDB, ID: sid}
+				outcomeWindow := viper.GetInt("experiments.outcome_window_sessions")
+				if outcomeWindow <= 0 {
+					outcomeWindow = 2
+				}
+				experimentSession = &experiment.Session{DB: expDB, ID: sid, OutcomeWindow: outcomeWindow}
 				cmd.SetContext(experiment.WithSession(cmd.Context(), experimentSession))
 			}
 		}

@@ -54,7 +54,7 @@ func runSearch(cmd *cobra.Command, args []string) error {
 
 	// Log experiment event (non-blocking)
 	if session := experiment.FromContext(cmd.Context()); session != nil {
-		session.VaultPath = vaultPath
+		session.SetVaultPath(vaultPath)
 		_, _ = session.LogSearchEvent(args[0], mode, map[string]any{
 			"variants": map[string]any{
 				"none": map[string]any{"results": []any{}},

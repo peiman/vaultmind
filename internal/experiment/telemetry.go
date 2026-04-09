@@ -1,8 +1,10 @@
 package experiment
 
 import (
+	"bufio"
 	"fmt"
 	"io"
+	"strings"
 )
 
 // Telemetry tier constants.
@@ -36,4 +38,25 @@ func ParseTelemetryChoice(input string) string {
 	default:
 		return TelemetryAnonymous
 	}
+}
+
+// PromptTelemetry shows the telemetry prompt and reads the user's choice.
+// Returns the selected tier string.
+func PromptTelemetry(r io.Reader, w io.Writer) string {
+	WriteTelemetryPrompt(w)
+	scanner := bufio.NewScanner(r)
+	if scanner.Scan() {
+		return ParseTelemetryChoice(strings.TrimSpace(scanner.Text()))
+	}
+	return TelemetryAnonymous
+}
+
+// IsFirstRun returns true if the experiment DB has no completed sessions.
+func (d *DB) IsFirstRun() (bool, error) {
+	var count int
+	err := d.db.QueryRow("SELECT COUNT(*) FROM sessions WHERE ended_at IS NOT NULL").Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count == 0, nil
 }

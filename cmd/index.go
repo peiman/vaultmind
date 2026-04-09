@@ -75,7 +75,7 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 
 	// Log experiment event (non-blocking)
 	if session := experiment.FromContext(cmd.Context()); session != nil {
-		session.VaultPath = vaultPath
+		session.SetVaultPath(vaultPath)
 		data := map[string]any{
 			"full_rebuild": result.FullRebuild,
 			"indexed":      result.Indexed,

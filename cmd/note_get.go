@@ -35,7 +35,7 @@ func runNoteGet(cmd *cobra.Command, args []string) error {
 
 	// Log note access for experiment outcome linkage (non-blocking)
 	if session := experiment.FromContext(cmd.Context()); session != nil {
-		session.VaultPath = vaultPath
+		session.SetVaultPath(vaultPath)
 		_, _ = session.LogNoteAccessEvent(args[0], "note_get")
 	}
 

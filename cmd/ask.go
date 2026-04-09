@@ -56,7 +56,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 
 	// Log experiment event (non-blocking)
 	if session := experiment.FromContext(cmd.Context()); session != nil {
-		session.VaultPath = vaultPath
+		session.SetVaultPath(vaultPath)
 		_, _ = session.LogAskEvent(args[0], map[string]any{
 			"top_hits": len(result.TopHits),
 			"variants": map[string]any{

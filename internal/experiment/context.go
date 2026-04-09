@@ -7,9 +7,24 @@ type contextKey struct{}
 
 // Session holds the active experiment session and its associated database.
 type Session struct {
-	DB        *DB
-	ID        string
-	VaultPath string
+	DB            *DB
+	ID            string
+	VaultPath     string
+	OutcomeWindow int // configurable outcome window; 0 uses default (2)
+}
+
+// SetVaultPath updates the vault path on the session and persists it to the DB.
+func (s *Session) SetVaultPath(vaultPath string) {
+	s.VaultPath = vaultPath
+	_ = s.DB.UpdateSessionVaultPath(s.ID, vaultPath)
+}
+
+// outcomeWindow returns the configured outcome window, defaulting to 2.
+func (s *Session) outcomeWindow() int {
+	if s.OutcomeWindow > 0 {
+		return s.OutcomeWindow
+	}
+	return 2
 }
 
 // WithSession stores s in the context and returns the updated context.
@@ -77,7 +92,6 @@ func (s *Session) LogNoteAccessEvent(noteID, source string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// Trigger outcome linkage (default window=2)
-	_, _ = s.DB.LinkOutcomes(s.ID, noteID, 2)
+	_, _ = s.DB.LinkOutcomes(s.ID, noteID, s.outcomeWindow())
 	return eventID, nil
 }
