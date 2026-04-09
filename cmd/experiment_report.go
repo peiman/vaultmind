@@ -40,7 +40,7 @@ func runExperimentReport(cmd *cobra.Command, _ []string) error {
 		}
 		return fmt.Errorf("opening experiment db: %w", err)
 	}
-	defer expDB.Close()
+	defer func() { _ = expDB.Close() }()
 
 	var variants []string
 	if expName != "" {
