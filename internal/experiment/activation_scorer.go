@@ -12,11 +12,13 @@ type ActivationParams struct {
 	D     float64 // decay exponent (ACT-R default: 0.5)
 	Alpha float64 // retrieval strength weight
 	Beta  float64 // storage strength weight
+	Delta float64 // spreading activation / similarity weight
 }
 
 // DefaultActivationParams returns params with research-based defaults.
+// Delta defaults to 0.0 (no similarity component) for backward compatibility.
 func DefaultActivationParams(gamma float64) ActivationParams {
-	return ActivationParams{Gamma: gamma, D: 0.5, Alpha: 0.6, Beta: 0.4}
+	return ActivationParams{Gamma: gamma, D: 0.5, Alpha: 0.6, Beta: 0.4, Delta: 0.0}
 }
 
 var variantGammas = map[string]float64{
@@ -50,24 +52,33 @@ func ComputeBatchScores(db *DB, noteIDs []string, params ActivationParams) (map[
 	}
 
 	now := time.Now().UTC()
-	scores, features := ScoreFromData(noteIDs, accessMap, windows, now, params)
+	scores, features := ScoreFromData(noteIDs, accessMap, windows, now, params, nil)
 	return scores, features, nil
 }
 
 // ScoreFromData computes activation scores from pre-fetched data.
 // Returns (scores, features). Use this to avoid redundant DB queries when
 // computing multiple variants over the same data.
-func ScoreFromData(noteIDs []string, accessMap map[string][]time.Time, windows []SessionWindow, now time.Time, params ActivationParams) (map[string]float64, map[string]map[string]float64) {
+// similarities is optional (nil = no similarity component). When provided,
+// it maps noteID -> cosine similarity with the current query, implementing
+// ACT-R spreading activation.
+func ScoreFromData(noteIDs []string, accessMap map[string][]time.Time, windows []SessionWindow, now time.Time, params ActivationParams, similarities map[string]float64) (map[string]float64, map[string]map[string]float64) {
 	scores := make(map[string]float64, len(noteIDs))
 	features := make(map[string]map[string]float64, len(noteIDs))
 
 	for _, noteID := range noteIDs {
 		accessTimes := accessMap[noteID]
+		sim := 0.0
+		if similarities != nil {
+			sim = similarities[noteID]
+		}
+
 		if len(accessTimes) == 0 {
-			scores[noteID] = 0.0
+			scores[noteID] = CombinedScore(0.0, 0.0, sim, params.Alpha, params.Beta, params.Delta)
 			features[noteID] = map[string]float64{
 				"retrieval_strength": 0.0,
 				"storage_strength":   0.0,
+				"similarity":         sim,
 				"access_count":       0.0,
 			}
 			continue
@@ -75,12 +86,13 @@ func ScoreFromData(noteIDs []string, accessMap map[string][]time.Time, windows [
 
 		retrieval := ComputeRetrieval(accessTimes, now, windows, params.Gamma, params.D)
 		storage := ComputeStorage(len(accessTimes))
-		score := CombinedScore(retrieval, storage, params.Alpha, params.Beta)
+		score := CombinedScore(retrieval, storage, sim, params.Alpha, params.Beta, params.Delta)
 
 		scores[noteID] = score
 		features[noteID] = map[string]float64{
 			"retrieval_strength": retrieval,
 			"storage_strength":   storage,
+			"similarity":         sim,
 			"access_count":       float64(len(accessTimes)),
 		}
 	}

@@ -95,7 +95,9 @@ func ComputeStorage(accessCount int) float64 {
 	return math.Log(1.0 + float64(accessCount))
 }
 
-// CombinedScore returns score = alpha * retrieval + beta * storage.
-func CombinedScore(retrieval, storage, alpha, beta float64) float64 {
-	return alpha*retrieval + beta*storage
+// CombinedScore returns score = alpha * retrieval + beta * storage + delta * similarity.
+// This implements the full ACT-R model: base-level activation (retrieval),
+// dual-strength storage (Bjork), and spreading activation (similarity).
+func CombinedScore(retrieval, storage, similarity, alpha, beta, delta float64) float64 {
+	return alpha*retrieval + beta*storage + delta*similarity
 }

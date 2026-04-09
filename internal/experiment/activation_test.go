@@ -146,6 +146,20 @@ func TestComputeStorage_Negative(t *testing.T) {
 }
 
 func TestCombinedScore(t *testing.T) {
-	score := CombinedScore(1.0, 2.0, 0.6, 0.4)
+	// Without similarity (delta=0): alpha*retrieval + beta*storage
+	score := CombinedScore(1.0, 2.0, 0.0, 0.6, 0.4, 0.0)
 	assert.InDelta(t, 1.4, score, 0.001)
+}
+
+func TestCombinedScore_WithSimilarity(t *testing.T) {
+	// alpha*retrieval + beta*storage + delta*similarity
+	// 0.5*1.0 + 0.3*2.0 + 0.2*0.8 = 0.5 + 0.6 + 0.16 = 1.26
+	score := CombinedScore(1.0, 2.0, 0.8, 0.5, 0.3, 0.2)
+	assert.InDelta(t, 1.26, score, 0.001)
+}
+
+func TestCombinedScore_SimilarityOnly(t *testing.T) {
+	// No access history, pure similarity
+	score := CombinedScore(0.0, 0.0, 0.95, 0.0, 0.0, 1.0)
+	assert.InDelta(t, 0.95, score, 0.001)
 }

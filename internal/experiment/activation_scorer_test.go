@@ -2,6 +2,7 @@ package experiment_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/stretchr/testify/assert"
@@ -72,4 +73,40 @@ func TestComputeBatchScores_WithAccesses(t *testing.T) {
 	assert.Equal(t, 0.0, scores["note-c"])
 	assert.Contains(t, features["note-a"], "retrieval_strength")
 	assert.Contains(t, features["note-a"], "storage_strength")
+}
+
+func TestScoreFromData_WithSimilarities(t *testing.T) {
+	now := time.Now().UTC()
+	accessMap := map[string][]time.Time{
+		"note-a": {now.Add(-1 * time.Hour)},
+		"note-b": {now.Add(-1 * time.Hour)},
+	}
+	similarities := map[string]float64{
+		"note-a": 0.9, // highly similar to query
+		"note-b": 0.1, // not similar
+	}
+	params := experiment.DefaultActivationParams(1.0)
+	params.Delta = 0.3
+	scores, features := experiment.ScoreFromData(
+		[]string{"note-a", "note-b"}, accessMap, nil, now, params, similarities,
+	)
+
+	// note-a should score higher due to similarity boost
+	assert.Greater(t, scores["note-a"], scores["note-b"])
+	assert.Contains(t, features["note-a"], "similarity")
+	assert.InDelta(t, 0.9, features["note-a"]["similarity"], 0.001)
+}
+
+func TestScoreFromData_NilSimilarities(t *testing.T) {
+	now := time.Now().UTC()
+	accessMap := map[string][]time.Time{
+		"note-a": {now.Add(-1 * time.Hour)},
+	}
+	params := experiment.DefaultActivationParams(1.0)
+	// nil similarities should work (backward compatible)
+	scores, features := experiment.ScoreFromData(
+		[]string{"note-a"}, accessMap, nil, now, params, nil,
+	)
+	assert.Greater(t, scores["note-a"], 0.0)
+	assert.Equal(t, 0.0, features["note-a"]["similarity"])
 }

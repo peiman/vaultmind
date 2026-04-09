@@ -86,7 +86,7 @@ func runMemoryContextPack(cmd *cobra.Command, args []string) error {
 			for _, variant := range actDef.AllVariants() {
 				gamma, _ := experiment.VariantGamma(variant)
 				params := experiment.DefaultActivationParams(gamma)
-				_, feats := experiment.ScoreFromData(accessedNotes, accessMap, windows, now, params)
+				_, feats := experiment.ScoreFromData(accessedNotes, accessMap, windows, now, params, nil)
 				results := make([]any, 0, len(result.Context))
 				for rank, item := range result.Context {
 					r := map[string]any{"note_id": item.ID, "rank": rank + 1}
