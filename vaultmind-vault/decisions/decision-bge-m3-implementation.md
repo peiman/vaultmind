@@ -2,8 +2,9 @@
 id: decision-bge-m3-implementation
 type: decision
 status: accepted
-title: "BGE-M3 3-in-1 via hugot pure Go backend with Go heads"
+title: "BGE-M3 3-in-1 via ORT backend with Go heads"
 created: 2026-04-08
+vm_updated: 2026-04-09
 tags:
   - architecture
   - embedding
@@ -18,53 +19,74 @@ related_ids:
 
 ## Decision
 
-Implement BGE-M3's three retrieval modes (dense, sparse, ColBERT) using hugot's pure Go backend (no CGO, no ORT). Bypass hugot's FeatureExtractionPipeline to access raw per-token hidden states, then apply the three heads as pure Go matrix operations. Load sparse_linear.pt and colbert_linear.pt weights via a Go torch loader.
+Implement BGE-M3's three retrieval modes (dense, sparse, ColBERT) using hugot with ONNX Runtime backend for indexing. Bypass hugot's FeatureExtractionPipeline to access raw per-token hidden states, then apply the three heads as pure Go matrix operations. Build with `-tags ORT` for BGE-M3 support; default build uses pure Go backend for MiniLM.
 
-## Performance Verification (2026-04-08)
+## Performance (Verified 2026-04-09, Apple Silicon M4 Max)
 
-Tested BGE-M3 (568M params) with hugot pure Go backend on Apple Silicon:
-- Embedder init: 10s (one-time model load)
-- 2 short texts: 1.9s (~950ms/text)
-- 1 longer text (3000 chars): 15s
-- Full vault (129 notes): estimated 2-3 minutes
+| Backend | Index (130 notes) | Query | Status |
+|---------|-------------------|-------|--------|
+| ORT CPU | **23 min** | **6s** | Shipping — works |
+| Pure Go | Hours (unusable) | ~1s short text | Too slow for indexing |
+| ORT + CoreML | Failed | — | XLMRoberta ops unsupported by CoreML EP |
+| coremltools conversion | Failed | — | int cast op unsupported in converter |
 
-Acceptable for a personal vault. No ORT/CGO needed.
+Pure Go backend bench test was misleading: tested with 10-token texts (~1s), but real notes average 800 tokens. Transformer attention is O(n2) — scaling is quadratic, not linear.
 
 ## Context
 
-BGE-M3's ONNX export (`BAAI/bge-m3/onnx/model.onnx`) contains ONLY the base XLMRobertaModel. It outputs a single tensor `last_hidden_state` of shape `[batch, seq_len, 1024]`. The three retrieval heads are separate PyTorch weight files NOT included in the ONNX model:
+BGE-M3's ONNX export (`BAAI/bge-m3/onnx/model.onnx`) contains ONLY the base XLMRobertaModel. It outputs a single tensor `last_hidden_state` of shape `[batch, seq_len, 1024]`. The three retrieval heads are separate weight files NOT included in the ONNX model:
 
 - `sparse_linear.pt` (3.52 KB): `Linear(1024, 1)` — token-to-scalar weight
 - `colbert_linear.pt` (2.1 MB): `Linear(1024, 1024)` — per-token projection
 
-hugot v0.7.0's `FeatureExtractionPipeline` always mean-pools 3D outputs — no raw per-token access. However, ORT backend internal fields are exported, enabling direct session access.
-
 ## Head Implementations (Pure Go)
 
-**Dense**: `last_hidden_state[:, 0]` (CLS token) → L2-normalize. No extra weights.
+**Dense**: `last_hidden_state[:, 0]` (CLS token, not mean pooling) then L2-normalize. No extra weights.
 
-**Sparse**: For each token: `weight = ReLU(dot(hidden, sparse_weights) + bias)`. Scatter weights to vocab positions via input_ids. Zero out special tokens. Output: sparse `map[int32]float32` per input.
+**Sparse**: For each non-special token: `weight = ReLU(dot(hidden, sparse_weights) + bias)`. Scatter to vocab positions via input_ids. Duplicate tokens keep max weight. Output: sparse `map[int32]float32`.
 
-**ColBERT**: For each token (skip CLS): `vec = matmul(hidden, colbert_weights) + bias` → L2-normalize per token. Output: `[seq_len-1, 1024]` per input.
+**ColBERT**: For each non-CLS token: `vec = matmul(hidden, colbert_weights) + bias` then L2-normalize. Output: `[seq_len-1, 1024]`.
 
 ## Storage
 
-Three BLOB columns in notes table: `embedding` (dense, existing), `sparse_embedding` (new), `colbert_embedding` (new).
+Three BLOB columns in notes table: `embedding` (dense), `sparse_embedding` (new), `colbert_embedding` (new, with 4-byte dims header).
 
-- Dense: raw float32 (1024 × 4 = 4KB/note)
-- Sparse: compressed pairs `int32:float32` (~200 entries × 8 = 1.6KB/note)
-- ColBERT: raw float32 matrix (seq_len × 1024 × 4, ~2MB/note at max length)
+- Dense: raw float32 (1024 x 4 = 4KB/note)
+- Sparse: packed int32:float32 pairs (~200 entries x 8 = 1.6KB/note)
+- ColBERT: 4-byte dims header + raw float32 matrix (variable, ~200KB-2MB/note)
+
+## GPU Investigation (2026-04-09)
+
+Three GPU paths attempted, all failed for BGE-M3:
+
+1. **ORT CoreML Execution Provider**: Cannot handle external data files (model.onnx + model.onnx_data split). Even after restructuring the data layout, fails with "unknown exception in Initialize()" — XLMRoberta's dynamic ops are unsupported.
+
+2. **coremltools PyTorch-to-CoreML conversion**: torch.jit.trace succeeds but coremltools converter fails on `int` cast op in XLMRoberta's attention mechanism ("only 0-dimensional arrays can be converted to Python scalars").
+
+3. **ONNX model merge** (eliminate external data): Protobuf has 2GB serialization limit. Model is 2.2GB so cannot be a single file.
+
+Conclusion: GPU acceleration for BGE-M3 on Apple Silicon is blocked by Apple's CoreML tooling, not by VaultMind. Future coremltools releases may add XLMRoberta support.
+
+## Build Configuration
+
+- `go build` (default): Pure Go backend. MiniLM works fine. BGE-M3 too slow for indexing.
+- `go build -tags ORT`: ONNX Runtime backend. Required for BGE-M3 indexing. Needs `libonnxruntime` + `libtokenizers` installed.
+- Build-tag-conditional session factory: `session_go.go` vs `session_ort.go` with `//go:build` tags.
+- Auto-detect `libonnxruntime` location: checks `ORT_LIB_DIR` env, `/opt/homebrew/lib`, `/usr/local/lib`.
 
 ## Alternatives Considered
 
-1. **Custom ONNX export with baked-in heads**: Requires Python in build pipeline. Rejected for simplicity.
-2. **Dense-only upgrade, add heads later**: Lower risk but user chose full 3-in-1 in single pass.
+1. **Pure Go backend for everything**: Verified too slow for BGE-M3 indexing (hours vs 23 min with ORT).
+2. **CoreML/GPU acceleration**: Blocked by Apple tooling limitations with XLMRoberta architecture.
 3. **onnxruntime-purego (no CGO)**: Marked unstable with no releases. Rejected for reliability.
+4. **Dense-only upgrade**: Lower risk but user chose full 3-in-1.
 
 ## Consequences
 
-- No CGO required — pure Go backend handles BGE-M3 (verified)
-- Must handle model.onnx_data download (hugot's DownloadModel misses it)
-- Must load two PyTorch weight files (sparse_linear.pt, colbert_linear.pt) from model cache via Go torch loader
-- Three new Retriever implementations plug into existing N-way RRF HybridRetriever
-- Query-time embedding ~1s per query (noticeable but tolerable for CLI)
+- CGO required at build time for BGE-M3 (`-tags ORT` build tag)
+- Must install `libonnxruntime` (via homebrew) and `libtokenizers` (pre-built binary from GitHub)
+- Default build (no tags) still works for MiniLM — no regression
+- Must handle `model.onnx_data` download (hugot's DownloadModel misses it)
+- Weight files loaded via gopickle (handles HalfStorage from PyTorch)
+- 4-way RRF hybrid: FTS + Dense + Sparse + ColBERT
+- 23 min index time, 6s query time (CPU-only ORT)
