@@ -2,6 +2,7 @@
 id: source-wixted-ebbesen-1991
 type: source
 title: "Wixted & Ebbesen. On the Form of Forgetting (1991)"
+url: "https://doi.org/10.1111/j.1467-9280.1991.tb00175.x"
 status: active
 created: 2026-04-09
 tags:

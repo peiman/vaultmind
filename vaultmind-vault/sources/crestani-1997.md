@@ -2,6 +2,7 @@
 id: source-crestani-1997
 type: source
 title: "Crestani. Application of Spreading Activation Techniques in Information Retrieval (1997)"
+url: "https://doi.org/10.1023/A:1006569829653"
 status: active
 created: 2026-04-09
 tags:

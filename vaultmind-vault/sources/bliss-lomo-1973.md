@@ -2,6 +2,7 @@
 id: source-bliss-lomo-1973
 type: source
 title: "Bliss & Lomo. Long-lasting Potentiation of Synaptic Transmission (1973)"
+url: "https://doi.org/10.1113/jphysiol.1973.sp010273"
 status: active
 created: 2026-04-09
 tags:
