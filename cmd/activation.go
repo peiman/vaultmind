@@ -17,7 +17,9 @@ type rankedItem struct {
 // computeActivationScores returns activation scores for the primary experiment
 // variant. Returns nil if the experiment session is absent, the activation
 // experiment is not enabled, or no notes have been accessed.
-func computeActivationScores(ctx context.Context) map[string]float64 {
+// similarities is optional — when provided (from search results), enables
+// spreading activation (Delta > 0) in the scoring model.
+func computeActivationScores(ctx context.Context, similarities map[string]float64) map[string]float64 {
 	session := experiment.FromContext(ctx)
 	if session == nil {
 		return nil
@@ -29,11 +31,14 @@ func computeActivationScores(ctx context.Context) map[string]float64 {
 	}
 	gamma, _ := experiment.VariantGamma(actDef.Primary)
 	params := experiment.DefaultActivationParams(gamma)
+	if similarities != nil {
+		params.Delta = 0.2
+	}
 	accessedNotes, _ := session.DB.AccessedNoteIDs()
 	if len(accessedNotes) == 0 {
 		return nil
 	}
-	scores, _, _ := experiment.ComputeBatchScores(session.DB, accessedNotes, params)
+	scores, _, _ := experiment.ComputeBatchScores(session.DB, accessedNotes, params, similarities)
 	return scores
 }
 

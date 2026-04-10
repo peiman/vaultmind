@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,8 @@ import (
 	"github.com/peiman/vaultmind/internal/envelope"
 	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/graph"
+	"github.com/peiman/vaultmind/internal/index"
+	"github.com/peiman/vaultmind/internal/memory"
 	"github.com/peiman/vaultmind/internal/query"
 	"github.com/spf13/cobra"
 )
@@ -45,17 +48,36 @@ func runAsk(cmd *cobra.Command, args []string) error {
 
 	resolver := graph.NewResolver(vdb.DB)
 
-	activationScores := computeActivationScores(cmd.Context())
-
-	result, err := query.Ask(retriever, resolver, vdb.DB, query.AskConfig{
-		Query:            args[0],
-		Budget:           getConfigValueWithFlags[int](cmd, "budget", config.KeyAppAskBudget),
-		MaxItems:         getConfigValueWithFlags[int](cmd, "max-items", config.KeyAppAskMaxItems),
-		SearchLimit:      getConfigValueWithFlags[int](cmd, "search-limit", config.KeyAppAskSearchLimit),
-		ActivationScores: activationScores,
-	})
+	// Step 1: Search — retrieves hits with cosine similarity scores.
+	searchLimit := getConfigValueWithFlags[int](cmd, "search-limit", config.KeyAppAskSearchLimit)
+	hits, _, err := retriever.Search(context.Background(), args[0], searchLimit, 0, index.SearchFilters{})
 	if err != nil {
-		return fmt.Errorf("ask: %w", err)
+		return fmt.Errorf("ask: search: %w", err)
+	}
+
+	// Step 2: Build similarities from search scores for spreading activation.
+	similarities := make(map[string]float64, len(hits))
+	for _, hit := range hits {
+		similarities[hit.ID] = hit.Score
+	}
+
+	// Step 3: Compute activation scores with spreading activation (query similarity).
+	activationScores := computeActivationScores(cmd.Context(), similarities)
+
+	// Step 4: Context-pack around the top hit.
+	result := &query.AskResult{Query: args[0], TopHits: hits}
+	if len(hits) > 0 {
+		packResult, packErr := memory.ContextPack(resolver, vdb.DB, memory.ContextPackConfig{
+			Input:            hits[0].ID,
+			Budget:           getConfigValueWithFlags[int](cmd, "budget", config.KeyAppAskBudget),
+			Depth:            1,
+			MaxItems:         getConfigValueWithFlags[int](cmd, "max-items", config.KeyAppAskMaxItems),
+			Slim:             true,
+			ActivationScores: activationScores,
+		})
+		if packErr == nil {
+			result.Context = packResult
+		}
 	}
 
 	// Log experiment event with shadow variant scores

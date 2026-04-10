@@ -21,7 +21,7 @@ func openTestExpDB(t *testing.T) *experiment.DB {
 }
 
 func TestComputeActivationScores_NilSession(t *testing.T) {
-	scores := computeActivationScores(context.Background())
+	scores := computeActivationScores(context.Background(), nil)
 	assert.Nil(t, scores)
 }
 
@@ -34,7 +34,7 @@ func TestComputeActivationScores_NoActivationExperiment(t *testing.T) {
 	ctx := experiment.WithSession(context.Background(), session)
 
 	// No experiment config in viper → no activation scores
-	scores := computeActivationScores(ctx)
+	scores := computeActivationScores(ctx, nil)
 	assert.Nil(t, scores)
 }
 

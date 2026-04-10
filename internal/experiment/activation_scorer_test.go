@@ -42,7 +42,7 @@ func TestDefaultActivationParams(t *testing.T) {
 func TestComputeBatchScores_Empty(t *testing.T) {
 	db := openTestExpDB(t)
 	params := experiment.DefaultActivationParams(0.2)
-	scores, features, err := experiment.ComputeBatchScores(db, nil, params)
+	scores, features, err := experiment.ComputeBatchScores(db, nil, params, nil)
 	require.NoError(t, err)
 	assert.Empty(t, scores)
 	assert.Empty(t, features)
@@ -66,13 +66,44 @@ func TestComputeBatchScores_WithAccesses(t *testing.T) {
 	})
 
 	params := experiment.DefaultActivationParams(0.2)
-	scores, features, err := experiment.ComputeBatchScores(db, []string{"note-a", "note-b", "note-c"}, params)
+	scores, features, err := experiment.ComputeBatchScores(db, []string{"note-a", "note-b", "note-c"}, params, nil)
 	require.NoError(t, err)
 
 	assert.Greater(t, scores["note-a"], scores["note-b"])
 	assert.Equal(t, 0.0, scores["note-c"])
 	assert.Contains(t, features["note-a"], "retrieval_strength")
 	assert.Contains(t, features["note-a"], "storage_strength")
+}
+
+func TestComputeBatchScores_WithSimilarities(t *testing.T) {
+	db := openTestExpDB(t)
+	sid, _ := db.StartSession("/vault")
+
+	// Both notes accessed once
+	_, _ = db.LogEvent(experiment.Event{
+		SessionID: sid, Type: experiment.EventNoteAccess, VaultPath: "/vault",
+		Data: map[string]any{"note_id": "note-a", "source": "search"},
+	})
+	_, _ = db.LogEvent(experiment.Event{
+		SessionID: sid, Type: experiment.EventNoteAccess, VaultPath: "/vault",
+		Data: map[string]any{"note_id": "note-b", "source": "search"},
+	})
+
+	params := experiment.DefaultActivationParams(0.2)
+	params.Delta = 0.3
+
+	similarities := map[string]float64{
+		"note-a": 0.9,
+		"note-b": 0.1,
+	}
+
+	scores, feats, err := experiment.ComputeBatchScores(db, []string{"note-a", "note-b"}, params, similarities)
+	require.NoError(t, err)
+
+	// note-a should score higher due to similarity boost
+	assert.Greater(t, scores["note-a"], scores["note-b"])
+	assert.InDelta(t, 0.9, feats["note-a"]["similarity"], 0.001)
+	assert.InDelta(t, 0.1, feats["note-b"]["similarity"], 0.001)
 }
 
 func TestScoreFromData_WithSimilarities(t *testing.T) {
