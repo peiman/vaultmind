@@ -40,3 +40,5 @@ VaultMind already implements graph-based spreading activation for context-pack a
 - Crestani, F. (1997). Application of spreading activation techniques in information retrieval. *Artificial Intelligence Review*, 11(6), 453-482. DOI: 10.1023/A:1006569829653
 - Joachims, T. (2002). Optimizing search engines using clickthrough data. *Proceedings of ACM SIGKDD*, 133-142. DOI: 10.1145/775047.775067
 - Salton, G. & Buckley, C. (1990). Improving retrieval performance by relevance feedback. *JASIS*, 41(4), 288-297. DOI: 10.1002/(SICI)1097-4571(199006)41:4<288::AID-ASI8>3.0.CO;2-H
+
+The [[concept-a-rag|A-RAG]] framework (2026) demonstrates that exposing retrieval at multiple granularities (keyword, semantic, chunk-read) lets LLM agents autonomously choose the most efficient strategy. This validates the design of VaultMind's planned MCP server, which exposes six tools at different granularities, including graph traversal that A-RAG lacks.

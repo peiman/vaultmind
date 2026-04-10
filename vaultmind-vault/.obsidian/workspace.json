@@ -13,22 +13,22 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "concepts/working-memory.md",
+                "file": "concepts/self-rag.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "working-memory"
+              "title": "self-rag"
             }
           }
         ]
       },
       {
-        "id": "507b97cf87e9bf96",
+        "id": "2d978c5f4319e5a7",
         "type": "tabs",
         "children": [
           {
-            "id": "e7543398b8bc2305",
+            "id": "2717188e3ec0b1b6",
             "type": "leaf",
             "state": {
               "type": "graph",
@@ -196,34 +196,34 @@
       "bases:Create new base": false
     }
   },
-  "active": "e7543398b8bc2305",
+  "active": "2717188e3ec0b1b6",
   "lastOpenFiles": [
-    "concepts/hybrid-search.md",
-    "concepts/vector-similarity-search.md",
-    "concepts/matryoshka-embeddings.md",
-    "concepts/onnx-inference.md",
-    "concepts/mteb-benchmark.md",
-    "concepts/open-source-embedding-models.md",
-    "concepts/zettelkasten.md",
-    "concepts/sparse-retrieval.md",
-    "sources/source-huang-2023.md",
-    "concepts/retrieval-evaluation-metrics.md",
-    "concepts/hallucination-grounding.md",
-    "concepts/dual-coding.md",
-    "concepts/query-expansion.md",
-    "concepts/clarion.md",
-    "concepts/chunking-strategies.md",
-    "sources/source-ahrens-2017.md",
-    "sources/source-jeong-2024.md",
-    "concepts/memory-replay.md",
+    "decisions/decision-vaultmind-mcp-server.md",
+    "concepts/concept-memr3.md",
+    "concepts/concept-a-rag.md",
+    "concepts/context-pack.md",
+    "templates/source.md",
+    "concepts/self-rag.md",
+    "sources/source-pavlik-anderson-2005.md",
+    "concepts/concept-actmem.md",
+    "concepts/concept-memos.md",
+    "concepts/concept-a-mem.md",
+    "sources/source-honda-2024.md",
+    "sources/source-zhang-kraska-khattab-2025.md",
+    "concepts/spaced-repetition-algorithms.md",
+    "concepts/new-theory-of-disuse.md",
+    "concepts/temporal-activation-for-intermittent-systems.md",
+    "sources/crestani-1997.md",
+    "sources/bliss-lomo-1973.md",
+    "sources/wixted-ebbesen-1991.md",
+    "concepts/spreading-activation-in-ir.md",
+    "concepts/power-law-forgetting.md",
+    "concepts/hebbian-learning.md",
+    "concepts/corrective-rag.md",
+    "concepts/cognitive-load-theory.md",
+    "concepts/base-level-activation.md",
     "concepts/adaptive-rag.md",
-    "concepts/prospective-memory.md",
-    "sources/source-nogueira-2019.md",
-    "concepts/reranking.md",
-    "templates/person.md",
-    "sources/source-edge-2024.md",
-    "concepts/working-memory.md",
-    "sources/source-izacard-2022.md",
+    "decisions/decision-bge-m3-implementation.md",
     "tmp",
     "templates",
     "decisions",
