@@ -21,9 +21,13 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/mattn/go-isatty"
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/.ckeletin/pkg/logger"
+	"github.com/peiman/vaultmind/.ckeletin/pkg/output"
+	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/xdg"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -31,15 +35,16 @@ import (
 )
 
 var (
-	cfgFile          string
-	configPathMode   = ConfigPathModeXDG
-	configPathFlag   *pflag.Flag
-	Version          = "dev"
-	Commit           = ""
-	Date             = ""
-	binaryName       = "" // MUST be injected via ldflags (see Taskfile.yml LDFLAGS)
-	configFileStatus string
-	configFileUsed   string
+	cfgFile           string
+	configPathMode    = ConfigPathModeXDG
+	configPathFlag    *pflag.Flag
+	Version           = "dev"
+	Commit            = ""
+	Date              = ""
+	binaryName        = "" // MUST be injected via ldflags (see Taskfile.yml LDFLAGS)
+	configFileStatus  string
+	configFileUsed    string
+	experimentSession *experiment.Session
 
 	// Compiled regex patterns for EnvPrefix()
 	// Compiled once at package initialization for better performance
@@ -214,6 +219,12 @@ var RootCmd = &cobra.Command{
 			return fmt.Errorf("failed to bind flags: %w", err)
 		}
 
+		// Early output mode detection from explicit flag (before config load)
+		if f := cmd.Root().PersistentFlags().Lookup("output-format"); f != nil && f.Changed {
+			output.SetOutputMode(f.Value.String())
+		}
+		output.SetCommandName(cmd.Name())
+
 		// Initialize configuration
 		if err := initConfig(); err != nil {
 			return err
@@ -222,6 +233,12 @@ var RootCmd = &cobra.Command{
 		// Initialize logger with configuration values
 		if err := logger.Init(nil); err != nil {
 			return fmt.Errorf("failed to initialize logger: %w", err)
+		}
+
+		// Activate JSON output mode (from config or flag) and suppress logs
+		output.SetOutputMode(viper.GetString(config.KeyAppOutputFormat))
+		if output.IsJSONMode() {
+			zerolog.SetGlobalLevel(zerolog.Disabled)
 		}
 
 		// Log config status after logger is initialized
@@ -233,6 +250,62 @@ var RootCmd = &cobra.Command{
 			}
 		}
 
+		// Initialize experiment session (non-blocking)
+		telemetry := viper.GetString(config.KeyExperimentsTelemetry)
+		if telemetry == experiment.TelemetryOff {
+			log.Debug().Msg("Experiments disabled (telemetry: off)")
+		} else if expDB, expErr := openExperimentDB(); expErr != nil {
+			log.Debug().Err(expErr).Msg("Experiment DB unavailable")
+		} else {
+			// Prompt for telemetry on first run (interactive TTY only)
+			if telemetry == "" {
+				if firstRun, _ := expDB.IsFirstRun(); firstRun {
+					if isatty.IsTerminal(os.Stdin.Fd()) {
+						telemetry = experiment.PromptTelemetry(os.Stdin, cmd.ErrOrStderr())
+						viper.Set(config.KeyExperimentsTelemetry, telemetry)
+						if cf := viper.ConfigFileUsed(); cf != "" {
+							if err := persistTelemetryChoice(telemetry, cf); err != nil {
+								log.Debug().Err(err).Msg("Failed to persist telemetry choice to config file")
+							}
+						}
+						if telemetry == experiment.TelemetryOff {
+							log.Debug().Msg("User chose telemetry: off")
+							_ = expDB.Close()
+							return nil
+						}
+					} else {
+						log.Debug().Msg("Non-interactive session, defaulting to anonymous telemetry")
+					}
+				}
+			}
+
+			if recovered, recErr := expDB.RecoverOrphans(); recErr != nil {
+				log.Debug().Err(recErr).Msg("Failed to recover orphan sessions")
+			} else if recovered > 0 {
+				log.Debug().Int("recovered", recovered).Msg("Recovered orphan experiment sessions")
+			}
+			sid, startErr := expDB.StartSession("")
+			if startErr != nil {
+				log.Debug().Err(startErr).Msg("Failed to start experiment session")
+				_ = expDB.Close()
+			} else {
+				outcomeWindow := viper.GetInt(config.KeyExperimentsOutcomeWindowSessions)
+				if outcomeWindow <= 0 {
+					outcomeWindow = 2
+				}
+				experimentSession = &experiment.Session{DB: expDB, ID: sid, OutcomeWindow: outcomeWindow}
+				cmd.SetContext(experiment.WithSession(cmd.Context(), experimentSession))
+			}
+		}
+
+		return nil
+	},
+	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
+		if experimentSession != nil {
+			_ = experimentSession.DB.EndSession(experimentSession.ID)
+			_ = experimentSession.DB.Close()
+			experimentSession = nil
+		}
 		return nil
 	},
 }
@@ -306,6 +379,9 @@ Powered by Cobra, Viper, Zerolog, and Bubble Tea with enforced architecture patt
 
 	RootCmd.PersistentFlags().Int("log-sampling-thereafter", 100, "Number of messages to log thereafter per second")
 
+	// Output format flag
+	RootCmd.PersistentFlags().String("output-format", "text", "Output format: text or json")
+
 	// Hide logging flags from --help to reduce noise. They still work when explicitly passed.
 	RootCmd.PersistentFlags().VisitAll(func(f *pflag.Flag) {
 		if strings.HasPrefix(f.Name, "log-") {
@@ -344,6 +420,7 @@ func bindFlags(cmd *cobra.Command) error {
 	bindFlag(config.KeyAppLogSamplingEnabled, "log-sampling-enabled")
 	bindFlag(config.KeyAppLogSamplingInitial, "log-sampling-initial")
 	bindFlag(config.KeyAppLogSamplingThereafter, "log-sampling-thereafter")
+	bindFlag(config.KeyAppOutputFormat, "output-format")
 
 	// Return combined error if any bindings failed
 	if len(errs) > 0 {
@@ -560,6 +637,17 @@ func getConfigValueWithFlags[T any](cmd *cobra.Command, flagName string, viperKe
 	return value
 }
 
+// openExperimentDB resolves the XDG data path for the experiment database and
+// opens (or creates) the SQLite file. It returns an error only if the path
+// cannot be resolved or the database cannot be opened.
+func openExperimentDB() (*experiment.DB, error) {
+	dbPath, err := xdg.DataFile("experiments.db")
+	if err != nil {
+		return nil, fmt.Errorf("resolving experiment db path: %w", err)
+	}
+	return experiment.Open(dbPath)
+}
+
 // getKeyValue retrieves a configuration value from Viper by key only.
 //
 // This function is used when flags are already bound to Viper and you want to
@@ -581,6 +669,12 @@ func getConfigValueWithFlags[T any](cmd *cobra.Command, flagName string, viperKe
 //
 // Returns:
 //   - The configuration value of type T, or zero value if not found/conversion fails
+
+// loadExperimentDefs reads the experiments map from config and returns parsed definitions.
+func loadExperimentDefs() map[string]experiment.ExperimentDef {
+	return experiment.ParseExperiments(viper.GetStringMap(config.KeyExperiments))
+}
+
 func getKeyValue[T any](viperKey string) T {
 	var zero T
 	if v := viper.Get(viperKey); v != nil {

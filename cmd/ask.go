@@ -9,6 +9,7 @@ import (
 	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/config/commands"
 	"github.com/peiman/vaultmind/internal/envelope"
+	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/graph"
 	"github.com/peiman/vaultmind/internal/query"
 	"github.com/spf13/cobra"
@@ -34,16 +35,51 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	}
 	defer vdb.Close()
 
+	retriever, cleanup, err := query.BuildAutoRetriever(vdb.DB)
+	if err != nil {
+		return err
+	}
+	if cleanup != nil {
+		defer cleanup()
+	}
+
 	resolver := graph.NewResolver(vdb.DB)
-	result, err := query.Ask(&query.FTSRetriever{DB: vdb.DB}, resolver, vdb.DB, query.AskConfig{
-		Query:       args[0],
-		Budget:      getConfigValueWithFlags[int](cmd, "budget", config.KeyAppAskBudget),
-		MaxItems:    getConfigValueWithFlags[int](cmd, "max-items", config.KeyAppAskMaxItems),
-		SearchLimit: getConfigValueWithFlags[int](cmd, "search-limit", config.KeyAppAskSearchLimit),
+
+	activationScores := computeActivationScores(cmd.Context())
+
+	result, err := query.Ask(retriever, resolver, vdb.DB, query.AskConfig{
+		Query:            args[0],
+		Budget:           getConfigValueWithFlags[int](cmd, "budget", config.KeyAppAskBudget),
+		MaxItems:         getConfigValueWithFlags[int](cmd, "max-items", config.KeyAppAskMaxItems),
+		SearchLimit:      getConfigValueWithFlags[int](cmd, "search-limit", config.KeyAppAskSearchLimit),
+		ActivationScores: activationScores,
 	})
 	if err != nil {
 		return fmt.Errorf("ask: %w", err)
 	}
+
+	// Log experiment event with shadow variant scores
+	if session := experiment.FromContext(cmd.Context()); session != nil {
+		session.SetVaultPath(vaultPath)
+		exps := loadExperimentDefs()
+		if actDef, ok := exps["activation"]; ok && actDef.Enabled && result.Context != nil {
+			items := make([]rankedItem, len(result.Context.Context))
+			for i, item := range result.Context.Context {
+				items[i] = rankedItem{ID: item.ID, Rank: i + 1}
+			}
+			_, _ = session.LogAskEvent(args[0], map[string]any{
+				"primary_variant": actDef.Primary,
+				"top_hits":        len(result.TopHits),
+				"variants":        buildVariantResults(session, actDef, items),
+			})
+		} else {
+			_, _ = session.LogAskEvent(args[0], map[string]any{
+				"top_hits": len(result.TopHits),
+				"variants": map[string]any{"none": map[string]any{"results": []any{}}},
+			})
+		}
+	}
+
 	if !getConfigValueWithFlags[bool](cmd, "json", config.KeyAppAskJson) {
 		return query.FormatAsk(result, cmd.OutOrStdout())
 	}

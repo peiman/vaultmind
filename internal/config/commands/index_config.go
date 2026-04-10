@@ -14,6 +14,8 @@ Use --full to force a complete rebuild from scratch.`,
 		"app.index.vault": "vault",
 		"app.index.json":  "json",
 		"app.index.full":  "full",
+		"app.index.embed": "embed",
+		"app.index.model": "model",
 	},
 }
 
@@ -43,6 +45,22 @@ func IndexOptions() []config.ConfigOption {
 			Type:         "bool",
 			Required:     false,
 			Example:      "true",
+		},
+		{
+			Key:          "app.index.embed",
+			DefaultValue: false,
+			Description:  "Compute and store embeddings for note bodies",
+			Type:         "bool",
+			Required:     false,
+			Example:      "true",
+		},
+		{
+			Key:          "app.index.model",
+			DefaultValue: "minilm",
+			Description:  "Embedding model: minilm (384d, fast) or bge-m3 (1024d, 3-in-1)",
+			Type:         "string",
+			Required:     false,
+			Example:      "bge-m3",
 		},
 	}
 }

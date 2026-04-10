@@ -10,9 +10,36 @@ import (
 
 // HugotEmbedder wraps the hugot library to produce embeddings using ONNX models.
 type HugotEmbedder struct {
-	session  *hugot.Session
-	pipeline *pipelines.FeatureExtractionPipeline
-	dims     int
+	session   *hugot.Session
+	pipeline  *pipelines.FeatureExtractionPipeline
+	dims      int
+	maxTokens int
+}
+
+// approxCharsPerToken is a conservative estimate for English text.
+// Transformer subword tokenizers average 3-4 characters per token.
+// We use 3 (conservative) to avoid exceeding the model's context window.
+const approxCharsPerToken = 3
+
+// TruncateForEmbedding truncates text to fit within the model's token limit.
+// Uses a character-based approximation (4 chars/token for English).
+// Breaks at word boundaries when possible.
+func TruncateForEmbedding(text string, maxTokens int) string {
+	if maxTokens <= 0 {
+		return ""
+	}
+	maxChars := maxTokens * approxCharsPerToken
+	if len(text) <= maxChars {
+		return text
+	}
+	cut := text[:maxChars]
+	// Find last space for clean word break
+	for i := len(cut) - 1; i > maxChars-40 && i > 0; i-- {
+		if cut[i] == ' ' {
+			return cut[:i]
+		}
+	}
+	return cut
 }
 
 // HugotConfig configures the HugotEmbedder.
@@ -34,6 +61,10 @@ type HugotConfig struct {
 	// OnnxFilePath specifies which ONNX file to use when a model has multiple variants.
 	// E.g., "onnx/model.onnx" for the default, "onnx/model_O2.onnx" for optimized.
 	OnnxFilePath string
+
+	// MaxTokens is the model's context window size. Texts longer than this (in approximate
+	// tokens) are truncated before embedding. 0 means no truncation.
+	MaxTokens int
 }
 
 // NewHugotEmbedder creates an embedder using hugot with the Go backend.
@@ -73,9 +104,10 @@ func NewHugotEmbedder(cfg HugotConfig) (*HugotEmbedder, error) {
 	}
 
 	return &HugotEmbedder{
-		session:  session,
-		pipeline: pipeline,
-		dims:     cfg.Dims,
+		session:   session,
+		pipeline:  pipeline,
+		dims:      cfg.Dims,
+		maxTokens: cfg.MaxTokens,
 	}, nil
 }
 
@@ -92,7 +124,15 @@ func (e *HugotEmbedder) Embed(ctx context.Context, text string) ([]float32, erro
 }
 
 // EmbedBatch produces embedding vectors for multiple texts.
+// Texts exceeding the model's token limit are truncated automatically.
 func (e *HugotEmbedder) EmbedBatch(_ context.Context, texts []string) ([][]float32, error) {
+	if e.maxTokens > 0 {
+		truncated := make([]string, len(texts))
+		for i, t := range texts {
+			truncated[i] = TruncateForEmbedding(t, e.maxTokens)
+		}
+		texts = truncated
+	}
 	result, err := e.pipeline.RunPipeline(texts)
 	if err != nil {
 		return nil, fmt.Errorf("running embedding pipeline: %w", err)

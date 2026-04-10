@@ -10,6 +10,7 @@ import (
 	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/config/commands"
 	"github.com/peiman/vaultmind/internal/envelope"
+	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/graph"
 	memory "github.com/peiman/vaultmind/internal/memory"
 	"github.com/spf13/cobra"
@@ -38,18 +39,45 @@ func runMemoryContextPack(cmd *cobra.Command, args []string) error {
 
 	jsonOut := getConfigValueWithFlags[bool](cmd, "json", config.KeyAppMemorycontextpackJson)
 	resolver := graph.NewResolver(vdb.DB)
+
+	activationScores := computeActivationScores(cmd.Context())
+
 	result, err := memory.ContextPack(resolver, vdb.DB, memory.ContextPackConfig{
-		Input:    args[0],
-		Budget:   getConfigValueWithFlags[int](cmd, "budget", config.KeyAppMemorycontextpackBudget),
-		Depth:    getConfigValueWithFlags[int](cmd, "depth", config.KeyAppMemorycontextpackDepth),
-		MaxItems: getConfigValueWithFlags[int](cmd, "max-items", config.KeyAppMemorycontextpackMaxItems),
-		Slim:     getConfigValueWithFlags[bool](cmd, "slim", config.KeyAppMemorycontextpackSlim),
+		Input:            args[0],
+		Budget:           getConfigValueWithFlags[int](cmd, "budget", config.KeyAppMemorycontextpackBudget),
+		Depth:            getConfigValueWithFlags[int](cmd, "depth", config.KeyAppMemorycontextpackDepth),
+		MaxItems:         getConfigValueWithFlags[int](cmd, "max-items", config.KeyAppMemorycontextpackMaxItems),
+		Slim:             getConfigValueWithFlags[bool](cmd, "slim", config.KeyAppMemorycontextpackSlim),
+		ActivationScores: activationScores,
 	})
 	if err != nil {
 		if jsonOut {
 			return cmdutil.WriteJSONError(cmd.OutOrStdout(), "memory context-pack", "context_pack_error", err.Error())
 		}
 		return fmt.Errorf("context-pack: %w", err)
+	}
+
+	// Log experiment event with shadow variant scores
+	if session := experiment.FromContext(cmd.Context()); session != nil {
+		session.SetVaultPath(vaultPath)
+		exps := loadExperimentDefs()
+		if actDef, ok := exps["activation"]; ok && actDef.Enabled {
+			items := make([]rankedItem, len(result.Context))
+			for i, item := range result.Context {
+				items[i] = rankedItem{ID: item.ID, Rank: i + 1}
+			}
+			_, _ = session.LogContextPackEvent(map[string]any{
+				"primary_variant": actDef.Primary,
+				"target_id":       result.TargetID,
+				"variants":        buildVariantResults(session, actDef, items),
+			})
+		} else {
+			_, _ = session.LogContextPackEvent(map[string]any{
+				"target_id":     result.TargetID,
+				"context_items": len(result.Context),
+				"variants":      map[string]any{"none": map[string]any{"results": []any{}}},
+			})
+		}
 	}
 
 	if jsonOut {

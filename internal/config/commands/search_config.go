@@ -15,6 +15,7 @@ var SearchMetadata = config.CommandMetadata{
 		"app.search.offset": "offset",
 		"app.search.type":   "type",
 		"app.search.tag":    "tag",
+		"app.search.mode":   "mode",
 	},
 }
 
@@ -27,6 +28,7 @@ func SearchOptions() []config.ConfigOption {
 		{Key: "app.search.offset", DefaultValue: 0, Description: "Skip first N results", Type: "int"},
 		{Key: "app.search.type", DefaultValue: "", Description: "Filter by note type", Type: "string"},
 		{Key: "app.search.tag", DefaultValue: "", Description: "Filter by tag", Type: "string"},
+		{Key: "app.search.mode", DefaultValue: "keyword", Description: "Search mode: keyword, semantic, or hybrid", Type: "string"},
 	}
 }
 

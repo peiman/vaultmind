@@ -18,6 +18,7 @@ const (
 	KeyAppLogSamplingEnabled            = "app.log.sampling_enabled"            // Enable log sampling for high-volume scenarios
 	KeyAppLogSamplingInitial            = "app.log.sampling_initial"            // Number of messages to log per second before sampling
 	KeyAppLogSamplingThereafter         = "app.log.sampling_thereafter"         // Number of messages to log thereafter per second
+	KeyAppOutputFormat                  = "app.output_format"                   // Output format: text (human-readable) or json (machine-readable)
 	KeyAppDocsOutputFormat              = "app.docs.output_format"              // Output format for documentation (markdown, yaml)
 	KeyAppDocsOutputFile                = "app.docs.output_file"                // Output file for documentation (defaults to stdout)
 	KeyAppApplyVault                    = "app.apply.vault"                     // Path to vault root
@@ -46,6 +47,12 @@ const (
 	KeyAppDataviewlintJson              = "app.dataviewlint.json"               // Output in JSON format
 	KeyAppDoctorVault                   = "app.doctor.vault"                    // Path to vault root
 	KeyAppDoctorJson                    = "app.doctor.json"                     // Output in JSON format
+	KeyAppExperimentreportExperiment    = "app.experimentreport.experiment"     // Experiment name to report on
+	KeyAppExperimentreportJson          = "app.experimentreport.json"           // Output in JSON format
+	KeyAppExperimentreportK             = "app.experimentreport.k"              // K value for Hit@K metric
+	KeyExperiments                      = "experiments"                         // Top-level experiment definitions map
+	KeyExperimentsTelemetry             = "experiments.telemetry"               // Telemetry level: anonymous, full, off
+	KeyExperimentsOutcomeWindowSessions = "experiments.outcome_window_sessions" // Sessions to look back for outcome linkage
 	KeyAppFrontmatterVault              = "app.frontmatter.vault"               // Path to vault root
 	KeyAppFrontmatterJson               = "app.frontmatter.json"                // Output in JSON format
 	KeyAppFrontmattersetVault           = "app.frontmatterset.vault"            // Path to vault root
@@ -77,6 +84,8 @@ const (
 	KeyAppIndexVault                    = "app.index.vault"                     // Path to the vault root directory
 	KeyAppIndexJson                     = "app.index.json"                      // Output in JSON format
 	KeyAppIndexFull                     = "app.index.full"                      // Force full rebuild instead of incremental index
+	KeyAppIndexEmbed                    = "app.index.embed"                     // Compute and store embeddings for note bodies
+	KeyAppIndexModel                    = "app.index.model"                     // Embedding model: minilm (384d, fast) or bge-m3 (1024d, 3-in-1)
 	KeyAppLinksVault                    = "app.links.vault"                     // Path to vault root
 	KeyAppLinksJson                     = "app.links.json"                      // Output in JSON format
 	KeyAppLinksEdgeType                 = "app.links.edge_type"                 // Filter by edge type
@@ -128,6 +137,7 @@ const (
 	KeyAppSearchOffset                  = "app.search.offset"                   // Skip first N results
 	KeyAppSearchType                    = "app.search.type"                     // Filter by note type
 	KeyAppSearchTag                     = "app.search.tag"                      // Filter by tag
+	KeyAppSearchMode                    = "app.search.mode"                     // Search mode: keyword, semantic, or hybrid
 	KeyAppVaultstatusVault              = "app.vaultstatus.vault"               // Path to vault root
 	KeyAppVaultstatusJson               = "app.vaultstatus.json"                // Output in JSON format
 )
