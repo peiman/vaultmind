@@ -249,6 +249,11 @@ var RootCmd = &cobra.Command{
 					if isatty.IsTerminal(os.Stdin.Fd()) {
 						telemetry = experiment.PromptTelemetry(os.Stdin, cmd.ErrOrStderr())
 						viper.Set(config.KeyExperimentsTelemetry, telemetry)
+						if cf := viper.ConfigFileUsed(); cf != "" {
+							if err := persistTelemetryChoice(telemetry, cf); err != nil {
+								log.Debug().Err(err).Msg("Failed to persist telemetry choice to config file")
+							}
+						}
 						if telemetry == experiment.TelemetryOff {
 							log.Debug().Msg("User chose telemetry: off")
 							_ = expDB.Close()

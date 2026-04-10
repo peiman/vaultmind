@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/internal/cmdutil"
@@ -46,19 +45,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 
 	resolver := graph.NewResolver(vdb.DB)
 
-	// Compute activation scores if experiment is enabled
-	var activationScores map[string]float64
-	if session := experiment.FromContext(cmd.Context()); session != nil {
-		exps := loadExperimentDefs()
-		if actDef, ok := exps["activation"]; ok && actDef.Enabled {
-			gamma, _ := experiment.VariantGamma(actDef.Primary)
-			params := experiment.DefaultActivationParams(gamma)
-			accessedNotes, _ := session.DB.AccessedNoteIDs()
-			if len(accessedNotes) > 0 {
-				activationScores, _, _ = experiment.ComputeBatchScores(session.DB, accessedNotes, params)
-			}
-		}
-	}
+	activationScores := computeActivationScores(cmd.Context())
 
 	result, err := query.Ask(retriever, resolver, vdb.DB, query.AskConfig{
 		Query:            args[0],
@@ -76,29 +63,14 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		session.SetVaultPath(vaultPath)
 		exps := loadExperimentDefs()
 		if actDef, ok := exps["activation"]; ok && actDef.Enabled && result.Context != nil {
-			accessedNotes, _ := session.DB.AccessedNoteIDs()
-			accessMap, _ := session.DB.BatchNoteAccessTimes(accessedNotes)
-			windows, _ := session.DB.RecentSessionWindows(100)
-			now := time.Now().UTC()
-			variantResults := make(map[string]any, len(actDef.AllVariants()))
-			for _, variant := range actDef.AllVariants() {
-				gamma, _ := experiment.VariantGamma(variant)
-				params := experiment.DefaultActivationParams(gamma)
-				_, feats := experiment.ScoreFromData(accessedNotes, accessMap, windows, now, params, nil)
-				results := make([]any, 0, len(result.Context.Context))
-				for rank, item := range result.Context.Context {
-					r := map[string]any{"note_id": item.ID, "rank": rank + 1}
-					if f, ok := feats[item.ID]; ok {
-						r["features"] = f
-					}
-					results = append(results, r)
-				}
-				variantResults[variant] = map[string]any{"results": results}
+			items := make([]rankedItem, len(result.Context.Context))
+			for i, item := range result.Context.Context {
+				items[i] = rankedItem{ID: item.ID, Rank: i + 1}
 			}
 			_, _ = session.LogAskEvent(args[0], map[string]any{
 				"primary_variant": actDef.Primary,
 				"top_hits":        len(result.TopHits),
-				"variants":        variantResults,
+				"variants":        buildVariantResults(session, actDef, items),
 			})
 		} else {
 			_, _ = session.LogAskEvent(args[0], map[string]any{
