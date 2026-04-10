@@ -365,6 +365,9 @@ Powered by Cobra, Viper, Zerolog, and Bubble Tea with enforced architecture patt
 
 	RootCmd.PersistentFlags().Int("log-sampling-thereafter", 100, "Number of messages to log thereafter per second")
 
+	// Output format flag
+	RootCmd.PersistentFlags().String("output-format", "text", "Output format: text or json")
+
 	// Hide logging flags from --help to reduce noise. They still work when explicitly passed.
 	RootCmd.PersistentFlags().VisitAll(func(f *pflag.Flag) {
 		if strings.HasPrefix(f.Name, "log-") {
@@ -403,6 +406,7 @@ func bindFlags(cmd *cobra.Command) error {
 	bindFlag(config.KeyAppLogSamplingEnabled, "log-sampling-enabled")
 	bindFlag(config.KeyAppLogSamplingInitial, "log-sampling-initial")
 	bindFlag(config.KeyAppLogSamplingThereafter, "log-sampling-thereafter")
+	bindFlag(config.KeyAppOutputFormat, "output-format")
 
 	// Return combined error if any bindings failed
 	if len(errs) > 0 {
