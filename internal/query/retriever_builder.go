@@ -83,18 +83,71 @@ func requireEmbeddings(db *index.DB) error {
 	return nil
 }
 
+// AutoRetrieverResult holds the retriever, embedder, and cleanup from BuildAutoRetriever.
+type AutoRetrieverResult struct {
+	Retriever Retriever
+	Embedder  embedding.Embedder // nil when keyword-only (no embeddings)
+	Cleanup   func()
+}
+
 // BuildAutoRetriever returns a hybrid retriever if embeddings exist, otherwise keyword.
 // Embedder initialization failure falls back to keyword silently.
+// The returned Embedder can be used for computing raw cosine similarities
+// (e.g., for spreading activation) without loading the model twice.
 func BuildAutoRetriever(db *index.DB) (Retriever, func(), error) {
+	r := BuildAutoRetrieverFull(db)
+	return r.Retriever, r.Cleanup, nil
+}
+
+// BuildAutoRetrieverFull is like BuildAutoRetriever but also exposes the embedder
+// for computing raw cosine similarities (spreading activation).
+func BuildAutoRetrieverFull(db *index.DB) AutoRetrieverResult {
 	has, err := index.HasEmbeddings(db)
 	if err != nil || !has {
-		return &FTSRetriever{DB: db}, nil, nil //nolint:nilerr // intentional fallback to keyword
+		return AutoRetrieverResult{Retriever: &FTSRetriever{DB: db}}
 	}
-	ret, cleanup, err := BuildRetriever("hybrid", db)
+
+	embedder, embedderCleanup, err := detectEmbedderForDB(db)
 	if err != nil {
-		return &FTSRetriever{DB: db}, nil, nil //nolint:nilerr // intentional fallback to keyword
+		return AutoRetrieverResult{Retriever: &FTSRetriever{DB: db}}
 	}
-	return ret, cleanup, nil
+
+	retrievers := []Retriever{
+		&FTSRetriever{DB: db},
+		&EmbeddingRetriever{DB: db, Embedder: embedder},
+	}
+	cleanupFuncs := []func(){embedderCleanup}
+
+	// Auto-detect BGE-M3 columns for 4-way hybrid.
+	hasSparse, sparseErr := index.HasSparseEmbeddings(db)
+	if sparseErr != nil {
+		log.Debug().Err(sparseErr).Msg("failed to check sparse embeddings")
+	}
+	hasColBERT, colbertErr := index.HasColBERTEmbeddings(db)
+	if colbertErr != nil {
+		log.Debug().Err(colbertErr).Msg("failed to check ColBERT embeddings")
+	}
+	if hasSparse || hasColBERT {
+		if bgem3, ok := embedder.(*embedding.BGEM3Embedder); ok {
+			if hasSparse {
+				retrievers = append(retrievers, &SparseRetriever{DB: db, EmbedSparse: bgem3.EmbedSparse})
+			}
+			if hasColBERT {
+				retrievers = append(retrievers, &ColBERTRetriever{DB: db, EmbedColBERT: bgem3.EmbedColBERT, Dims: embedding.BGEM3Dims})
+			}
+		}
+	}
+
+	cleanup := func() {
+		for _, f := range cleanupFuncs {
+			f()
+		}
+	}
+	return AutoRetrieverResult{
+		Retriever: &HybridRetriever{Retrievers: retrievers, K: 60},
+		Embedder:  embedder,
+		Cleanup:   cleanup,
+	}
 }
 
 func newDefaultEmbedder() (*embedding.HugotEmbedder, error) {

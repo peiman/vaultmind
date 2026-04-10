@@ -38,28 +38,23 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	}
 	defer vdb.Close()
 
-	retriever, cleanup, err := query.BuildAutoRetriever(vdb.DB)
-	if err != nil {
-		return err
-	}
-	if cleanup != nil {
-		defer cleanup()
+	ret := query.BuildAutoRetrieverFull(vdb.DB)
+	if ret.Cleanup != nil {
+		defer ret.Cleanup()
 	}
 
 	resolver := graph.NewResolver(vdb.DB)
 
-	// Step 1: Search — retrieves hits with cosine similarity scores.
+	// Step 1: Search — retrieves hits via hybrid retriever.
 	searchLimit := getConfigValueWithFlags[int](cmd, "search-limit", config.KeyAppAskSearchLimit)
-	hits, _, err := retriever.Search(context.Background(), args[0], searchLimit, 0, index.SearchFilters{})
+	hits, _, err := ret.Retriever.Search(context.Background(), args[0], searchLimit, 0, index.SearchFilters{})
 	if err != nil {
 		return fmt.Errorf("ask: search: %w", err)
 	}
 
-	// Step 2: Build similarities from search scores for spreading activation.
-	similarities := make(map[string]float64, len(hits))
-	for _, hit := range hits {
-		similarities[hit.ID] = hit.Score
-	}
+	// Step 2: Compute raw cosine similarities for spreading activation.
+	// Uses the same embedder as search — no double model loading.
+	similarities, _ := query.NoteSimilarities(context.Background(), args[0], ret.Embedder, vdb.DB)
 
 	// Step 3: Compute activation scores with spreading activation (query similarity).
 	activationScores := computeActivationScores(cmd.Context(), similarities)
