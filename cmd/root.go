@@ -24,8 +24,10 @@ import (
 	"github.com/mattn/go-isatty"
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/.ckeletin/pkg/logger"
+	"github.com/peiman/vaultmind/.ckeletin/pkg/output"
 	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/xdg"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -217,6 +219,12 @@ var RootCmd = &cobra.Command{
 			return fmt.Errorf("failed to bind flags: %w", err)
 		}
 
+		// Early output mode detection from explicit flag (before config load)
+		if f := cmd.Root().PersistentFlags().Lookup("output-format"); f != nil && f.Changed {
+			output.SetOutputMode(f.Value.String())
+		}
+		output.SetCommandName(cmd.Name())
+
 		// Initialize configuration
 		if err := initConfig(); err != nil {
 			return err
@@ -225,6 +233,12 @@ var RootCmd = &cobra.Command{
 		// Initialize logger with configuration values
 		if err := logger.Init(nil); err != nil {
 			return fmt.Errorf("failed to initialize logger: %w", err)
+		}
+
+		// Activate JSON output mode (from config or flag) and suppress logs
+		output.SetOutputMode(viper.GetString(config.KeyAppOutputFormat))
+		if output.IsJSONMode() {
+			zerolog.SetGlobalLevel(zerolog.Disabled)
 		}
 
 		// Log config status after logger is initialized

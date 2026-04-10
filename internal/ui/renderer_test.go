@@ -2,10 +2,13 @@ package ui
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"testing"
 
+	"github.com/peiman/vaultmind/.ckeletin/pkg/output"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRenderSuccess(t *testing.T) {
@@ -94,6 +97,70 @@ func TestRenderError(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRenderSuccess_JSONMode(t *testing.T) {
+	output.SetOutputMode("json")
+	output.SetCommandName("test-cmd")
+	t.Cleanup(func() {
+		output.SetOutputMode("text")
+		output.SetCommandName("")
+	})
+
+	var buf bytes.Buffer
+	err := RenderSuccess(&buf, "it worked", map[string]string{"key": "value"})
+	require.NoError(t, err)
+
+	var env output.JSONEnvelope
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &env))
+
+	assert.Equal(t, "success", env.Status)
+	assert.Equal(t, "test-cmd", env.Command)
+	assert.Nil(t, env.Error)
+	assert.NotNil(t, env.Data)
+}
+
+type mockResponder struct{ value string }
+
+func (m *mockResponder) JSONResponse() interface{} { return m.value }
+
+func TestRenderSuccess_JSONMode_Responder(t *testing.T) {
+	output.SetOutputMode("json")
+	output.SetCommandName("custom")
+	t.Cleanup(func() {
+		output.SetOutputMode("text")
+		output.SetCommandName("")
+	})
+
+	var buf bytes.Buffer
+	err := RenderSuccess(&buf, "msg", &mockResponder{value: "custom-data"})
+	require.NoError(t, err)
+
+	var env output.JSONEnvelope
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &env))
+	assert.Equal(t, "custom-data", env.Data)
+}
+
+func TestRenderError_JSONMode(t *testing.T) {
+	output.SetOutputMode("json")
+	output.SetCommandName("fail-cmd")
+	t.Cleanup(func() {
+		output.SetOutputMode("text")
+		output.SetCommandName("")
+	})
+
+	var buf bytes.Buffer
+	writeErr := RenderError(&buf, "something broke", errors.New("root cause"))
+	require.NoError(t, writeErr)
+
+	var env output.JSONEnvelope
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &env))
+
+	assert.Equal(t, "error", env.Status)
+	assert.Equal(t, "fail-cmd", env.Command)
+	assert.Nil(t, env.Data)
+	require.NotNil(t, env.Error)
+	assert.Equal(t, "something broke", env.Error.Message)
 }
 
 // errorWriter is a writer that always returns an error
