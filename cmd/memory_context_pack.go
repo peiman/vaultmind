@@ -39,12 +39,16 @@ func runMemoryContextPack(cmd *cobra.Command, args []string) error {
 
 	jsonOut := getConfigValueWithFlags[bool](cmd, "json", config.KeyAppMemorycontextpackJson)
 	resolver := graph.NewResolver(vdb.DB)
+
+	activationScores := computeActivationScores(cmd.Context())
+
 	result, err := memory.ContextPack(resolver, vdb.DB, memory.ContextPackConfig{
-		Input:    args[0],
-		Budget:   getConfigValueWithFlags[int](cmd, "budget", config.KeyAppMemorycontextpackBudget),
-		Depth:    getConfigValueWithFlags[int](cmd, "depth", config.KeyAppMemorycontextpackDepth),
-		MaxItems: getConfigValueWithFlags[int](cmd, "max-items", config.KeyAppMemorycontextpackMaxItems),
-		Slim:     getConfigValueWithFlags[bool](cmd, "slim", config.KeyAppMemorycontextpackSlim),
+		Input:            args[0],
+		Budget:           getConfigValueWithFlags[int](cmd, "budget", config.KeyAppMemorycontextpackBudget),
+		Depth:            getConfigValueWithFlags[int](cmd, "depth", config.KeyAppMemorycontextpackDepth),
+		MaxItems:         getConfigValueWithFlags[int](cmd, "max-items", config.KeyAppMemorycontextpackMaxItems),
+		Slim:             getConfigValueWithFlags[bool](cmd, "slim", config.KeyAppMemorycontextpackSlim),
+		ActivationScores: activationScores,
 	})
 	if err != nil {
 		if jsonOut {
@@ -53,18 +57,27 @@ func runMemoryContextPack(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("context-pack: %w", err)
 	}
 
-	// Log experiment event (non-blocking)
+	// Log experiment event with shadow variant scores
 	if session := experiment.FromContext(cmd.Context()); session != nil {
 		session.SetVaultPath(vaultPath)
-		_, _ = session.LogContextPackEvent(map[string]any{
-			"target_id":     result.TargetID,
-			"budget":        result.BudgetTokens,
-			"used_tokens":   result.UsedTokens,
-			"context_items": len(result.Context),
-			"variants": map[string]any{
-				"none": map[string]any{"results": []any{}},
-			},
-		})
+		exps := loadExperimentDefs()
+		if actDef, ok := exps["activation"]; ok && actDef.Enabled {
+			items := make([]rankedItem, len(result.Context))
+			for i, item := range result.Context {
+				items[i] = rankedItem{ID: item.ID, Rank: i + 1}
+			}
+			_, _ = session.LogContextPackEvent(map[string]any{
+				"primary_variant": actDef.Primary,
+				"target_id":       result.TargetID,
+				"variants":        buildVariantResults(session, actDef, items),
+			})
+		} else {
+			_, _ = session.LogContextPackEvent(map[string]any{
+				"target_id":     result.TargetID,
+				"context_items": len(result.Context),
+				"variants":      map[string]any{"none": map[string]any{"results": []any{}}},
+			})
+		}
 	}
 
 	if jsonOut {

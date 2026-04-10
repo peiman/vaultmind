@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/peiman/vaultmind/.ckeletin/pkg/output"
 	"github.com/rs/zerolog/log"
 )
 
@@ -13,6 +14,14 @@ import (
 // Stream 1 (Data): Prints formatted message to out
 // Stream 3 (Audit): Logs raw data to file
 func RenderSuccess(out io.Writer, message string, data interface{}) error {
+	if output.IsJSONMode() {
+		return output.RenderJSON(out, output.JSONEnvelope{
+			Status:  "success",
+			Command: output.CommandName(),
+			Data:    output.ResolveJSONData(data),
+		})
+	}
+
 	// 1. Shadow Log (Audit Stream)
 	// We log the raw data so the log file has the full context of what was returned
 	event := log.Info().Str("user_message", message)
@@ -45,6 +54,14 @@ func RenderSuccess(out io.Writer, message string, data interface{}) error {
 // Stream 2 (Status): Prints friendly error to out
 // Stream 3 (Audit): Logs full error with stack trace to file
 func RenderError(out io.Writer, friendlyMessage string, err error) error {
+	if output.IsJSONMode() {
+		return output.RenderJSON(out, output.JSONEnvelope{
+			Status:  "error",
+			Command: output.CommandName(),
+			Error:   &output.JSONError{Message: friendlyMessage},
+		})
+	}
+
 	// 1. Shadow Log (Audit Stream)
 	// Capture the full technical error
 	log.Error().

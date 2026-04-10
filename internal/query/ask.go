@@ -10,10 +10,11 @@ import (
 
 // AskConfig holds parameters for the Ask compound operation.
 type AskConfig struct {
-	Query       string
-	Budget      int
-	MaxItems    int
-	SearchLimit int
+	Query            string
+	Budget           int
+	MaxItems         int
+	SearchLimit      int
+	ActivationScores map[string]float64
 }
 
 // AskResult is the combined output of a search + context-pack operation.
@@ -42,11 +43,12 @@ func Ask(retriever Retriever, resolver *graph.Resolver, db *index.DB, cfg AskCon
 	}
 
 	packResult, err := memory.ContextPack(resolver, db, memory.ContextPackConfig{
-		Input:    hits[0].ID,
-		Budget:   cfg.Budget,
-		Depth:    1,
-		MaxItems: cfg.MaxItems,
-		Slim:     true,
+		Input:            hits[0].ID,
+		Budget:           cfg.Budget,
+		Depth:            1,
+		MaxItems:         cfg.MaxItems,
+		Slim:             true,
+		ActivationScores: cfg.ActivationScores,
 	})
 	if err != nil {
 		// Non-fatal: return search results without context.

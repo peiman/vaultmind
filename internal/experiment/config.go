@@ -9,9 +9,9 @@ var reservedKeys = map[string]bool{
 
 // ExperimentDef holds the parsed definition for a single experiment.
 type ExperimentDef struct {
-	Enabled  bool
-	Primary  string
-	Shadows  []string
+	Enabled bool
+	Primary string
+	Shadows []string
 }
 
 // AllVariants returns the primary variant followed by all shadow variants.

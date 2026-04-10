@@ -11,11 +11,12 @@ import (
 
 // ContextPackConfig holds parameters for a ContextPack operation.
 type ContextPackConfig struct {
-	Input    string
-	Budget   int  // token budget
-	Depth    int  // BFS traversal depth; 0 or 1 = direct neighbors only (default)
-	MaxItems int  // max context items to return; 0 = unlimited (default, backward-compat)
-	Slim     bool // reduce context item frontmatter to {type, title, status} only
+	Input            string
+	Budget           int                // token budget
+	Depth            int                // BFS traversal depth; 0 or 1 = direct neighbors only (default)
+	MaxItems         int                // max context items to return; 0 = unlimited (default, backward-compat)
+	Slim             bool               // reduce context item frontmatter to {type, title, status} only
+	ActivationScores map[string]float64 // optional activation scores keyed by note ID
 }
 
 // ContextPackTarget holds the fully-loaded target note.
@@ -48,11 +49,12 @@ type ContextPackResult struct {
 
 // contextCandidate is an internal type for a ranked context edge.
 type contextCandidate struct {
-	noteID     string
-	edgeType   string
-	confidence string
-	priority   int    // lower = higher priority
-	updated    string // ISO date string from frontmatter; used for secondary sort (desc)
+	noteID          string
+	edgeType        string
+	confidence      string
+	priority        int     // lower = higher priority
+	updated         string  // ISO date string from frontmatter; used for tertiary sort (desc)
+	activationScore float64 // ACT-R activation score; used for secondary sort (desc)
 }
 
 // edgePriority returns the sort priority for an edge type and confidence.
@@ -133,8 +135,8 @@ func ContextPack(resolver *graph.Resolver, db *index.DB, cfg ContextPackConfig) 
 		return nil, err
 	}
 
-	// Step 5: Enrich with updated date and sort by (priority ASC, updated DESC).
-	if err := enrichAndSortCandidates(loadNote, candidates); err != nil {
+	// Step 5: Enrich with updated date and sort by (priority ASC, activationScore DESC, updated DESC).
+	if err := enrichAndSortCandidates(loadNote, candidates, cfg.ActivationScores); err != nil {
 		return nil, err
 	}
 
@@ -439,8 +441,9 @@ func collectTraverseCandidates(resolver *graph.Resolver, targetID string, maxDep
 
 // enrichAndSortCandidates loads the updated date for each candidate using the
 // provided loader (which may be cache-backed) and sorts candidates by
-// (priority ASC, updated DESC).
-func enrichAndSortCandidates(loader func(string) (*index.FullNote, error), candidates []contextCandidate) error {
+// (priority ASC, activationScore DESC, updated DESC).
+// activationScores may be nil, in which case activation is not used for sorting.
+func enrichAndSortCandidates(loader func(string) (*index.FullNote, error), candidates []contextCandidate, activationScores map[string]float64) error {
 	for i := range candidates {
 		noteFull, err := loader(candidates[i].noteID)
 		if err != nil {
@@ -451,11 +454,17 @@ func enrichAndSortCandidates(loader func(string) (*index.FullNote, error), candi
 				candidates[i].updated = u
 			}
 		}
+		if activationScores != nil {
+			candidates[i].activationScore = activationScores[candidates[i].noteID]
+		}
 	}
 
 	sort.SliceStable(candidates, func(i, j int) bool {
 		if candidates[i].priority != candidates[j].priority {
 			return candidates[i].priority < candidates[j].priority
+		}
+		if candidates[i].activationScore != candidates[j].activationScore {
+			return candidates[i].activationScore > candidates[j].activationScore // desc: higher activation first
 		}
 		return candidates[i].updated > candidates[j].updated // desc: newer first
 	})

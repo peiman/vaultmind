@@ -3,7 +3,9 @@ package memory
 import (
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/index"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestEstimateTokens_Basic(t *testing.T) {
@@ -39,4 +41,56 @@ func TestEdgePriority_AllBranches(t *testing.T) {
 
 	// Verify the old "embed" (non-explicit) is NOT tier 1
 	assert.NotEqual(t, 1, edgePriority("embed", "high"))
+}
+
+func TestEnrichAndSortCandidates_WithActivation(t *testing.T) {
+	candidates := []contextCandidate{
+		{noteID: "low-act", edgeType: "explicit_link", confidence: "high", priority: 1},
+		{noteID: "high-act", edgeType: "explicit_link", confidence: "high", priority: 1},
+	}
+	activation := map[string]float64{"low-act": 0.5, "high-act": 2.0}
+	loader := func(id string) (*index.FullNote, error) {
+		return &index.FullNote{ID: id, Frontmatter: map[string]any{}}, nil
+	}
+
+	err := enrichAndSortCandidates(loader, candidates, activation)
+	require.NoError(t, err)
+	assert.Equal(t, "high-act", candidates[0].noteID)
+	assert.Equal(t, "low-act", candidates[1].noteID)
+}
+
+func TestEnrichAndSortCandidates_PriorityBeatsActivation(t *testing.T) {
+	candidates := []contextCandidate{
+		{noteID: "high-act-low-pri", edgeType: "tag_overlap", confidence: "low", priority: 3},
+		{noteID: "low-act-high-pri", edgeType: "explicit_relation", confidence: "high", priority: 0},
+	}
+	activation := map[string]float64{"high-act-low-pri": 5.0, "low-act-high-pri": 0.1}
+	loader := func(id string) (*index.FullNote, error) {
+		return &index.FullNote{ID: id, Frontmatter: map[string]any{}}, nil
+	}
+
+	err := enrichAndSortCandidates(loader, candidates, activation)
+	require.NoError(t, err)
+	assert.Equal(t, "low-act-high-pri", candidates[0].noteID)
+}
+
+func TestEnrichAndSortCandidates_NilActivation(t *testing.T) {
+	candidates := []contextCandidate{
+		{noteID: "b", edgeType: "explicit_link", confidence: "high", priority: 1},
+		{noteID: "a", edgeType: "explicit_link", confidence: "high", priority: 1},
+	}
+	loader := func(id string) (*index.FullNote, error) {
+		fm := map[string]any{}
+		if id == "a" {
+			fm["updated"] = "2026-04-09"
+		} else {
+			fm["updated"] = "2026-04-08"
+		}
+		return &index.FullNote{ID: id, Frontmatter: fm}, nil
+	}
+
+	err := enrichAndSortCandidates(loader, candidates, nil)
+	require.NoError(t, err)
+	// Falls back to updated date sort: a (newer) before b
+	assert.Equal(t, "a", candidates[0].noteID)
 }

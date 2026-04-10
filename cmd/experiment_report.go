@@ -14,7 +14,6 @@ import (
 	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/xdg"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var experimentReportCmd = MustNewCommand(commands.ExperimentReportMetadata, runExperimentReport)
@@ -45,8 +44,7 @@ func runExperimentReport(cmd *cobra.Command, _ []string) error {
 
 	var variants []string
 	if expName != "" {
-		expMap := viper.GetStringMap("experiments")
-		exps := experiment.ParseExperiments(expMap)
+		exps := loadExperimentDefs()
 		def, ok := exps[expName]
 		if !ok {
 			msg := fmt.Sprintf("experiment %q not found in config", expName)

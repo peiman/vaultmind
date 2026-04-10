@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-04-09
+
+### Added
+
+- **BGE-M3 3-in-1 embedding**: Dense, sparse, and ColBERT vectors from a single model. ORT backend for fast indexing, MiniLM pure Go fallback for zero-dependency operation
+- **4-way hybrid retrieval**: N-way Reciprocal Rank Fusion combining keyword, dense, sparse, and ColBERT retrievers. Auto-detects available embeddings and selects the best mode
+- **Experiment framework**: Local-first instrumentation for data-driven feature improvement. Session tracking, event logging, outcome linkage, shadow scoring, and Hit@K/MRR reporting via `vaultmind experiment report`
+- **Activation scoring**: Temporal re-ranking of context-pack candidates using ACT-R base-level activation with compressed idle time and Bjork dual-strength theory. Four shadow variants (compressed-0.2, compressed-0.5, wall-clock, none) logged with per-rank features for empirical comparison
+- **Telemetry opt-in**: First-run prompt with anonymous, full, and off options
+- **Research vault**: 6 new notes covering Bjork dual-strength theory, spreading activation in IR, spaced repetition algorithms, power-law forgetting, Hebbian learning, and temporal activation for intermittent systems
+
+### Changed
+
+- Search command now supports `--mode` flag for semantic/hybrid retrieval
+- Index command supports `--embed` flag to generate embeddings during indexing
+- Ask command auto-detects hybrid mode when embeddings exist
+- Context-pack sorting now uses activation scores as secondary criterion (priority > activation > updated date)
+- Specs directory reorganized into versioned subdirectories with index
+
+### Fixed
+
+- Embedding text truncated to model's token limit before encoding
+- PartitionTime correctly merges overlapping session windows
+- ComputeStorage guards against negative access count (prevents NaN)
+- Shadow variant logging hoists DB queries out of variant loop (4x fewer queries)
+
 ## [0.9.1] - 2026-04-02
 
 ### Fixed

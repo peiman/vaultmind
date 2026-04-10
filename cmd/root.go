@@ -24,8 +24,10 @@ import (
 	"github.com/mattn/go-isatty"
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/.ckeletin/pkg/logger"
+	"github.com/peiman/vaultmind/.ckeletin/pkg/output"
 	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/xdg"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -217,6 +219,12 @@ var RootCmd = &cobra.Command{
 			return fmt.Errorf("failed to bind flags: %w", err)
 		}
 
+		// Early output mode detection from explicit flag (before config load)
+		if f := cmd.Root().PersistentFlags().Lookup("output-format"); f != nil && f.Changed {
+			output.SetOutputMode(f.Value.String())
+		}
+		output.SetCommandName(cmd.Name())
+
 		// Initialize configuration
 		if err := initConfig(); err != nil {
 			return err
@@ -225,6 +233,12 @@ var RootCmd = &cobra.Command{
 		// Initialize logger with configuration values
 		if err := logger.Init(nil); err != nil {
 			return fmt.Errorf("failed to initialize logger: %w", err)
+		}
+
+		// Activate JSON output mode (from config or flag) and suppress logs
+		output.SetOutputMode(viper.GetString(config.KeyAppOutputFormat))
+		if output.IsJSONMode() {
+			zerolog.SetGlobalLevel(zerolog.Disabled)
 		}
 
 		// Log config status after logger is initialized
@@ -237,7 +251,7 @@ var RootCmd = &cobra.Command{
 		}
 
 		// Initialize experiment session (non-blocking)
-		telemetry := viper.GetString("experiments.telemetry")
+		telemetry := viper.GetString(config.KeyExperimentsTelemetry)
 		if telemetry == experiment.TelemetryOff {
 			log.Debug().Msg("Experiments disabled (telemetry: off)")
 		} else if expDB, expErr := openExperimentDB(); expErr != nil {
@@ -248,7 +262,12 @@ var RootCmd = &cobra.Command{
 				if firstRun, _ := expDB.IsFirstRun(); firstRun {
 					if isatty.IsTerminal(os.Stdin.Fd()) {
 						telemetry = experiment.PromptTelemetry(os.Stdin, cmd.ErrOrStderr())
-						viper.Set("experiments.telemetry", telemetry)
+						viper.Set(config.KeyExperimentsTelemetry, telemetry)
+						if cf := viper.ConfigFileUsed(); cf != "" {
+							if err := persistTelemetryChoice(telemetry, cf); err != nil {
+								log.Debug().Err(err).Msg("Failed to persist telemetry choice to config file")
+							}
+						}
 						if telemetry == experiment.TelemetryOff {
 							log.Debug().Msg("User chose telemetry: off")
 							_ = expDB.Close()
@@ -270,7 +289,7 @@ var RootCmd = &cobra.Command{
 				log.Debug().Err(startErr).Msg("Failed to start experiment session")
 				_ = expDB.Close()
 			} else {
-				outcomeWindow := viper.GetInt("experiments.outcome_window_sessions")
+				outcomeWindow := viper.GetInt(config.KeyExperimentsOutcomeWindowSessions)
 				if outcomeWindow <= 0 {
 					outcomeWindow = 2
 				}
@@ -360,6 +379,9 @@ Powered by Cobra, Viper, Zerolog, and Bubble Tea with enforced architecture patt
 
 	RootCmd.PersistentFlags().Int("log-sampling-thereafter", 100, "Number of messages to log thereafter per second")
 
+	// Output format flag
+	RootCmd.PersistentFlags().String("output-format", "text", "Output format: text or json")
+
 	// Hide logging flags from --help to reduce noise. They still work when explicitly passed.
 	RootCmd.PersistentFlags().VisitAll(func(f *pflag.Flag) {
 		if strings.HasPrefix(f.Name, "log-") {
@@ -398,6 +420,7 @@ func bindFlags(cmd *cobra.Command) error {
 	bindFlag(config.KeyAppLogSamplingEnabled, "log-sampling-enabled")
 	bindFlag(config.KeyAppLogSamplingInitial, "log-sampling-initial")
 	bindFlag(config.KeyAppLogSamplingThereafter, "log-sampling-thereafter")
+	bindFlag(config.KeyAppOutputFormat, "output-format")
 
 	// Return combined error if any bindings failed
 	if len(errs) > 0 {
@@ -646,6 +669,12 @@ func openExperimentDB() (*experiment.DB, error) {
 //
 // Returns:
 //   - The configuration value of type T, or zero value if not found/conversion fails
+
+// loadExperimentDefs reads the experiments map from config and returns parsed definitions.
+func loadExperimentDefs() map[string]experiment.ExperimentDef {
+	return experiment.ParseExperiments(viper.GetStringMap(config.KeyExperiments))
+}
+
 func getKeyValue[T any](viperKey string) T {
 	var zero T
 	if v := viper.Get(viperKey); v != nil {

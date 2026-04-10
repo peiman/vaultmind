@@ -17,12 +17,12 @@ func TestLogEvent_Search(t *testing.T) {
 	require.NoError(t, err)
 
 	evt := experiment.Event{
-		SessionID:  sessionID,
-		Type:       experiment.EventSearch,
-		VaultPath:  "/tmp/test-vault",
-		QueryText:  "spreading activation",
-		QueryMode:  "hybrid",
-		Data:       map[string]any{"k": 10},
+		SessionID: sessionID,
+		Type:      experiment.EventSearch,
+		VaultPath: "/tmp/test-vault",
+		QueryText: "spreading activation",
+		QueryMode: "hybrid",
+		Data:      map[string]any{"k": 10},
 	}
 
 	eventID, err := db.LogEvent(evt)
