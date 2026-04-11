@@ -36,7 +36,9 @@ func VariantGamma(variant string) (float64, bool) {
 
 // ComputeBatchScores computes activation scores for a batch of notes.
 // Returns noteID->score and noteID->features maps.
-func ComputeBatchScores(db *DB, noteIDs []string, params ActivationParams) (map[string]float64, map[string]map[string]float64, error) {
+// similarities is optional (nil = no spreading activation). When provided,
+// it maps noteID -> cosine similarity with the current query.
+func ComputeBatchScores(db *DB, noteIDs []string, params ActivationParams, similarities map[string]float64) (map[string]float64, map[string]map[string]float64, error) {
 	if len(noteIDs) == 0 {
 		return make(map[string]float64), make(map[string]map[string]float64), nil
 	}
@@ -52,7 +54,7 @@ func ComputeBatchScores(db *DB, noteIDs []string, params ActivationParams) (map[
 	}
 
 	now := time.Now().UTC()
-	scores, features := ScoreFromData(noteIDs, accessMap, windows, now, params, nil)
+	scores, features := ScoreFromData(noteIDs, accessMap, windows, now, params, similarities)
 	return scores, features, nil
 }
 

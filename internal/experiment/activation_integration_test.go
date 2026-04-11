@@ -28,7 +28,7 @@ func TestActivation_EndToEnd(t *testing.T) {
 
 	// compressed-0.2
 	params02 := experiment.DefaultActivationParams(0.2)
-	scores02, feats02, err := experiment.ComputeBatchScores(db, noteIDs, params02)
+	scores02, feats02, err := experiment.ComputeBatchScores(db, noteIDs, params02, nil)
 	require.NoError(t, err)
 	assert.Greater(t, scores02["frequently-accessed"], scores02["rarely-accessed"])
 	assert.Equal(t, 0.0, scores02["never-accessed"])
@@ -36,13 +36,13 @@ func TestActivation_EndToEnd(t *testing.T) {
 
 	// wall-clock
 	paramsWC := experiment.DefaultActivationParams(1.0)
-	scoresWC, _, err := experiment.ComputeBatchScores(db, noteIDs, paramsWC)
+	scoresWC, _, err := experiment.ComputeBatchScores(db, noteIDs, paramsWC, nil)
 	require.NoError(t, err)
 	assert.Greater(t, scoresWC["frequently-accessed"], scoresWC["rarely-accessed"])
 
 	// none (gamma=0)
 	paramsNone := experiment.DefaultActivationParams(0.0)
-	scoresNone, _, err := experiment.ComputeBatchScores(db, noteIDs, paramsNone)
+	scoresNone, _, err := experiment.ComputeBatchScores(db, noteIDs, paramsNone, nil)
 	require.NoError(t, err)
 	// With gamma=0, only active session time counts. Storage still works.
 	assert.Greater(t, scoresNone["frequently-accessed"], 0.0)
