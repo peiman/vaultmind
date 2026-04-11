@@ -40,7 +40,7 @@ func runMemoryContextPack(cmd *cobra.Command, args []string) error {
 	jsonOut := getConfigValueWithFlags[bool](cmd, "json", config.KeyAppMemorycontextpackJson)
 	resolver := graph.NewResolver(vdb.DB)
 
-	activationScores := computeActivationScores(cmd.Context(), nil)
+	activationScores := computeActivationScores(cmd.Context(), nil, 0)
 
 	result, err := memory.ContextPack(resolver, vdb.DB, memory.ContextPackConfig{
 		Input:            args[0],

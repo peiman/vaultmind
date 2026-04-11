@@ -5,12 +5,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/query"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 // defaultActivationDelta is the spreading activation weight when similarities
@@ -28,7 +26,7 @@ type rankedItem struct {
 // experiment is not enabled, or no notes have been accessed.
 // similarities is optional — when provided (from search results), enables
 // spreading activation (Delta > 0) in the scoring model.
-func computeActivationScores(ctx context.Context, similarities map[string]float64) map[string]float64 {
+func computeActivationScores(ctx context.Context, similarities map[string]float64, delta float64) map[string]float64 {
 	session := experiment.FromContext(ctx)
 	if session == nil {
 		return nil
@@ -45,8 +43,9 @@ func computeActivationScores(ctx context.Context, similarities map[string]float6
 	}
 	params := experiment.DefaultActivationParams(gamma)
 	if similarities != nil {
-		params.Delta = viper.GetFloat64(config.KeyExperimentsActivationDelta)
-		if params.Delta <= 0 {
+		if delta > 0 {
+			params.Delta = delta
+		} else {
 			params.Delta = defaultActivationDelta
 		}
 	}

@@ -22,7 +22,7 @@ func openTestExpDB(t *testing.T) *experiment.DB {
 }
 
 func TestComputeActivationScores_NilSession(t *testing.T) {
-	scores := computeActivationScores(context.Background(), nil)
+	scores := computeActivationScores(context.Background(), nil, 0)
 	assert.Nil(t, scores)
 }
 
@@ -35,7 +35,7 @@ func TestComputeActivationScores_NoActivationExperiment(t *testing.T) {
 	ctx := experiment.WithSession(context.Background(), session)
 
 	// No experiment config in viper → no activation scores
-	scores := computeActivationScores(ctx, nil)
+	scores := computeActivationScores(ctx, nil, 0)
 	assert.Nil(t, scores)
 }
 
@@ -66,7 +66,7 @@ func TestComputeActivationScores_WithSimilarities(t *testing.T) {
 	t.Cleanup(func() { viper.Set("experiments", map[string]any{}) })
 
 	// Without similarities — Delta stays 0.0
-	scoresNoSim := computeActivationScores(ctx, nil)
+	scoresNoSim := computeActivationScores(ctx, nil, 0)
 	require.NotNil(t, scoresNoSim)
 
 	// With similarities — Delta > 0, note-a gets a boost
@@ -74,7 +74,7 @@ func TestComputeActivationScores_WithSimilarities(t *testing.T) {
 		"note-a": 0.95,
 		"note-b": 0.1,
 	}
-	scoresWithSim := computeActivationScores(ctx, similarities)
+	scoresWithSim := computeActivationScores(ctx, similarities, 0.2)
 	require.NotNil(t, scoresWithSim)
 
 	// note-a should score higher than note-b due to similarity boost

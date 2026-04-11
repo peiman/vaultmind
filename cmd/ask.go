@@ -38,7 +38,8 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	defer ret.Cleanup()
 
 	resolver := graph.NewResolver(vdb.DB)
-	activationScores := computeActivationScores(cmd.Context(), nil)
+	delta := getConfigValueWithFlags[float64](cmd, "activation-delta", config.KeyExperimentsActivationDelta)
+	activationScores := computeActivationScores(cmd.Context(), nil, delta)
 
 	result, err := query.Ask(cmd.Context(), ret.Retriever, resolver, vdb.DB, query.AskConfig{
 		Query:            args[0],
@@ -48,7 +49,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		ActivationScores: activationScores,
 		Embedder:         ret.Embedder,
 		ActivationFunc: func(sims map[string]float64) map[string]float64 {
-			return computeActivationScores(cmd.Context(), sims)
+			return computeActivationScores(cmd.Context(), sims, delta)
 		},
 	})
 	if err != nil {
