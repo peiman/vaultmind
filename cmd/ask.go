@@ -47,6 +47,9 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		SearchLimit:      getConfigValueWithFlags[int](cmd, "search-limit", config.KeyAppAskSearchLimit),
 		ActivationScores: activationScores,
 		Embedder:         ret.Embedder,
+		ActivationFunc: func(sims map[string]float64) map[string]float64 {
+			return computeActivationScores(cmd.Context(), sims)
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("ask: %w", err)

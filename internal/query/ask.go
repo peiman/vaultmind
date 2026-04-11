@@ -18,8 +18,13 @@ type AskConfig struct {
 	SearchLimit      int
 	ActivationScores map[string]float64
 	// Embedder is optional. When non-nil, raw cosine similarities are computed
-	// and returned in Similarities for spreading activation scoring.
+	// and used for spreading activation scoring via ActivationFunc.
 	Embedder embedding.Embedder
+	// ActivationFunc optionally recomputes activation scores after similarities
+	// are known. When provided and similarities are available, the returned
+	// scores replace ActivationScores for context-pack sorting. This enables
+	// spreading activation without coupling query to the experiment package.
+	ActivationFunc func(similarities map[string]float64) map[string]float64
 }
 
 // AskResult is the combined output of a search + context-pack operation.
@@ -31,9 +36,9 @@ type AskResult struct {
 }
 
 // Ask searches the vault for the query, computes raw cosine similarities
-// (when an embedder is available), then packs token-budgeted context around
-// the top hit. Context-pack failure is non-fatal: search results are returned
-// even if context-pack cannot resolve the top hit.
+// (when an embedder is available), recomputes activation scores with
+// spreading activation (via ActivationFunc), then packs token-budgeted
+// context around the top hit. Context-pack failure is non-fatal.
 func Ask(ctx context.Context, retriever Retriever, resolver *graph.Resolver, db *index.DB, cfg AskConfig) (*AskResult, error) {
 	hits, _, err := retriever.Search(ctx, cfg.Query, cfg.SearchLimit, 0, index.SearchFilters{})
 	if err != nil {
@@ -59,13 +64,21 @@ func Ask(ctx context.Context, retriever Retriever, resolver *graph.Resolver, db 
 		}
 	}
 
+	// Recompute activation scores with similarity data when available.
+	activationScores := cfg.ActivationScores
+	if result.Similarities != nil && cfg.ActivationFunc != nil {
+		if updated := cfg.ActivationFunc(result.Similarities); updated != nil {
+			activationScores = updated
+		}
+	}
+
 	packResult, packErr := memory.ContextPack(resolver, db, memory.ContextPackConfig{
 		Input:            hits[0].ID,
 		Budget:           cfg.Budget,
 		Depth:            1,
 		MaxItems:         cfg.MaxItems,
 		Slim:             true,
-		ActivationScores: cfg.ActivationScores,
+		ActivationScores: activationScores,
 	})
 	if packErr != nil {
 		log.Debug().Err(packErr).Str("note_id", hits[0].ID).Msg("context-pack failed; returning search results only")
