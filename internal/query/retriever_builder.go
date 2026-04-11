@@ -27,46 +27,11 @@ func BuildRetriever(mode string, db *index.DB) (Retriever, func(), error) {
 		if err := requireEmbeddings(db); err != nil {
 			return nil, nil, err
 		}
-		embedder, embedderCleanup, err := detectEmbedderForDB(db)
+		ret, _, cleanup, err := buildHybridRetriever(db)
 		if err != nil {
 			return nil, nil, err
 		}
-		retrievers := []Retriever{
-			&FTSRetriever{DB: db},
-			&EmbeddingRetriever{DB: db, Embedder: embedder},
-		}
-		cleanupFuncs := []func(){embedderCleanup}
-
-		// Auto-detect BGE-M3 columns for 4-way hybrid.
-		// Reuse the existing embedder if it's already a BGEM3Embedder (C1 fix).
-		hasSparse, sparseErr := index.HasSparseEmbeddings(db)
-		if sparseErr != nil {
-			log.Debug().Err(sparseErr).Msg("failed to check sparse embeddings")
-		}
-		hasColBERT, colbertErr := index.HasColBERTEmbeddings(db)
-		if colbertErr != nil {
-			log.Debug().Err(colbertErr).Msg("failed to check ColBERT embeddings")
-		}
-		if hasSparse || hasColBERT {
-			if bgem3, ok := embedder.(*embedding.BGEM3Embedder); ok {
-				// Reuse the already-loaded BGE-M3 embedder — no double init
-				if hasSparse {
-					retrievers = append(retrievers, &SparseRetriever{DB: db, EmbedSparse: bgem3.EmbedSparse})
-				}
-				if hasColBERT {
-					retrievers = append(retrievers, &ColBERTRetriever{DB: db, EmbedColBERT: bgem3.EmbedColBERT, Dims: embedding.BGEM3Dims})
-				}
-			}
-			// If embedder is MiniLM but sparse/ColBERT columns exist, ignore them
-			// (would need BGE-M3 to query-embed sparse/ColBERT)
-		}
-
-		cleanup := func() {
-			for _, f := range cleanupFuncs {
-				f()
-			}
-		}
-		return &HybridRetriever{Retrievers: retrievers, K: 60}, cleanup, nil
+		return ret, cleanup, nil
 	default:
 		return nil, nil, fmt.Errorf("unknown search mode %q (use keyword, semantic, or hybrid)", mode)
 	}
@@ -84,16 +49,16 @@ func requireEmbeddings(db *index.DB) error {
 }
 
 // AutoRetrieverResult holds the retriever, embedder, and cleanup from BuildAutoRetriever.
+// Retriever is always non-nil. Embedder is nil in keyword-only mode (no embeddings).
+// Cleanup is always safe to call unconditionally (no-op in keyword-only mode).
 type AutoRetrieverResult struct {
 	Retriever Retriever
 	Embedder  embedding.Embedder // nil when keyword-only (no embeddings)
-	Cleanup   func()
+	Cleanup   func()             // always non-nil; safe to defer unconditionally
 }
 
 // BuildAutoRetriever returns a hybrid retriever if embeddings exist, otherwise keyword.
 // Embedder initialization failure falls back to keyword silently.
-// The returned Embedder can be used for computing raw cosine similarities
-// (e.g., for spreading activation) without loading the model twice.
 func BuildAutoRetriever(db *index.DB) (Retriever, func(), error) {
 	r := BuildAutoRetrieverFull(db)
 	return r.Retriever, r.Cleanup, nil
@@ -102,14 +67,32 @@ func BuildAutoRetriever(db *index.DB) (Retriever, func(), error) {
 // BuildAutoRetrieverFull is like BuildAutoRetriever but also exposes the embedder
 // for computing raw cosine similarities (spreading activation).
 func BuildAutoRetrieverFull(db *index.DB) AutoRetrieverResult {
+	noop := func() {}
+
 	has, err := index.HasEmbeddings(db)
-	if err != nil || !has {
-		return AutoRetrieverResult{Retriever: &FTSRetriever{DB: db}}
+	if err != nil {
+		log.Warn().Err(err).Msg("failed to check embeddings; falling back to keyword search")
+		return AutoRetrieverResult{Retriever: &FTSRetriever{DB: db}, Cleanup: noop}
+	}
+	if !has {
+		return AutoRetrieverResult{Retriever: &FTSRetriever{DB: db}, Cleanup: noop}
 	}
 
+	ret, embedder, cleanup, buildErr := buildHybridRetriever(db)
+	if buildErr != nil {
+		log.Warn().Err(buildErr).Msg("failed to initialize embedder; falling back to keyword search")
+		return AutoRetrieverResult{Retriever: &FTSRetriever{DB: db}, Cleanup: noop}
+	}
+	return AutoRetrieverResult{Retriever: ret, Embedder: embedder, Cleanup: cleanup}
+}
+
+// buildHybridRetriever constructs the hybrid retriever with all available
+// sub-retrievers and returns the embedder separately. Shared by
+// BuildRetriever("hybrid") and BuildAutoRetrieverFull to avoid duplication.
+func buildHybridRetriever(db *index.DB) (Retriever, embedding.Embedder, func(), error) {
 	embedder, embedderCleanup, err := detectEmbedderForDB(db)
 	if err != nil {
-		return AutoRetrieverResult{Retriever: &FTSRetriever{DB: db}}
+		return nil, nil, nil, err
 	}
 
 	retrievers := []Retriever{
@@ -118,7 +101,6 @@ func BuildAutoRetrieverFull(db *index.DB) AutoRetrieverResult {
 	}
 	cleanupFuncs := []func(){embedderCleanup}
 
-	// Auto-detect BGE-M3 columns for 4-way hybrid.
 	hasSparse, sparseErr := index.HasSparseEmbeddings(db)
 	if sparseErr != nil {
 		log.Debug().Err(sparseErr).Msg("failed to check sparse embeddings")
@@ -143,11 +125,7 @@ func BuildAutoRetrieverFull(db *index.DB) AutoRetrieverResult {
 			f()
 		}
 	}
-	return AutoRetrieverResult{
-		Retriever: &HybridRetriever{Retrievers: retrievers, K: 60},
-		Embedder:  embedder,
-		Cleanup:   cleanup,
-	}
+	return &HybridRetriever{Retrievers: retrievers, K: 60}, embedder, cleanup, nil
 }
 
 func newDefaultEmbedder() (*embedding.HugotEmbedder, error) {

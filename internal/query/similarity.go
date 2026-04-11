@@ -13,7 +13,7 @@ import (
 // Returns nil map if embedder is nil (keyword-only mode).
 func NoteSimilarities(ctx context.Context, queryText string, embedder embedding.Embedder, db *index.DB) (map[string]float64, error) {
 	if embedder == nil {
-		return nil, nil
+		return nil, nil //nolint:nilnil // nil embedder = keyword-only mode, no similarities to compute
 	}
 	queryVec, err := embedder.Embed(ctx, queryText)
 	if err != nil {

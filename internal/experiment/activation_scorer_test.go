@@ -37,6 +37,7 @@ func TestDefaultActivationParams(t *testing.T) {
 	assert.InDelta(t, 0.5, p.D, 0.001)
 	assert.InDelta(t, 0.6, p.Alpha, 0.001)
 	assert.InDelta(t, 0.4, p.Beta, 0.001)
+	assert.InDelta(t, 0.0, p.Delta, 0.001, "Delta defaults to 0.0 (no similarity) for backward compat")
 }
 
 func TestComputeBatchScores_Empty(t *testing.T) {

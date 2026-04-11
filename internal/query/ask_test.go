@@ -1,6 +1,7 @@
 package query_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/graph"
@@ -14,7 +15,7 @@ func TestAsk_ReturnsHitsAndContext(t *testing.T) {
 	retriever := &query.FTSRetriever{DB: db}
 	resolver := graph.NewResolver(db)
 
-	result, err := query.Ask(retriever, resolver, db, query.AskConfig{
+	result, err := query.Ask(context.Background(), retriever, resolver, db, query.AskConfig{
 		Query:       "memory",
 		Budget:      4000,
 		MaxItems:    8,
@@ -34,7 +35,7 @@ func TestAsk_EmptyQuery(t *testing.T) {
 	retriever := &query.FTSRetriever{DB: db}
 	resolver := graph.NewResolver(db)
 
-	result, err := query.Ask(retriever, resolver, db, query.AskConfig{
+	result, err := query.Ask(context.Background(), retriever, resolver, db, query.AskConfig{
 		Query:       "",
 		Budget:      4000,
 		MaxItems:    8,
@@ -52,7 +53,7 @@ func TestAsk_NoHitsGivesNilContext(t *testing.T) {
 	retriever := &query.FTSRetriever{DB: db}
 	resolver := graph.NewResolver(db)
 
-	result, err := query.Ask(retriever, resolver, db, query.AskConfig{
+	result, err := query.Ask(context.Background(), retriever, resolver, db, query.AskConfig{
 		Query:       "xyzzy_nonexistent_7329",
 		Budget:      4000,
 		MaxItems:    8,
@@ -69,7 +70,7 @@ func TestAsk_LimitsHitsToSearchLimit(t *testing.T) {
 	retriever := &query.FTSRetriever{DB: db}
 	resolver := graph.NewResolver(db)
 
-	result, err := query.Ask(retriever, resolver, db, query.AskConfig{
+	result, err := query.Ask(context.Background(), retriever, resolver, db, query.AskConfig{
 		Query:       "memory",
 		Budget:      4000,
 		MaxItems:    8,

@@ -53,6 +53,7 @@ const (
 	KeyExperiments                      = "experiments"                         // Top-level experiment definitions map
 	KeyExperimentsTelemetry             = "experiments.telemetry"               // Telemetry level: anonymous, full, off
 	KeyExperimentsOutcomeWindowSessions = "experiments.outcome_window_sessions" // Sessions to look back for outcome linkage
+	KeyExperimentsActivationDelta       = "experiments.activation.delta"        // Spreading activation weight (0.0 disables similarity component)
 	KeyAppFrontmatterVault              = "app.frontmatter.vault"               // Path to vault root
 	KeyAppFrontmatterJson               = "app.frontmatter.json"                // Output in JSON format
 	KeyAppFrontmattersetVault           = "app.frontmatterset.vault"            // Path to vault root
