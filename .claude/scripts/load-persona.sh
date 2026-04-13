@@ -6,8 +6,11 @@
 HOOK_INPUT=$(cat)
 SESSION_ID=$(echo "$HOOK_INPUT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('session_id','unknown'))" 2>/dev/null || echo "unknown")
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
 VAULTMIND="/tmp/vaultmind"
-VAULT_PATH="$CLAUDE_PROJECT_DIR/vaultmind-identity"
+VAULT_PATH="$PROJECT_DIR/vaultmind-identity"
 
 # Sidecar log — captures what was injected without changing agent-visible output.
 LOG_DIR="${HOME}/.vaultmind/persona-eval"
@@ -17,7 +20,7 @@ HOOK_VERSION="v3-dual-query"
 
 # Build if needed
 if [ ! -f "$VAULTMIND" ]; then
-  (cd "$CLAUDE_PROJECT_DIR" && go build -o "$VAULTMIND" . 2>/dev/null)
+  (cd "$PROJECT_DIR" && go build -o "$VAULTMIND" . 2>/dev/null)
 fi
 
 if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
