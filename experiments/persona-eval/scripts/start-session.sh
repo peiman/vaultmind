@@ -9,7 +9,9 @@ PROJECT_DIR="$(cd "$EXPERIMENT_DIR/../.." && pwd)"
 SCHEDULE="$EXPERIMENT_DIR/schedule.json"
 SESSIONS_DIR="$EXPERIMENT_DIR/sessions"
 SETTINGS_FILE="$PROJECT_DIR/.claude/settings.local.json"
+CLAUDE_MD="$PROJECT_DIR/CLAUDE.md"
 BACKUP_FILE="$EXPERIMENT_DIR/.settings-backup.json"
+CLAUDE_MD_BACKUP="$EXPERIMENT_DIR/.claude-md-backup.md"
 TRANSCRIPT_DIR="$HOME/.claude/projects/-Users-peiman-dev-cli-vaultmind"
 
 if [ ! -f "$SCHEDULE" ]; then
@@ -116,6 +118,10 @@ print(len([sl for sl in s['slots'] if sl['status'] == 'complete']))
     cp "$BACKUP_FILE" "$SETTINGS_FILE"
     echo "Original settings.local.json restored."
   fi
+  if [ -f "$CLAUDE_MD_BACKUP" ]; then
+    cp "$CLAUDE_MD_BACKUP" "$CLAUDE_MD"
+    echo "Original CLAUDE.md restored."
+  fi
   exit 0
 fi
 
@@ -129,9 +135,25 @@ print(len([sl for sl in s['slots'] if sl['status'] == 'complete']))
 ")
 SESSION_NUM=$((COMPLETED + 1))
 
-# --- Backup current settings (once) ---
-if [ ! -f "$BACKUP_FILE" ]; then
+# --- Backup current settings and CLAUDE.md (once) ---
+if [ ! -f "$BACKUP_FILE" ] && [ -f "$SETTINGS_FILE" ]; then
   cp "$SETTINGS_FILE" "$BACKUP_FILE"
+fi
+if [ ! -f "$CLAUDE_MD_BACKUP" ] && [ -f "$CLAUDE_MD" ]; then
+  cp "$CLAUDE_MD" "$CLAUDE_MD_BACKUP"
+  # Neutralize the self-injection fallback in CLAUDE.md for experiment sessions
+  python3 -c "
+import re
+with open('$CLAUDE_MD') as f:
+    content = f.read()
+# Remove the vault fallback instruction but keep the line structure
+content = content.replace(
+    'A SessionStart hook loads it automatically, but if it didn\\'t fire, run: \`/tmp/vaultmind ask \"who am I\" --vault vaultmind-identity --max-items 8 --budget 6000\` and read the output.',
+    'A SessionStart hook loads it automatically.'
+)
+with open('$CLAUDE_MD', 'w') as f:
+    f.write(content)
+"
 fi
 
 # --- Swap in condition config ---
@@ -158,7 +180,7 @@ s = json.load(open('$SCHEDULE'))
 for slot in s['slots']:
     if slot['slot'] == $NEXT_SLOT:
         slot['status'] = 'started'
-        slot['started_at'] = '$START_TIME'
+        slot['started_at'] = $START_TIME
         break
 with open('$SCHEDULE', 'w') as f:
     json.dump(s, f, indent=2)
@@ -171,7 +193,7 @@ meta = {
     'slot': $NEXT_SLOT,
     'condition': '$CONDITION',
     'status': 'started',
-    'started_at': '$START_TIME',
+    'started_at': $START_TIME,
     'transcript_path': None
 }
 with open('$META_FILE', 'w') as f:

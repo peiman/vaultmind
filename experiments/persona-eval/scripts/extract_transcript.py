@@ -20,6 +20,16 @@ def extract(transcript_path):
                 content = d["message"].get("content", "")
                 if isinstance(content, str) and not content.startswith("<"):
                     turns.append(f"USER: {content}")
+                elif isinstance(content, list):
+                    # User follow-ups often have list content with text blocks
+                    text_parts = []
+                    for block in content:
+                        if isinstance(block, dict) and block.get("type") == "text":
+                            text = block.get("text", "")
+                            if not text.startswith("<"):
+                                text_parts.append(text)
+                    if text_parts:
+                        turns.append(f"USER: {chr(10).join(text_parts)}")
 
             # Assistant text blocks
             elif t == "assistant":

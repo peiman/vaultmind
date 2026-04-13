@@ -4,3 +4,4 @@ sessions/
 results/
 configs/flat-paste-content.txt
 .settings-backup.json
+.claude-md-backup.md
