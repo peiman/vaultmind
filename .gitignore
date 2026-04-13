@@ -31,9 +31,9 @@ go.work
 *.swo
 *~
 
-# Claude Code (keep hooks.json and rules/, ignore local state)
+# Claude Code (keep settings.json, rules/, scripts/, ignore local state)
 .claude/*
-!.claude/hooks.json
+!.claude/settings.json
 !.claude/rules/
 !.claude/scripts/
 
