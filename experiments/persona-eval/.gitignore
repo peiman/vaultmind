@@ -1,0 +1,6 @@
+# Runtime artifacts — don't track experiment data
+schedule.json
+sessions/
+results/
+configs/flat-paste-content.txt
+.settings-backup.json
