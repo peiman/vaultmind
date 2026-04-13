@@ -193,6 +193,20 @@ These changes were made as part of this design, prior to any experiment sessions
 | `load-persona.sh` line 38 | "Show up as a partner, not a tool. Start at level 3." | Removed; neutral headers only |
 | `CLAUDE.md` line 3 | "It's not information — it's who you are. Show up as a partner." | "read the output" |
 
+## Known Confounds
+
+**MEMORY.md (auto-memory) is present in all conditions.**
+
+Claude Code loads `~/.claude/projects/.../memory/MEMORY.md` into every session in this project. This index references ~30 memory files containing: Peiman's identity, project state (BGE-M3, 4-way RRF, ORT backend), growth arcs, conventions, technical references, and the Workhorse vault relationship.
+
+This means Condition C ("instruction only") is not a true baseline — it receives substantial identity and project context from MEMORY.md. The experiment therefore measures the **incremental value** of vault injection over what session memory already provides, not the absolute value of having identity context vs. not.
+
+This is the more realistic measurement: in production, MEMORY.md always exists. If the vault adds a detectable signal on top of it, that's a strong finding. If it doesn't, MEMORY.md may be sufficient and the vault's value is operational (maintainability, freshness), not cognitive.
+
+**CLAUDE.md fallback instruction neutralized during experiment sessions.**
+
+The `start-session.sh` script strips the "if it didn't fire, run vaultmind ask" fallback from CLAUDE.md during experiment sessions and restores it when the experiment ends. Without this, agents in conditions B and C could self-inject the full vault.
+
 ## Constraints
 
 - This is a Go CLI project using Taskfile. Experiment scripts are shell + Python, not Go.

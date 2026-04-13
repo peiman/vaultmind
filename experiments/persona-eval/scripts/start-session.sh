@@ -40,20 +40,28 @@ m = json.load(open('$META_FILE'))
 print(m['started_at'])
 ")
 
+  # Find new transcript by diffing against the snapshot taken at session start
+  SNAPSHOT_FILE="$SESSIONS_DIR/session-$(printf '%02d' "$LAST_STARTED").snapshot.txt"
   TRANSCRIPT=$(python3 -c "
 import os, glob
 
 transcript_dir = '$TRANSCRIPT_DIR'
-started_at = float('$STARTED_AT')
-candidates = []
-for f in glob.glob(os.path.join(transcript_dir, '*.jsonl')):
-    mtime = os.path.getmtime(f)
-    if mtime > started_at:
-        candidates.append((mtime, f))
+snapshot_file = '$SNAPSHOT_FILE'
 
-if candidates:
-    candidates.sort(reverse=True)
-    print(candidates[0][1])
+# Load snapshot of files that existed before the session
+known = set()
+if os.path.exists(snapshot_file):
+    with open(snapshot_file) as f:
+        known = set(line.strip() for line in f if line.strip())
+
+# Find new files
+current = set(glob.glob(os.path.join(transcript_dir, '*.jsonl')))
+new_files = current - known
+
+if new_files:
+    # Pick the newest by mtime among new files
+    newest = max(new_files, key=os.path.getmtime)
+    print(newest)
 else:
     print('')
 ")
@@ -198,6 +206,16 @@ meta = {
 }
 with open('$META_FILE', 'w') as f:
     json.dump(meta, f, indent=2)
+"
+
+# --- Snapshot existing transcripts for later diff ---
+SNAPSHOT_FILE="$SESSIONS_DIR/session-$(printf '%02d' "$NEXT_SLOT").snapshot.txt"
+python3 -c "
+import glob, os
+files = glob.glob(os.path.join('$TRANSCRIPT_DIR', '*.jsonl'))
+with open('$SNAPSHOT_FILE', 'w') as f:
+    for path in sorted(files):
+        f.write(path + '\n')
 "
 
 echo ""
