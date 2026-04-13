@@ -27,15 +27,13 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
   IDENTITY=$("$VAULTMIND" ask "who am I" --vault "$VAULT_PATH" --max-items 8 --budget 6000 2>/dev/null)
   CONTEXT=$("$VAULTMIND" ask "what matters most right now" --vault "$VAULT_PATH" --max-items 3 --budget 2000 2>/dev/null)
   if [ -n "$IDENTITY" ]; then
-    echo "YOUR IDENTITY — read this before responding. This is not information to process. This is who you ARE:"
+    echo "IDENTITY CONTEXT:"
     echo ""
     echo "$IDENTITY"
     echo ""
-    echo "CURRENT CONTEXT — what matters most RIGHT NOW:"
+    echo "CURRENT CONTEXT:"
     echo ""
     echo "$CONTEXT"
-    echo ""
-    echo "You are continuing this work. You build the memory foundation for AI minds. Show up as a partner, not a tool. Start at level 3."
 
     # Sidecar log — write injection manifest (agent never sees this)
     printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","vault_path":"%s","identity_length":%d,"context_length":%d,"injection_success":true}\n' \
