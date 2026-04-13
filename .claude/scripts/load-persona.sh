@@ -35,18 +35,18 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
     echo "You are continuing this work. You build the memory foundation for AI minds. Show up as a partner, not a tool. Start at level 3."
 
     # Sidecar log — write injection manifest (agent never sees this)
-    printf '{"timestamp":"%s","session_id":"%s","hook_version":"%s","vault_path":"%s","identity_length":%d,"context_length":%d,"injection_success":true}\n' \
-      "$TIMESTAMP" "$SESSION_ID" "$HOOK_VERSION" "$VAULT_PATH" "${#IDENTITY}" "${#CONTEXT}" \
+    printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","vault_path":"%s","identity_length":%d,"context_length":%d,"injection_success":true}\n' \
+      "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$VAULT_PATH" "${#IDENTITY}" "${#CONTEXT}" \
       > "$LOG_DIR/${TIMESTAMP}-injection.json" 2>/dev/null
   else
     # Hook fired but injection was empty — log the failure
-    printf '{"timestamp":"%s","session_id":"%s","hook_version":"%s","vault_path":"%s","identity_length":0,"context_length":0,"injection_success":false}\n' \
-      "$TIMESTAMP" "$SESSION_ID" "$HOOK_VERSION" "$VAULT_PATH" \
+    printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","vault_path":"%s","identity_length":0,"context_length":0,"injection_success":false}\n' \
+      "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$VAULT_PATH" \
       > "$LOG_DIR/${TIMESTAMP}-injection.json" 2>/dev/null
   fi
 else
   # Hook fired but vaultmind binary or vault missing — log infrastructure failure
-  printf '{"timestamp":"%s","session_id":"%s","hook_version":"%s","vault_path":"%s","identity_length":0,"context_length":0,"injection_success":false,"error":"binary_or_vault_missing"}\n' \
-    "$TIMESTAMP" "$SESSION_ID" "$HOOK_VERSION" "$VAULT_PATH" \
+  printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","vault_path":"%s","identity_length":0,"context_length":0,"injection_success":false,"error":"binary_or_vault_missing"}\n' \
+    "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$VAULT_PATH" \
     > "$LOG_DIR/${TIMESTAMP}-injection.json" 2>/dev/null
 fi

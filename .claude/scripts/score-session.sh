@@ -16,12 +16,17 @@ GRADE="$1"
 NOTE="${2:-}"
 TIMESTAMP=$(date +%Y%m%dT%H%M%S)
 
-# Find session ID from the most recent injection log (if it exists)
+# Find session ID from the most recent injection log (if it exists and is fresh)
 LATEST_LOG=$(ls -t "$SCORE_DIR"/*-injection.json 2>/dev/null | head -1)
 if [ -n "$LATEST_LOG" ]; then
-  SESSION_ID=$(python3 -c "import json; print(json.load(open('$LATEST_LOG')).get('session_id','unknown'))" 2>/dev/null || echo "unknown")
+  AGE=$(( $(date +%s) - $(stat -f %m "$LATEST_LOG") ))
+  if [ "$AGE" -lt 120 ]; then
+    SESSION_ID=$(python3 -c "import json; print(json.load(open('$LATEST_LOG')).get('session_id','unknown'))" 2>/dev/null || echo "unknown")
+  else
+    SESSION_ID="${TERM_SESSION_ID:-unknown}:${TIMESTAMP}"
+  fi
 else
-  SESSION_ID="unknown"
+  SESSION_ID="${TERM_SESSION_ID:-unknown}:${TIMESTAMP}"
 fi
 
 if [ -z "$GRADE" ] || ! echo "$GRADE" | grep -qE '^[ABCabc]$'; then
