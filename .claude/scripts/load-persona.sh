@@ -10,22 +10,49 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 VAULTMIND="/tmp/vaultmind"
+VAULTMIND_SRC="$PROJECT_DIR"
 VAULT_PATH="$PROJECT_DIR/vaultmind-identity"
 
 # Sidecar log — captures what was injected without changing agent-visible output.
 LOG_DIR="${HOME}/.vaultmind/persona-eval"
 mkdir -p "$LOG_DIR" 2>/dev/null
 TIMESTAMP=$(date +%Y%m%dT%H%M%S)
-HOOK_VERSION="v3-dual-query"
+HOOK_VERSION="v4-hardened"
 
-# Build if needed
+# Rebuild when binary is absent OR any .go source is newer than the binary.
+# Keeps the dogfood loop self-updating — any VaultMind commit propagates to
+# the next session without a manual rm.
+needs_build=0
 if [ ! -f "$VAULTMIND" ]; then
-  (cd "$PROJECT_DIR" && go build -o "$VAULTMIND" . 2>/dev/null)
+  needs_build=1
+elif [ -d "$VAULTMIND_SRC" ] && [ -n "$(find "$VAULTMIND_SRC" -name '*.go' -newer "$VAULTMIND" -print -quit 2>/dev/null)" ]; then
+  needs_build=1
+fi
+
+if [ "$needs_build" = "1" ] && [ -d "$VAULTMIND_SRC" ]; then
+  BUILD_OUTPUT=$(cd "$VAULTMIND_SRC" && go build -o "$VAULTMIND" . 2>&1)
+  BUILD_STATUS=$?
+  if [ "$BUILD_STATUS" != "0" ]; then
+    # Surface build failures instead of silently loading no persona.
+    echo "VaultMind build failed — persona not loaded" >&2
+    echo "$BUILD_OUTPUT" >&2
+  fi
 fi
 
 if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
-  IDENTITY=$("$VAULTMIND" ask "who am I" --vault "$VAULT_PATH" --max-items 8 --budget 6000 2>/dev/null)
-  CONTEXT=$("$VAULTMIND" ask "what matters most right now" --vault "$VAULT_PATH" --max-items 3 --budget 2000 2>/dev/null)
+  # Capture stderr so runtime failures surface instead of producing empty
+  # persona silently. VAULTMIND_CALLER tags the event so the experiment DB
+  # can separate hook-triggered loads from deliberate queries.
+  ASK_ERR=$(mktemp -t vaultmind-persona-err.XXXXXX)
+  IDENTITY=$(VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" ask "who am I" --vault "$VAULT_PATH" --max-items 8 --budget 6000 2>"$ASK_ERR")
+  IDENTITY_STATUS=$?
+  CONTEXT=$(VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" ask "what matters most right now" --vault "$VAULT_PATH" --max-items 3 --budget 2000 2>>"$ASK_ERR")
+  if [ "$IDENTITY_STATUS" != "0" ]; then
+    echo "VaultMind ask failed (exit $IDENTITY_STATUS) — persona not loaded" >&2
+    cat "$ASK_ERR" >&2
+  fi
+  rm -f "$ASK_ERR"
+
   if [ -n "$IDENTITY" ]; then
     echo "IDENTITY CONTEXT:"
     echo ""
