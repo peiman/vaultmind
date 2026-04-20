@@ -75,3 +75,41 @@ func TestExperimentCompare_JSONOutput(t *testing.T) {
 		t.Fatalf("expected EventCount=1, got %d", row.EventCount)
 	}
 }
+
+func TestFormatCompareResult_Empty(t *testing.T) {
+	buf := &bytes.Buffer{}
+	if err := formatCompareResult(buf, compareResult{}, 10, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !bytes.Contains(buf.Bytes(), []byte("No comparable events")) {
+		t.Fatalf("expected empty-result message, got %q", buf.String())
+	}
+}
+
+func TestFormatCompareResult_WithRowsAndPerEvent(t *testing.T) {
+	r := compareResult{
+		Aggregates: []experiment.AggregateRow{
+			{PrimaryVariant: "hybrid", ShadowVariant: "activation_v1", EventCount: 2, MeanJaccardAtK: 0.75, MeanKendallTau: 0.5, KendallEventCount: 2},
+			{PrimaryVariant: "hybrid", ShadowVariant: "activation_v2", EventCount: 3, MeanJaccardAtK: 1.0, MeanKendallTau: nan(), KendallEventCount: 0},
+		},
+		PerEvent: []perEventRow{
+			{EventID: "ev-1", PrimaryVariant: "hybrid", ShadowVariant: "activation_v1", JaccardAtK: 0.5, KendallTau: 1.0, SharedItems: 3},
+			{EventID: "ev-2", PrimaryVariant: "hybrid", ShadowVariant: "activation_v2", JaccardAtK: 1.0, KendallTau: nan(), SharedItems: 1},
+		},
+	}
+	buf := &bytes.Buffer{}
+	if err := formatCompareResult(buf, r, 10, true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	out := buf.String()
+	for _, want := range []string{"Variant disagreement (K=10)", "activation_v1", "activation_v2", "Per-event:", "ev-1", "ev-2", "nan"} {
+		if !bytes.Contains(buf.Bytes(), []byte(want)) {
+			t.Fatalf("expected output to contain %q, got %q", want, out)
+		}
+	}
+}
+
+func nan() float64 {
+	z := 0.0
+	return z / z
+}

@@ -104,13 +104,16 @@ fi
 echo ""
 echo "3. SessionStart hook wiring"
 settings="$PROJECT_DIR/.claude/settings.json"
+settings_local="$PROJECT_DIR/.claude/settings.local.json"
 if [ ! -f "$settings" ]; then
   echo "$FAIL $settings missing"
   FAILED=1
-elif grep -q "load-persona.sh" "$settings"; then
+elif grep -q "load-persona.sh" "$settings" 2>/dev/null; then
   echo "$PASS load-persona.sh is wired in settings.json"
+elif [ -f "$settings_local" ] && grep -q "load-persona.sh" "$settings_local" 2>/dev/null; then
+  echo "$PASS load-persona.sh is wired in settings.local.json"
 else
-  echo "$FAIL load-persona.sh script exists but is NOT wired in settings.json"
+  echo "$FAIL load-persona.sh script exists but is NOT wired in either settings.json or settings.local.json"
   echo "     add a SessionStart hook entry pointing at .claude/scripts/load-persona.sh"
   FAILED=1
 fi

@@ -221,6 +221,33 @@ func TestAggregateComparisons_TwoEventsOnePair(t *testing.T) {
 	}
 }
 
+func TestEffectiveK(t *testing.T) {
+	tests := []struct {
+		name       string
+		kCap, a, b int
+		want       int
+	}{
+		{"positive kCap wins", 5, 10, 3, 5},
+		{"zero kCap falls back to longer A", 0, 7, 3, 7},
+		{"zero kCap falls back to longer B", 0, 2, 9, 9},
+		{"negative kCap falls back", -1, 4, 4, 4},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := effectiveK(tt.kCap, tt.a, tt.b); got != tt.want {
+				t.Fatalf("effectiveK(%d,%d,%d) = %d, want %d", tt.kCap, tt.a, tt.b, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTruncate_NegativeK(t *testing.T) {
+	got := truncate([]string{"a", "b"}, -1)
+	if len(got) != 0 {
+		t.Fatalf("negative K should clamp to 0, got %d items", len(got))
+	}
+}
+
 func TestAggregateComparisons_SkipsInsufficientShared(t *testing.T) {
 	events := []ComparableEvent{
 		{
