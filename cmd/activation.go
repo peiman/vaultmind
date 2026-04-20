@@ -3,9 +3,9 @@ package cmd
 
 import (
 	"context"
-	"time"
 
 	"github.com/peiman/vaultmind/internal/experiment"
+	"github.com/peiman/vaultmind/internal/memory"
 	"github.com/peiman/vaultmind/internal/query"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -14,12 +14,6 @@ import (
 // defaultActivationDelta is the spreading activation weight when similarities
 // are available. Configurable via experiments.activation.delta.
 const defaultActivationDelta = 0.2
-
-// rankedItem pairs a note ID with its position in a result list.
-type rankedItem struct {
-	ID   string
-	Rank int
-}
 
 // computeActivationScores returns activation scores for the primary experiment
 // variant. Returns nil if the experiment session is absent, the activation
@@ -77,58 +71,43 @@ func logAskExperiment(cmd *cobra.Command, queryText, vaultPath, retrievalMode st
 	}
 	session.SetVaultPath(vaultPath)
 
-	var shadowVariants map[string]any
-	primary := ""
-	actEnabled := false
+	params := experiment.AskEventParams{
+		RetrievalMode: retrievalMode,
+		TopHits:       askRetrievalHits(result),
+		RetrievalErr:  retrievalErr,
+	}
 	if result != nil {
 		if actDef, ok := loadExperimentDefs()["activation"]; ok && actDef.Enabled && result.Context != nil {
-			actEnabled = true
-			primary = actDef.Primary
-			items := make([]rankedItem, len(result.Context.Context))
-			for i, item := range result.Context.Context {
-				items[i] = rankedItem{ID: item.ID, Rank: i + 1}
-			}
-			shadowVariants = buildVariantResults(session, actDef, items)
+			params.ActivationOn = true
+			params.PrimaryVariant = actDef.Primary
+			params.ShadowVariants = experiment.BuildShadowVariantResults(session, actDef, contextNoteIDs(result.Context.Context))
 		}
 	}
 
-	if _, err := session.LogAskEvent(queryText, buildAskEventData(result, retrievalMode, shadowVariants, primary, actEnabled, retrievalErr)); err != nil {
+	if _, err := session.LogAskEvent(queryText, experiment.BuildAskEventData(params)); err != nil {
 		log.Debug().Err(err).Msg("failed to log ask experiment event")
 	}
 }
 
-// buildAskEventData composes the event payload for an ask event. The retrieval
-// mode is carried as a variant under `variants.{mode}` so downstream LinkOutcomes
-// and shadow-scoring consumers see the retrieved notes. When activation is
-// enabled, shadow variants are merged into the same variants map — activation
-// variant names ("compressed-0.2", "wall-clock", "none", "compressed-0.5") do
-// not collide with retrieval-mode names today; a collision-warning log guards
-// against future drift.
-func buildAskEventData(result *query.AskResult, retrievalMode string, shadowVariants map[string]any, primaryVariant string, actEnabled bool, retrievalErr error) map[string]any {
-	var topHits []query.ScoredResult
-	if result != nil {
-		topHits = result.TopHits
+// contextNoteIDs extracts note IDs from context-pack items in rank order.
+// Thin adapter between memory.ContextItem and the experiment layer.
+func contextNoteIDs(items []memory.ContextItem) []string {
+	ids := make([]string, len(items))
+	for i, it := range items {
+		ids[i] = it.ID
 	}
-	variants := experiment.BuildVariantPayload(retrievalMode, askRetrievalHits(topHits))
-	for name, payload := range shadowVariants {
-		if _, clash := variants[name]; clash {
-			log.Warn().Str("variant", name).Msg("shadow variant name collides with retrieval mode; retrieval payload overwritten")
-		}
-		variants[name] = payload
-	}
-	data := experiment.BuildRetrievalEventData(variants, len(topHits), retrievalErr)
-	data["top_hits"] = len(topHits)
-	if actEnabled {
-		data["primary_variant"] = primaryVariant
-	}
-	return data
+	return ids
 }
 
-// askRetrievalHits maps ask top hits to the experiment payload input type.
+// askRetrievalHits adapts query top hits into the experiment payload shape.
 // Rank is 1-indexed within the result set (ask does not paginate — no offset).
-func askRetrievalHits(hits []query.ScoredResult) []experiment.RetrievalHit {
-	out := make([]experiment.RetrievalHit, len(hits))
-	for i, h := range hits {
+// Returns nil when result is nil so callers can pass straight through.
+func askRetrievalHits(result *query.AskResult) []experiment.RetrievalHit {
+	if result == nil {
+		return nil
+	}
+	out := make([]experiment.RetrievalHit, len(result.TopHits))
+	for i, h := range result.TopHits {
 		out[i] = experiment.RetrievalHit{
 			NoteID:   h.ID,
 			Rank:     i + 1,
@@ -138,48 +117,4 @@ func askRetrievalHits(hits []query.ScoredResult) []experiment.RetrievalHit {
 		}
 	}
 	return out
-}
-
-// buildVariantResults computes activation features for all experiment variants
-// across the given ranked items. Used for shadow-scoring comparison in
-// experiment event logs.
-func buildVariantResults(session *experiment.Session, actDef experiment.ExperimentDef, items []rankedItem) map[string]any {
-	accessedNotes, err := session.DB.AccessedNoteIDs()
-	if err != nil {
-		log.Debug().Err(err).Msg("failed to load accessed notes for variant results")
-		return map[string]any{}
-	}
-	accessMap, err := session.DB.BatchNoteAccessTimes(accessedNotes)
-	if err != nil {
-		log.Debug().Err(err).Msg("failed to load access times for variant results")
-		return map[string]any{}
-	}
-	windows, err := session.DB.RecentSessionWindows(100)
-	if err != nil {
-		log.Debug().Err(err).Msg("failed to load session windows for variant results")
-		return map[string]any{}
-	}
-	now := time.Now().UTC()
-
-	variantResults := make(map[string]any, len(actDef.AllVariants()))
-	for _, variant := range actDef.AllVariants() {
-		gamma, ok := experiment.VariantGamma(variant)
-		if !ok {
-			log.Debug().Str("variant", variant).Msg("skipping unrecognized variant in shadow scoring")
-			continue
-		}
-		params := experiment.DefaultActivationParams(gamma)
-		_, feats := experiment.ScoreFromData(accessedNotes, accessMap, windows, now, params, nil)
-
-		results := make([]any, 0, len(items))
-		for _, item := range items {
-			r := map[string]any{"note_id": item.ID, "rank": item.Rank}
-			if f, fOK := feats[item.ID]; fOK {
-				r["features"] = f
-			}
-			results = append(results, r)
-		}
-		variantResults[variant] = map[string]any{"results": results}
-	}
-	return variantResults
 }

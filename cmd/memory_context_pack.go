@@ -62,14 +62,10 @@ func runMemoryContextPack(cmd *cobra.Command, args []string) error {
 		session.SetVaultPath(vaultPath)
 		exps := loadExperimentDefs()
 		if actDef, ok := exps["activation"]; ok && actDef.Enabled {
-			items := make([]rankedItem, len(result.Context))
-			for i, item := range result.Context {
-				items[i] = rankedItem{ID: item.ID, Rank: i + 1}
-			}
 			_, _ = session.LogContextPackEvent(map[string]any{
 				"primary_variant": actDef.Primary,
 				"target_id":       result.TargetID,
-				"variants":        buildVariantResults(session, actDef, items),
+				"variants":        experiment.BuildShadowVariantResults(session, actDef, contextNoteIDs(result.Context)),
 			})
 		} else {
 			_, _ = session.LogContextPackEvent(map[string]any{
