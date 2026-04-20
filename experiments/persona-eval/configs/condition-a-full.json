@@ -10,6 +10,10 @@
           },
           {
             "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR\"/experiments/persona-eval/scripts/auto-advance.sh"
+          },
+          {
+            "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/load-persona.sh"
           }
         ]
