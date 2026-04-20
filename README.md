@@ -60,6 +60,8 @@ vaultmind experiment trace --note <id>                       # which sessions re
 
 Run `vaultmind --help` for the full list.
 
+**For AI agents using VaultMind as memory:** see **[docs/AGENT_USAGE.md](docs/AGENT_USAGE.md)** — end-to-end guide covering save, retrieve, update, inspect, frontmatter schema, and integration patterns.
+
 ## How the hook works
 
 VaultMind integrates with Claude Code (and other hook-supporting agents) via a SessionStart hook script. Two reference implementations are in this repo:

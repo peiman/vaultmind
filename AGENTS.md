@@ -1,8 +1,11 @@
-# ckeletin-go — Project Guide for AI Agents
+# VaultMind — Project Guide for AI Agents (contributors)
 
-> **This file is a reference implementation.** The pattern — structured project
-> guide, behavioral rules, automated hooks, machine-checkable enforcement — works
-> in any codebase. See the README for how the pieces fit together.
+> **Two audiences, two docs.**
+>
+> - **Working ON the VaultMind codebase?** (changing code, adding features, fixing bugs) — **this file.** Architecture rules, test standards, commit conventions.
+> - **Using VaultMind as memory?** (querying a vault, saving new notes, persona hooks) — read **[docs/AGENT_USAGE.md](docs/AGENT_USAGE.md)**.
+>
+> The scaffold pattern below is a reference implementation — it works in any codebase. See the README for how the pieces fit together.
 
 ## About This Project
 
