@@ -28,11 +28,19 @@ type AskConfig struct {
 }
 
 // AskResult is the combined output of a search + context-pack operation.
+// RetrievalMode reports which retriever lane actually ran ("hybrid" when
+// embeddings exist and were used, "keyword" when ask fell back to FTS-only).
+// Set by the caller after Ask returns, since Ask itself does not know which
+// retriever it was handed — the caller (cmd/ask.go) has that signal.
+// Surfacing it in the JSON envelope lets agent consumers detect keyword-only
+// fallback programmatically (the human-readable hint prints on stdout and
+// isn't available via --json).
 type AskResult struct {
-	Query        string                    `json:"query"`
-	TopHits      []ScoredResult            `json:"top_hits"`
-	Context      *memory.ContextPackResult `json:"context,omitempty"`
-	Similarities map[string]float64        `json:"-"` // raw cosine similarities (not serialized)
+	Query         string                    `json:"query"`
+	TopHits       []ScoredResult            `json:"top_hits"`
+	Context       *memory.ContextPackResult `json:"context,omitempty"`
+	RetrievalMode string                    `json:"retrieval_mode,omitempty"`
+	Similarities  map[string]float64        `json:"-"` // raw cosine similarities (not serialized)
 }
 
 // Ask searches the vault for the query, computes raw cosine similarities

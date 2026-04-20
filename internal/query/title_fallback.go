@@ -13,6 +13,15 @@ import (
 // minTitleMatchToken is the minimum token length considered for fuzzy title
 // matching. Filters out stopwords ("do", "it", "my", "of", "in", ...) that
 // would otherwise match any title by accident.
+//
+// The threshold is measured in bytes via len(), which equals rune count for
+// ASCII. Vaults authored in non-ASCII scripts (CJK, Cyrillic, accented
+// Latin) would have their single-character tokens pass the 3-byte threshold
+// incorrectly — acceptable today because vaults are English; revisit with
+// utf8.RuneCountInString if/when non-ASCII vaults land.
+//
+// Accepted false-negative: 2-letter acronyms ("AI", "ML", "NLP") filter out
+// alongside stopwords. A silent return still beats a misleading suggestion.
 const minTitleMatchToken = 3
 
 // FuzzyTitleMatches returns up to n titles whose words overlap with the

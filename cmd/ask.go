@@ -84,6 +84,9 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	})
 
 	mode := retrievalModeLabel(ret)
+	if result != nil {
+		result.RetrievalMode = mode
+	}
 	logAskExperiment(cmd, args[0], vaultPath, mode, result, err)
 
 	if err != nil {
