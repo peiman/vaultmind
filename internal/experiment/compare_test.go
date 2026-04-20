@@ -176,6 +176,82 @@ func TestExtractEventPairs_PrimaryMissing(t *testing.T) {
 	}
 }
 
+func TestAggregateComparisons_TwoEventsOnePair(t *testing.T) {
+	events := []ComparableEvent{
+		{
+			EventID: "e1",
+			Pairs: []EventPair{
+				{
+					PrimaryVariant: "hybrid", ShadowVariant: "activation_v1",
+					PrimaryList: []string{"n1", "n2", "n3"},
+					ShadowList:  []string{"n1", "n2", "n3"},
+				},
+			},
+		},
+		{
+			EventID: "e2",
+			Pairs: []EventPair{
+				{
+					PrimaryVariant: "hybrid", ShadowVariant: "activation_v1",
+					PrimaryList: []string{"n1", "n2", "n3"},
+					ShadowList:  []string{"n3", "n2", "n1"},
+				},
+			},
+		},
+	}
+	agg := AggregateComparisons(events, 3)
+	if len(agg) != 1 {
+		t.Fatalf("expected 1 aggregate row, got %d", len(agg))
+	}
+	row := agg[0]
+	if row.PrimaryVariant != "hybrid" || row.ShadowVariant != "activation_v1" {
+		t.Fatalf("unexpected labels: %+v", row)
+	}
+	if row.EventCount != 2 {
+		t.Fatalf("expected EventCount=2, got %d", row.EventCount)
+	}
+	if math.Abs(row.MeanJaccardAtK-1.0) > 1e-9 {
+		t.Fatalf("expected MeanJaccardAtK=1.0, got %v", row.MeanJaccardAtK)
+	}
+	if math.Abs(row.MeanKendallTau-0.0) > 1e-9 {
+		t.Fatalf("expected MeanKendallTau=0.0, got %v", row.MeanKendallTau)
+	}
+	if row.KendallEventCount != 2 {
+		t.Fatalf("expected KendallEventCount=2, got %d", row.KendallEventCount)
+	}
+}
+
+func TestAggregateComparisons_SkipsInsufficientShared(t *testing.T) {
+	events := []ComparableEvent{
+		{
+			EventID: "e1",
+			Pairs: []EventPair{
+				{
+					PrimaryVariant: "hybrid", ShadowVariant: "activation_v1",
+					PrimaryList: []string{"n1"},
+					ShadowList:  []string{"n2"},
+				},
+			},
+		},
+	}
+	agg := AggregateComparisons(events, 5)
+	if len(agg) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(agg))
+	}
+	if agg[0].EventCount != 1 {
+		t.Fatalf("EventCount should still count the event: got %d", agg[0].EventCount)
+	}
+	if agg[0].KendallEventCount != 0 {
+		t.Fatalf("KendallEventCount should be 0 when no pair has >=2 shared: got %d", agg[0].KendallEventCount)
+	}
+	if !math.IsNaN(agg[0].MeanKendallTau) {
+		t.Fatalf("MeanKendallTau should be NaN when no pair contributed, got %v", agg[0].MeanKendallTau)
+	}
+	if math.Abs(agg[0].MeanJaccardAtK-0.0) > 1e-9 {
+		t.Fatalf("MeanJaccardAtK should be 0.0, got %v", agg[0].MeanJaccardAtK)
+	}
+}
+
 func TestExtractEventPairs_MultipleShadows(t *testing.T) {
 	eventData := map[string]any{
 		"variants": map[string]any{
