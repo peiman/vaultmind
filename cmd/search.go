@@ -42,25 +42,52 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		defer cleanup()
 	}
 
-	err = query.RunSearch(retriever, query.SearchConfig{
-		Query:      args[0],
+	result, err := query.RunSearch(retriever, buildSearchConfig(cmd, args[0], vaultPath), cmd.OutOrStdout())
+	logSearchExperiment(cmd, vaultPath, mode, args[0], result)
+	return err
+}
+
+// buildSearchConfig assembles the SearchConfig from command flags.
+func buildSearchConfig(cmd *cobra.Command, queryText, vaultPath string) query.SearchConfig {
+	return query.SearchConfig{
+		Query:      queryText,
 		Limit:      getConfigValueWithFlags[int](cmd, "limit", config.KeyAppSearchLimit),
 		Offset:     getConfigValueWithFlags[int](cmd, "offset", config.KeyAppSearchOffset),
 		TypeFilter: getConfigValueWithFlags[string](cmd, "type", config.KeyAppSearchType),
 		TagFilter:  getConfigValueWithFlags[string](cmd, "tag", config.KeyAppSearchTag),
 		JSONOutput: getConfigValueWithFlags[bool](cmd, "json", config.KeyAppSearchJson),
 		VaultPath:  vaultPath,
-	}, cmd.OutOrStdout())
-
-	// Log experiment event (non-blocking)
-	if session := experiment.FromContext(cmd.Context()); session != nil {
-		session.SetVaultPath(vaultPath)
-		_, _ = session.LogSearchEvent(args[0], mode, map[string]any{
-			"variants": map[string]any{
-				"none": map[string]any{"results": []any{}},
-			},
-		})
 	}
+}
 
-	return err
+// logSearchExperiment records the search event with retrieval results as the
+// variant payload. Non-blocking — errors are swallowed by design.
+func logSearchExperiment(cmd *cobra.Command, vaultPath, mode, queryText string, result *query.SearchResult) {
+	session := experiment.FromContext(cmd.Context())
+	if session == nil {
+		return
+	}
+	session.SetVaultPath(vaultPath)
+	_, _ = session.LogSearchEvent(queryText, mode, map[string]any{
+		"variants": experiment.BuildVariantPayload(mode, toRetrievalHits(result)),
+	})
+}
+
+// toRetrievalHits maps search hits to the experiment payload input type.
+// Returns nil when result is nil (e.g. retrieval failed before producing hits).
+func toRetrievalHits(result *query.SearchResult) []experiment.RetrievalHit {
+	if result == nil {
+		return nil
+	}
+	hits := make([]experiment.RetrievalHit, len(result.Hits))
+	for i, h := range result.Hits {
+		hits[i] = experiment.RetrievalHit{
+			NoteID:   h.ID,
+			Rank:     i + 1 + result.Offset,
+			Score:    h.Score,
+			NoteType: h.Type,
+			Path:     h.Path,
+		}
+	}
+	return hits
 }
