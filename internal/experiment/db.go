@@ -95,6 +95,16 @@ FROM sessions;`,
 	// NULL — reporters treat NULL as "unknown" rather than failing.
 	`ALTER TABLE sessions ADD COLUMN caller TEXT;
 ALTER TABLE sessions ADD COLUMN caller_meta TEXT;`,
+	// Version 5: user_session_id — groups invocation-sessions into working
+	// sessions via a time heuristic at write time (same caller+user+host
+	// within UserSessionThreshold = same user-session). The DB has one row
+	// per vaultmind command invocation, but a Claude chat or shell session
+	// typically spans many invocations. Without this grouping, "session
+	// count" and "session gap" metrics conflate invocations with working
+	// sessions and the paper's gamma fit sees misleading rapid-succession
+	// gaps. Existing rows get NULL and are treated as "unknown grouping."
+	`ALTER TABLE sessions ADD COLUMN user_session_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_sessions_user_session ON sessions(user_session_id);`,
 }
 
 // DB wraps *sql.DB with schema initialization and experiment-specific helpers.
