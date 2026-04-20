@@ -65,7 +65,7 @@ func TestOpen_SchemaVersion(t *testing.T) {
 	var version int
 	err := db.QueryRow("PRAGMA user_version").Scan(&version)
 	require.NoError(t, err)
-	assert.Equal(t, 1, version)
+	assert.Equal(t, 3, version)
 }
 
 func TestOpen_Idempotent(t *testing.T) {
@@ -81,11 +81,12 @@ func TestOpen_Idempotent(t *testing.T) {
 	defer db2.Close()
 	assert.NotNil(t, db2)
 
-	// Schema version should still be 1 after reopen.
+	// Schema version should match the current migration count after reopen.
+	// Bump when migrations are added.
 	var version int
 	err = db2.QueryRow("PRAGMA user_version").Scan(&version)
 	require.NoError(t, err)
-	assert.Equal(t, 1, version)
+	assert.Equal(t, 3, version)
 }
 
 func TestOpen_WALMode(t *testing.T) {

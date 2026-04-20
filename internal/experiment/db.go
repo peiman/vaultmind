@@ -49,6 +49,45 @@ CREATE TABLE IF NOT EXISTS outcomes (
 
 CREATE INDEX IF NOT EXISTS idx_outcomes_event ON outcomes(event_id);
 CREATE INDEX IF NOT EXISTS idx_outcomes_note  ON outcomes(note_id);`,
+	// Version 2: per_note_stats view. Unnests event_data.variants.*.results[]
+	// across search/ask/context_pack events and aggregates per-note metrics.
+	// DISTINCT on (event_id, note_id) so a note appearing in multiple variants
+	// of the same event counts once.
+	`CREATE VIEW IF NOT EXISTS per_note_stats AS
+WITH hits AS (
+    SELECT DISTINCT
+        e.event_id,
+        e.timestamp,
+        json_extract(h.value, '$.note_id') AS note_id
+    FROM events e,
+         json_each(e.event_data, '$.variants') v,
+         json_each(v.value, '$.results') h
+    WHERE e.event_type IN ('search', 'ask', 'context_pack')
+      AND json_valid(e.event_data)
+      AND json_extract(h.value, '$.note_id') IS NOT NULL
+)
+SELECT
+    note_id,
+    COUNT(*) AS retrieval_count_total,
+    MIN(timestamp) AS first_retrieved_ts,
+    MAX(timestamp) AS last_retrieved_ts
+FROM hits
+GROUP BY note_id;`,
+	// Version 3: session_gaps view. For each session, reports the previous
+	// session and the inter-session interval in seconds. Feeds compressed-
+	// idle-time analysis (gamma parameter). First session's prev_* fields
+	// and gap_seconds are NULL.
+	`CREATE VIEW IF NOT EXISTS session_gaps AS
+SELECT
+    session_id,
+    started_at,
+    LAG(session_id) OVER (ORDER BY started_at) AS prev_session_id,
+    LAG(started_at) OVER (ORDER BY started_at) AS prev_started_at,
+    CAST(
+        (julianday(started_at) - julianday(LAG(started_at) OVER (ORDER BY started_at))) * 86400
+        AS INTEGER
+    ) AS gap_seconds
+FROM sessions;`,
 }
 
 // DB wraps *sql.DB with schema initialization and experiment-specific helpers.
