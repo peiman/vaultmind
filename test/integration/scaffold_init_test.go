@@ -34,6 +34,9 @@ const upstreamModule = "github.com/peiman/ckeletin-go"
 
 // TestScaffoldInit tests the complete scaffold initialization workflow
 func TestScaffoldInit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
 	// Skip in derived projects - this test only makes sense in the upstream repo
 	// because it tests the scaffold initialization process itself
 	currentModule := getCurrentModule(t)

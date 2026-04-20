@@ -64,6 +64,9 @@ func TestMain(m *testing.M) {
 }
 
 func TestPingCommand(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
 	tests := []struct {
 		name               string
 		args               []string
@@ -117,6 +120,9 @@ func TestPingCommand(t *testing.T) {
 }
 
 func TestConfigValidateCommand(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
 	// Create temp directory for test config files
 	tmpDir := t.TempDir()
 

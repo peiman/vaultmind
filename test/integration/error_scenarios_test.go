@@ -26,6 +26,9 @@ import (
 
 // TestConfigFileErrors tests error handling for config file issues
 func TestConfigFileErrors(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
 	tmpDir := t.TempDir()
 
 	tests := []struct {
@@ -165,6 +168,9 @@ func TestConfigFileErrors(t *testing.T) {
 
 // TestInvalidFlagValues tests handling of invalid flag values
 func TestInvalidFlagValues(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
 	tests := []struct {
 		name               string
 		args               []string
@@ -224,6 +230,9 @@ func TestInvalidFlagValues(t *testing.T) {
 
 // TestInvalidCommands tests handling of invalid commands and subcommands
 func TestInvalidCommands(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
 	tests := []struct {
 		name               string
 		args               []string

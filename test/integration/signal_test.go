@@ -18,6 +18,9 @@ import (
 )
 
 func TestGracefulShutdownOnSIGINT(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
 	cmd := exec.Command(binaryPath, "ping")
 	require.NoError(t, cmd.Start())
 
