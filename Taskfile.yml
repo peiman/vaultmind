@@ -61,8 +61,20 @@ tasks:
     cmds: [task: ckeletin:build]
 
   check:
-    desc: Run all quality checks
-    cmds: [task: ckeletin:check]
+    desc: Run all quality checks (including VaultMind bootstrap verification)
+    cmds:
+      - task: ckeletin:check
+      - task: check:bootstrap
+
+  check:bootstrap:
+    desc: Verify VaultMind setup (binary, vaults, hook wiring, smoke test)
+    cmds:
+      - bash .claude/scripts/bootstrap.sh --check
+
+  check:hook:
+    desc: Run the persona SessionStart hook smoke test
+    cmds:
+      - bash .claude/scripts/test-hook.sh
 
   check:fast:
     desc: Run fast quality checks
