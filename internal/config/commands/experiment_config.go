@@ -44,7 +44,30 @@ func ExperimentSummaryOptions() []config.ConfigOption {
 	}
 }
 
+// ExperimentTraceMetadata defines metadata for the experiment trace command.
+var ExperimentTraceMetadata = config.CommandMetadata{
+	Use:          "trace",
+	Short:        "Drill into a specific session or note's retrieval history",
+	Long:         "Given --session <id>, reports that session's caller (agent + operator) and every retrieval it performed in order. Given --note <id>, reports every session that retrieved that note with caller attribution. Exactly one of --session or --note must be provided.",
+	ConfigPrefix: "app.experimenttrace",
+	FlagOverrides: map[string]string{
+		"app.experimenttrace.session": "session",
+		"app.experimenttrace.note":    "note",
+		"app.experimenttrace.json":    "json",
+	},
+}
+
+// ExperimentTraceOptions returns config options for the experiment trace command.
+func ExperimentTraceOptions() []config.ConfigOption {
+	return []config.ConfigOption{
+		{Key: "app.experimenttrace.session", DefaultValue: "", Description: "Session ID to trace", Type: "string"},
+		{Key: "app.experimenttrace.note", DefaultValue: "", Description: "Note ID to trace across sessions", Type: "string"},
+		{Key: "app.experimenttrace.json", DefaultValue: false, Description: "Output in JSON format", Type: "bool"},
+	}
+}
+
 func init() {
 	config.RegisterOptionsProvider(ExperimentReportOptions)
 	config.RegisterOptionsProvider(ExperimentSummaryOptions)
+	config.RegisterOptionsProvider(ExperimentTraceOptions)
 }

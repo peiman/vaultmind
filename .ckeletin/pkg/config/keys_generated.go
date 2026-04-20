@@ -52,6 +52,9 @@ const (
 	KeyAppExperimentreportK             = "app.experimentreport.k"              // K value for Hit@K metric
 	KeyAppExperimentsummaryJson         = "app.experimentsummary.json"          // Output in JSON format
 	KeyAppExperimentsummaryTop          = "app.experimentsummary.top"           // Number of top-recalled notes to show
+	KeyAppExperimenttraceSession        = "app.experimenttrace.session"         // Session ID to trace
+	KeyAppExperimenttraceNote           = "app.experimenttrace.note"            // Note ID to trace across sessions
+	KeyAppExperimenttraceJson           = "app.experimenttrace.json"            // Output in JSON format
 	KeyExperiments                      = "experiments"                         // Top-level experiment definitions map
 	KeyExperimentsTelemetry             = "experiments.telemetry"               // Telemetry level: anonymous, full, off
 	KeyExperimentsOutcomeWindowSessions = "experiments.outcome_window_sessions" // Sessions to look back for outcome linkage
