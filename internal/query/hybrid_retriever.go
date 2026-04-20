@@ -10,14 +10,18 @@ import (
 )
 
 // HybridRetriever fuses results from N retrievers using Reciprocal Rank Fusion.
+// Sub-retrievers are named so each note's Components map reports which
+// sub-retriever contributed what — useful for studying the 4-way RRF
+// contribution ("what did FTS add here vs dense?") during research.
 type HybridRetriever struct {
-	Retrievers []Retriever
+	Retrievers []NamedRetriever
 	K          int // RRF constant, default 60
 }
 
 type rrfEntry struct {
-	result ScoredResult
-	score  float64
+	result     ScoredResult
+	score      float64
+	components map[string]float64
 }
 
 // Search runs all retrievers concurrently, then fuses their ranked lists via RRF.
@@ -47,11 +51,11 @@ func (h *HybridRetriever) Search(ctx context.Context, query string, limit, offse
 	perRetriever := make([]retrieverResult, len(h.Retrievers))
 
 	g, gCtx := errgroup.WithContext(ctx)
-	for i, ret := range h.Retrievers {
+	for i, nr := range h.Retrievers {
 		g.Go(func() error {
-			results, _, err := ret.Search(gCtx, query, fetchLimit, 0, filters)
+			results, _, err := nr.Retriever.Search(gCtx, query, fetchLimit, 0, filters)
 			if err != nil {
-				return fmt.Errorf("retriever %d: %w", i, err)
+				return fmt.Errorf("retriever %s: %w", nr.Name, err)
 			}
 			perRetriever[i] = retrieverResult{results: results}
 			return nil
@@ -61,21 +65,25 @@ func (h *HybridRetriever) Search(ctx context.Context, query string, limit, offse
 		return nil, 0, err
 	}
 
-	// Compute RRF scores: for each note, sum 1/(K+rank) across all retrievers
+	// Compute RRF scores: for each note, sum 1/(K+rank) across all retrievers.
+	// Also track the per-retriever contribution keyed by retriever name.
 	rrfScores := make(map[string]*rrfEntry)
-	for _, rr := range perRetriever {
+	for i, rr := range perRetriever {
+		name := h.Retrievers[i].Name
 		for rank, result := range rr.results {
 			rrfScore := 1.0 / float64(k+rank+1) // rank is 0-based, RRF uses 1-based
 			if entry, ok := rrfScores[result.ID]; ok {
 				entry.score += rrfScore
+				entry.components[name] = rrfScore
 				// Prefer result with non-empty snippet for display
 				if entry.result.Snippet == "" && result.Snippet != "" {
 					entry.result.Snippet = result.Snippet
 				}
 			} else {
 				rrfScores[result.ID] = &rrfEntry{
-					result: result,
-					score:  rrfScore,
+					result:     result,
+					score:      rrfScore,
+					components: map[string]float64{name: rrfScore},
 				}
 			}
 		}
@@ -105,6 +113,7 @@ func (h *HybridRetriever) Search(ctx context.Context, query string, limit, offse
 	for i, e := range entries {
 		results[i] = e.result
 		results[i].Score = e.score
+		results[i].Components = e.components
 	}
 
 	return results, total, nil

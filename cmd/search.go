@@ -94,6 +94,7 @@ func toRetrievalHits(result *query.SearchResult) []experiment.RetrievalHit {
 			Score:    h.Score,
 			NoteType: h.Type,
 			Path:     h.Path,
+			Scores:   h.Components,
 		}
 	}
 	return hits

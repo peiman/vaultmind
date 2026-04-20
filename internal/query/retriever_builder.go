@@ -95,9 +95,9 @@ func buildHybridRetriever(db *index.DB) (Retriever, embedding.Embedder, func(), 
 		return nil, nil, nil, err
 	}
 
-	retrievers := []Retriever{
-		&FTSRetriever{DB: db},
-		&EmbeddingRetriever{DB: db, Embedder: embedder},
+	retrievers := []NamedRetriever{
+		{Name: "fts", Retriever: &FTSRetriever{DB: db}},
+		{Name: "dense", Retriever: &EmbeddingRetriever{DB: db, Embedder: embedder}},
 	}
 	cleanupFuncs := []func(){embedderCleanup}
 
@@ -112,10 +112,10 @@ func buildHybridRetriever(db *index.DB) (Retriever, embedding.Embedder, func(), 
 	if hasSparse || hasColBERT {
 		if bgem3, ok := embedder.(*embedding.BGEM3Embedder); ok {
 			if hasSparse {
-				retrievers = append(retrievers, &SparseRetriever{DB: db, EmbedSparse: bgem3.EmbedSparse})
+				retrievers = append(retrievers, NamedRetriever{Name: "sparse", Retriever: &SparseRetriever{DB: db, EmbedSparse: bgem3.EmbedSparse}})
 			}
 			if hasColBERT {
-				retrievers = append(retrievers, &ColBERTRetriever{DB: db, EmbedColBERT: bgem3.EmbedColBERT, Dims: embedding.BGEM3Dims})
+				retrievers = append(retrievers, NamedRetriever{Name: "colbert", Retriever: &ColBERTRetriever{DB: db, EmbedColBERT: bgem3.EmbedColBERT, Dims: embedding.BGEM3Dims}})
 			}
 		}
 	}

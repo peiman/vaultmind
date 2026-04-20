@@ -53,7 +53,7 @@ func TestHybridRetriever_TwoRetrievers(t *testing.T) {
 	}
 
 	hybrid := &query.HybridRetriever{
-		Retrievers: []query.Retriever{retA, retB},
+		Retrievers: []query.NamedRetriever{{Name: "a", Retriever: retA}, {Name: "b", Retriever: retB}},
 		K:          60,
 	}
 
@@ -82,7 +82,7 @@ func TestHybridRetriever_SingleRetriever(t *testing.T) {
 	}
 
 	hybrid := &query.HybridRetriever{
-		Retrievers: []query.Retriever{ret},
+		Retrievers: []query.NamedRetriever{{Name: "ret", Retriever: ret}},
 		K:          60,
 	}
 
@@ -103,7 +103,7 @@ func TestHybridRetriever_EmptyRetriever(t *testing.T) {
 	retB := &staticRetriever{results: nil, total: 0}
 
 	hybrid := &query.HybridRetriever{
-		Retrievers: []query.Retriever{retA, retB},
+		Retrievers: []query.NamedRetriever{{Name: "a", Retriever: retA}, {Name: "b", Retriever: retB}},
 		K:          60,
 	}
 
@@ -124,7 +124,7 @@ func TestHybridRetriever_DisjointResults(t *testing.T) {
 	}
 
 	hybrid := &query.HybridRetriever{
-		Retrievers: []query.Retriever{retA, retB},
+		Retrievers: []query.NamedRetriever{{Name: "a", Retriever: retA}, {Name: "b", Retriever: retB}},
 		K:          60,
 	}
 
@@ -145,7 +145,7 @@ func TestHybridRetriever_LimitAndOffset(t *testing.T) {
 
 	ret := &staticRetriever{results: results, total: 5}
 	hybrid := &query.HybridRetriever{
-		Retrievers: []query.Retriever{ret},
+		Retrievers: []query.NamedRetriever{{Name: "ret", Retriever: ret}},
 		K:          60,
 	}
 
@@ -169,7 +169,7 @@ func TestHybridRetriever_ErrorPropagation(t *testing.T) {
 	}
 
 	hybrid := &query.HybridRetriever{
-		Retrievers: []query.Retriever{ret, &errorRetriever{}},
+		Retrievers: []query.NamedRetriever{{Name: "ok", Retriever: ret}, {Name: "boom", Retriever: &errorRetriever{}}},
 		K:          60,
 	}
 
@@ -186,7 +186,7 @@ func TestHybridRetriever_DefaultK(t *testing.T) {
 	}
 
 	hybrid := &query.HybridRetriever{
-		Retrievers: []query.Retriever{ret},
+		Retrievers: []query.NamedRetriever{{Name: "ret", Retriever: ret}},
 		// K is 0, should default to 60
 	}
 
@@ -201,7 +201,7 @@ func TestHybridRetriever_DefaultK(t *testing.T) {
 
 func TestHybridRetriever_NoRetrievers(t *testing.T) {
 	hybrid := &query.HybridRetriever{
-		Retrievers: []query.Retriever{},
+		Retrievers: []query.NamedRetriever{},
 		K:          60,
 	}
 
@@ -220,7 +220,7 @@ func TestHybridRetriever_OffsetBeyondResults(t *testing.T) {
 	}
 
 	hybrid := &query.HybridRetriever{
-		Retrievers: []query.Retriever{ret},
+		Retrievers: []query.NamedRetriever{{Name: "ret", Retriever: ret}},
 		K:          60,
 	}
 
