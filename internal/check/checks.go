@@ -231,11 +231,15 @@ func filterLintOutput(output, tool string) string {
 	return strings.TrimSpace(sb.String())
 }
 
-// checkTest runs tests with race detection and returns coverage
+// checkTest runs tests and returns coverage. Race detection and integration
+// tests are excluded from the default check path (run via `task test:race` and
+// `task test:integration` respectively) so task check stays fast and reliable
+// on developer machines. Rationale: -race multiplies runtime ~10x and
+// combines badly with tests that rebuild the full vault index as fixture.
 func (e *checkMethods) checkTest(ctx context.Context) error {
 	log.Debug().Msg("Running test check")
 
-	cmd := exec.CommandContext(ctx, "go", "test", "-race", "-cover", "./...")
+	cmd := exec.CommandContext(ctx, "go", "test", "-short", "-cover", "./...")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		// Filter output to only show failures, not passing packages

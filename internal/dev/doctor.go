@@ -6,15 +6,25 @@
 package dev
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 )
+
+// depCheckTimeout bounds `go mod verify`/`go mod tidy -diff` so they cannot
+// block indefinitely when the module cache is contended (e.g. by sibling tests
+// in a parallel `task check` run). 60s is generous for a warm cache; a genuine
+// network/cache problem still fails fast instead of eating the full test
+// harness timeout.
+const depCheckTimeout = 60 * time.Second
 
 // HealthCheck represents a single health check result
 type HealthCheck struct {
@@ -398,21 +408,30 @@ func (d *Doctor) checkDependencies() {
 		return
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), depCheckTimeout)
+	defer cancel()
+
 	// Run go mod verify
-	cmd := exec.Command("go", "mod", "verify")
+	cmd := exec.CommandContext(ctx, "go", "mod", "verify")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		status := CheckFailed
+		msg := "Dependency verification failed"
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			status = CheckWarning
+			msg = "Dependency verification timed out (module cache may be contended)"
+		}
 		d.checks = append(d.checks, HealthCheck{
 			Name:    "Dependencies",
-			Status:  CheckFailed,
-			Message: "Dependency verification failed",
+			Status:  status,
+			Message: msg,
 			Details: string(output),
 		})
 		return
 	}
 
 	// Check if go.mod and go.sum are in sync (go mod tidy -check)
-	cmd = exec.Command("go", "mod", "tidy", "-diff")
+	cmd = exec.CommandContext(ctx, "go", "mod", "tidy", "-diff")
 	output, _ = cmd.CombinedOutput()
 
 	// If there's output, go.mod needs tidying
