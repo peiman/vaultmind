@@ -63,14 +63,19 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		},
 	})
 
-	logAskExperiment(cmd, args[0], vaultPath, retrievalModeLabel(ret), result, err)
+	mode := retrievalModeLabel(ret)
+	logAskExperiment(cmd, args[0], vaultPath, mode, result, err)
 
 	if err != nil {
 		return fmt.Errorf("ask: %w", err)
 	}
 
 	if !getConfigValueWithFlags[bool](cmd, "json", config.KeyAppAskJson) {
-		return query.FormatAsk(result, cmd.OutOrStdout())
+		if err := query.FormatAsk(result, cmd.OutOrStdout()); err != nil {
+			return err
+		}
+		query.WriteKeywordOnlyHint(cmd.OutOrStdout(), mode, len(result.TopHits))
+		return nil
 	}
 	env := envelope.OK("ask", result)
 	env.Meta.VaultPath = vaultPath
