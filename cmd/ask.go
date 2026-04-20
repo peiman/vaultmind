@@ -4,13 +4,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/config/commands"
 	"github.com/peiman/vaultmind/internal/envelope"
 	"github.com/peiman/vaultmind/internal/graph"
+	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/query"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -28,6 +31,23 @@ func retrievalModeLabel(r query.AutoRetrieverResult) string {
 		return "hybrid"
 	}
 	return "keyword"
+}
+
+// writeZeroHitDiagnostics emits user-facing hints when ask returns no hits.
+// Non-fatal: a database error fetching titles is logged at debug and the
+// function proceeds. The keyword-only hint always fires first when
+// applicable; the title-suggestions block follows when matches exist.
+func writeZeroHitDiagnostics(w io.Writer, db *index.DB, queryText, mode string, hitCount int) {
+	query.WriteKeywordOnlyHint(w, mode, hitCount)
+	if hitCount > 0 {
+		return
+	}
+	titles, err := db.AllNoteTitles()
+	if err != nil {
+		log.Debug().Err(err).Msg("could not load titles for zero-hit fallback")
+		return
+	}
+	query.WriteTitleSuggestions(w, query.FuzzyTitleMatches(queryText, titles, 3))
 }
 
 func runAsk(cmd *cobra.Command, args []string) error {
@@ -74,7 +94,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		if err := query.FormatAsk(result, cmd.OutOrStdout()); err != nil {
 			return err
 		}
-		query.WriteKeywordOnlyHint(cmd.OutOrStdout(), mode, len(result.TopHits))
+		writeZeroHitDiagnostics(cmd.OutOrStdout(), vdb.DB, args[0], mode, len(result.TopHits))
 		return nil
 	}
 	env := envelope.OK("ask", result)
