@@ -62,11 +62,12 @@ func runAsk(cmd *cobra.Command, args []string) error {
 			return computeActivationScores(cmd.Context(), sims, delta)
 		},
 	})
+
+	logAskExperiment(cmd, args[0], vaultPath, retrievalModeLabel(ret), result, err)
+
 	if err != nil {
 		return fmt.Errorf("ask: %w", err)
 	}
-
-	logAskExperiment(cmd, args[0], vaultPath, retrievalModeLabel(ret), result)
 
 	if !getConfigValueWithFlags[bool](cmd, "json", config.KeyAppAskJson) {
 		return query.FormatAsk(result, cmd.OutOrStdout())

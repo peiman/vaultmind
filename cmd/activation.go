@@ -66,10 +66,11 @@ func computeActivationScores(ctx context.Context, similarities map[string]float6
 }
 
 // logAskExperiment logs an ask event with retrieval results and, when the
-// activation experiment is enabled, shadow-scored variants alongside.
-// retrievalMode is the retriever label (e.g. "hybrid", "keyword") used as the
-// variant key for the actual retrieval hits.
-func logAskExperiment(cmd *cobra.Command, queryText, vaultPath, retrievalMode string, result *query.AskResult) {
+// activation experiment is enabled, shadow-scored variants alongside. Logs
+// regardless of ask error so failures are observable — retrievalErr becomes
+// the event_data.error field. retrievalMode is the retriever label (e.g.
+// "hybrid", "keyword") used as the variant key for the actual retrieval hits.
+func logAskExperiment(cmd *cobra.Command, queryText, vaultPath, retrievalMode string, result *query.AskResult, retrievalErr error) {
 	session := experiment.FromContext(cmd.Context())
 	if session == nil {
 		return
@@ -79,17 +80,19 @@ func logAskExperiment(cmd *cobra.Command, queryText, vaultPath, retrievalMode st
 	var shadowVariants map[string]any
 	primary := ""
 	actEnabled := false
-	if actDef, ok := loadExperimentDefs()["activation"]; ok && actDef.Enabled && result.Context != nil {
-		actEnabled = true
-		primary = actDef.Primary
-		items := make([]rankedItem, len(result.Context.Context))
-		for i, item := range result.Context.Context {
-			items[i] = rankedItem{ID: item.ID, Rank: i + 1}
+	if result != nil {
+		if actDef, ok := loadExperimentDefs()["activation"]; ok && actDef.Enabled && result.Context != nil {
+			actEnabled = true
+			primary = actDef.Primary
+			items := make([]rankedItem, len(result.Context.Context))
+			for i, item := range result.Context.Context {
+				items[i] = rankedItem{ID: item.ID, Rank: i + 1}
+			}
+			shadowVariants = buildVariantResults(session, actDef, items)
 		}
-		shadowVariants = buildVariantResults(session, actDef, items)
 	}
 
-	if _, err := session.LogAskEvent(queryText, buildAskEventData(result, retrievalMode, shadowVariants, primary, actEnabled)); err != nil {
+	if _, err := session.LogAskEvent(queryText, buildAskEventData(result, retrievalMode, shadowVariants, primary, actEnabled, retrievalErr)); err != nil {
 		log.Debug().Err(err).Msg("failed to log ask experiment event")
 	}
 }
@@ -99,16 +102,22 @@ func logAskExperiment(cmd *cobra.Command, queryText, vaultPath, retrievalMode st
 // and shadow-scoring consumers see the retrieved notes. When activation is
 // enabled, shadow variants are merged into the same variants map — activation
 // variant names ("compressed-0.2", "wall-clock", "none", "compressed-0.5") do
-// not collide with retrieval-mode names.
-func buildAskEventData(result *query.AskResult, retrievalMode string, shadowVariants map[string]any, primaryVariant string, actEnabled bool) map[string]any {
-	variants := experiment.BuildVariantPayload(retrievalMode, askRetrievalHits(result.TopHits))
+// not collide with retrieval-mode names today; a collision-warning log guards
+// against future drift.
+func buildAskEventData(result *query.AskResult, retrievalMode string, shadowVariants map[string]any, primaryVariant string, actEnabled bool, retrievalErr error) map[string]any {
+	var topHits []query.ScoredResult
+	if result != nil {
+		topHits = result.TopHits
+	}
+	variants := experiment.BuildVariantPayload(retrievalMode, askRetrievalHits(topHits))
 	for name, payload := range shadowVariants {
+		if _, clash := variants[name]; clash {
+			log.Warn().Str("variant", name).Msg("shadow variant name collides with retrieval mode; retrieval payload overwritten")
+		}
 		variants[name] = payload
 	}
-	data := map[string]any{
-		"top_hits": len(result.TopHits),
-		"variants": variants,
-	}
+	data := experiment.BuildRetrievalEventData(variants, len(topHits), retrievalErr)
+	data["top_hits"] = len(topHits)
 	if actEnabled {
 		data["primary_variant"] = primaryVariant
 	}
@@ -116,6 +125,7 @@ func buildAskEventData(result *query.AskResult, retrievalMode string, shadowVari
 }
 
 // askRetrievalHits maps ask top hits to the experiment payload input type.
+// Rank is 1-indexed within the result set (ask does not paginate — no offset).
 func askRetrievalHits(hits []query.ScoredResult) []experiment.RetrievalHit {
 	out := make([]experiment.RetrievalHit, len(hits))
 	for i, h := range hits {

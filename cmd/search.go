@@ -43,7 +43,7 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	}
 
 	result, err := query.RunSearch(retriever, buildSearchConfig(cmd, args[0], vaultPath), cmd.OutOrStdout())
-	logSearchExperiment(cmd, vaultPath, mode, args[0], result)
+	logSearchExperiment(cmd, vaultPath, mode, args[0], result, err)
 	return err
 }
 
@@ -61,16 +61,23 @@ func buildSearchConfig(cmd *cobra.Command, queryText, vaultPath string) query.Se
 }
 
 // logSearchExperiment records the search event with retrieval results as the
-// variant payload. Non-blocking — errors are swallowed by design.
-func logSearchExperiment(cmd *cobra.Command, vaultPath, mode, queryText string, result *query.SearchResult) {
+// variant payload. Logs regardless of retrieval error so failed retrievals are
+// observable (curiosity-over-certainty) and distinguishable from zero-hit
+// success via the event_data.error field. Non-blocking — write errors are
+// swallowed by design.
+func logSearchExperiment(cmd *cobra.Command, vaultPath, mode, queryText string, result *query.SearchResult, retrievalErr error) {
 	session := experiment.FromContext(cmd.Context())
 	if session == nil {
 		return
 	}
 	session.SetVaultPath(vaultPath)
-	_, _ = session.LogSearchEvent(queryText, mode, map[string]any{
-		"variants": experiment.BuildVariantPayload(mode, toRetrievalHits(result)),
-	})
+	hits := toRetrievalHits(result)
+	variants := experiment.BuildVariantPayload(mode, hits)
+	count := 0
+	if result != nil {
+		count = result.Total
+	}
+	_, _ = session.LogSearchEvent(queryText, mode, experiment.BuildRetrievalEventData(variants, count, retrievalErr))
 }
 
 // toRetrievalHits maps search hits to the experiment payload input type.

@@ -18,6 +18,24 @@ type RetrievalHit struct {
 	Scores   map[string]float64
 }
 
+// BuildRetrievalEventData composes the base event_data payload for a
+// retrieval event. resultCount is the total number of hits the retrieval
+// reported (may differ from len(variants.*.results) when limits truncate).
+// When err is non-nil, an "error" field is added so downstream consumers can
+// distinguish genuine zero-hit retrievals (curiosity signal) from crashes
+// (error signal). The error field is omitted on success, including the
+// zero-hit success case.
+func BuildRetrievalEventData(variants map[string]any, resultCount int, err error) map[string]any {
+	data := map[string]any{
+		"variants":     variants,
+		"result_count": resultCount,
+	}
+	if err != nil {
+		data["error"] = err.Error()
+	}
+	return data
+}
+
 // BuildVariantPayload produces the event_data.variants substructure for one
 // retrieval variant. The shape matches what LinkOutcomes walks:
 //

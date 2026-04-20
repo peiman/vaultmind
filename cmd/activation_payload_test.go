@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/query"
@@ -17,7 +18,7 @@ func TestBuildAskEventData_IncludesRetrievalVariantInFallback(t *testing.T) {
 		},
 	}
 
-	got := buildAskEventData(result, "hybrid", nil, "", false)
+	got := buildAskEventData(result, "hybrid", nil, "", false, nil)
 
 	assert.Equal(t, 2, got["top_hits"])
 	_, hasPrimary := got["primary_variant"]
@@ -51,7 +52,7 @@ func TestBuildAskEventData_MergesRetrievalAndShadowVariants(t *testing.T) {
 		"wall-clock":     map[string]any{"results": []any{}},
 	}
 
-	got := buildAskEventData(result, "keyword", shadow, "compressed-0.2", true)
+	got := buildAskEventData(result, "keyword", shadow, "compressed-0.2", true, nil)
 
 	assert.Equal(t, "compressed-0.2", got["primary_variant"])
 	assert.Equal(t, 1, got["top_hits"])
@@ -66,13 +67,31 @@ func TestBuildAskEventData_MergesRetrievalAndShadowVariants(t *testing.T) {
 func TestBuildAskEventData_EmptyTopHitsStillEmitsRetrievalVariant(t *testing.T) {
 	result := &query.AskResult{Query: "nothing found"}
 
-	got := buildAskEventData(result, "hybrid", nil, "", false)
+	got := buildAskEventData(result, "hybrid", nil, "", false, nil)
 
 	assert.Equal(t, 0, got["top_hits"])
 	variants := got["variants"].(map[string]any)
 	hybrid := variants["hybrid"].(map[string]any)
 	results := hybrid["results"].([]any)
 	assert.Empty(t, results)
+}
+
+func TestBuildAskEventData_NilResultIsSafe(t *testing.T) {
+	got := buildAskEventData(nil, "hybrid", nil, "", false, errors.New("boom"))
+
+	assert.Equal(t, 0, got["top_hits"])
+	assert.Equal(t, "boom", got["error"])
+	variants := got["variants"].(map[string]any)
+	require.Contains(t, variants, "hybrid")
+}
+
+func TestBuildAskEventData_ErrorPopulatesErrorField(t *testing.T) {
+	result := &query.AskResult{TopHits: []query.ScoredResult{{ID: "n1", Score: 0.5}}}
+
+	got := buildAskEventData(result, "hybrid", nil, "", false, errors.New("retriever failed"))
+
+	assert.Equal(t, "retriever failed", got["error"])
+	assert.Equal(t, 1, got["top_hits"])
 }
 
 func TestAskRetrievalHits_MapsTopHitsToExperimentShape(t *testing.T) {
