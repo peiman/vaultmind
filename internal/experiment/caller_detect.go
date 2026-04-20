@@ -1,13 +1,13 @@
-package cmd
+package experiment
 
 import (
 	"os"
 )
 
-// detectCaller resolves the caller identity for a new experiment session.
+// DetectCaller resolves the caller identity for a new experiment session.
 // Precedence:
 //  1. VAULTMIND_CALLER env var — explicit, wins unconditionally. Hooks and
-//     scripts set this ("workhorse-persona-hook", "claude-code-vaultmind").
+//     scripts set this ("workhorse-persona-hook", "vaultmind-persona-hook").
 //  2. CLAUDE_PROJECT_DIR set — we were invoked from a Claude Code session,
 //     probably by the agent running bash. Label as "claude-code" so we can
 //     distinguish from raw CLI use.
@@ -16,7 +16,7 @@ import (
 // The companion caller_meta captures $USER, $HOSTNAME, and CLAUDE_PROJECT_DIR
 // so we can later answer "whose laptop" and "which project context" without
 // having to encode them into the caller label itself.
-func detectCaller() (string, map[string]any) {
+func DetectCaller() (string, map[string]any) {
 	caller := os.Getenv("VAULTMIND_CALLER")
 	if caller == "" {
 		if os.Getenv("CLAUDE_PROJECT_DIR") != "" {
