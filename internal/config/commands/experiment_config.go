@@ -66,8 +66,39 @@ func ExperimentTraceOptions() []config.ConfigOption {
 	}
 }
 
+// ExperimentCompareMetadata defines metadata for the experiment compare command.
+var ExperimentCompareMetadata = config.CommandMetadata{
+	Use:          "compare",
+	Short:        "Compare shadow variants against the primary retrieval per event",
+	Long:         "Reads recent ask/search/context-pack events that recorded shadow variants and computes pairwise rank-agreement metrics (Jaccard@K and Kendall's tau on shared items). Reports per-variant-pair means and event counts, optionally broken down per event. Requires no labeled gold truth — this surfaces where variants disagree, not which is correct.",
+	ConfigPrefix: "app.experimentcompare",
+	FlagOverrides: map[string]string{
+		"app.experimentcompare.session":    "session",
+		"app.experimentcompare.caller":     "caller",
+		"app.experimentcompare.since":      "since",
+		"app.experimentcompare.event_type": "event-type",
+		"app.experimentcompare.k":          "k",
+		"app.experimentcompare.per_event":  "per-event",
+		"app.experimentcompare.json":       "json",
+	},
+}
+
+// ExperimentCompareOptions returns config options for the experiment compare command.
+func ExperimentCompareOptions() []config.ConfigOption {
+	return []config.ConfigOption{
+		{Key: "app.experimentcompare.session", DefaultValue: "", Description: "Restrict to a single session ID", Type: "string"},
+		{Key: "app.experimentcompare.caller", DefaultValue: "", Description: "Restrict to a single caller label", Type: "string"},
+		{Key: "app.experimentcompare.since", DefaultValue: "", Description: "Only events at or after this RFC3339 timestamp", Type: "string"},
+		{Key: "app.experimentcompare.event_type", DefaultValue: "", Description: "Restrict to one event type (ask|search|context_pack); empty = all three", Type: "string"},
+		{Key: "app.experimentcompare.k", DefaultValue: 10, Description: "K value for Jaccard@K (and the cap on list length used for Kendall's tau)", Type: "int"},
+		{Key: "app.experimentcompare.per_event", DefaultValue: false, Description: "Emit one row per event in addition to aggregates", Type: "bool"},
+		{Key: "app.experimentcompare.json", DefaultValue: false, Description: "Output in JSON format", Type: "bool"},
+	}
+}
+
 func init() {
 	config.RegisterOptionsProvider(ExperimentReportOptions)
 	config.RegisterOptionsProvider(ExperimentSummaryOptions)
 	config.RegisterOptionsProvider(ExperimentTraceOptions)
+	config.RegisterOptionsProvider(ExperimentCompareOptions)
 }

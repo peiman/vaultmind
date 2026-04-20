@@ -55,6 +55,13 @@ const (
 	KeyAppExperimenttraceSession        = "app.experimenttrace.session"         // Session ID to trace
 	KeyAppExperimenttraceNote           = "app.experimenttrace.note"            // Note ID to trace across sessions
 	KeyAppExperimenttraceJson           = "app.experimenttrace.json"            // Output in JSON format
+	KeyAppExperimentcompareSession      = "app.experimentcompare.session"       // Restrict to a single session ID
+	KeyAppExperimentcompareCaller       = "app.experimentcompare.caller"        // Restrict to a single caller label
+	KeyAppExperimentcompareSince        = "app.experimentcompare.since"         // Only events at or after this RFC3339 timestamp
+	KeyAppExperimentcompareEventType    = "app.experimentcompare.event_type"    // Restrict to one event type (ask|search|context_pack); empty = all three
+	KeyAppExperimentcompareK            = "app.experimentcompare.k"             // K value for Jaccard@K (and the cap on list length used for Kendall's tau)
+	KeyAppExperimentcomparePerEvent     = "app.experimentcompare.per_event"     // Emit one row per event in addition to aggregates
+	KeyAppExperimentcompareJson         = "app.experimentcompare.json"          // Output in JSON format
 	KeyExperiments                      = "experiments"                         // Top-level experiment definitions map
 	KeyExperimentsTelemetry             = "experiments.telemetry"               // Telemetry level: anonymous, full, off
 	KeyExperimentsOutcomeWindowSessions = "experiments.outcome_window_sessions" // Sessions to look back for outcome linkage
