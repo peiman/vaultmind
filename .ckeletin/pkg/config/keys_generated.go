@@ -50,6 +50,8 @@ const (
 	KeyAppExperimentreportExperiment    = "app.experimentreport.experiment"     // Experiment name to report on
 	KeyAppExperimentreportJson          = "app.experimentreport.json"           // Output in JSON format
 	KeyAppExperimentreportK             = "app.experimentreport.k"              // K value for Hit@K metric
+	KeyAppExperimentsummaryJson         = "app.experimentsummary.json"          // Output in JSON format
+	KeyAppExperimentsummaryTop          = "app.experimentsummary.top"           // Number of top-recalled notes to show
 	KeyExperiments                      = "experiments"                         // Top-level experiment definitions map
 	KeyExperimentsTelemetry             = "experiments.telemetry"               // Telemetry level: anonymous, full, off
 	KeyExperimentsOutcomeWindowSessions = "experiments.outcome_window_sessions" // Sessions to look back for outcome linkage

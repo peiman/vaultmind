@@ -84,7 +84,7 @@ SELECT
     LAG(session_id) OVER (ORDER BY started_at) AS prev_session_id,
     LAG(started_at) OVER (ORDER BY started_at) AS prev_started_at,
     CAST(
-        (julianday(started_at) - julianday(LAG(started_at) OVER (ORDER BY started_at))) * 86400
+        ROUND((julianday(started_at) - julianday(LAG(started_at) OVER (ORDER BY started_at))) * 86400)
         AS INTEGER
     ) AS gap_seconds
 FROM sessions;`,
