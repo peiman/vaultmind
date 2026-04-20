@@ -86,6 +86,13 @@ test_started_with_transcript_advances() {
 {"slot":1,"condition":"A","status":"started","started_at":1.0,"transcript_path":null}
 JSON
   touch "$root/transcripts/new-transcript.jsonl"
+  # Backdate by 60s so the age filter treats it as a closed session's transcript
+  python3 -c "
+import os, time
+p='$root/transcripts/new-transcript.jsonl'
+past = time.time() - 60
+os.utime(p, (past, past))
+"
   cat > "$root/experiments/persona-eval/schedule.json" <<'JSON'
 {"seed":1,"total_sessions":2,"distribution":{"A":1,"B":1,"C":0},
  "condition_labels":{"A":"full","B":"flat","C":"instr"},
@@ -138,10 +145,39 @@ JSON
   assert "prints in-progress banner" "1" "$waiting"
 }
 
+# --- Scenario 5: started slot + FRESH transcript (age < 30s) → in-progress banner
+test_started_with_fresh_transcript_waits() {
+  echo "Scenario: started slot + fresh (age < 30s) transcript → in-progress banner (no completion)"
+  local root
+  root=$(setup_fixture)
+  touch "$root/experiments/persona-eval/sessions/session-01.snapshot.txt"
+  cat > "$root/experiments/persona-eval/sessions/session-01.meta.json" <<'JSON'
+{"slot":1,"condition":"A","status":"started","started_at":1.0,"transcript_path":null}
+JSON
+  touch "$root/transcripts/fresh-transcript.jsonl"  # mtime = now, default age filter rejects it
+  cat > "$root/experiments/persona-eval/schedule.json" <<'JSON'
+{"seed":1,"total_sessions":2,"distribution":{"A":1,"B":1,"C":0},
+ "condition_labels":{"A":"full","B":"flat","C":"instr"},
+ "slots":[
+   {"slot":1,"condition":"A","status":"started","started_at":1.0,"transcript_path":null},
+   {"slot":2,"condition":"B","status":"pending","started_at":null,"transcript_path":null}
+ ]}
+JSON
+  local out
+  out=$(AUTO_ADVANCE_TRANSCRIPT_DIR="$root/transcripts" "$root/experiments/persona-eval/scripts/auto-advance.sh" 2>&1)
+  local slot1_status
+  slot1_status=$(python3 -c "import json;print(json.load(open('$root/experiments/persona-eval/schedule.json'))['slots'][0]['status'])")
+  assert "slot 1 stays started (fresh transcript rejected)" "started" "$slot1_status"
+  local waiting
+  waiting=$(echo "$out" | grep -c "EXPERIMENT: slot 1/2 in progress" || true)
+  assert "prints in-progress banner" "1" "$waiting"
+}
+
 test_no_schedule
 test_all_complete
 test_started_with_transcript_advances
 test_started_without_transcript_noop
+test_started_with_fresh_transcript_waits
 
 echo ""
 echo "Total: $PASS passed, $FAIL failed"
