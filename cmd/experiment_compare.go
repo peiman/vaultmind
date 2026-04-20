@@ -14,6 +14,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// formatTau renders a *float64 tau as "%.3f" or "  nan" when undefined (nil).
+func formatTau(t *float64) string {
+	if t == nil {
+		return "  nan"
+	}
+	return fmt.Sprintf("%.3f", *t)
+}
+
 var experimentCompareCmd = MustNewCommand(commands.ExperimentCompareMetadata, runExperimentCompare)
 
 func init() {
@@ -27,12 +35,12 @@ type compareResult struct {
 }
 
 type perEventRow struct {
-	EventID        string  `json:"event_id"`
-	PrimaryVariant string  `json:"primary_variant"`
-	ShadowVariant  string  `json:"shadow_variant"`
-	JaccardAtK     float64 `json:"jaccard_at_k"`
-	KendallTau     float64 `json:"kendall_tau"`
-	SharedItems    int     `json:"shared_items"`
+	EventID        string   `json:"event_id"`
+	PrimaryVariant string   `json:"primary_variant"`
+	ShadowVariant  string   `json:"shadow_variant"`
+	JaccardAtK     float64  `json:"jaccard_at_k"`
+	KendallTau     *float64 `json:"kendall_tau"` // nil when shared_items < 2 (tau undefined)
+	SharedItems    int      `json:"shared_items"`
 }
 
 func runExperimentCompare(cmd *cobra.Command, _ []string) error {
@@ -73,14 +81,17 @@ func runExperimentCompare(cmd *cobra.Command, _ []string) error {
 		for _, ev := range events {
 			for _, p := range ev.Pairs {
 				tau, shared := experiment.KendallTauShared(p.PrimaryList, p.ShadowList)
-				result.PerEvent = append(result.PerEvent, perEventRow{
+				row := perEventRow{
 					EventID:        ev.EventID,
 					PrimaryVariant: p.PrimaryVariant,
 					ShadowVariant:  p.ShadowVariant,
 					JaccardAtK:     experiment.JaccardAtK(p.PrimaryList, p.ShadowList, k),
-					KendallTau:     tau,
 					SharedItems:    shared,
-				})
+				}
+				if shared >= 2 && !math.IsNaN(tau) {
+					row.KendallTau = &tau
+				}
+				result.PerEvent = append(result.PerEvent, row)
 			}
 		}
 	}
@@ -104,13 +115,9 @@ func formatCompareResult(w io.Writer, r compareResult, k int, perEvent bool) err
 		return err
 	}
 	for _, a := range r.Aggregates {
-		tau := "  nan"
-		if !math.IsNaN(a.MeanKendallTau) {
-			tau = fmt.Sprintf("%.3f", a.MeanKendallTau)
-		}
 		if _, err := fmt.Fprintf(w, "  %-18s  %-18s  %6d  %11.3f  %11s  %9d\n",
 			a.PrimaryVariant, a.ShadowVariant, a.EventCount,
-			a.MeanJaccardAtK, tau, a.KendallEventCount); err != nil {
+			a.MeanJaccardAtK, formatTau(a.MeanKendallTau), a.KendallEventCount); err != nil {
 			return err
 		}
 	}
@@ -119,13 +126,9 @@ func formatCompareResult(w io.Writer, r compareResult, k int, perEvent bool) err
 			return err
 		}
 		for _, pe := range r.PerEvent {
-			tau := "  nan"
-			if !math.IsNaN(pe.KendallTau) {
-				tau = fmt.Sprintf("%.3f", pe.KendallTau)
-			}
 			if _, err := fmt.Fprintf(w, "  %s  %s->%s  jaccard=%.3f  tau=%s  shared=%d\n",
 				pe.EventID, pe.PrimaryVariant, pe.ShadowVariant,
-				pe.JaccardAtK, tau, pe.SharedItems); err != nil {
+				pe.JaccardAtK, formatTau(pe.KendallTau), pe.SharedItems); err != nil {
 				return err
 			}
 		}

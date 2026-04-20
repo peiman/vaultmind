@@ -71,26 +71,31 @@ if [ -n "$started_slot" ]; then
   snapshot_file="$SESSIONS_DIR/session-$(printf '%02d' "$started_slot").snapshot.txt"
   transcript=$("$FIND_TRANSCRIPT" "$TRANSCRIPT_DIR" "$snapshot_file")
   if [ -n "$transcript" ]; then
-    python3 -c "
-import json
-p='$SCHEDULE'
-s=json.load(open(p))
+    # Pass transcript path + slot via env so a path containing single quotes
+    # cannot break out of a Python string literal (G201/shell-injection class).
+    SCHEDULE_PATH="$SCHEDULE" TRANSCRIPT_PATH="$transcript" SLOT="$started_slot" python3 - <<'PY'
+import json, os
+p = os.environ['SCHEDULE_PATH']
+slot = int(os.environ['SLOT'])
+transcript = os.environ['TRANSCRIPT_PATH']
+s = json.load(open(p))
 for sl in s['slots']:
-    if sl['slot']==$started_slot:
-        sl['status']='complete'
-        sl['transcript_path']='$transcript'
+    if sl['slot'] == slot:
+        sl['status'] = 'complete'
+        sl['transcript_path'] = transcript
         break
-json.dump(s,open(p,'w'),indent=2)
-"
+json.dump(s, open(p, 'w'), indent=2)
+PY
     if [ -f "$meta_file" ]; then
-      python3 -c "
-import json
-p='$meta_file'
-m=json.load(open(p))
-m['status']='complete'
-m['transcript_path']='$transcript'
-json.dump(m,open(p,'w'),indent=2)
-"
+      META_PATH="$meta_file" TRANSCRIPT_PATH="$transcript" python3 - <<'PY'
+import json, os
+p = os.environ['META_PATH']
+transcript = os.environ['TRANSCRIPT_PATH']
+m = json.load(open(p))
+m['status'] = 'complete'
+m['transcript_path'] = transcript
+json.dump(m, open(p, 'w'), indent=2)
+PY
     fi
     advanced="yes"
   else

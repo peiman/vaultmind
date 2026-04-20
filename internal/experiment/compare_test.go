@@ -213,8 +213,11 @@ func TestAggregateComparisons_TwoEventsOnePair(t *testing.T) {
 	if math.Abs(row.MeanJaccardAtK-1.0) > 1e-9 {
 		t.Fatalf("expected MeanJaccardAtK=1.0, got %v", row.MeanJaccardAtK)
 	}
-	if math.Abs(row.MeanKendallTau-0.0) > 1e-9 {
-		t.Fatalf("expected MeanKendallTau=0.0, got %v", row.MeanKendallTau)
+	if row.MeanKendallTau == nil {
+		t.Fatalf("expected MeanKendallTau to be non-nil for events with shared items")
+	}
+	if math.Abs(*row.MeanKendallTau-0.0) > 1e-9 {
+		t.Fatalf("expected MeanKendallTau=0.0, got %v", *row.MeanKendallTau)
 	}
 	if row.KendallEventCount != 2 {
 		t.Fatalf("expected KendallEventCount=2, got %d", row.KendallEventCount)
@@ -271,11 +274,44 @@ func TestAggregateComparisons_SkipsInsufficientShared(t *testing.T) {
 	if agg[0].KendallEventCount != 0 {
 		t.Fatalf("KendallEventCount should be 0 when no pair has >=2 shared: got %d", agg[0].KendallEventCount)
 	}
-	if !math.IsNaN(agg[0].MeanKendallTau) {
-		t.Fatalf("MeanKendallTau should be NaN when no pair contributed, got %v", agg[0].MeanKendallTau)
+	if agg[0].MeanKendallTau != nil {
+		t.Fatalf("MeanKendallTau should be nil when no pair contributed, got %v", *agg[0].MeanKendallTau)
 	}
 	if math.Abs(agg[0].MeanJaccardAtK-0.0) > 1e-9 {
 		t.Fatalf("MeanJaccardAtK should be 0.0, got %v", agg[0].MeanJaccardAtK)
+	}
+}
+
+func TestExtractEventPairs_DedupesDuplicateNoteIDs(t *testing.T) {
+	// Telemetry should never write duplicates, but if it does we must not
+	// produce wrong tau values. Keep the first occurrence; drop later ones.
+	eventData := map[string]any{
+		"variants": map[string]any{
+			"hybrid": map[string]any{
+				"results": []any{
+					map[string]any{"note_id": "n1", "rank": 1},
+					map[string]any{"note_id": "n2", "rank": 2},
+					map[string]any{"note_id": "n1", "rank": 3}, // duplicate; must be skipped
+				},
+			},
+			"activation_v1": map[string]any{
+				"results": []any{map[string]any{"note_id": "n1", "rank": 1}},
+			},
+		},
+	}
+	pairs, err := ExtractEventPairs(eventData, "hybrid")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(pairs) != 1 {
+		t.Fatalf("expected 1 pair, got %d", len(pairs))
+	}
+	got := pairs[0].PrimaryList
+	if len(got) != 2 {
+		t.Fatalf("expected 2 unique note IDs after dedupe, got %d (%v)", len(got), got)
+	}
+	if got[0] != "n1" || got[1] != "n2" {
+		t.Fatalf("expected order [n1 n2] (first-occurrence wins), got %v", got)
 	}
 }
 

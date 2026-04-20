@@ -87,14 +87,15 @@ func TestFormatCompareResult_Empty(t *testing.T) {
 }
 
 func TestFormatCompareResult_WithRowsAndPerEvent(t *testing.T) {
+	half, one := 0.5, 1.0
 	r := compareResult{
 		Aggregates: []experiment.AggregateRow{
-			{PrimaryVariant: "hybrid", ShadowVariant: "activation_v1", EventCount: 2, MeanJaccardAtK: 0.75, MeanKendallTau: 0.5, KendallEventCount: 2},
-			{PrimaryVariant: "hybrid", ShadowVariant: "activation_v2", EventCount: 3, MeanJaccardAtK: 1.0, MeanKendallTau: nan(), KendallEventCount: 0},
+			{PrimaryVariant: "hybrid", ShadowVariant: "activation_v1", EventCount: 2, MeanJaccardAtK: 0.75, MeanKendallTau: &half, KendallEventCount: 2},
+			{PrimaryVariant: "hybrid", ShadowVariant: "activation_v2", EventCount: 3, MeanJaccardAtK: 1.0, MeanKendallTau: nil, KendallEventCount: 0},
 		},
 		PerEvent: []perEventRow{
-			{EventID: "ev-1", PrimaryVariant: "hybrid", ShadowVariant: "activation_v1", JaccardAtK: 0.5, KendallTau: 1.0, SharedItems: 3},
-			{EventID: "ev-2", PrimaryVariant: "hybrid", ShadowVariant: "activation_v2", JaccardAtK: 1.0, KendallTau: nan(), SharedItems: 1},
+			{EventID: "ev-1", PrimaryVariant: "hybrid", ShadowVariant: "activation_v1", JaccardAtK: 0.5, KendallTau: &one, SharedItems: 3},
+			{EventID: "ev-2", PrimaryVariant: "hybrid", ShadowVariant: "activation_v2", JaccardAtK: 1.0, KendallTau: nil, SharedItems: 1},
 		},
 	}
 	buf := &bytes.Buffer{}
@@ -109,7 +110,67 @@ func TestFormatCompareResult_WithRowsAndPerEvent(t *testing.T) {
 	}
 }
 
-func nan() float64 {
-	z := 0.0
-	return z / z
+func TestExperimentCompare_JSONEncodesNaNAsNull(t *testing.T) {
+	// Regression test for the bug found in code review: when a pair has
+	// fewer than 2 shared items, MeanKendallTau is undefined. Storing NaN
+	// breaks encoding/json. Pointer-with-nil serializes as JSON null.
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+	t.Setenv("XDG_DATA_HOME", tmp)
+
+	dbPath, err := xdg.DataFile("experiments.db")
+	if err != nil {
+		t.Fatalf("xdg.DataFile: %v", err)
+	}
+	db, err := experiment.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	sid, _ := db.StartSession("/tmp/v")
+	ts := time.Now().UTC().Format(time.RFC3339)
+	// Disjoint single-item lists => 0 shared items => tau undefined
+	blob, _ := json.Marshal(map[string]any{
+		"variants": map[string]any{
+			"hybrid":        map[string]any{"results": []any{map[string]any{"note_id": "n1", "rank": 1}}},
+			"activation_v1": map[string]any{"results": []any{map[string]any{"note_id": "n2", "rank": 1}}},
+		},
+	})
+	if _, err := db.Exec(`INSERT INTO events
+		(event_id, session_id, event_type, timestamp, vault_path, query_text, query_mode, primary_variant, event_data)
+		VALUES ('ev-nan', ?, 'ask', ?, '/tmp/v', 'q', 'hybrid', 'hybrid', ?)`, sid, ts, string(blob)); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	_ = db.Close()
+
+	out := &bytes.Buffer{}
+	RootCmd.SetOut(out)
+	RootCmd.SetErr(&bytes.Buffer{})
+	RootCmd.SetArgs([]string{"experiment", "compare", "--json", "--k", "5", "--per-event"})
+	if err := RootCmd.Execute(); err != nil {
+		t.Fatalf("execute should not error on NaN-tau pairs: %v", err)
+	}
+
+	var env struct {
+		Status string                 `json:"status"`
+		Result map[string]any         `json:"result"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &env); err != nil {
+		t.Fatalf("decode: %v raw=%s", err, out.String())
+	}
+	aggs, _ := env.Result["aggregates"].([]any)
+	if len(aggs) != 1 {
+		t.Fatalf("expected 1 aggregate, got %d", len(aggs))
+	}
+	row := aggs[0].(map[string]any)
+	if row["mean_kendall_tau"] != nil {
+		t.Fatalf("expected mean_kendall_tau == JSON null for insufficient-shared case, got %v", row["mean_kendall_tau"])
+	}
+	perEvent, _ := env.Result["per_event"].([]any)
+	if len(perEvent) != 1 {
+		t.Fatalf("expected 1 per_event row, got %d", len(perEvent))
+	}
+	pe := perEvent[0].(map[string]any)
+	if pe["kendall_tau"] != nil {
+		t.Fatalf("expected per_event kendall_tau == JSON null, got %v", pe["kendall_tau"])
+	}
 }

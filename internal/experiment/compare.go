@@ -148,13 +148,16 @@ type ComparableEvent struct {
 }
 
 // AggregateRow is the per-(primary, shadow) pair summary across many events.
+// MeanKendallTau is a pointer because tau is undefined when no event in the
+// pair had >=2 shared items; nil here means "insufficient data" and serializes
+// to JSON null. Storing NaN here would break encoding/json (NaN is unsupported).
 type AggregateRow struct {
-	PrimaryVariant    string  `json:"primary_variant"`
-	ShadowVariant     string  `json:"shadow_variant"`
-	EventCount        int     `json:"event_count"`
-	MeanJaccardAtK    float64 `json:"mean_jaccard_at_k"`
-	MeanKendallTau    float64 `json:"mean_kendall_tau"`
-	KendallEventCount int     `json:"kendall_event_count"`
+	PrimaryVariant    string   `json:"primary_variant"`
+	ShadowVariant     string   `json:"shadow_variant"`
+	EventCount        int      `json:"event_count"`
+	MeanJaccardAtK    float64  `json:"mean_jaccard_at_k"`
+	MeanKendallTau    *float64 `json:"mean_kendall_tau"`
+	KendallEventCount int      `json:"kendall_event_count"`
 }
 
 // AggregateComparisons collapses per-event EventPairs into per-pair
@@ -211,9 +214,8 @@ func AggregateComparisons(events []ComparableEvent, kCap int) []AggregateRow {
 			KendallEventCount: a.kendallCount,
 		}
 		if a.kendallCount > 0 {
-			row.MeanKendallTau = a.kendallSum / float64(a.kendallCount)
-		} else {
-			row.MeanKendallTau = math.NaN()
+			mean := a.kendallSum / float64(a.kendallCount)
+			row.MeanKendallTau = &mean
 		}
 		rows = append(rows, row)
 	}
@@ -246,6 +248,7 @@ func extractRankList(variants map[string]any, name string) ([]string, error) {
 		rank int
 	}
 	ranked := make([]rankedID, 0, len(results))
+	seen := make(map[string]struct{}, len(results))
 	for _, r := range results {
 		row, ok := r.(map[string]any)
 		if !ok {
@@ -255,6 +258,13 @@ func extractRankList(variants map[string]any, name string) ([]string, error) {
 		if id == "" {
 			continue
 		}
+		// Dedupe: keep the first occurrence (preserves the original rank
+		// for that note_id). Without this, KendallTauShared's rank map gets
+		// arbitrarily overwritten by later duplicates and produces wrong tau.
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
 		rank := 0
 		switch rv := row["rank"].(type) {
 		case float64:

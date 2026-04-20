@@ -49,8 +49,11 @@ func (d *DB) LoadComparableEvents(f ComparableEventFilter) ([]ComparableEvent, e
 		args = append(args, f.SinceRFC3339)
 	}
 
-	// #nosec G201 -- query body and placeholders are fixed strings; all user
-	// input flows through args and is parameter-bound.
+	// #nosec G201 -- query body, placeholders, and where-clause fragments are
+	// hard-coded string literals built only from this function. All user input
+	// flows through args and is parameter-bound. Future maintainers: do NOT
+	// concatenate any value from ComparableEventFilter directly into the query
+	// string; pass it through args.
 	query := fmt.Sprintf(`
 		SELECT e.event_id, e.primary_variant, e.event_data
 		FROM events e
