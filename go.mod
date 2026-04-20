@@ -1,13 +1,14 @@
 module github.com/peiman/vaultmind
 
-go 1.26.1
+go 1.26.2
 
 require (
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/go-git/go-git/v5 v5.17.2
+	github.com/go-git/go-git/v5 v5.18.0
 	github.com/knights-analytics/hugot v0.7.0
 	github.com/mattn/go-isatty v0.0.20
+	github.com/nlpodyssey/gopickle v0.3.0
 	github.com/peiman/ckeletin-go v0.9.1
 	github.com/pressly/goose/v3 v3.27.0
 	github.com/rs/zerolog v1.35.0
@@ -70,7 +71,6 @@ require (
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
-	github.com/nlpodyssey/gopickle v0.3.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pjbgf/sha1cd v0.3.2 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
