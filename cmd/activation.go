@@ -65,36 +65,69 @@ func computeActivationScores(ctx context.Context, similarities map[string]float6
 	return scores
 }
 
-// logAskExperiment logs experiment event with shadow variant scores for an ask command.
-func logAskExperiment(cmd *cobra.Command, queryText, vaultPath string, result *query.AskResult) {
+// logAskExperiment logs an ask event with retrieval results and, when the
+// activation experiment is enabled, shadow-scored variants alongside.
+// retrievalMode is the retriever label (e.g. "hybrid", "keyword") used as the
+// variant key for the actual retrieval hits.
+func logAskExperiment(cmd *cobra.Command, queryText, vaultPath, retrievalMode string, result *query.AskResult) {
 	session := experiment.FromContext(cmd.Context())
 	if session == nil {
 		return
 	}
 	session.SetVaultPath(vaultPath)
-	exps := loadExperimentDefs()
-	if actDef, ok := exps["activation"]; ok && actDef.Enabled && result.Context != nil {
+
+	var shadowVariants map[string]any
+	primary := ""
+	actEnabled := false
+	if actDef, ok := loadExperimentDefs()["activation"]; ok && actDef.Enabled && result.Context != nil {
+		actEnabled = true
+		primary = actDef.Primary
 		items := make([]rankedItem, len(result.Context.Context))
 		for i, item := range result.Context.Context {
 			items[i] = rankedItem{ID: item.ID, Rank: i + 1}
 		}
-		_, err := session.LogAskEvent(queryText, map[string]any{
-			"primary_variant": actDef.Primary,
-			"top_hits":        len(result.TopHits),
-			"variants":        buildVariantResults(session, actDef, items),
-		})
-		if err != nil {
-			log.Debug().Err(err).Msg("failed to log ask experiment event")
-		}
-	} else {
-		_, err := session.LogAskEvent(queryText, map[string]any{
-			"top_hits": len(result.TopHits),
-			"variants": map[string]any{"none": map[string]any{"results": []any{}}},
-		})
-		if err != nil {
-			log.Debug().Err(err).Msg("failed to log ask experiment event")
+		shadowVariants = buildVariantResults(session, actDef, items)
+	}
+
+	if _, err := session.LogAskEvent(queryText, buildAskEventData(result, retrievalMode, shadowVariants, primary, actEnabled)); err != nil {
+		log.Debug().Err(err).Msg("failed to log ask experiment event")
+	}
+}
+
+// buildAskEventData composes the event payload for an ask event. The retrieval
+// mode is carried as a variant under `variants.{mode}` so downstream LinkOutcomes
+// and shadow-scoring consumers see the retrieved notes. When activation is
+// enabled, shadow variants are merged into the same variants map — activation
+// variant names ("compressed-0.2", "wall-clock", "none", "compressed-0.5") do
+// not collide with retrieval-mode names.
+func buildAskEventData(result *query.AskResult, retrievalMode string, shadowVariants map[string]any, primaryVariant string, actEnabled bool) map[string]any {
+	variants := experiment.BuildVariantPayload(retrievalMode, askRetrievalHits(result.TopHits))
+	for name, payload := range shadowVariants {
+		variants[name] = payload
+	}
+	data := map[string]any{
+		"top_hits": len(result.TopHits),
+		"variants": variants,
+	}
+	if actEnabled {
+		data["primary_variant"] = primaryVariant
+	}
+	return data
+}
+
+// askRetrievalHits maps ask top hits to the experiment payload input type.
+func askRetrievalHits(hits []query.ScoredResult) []experiment.RetrievalHit {
+	out := make([]experiment.RetrievalHit, len(hits))
+	for i, h := range hits {
+		out[i] = experiment.RetrievalHit{
+			NoteID:   h.ID,
+			Rank:     i + 1,
+			Score:    h.Score,
+			NoteType: h.Type,
+			Path:     h.Path,
 		}
 	}
+	return out
 }
 
 // buildVariantResults computes activation features for all experiment variants

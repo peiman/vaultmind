@@ -20,6 +20,16 @@ func init() {
 	MustAddToRoot(askCmd)
 }
 
+// retrievalModeLabel reports the retriever kind for event logging. Ask uses an
+// auto-selected retriever — hybrid when embeddings are available, keyword
+// otherwise. Embedder presence is the signal.
+func retrievalModeLabel(r query.AutoRetrieverResult) string {
+	if r.Embedder != nil {
+		return "hybrid"
+	}
+	return "keyword"
+}
+
 func runAsk(cmd *cobra.Command, args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: vaultmind ask <query>")
@@ -56,7 +66,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("ask: %w", err)
 	}
 
-	logAskExperiment(cmd, args[0], vaultPath, result)
+	logAskExperiment(cmd, args[0], vaultPath, retrievalModeLabel(ret), result)
 
 	if !getConfigValueWithFlags[bool](cmd, "json", config.KeyAppAskJson) {
 		return query.FormatAsk(result, cmd.OutOrStdout())
