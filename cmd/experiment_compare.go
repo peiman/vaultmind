@@ -3,7 +3,6 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"math"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
@@ -13,14 +12,6 @@ import (
 	"github.com/peiman/vaultmind/internal/xdg"
 	"github.com/spf13/cobra"
 )
-
-// formatTau renders a *float64 tau as "%.3f" or "  nan" when undefined (nil).
-func formatTau(t *float64) string {
-	if t == nil {
-		return "  nan"
-	}
-	return fmt.Sprintf("%.3f", *t)
-}
 
 var experimentCompareCmd = MustNewCommand(commands.ExperimentCompareMetadata, runExperimentCompare)
 
@@ -102,36 +93,4 @@ func runExperimentCompare(cmd *cobra.Command, _ []string) error {
 	return formatCompareResult(cmd.OutOrStdout(), result, k, perEvent)
 }
 
-func formatCompareResult(w io.Writer, r compareResult, k int, perEvent bool) error {
-	if len(r.Aggregates) == 0 {
-		_, err := fmt.Fprintln(w, "No comparable events found. Shadow variants may be disabled or no ask/search/context-pack events have been recorded.")
-		return err
-	}
-	if _, err := fmt.Fprintf(w, "Variant disagreement (K=%d)\n\n", k); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintf(w, "  %-18s  %-18s  %6s  %11s  %11s  %9s\n",
-		"primary", "shadow", "events", "meanJaccard", "meanKendall", "kendallN"); err != nil {
-		return err
-	}
-	for _, a := range r.Aggregates {
-		if _, err := fmt.Fprintf(w, "  %-18s  %-18s  %6d  %11.3f  %11s  %9d\n",
-			a.PrimaryVariant, a.ShadowVariant, a.EventCount,
-			a.MeanJaccardAtK, formatTau(a.MeanKendallTau), a.KendallEventCount); err != nil {
-			return err
-		}
-	}
-	if perEvent && len(r.PerEvent) > 0 {
-		if _, err := fmt.Fprintln(w, "\nPer-event:"); err != nil {
-			return err
-		}
-		for _, pe := range r.PerEvent {
-			if _, err := fmt.Fprintf(w, "  %s  %s->%s  jaccard=%.3f  tau=%s  shared=%d\n",
-				pe.EventID, pe.PrimaryVariant, pe.ShadowVariant,
-				pe.JaccardAtK, formatTau(pe.KendallTau), pe.SharedItems); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
+// formatCompareResult moved to cmd/experiment_format.go.

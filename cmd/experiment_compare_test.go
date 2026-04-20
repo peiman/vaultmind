@@ -151,8 +151,8 @@ func TestExperimentCompare_JSONEncodesNaNAsNull(t *testing.T) {
 	}
 
 	var env struct {
-		Status string                 `json:"status"`
-		Result map[string]any         `json:"result"`
+		Status string         `json:"status"`
+		Result map[string]any `json:"result"`
 	}
 	if err := json.Unmarshal(out.Bytes(), &env); err != nil {
 		t.Fatalf("decode: %v raw=%s", err, out.String())
