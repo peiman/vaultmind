@@ -1,3 +1,25 @@
+# VaultMind
+
+An associative memory system for AI agents — persona reconstruction, research knowledge retrieval, and spreading-activation-weighted recall over Git-backed Obsidian vaults.
+
+```bash
+git clone https://github.com/peiman/vaultmind $HOME/dev/cli/vaultmind
+cd $HOME/dev/cli/vaultmind
+bash .claude/scripts/bootstrap.sh
+```
+
+See **[SETUP.md](SETUP.md)** for the full bootstrap guide, environment conventions, and troubleshooting.
+
+**Key commands after setup:**
+- `vaultmind ask "who am I"` — semantic retrieval from a vault
+- `vaultmind doctor --vault <path>` — vault health, including embedding status
+- `vaultmind experiment summary` — weekly readout of retrieval patterns
+- `vaultmind experiment trace --session <id>` / `--note <id>` — drill into specific history
+
+**Built on [ckeletin-go](https://github.com/peiman/ckeletin-go)** — the framework documentation below explains the scaffold (ultra-thin commands, config registry, automated enforcement) that VaultMind uses.
+
+---
+
 <div align="center">
 
 ![ckeletin-go](logo/ckeletin-go-banner.png)
