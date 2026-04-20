@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/internal/cmdutil"
@@ -17,6 +18,29 @@ var doctorCmd = MustNewCommand(commands.DoctorMetadata, runDoctor)
 
 func init() {
 	MustAddToRoot(doctorCmd)
+}
+
+// writeEmbeddingStatus prints the vault's semantic-retrieval readiness in a
+// human-readable form. When no dense embeddings exist, the output names the
+// remedy explicitly so users don't have to read ask's zero-hit hint to
+// discover it.
+func writeEmbeddingStatus(w io.Writer, emb *query.DoctorEmbeddings) error {
+	if emb == nil {
+		return nil
+	}
+	if !emb.SemanticReady {
+		_, err := fmt.Fprintf(w,
+			"Embeddings: none (%d notes) — keyword-only retrieval\n"+
+				"  run: vaultmind index --embed --model bge-m3 --vault <vault>\n",
+			emb.TotalNotes)
+		return err
+	}
+	_, err := fmt.Fprintf(w,
+		"Embeddings: dense %d/%d (%s), sparse %d/%d, colbert %d/%d\n",
+		emb.DenseCount, emb.TotalNotes, emb.Model,
+		emb.SparseCount, emb.TotalNotes,
+		emb.ColBERTCount, emb.TotalNotes)
+	return err
 }
 
 func runDoctor(cmd *cobra.Command, _ []string) error {
@@ -46,6 +70,9 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		"Vault: %s\nNotes: %d (%d domain, %d unstructured)\nUnresolved links: %d\n",
 		result.VaultPath, result.TotalFiles, result.DomainNotes,
 		result.UnstructuredNotes, result.Issues.UnresolvedLinks); err != nil {
+		return err
+	}
+	if err = writeEmbeddingStatus(w, result.Embeddings); err != nil {
 		return err
 	}
 	if result.Issues.ObsidianIncompatibleLinks > 0 {

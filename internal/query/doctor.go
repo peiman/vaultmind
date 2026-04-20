@@ -11,12 +11,25 @@ import (
 
 // DoctorResult is the JSON-serializable output of the doctor command.
 type DoctorResult struct {
-	VaultPath         string       `json:"vault_path"`
-	TotalFiles        int          `json:"total_files"`
-	DomainNotes       int          `json:"domain_notes"`
-	UnstructuredNotes int          `json:"unstructured_notes"`
-	IndexStatus       string       `json:"index_status"`
-	Issues            DoctorIssues `json:"issues"`
+	VaultPath         string            `json:"vault_path"`
+	TotalFiles        int               `json:"total_files"`
+	DomainNotes       int               `json:"domain_notes"`
+	UnstructuredNotes int               `json:"unstructured_notes"`
+	IndexStatus       string            `json:"index_status"`
+	Embeddings        *DoctorEmbeddings `json:"embeddings,omitempty"`
+	Issues            DoctorIssues      `json:"issues"`
+}
+
+// DoctorEmbeddings reports the vault's semantic-retrieval readiness. Surfaces
+// which embedding lanes are populated so a user can diagnose a keyword-only
+// fallback at a glance without running an ask query and hitting zero hits.
+type DoctorEmbeddings struct {
+	TotalNotes    int    `json:"total_notes"`
+	DenseCount    int    `json:"dense_count"`
+	SparseCount   int    `json:"sparse_count"`
+	ColBERTCount  int    `json:"colbert_count"`
+	Model         string `json:"model"` // "bge-m3", "minilm", or "" when no dense embeddings
+	SemanticReady bool   `json:"semantic_ready"`
 }
 
 // DoctorIssues holds counts of vault health issues.
@@ -173,5 +186,42 @@ func Doctor(db *index.DB, vaultPath string) (*DoctorResult, error) {
 	}
 	result.Issues.ObsidianIncompatibleLinks = len(result.Issues.IncompatibleLinkDetails)
 
+	emb, err := collectEmbeddingStatus(db, result.TotalFiles)
+	if err != nil {
+		return nil, err
+	}
+	result.Embeddings = emb
+
 	return result, nil
+}
+
+// collectEmbeddingStatus inspects the index DB for per-lane embedding counts
+// and infers the model from dense-embedding dimensionality (384=minilm,
+// 1024=bge-m3). SemanticReady is driven by dense presence since it's the
+// required lane for ask's auto-retriever to engage hybrid mode.
+func collectEmbeddingStatus(db *index.DB, total int) (*DoctorEmbeddings, error) {
+	emb := &DoctorEmbeddings{TotalNotes: total}
+	if err := db.QueryRow("SELECT COUNT(*) FROM notes WHERE embedding IS NOT NULL").Scan(&emb.DenseCount); err != nil {
+		return nil, fmt.Errorf("counting dense embeddings: %w", err)
+	}
+	if err := db.QueryRow("SELECT COUNT(*) FROM notes WHERE sparse_embedding IS NOT NULL").Scan(&emb.SparseCount); err != nil {
+		return nil, fmt.Errorf("counting sparse embeddings: %w", err)
+	}
+	if err := db.QueryRow("SELECT COUNT(*) FROM notes WHERE colbert_embedding IS NOT NULL").Scan(&emb.ColBERTCount); err != nil {
+		return nil, fmt.Errorf("counting colbert embeddings: %w", err)
+	}
+	emb.SemanticReady = emb.DenseCount > 0
+	if emb.DenseCount > 0 {
+		dims, err := index.DetectEmbeddingDims(db)
+		if err != nil {
+			return nil, fmt.Errorf("detecting embedding dims: %w", err)
+		}
+		switch dims {
+		case 384:
+			emb.Model = "minilm"
+		case 1024:
+			emb.Model = "bge-m3"
+		}
+	}
+	return emb, nil
 }
