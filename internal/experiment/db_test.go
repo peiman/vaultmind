@@ -65,7 +65,7 @@ func TestOpen_SchemaVersion(t *testing.T) {
 	var version int
 	err := db.QueryRow("PRAGMA user_version").Scan(&version)
 	require.NoError(t, err)
-	assert.Equal(t, 3, version)
+	assert.Equal(t, 4, version)
 }
 
 func TestOpen_Idempotent(t *testing.T) {
@@ -86,7 +86,7 @@ func TestOpen_Idempotent(t *testing.T) {
 	var version int
 	err = db2.QueryRow("PRAGMA user_version").Scan(&version)
 	require.NoError(t, err)
-	assert.Equal(t, 3, version)
+	assert.Equal(t, 4, version)
 }
 
 func TestOpen_WALMode(t *testing.T) {

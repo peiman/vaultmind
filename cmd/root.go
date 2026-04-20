@@ -284,7 +284,8 @@ var RootCmd = &cobra.Command{
 			} else if recovered > 0 {
 				log.Debug().Int("recovered", recovered).Msg("Recovered orphan experiment sessions")
 			}
-			sid, startErr := expDB.StartSession("")
+			caller, callerMeta := detectCaller()
+			sid, startErr := expDB.StartSessionWithCaller("", caller, callerMeta)
 			if startErr != nil {
 				log.Debug().Err(startErr).Msg("Failed to start experiment session")
 				_ = expDB.Close()

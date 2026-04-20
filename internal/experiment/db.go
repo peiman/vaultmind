@@ -88,6 +88,13 @@ SELECT
         AS INTEGER
     ) AS gap_seconds
 FROM sessions;`,
+	// Version 4: caller attribution on sessions. caller is a short label
+	// identifying the invoking agent (e.g. "workhorse-persona-hook",
+	// "claude-code", "cli"); caller_meta is a JSON blob for flexible
+	// attribution (project_dir, pid, env-var snapshot). Existing rows stay
+	// NULL — reporters treat NULL as "unknown" rather than failing.
+	`ALTER TABLE sessions ADD COLUMN caller TEXT;
+ALTER TABLE sessions ADD COLUMN caller_meta TEXT;`,
 }
 
 // DB wraps *sql.DB with schema initialization and experiment-specific helpers.
