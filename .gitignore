@@ -96,6 +96,10 @@ reports/sbom/
 # Lichen cache (if applicable)
 .lichen-cache/
 
-# VaultMind index (derived, rebuildable)
+# VaultMind index (derived, rebuildable) and SQLite WAL/SHM transients
 vaultmind-vault/.vaultmind/index.db
+vaultmind-vault/.vaultmind/index.db-shm
+vaultmind-vault/.vaultmind/index.db-wal
+vaultmind-identity/.vaultmind/index.db-shm
+vaultmind-identity/.vaultmind/index.db-wal
 coverage.raw.txt
