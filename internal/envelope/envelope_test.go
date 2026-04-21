@@ -90,3 +90,27 @@ func TestEnvelope_ErrorWithCandidates(t *testing.T) {
 	assert.Len(t, candidates, 2)
 	assert.NotNil(t, parsed["result"])
 }
+
+// Every envelope carries a stable schema_version string. Consumers branch
+// on this to detect major-version changes; the "numbers were wrong"
+// avoidance applied to output shape. Locked at "v1".
+func TestEnvelope_OKCarriesSchemaVersionV1(t *testing.T) {
+	env := envelope.OK("test cmd", map[string]any{"k": "v"})
+	assert.Equal(t, "v1", env.SchemaVersion,
+		"schema_version must be v1 on every OK envelope — public contract anchor")
+}
+
+// Error envelopes carry the same schema_version. One shape, two statuses.
+func TestEnvelope_ErrorCarriesSchemaVersionV1(t *testing.T) {
+	env := envelope.Error("test cmd", "some_code", "msg", "")
+	assert.Equal(t, "v1", env.SchemaVersion,
+		"schema_version must be v1 on every Error envelope — consumers branch on it the same way")
+}
+
+// The exported SchemaVersion constant IS the contract anchor. Locking its
+// value here surfaces any change in the diff — the rename/bump pattern
+// documented in AGENTS.md depends on this being deliberate.
+func TestSchemaVersion_IsLockedAtV1(t *testing.T) {
+	assert.Equal(t, "v1", envelope.SchemaVersion,
+		"public schema version is v1 — changing this is a major-version bump event, not a refactor")
+}

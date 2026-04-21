@@ -3,14 +3,22 @@ package envelope
 
 import "time"
 
+// SchemaVersion is the public contract version. Consumers decoding this
+// envelope should branch on major-version changes (v1 -> v2) and expect
+// additive changes within a version. Adding a field is backward-compatible
+// (unknown fields are ignored by Go's json decoder). Renaming or removing
+// a field is a breaking change and requires a major-version bump.
+const SchemaVersion = "v1"
+
 // Envelope is the standard JSON response wrapper for all --json output.
 type Envelope struct {
-	Command  string      `json:"command"`
-	Status   string      `json:"status"`
-	Warnings []Issue     `json:"warnings"`
-	Errors   []Issue     `json:"errors"`
-	Result   interface{} `json:"result"`
-	Meta     Meta        `json:"meta"`
+	SchemaVersion string      `json:"schema_version"`
+	Command       string      `json:"command"`
+	Status        string      `json:"status"`
+	Warnings      []Issue     `json:"warnings"`
+	Errors        []Issue     `json:"errors"`
+	Result        interface{} `json:"result"`
+	Meta          Meta        `json:"meta"`
 }
 
 // Issue represents a structured warning or error.
@@ -32,11 +40,12 @@ type Meta struct {
 // OK creates a successful envelope.
 func OK(command string, result interface{}) *Envelope {
 	return &Envelope{
-		Command:  command,
-		Status:   "ok",
-		Warnings: []Issue{},
-		Errors:   []Issue{},
-		Result:   result,
+		SchemaVersion: SchemaVersion,
+		Command:       command,
+		Status:        "ok",
+		Warnings:      []Issue{},
+		Errors:        []Issue{},
+		Result:        result,
 		Meta: Meta{
 			Timestamp: time.Now().UTC().Format(time.RFC3339),
 		},
@@ -46,11 +55,12 @@ func OK(command string, result interface{}) *Envelope {
 // Error creates an error envelope.
 func Error(command, code, message, field string) *Envelope {
 	return &Envelope{
-		Command:  command,
-		Status:   "error",
-		Warnings: []Issue{},
-		Errors:   []Issue{{Code: code, Message: message, Field: field}},
-		Result:   nil,
+		SchemaVersion: SchemaVersion,
+		Command:       command,
+		Status:        "error",
+		Warnings:      []Issue{},
+		Errors:        []Issue{{Code: code, Message: message, Field: field}},
+		Result:        nil,
 		Meta: Meta{
 			Timestamp: time.Now().UTC().Format(time.RFC3339),
 		},
