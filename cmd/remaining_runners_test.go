@@ -86,6 +86,44 @@ func TestNoteCreate_MissingTypeErrors(t *testing.T) {
 	assert.Contains(t, strings.ToLower(err.Error()), "type")
 }
 
+// note create human mode prints "Created: <path> (id: <id>)". Regression:
+// users who run the command without --json rely on this line to confirm
+// the note was actually made.
+func TestNoteCreate_HumanModeConfirmationLine(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	out, _, err := runRootCmd(t, "note", "create", "concepts/new.md",
+		"--type", "concept",
+		"--field", "title=Fresh",
+		"--vault", vault)
+	require.NoError(t, err)
+	text := out.String()
+	assert.Contains(t, text, "Created: concepts/new.md",
+		"human output must confirm the created path")
+	assert.Contains(t, text, "id:", "human output must include the id line fragment")
+}
+
+// note create with body-stdin reads stdin as the note body. This path is
+// how agents pipe structured content in; losing it breaks the agent
+// authoring flow.
+func TestNoteCreate_BodyStdinReadsStdin(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	// Seed stdin on the root command for the duration of this run.
+	RootCmd.SetIn(strings.NewReader("piped body text"))
+	defer RootCmd.SetIn(os.Stdin)
+
+	_, _, err := runRootCmd(t, "note", "create", "concepts/stdin.md",
+		"--type", "concept",
+		"--field", "title=Stdin",
+		"--body-stdin",
+		"--vault", vault)
+	require.NoError(t, err)
+
+	content, err := os.ReadFile(filepath.Join(vault, "concepts/stdin.md"))
+	require.NoError(t, err)
+	assert.Contains(t, string(content), "piped body text",
+		"body read from stdin must be persisted in the note body")
+}
+
 // note create (happy path through RootCmd) writes the file and returns an
 // envelope with path+id. This test covers runNoteCreate which the existing
 // internal-only tests skip by calling executeNoteCreate directly.

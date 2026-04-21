@@ -97,6 +97,27 @@ func TestMemoryContextPack_IncludesTarget(t *testing.T) {
 	assert.Equal(t, "concept-alpha", env.Result.Target.ID)
 }
 
+// memory context-pack with a tiny budget forces body truncation in
+// packTargetContent — the truncated flag must flip. Agents trust this
+// signal to know when to fetch a full note separately.
+func TestMemoryContextPack_TinyBudgetTruncatesTarget(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	out, _, err := runRootCmd(t, "memory", "context-pack", "concept-alpha",
+		"--vault", vault, "--budget", "1", "--max-items", "1", "--json")
+	require.NoError(t, err)
+
+	var env struct {
+		Result struct {
+			BudgetTokens int  `json:"budget_tokens"`
+			Truncated    bool `json:"truncated"`
+		} `json:"result"`
+	}
+	require.NoError(t, json.Unmarshal(out.Bytes(), &env))
+	assert.Equal(t, 1, env.Result.BudgetTokens)
+	assert.True(t, env.Result.Truncated,
+		"budget=1 cannot fit even frontmatter — truncated=true is the contract")
+}
+
 // memory context-pack human output reports a token budget line. Regression:
 // dropping it would make "am I close to budget?" invisible to the user.
 func TestMemoryContextPack_HumanOutputReportsBudget(t *testing.T) {

@@ -105,6 +105,21 @@ func TestCollectMgetIDs_SplitsAndTrims(t *testing.T) {
 	require.NoError(t, cmd.Flags().Set("ids", ""))
 }
 
+// note mget human mode emits one line per found note + one "NOT FOUND:"
+// line per missing ID. Scripts read both separately.
+func TestNoteMget_HumanOutputLinesForFoundAndMissing(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	out, _, err := runRootCmd(t, "note", "mget",
+		"--ids", "concept-alpha,does-not-exist",
+		"--vault", vault)
+	require.NoError(t, err)
+	text := out.String()
+	assert.Contains(t, text, "concept-alpha",
+		"found note must appear as a line (ID + type + title format)")
+	assert.Contains(t, text, "NOT FOUND: does-not-exist",
+		"missing IDs must use the 'NOT FOUND:' prefix (machine-parseable)")
+}
+
 // vault status must report the correct partition between domain notes and
 // unstructured notes. Miscounting would make every doctor/status report
 // fiction.
