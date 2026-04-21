@@ -68,11 +68,27 @@ Coverage floor      → ≥85% project coverage (check-coverage-project.sh)
 in `.ckeletin/scripts/check-coverage-project.sh`. Future work: push embedding
 coverage up and narrow the exclusion list.
 
+**Per-package ratchets** (enforced alongside the project floor): certain
+packages carry invariants the whole system depends on — dropping their coverage
+below the ratchet fails the gate with a specific package callout:
+
+| Package | Floor | Why |
+|---------|-------|-----|
+| `internal/envelope` | 100% | JSON output contract — every CLI caller parses it |
+| `internal/parser` | 100% | Frontmatter extractor — wrong parse = wrong note |
+| `internal/schema` | 100% | Type registry — the enforcement layer |
+| `internal/config/commands` | 100% | Command metadata registry (SSOT) |
+| `internal/vault` | 90% | Config loader + scanner — vault boundary |
+
+Ratchet discipline: floors **only move up, never down**. Raising one requires
+the package to hit the new floor first. Adding a package to the tier requires
+the same.
+
 **If `task check` fails:** Fix the issue, don't work around it.
 - Format issues → `task format`
 - Lint issues → Read output and fix code
 - Test failures → Debug and fix tests
-- Coverage drops → Add more tests (gate is 85% project floor)
+- Coverage drops → Add more tests (85% project floor + tier ratchets)
 
 ## Code Organization
 
