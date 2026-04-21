@@ -45,6 +45,9 @@ func computeActivationScores(ctx context.Context, similarities map[string]float6
 	}
 	accessedNotes, err := session.DB.AccessedNoteIDs()
 	if err != nil {
+		// silent-failure-ok: activation scoring is opt-in telemetry. On
+		// failure we fall through to the non-activation path (nil scores),
+		// which the retriever handles identically to "activation off".
 		log.Debug().Err(err).Msg("failed to load accessed notes for activation scoring")
 		return nil
 	}
@@ -53,6 +56,8 @@ func computeActivationScores(ctx context.Context, similarities map[string]float6
 	}
 	scores, _, err := experiment.ComputeBatchScores(session.DB, accessedNotes, params, similarities)
 	if err != nil {
+		// silent-failure-ok: activation is an experimental enhancement.
+		// Nil-score fallback restores baseline (non-activation) retrieval.
 		log.Debug().Err(err).Msg("failed to compute activation scores")
 		return nil
 	}
@@ -85,6 +90,9 @@ func logAskExperiment(cmd *cobra.Command, queryText, vaultPath, retrievalMode st
 	}
 
 	if _, err := session.LogAskEvent(queryText, experiment.BuildAskEventData(params)); err != nil {
+		// silent-failure-ok: telemetry-only. Failing to log the event
+		// must never block the user's ask — the result has already been
+		// computed and returned above.
 		log.Debug().Err(err).Msg("failed to log ask experiment event")
 	}
 }

@@ -121,7 +121,10 @@ func (e *Executor) Apply(p Plan, dryRun, diff, commit bool) (*ApplyResult, error
 		idxr := index.NewIndexer(e.VaultPath, dbPath, e.Config)
 		for _, p := range collectPaths(result.Operations) {
 			if idxErr := idxr.IndexFile(p); idxErr != nil {
-				log.Debug().Err(idxErr).Str("path", p).Msg("post-apply re-index failed")
+				// Apply succeeded on disk but the index didn't catch up. The
+				// next `vaultmind index` run will fix it; warn here so the
+				// operator knows retrieval is briefly stale on this file.
+				log.Warn().Err(idxErr).Str("path", p).Msg("post-apply re-index failed — index is stale for this file")
 			}
 		}
 	}

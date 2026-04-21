@@ -44,6 +44,10 @@ func writeZeroHitDiagnostics(w io.Writer, db *index.DB, queryText, mode string, 
 	}
 	titles, err := db.AllNoteTitles()
 	if err != nil {
+		// silent-failure-ok: fuzzy-title suggestions are an enhancement on
+		// an already-reported zero-hit result. The keyword-only hint above
+		// remains visible; users just don't get the optional "did you mean"
+		// list. Nothing is lost.
 		log.Debug().Err(err).Msg("could not load titles for zero-hit fallback")
 		return
 	}

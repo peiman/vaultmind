@@ -69,7 +69,11 @@ func runMutation(cmd *cobra.Command, req mutation.MutationRequest,
 		dbPath := filepath.Join(vaultPath, vdb.Config.Index.DBPath)
 		idxr := index.NewIndexer(vaultPath, dbPath, vdb.Config)
 		if idxErr := idxr.IndexFile(result.Path); idxErr != nil {
-			log.Debug().Err(idxErr).Str("path", result.Path).Msg("post-mutation re-index failed")
+			// result.ReindexRequired stays true as the structured signal to
+			// callers. Log at Warn so the operator sees it in normal terminal
+			// output; Debug alone would leave them thinking the mutation
+			// fully succeeded when the index is actually stale.
+			log.Warn().Err(idxErr).Str("path", result.Path).Msg("post-mutation re-index failed — index is stale for this file")
 		} else {
 			result.ReindexRequired = false
 		}

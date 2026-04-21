@@ -485,7 +485,11 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 			// BGE-M3 path: store dense + sparse + ColBERT
 			fullOutputs, embedErr := fullEmbedder.EmbedFullBatch(ctx, texts)
 			if embedErr != nil {
-				log.Debug().Err(embedErr).Int("batch_start", i).Msg("embedding batch failed")
+				// Whole batch failed — those N notes will have no embeddings
+				// and will miss semantic retrieval until the next --embed
+				// run. Surface at Warn so the operator knows recall quality
+				// is degraded on this batch's notes.
+				log.Warn().Err(embedErr).Int("batch_start", i).Int("batch_size", len(batch)).Msg("embedding batch failed — notes in batch will lack embeddings")
 				result.Errors += len(batch)
 				continue
 			}
@@ -530,7 +534,8 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 			// MiniLM path: dense only
 			vectors, embedErr := embedder.EmbedBatch(ctx, texts)
 			if embedErr != nil {
-				log.Debug().Err(embedErr).Int("batch_start", i).Msg("embedding batch failed")
+				// See FullEmbedder branch above for the rationale.
+				log.Warn().Err(embedErr).Int("batch_start", i).Int("batch_size", len(batch)).Msg("embedding batch failed — notes in batch will lack embeddings")
 				result.Errors += len(batch)
 				continue
 			}

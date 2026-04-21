@@ -72,6 +72,11 @@ func (g *Generator) Generate() error {
 		file = nil // Mark as closed so defer doesn't try again
 
 		if closeErr != nil {
+			// silent-failure-ok (close-path): the file content was already
+			// written and flushed by earlier Write calls; close failures
+			// here don't lose data, they just leak a file descriptor which
+			// the OS reclaims when the process exits. The combined-error
+			// path below handles the case where generation ALSO failed.
 			log.Debug().Err(closeErr).Str("component", "docs").Str("file", g.cfg.OutputFile).Msg("Failed to close output file")
 			// Handle both generation and close errors
 			if err != nil {

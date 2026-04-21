@@ -103,10 +103,15 @@ func buildHybridRetriever(db *index.DB) (Retriever, embedding.Embedder, func(), 
 
 	hasSparse, sparseErr := index.HasSparseEmbeddings(db)
 	if sparseErr != nil {
+		// silent-failure-ok: sparse is an optional retriever lane. On
+		// check failure we proceed as if not present (hasSparse stays
+		// zero-value). Worst case is a retrieval without sparse signal;
+		// no data is lost.
 		log.Debug().Err(sparseErr).Msg("failed to check sparse embeddings")
 	}
 	hasColBERT, colbertErr := index.HasColBERTEmbeddings(db)
 	if colbertErr != nil {
+		// silent-failure-ok: same as sparse lane.
 		log.Debug().Err(colbertErr).Msg("failed to check ColBERT embeddings")
 	}
 	if hasSparse || hasColBERT {
@@ -141,6 +146,11 @@ func newDefaultEmbedder() (*embedding.HugotEmbedder, error) {
 func detectEmbedderForDB(db *index.DB) (embedding.Embedder, func(), error) {
 	dims, err := index.DetectEmbeddingDims(db)
 	if err != nil {
+		// silent-failure-ok: dim detection falls back to the MiniLM default,
+		// which is the correct choice for a vault that hasn't been embedded
+		// at all. A broken detection wouldn't lose data; worst case is
+		// attempting to load MiniLM when the vault expects BGE-M3, which
+		// fails loudly at the embedder init boundary (not silently here).
 		log.Debug().Err(err).Msg("failed to detect embedding dims, falling back to MiniLM")
 	}
 	if err == nil && dims == embedding.BGEM3Dims {
