@@ -96,6 +96,62 @@ func TestEmbedNotes_EmbedsThenSkipsOnRerun(t *testing.T) {
 	assert.Equal(t, 3, r2.Skipped, "all three must be counted as skipped")
 }
 
+// fakeFullEmbedder satisfies FullEmbedder: dense + sparse + ColBERT. The
+// BGE-M3 path in EmbedNotes uses this to fan out into three UPDATEs per note.
+type fakeFullEmbedder struct {
+	fakeDenseEmbedder
+}
+
+func (f fakeFullEmbedder) EmbedFullBatch(_ context.Context, texts []string) ([]*embedding.BGEM3Output, error) {
+	out := make([]*embedding.BGEM3Output, len(texts))
+	for i, tx := range texts {
+		_ = tx
+		out[i] = &embedding.BGEM3Output{
+			Dense:   []float32{1, 0, 0, 0},
+			Sparse:  map[int32]float32{1: 0.5},
+			ColBERT: [][]float32{{0.1, 0.2}},
+		}
+	}
+	return out, nil
+}
+
+var _ embedding.FullEmbedder = fakeFullEmbedder{}
+
+// EmbedNotes with a FullEmbedder exercises the BGE-M3 branch (dense +
+// sparse + ColBERT stored). Coverage for this branch asserts that the
+// dense-only stub doesn't silently misroute against FullEmbedder callers,
+// and that sparse+colbert columns get populated.
+func TestEmbedNotes_FullEmbedderStoresAllThreeColumns(t *testing.T) {
+	vaultRoot, dbPath := buildEmbedTestVault(t)
+	cfg, err := vault.LoadConfig(vaultRoot)
+	require.NoError(t, err)
+	idxr := index.NewIndexer(vaultRoot, dbPath, cfg)
+
+	emb := fakeFullEmbedder{fakeDenseEmbedder: fakeDenseEmbedder{dims: 4}}
+	r, err := idxr.EmbedNotes(context.Background(), dbPath, emb)
+	require.NoError(t, err)
+	assert.Equal(t, 3, r.Embedded)
+
+	// Second pass on a FullEmbedder DB must skip everything — the skipQuery
+	// checks ALL THREE columns, so anything less than "all three present"
+	// would trigger a re-embed.
+	r2, err := idxr.EmbedNotes(context.Background(), dbPath, emb)
+	require.NoError(t, err)
+	assert.Equal(t, 0, r2.Embedded, "post-full-embed: nothing pending")
+	assert.Equal(t, 3, r2.Skipped)
+
+	// Sparse+colbert signals flip too.
+	db, err := index.Open(dbPath)
+	require.NoError(t, err)
+	defer db.Close()
+	hasSparse, err := index.HasSparseEmbeddings(db)
+	require.NoError(t, err)
+	assert.True(t, hasSparse, "sparse column must be populated")
+	hasColBERT, err := index.HasColBERTEmbeddings(db)
+	require.NoError(t, err)
+	assert.True(t, hasColBERT, "colbert column must be populated")
+}
+
 // After EmbedNotes runs, HasEmbeddings must report true — this is the
 // signal BuildAutoRetrieverFull reads to decide whether to wire the hybrid
 // retriever or fall back to keyword.
