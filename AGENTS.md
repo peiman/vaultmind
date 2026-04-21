@@ -59,7 +59,8 @@ Architecture        → validate:defaults, commands, constants, task-naming,
 Security Scanning   → check:secrets, check:sast
 Dependencies        → check:deps, check:license, check:sbom:vulns
 Tests               → test:full (unit + integration + race detection)
-Coverage floor      → ≥85% project coverage (check-coverage-project.sh)
+Coverage floor      → ≥85% project coverage + per-package ratchets
+Retrieval baseline  → golden-query Hit@K/MRR vs committed snapshot
 ```
 
 **Coverage gate enforced:** `task check` fails if project coverage drops below
@@ -83,6 +84,22 @@ below the ratchet fails the gate with a specific package callout:
 Ratchet discipline: floors **only move up, never down**. Raising one requires
 the package to hit the new floor first. Adding a package to the tier requires
 the same.
+
+**Retrieval baseline (golden-query regression gate):**
+`task test:baseline` runs a curated query fixture (`test/fixtures/baseline/`)
+against the keyword retriever and compares Hit@K / MRR against a committed
+snapshot (`baseline.json`). Any aggregate or per-query drop beyond the
+tolerance (0.02) fails the gate with a specific regression message.
+
+- **Intended retrieval change (snapshot refresh):** `task test:baseline:update`
+  regenerates `baseline.json`. The diff MUST be reviewed in the commit —
+  silent snapshot refreshes defeat the gate's purpose.
+- **Extending the fixture:** add queries to `queries.yaml` (and notes to
+  `vault/` if needed). Run `task test:baseline:update`, review the snapshot
+  diff, commit together.
+- **Why it's there:** before this gate, a change that silently re-ranked
+  retrieval results would be invisible until a human noticed "hmm, that's
+  wrong." Matches manifesto principle #4 (reality is the spec).
 
 **If `task check` fails:** Fix the issue, don't work around it.
 - Format issues → `task format`

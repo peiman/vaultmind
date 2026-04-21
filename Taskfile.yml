@@ -65,7 +65,18 @@ tasks:
     cmds:
       - task: ckeletin:check
       - task: ckeletin:test:coverage:project # enforce 85% project floor (manifesto principle #9)
+      - task: test:baseline # retrieval-quality regression gate (manifesto principle #4)
       - task: check:bootstrap
+
+  test:baseline:
+    desc: Run the golden-query retrieval baseline (fails if metrics drop beyond tolerance)
+    cmds:
+      - go test -tags dev -count=1 -run TestBaseline_GoldenFixture ./internal/baseline/...
+
+  test:baseline:update:
+    desc: Regenerate baseline.json snapshot — only run when retrieval change is intended; review the diff before commit
+    cmds:
+      - go test -tags dev -count=1 -run TestBaseline_GoldenFixture ./internal/baseline/... -baseline-update
 
   check:bootstrap:
     desc: Verify VaultMind setup (binary, vaults, hook wiring, smoke test)
