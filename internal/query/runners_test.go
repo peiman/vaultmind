@@ -286,6 +286,30 @@ func TestRunLinks_OutDirectionFindsOutboundEdge(t *testing.T) {
 	assert.Contains(t, buf.String(), "proj-beta")
 }
 
+// Doctor on a small indexed vault populates the core counts without error.
+// Regression guard: Doctor touches many joins/queries; a migration that
+// broke any would show up here as an error or a zero count.
+func TestDoctor_CoreCountsPopulateCleanly(t *testing.T) {
+	db, dir := smallIndexedVault(t)
+	result, err := query.Doctor(db, dir)
+	require.NoError(t, err)
+	assert.Equal(t, 3, result.TotalFiles, "vault has 3 .md files")
+	assert.Equal(t, 3, result.DomainNotes, "all three are domain notes")
+	assert.Equal(t, 0, result.UnstructuredNotes)
+}
+
+// Doctor reports an embedding-readiness summary. On a vault without any
+// embeddings, SemanticReady must be false and the note count must match.
+func TestDoctor_EmbeddingsStatusReflectsAbsence(t *testing.T) {
+	db, dir := smallIndexedVault(t)
+	result, err := query.Doctor(db, dir)
+	require.NoError(t, err)
+	require.NotNil(t, result.Embeddings, "embeddings field must always be populated")
+	assert.False(t, result.Embeddings.SemanticReady, "no embeddings = SemanticReady false")
+	assert.Equal(t, result.TotalFiles, result.Embeddings.TotalNotes,
+		"total notes in the embedding report must match the vault total")
+}
+
 // RunLinks in human mode (non-JSON) prints rows with source/edge/confidence
 // columns — scripts awk these. Covers the human-output branch of runLinksIn
 // and runLinksOut.
