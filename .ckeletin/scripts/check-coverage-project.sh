@@ -34,6 +34,10 @@ fi
 #   - internal/embedding/: ONNX/hugot model inference — exercised in integration
 #     tests with real model files, not unit-testable in CI without the runtime.
 #     Tracked for future improvement (see AGENTS.md / roadmap).
+#   - cmd/dev_progress.go: //go:build dev demo command for progress UI rendering.
+#     Timing-sensitive spinners/bars; exercised by eye, not unit tests.
+#   - cmd/check.go: //go:build dev wrapper that runs the full test suite via
+#     internal/check.Executor. Unit-testing this would mean tests-within-tests.
 
 # Calculate per-package coverage from go test output.
 #
@@ -61,7 +65,9 @@ while IFS= read -r line; do
     if [[ "$line" == mode:* ]] || [[ "$line" == *"_tui.go"* ]] || [[ "$line" == *"/demo/"* ]] \
        || [[ "$line" == *"internal/check/executor.go"* ]] \
        || [[ "$line" == *"internal/check/summary.go"* ]] \
-       || [[ "$line" == *"internal/embedding/"* ]]; then
+       || [[ "$line" == *"internal/embedding/"* ]] \
+       || [[ "$line" == *"cmd/dev_progress.go"* ]] \
+       || [[ "$line" == *"cmd/check.go"* ]]; then
         continue
     fi
 
