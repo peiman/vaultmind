@@ -101,6 +101,36 @@ tolerance (0.02) fails the gate with a specific regression message.
   retrieval results would be invisible until a human noticed "hmm, that's
   wrong." Matches manifesto principle #4 (reality is the spec).
 
+**Scoring-constant SSOT:**
+Every tunable in the scoring/activation/retrieval path lives in one file,
+with a regression test locking its current value. Accidental drift has
+historically produced hard-to-trace retrieval bugs (the "Numbers Were
+Wrong" arc). Each of these is the single source for its constant:
+
+| Constant | Location | Meaning |
+|----------|----------|---------|
+| `experiment.DefaultActivationParams(gamma)` | `internal/experiment/activation_scorer.go` | No-similarity baseline (Delta=0) |
+| `experiment.DefaultActivationParamsWithSimilarity(gamma)` | `internal/experiment/activation_scorer.go` | Similarity-available case (uses `DefaultSpreadingActivationDelta`) |
+| `experiment.DefaultSpreadingActivationDelta = 0.2` | `internal/experiment/activation_scorer.go` | Spreading-activation weight |
+| `experiment.MinElapsedHours = 1/3600` | `internal/experiment/activation.go` | Soft floor on log(elapsed) for recent accesses |
+| `query.DefaultRRFK = 60` | `internal/query/hybrid_retriever.go` | Reciprocal Rank Fusion smoothing |
+| `memory.PriorityExplicitRelation/Link/MediumConfidence/LowConfidence` | `internal/memory/contextpack.go` | Edge-priority tiers (0/1/2/3; feed distance-weighted ranking) |
+
+**Changing a scoring value:**
+1. Update the named constant.
+2. The regression test in the `*_ssot_test.go` file now fails — good.
+   The failing diff shows the deliberate change.
+3. Update the test's expected value.
+4. Run `task test:baseline` to check retrieval-quality impact. A value
+   change usually shifts Hit@K/MRR — decide whether the shift is intended.
+5. Commit the constant change, test change, and (if baseline moved) the
+   snapshot refresh in separate commits so the review is readable.
+
+**Deliberately out of SSOT (comments explain why):**
+- `variantGammas` map values (the float IS the variant identity).
+- `D=0.5, Alpha=0.6, Beta=0.4` in `DefaultActivationParams` (factory defaults).
+- `minFusionCandidates = 100` (function-local; behavior it guards is internal).
+
 **If `task check` fails:** Fix the issue, don't work around it.
 - Format issues → `task format`
 - Lint issues → Read output and fix code
