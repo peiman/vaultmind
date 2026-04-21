@@ -11,10 +11,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// defaultActivationDelta is the spreading activation weight when similarities
-// are available. Configurable via experiments.activation.delta.
-const defaultActivationDelta = 0.2
-
 // computeActivationScores returns activation scores for the primary experiment
 // variant. Returns nil if the experiment session is absent, the activation
 // experiment is not enabled, or no notes have been accessed.
@@ -35,13 +31,17 @@ func computeActivationScores(ctx context.Context, similarities map[string]float6
 		log.Warn().Str("variant", actDef.Primary).Msg("unrecognized activation variant; skipping activation scoring")
 		return nil
 	}
-	params := experiment.DefaultActivationParams(gamma)
+	var params experiment.ActivationParams
 	if similarities != nil {
+		// Similarity-available: use the factory that sets the spreading-
+		// activation Delta by default; user-config override (delta > 0) wins.
+		params = experiment.DefaultActivationParamsWithSimilarity(gamma)
 		if delta > 0 {
 			params.Delta = delta
-		} else {
-			params.Delta = defaultActivationDelta
 		}
+	} else {
+		// No similarities fed in — Delta stays 0 (baseline ACT-R).
+		params = experiment.DefaultActivationParams(gamma)
 	}
 	accessedNotes, err := session.DB.AccessedNoteIDs()
 	if err != nil {
