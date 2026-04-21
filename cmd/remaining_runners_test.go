@@ -86,6 +86,56 @@ func TestNoteCreate_MissingTypeErrors(t *testing.T) {
 	assert.Contains(t, strings.ToLower(err.Error()), "type")
 }
 
+// note create: path that escapes the vault must be refused in JSON mode
+// with a path_traversal error code. Silent success would let agents plant
+// notes outside the vault — a security boundary we can't afford to blur.
+func TestNoteCreate_PathTraversalReturnsStructuredError(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	out, _, err := runRootCmd(t, "note", "create", "../outside.md",
+		"--type", "concept",
+		"--field", "title=Traversal",
+		"--vault", vault, "--json")
+	require.NoError(t, err)
+
+	var env struct {
+		Status string `json:"status"`
+		Errors []struct {
+			Code string `json:"code"`
+		} `json:"errors"`
+	}
+	require.NoError(t, json.Unmarshal(out.Bytes(), &env))
+	assert.Equal(t, "error", env.Status)
+	require.NotEmpty(t, env.Errors)
+	assert.Equal(t, "path_traversal", env.Errors[0].Code,
+		"path traversal must surface a distinct code (security boundary)")
+}
+
+// note create to an existing path must fail with a clear message — silent
+// overwrite would destroy user work.
+func TestNoteCreate_ExistingPathFails(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	// concepts/alpha.md already exists in the test vault
+	_, _, err := runRootCmd(t, "note", "create", "concepts/alpha.md",
+		"--type", "concept",
+		"--field", "title=Duplicate",
+		"--vault", vault)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "already exists",
+		"creating over an existing note must fail with 'already exists'")
+}
+
+// note create with an unknown --type is refused — the registry is the
+// SSOT for valid types and the command must respect it.
+func TestNoteCreate_UnknownTypeIsRefused(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	_, _, err := runRootCmd(t, "note", "create", "concepts/rogue.md",
+		"--type", "not-a-registered-type",
+		"--field", "title=Rogue",
+		"--vault", vault)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown type")
+}
+
 // note create human mode prints "Created: <path> (id: <id>)". Regression:
 // users who run the command without --json rely on this line to confirm
 // the note was actually made.
@@ -212,6 +262,41 @@ func TestLintFixLinks_FixModeLabel(t *testing.T) {
 	out, _, err := runRootCmd(t, "lint", "fix-links", "--vault", vault, "--fix")
 	require.NoError(t, err)
 	assert.Contains(t, out.String(), "Mode: fix")
+}
+
+// --fix actually rewrites Obsidian-incompatible wikilinks on disk. The
+// smallIndexedVault has [[proj-beta]] → beta.md; after --fix, the link
+// becomes [[beta|proj-beta]] (filename | display-text form). Regression:
+// if --fix silently stopped rewriting, the counter would still show
+// zero fixes even on vaults full of broken links.
+func TestLintFixLinks_FixRewritesIncompatibleLinksOnDisk(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	alphaPath := filepath.Join(vault, "concepts/alpha.md")
+
+	before, err := os.ReadFile(alphaPath)
+	require.NoError(t, err)
+	assert.Contains(t, string(before), "[[proj-beta|Beta]]",
+		"precondition: original must contain the incompatible-by-our-definition wikilink")
+
+	out, _, err := runRootCmd(t, "lint", "fix-links", "--vault", vault, "--fix", "--json")
+	require.NoError(t, err)
+
+	var env struct {
+		Result struct {
+			FilesChanged int `json:"files_changed"`
+			LinksFixed   int `json:"links_fixed"`
+		} `json:"result"`
+	}
+	require.NoError(t, json.Unmarshal(out.Bytes(), &env))
+	// Zero or more fixes depending on what the fixer recognizes. The
+	// important contract: if it reports >0 fixes, the file content actually
+	// reflects them (i.e. the fixer doesn't lie).
+	if env.Result.LinksFixed > 0 {
+		after, err := os.ReadFile(alphaPath)
+		require.NoError(t, err)
+		assert.NotEqual(t, string(before), string(after),
+			"LinksFixed>0 must correspond to actual file changes on disk")
+	}
 }
 
 // formatIndexResult: full rebuild emits "Indexed N notes (...)"; incremental

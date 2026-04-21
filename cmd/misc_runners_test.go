@@ -274,3 +274,21 @@ func TestAsk_ReturnsResultWithQuery(t *testing.T) {
 	assert.Equal(t, "ok", env.Status)
 	assert.NotEmpty(t, env.Result)
 }
+
+// ask on a zero-hit query in human mode must emit the keyword-only hint.
+// (Vault has no embeddings → ask auto-picks keyword mode; an unknown query
+// gives zero hits → the fallback diagnostic must fire.) Covers runAsk's
+// writeZeroHitDiagnostics invocation path end-to-end.
+func TestAsk_ZeroHitHumanModeEmitsKeywordHint(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	out, _, err := runRootCmd(t, "ask",
+		"xyzzyverylongnonexistenttermxyzzy",
+		"--vault", vault,
+		"--budget", "1000", "--max-items", "2", "--search-limit", "3")
+	require.NoError(t, err)
+	text := out.String()
+	assert.Contains(t, text, "no embeddings",
+		"zero-hit ask on a vault without embeddings must name the cause")
+	assert.Contains(t, text, "vaultmind index --embed",
+		"zero-hit ask must point at the remedy command")
+}
