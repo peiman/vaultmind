@@ -153,3 +153,59 @@ func TestExperimentReport_NoDataMessage(t *testing.T) {
 			strings.Contains(out.String(), "no experiment data"),
 		"empty DB must produce the no-data human message, got: %q", out.String())
 }
+
+// seedExperimentReportRows inserts the minimum rows DistinctVariants and
+// Report need: a session + an event + outcomes that reference a variant.
+// This makes `experiment report` on the shared DB produce a real report
+// instead of the no-data message.
+func seedExperimentReportRows(t *testing.T, db *experiment.DB) {
+	t.Helper()
+	sid, err := db.StartSession("/vault")
+	require.NoError(t, err)
+	ts := time.Now().UTC().Format(time.RFC3339)
+	_, err = db.Exec(`INSERT INTO events
+		(event_id, session_id, event_type, timestamp, vault_path, query_text, query_mode, primary_variant, event_data)
+		VALUES ('ev-r', ?, 'ask', ?, '/vault', 'q', 'hybrid', 'hybrid', '{"variants":{}}')`, sid, ts)
+	require.NoError(t, err)
+	// One outcome with variant="hybrid", rank 1 so Hit@k and MRR are non-zero
+	_, err = db.Exec(`INSERT INTO outcomes
+		(outcome_id, event_id, note_id, variant, rank, accessed_at, session_id)
+		VALUES ('out-1', 'ev-r', 'n1', 'hybrid', 1, ?, ?)`, ts, sid)
+	require.NoError(t, err)
+}
+
+// experiment report with seeded outcomes produces a populated report. A
+// broken join that drops rows would reduce the report to a no-data line
+// even when telemetry is rich — silently masking the data Peiman uses to
+// compare retrieval variants.
+func TestExperimentReport_SeededOutcomesProduceReport(t *testing.T) {
+	db, _ := seedExperimentDB(t)
+	seedExperimentReportRows(t, db)
+	require.NoError(t, db.Close())
+
+	out, _, err := runRootCmd(t, "experiment", "report", "--json")
+	require.NoError(t, err)
+
+	var env struct {
+		Status string `json:"status"`
+	}
+	require.NoError(t, json.Unmarshal(out.Bytes(), &env))
+	assert.Equal(t, "ok", env.Status)
+	assert.Contains(t, out.String(), "hybrid",
+		"report must reference the seeded variant")
+}
+
+// Human-mode seeded report triggers formatExperimentReport's table path.
+func TestExperimentReport_SeededOutcomesHumanTable(t *testing.T) {
+	db, _ := seedExperimentDB(t)
+	seedExperimentReportRows(t, db)
+	require.NoError(t, db.Close())
+
+	out, _, err := runRootCmd(t, "experiment", "report")
+	require.NoError(t, err)
+	text := out.String()
+	assert.Contains(t, text, "Experiment:")
+	assert.Contains(t, text, "Hit@")
+	assert.Contains(t, text, "MRR")
+	assert.Contains(t, text, "hybrid")
+}
