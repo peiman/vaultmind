@@ -131,6 +131,52 @@ Wrong" arc). Each of these is the single source for its constant:
 - `D=0.5, Alpha=0.6, Beta=0.4` in `DefaultActivationParams` (factory defaults).
 - `minFusionCandidates = 100` (function-local; behavior it guards is internal).
 
+## Public CLI JSON Contract
+
+Every `vaultmind` command that accepts `--json` emits an envelope with a
+**stable** public shape. Downstream consumers (Workhorse persona hook,
+chat app, custom tooling) can decode this envelope against their own
+struct definitions and trust that additive changes within a version
+won't break them.
+
+**Schema versioning:**
+- `schema_version: "v1"` — current major version. Present on every
+  envelope, every command, both `ok` and `error` statuses.
+- **Additive changes within v1 are non-breaking.** Adding a new top-level
+  or nested field, adding a new optional flag, adding a new status value
+  that the consumer already ignores — all safe.
+- **Renaming or removing a field is breaking** and requires a v1 → v2
+  bump. Consumers branch on `schema_version` at decode time.
+
+**Covered commands (contract tests in `cmd/contract_*_test.go`):**
+- `vaultmind ask --json`: `result.query`, `result.retrieval_mode`,
+  `result.top_hits[].{id,type,title,path,score}`, `result.context.target_id`
+- `vaultmind memory context-pack --json`: `result.target_id`,
+  `result.target.id`, `result.used_tokens`, `result.budget_tokens`,
+  `result.truncated`, `result.context[].{id,edge_type,body_included}`
+- `vaultmind search --json`: `result.hits[].{id,title,score}`, `result.total`
+- `vaultmind note get --json`: `result.{id,type,title}`
+
+**Text-mode contract (`vaultmind ask` without `--json`):**
+The Workhorse persona hook consumes `vaultmind ask`'s **stdout as raw
+text**. The contract is: exit code 0, non-empty stdout, `"Search:"`
+header line present, at-least-one hit ID in stdout when content matches,
+and stderr never bleeds into stdout. See `cmd/contract_ask_test.go`.
+
+**Changing the contract:**
+1. Rename or remove a field → bump `schema_version` (see
+   `internal/envelope/envelope.go`).
+2. Update every contract-test struct in `cmd/contract_types_test.go`.
+3. Document the migration in this section (old field → new field).
+4. Coordinate with downstream consumers BEFORE merging — Workhorse lives
+   outside this repo; a breaking change strands it.
+
+**Current external consumers:**
+- Workhorse persona hook: `~/dev/workhorse/.claude/scripts/load-persona.sh`
+  — consumes `vaultmind ask` **text output**.
+- VaultMind's own identity hook: `.claude/scripts/load-persona.sh` —
+  same text-output pattern.
+
 **If `task check` fails:** Fix the issue, don't work around it.
 - Format issues → `task format`
 - Lint issues → Read output and fix code
