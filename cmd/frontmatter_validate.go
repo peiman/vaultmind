@@ -22,27 +22,24 @@ func init() {
 
 func runFrontmatterValidate(cmd *cobra.Command, _ []string) error {
 	vaultPath := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppFrontmatterVault)
-	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, "frontmatter validate")
+	live := getConfigValueWithFlags[bool](cmd, "live", config.KeyAppFrontmatterLive)
+	jsonOut := getConfigValueWithFlags[bool](cmd, "json", config.KeyAppFrontmatterJson)
+
+	result, indexHash, err := runValidation(cmd, vaultPath, live)
 	if err != nil {
 		if errors.Is(err, cmdutil.ErrAlreadyWritten) {
 			return nil
 		}
 		return err
 	}
-	defer vdb.Close()
 
-	result, err := query.Validate(vdb.DB, vdb.Reg)
-	if err != nil {
-		return fmt.Errorf("validating: %w", err)
-	}
-
-	if getConfigValueWithFlags[bool](cmd, "json", config.KeyAppFrontmatterJson) {
+	if jsonOut {
 		env := envelope.OK("frontmatter validate", result)
 		if len(result.Issues) > 0 {
 			env.Status = "warning"
 		}
 		env.Meta.VaultPath = vaultPath
-		env.Meta.IndexHash = vdb.GetIndexHash()
+		env.Meta.IndexHash = indexHash
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(env)
 	}
 
@@ -57,4 +54,31 @@ func runFrontmatterValidate(cmd *cobra.Command, _ []string) error {
 		}
 	}
 	return nil
+}
+
+// runValidation dispatches to either live (raw .md) or indexed validation and
+// returns the result plus an index hash (empty string in live mode).
+func runValidation(cmd *cobra.Command, vaultPath string, live bool) (*query.ValidateResult, string, error) {
+	if live {
+		reg, err := cmdutil.LoadRegistry(vaultPath)
+		if err != nil {
+			return nil, "", fmt.Errorf("loading registry: %w", err)
+		}
+		res, err := query.ValidateLive(vaultPath, reg)
+		if err != nil {
+			return nil, "", fmt.Errorf("validating: %w", err)
+		}
+		return res, "", nil
+	}
+
+	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, "frontmatter validate")
+	if err != nil {
+		return nil, "", err
+	}
+	defer vdb.Close()
+	res, err := query.Validate(vdb.DB, vdb.Reg)
+	if err != nil {
+		return nil, "", fmt.Errorf("validating: %w", err)
+	}
+	return res, vdb.GetIndexHash(), nil
 }
