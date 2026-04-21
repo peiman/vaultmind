@@ -64,6 +64,23 @@ func TestDoctor_HumanOutputNamesEmbedRemedy(t *testing.T) {
 		"doctor must print the exact remedy command users should run")
 }
 
+// doctor human output surfaces the Obsidian-incompatible link section when
+// any are detected. Losing this printing would mean users who run `doctor`
+// never see what's wrong — the diagnostic is there in JSON but invisible
+// at the terminal.
+func TestDoctor_HumanOutputSurfacesObsidianIncompatibleLinks(t *testing.T) {
+	// buildIndexedTestVault has [[proj-beta]] → beta.md which creates an
+	// incompatible link (proj-beta != beta).
+	vault := buildIndexedTestVault(t)
+	out, _, err := runRootCmd(t, "doctor", "--vault", vault)
+	require.NoError(t, err)
+	text := out.String()
+	assert.Contains(t, text, "Obsidian-incompatible links",
+		"the section header must appear when any exist")
+	assert.Contains(t, text, "proj-beta",
+		"the specific incompatible target must be named so the user can fix it")
+}
+
 // writeEmbeddingStatus unit-level contract: nil input is a no-op, semantic
 // ready renders counts, semantic-not-ready renders the remedy line.
 func TestWriteEmbeddingStatus_NilInputIsNoop(t *testing.T) {
