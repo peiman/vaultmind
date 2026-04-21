@@ -20,7 +20,7 @@ import (
 // meaningful implementations.
 type stubEmbedder struct{}
 
-func (stubEmbedder) Embed(context.Context, string) ([]float32, error)       { return nil, nil }
+func (stubEmbedder) Embed(context.Context, string) ([]float32, error)          { return nil, nil }
 func (stubEmbedder) EmbedBatch(context.Context, []string) ([][]float32, error) { return nil, nil }
 func (stubEmbedder) Dims() int                                                 { return 0 }
 func (stubEmbedder) Close() error                                              { return nil }
@@ -169,8 +169,8 @@ func TestDataviewLint_CleanVaultReportsValid(t *testing.T) {
 	var env struct {
 		Status string `json:"status"`
 		Result struct {
-			FilesChecked int `json:"files_checked"`
-			Valid        int `json:"valid"`
+			FilesChecked int   `json:"files_checked"`
+			Valid        int   `json:"valid"`
 			Issues       []any `json:"issues"`
 		} `json:"result"`
 	}

@@ -19,10 +19,11 @@ import (
 // each test targets behavior, not scaffolding.
 //
 // Vault shape:
-//   concepts/alpha.md     type=concept, links to project beta
-//   concepts/gamma.md     type=concept, no links
-//   projects/beta.md      type=project status=active, links to concept alpha
-//   unstructured.md       no id/type (should be ignored by domain queries)
+//
+//	concepts/alpha.md     type=concept, links to project beta
+//	concepts/gamma.md     type=concept, no links
+//	projects/beta.md      type=project status=active, links to concept alpha
+//	unstructured.md       no id/type (should be ignored by domain queries)
 func buildIndexedTestVault(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()

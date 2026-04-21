@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/index"
+	"github.com/peiman/vaultmind/internal/memory"
 	"github.com/peiman/vaultmind/internal/query"
 	"github.com/peiman/vaultmind/internal/vault"
 	"github.com/stretchr/testify/assert"
@@ -163,6 +164,30 @@ func TestRunResolve_KnownIDRoundTrips(t *testing.T) {
 	assert.Contains(t, buf.String(), "concept-alpha")
 }
 
+// Human-mode path: unknown input prints "No match for" so terminal users
+// get a clear signal.
+func TestRunResolve_HumanModeNoMatchMessage(t *testing.T) {
+	db, dir := smallIndexedVault(t)
+	var buf bytes.Buffer
+	err := query.RunResolve(db, "no-such-id", dir, false, &buf)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), `No match for "no-such-id"`)
+}
+
+// Human-mode path with a known input prints one row per match. The format
+// uses fixed columns (id, type, title, path) that scripts pipe through awk.
+func TestRunResolve_HumanModeFormatRow(t *testing.T) {
+	db, dir := smallIndexedVault(t)
+	var buf bytes.Buffer
+	err := query.RunResolve(db, "concept-alpha", dir, false, &buf)
+	require.NoError(t, err)
+	out := buf.String()
+	assert.Contains(t, out, "concept-alpha")
+	assert.Contains(t, out, "concept")
+	assert.Contains(t, out, "Alpha")
+	assert.Contains(t, out, "alpha.md")
+}
+
 // RunLinks in-direction: alpha must have beta as an inbound source (beta
 // references alpha via both wikilink and related_ids).
 func TestRunLinks_InDirectionFindsInboundEdge(t *testing.T) {
@@ -223,6 +248,67 @@ func TestBuildAutoRetriever_FallsBackToKeywordWithoutEmbeddings(t *testing.T) {
 	assert.Nil(t, r.Embedder, "no embeddings in the small test vault → Embedder must be nil")
 }
 
+// BuildAutoRetriever (non-Full variant) delegates to Full and must return
+// a non-nil retriever + safe-to-call cleanup.
+func TestBuildAutoRetriever_ReturnsNonNilRetrieverAndSafeCleanup(t *testing.T) {
+	db, _ := smallIndexedVault(t)
+	ret, cleanup, err := query.BuildAutoRetriever(db)
+	require.NoError(t, err)
+	assert.NotNil(t, ret)
+	require.NotNil(t, cleanup, "cleanup must always be non-nil (documented contract)")
+	cleanup() // must not panic
+}
+
+// BuildRetriever: keyword mode is always valid (no embeddings needed).
+func TestBuildRetriever_KeywordModeDoesNotRequireEmbeddings(t *testing.T) {
+	db, _ := smallIndexedVault(t)
+	ret, cleanup, err := query.BuildRetriever("keyword", db)
+	require.NoError(t, err)
+	assert.NotNil(t, ret)
+	if cleanup != nil {
+		cleanup()
+	}
+}
+
+// BuildRetriever: empty string is treated as "keyword" (default path).
+func TestBuildRetriever_EmptyModeTreatedAsKeyword(t *testing.T) {
+	db, _ := smallIndexedVault(t)
+	ret, cleanup, err := query.BuildRetriever("", db)
+	require.NoError(t, err)
+	assert.NotNil(t, ret)
+	if cleanup != nil {
+		cleanup()
+	}
+}
+
+// BuildRetriever: semantic mode on a vault without embeddings errors with
+// a clear message pointing at the remedy command.
+func TestBuildRetriever_SemanticWithoutEmbeddingsErrors(t *testing.T) {
+	db, _ := smallIndexedVault(t)
+	_, _, err := query.BuildRetriever("semantic", db)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no embeddings")
+}
+
+// BuildRetriever: hybrid mode on a vault without embeddings errors the
+// same way as semantic (both require dense vectors).
+func TestBuildRetriever_HybridWithoutEmbeddingsErrors(t *testing.T) {
+	db, _ := smallIndexedVault(t)
+	_, _, err := query.BuildRetriever("hybrid", db)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no embeddings")
+}
+
+// BuildRetriever: unknown mode errors with a helpful message listing the
+// valid options — a silent fallback would hide typos.
+func TestBuildRetriever_UnknownModeErrors(t *testing.T) {
+	db, _ := smallIndexedVault(t)
+	_, _, err := query.BuildRetriever("fuzzy", db)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "fuzzy")
+	assert.Contains(t, err.Error(), "keyword")
+}
+
 // Truncate: precise contract — shorter than limit returns the string
 // unchanged; equal to limit returns it unchanged; longer returns the first
 // maxLen runes + "..." (so the final length is maxLen + 3). Off-by-one here
@@ -250,4 +336,70 @@ func TestFormatAsk_HumanOutputCarriesHits(t *testing.T) {
 	out := buf.String()
 	assert.Contains(t, out, "concept-alpha")
 	assert.Contains(t, out, "Alpha")
+}
+
+// FormatAsk with a context pack attached must render the target's
+// type+title and each context item. The context section is the critical
+// output for agents that use `ask` as a retrieval front-end — losing it
+// drops the whole "why this answer" explanation.
+func TestFormatAsk_RendersTargetAndContextItems(t *testing.T) {
+	r := &query.AskResult{
+		Query: "what is alpha",
+		TopHits: []query.ScoredResult{
+			{ID: "concept-alpha", Title: "Alpha", Path: "alpha.md", Score: 0.8},
+		},
+		Context: &memory.ContextPackResult{
+			TargetID:     "concept-alpha",
+			BudgetTokens: 1000, UsedTokens: 120,
+			Target: &memory.ContextPackTarget{
+				ID: "concept-alpha",
+				Frontmatter: map[string]interface{}{
+					"type": "concept", "title": "Alpha",
+				},
+				Body: "Alpha is the anchor of spreading activation.",
+			},
+			Context: []memory.ContextItem{
+				{
+					ID:           "proj-beta",
+					Frontmatter:  map[string]interface{}{"type": "project", "title": "Beta"},
+					BodyIncluded: true,
+					Body:         "Beta uses Alpha as its conceptual root.",
+				},
+			},
+		},
+	}
+	var buf bytes.Buffer
+	require.NoError(t, query.FormatAsk(r, &buf))
+	out := buf.String()
+	assert.Contains(t, out, "Context from: concept-alpha", "target ID must appear")
+	assert.Contains(t, out, "120/1000 tokens", "budget/used line must render")
+	assert.Contains(t, out, "[concept] Alpha", "target [type] title line must appear")
+	assert.Contains(t, out, "Alpha is the anchor", "target body must be rendered")
+	assert.Contains(t, out, "[project] Beta", "each context item's [type] title must appear")
+	assert.Contains(t, out, "Beta uses Alpha", "context item body included when BodyIncluded=true")
+}
+
+// Context items with BodyIncluded=false must NOT leak their body into the
+// output. This is the slim-mode contract consumers rely on.
+func TestFormatAsk_SlimContextItemOmitsBody(t *testing.T) {
+	r := &query.AskResult{
+		Query: "q",
+		Context: &memory.ContextPackResult{
+			TargetID: "concept-alpha",
+			Context: []memory.ContextItem{
+				{
+					ID:           "proj-beta",
+					Frontmatter:  map[string]interface{}{"type": "project", "title": "Beta"},
+					BodyIncluded: false,
+					Body:         "SECRET BODY TEXT MUST NOT APPEAR",
+				},
+			},
+		},
+	}
+	var buf bytes.Buffer
+	require.NoError(t, query.FormatAsk(r, &buf))
+	out := buf.String()
+	assert.Contains(t, out, "[project] Beta")
+	assert.NotContains(t, out, "SECRET BODY TEXT",
+		"BodyIncluded=false must keep the body out of the rendered output")
 }
