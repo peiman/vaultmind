@@ -222,6 +222,14 @@ Modes: `explicit` (high-confidence edges only), `inferred` (medium/low only), `m
 }
 ```
 
+**`--live` flag:** Validates raw `.md` files on disk instead of the indexed
+database. Use when you want to catch schema drift introduced by external
+edits *before* the next `vaultmind index` run — for example, before
+committing a batch of hand-edited notes. Live mode evaluates the same
+rules as the default mode (`unknown_type`, `missing_required_field`,
+`invalid_status`), plus `invalid_frontmatter` for unparseable YAML, and
+skips `broken_reference` (which requires the indexed link graph).
+
 ## `frontmatter set` (with `--dry-run --diff`)
 
 ```json

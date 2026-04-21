@@ -59,13 +59,20 @@ Architecture        → validate:defaults, commands, constants, task-naming,
 Security Scanning   → check:secrets, check:sast
 Dependencies        → check:deps, check:license, check:sbom:vulns
 Tests               → test:full (unit + integration + race detection)
+Coverage floor      → ≥85% project coverage (check-coverage-project.sh)
 ```
+
+**Coverage gate enforced:** `task check` fails if project coverage drops below
+85%. The script excludes integration-only or demo code (`_tui.go`,
+`internal/embedding/`, `cmd/dev_progress.go`, `cmd/check.go`) — all documented
+in `.ckeletin/scripts/check-coverage-project.sh`. Future work: push embedding
+coverage up and narrow the exclusion list.
 
 **If `task check` fails:** Fix the issue, don't work around it.
 - Format issues → `task format`
 - Lint issues → Read output and fix code
 - Test failures → Debug and fix tests
-- Coverage drops → Add more tests
+- Coverage drops → Add more tests (gate is 85% project floor)
 
 ## Code Organization
 
