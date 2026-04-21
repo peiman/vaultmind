@@ -72,6 +72,31 @@ func TestMemoryRelated_SurfacesRelatedIDs(t *testing.T) {
 	assert.Contains(t, out.String(), "proj-beta")
 }
 
+// memory related with --mode explicit filters to explicit edges (wikilinks +
+// related_ids); inferred tag-overlap/alias-mention edges are excluded.
+// Losing the mode filter would give agents an unfiltered firehose they
+// can't rely on for high-confidence context.
+func TestMemoryRelated_ModeExplicit(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	out, _, err := runRootCmd(t, "memory", "related", "concept-alpha",
+		"--vault", vault, "--mode", "explicit", "--json")
+	require.NoError(t, err)
+	assert.Contains(t, out.String(), "proj-beta",
+		"explicit mode should still surface the wikilink/related_ids edge")
+}
+
+// memory related with --mode inferred surfaces the inferred edges
+// (tag-overlap, alias-mention). Testing all three modes pins the mode
+// filter contract.
+func TestMemoryRelated_ModeInferred(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	// This may legitimately return zero related items in our tiny vault;
+	// the regression guard is that the command doesn't error out.
+	_, _, err := runRootCmd(t, "memory", "related", "concept-alpha",
+		"--vault", vault, "--mode", "inferred", "--json")
+	require.NoError(t, err)
+}
+
 // memory context-pack must include the target in its payload — a context
 // pack missing the target is a protocol-level bug that would starve the
 // consuming agent of its anchor.

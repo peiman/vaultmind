@@ -86,6 +86,34 @@ func TestNoteCreate_MissingTypeErrors(t *testing.T) {
 	assert.Contains(t, strings.ToLower(err.Error()), "type")
 }
 
+// note create --body piped via --body flag (not stdin) exercises the
+// direct-body path distinct from body-stdin.
+func TestNoteCreate_DirectBodyFlag(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	_, _, err := runRootCmd(t, "note", "create", "concepts/with-body.md",
+		"--type", "concept",
+		"--field", "title=WithBody",
+		"--body", "direct body text",
+		"--vault", vault)
+	require.NoError(t, err)
+	content, err := os.ReadFile(filepath.Join(vault, "concepts/with-body.md"))
+	require.NoError(t, err)
+	assert.Contains(t, string(content), "direct body text")
+}
+
+// note create in JSON mode with path traversal uses the JSON envelope
+// path — a different branch from human mode's Go error. Both must work.
+func TestNoteCreate_PathTraversalHumanModeError(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	_, _, err := runRootCmd(t, "note", "create", "../outside.md",
+		"--type", "concept",
+		"--field", "title=Escape",
+		"--vault", vault)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "traversal",
+		"human mode must surface the path traversal via Go error")
+}
+
 // note create: path that escapes the vault must be refused in JSON mode
 // with a path_traversal error code. Silent success would let agents plant
 // notes outside the vault — a security boundary we can't afford to blur.
