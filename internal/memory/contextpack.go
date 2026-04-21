@@ -57,19 +57,33 @@ type contextCandidate struct {
 	activationScore float64 // ACT-R activation score; used for secondary sort (desc)
 }
 
+// Priority tier constants for edgePriority. Lower value = higher priority
+// (closer to the target in the context-pack ranking).
+//
+// The numeric values also appear in the distance-weighted ranking formula
+// (distance*10 + priority), so the gaps between tiers encode the relative
+// cost of "one edge further away" vs "one tier weaker confidence". Don't
+// renumber without updating the distance formula.
+const (
+	PriorityExplicitRelation = 0 // frontmatter related_ids, parent_id, source_ids
+	PriorityExplicitLink     = 1 // wikilinks, markdown links, embeds
+	PriorityMediumConfidence = 2 // inferred edges with medium confidence
+	PriorityLowConfidence    = 3 // inferred edges below medium
+)
+
 // edgePriority returns the sort priority for an edge type and confidence.
-// explicit_relation(0) > explicit_link/embed(1) > medium confidence(2) > low confidence(3)
+// Lower value = higher priority. See the Priority* constants above.
 func edgePriority(edgeType, confidence string) int {
 	if edgeType == "explicit_relation" {
-		return 0
+		return PriorityExplicitRelation
 	}
 	if edgeType == "explicit_link" || edgeType == "explicit_embed" {
-		return 1
+		return PriorityExplicitLink
 	}
 	if confidence == "medium" {
-		return 2
+		return PriorityMediumConfidence
 	}
-	return 3
+	return PriorityLowConfidence
 }
 
 // ContextPack resolves the input, loads the target note, and fills a token budget
