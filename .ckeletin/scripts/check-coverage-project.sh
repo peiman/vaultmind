@@ -31,6 +31,9 @@ fi
 #   - internal/check/executor.go: TUI executor (split from check_tui.go)
 #   - internal/check/summary.go: TUI summary rendering (split from check_tui.go)
 #   - /demo/: Demo code for documentation
+#   - internal/embedding/: ONNX/hugot model inference — exercised in integration
+#     tests with real model files, not unit-testable in CI without the runtime.
+#     Tracked for future improvement (see AGENTS.md / roadmap).
 
 # Calculate per-package coverage from go test output.
 #
@@ -57,7 +60,8 @@ while IFS= read -r line; do
     # Skip mode line, TUI, and demo code
     if [[ "$line" == mode:* ]] || [[ "$line" == *"_tui.go"* ]] || [[ "$line" == *"/demo/"* ]] \
        || [[ "$line" == *"internal/check/executor.go"* ]] \
-       || [[ "$line" == *"internal/check/summary.go"* ]]; then
+       || [[ "$line" == *"internal/check/summary.go"* ]] \
+       || [[ "$line" == *"internal/embedding/"* ]]; then
         continue
     fi
 
