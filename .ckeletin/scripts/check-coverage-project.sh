@@ -87,7 +87,7 @@ if [ "$total_statements" -eq 0 ]; then
     exit 1
 fi
 
-total_coverage=$(echo "scale=1; $covered_statements * 100 / $total_statements" | bc -l)
+total_coverage=$(echo "scale=2; $covered_statements * 100 / $total_statements" | bc -l)
 
 # Compare coverage (using bc for floating point comparison)
 if command -v bc &> /dev/null; then
@@ -97,7 +97,7 @@ else
     result=$(awk -v tc="$total_coverage" -v min="$MIN_COVERAGE" 'BEGIN {print (tc >= min)}')
 fi
 
-echo "📊 Project Coverage: ${total_coverage}%"
+printf "📊 Project Coverage: %s%% (%d/%d statements)\n" "${total_coverage}" "${covered_statements}" "${total_statements}"
 echo "🎯 Minimum Required: ${MIN_COVERAGE}%"
 
 if [ "$result" -eq 1 ]; then
