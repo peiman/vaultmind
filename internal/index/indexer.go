@@ -16,19 +16,30 @@ import (
 
 // IndexResult holds the outcome of an index rebuild.
 type IndexResult struct {
-	DBPath            string `json:"db_path"`
-	Indexed           int    `json:"indexed"`
-	DomainNotes       int    `json:"domain_notes"`
-	UnstructuredNotes int    `json:"unstructured_notes"`
-	Errors            int    `json:"errors"`
-	Skipped           int    `json:"skipped"`
-	DuplicateIDs      int    `json:"duplicate_ids"`
-	Added             int    `json:"added"`
-	Updated           int    `json:"updated"`
-	Deleted           int    `json:"deleted"`
-	FullRebuild       bool   `json:"full_rebuild"`
-	DurationMs        int64  `json:"duration_ms"`
-	CompletedAt       string `json:"completed_at"`
+	DBPath            string       `json:"db_path"`
+	Indexed           int          `json:"indexed"`
+	DomainNotes       int          `json:"domain_notes"`
+	UnstructuredNotes int          `json:"unstructured_notes"`
+	Errors            int          `json:"errors"`
+	Skipped           int          `json:"skipped"`
+	DuplicateIDs      int          `json:"duplicate_ids"`
+	Added             int          `json:"added"`
+	Updated           int          `json:"updated"`
+	Deleted           int          `json:"deleted"`
+	FullRebuild       bool         `json:"full_rebuild"`
+	DurationMs        int64        `json:"duration_ms"`
+	CompletedAt       string       `json:"completed_at"`
+	ErrorDetails      []IndexError `json:"error_details,omitempty"`
+}
+
+// IndexError names a specific per-file failure during Rebuild or
+// Incremental. The counter in IndexResult.Errors tells you *how many*
+// files failed; ErrorDetails tells you WHICH files and WHY — without it,
+// a partial-index failure is an unactionable number (manifesto #3).
+type IndexError struct {
+	Path  string `json:"path"`
+	Kind  string `json:"kind"` // "read" | "parse" | "store"
+	Error string `json:"error"`
 }
 
 // EmbedResult holds the outcome of an embedding pass.
@@ -106,15 +117,21 @@ func (idx *Indexer) Rebuild() (*IndexResult, error) {
 	for _, file := range files {
 		content, readErr := os.ReadFile(file.AbsPath)
 		if readErr != nil {
-			log.Debug().Err(readErr).Str("path", file.RelPath).Msg("skipping unreadable file")
+			log.Warn().Err(readErr).Str("path", file.RelPath).Msg("skipping unreadable file")
 			result.Errors++
+			result.ErrorDetails = append(result.ErrorDetails, IndexError{
+				Path: file.RelPath, Kind: "read", Error: readErr.Error(),
+			})
 			continue
 		}
 
 		parsed, parseErr := parser.Parse(content)
 		if parseErr != nil {
-			log.Debug().Err(parseErr).Str("path", file.RelPath).Msg("skipping unparseable file")
+			log.Warn().Err(parseErr).Str("path", file.RelPath).Msg("skipping unparseable file")
 			result.Errors++
+			result.ErrorDetails = append(result.ErrorDetails, IndexError{
+				Path: file.RelPath, Kind: "parse", Error: parseErr.Error(),
+			})
 			continue
 		}
 
@@ -146,8 +163,11 @@ func (idx *Indexer) Rebuild() (*IndexResult, error) {
 
 	for _, pf := range records {
 		if storeErr := StoreNoteInTx(tx, pf.rec); storeErr != nil {
-			log.Debug().Err(storeErr).Str("path", pf.path).Msg("skipping file with store error")
+			log.Warn().Err(storeErr).Str("path", pf.path).Msg("skipping file with store error")
 			result.Errors++
+			result.ErrorDetails = append(result.ErrorDetails, IndexError{
+				Path: pf.path, Kind: "store", Error: storeErr.Error(),
+			})
 			continue
 		}
 
@@ -266,8 +286,11 @@ func (idx *Indexer) Incremental() (*IndexResult, error) {
 		// Mtime changed or new file — must read and hash
 		content, readErr := os.ReadFile(file.AbsPath) //nolint:gosec // vault path is trusted
 		if readErr != nil {
-			log.Debug().Err(readErr).Str("path", file.RelPath).Msg("skipping unreadable file")
+			log.Warn().Err(readErr).Str("path", file.RelPath).Msg("skipping unreadable file")
 			result.Errors++
+			result.ErrorDetails = append(result.ErrorDetails, IndexError{
+				Path: file.RelPath, Kind: "read", Error: readErr.Error(),
+			})
 			continue
 		}
 
@@ -277,6 +300,8 @@ func (idx *Indexer) Incremental() (*IndexResult, error) {
 		// Hash unchanged — just update mtime, skip parse
 		if ok && hash == info.Hash {
 			if mtErr := db.UpdateMTime(file.RelPath, file.ModTime.Unix()); mtErr != nil {
+				// mtime update is a performance optimization only — the file will
+				// just get re-hashed next run. Keep at Debug: not a lost memory.
 				log.Debug().Err(mtErr).Str("path", file.RelPath).Msg("failed to update mtime")
 			}
 			result.Skipped++
@@ -285,15 +310,21 @@ func (idx *Indexer) Incremental() (*IndexResult, error) {
 
 		parsed, parseErr := parser.Parse(content)
 		if parseErr != nil {
-			log.Debug().Err(parseErr).Str("path", file.RelPath).Msg("skipping unparseable file")
+			log.Warn().Err(parseErr).Str("path", file.RelPath).Msg("skipping unparseable file")
 			result.Errors++
+			result.ErrorDetails = append(result.ErrorDetails, IndexError{
+				Path: file.RelPath, Kind: "parse", Error: parseErr.Error(),
+			})
 			continue
 		}
 
 		rec := buildNoteRecord(file, content, parsed)
 		if storeErr := StoreNote(db, rec); storeErr != nil {
-			log.Debug().Err(storeErr).Str("path", file.RelPath).Msg("skipping file with store error")
+			log.Warn().Err(storeErr).Str("path", file.RelPath).Msg("skipping file with store error")
 			result.Errors++
+			result.ErrorDetails = append(result.ErrorDetails, IndexError{
+				Path: file.RelPath, Kind: "store", Error: storeErr.Error(),
+			})
 			continue
 		}
 
@@ -308,8 +339,11 @@ func (idx *Indexer) Incremental() (*IndexResult, error) {
 	for storedPath := range stored {
 		if !diskPaths[storedPath] {
 			if delErr := DeleteNoteByPath(db, storedPath); delErr != nil {
-				log.Debug().Err(delErr).Str("path", storedPath).Msg("failed to delete orphaned note")
+				log.Warn().Err(delErr).Str("path", storedPath).Msg("failed to delete orphaned note")
 				result.Errors++
+				result.ErrorDetails = append(result.ErrorDetails, IndexError{
+					Path: storedPath, Kind: "delete", Error: delErr.Error(),
+				})
 				continue
 			}
 			result.Deleted++
