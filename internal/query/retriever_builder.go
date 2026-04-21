@@ -130,7 +130,7 @@ func buildHybridRetriever(db *index.DB) (Retriever, embedding.Embedder, func(), 
 			f()
 		}
 	}
-	return &HybridRetriever{Retrievers: retrievers, K: 60}, embedder, cleanup, nil
+	return &HybridRetriever{Retrievers: retrievers, K: DefaultRRFK}, embedder, cleanup, nil
 }
 
 func newDefaultEmbedder() (*embedding.HugotEmbedder, error) {

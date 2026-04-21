@@ -9,13 +9,19 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// DefaultRRFK is the Reciprocal Rank Fusion smoothing constant from the
+// original RRF paper. Applied when HybridRetriever.K is zero-value.
+// Tuning this value shifts every hybrid retrieval's ranking; it lives
+// here so there's one home to reason about.
+const DefaultRRFK = 60
+
 // HybridRetriever fuses results from N retrievers using Reciprocal Rank Fusion.
 // Sub-retrievers are named so each note's Components map reports which
 // sub-retriever contributed what — useful for studying the 4-way RRF
 // contribution ("what did FTS add here vs dense?") during research.
 type HybridRetriever struct {
 	Retrievers []NamedRetriever
-	K          int // RRF constant, default 60
+	K          int // RRF smoothing constant; zero-value falls back to DefaultRRFK
 }
 
 type rrfEntry struct {
@@ -28,7 +34,7 @@ type rrfEntry struct {
 func (h *HybridRetriever) Search(ctx context.Context, query string, limit, offset int, filters index.SearchFilters) ([]ScoredResult, int, error) {
 	k := h.K
 	if k <= 0 {
-		k = 60
+		k = DefaultRRFK
 	}
 
 	if len(h.Retrievers) == 0 {
