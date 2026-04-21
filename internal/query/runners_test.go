@@ -188,6 +188,81 @@ func TestRunResolve_HumanModeFormatRow(t *testing.T) {
 	assert.Contains(t, out, "alpha.md")
 }
 
+// RunSearch human mode prints hits with id + title. Covers the non-JSON
+// branch of query.RunSearch.
+func TestRunSearch_HumanModeCarriesHits(t *testing.T) {
+	db, dir := smallIndexedVault(t)
+	retriever := &query.FTSRetriever{DB: db}
+	var buf bytes.Buffer
+	_, err := query.RunSearch(retriever, query.SearchConfig{
+		Query: "Alpha", Limit: 5, VaultPath: dir,
+	}, &buf)
+	require.NoError(t, err)
+	out := buf.String()
+	assert.Contains(t, out, "concept-alpha", "human search output must include the matching note ID")
+}
+
+// RunNoteGet with an ambiguous input (two notes with the same title) returns
+// an "ambiguous_resolution" envelope in JSON mode. This is the path
+// AX-sensitive callers use to prompt for disambiguation.
+//
+// We can trigger ambiguity by creating two notes with the same title and
+// resolving by title. Since smallIndexedVault has unique titles, build a
+// bespoke vault here.
+func TestRunNoteGet_AmbiguousTitleReturnsCandidatesEnvelope(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".vaultmind"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".vaultmind", "config.yaml"), []byte(`
+types:
+  concept:
+    required: [title]
+`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.md"), []byte(`---
+id: c-1
+type: concept
+title: Shared Title
+---
+body
+`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "b.md"), []byte(`---
+id: c-2
+type: concept
+title: Shared Title
+---
+body
+`), 0o644))
+
+	cfg, err := vault.LoadConfig(dir)
+	require.NoError(t, err)
+	dbPath := filepath.Join(dir, cfg.Index.DBPath)
+	require.NoError(t, os.MkdirAll(filepath.Dir(dbPath), 0o755))
+	idxr := index.NewIndexer(dir, dbPath, cfg)
+	_, err = idxr.Rebuild()
+	require.NoError(t, err)
+	db, err := index.Open(dbPath)
+	require.NoError(t, err)
+	defer db.Close()
+
+	var buf bytes.Buffer
+	err = query.RunNoteGet(db, query.NoteGetConfig{
+		Input: "Shared Title", JSONOutput: true, VaultPath: dir,
+	}, &buf)
+	require.NoError(t, err)
+
+	var env struct {
+		Status string `json:"status"`
+		Errors []struct {
+			Code       string   `json:"code"`
+			Candidates []string `json:"candidates"`
+		} `json:"errors"`
+	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &env))
+	assert.Equal(t, "error", env.Status)
+	require.NotEmpty(t, env.Errors)
+	assert.Equal(t, "ambiguous_resolution", env.Errors[0].Code)
+	assert.Len(t, env.Errors[0].Candidates, 2, "ambiguous envelope must list both candidate IDs")
+}
+
 // RunLinks in-direction: alpha must have beta as an inbound source (beta
 // references alpha via both wikilink and related_ids).
 func TestRunLinks_InDirectionFindsInboundEdge(t *testing.T) {
@@ -209,6 +284,32 @@ func TestRunLinks_OutDirectionFindsOutboundEdge(t *testing.T) {
 	}, &buf)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "proj-beta")
+}
+
+// RunLinks in human mode (non-JSON) prints rows with source/edge/confidence
+// columns — scripts awk these. Covers the human-output branch of runLinksIn
+// and runLinksOut.
+func TestRunLinks_InHumanOutputHasSourceAndEdgeColumns(t *testing.T) {
+	db, dir := smallIndexedVault(t)
+	var buf bytes.Buffer
+	err := query.RunLinks(db, query.LinksConfig{
+		Input: "concept-alpha", Direction: "in", VaultPath: dir,
+	}, &buf)
+	require.NoError(t, err)
+	out := buf.String()
+	// Source must include proj-beta (which references alpha)
+	assert.Contains(t, out, "proj-beta")
+}
+
+func TestRunLinks_OutHumanOutputHasTargetAndEdgeColumns(t *testing.T) {
+	db, dir := smallIndexedVault(t)
+	var buf bytes.Buffer
+	err := query.RunLinks(db, query.LinksConfig{
+		Input: "concept-alpha", Direction: "out", VaultPath: dir,
+	}, &buf)
+	require.NoError(t, err)
+	out := buf.String()
+	assert.Contains(t, out, "proj-beta", "alpha's outbound target must appear in human output")
 }
 
 // RunLinks with an unresolvable input must fail fast — either via a Go
