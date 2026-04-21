@@ -1,0 +1,253 @@
+package query_test
+
+import (
+	"bytes"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/peiman/vaultmind/internal/index"
+	"github.com/peiman/vaultmind/internal/query"
+	"github.com/peiman/vaultmind/internal/vault"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// smallIndexedVault builds a 3-note temp vault and returns the open DB. The
+// notes mirror the cmd-package helper's shape (alpha, beta, gamma with
+// inbound/outbound links between alpha ↔ beta) so runner tests can target
+// realistic edge cases without paying the cost of reading the full repo
+// vault.
+func smallIndexedVault(t *testing.T) (*index.DB, string) {
+	t.Helper()
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".vaultmind"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".vaultmind", "config.yaml"), []byte(`
+types:
+  concept:
+    required: [title]
+    optional: [related_ids]
+  project:
+    required: [status, title]
+    optional: [related_ids]
+    statuses: [active]
+`), 0o644))
+
+	mustWrite := func(rel, content string) {
+		full := filepath.Join(dir, rel)
+		require.NoError(t, os.MkdirAll(filepath.Dir(full), 0o755))
+		require.NoError(t, os.WriteFile(full, []byte(content), 0o644))
+	}
+	mustWrite("alpha.md", `---
+id: concept-alpha
+type: concept
+title: Alpha
+related_ids: [proj-beta]
+---
+See [[proj-beta]].
+`)
+	mustWrite("beta.md", `---
+id: proj-beta
+type: project
+status: active
+title: Beta
+related_ids: [concept-alpha]
+---
+See [[concept-alpha]].
+`)
+	mustWrite("gamma.md", `---
+id: concept-gamma
+type: concept
+title: Gamma
+---
+Nothing linked.
+`)
+
+	cfg, err := vault.LoadConfig(dir)
+	require.NoError(t, err)
+	dbPath := filepath.Join(dir, cfg.Index.DBPath)
+	require.NoError(t, os.MkdirAll(filepath.Dir(dbPath), 0o755))
+	idxr := index.NewIndexer(dir, dbPath, cfg)
+	_, err = idxr.Rebuild()
+	require.NoError(t, err)
+	db, err := index.Open(dbPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	return db, dir
+}
+
+// RunNoteGet (JSON path) returns the requested note in the envelope result.
+// Regression: returning a different note silently would break every caller
+// that uses ID as a key.
+func TestRunNoteGet_JSONReturnsRequestedNote(t *testing.T) {
+	db, dir := smallIndexedVault(t)
+	var buf bytes.Buffer
+	err := query.RunNoteGet(db, query.NoteGetConfig{
+		Input: "concept-alpha", JSONOutput: true, VaultPath: dir,
+	}, &buf)
+	require.NoError(t, err)
+	var env struct {
+		Status string `json:"status"`
+		Result struct {
+			ID    string `json:"id"`
+			Title string `json:"title"`
+		} `json:"result"`
+	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &env))
+	assert.Equal(t, "ok", env.Status)
+	assert.Equal(t, "concept-alpha", env.Result.ID)
+	assert.Equal(t, "Alpha", env.Result.Title)
+}
+
+// Unknown ID path emits an error envelope with "not_found" — structured so
+// callers can branch on the code, not a raw text message.
+func TestRunNoteGet_UnknownIDEmitsNotFoundEnvelope(t *testing.T) {
+	db, dir := smallIndexedVault(t)
+	var buf bytes.Buffer
+	err := query.RunNoteGet(db, query.NoteGetConfig{
+		Input: "nope", JSONOutput: true, VaultPath: dir,
+	}, &buf)
+	require.NoError(t, err)
+
+	var env struct {
+		Status string `json:"status"`
+		Errors []struct {
+			Code string `json:"code"`
+		} `json:"errors"`
+	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &env))
+	assert.Equal(t, "error", env.Status)
+	require.NotEmpty(t, env.Errors)
+	assert.Equal(t, "not_found", env.Errors[0].Code)
+}
+
+// FrontmatterOnly strips body, headings, blocks from the response — caller
+// scripts rely on this to keep payloads small.
+func TestRunNoteGet_FrontmatterOnlyStripsBody(t *testing.T) {
+	db, dir := smallIndexedVault(t)
+	var buf bytes.Buffer
+	err := query.RunNoteGet(db, query.NoteGetConfig{
+		Input: "concept-alpha", FrontmatterOnly: true, JSONOutput: true, VaultPath: dir,
+	}, &buf)
+	require.NoError(t, err)
+	var env struct {
+		Result struct {
+			Body string `json:"body"`
+		} `json:"result"`
+	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &env))
+	assert.Empty(t, env.Result.Body, "FrontmatterOnly must strip body")
+}
+
+// Human mode: a short one-liner identifying the note.
+func TestRunNoteGet_HumanModeOneLiner(t *testing.T) {
+	db, dir := smallIndexedVault(t)
+	var buf bytes.Buffer
+	err := query.RunNoteGet(db, query.NoteGetConfig{
+		Input: "concept-alpha", VaultPath: dir,
+	}, &buf)
+	require.NoError(t, err)
+	out := buf.String()
+	assert.Contains(t, out, "concept-alpha")
+	assert.Contains(t, out, "Alpha")
+	assert.Contains(t, out, "concept")
+}
+
+// RunResolve: a known ID resolves to itself (identity round-trip).
+func TestRunResolve_KnownIDRoundTrips(t *testing.T) {
+	db, dir := smallIndexedVault(t)
+	var buf bytes.Buffer
+	err := query.RunResolve(db, "concept-alpha", dir, true, &buf)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "concept-alpha")
+}
+
+// RunLinks in-direction: alpha must have beta as an inbound source (beta
+// references alpha via both wikilink and related_ids).
+func TestRunLinks_InDirectionFindsInboundEdge(t *testing.T) {
+	db, dir := smallIndexedVault(t)
+	var buf bytes.Buffer
+	err := query.RunLinks(db, query.LinksConfig{
+		Input: "concept-alpha", Direction: "in", VaultPath: dir, JSONOutput: true,
+	}, &buf)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "proj-beta")
+}
+
+// RunLinks out-direction: alpha outbound must include proj-beta.
+func TestRunLinks_OutDirectionFindsOutboundEdge(t *testing.T) {
+	db, dir := smallIndexedVault(t)
+	var buf bytes.Buffer
+	err := query.RunLinks(db, query.LinksConfig{
+		Input: "concept-alpha", Direction: "out", VaultPath: dir, JSONOutput: true,
+	}, &buf)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "proj-beta")
+}
+
+// RunLinks with an unresolvable input must fail fast — either via a Go
+// error (human mode) or an error envelope (JSON mode). Silent empty results
+// would hide resolution failures from callers.
+func TestRunLinks_UnresolvableInputErrors(t *testing.T) {
+	db, dir := smallIndexedVault(t)
+	var buf bytes.Buffer
+	err := query.RunLinks(db, query.LinksConfig{
+		Input: "does-not-exist", Direction: "in", VaultPath: dir,
+	}, &buf)
+	require.Error(t, err)
+}
+
+// RunSearch over a known token must place the matching note in the hits.
+func TestRunSearch_FindsNoteByBodyToken(t *testing.T) {
+	db, dir := smallIndexedVault(t)
+	retriever := &query.FTSRetriever{DB: db}
+	var buf bytes.Buffer
+	res, err := query.RunSearch(retriever, query.SearchConfig{
+		Query: "Alpha", Limit: 5, VaultPath: dir, JSONOutput: true,
+	}, &buf)
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	assert.NotEmpty(t, res.Hits, "keyword 'Alpha' must appear at least once")
+	// Also assert on human output shape via non-JSON mode
+}
+
+// BuildAutoRetriever must return a keyword-only retriever when there are no
+// dense embeddings present in the DB (the fallback path that keeps the CLI
+// usable without a running model).
+func TestBuildAutoRetriever_FallsBackToKeywordWithoutEmbeddings(t *testing.T) {
+	db, _ := smallIndexedVault(t)
+	r := query.BuildAutoRetrieverFull(db)
+	defer r.Cleanup()
+	assert.NotNil(t, r.Retriever)
+	assert.Nil(t, r.Embedder, "no embeddings in the small test vault → Embedder must be nil")
+}
+
+// Truncate: precise contract — shorter than limit returns the string
+// unchanged; equal to limit returns it unchanged; longer returns the first
+// maxLen runes + "..." (so the final length is maxLen + 3). Off-by-one here
+// has broken grep patterns before.
+func TestTruncate_Boundaries(t *testing.T) {
+	assert.Equal(t, "hi", query.Truncate("hi", 10), "shorter returned unchanged")
+	assert.Equal(t, "hello", query.Truncate("hello", 5), "equal length returned unchanged")
+	assert.Equal(t, "hello ...", query.Truncate("hello world", 6), "truncate keeps first N runes + ellipsis")
+	// Unicode sanity: runes, not bytes.
+	assert.Equal(t, "åäö...", query.Truncate("åäö world", 3))
+}
+
+// FormatAsk human output includes a simple header + hit lines so users can
+// read the result without --json. Losing the structure would degrade the
+// terminal UX.
+func TestFormatAsk_HumanOutputCarriesHits(t *testing.T) {
+	r := &query.AskResult{
+		Query: "what is alpha",
+		TopHits: []query.ScoredResult{
+			{ID: "concept-alpha", Title: "Alpha", Path: "alpha.md", Score: 0.8},
+		},
+	}
+	var buf bytes.Buffer
+	require.NoError(t, query.FormatAsk(r, &buf))
+	out := buf.String()
+	assert.Contains(t, out, "concept-alpha")
+	assert.Contains(t, out, "Alpha")
+}
