@@ -6,6 +6,13 @@ import (
 	"time"
 )
 
+// MinElapsedHours is the minimum effective-elapsed value substituted when
+// a note access's compressed elapsed time rounds to zero or below.
+// Expressed as 1 second in hours so it's a soft floor that still makes
+// the log(time) term in retrieval strength well-defined. Changing this
+// shifts the retrieval score for very recent accesses.
+const MinElapsedHours = 1.0 / 3600.0
+
 // SessionWindow represents a period when VaultMind was actively in use.
 type SessionWindow struct {
 	Start time.Time
@@ -76,7 +83,7 @@ func ComputeRetrieval(accessTimes []time.Time, now time.Time, windows []SessionW
 		effective := CompressedElapsed(active, idle, gamma)
 		hours := effective.Hours()
 		if hours <= 0 {
-			hours = 1.0 / 3600.0 // minimum 1 second
+			hours = MinElapsedHours
 		}
 		sum += math.Pow(hours, -d)
 	}

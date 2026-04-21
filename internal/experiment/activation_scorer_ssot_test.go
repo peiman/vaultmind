@@ -43,3 +43,11 @@ func TestDefaultActivationParams_DeltaStaysZero(t *testing.T) {
 	assert.Equal(t, 0.0, p.Delta,
 		"DefaultActivationParams must keep Delta=0 — callers opt into similarity via the other constructor")
 }
+
+// MinElapsedHours is the soft floor preventing log(0) in the retrieval
+// strength formula for very-recent accesses. Locked at 1 second (in
+// hours). Changing it shifts recent-access scores.
+func TestMinElapsedHours_IsOneSecondInHours(t *testing.T) {
+	assert.InDelta(t, 1.0/3600.0, experiment.MinElapsedHours, 1e-12,
+		"MinElapsedHours must equal 1 second in hours — changing this shifts recent-access retrieval scores")
+}
