@@ -64,6 +64,7 @@ tasks:
     desc: Run all quality checks (including VaultMind bootstrap verification)
     cmds:
       - task: ckeletin:check
+      - task: ckeletin:test:coverage:project # enforce 85% project floor (manifesto principle #9)
       - task: check:bootstrap
 
   check:bootstrap:
@@ -406,4 +407,10 @@ tasks:
     cmds:
       - task: generate:docs:config
       - task: generate:config:template
+    silent: true
+
+  memory:lint:
+    desc: Validate Claude Code memory corpus (index bijection, frontmatter, refs)
+    cmds:
+      - "$HOME/.claude/projects/-Users-peiman-dev-cli-vaultmind/memory/lint.sh"
     silent: true

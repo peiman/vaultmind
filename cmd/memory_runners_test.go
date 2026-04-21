@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -141,6 +143,55 @@ func TestMemoryContextPack_TinyBudgetTruncatesTarget(t *testing.T) {
 	assert.Equal(t, 1, env.Result.BudgetTokens)
 	assert.True(t, env.Result.Truncated,
 		"budget=1 cannot fit even frontmatter — truncated=true is the contract")
+}
+
+// memory context-pack: budget large enough for frontmatter but not body
+// forces the body-truncation path in packTargetContent. The truncated
+// body must fit the remaining budget; silent failure to truncate would
+// blow agent context windows.
+func TestMemoryContextPack_MidBudgetTruncatesBodyNotFrontmatter(t *testing.T) {
+	vault := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(vault, ".vaultmind"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(vault, ".vaultmind", "config.yaml"), []byte(`
+types:
+  concept:
+    required: [title]
+`), 0o644))
+	// ~8000 char body = ~2000 tokens
+	bigBody := strings.Repeat("the quick brown fox jumps over the lazy dog. ", 200)
+	require.NoError(t, os.WriteFile(filepath.Join(vault, "big.md"), []byte(`---
+id: concept-big
+type: concept
+title: Big Note
+---
+`+bigBody), 0o644))
+
+	// Bootstrap the index
+	_, _, err := runRootCmd(t, "index", "--vault", vault)
+	require.NoError(t, err)
+
+	// Budget 100 tokens: fits the small frontmatter but not the 2000-token
+	// body — forces packTargetContent's truncation branch.
+	out, _, err := runRootCmd(t, "memory", "context-pack", "concept-big",
+		"--vault", vault, "--budget", "100", "--max-items", "1", "--json")
+	require.NoError(t, err)
+
+	var env struct {
+		Result struct {
+			BudgetTokens int  `json:"budget_tokens"`
+			Truncated    bool `json:"truncated"`
+			Target       struct {
+				Body string `json:"body"`
+			} `json:"target"`
+		} `json:"result"`
+	}
+	require.NoError(t, json.Unmarshal(out.Bytes(), &env))
+	assert.Equal(t, 100, env.Result.BudgetTokens)
+	assert.True(t, env.Result.Truncated, "body >> budget must set Truncated=true")
+	assert.Less(t, len(env.Result.Target.Body), len(bigBody),
+		"body must be truncated to fit the remaining budget")
+	assert.Greater(t, len(env.Result.Target.Body), 0,
+		"truncated body prefix must still be included")
 }
 
 // memory context-pack human output reports a token budget line. Regression:
