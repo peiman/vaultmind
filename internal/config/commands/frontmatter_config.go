@@ -11,6 +11,7 @@ var FrontmatterValidateMetadata = config.CommandMetadata{
 	FlagOverrides: map[string]string{
 		"app.frontmatter.vault": "vault",
 		"app.frontmatter.json":  "json",
+		"app.frontmatter.live":  "live",
 	},
 }
 
@@ -19,6 +20,7 @@ func FrontmatterOptions() []config.ConfigOption {
 	return []config.ConfigOption{
 		{Key: "app.frontmatter.vault", DefaultValue: ".", Description: "Path to vault root", Type: "string"},
 		{Key: "app.frontmatter.json", DefaultValue: false, Description: "Output in JSON format", Type: "bool"},
+		{Key: "app.frontmatter.live", DefaultValue: false, Description: "Validate raw .md files on disk instead of the indexed database", Type: "bool"},
 	}
 }
 

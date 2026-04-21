@@ -68,6 +68,7 @@ const (
 	KeyExperimentsActivationDelta       = "experiments.activation.delta"        // Spreading activation weight (0.0 disables similarity component)
 	KeyAppFrontmatterVault              = "app.frontmatter.vault"               // Path to vault root
 	KeyAppFrontmatterJson               = "app.frontmatter.json"                // Output in JSON format
+	KeyAppFrontmatterLive               = "app.frontmatter.live"                // Validate raw .md files on disk instead of the indexed database
 	KeyAppFrontmattersetVault           = "app.frontmatterset.vault"            // Path to vault root
 	KeyAppFrontmattersetJson            = "app.frontmatterset.json"             // Output in JSON format
 	KeyAppFrontmattersetDryRun          = "app.frontmatterset.dry_run"          // Preview changes without writing
