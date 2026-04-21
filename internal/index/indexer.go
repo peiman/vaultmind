@@ -16,20 +16,21 @@ import (
 
 // IndexResult holds the outcome of an index rebuild.
 type IndexResult struct {
-	DBPath            string       `json:"db_path"`
-	Indexed           int          `json:"indexed"`
-	DomainNotes       int          `json:"domain_notes"`
-	UnstructuredNotes int          `json:"unstructured_notes"`
-	Errors            int          `json:"errors"`
-	Skipped           int          `json:"skipped"`
-	DuplicateIDs      int          `json:"duplicate_ids"`
-	Added             int          `json:"added"`
-	Updated           int          `json:"updated"`
-	Deleted           int          `json:"deleted"`
-	FullRebuild       bool         `json:"full_rebuild"`
-	DurationMs        int64        `json:"duration_ms"`
-	CompletedAt       string       `json:"completed_at"`
-	ErrorDetails      []IndexError `json:"error_details,omitempty"`
+	DBPath            string             `json:"db_path"`
+	Indexed           int                `json:"indexed"`
+	DomainNotes       int                `json:"domain_notes"`
+	UnstructuredNotes int                `json:"unstructured_notes"`
+	Errors            int                `json:"errors"`
+	Skipped           int                `json:"skipped"`
+	DuplicateIDs      int                `json:"duplicate_ids"`
+	Added             int                `json:"added"`
+	Updated           int                `json:"updated"`
+	Deleted           int                `json:"deleted"`
+	FullRebuild       bool               `json:"full_rebuild"`
+	DurationMs        int64              `json:"duration_ms"`
+	CompletedAt       string             `json:"completed_at"`
+	ErrorDetails      []IndexError       `json:"error_details,omitempty"`
+	PostIndexWarnings []PostIndexWarning `json:"post_index_warnings,omitempty"`
 }
 
 // IndexError names a specific per-file failure during Rebuild or
@@ -38,7 +39,18 @@ type IndexResult struct {
 // a partial-index failure is an unactionable number (manifesto #3).
 type IndexError struct {
 	Path  string `json:"path"`
-	Kind  string `json:"kind"` // "read" | "parse" | "store"
+	Kind  string `json:"kind"` // "read" | "parse" | "store" | "delete"
+	Error string `json:"error"`
+}
+
+// PostIndexWarning reports failure of a post-store pass (link resolution,
+// alias detection, tag overlap). These run after the note-store transaction
+// commits; their failure leaves a partially-connected graph the operator
+// can't distinguish from a successful run without this surface.
+//
+// Conventional Step values: "link_resolution", "alias_mention", "tag_overlap".
+type PostIndexWarning struct {
+	Step  string `json:"step"`
 	Error string `json:"error"`
 }
 
@@ -186,7 +198,10 @@ func (idx *Indexer) Rebuild() (*IndexResult, error) {
 	// Post-index: resolve body wikilinks against the notes table
 	resolved, resolveErr := ResolveLinks(db)
 	if resolveErr != nil {
-		log.Debug().Err(resolveErr).Msg("link resolution pass failed")
+		log.Warn().Err(resolveErr).Msg("link resolution pass failed — graph will be partially connected")
+		result.PostIndexWarnings = append(result.PostIndexWarnings, PostIndexWarning{
+			Step: "link_resolution", Error: resolveErr.Error(),
+		})
 	} else {
 		log.Debug().Int("resolved", resolved).Msg("link resolution complete")
 	}
@@ -194,14 +209,20 @@ func (idx *Indexer) Rebuild() (*IndexResult, error) {
 	// Compute inferred edges
 	aliasCount, aliasErr := ComputeAliasMentions(db, idx.cfg.Memory.AliasMinLength)
 	if aliasErr != nil {
-		log.Debug().Err(aliasErr).Msg("alias mention detection failed")
+		log.Warn().Err(aliasErr).Msg("alias mention detection failed — alias edges missing")
+		result.PostIndexWarnings = append(result.PostIndexWarnings, PostIndexWarning{
+			Step: "alias_mention", Error: aliasErr.Error(),
+		})
 	} else {
 		log.Debug().Int("edges", aliasCount).Msg("alias mention detection complete")
 	}
 
 	tagCount, tagErr := ComputeTagOverlap(db, idx.cfg.Memory.TagOverlapThreshold)
 	if tagErr != nil {
-		log.Debug().Err(tagErr).Msg("tag overlap detection failed")
+		log.Warn().Err(tagErr).Msg("tag overlap detection failed — tag-based edges missing")
+		result.PostIndexWarnings = append(result.PostIndexWarnings, PostIndexWarning{
+			Step: "tag_overlap", Error: tagErr.Error(),
+		})
 	} else {
 		log.Debug().Int("edges", tagCount).Msg("tag overlap detection complete")
 	}
@@ -352,7 +373,10 @@ func (idx *Indexer) Incremental() (*IndexResult, error) {
 
 	resolved, resolveErr := ResolveLinks(db)
 	if resolveErr != nil {
-		log.Debug().Err(resolveErr).Msg("link resolution failed")
+		log.Warn().Err(resolveErr).Msg("link resolution pass failed — graph will be partially connected")
+		result.PostIndexWarnings = append(result.PostIndexWarnings, PostIndexWarning{
+			Step: "link_resolution", Error: resolveErr.Error(),
+		})
 	} else {
 		log.Debug().Int("resolved", resolved).Msg("link resolution complete")
 	}
@@ -360,14 +384,20 @@ func (idx *Indexer) Incremental() (*IndexResult, error) {
 	// Compute inferred edges
 	aliasCount, aliasErr := ComputeAliasMentions(db, idx.cfg.Memory.AliasMinLength)
 	if aliasErr != nil {
-		log.Debug().Err(aliasErr).Msg("alias mention detection failed")
+		log.Warn().Err(aliasErr).Msg("alias mention detection failed — alias edges missing")
+		result.PostIndexWarnings = append(result.PostIndexWarnings, PostIndexWarning{
+			Step: "alias_mention", Error: aliasErr.Error(),
+		})
 	} else {
 		log.Debug().Int("edges", aliasCount).Msg("alias mention detection complete")
 	}
 
 	tagCount, tagErr := ComputeTagOverlap(db, idx.cfg.Memory.TagOverlapThreshold)
 	if tagErr != nil {
-		log.Debug().Err(tagErr).Msg("tag overlap detection failed")
+		log.Warn().Err(tagErr).Msg("tag overlap detection failed — tag-based edges missing")
+		result.PostIndexWarnings = append(result.PostIndexWarnings, PostIndexWarning{
+			Step: "tag_overlap", Error: tagErr.Error(),
+		})
 	} else {
 		log.Debug().Int("edges", tagCount).Msg("tag overlap detection complete")
 	}
