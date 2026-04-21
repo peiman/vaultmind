@@ -90,6 +90,57 @@ func writeTestNote(t *testing.T, vaultRoot, relPath, content string) {
 	require.NoError(t, os.WriteFile(full, []byte(content), 0o644))
 }
 
+// copyBaselineVaultToTemp copies the committed baseline fixture vault into
+// a tempdir so tests can index it without mutating the source tree. The
+// committed fixture has no index.db (SQLite files aren't committed); tests
+// that drive CLI commands must build one, and the tempdir copy is the
+// isolation boundary so concurrent tests don't race on the same DB and
+// the committed fixture stays immutable.
+func copyBaselineVaultToTemp(t *testing.T) string {
+	t.Helper()
+	src := "../test/fixtures/baseline/vault"
+	dst := t.TempDir()
+
+	err := filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(src, path)
+		target := filepath.Join(dst, rel)
+		if info.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		// Skip any stray index.db from previous dirty runs — the tempdir
+		// copy must start with no index so the test-controlled rebuild is
+		// the only index present.
+		if filepath.Base(path) == "index.db" {
+			return nil
+		}
+		content, err := os.ReadFile(path) //nolint:gosec // fixture path under testdata
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(target, content, 0o644)
+	})
+	require.NoError(t, err)
+	return dst
+}
+
+// indexedBaselineVault returns a tempdir path containing the baseline
+// fixture vault with a freshly built index.db. Use this in contract tests
+// or any CLI-level test that needs the full baseline content indexed.
+func indexedBaselineVault(t *testing.T) string {
+	t.Helper()
+	dir := copyBaselineVaultToTemp(t)
+	cfg, err := vault.LoadConfig(dir)
+	require.NoError(t, err)
+	dbPath := filepath.Join(dir, cfg.Index.DBPath)
+	require.NoError(t, os.MkdirAll(filepath.Dir(dbPath), 0o755))
+	_, err = index.NewIndexer(dir, dbPath, cfg).Rebuild()
+	require.NoError(t, err)
+	return dir
+}
+
 // runRootCmd executes RootCmd with the given args and returns stdout + stderr
 // as separate buffers, plus the execute error.
 //
