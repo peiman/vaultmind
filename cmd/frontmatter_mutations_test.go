@@ -120,6 +120,37 @@ func TestFrontmatterNormalize_PreservesDomainFields(t *testing.T) {
 	assert.Contains(t, body, "status: active")
 }
 
+// --dry-run + --diff combo emits the unified diff to stdout instead of the
+// usual "Dry run: ..." summary. The diff is what tools pipe into review
+// workflows; dropping it would break audit trails.
+func TestFrontmatterSet_DryRunWithDiffEmitsUnifiedDiff(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	out, _, err := runRootCmd(t, "frontmatter", "set", "projects/beta.md",
+		"status", "completed",
+		"--vault", vault, "--dry-run", "--diff")
+	require.NoError(t, err)
+	text := out.String()
+	// A unified diff opens with "---" / "+++" or has "-" / "+" lines per hunk.
+	assert.True(t,
+		strings.Contains(text, "+status: completed") ||
+			strings.Contains(text, "---") ||
+			strings.Contains(text, "+++"),
+		"dry-run --diff must produce unified-diff output, got %q", text)
+}
+
+// Human-mode success output has a specific shape: "set <path>: <id>". A
+// refactor that changes the format would surprise scripts that grep it.
+func TestFrontmatterSet_HumanModeSuccessLineFormat(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	out, _, err := runRootCmd(t, "frontmatter", "set", "projects/beta.md",
+		"status", "paused",
+		"--vault", vault)
+	require.NoError(t, err)
+	text := out.String()
+	assert.Contains(t, text, "set projects/beta.md")
+	assert.Contains(t, text, "proj-beta")
+}
+
 // JSON envelope must surface on a mutation error so pipelines can branch.
 // Setting a field that violates required-fields with --allow-extra=false is
 // a classic "user typed the wrong type" case.

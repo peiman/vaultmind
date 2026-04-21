@@ -152,6 +152,30 @@ func TestLintFixLinks_CleanVaultReportsNoChanges(t *testing.T) {
 	assert.Equal(t, 0, env.Result.LinksFixed)
 }
 
+// lint fix-links human output (non-JSON mode) surfaces the mode tag and the
+// three counters. Downstream scripts tail this output for a human-readable
+// audit trail.
+func TestLintFixLinks_HumanOutputShowsModeAndCounters(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	out, _, err := runRootCmd(t, "lint", "fix-links", "--vault", vault)
+	require.NoError(t, err)
+	text := out.String()
+	assert.Contains(t, text, "Mode:", "mode line must appear")
+	assert.Contains(t, text, "dry-run", "without --fix the mode is dry-run")
+	assert.Contains(t, text, "Files scanned:")
+	assert.Contains(t, text, "Files changed:")
+	assert.Contains(t, text, "Links fixed:")
+}
+
+// --fix flag switches the mode line — the script contract is that `Mode:
+// fix` is visible so operators know the action was taken.
+func TestLintFixLinks_FixModeLabel(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	out, _, err := runRootCmd(t, "lint", "fix-links", "--vault", vault, "--fix")
+	require.NoError(t, err)
+	assert.Contains(t, out.String(), "Mode: fix")
+}
+
 // formatIndexResult: full rebuild emits "Indexed N notes (...)"; incremental
 // emits the skipped/updated/added/deleted breakdown. Regression: swapping
 // the two paths would confuse the user about whether everything was rebuilt.
