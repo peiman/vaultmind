@@ -1,0 +1,4 @@
+types:
+  concept:
+    required: [title]
+    optional: [tags, related_ids]
