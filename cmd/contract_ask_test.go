@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -78,4 +79,53 @@ func TestAskTextContract_StderrIsNotInjected(t *testing.T) {
 	// "persona" which corrupts every session it fires in.
 	assert.NotContains(t, out.String(), `"level":`,
 		"stdout must not contain zerolog JSON log lines — those belong on stderr only")
+}
+
+// JSON-mode contract: consumers that opt into --json get a stable envelope
+// they can decode with their own struct definitions (see
+// contract_types_test.go). The shape of this envelope is the PUBLIC
+// CONTRACT of VaultMind's CLI — changes require a schema_version bump.
+func TestAskJSONContract_EnvelopeDecodesIntoConsumerShape(t *testing.T) {
+	vault := indexedBaselineVault(t)
+	out, _, err := runRootCmd(t, "ask", "spreading activation",
+		"--vault", vault,
+		"--max-items", "4", "--budget", "1500",
+		"--json")
+	require.NoError(t, err)
+
+	var env AskEnvelope
+	require.NoError(t, json.Unmarshal(out.Bytes(), &env),
+		"--json output MUST decode cleanly into the consumer-side AskEnvelope shape")
+
+	assert.Equal(t, "v1", env.SchemaVersion,
+		"consumers rely on schema_version to branch on major-version changes")
+	assert.Equal(t, "ok", env.Status)
+	assert.Equal(t, "spreading activation", env.Result.Query,
+		"result.query must echo the user's query — regression would lose provenance")
+	assert.NotEmpty(t, env.Result.RetrievalMode,
+		"result.retrieval_mode must be set ('hybrid' or 'keyword') — experiment telemetry branches on it")
+	require.NotEmpty(t, env.Result.TopHits,
+		"non-trivial query on the baseline vault must produce at least one hit")
+	assert.NotEmpty(t, env.Result.TopHits[0].ID,
+		"hit ID is the primary field consumers use to dereference notes")
+}
+
+// A missing-vault failure must still produce a decodable envelope with
+// status='error' when one is emitted. Consumers that pipe failures
+// through their tooling rely on the envelope shape being consistent.
+func TestAskJSONContract_ErrorEnvelopeShape(t *testing.T) {
+	out, _, _ := runRootCmd(t, "ask", "q",
+		"--vault", "/does/not/exist",
+		"--json")
+	// Some error paths return a Go error; some write the envelope and
+	// return nil (ErrAlreadyWritten). Contract holds when the envelope is present.
+	if out.Len() == 0 {
+		t.Skip("this path returned a Go error instead of writing the envelope")
+	}
+
+	var env AskEnvelope
+	require.NoError(t, json.Unmarshal(out.Bytes(), &env),
+		"error envelope must decode into the same shape as ok envelope — one shape, two statuses")
+	assert.Equal(t, "v1", env.SchemaVersion)
+	assert.Equal(t, "error", env.Status)
 }
