@@ -21,6 +21,24 @@ func DefaultActivationParams(gamma float64) ActivationParams {
 	return ActivationParams{Gamma: gamma, D: 0.5, Alpha: 0.6, Beta: 0.4, Delta: 0.0}
 }
 
+// DefaultSpreadingActivationDelta is the Delta weight applied when query
+// similarities are available to the scorer (hybrid retrieval on). The
+// value is ACT-R's standard spreading-activation contribution; use
+// DefaultActivationParamsWithSimilarity to construct a params set with
+// this value set, or DefaultActivationParams when similarities are
+// intentionally absent (Delta stays 0).
+const DefaultSpreadingActivationDelta = 0.2
+
+// DefaultActivationParamsWithSimilarity returns a params set for the
+// similarity-available case. Only Delta differs from DefaultActivationParams;
+// everything else is shared so the two constructors are swappable without
+// cascading tuning changes.
+func DefaultActivationParamsWithSimilarity(gamma float64) ActivationParams {
+	p := DefaultActivationParams(gamma)
+	p.Delta = DefaultSpreadingActivationDelta
+	return p
+}
+
 var variantGammas = map[string]float64{
 	"compressed-0.2": 0.2,
 	"compressed-0.5": 0.5,
