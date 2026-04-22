@@ -11,7 +11,7 @@ require (
 	github.com/nlpodyssey/gopickle v0.3.0
 	github.com/peiman/ckeletin-go v0.10.0
 	github.com/pressly/goose/v3 v3.27.0
-	github.com/rs/zerolog v1.35.0
+	github.com/rs/zerolog v1.35.1
 	github.com/sebdah/goldie/v2 v2.8.0
 	github.com/sergi/go-diff v1.4.0
 	github.com/spf13/cobra v1.10.2
