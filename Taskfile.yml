@@ -290,6 +290,28 @@ tasks:
     desc: Build release artifacts locally (requires git tag)
     cmds: [task: ckeletin:build:release]
 
+  # === ORT (BGE-M3) Build ===
+  # Default `task build` uses pure Go (fast to build, slow for BGE-M3 indexing).
+  # ORT build accelerates BGE-M3 from hours → ~20 min on 130 notes; see
+  # .claude/scripts/setup-ort.sh for the install it requires.
+
+  setup:ort:
+    desc: Install libtokenizers for the ORT (CGO) BGE-M3 build (idempotent)
+    cmds:
+      - bash .claude/scripts/setup-ort.sh
+
+  setup:ort:check:
+    desc: Verify ORT build dependencies are installed (non-destructive)
+    cmds:
+      - bash .claude/scripts/setup-ort.sh --check
+
+  build:ort:
+    desc: Build with -tags ORT for BGE-M3 indexing acceleration (outputs /tmp/vaultmind-ort)
+    deps: [setup:ort:check]
+    cmds:
+      - CGO_LDFLAGS="-L$(pwd)/lib" go build -tags ORT -o /tmp/vaultmind-ort .
+      - 'echo "Built /tmp/vaultmind-ort ($(du -m /tmp/vaultmind-ort | cut -f1)MB)"'
+
   # === Bench Aliases ===
 
   bench:

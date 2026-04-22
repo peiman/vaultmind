@@ -10,6 +10,9 @@ vaultmind
 # Task artifacts
 .task
 
+# ORT build dependency (downloaded via `task setup:ort`)
+lib/libtokenizers.a
+
 # Test binary, built with `go test -c`
 *.test
 
