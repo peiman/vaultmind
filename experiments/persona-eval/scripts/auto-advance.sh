@@ -34,6 +34,35 @@ CLAUDE_MD_BACKUP="$EXPERIMENT_DIR/.claude-md-backup.md"
 TRANSCRIPT_DIR="${AUTO_ADVANCE_TRANSCRIPT_DIR:-$HOME/.claude/projects/-Users-peiman-dev-cli-vaultmind}"
 FIND_TRANSCRIPT="$SCRIPT_DIR/lib/find-new-transcript.py"
 
+# notify: surface a user-visible macOS notification.
+# Hook stdout goes to the agent's context, not the user's terminal, so without
+# this the user never sees the experiment state change.
+# No-op on non-macOS or when AUTO_ADVANCE_NO_NOTIFY is set (used by tests).
+notify() {
+  local title="$1" subtitle="$2" body="$3"
+  [ -n "${AUTO_ADVANCE_NO_NOTIFY:-}" ] && return 0
+  command -v osascript >/dev/null 2>&1 || return 0
+  osascript -e "display notification \"$body\" with title \"$title\" subtitle \"$subtitle\" sound name \"Glass\"" >/dev/null 2>&1 || true
+}
+
+# Read the current session's transcript_path from stdin JSON if present.
+# Claude Code passes {"session_id","transcript_path","hook_event_name",...} on
+# stdin for SessionStart hooks. We exclude that path from new-transcript
+# detection so we never mistake the active session for a completed prior one.
+CURRENT_TRANSCRIPT=""
+if [ ! -t 0 ]; then
+  STDIN_JSON=$(cat)
+  if [ -n "$STDIN_JSON" ]; then
+    CURRENT_TRANSCRIPT=$(printf '%s' "$STDIN_JSON" | python3 -c '
+import json, sys
+try:
+    print(json.loads(sys.stdin.read()).get("transcript_path", "") or "")
+except Exception:
+    print("")
+' 2>/dev/null || echo "")
+  fi
+fi
+
 # --- No-op #1: no schedule ---
 if [ ! -f "$SCHEDULE" ]; then
   exit 0
@@ -52,6 +81,7 @@ if [ "$completed" -ge "$total" ]; then
     cp "$CLAUDE_MD_BACKUP" "$CLAUDE_MD" 2>/dev/null || true
     rm "$CLAUDE_MD_BACKUP"
   fi
+  notify "VaultMind experiment" "All sessions complete" "$completed/$total done — run score-transcripts.sh"
   echo "EXPERIMENT COMPLETE ($completed/$total). Run: bash experiments/persona-eval/scripts/score-transcripts.sh --llm openai/gpt-4o"
   exit 0
 fi
@@ -69,7 +99,11 @@ advanced="no"
 if [ -n "$started_slot" ]; then
   meta_file="$SESSIONS_DIR/session-$(printf '%02d' "$started_slot").meta.json"
   snapshot_file="$SESSIONS_DIR/session-$(printf '%02d' "$started_slot").snapshot.txt"
-  transcript=$("$FIND_TRANSCRIPT" "$TRANSCRIPT_DIR" "$snapshot_file")
+  if [ -n "$CURRENT_TRANSCRIPT" ]; then
+    transcript=$("$FIND_TRANSCRIPT" "$TRANSCRIPT_DIR" "$snapshot_file" --exclude "$CURRENT_TRANSCRIPT")
+  else
+    transcript=$("$FIND_TRANSCRIPT" "$TRANSCRIPT_DIR" "$snapshot_file")
+  fi
   if [ -n "$transcript" ]; then
     # Pass transcript path + slot via env so a path containing single quotes
     # cannot break out of a Python string literal (G201/shell-injection class).
@@ -99,8 +133,16 @@ PY
     fi
     advanced="yes"
   else
-    # Started but no transcript yet — print status and exit
-    echo "EXPERIMENT: slot $started_slot/$total in progress (no transcript detected yet). Work naturally; close Claude Code when done."
+    # Started but no completed prior transcript — THIS session is the work session.
+    started_condition=$(python3 -c "
+import json
+s=json.load(open('$SCHEDULE'))
+for sl in s['slots']:
+    if sl['slot']==$started_slot:
+        print(sl['condition']); break
+" 2>/dev/null)
+    notify "VaultMind slot $started_slot/$total ACTIVE" "Condition $started_condition — work session" "Do natural work, then close Claude Code."
+    echo "EXPERIMENT slot $started_slot/$total ACTIVE (condition $started_condition). This is your work session — do whatever you'd normally do on this project, then close Claude Code when you're done. The next Claude Code startup will auto-advance."
     exit 0
   fi
 fi
@@ -127,6 +169,7 @@ if [ "$next_info" = "DONE" ]; then
     cp "$CLAUDE_MD_BACKUP" "$CLAUDE_MD" 2>/dev/null || true
     rm "$CLAUDE_MD_BACKUP"
   fi
+  notify "VaultMind experiment" "All sessions complete" "$completed/$total done — run score-transcripts.sh"
   echo "EXPERIMENT COMPLETE ($completed/$total). Run: bash experiments/persona-eval/scripts/score-transcripts.sh --llm openai/gpt-4o"
   exit 0
 fi
@@ -200,7 +243,9 @@ open('$snapshot_file','w').write(('\n'.join(files)+'\n') if files else '')
 # --- Banner ---
 if [ "$advanced" = "yes" ]; then
   prev=$((next_slot - 1))
-  echo "EXPERIMENT: slot $next_slot/$total ready — previous slot $prev auto-completed. Condition $next_condition swapped in. Close this Claude Code session and re-open to start slot $next_slot."
+  notify "VaultMind slot $prev COMPLETED" "Slot $next_slot/$total READY (condition $next_condition)" "CLOSE + REOPEN Claude Code to begin slot $next_slot."
+  echo "EXPERIMENT slot $prev/$total COMPLETED. Slot $next_slot/$total READY (condition $next_condition swapped in). CLOSE this Claude Code window and REOPEN to begin slot $next_slot."
 else
-  echo "EXPERIMENT: slot $next_slot/$total ready (condition $next_condition). Close this Claude Code session and re-open to start slot $next_slot."
+  notify "VaultMind slot $next_slot/$total READY" "Condition $next_condition swapped in" "CLOSE + REOPEN Claude Code to begin slot $next_slot."
+  echo "EXPERIMENT slot $next_slot/$total READY (condition $next_condition swapped in). CLOSE this Claude Code window and REOPEN to begin slot $next_slot."
 fi
