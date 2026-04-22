@@ -59,6 +59,8 @@ rules:
         - cmd/telemetry.go  # Reads config file from viper.ConfigFileUsed() path (not user input)
         - cmd/dataview_lint.go  # Reads vault .md files via paths from vault scanner (user-provided vault path)
         - internal/mutation/lint.go  # Reads/writes vault .md files via WalkDir (user-provided vault path, paths from filesystem walk)
+        - internal/baseline/fixture.go  # Reads project-internal baseline fixture + snapshot paths from test callers (filepath.Clean applied, not user input at runtime)
+        - internal/query/validate_live.go  # Reads vault .md files via filepath.WalkDir rooted at user-provided vault path (already #nosec G304)
     message: "Potential path traversal. Validate and sanitize file paths."
     languages: [go]
     severity: WARNING
