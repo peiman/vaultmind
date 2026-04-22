@@ -6,12 +6,12 @@ require (
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/go-git/go-git/v5 v5.18.0
-	github.com/knights-analytics/hugot v0.7.0
+	github.com/knights-analytics/hugot v0.7.1
 	github.com/mattn/go-isatty v0.0.21
 	github.com/nlpodyssey/gopickle v0.3.0
 	github.com/peiman/ckeletin-go v0.10.0
 	github.com/pressly/goose/v3 v3.27.0
-	github.com/rs/zerolog v1.35.0
+	github.com/rs/zerolog v1.35.1
 	github.com/sebdah/goldie/v2 v2.8.0
 	github.com/sergi/go-diff v1.4.0
 	github.com/spf13/cobra v1.10.2
