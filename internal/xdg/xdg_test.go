@@ -359,8 +359,23 @@ func TestDataBase_Darwin(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("darwin-specific test")
 	}
+	// Clear XDG_DATA_HOME so we exercise the darwin fallback, not the
+	// cross-platform override.
+	t.Setenv("XDG_DATA_HOME", "")
 	base := dataBase()
 	assert.Contains(t, base, filepath.Join("Library", "Application Support"))
+}
+
+// TestDataBase_XDGOverridesDarwin locks in the cross-platform override
+// behavior: when XDG_DATA_HOME is set, it wins over the macOS default.
+// This is what enables test isolation on macOS (see issue #17).
+func TestDataBase_XDGOverridesDarwin(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("darwin-specific test")
+	}
+	tempDir := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", tempDir)
+	assert.Equal(t, tempDir, dataBase())
 }
 
 func TestCacheBase_Darwin(t *testing.T) {
@@ -382,6 +397,9 @@ func TestStateBase_Darwin(t *testing.T) {
 func TestBasePathsUseHomeDir(t *testing.T) {
 	// Verify all base functions incorporate the home directory
 	t.Setenv("HOME", "/test/home")
+	// Clear XDG_DATA_HOME so dataBase() falls through to the HOME-relative
+	// default on every platform (not the cross-platform override).
+	t.Setenv("XDG_DATA_HOME", "")
 
 	config := configBase()
 	data := dataBase()
@@ -481,6 +499,9 @@ func TestBasePaths_Windows(t *testing.T) {
 	t.Cleanup(func() { osName = origOS })
 
 	t.Setenv("HOME", `C:\Users\testuser`)
+	// Clear XDG_DATA_HOME so dataBase() falls through to the Windows
+	// AppData resolution, not the cross-platform override.
+	t.Setenv("XDG_DATA_HOME", "")
 
 	t.Run("uses AppData and LocalAppData env vars", func(t *testing.T) {
 		t.Setenv("AppData", `C:\Users\testuser\AppData\Roaming`)
@@ -509,6 +530,8 @@ func TestBasePaths_Darwin(t *testing.T) {
 	t.Cleanup(func() { osName = origOS })
 
 	t.Setenv("HOME", "/Users/testuser")
+	// Clear XDG_DATA_HOME so dataBase() falls through to the darwin default.
+	t.Setenv("XDG_DATA_HOME", "")
 
 	assert.Equal(t, "/Users/testuser/Library/Application Support", configBase())
 	assert.Equal(t, "/Users/testuser/Library/Application Support", dataBase())

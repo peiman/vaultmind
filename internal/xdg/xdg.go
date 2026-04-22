@@ -184,8 +184,17 @@ func configBase() string {
 	}
 }
 
-// dataBase returns the base data directory.
+// dataBase returns the base data directory. XDG_DATA_HOME is honored on all
+// platforms when explicitly set — the XDG spec is cross-platform by design,
+// and an explicit env var signals deliberate user intent that should win over
+// OS defaults. When unset, the platform default applies (Library/Application
+// Support on macOS, %AppData% on Windows, ~/.local/share on Linux/Unix).
+// This cross-platform override is also what makes test isolation possible
+// on macOS — see issue #17 and Taskfile.yml 'test'/'check' tasks.
 func dataBase() string {
+	if dir := os.Getenv("XDG_DATA_HOME"); dir != "" {
+		return dir
+	}
 	switch osName {
 	case "darwin":
 		return filepath.Join(homeDir(), "Library", "Application Support")
@@ -195,9 +204,6 @@ func dataBase() string {
 		}
 		return filepath.Join(homeDir(), "AppData", "Roaming")
 	default: // Linux and other Unix
-		if dir := os.Getenv("XDG_DATA_HOME"); dir != "" {
-			return dir
-		}
 		return filepath.Join(homeDir(), ".local", "share")
 	}
 }

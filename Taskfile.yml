@@ -53,8 +53,15 @@ tasks:
     cmds: [task: ckeletin:lint]
 
   test:
-    desc: Run tests with coverage
-    cmds: [task: ckeletin:test]
+    desc: Run tests with coverage (XDG_DATA_HOME isolated — issue #17)
+    cmds:
+      # Shell export so the subprocess inherits XDG_DATA_HOME. Task's top-level
+      # `env:` does not cascade through `task: ckeletin:test` (child task has
+      # its own env scope), so isolation must be set at the command level.
+      - cmd: |
+          export XDG_DATA_HOME=$(mktemp -d -t vm-test.XXXXXX)
+          trap 'rm -rf "$XDG_DATA_HOME"' EXIT
+          task ckeletin:test
 
   build:
     desc: Build the binary
@@ -63,20 +70,29 @@ tasks:
   check:
     desc: Run all quality checks (including VaultMind bootstrap verification)
     cmds:
-      - task: ckeletin:check
-      - task: ckeletin:test:coverage:project # enforce 85% project floor (manifesto principle #9)
-      - task: test:baseline # retrieval-quality regression gate (manifesto principle #4)
-      - task: check:bootstrap
+      # Same isolation as `task test` — one tmp dir for the whole check run,
+      # inherited by every test subprocess below (issue #17).
+      - cmd: |
+          export XDG_DATA_HOME=$(mktemp -d -t vm-test.XXXXXX)
+          trap 'rm -rf "$XDG_DATA_HOME"' EXIT
+          task ckeletin:check \
+            && task ckeletin:test:coverage:project \
+            && task test:baseline \
+            && task check:bootstrap
 
   test:baseline:
     desc: Run the golden-query retrieval baseline (fails if metrics drop beyond tolerance)
     cmds:
-      - go test -tags dev -count=1 -run TestBaseline_GoldenFixture ./internal/baseline/...
+      - cmd: |
+          export XDG_DATA_HOME="${XDG_DATA_HOME:-$(mktemp -d -t vm-test.XXXXXX)}"
+          go test -tags dev -count=1 -run TestBaseline_GoldenFixture ./internal/baseline/...
 
   test:baseline:update:
     desc: Regenerate baseline.json snapshot — only run when retrieval change is intended; review the diff before commit
     cmds:
-      - go test -tags dev -count=1 -run TestBaseline_GoldenFixture ./internal/baseline/... -baseline-update
+      - cmd: |
+          export XDG_DATA_HOME="${XDG_DATA_HOME:-$(mktemp -d -t vm-test.XXXXXX)}"
+          go test -tags dev -count=1 -run TestBaseline_GoldenFixture ./internal/baseline/... -baseline-update
 
   check:bootstrap:
     desc: Verify VaultMind setup (binary, vaults, hook wiring, smoke test)
