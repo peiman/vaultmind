@@ -11,6 +11,7 @@ import (
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/memory"
 	"github.com/peiman/vaultmind/internal/query"
+	"github.com/peiman/vaultmind/internal/retrieval"
 	"github.com/peiman/vaultmind/internal/vault"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -41,7 +42,7 @@ func TestAskRetrievalHits_NilResultPassThrough(t *testing.T) {
 // RetrievalHits with 1-indexed ranks and the original scores preserved.
 func TestAskRetrievalHits_RankIsOneIndexedScoresPreserved(t *testing.T) {
 	r := &query.AskResult{
-		TopHits: []query.ScoredResult{
+		TopHits: []retrieval.ScoredResult{
 			{ID: "a", Score: 0.9, Type: "concept", Path: "a.md"},
 			{ID: "b", Score: 0.7, Type: "concept", Path: "b.md"},
 		},

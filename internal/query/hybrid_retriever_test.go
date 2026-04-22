@@ -7,20 +7,21 @@ import (
 
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/query"
+	"github.com/peiman/vaultmind/internal/retrieval"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // Compile-time interface check
-var _ query.Retriever = (*query.HybridRetriever)(nil)
+var _ retrieval.Retriever = (*query.HybridRetriever)(nil)
 
 // staticRetriever returns a fixed set of results.
 type staticRetriever struct {
-	results []query.ScoredResult
+	results []retrieval.ScoredResult
 	total   int
 }
 
-func (r *staticRetriever) Search(_ context.Context, _ string, limit, offset int, _ index.SearchFilters) ([]query.ScoredResult, int, error) {
+func (r *staticRetriever) Search(_ context.Context, _ string, limit, offset int, _ index.SearchFilters) ([]retrieval.ScoredResult, int, error) {
 	results := r.results
 	if offset >= len(results) {
 		return nil, r.total, nil
@@ -35,7 +36,7 @@ func (r *staticRetriever) Search(_ context.Context, _ string, limit, offset int,
 func TestHybridRetriever_TwoRetrievers(t *testing.T) {
 	// Retriever A ranks: note1, note2, note3
 	retA := &staticRetriever{
-		results: []query.ScoredResult{
+		results: []retrieval.ScoredResult{
 			{ID: "note1", Title: "Note 1", Score: 1.0},
 			{ID: "note2", Title: "Note 2", Score: 0.5},
 			{ID: "note3", Title: "Note 3", Score: 0.1},
@@ -44,7 +45,7 @@ func TestHybridRetriever_TwoRetrievers(t *testing.T) {
 	}
 	// Retriever B ranks: note2, note3, note1
 	retB := &staticRetriever{
-		results: []query.ScoredResult{
+		results: []retrieval.ScoredResult{
 			{ID: "note2", Title: "Note 2", Score: 1.0},
 			{ID: "note3", Title: "Note 3", Score: 0.5},
 			{ID: "note1", Title: "Note 1", Score: 0.1},
@@ -53,7 +54,7 @@ func TestHybridRetriever_TwoRetrievers(t *testing.T) {
 	}
 
 	hybrid := &query.HybridRetriever{
-		Retrievers: []query.NamedRetriever{{Name: "a", Retriever: retA}, {Name: "b", Retriever: retB}},
+		Retrievers: []retrieval.NamedRetriever{{Name: "a", Retriever: retA}, {Name: "b", Retriever: retB}},
 		K:          60,
 	}
 
@@ -74,7 +75,7 @@ func TestHybridRetriever_TwoRetrievers(t *testing.T) {
 
 func TestHybridRetriever_SingleRetriever(t *testing.T) {
 	ret := &staticRetriever{
-		results: []query.ScoredResult{
+		results: []retrieval.ScoredResult{
 			{ID: "a", Title: "A", Score: 1.0},
 			{ID: "b", Title: "B", Score: 0.5},
 		},
@@ -82,7 +83,7 @@ func TestHybridRetriever_SingleRetriever(t *testing.T) {
 	}
 
 	hybrid := &query.HybridRetriever{
-		Retrievers: []query.NamedRetriever{{Name: "ret", Retriever: ret}},
+		Retrievers: []retrieval.NamedRetriever{{Name: "ret", Retriever: ret}},
 		K:          60,
 	}
 
@@ -95,7 +96,7 @@ func TestHybridRetriever_SingleRetriever(t *testing.T) {
 
 func TestHybridRetriever_EmptyRetriever(t *testing.T) {
 	retA := &staticRetriever{
-		results: []query.ScoredResult{
+		results: []retrieval.ScoredResult{
 			{ID: "note1", Title: "Note 1", Score: 1.0},
 		},
 		total: 1,
@@ -103,7 +104,7 @@ func TestHybridRetriever_EmptyRetriever(t *testing.T) {
 	retB := &staticRetriever{results: nil, total: 0}
 
 	hybrid := &query.HybridRetriever{
-		Retrievers: []query.NamedRetriever{{Name: "a", Retriever: retA}, {Name: "b", Retriever: retB}},
+		Retrievers: []retrieval.NamedRetriever{{Name: "a", Retriever: retA}, {Name: "b", Retriever: retB}},
 		K:          60,
 	}
 
@@ -115,16 +116,16 @@ func TestHybridRetriever_EmptyRetriever(t *testing.T) {
 
 func TestHybridRetriever_DisjointResults(t *testing.T) {
 	retA := &staticRetriever{
-		results: []query.ScoredResult{{ID: "a", Title: "A", Score: 1.0}},
+		results: []retrieval.ScoredResult{{ID: "a", Title: "A", Score: 1.0}},
 		total:   1,
 	}
 	retB := &staticRetriever{
-		results: []query.ScoredResult{{ID: "b", Title: "B", Score: 1.0}},
+		results: []retrieval.ScoredResult{{ID: "b", Title: "B", Score: 1.0}},
 		total:   1,
 	}
 
 	hybrid := &query.HybridRetriever{
-		Retrievers: []query.NamedRetriever{{Name: "a", Retriever: retA}, {Name: "b", Retriever: retB}},
+		Retrievers: []retrieval.NamedRetriever{{Name: "a", Retriever: retA}, {Name: "b", Retriever: retB}},
 		K:          60,
 	}
 
@@ -138,14 +139,14 @@ func TestHybridRetriever_DisjointResults(t *testing.T) {
 }
 
 func TestHybridRetriever_LimitAndOffset(t *testing.T) {
-	results := make([]query.ScoredResult, 5)
+	results := make([]retrieval.ScoredResult, 5)
 	for i := range results {
-		results[i] = query.ScoredResult{ID: fmt.Sprintf("n%d", i), Title: fmt.Sprintf("N%d", i), Score: float64(5 - i)}
+		results[i] = retrieval.ScoredResult{ID: fmt.Sprintf("n%d", i), Title: fmt.Sprintf("N%d", i), Score: float64(5 - i)}
 	}
 
 	ret := &staticRetriever{results: results, total: 5}
 	hybrid := &query.HybridRetriever{
-		Retrievers: []query.NamedRetriever{{Name: "ret", Retriever: ret}},
+		Retrievers: []retrieval.NamedRetriever{{Name: "ret", Retriever: ret}},
 		K:          60,
 	}
 
@@ -158,18 +159,18 @@ func TestHybridRetriever_LimitAndOffset(t *testing.T) {
 // errorRetriever always returns an error.
 type errorRetriever struct{}
 
-func (r *errorRetriever) Search(_ context.Context, _ string, _, _ int, _ index.SearchFilters) ([]query.ScoredResult, int, error) {
+func (r *errorRetriever) Search(_ context.Context, _ string, _, _ int, _ index.SearchFilters) ([]retrieval.ScoredResult, int, error) {
 	return nil, 0, fmt.Errorf("retriever error")
 }
 
 func TestHybridRetriever_ErrorPropagation(t *testing.T) {
 	ret := &staticRetriever{
-		results: []query.ScoredResult{{ID: "a", Title: "A", Score: 1.0}},
+		results: []retrieval.ScoredResult{{ID: "a", Title: "A", Score: 1.0}},
 		total:   1,
 	}
 
 	hybrid := &query.HybridRetriever{
-		Retrievers: []query.NamedRetriever{{Name: "ok", Retriever: ret}, {Name: "boom", Retriever: &errorRetriever{}}},
+		Retrievers: []retrieval.NamedRetriever{{Name: "ok", Retriever: ret}, {Name: "boom", Retriever: &errorRetriever{}}},
 		K:          60,
 	}
 
@@ -179,14 +180,14 @@ func TestHybridRetriever_ErrorPropagation(t *testing.T) {
 
 func TestHybridRetriever_DefaultK(t *testing.T) {
 	ret := &staticRetriever{
-		results: []query.ScoredResult{
+		results: []retrieval.ScoredResult{
 			{ID: "a", Title: "A", Score: 1.0},
 		},
 		total: 1,
 	}
 
 	hybrid := &query.HybridRetriever{
-		Retrievers: []query.NamedRetriever{{Name: "ret", Retriever: ret}},
+		Retrievers: []retrieval.NamedRetriever{{Name: "ret", Retriever: ret}},
 		// K is 0, should default to 60
 	}
 
@@ -201,7 +202,7 @@ func TestHybridRetriever_DefaultK(t *testing.T) {
 
 func TestHybridRetriever_NoRetrievers(t *testing.T) {
 	hybrid := &query.HybridRetriever{
-		Retrievers: []query.NamedRetriever{},
+		Retrievers: []retrieval.NamedRetriever{},
 		K:          60,
 	}
 
@@ -213,14 +214,14 @@ func TestHybridRetriever_NoRetrievers(t *testing.T) {
 
 func TestHybridRetriever_OffsetBeyondResults(t *testing.T) {
 	ret := &staticRetriever{
-		results: []query.ScoredResult{
+		results: []retrieval.ScoredResult{
 			{ID: "a", Title: "A", Score: 1.0},
 		},
 		total: 1,
 	}
 
 	hybrid := &query.HybridRetriever{
-		Retrievers: []query.NamedRetriever{{Name: "ret", Retriever: ret}},
+		Retrievers: []retrieval.NamedRetriever{{Name: "ret", Retriever: ret}},
 		K:          60,
 	}
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/peiman/vaultmind/internal/embedding"
 	"github.com/peiman/vaultmind/internal/index"
+	"github.com/peiman/vaultmind/internal/retrieval"
 )
 
 // SparseEmbedFunc produces a sparse vector for a query string.
@@ -20,7 +21,7 @@ type SparseRetriever struct {
 
 // Search embeds the query as a sparse vector, computes dot-product similarity against
 // all stored sparse embeddings, and returns the top results sorted by score descending.
-func (r *SparseRetriever) Search(ctx context.Context, query string, limit, offset int, filters index.SearchFilters) ([]ScoredResult, int, error) {
+func (r *SparseRetriever) Search(ctx context.Context, query string, limit, offset int, filters index.SearchFilters) ([]retrieval.ScoredResult, int, error) {
 	querySparse, err := r.EmbedSparse(ctx, query)
 	if err != nil {
 		return nil, 0, fmt.Errorf("embedding query (sparse): %w", err)
@@ -35,7 +36,7 @@ func (r *SparseRetriever) Search(ctx context.Context, query string, limit, offse
 	}
 
 	type scored struct {
-		result ScoredResult
+		result retrieval.ScoredResult
 		score  float64
 	}
 	var results []scored
@@ -45,7 +46,7 @@ func (r *SparseRetriever) Search(ctx context.Context, query string, limit, offse
 		}
 		sim := embedding.SparseDotProduct(querySparse, ne.Sparse)
 		results = append(results, scored{
-			result: ScoredResult{
+			result: retrieval.ScoredResult{
 				ID: ne.NoteID, Type: ne.Type, Title: ne.Title,
 				Path: ne.Path, Snippet: truncate(ne.BodyText, snippetMaxLen),
 				Score: sim, IsDomain: ne.IsDomain,
@@ -67,7 +68,7 @@ func (r *SparseRetriever) Search(ctx context.Context, query string, limit, offse
 		results = results[:limit]
 	}
 
-	out := make([]ScoredResult, len(results))
+	out := make([]retrieval.ScoredResult, len(results))
 	for i, s := range results {
 		out[i] = s.result
 	}

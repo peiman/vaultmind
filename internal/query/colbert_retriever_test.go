@@ -6,11 +6,12 @@ import (
 
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/query"
+	"github.com/peiman/vaultmind/internal/retrieval"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-var _ query.Retriever = (*query.ColBERTRetriever)(nil)
+var _ retrieval.Retriever = (*query.ColBERTRetriever)(nil)
 
 func TestColBERTRetriever_Search(t *testing.T) {
 	db := buildRetrieverTestDB(t)

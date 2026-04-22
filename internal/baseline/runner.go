@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/peiman/vaultmind/internal/index"
-	"github.com/peiman/vaultmind/internal/query"
+	"github.com/peiman/vaultmind/internal/retrieval"
 )
 
 // Query is a single golden-query spec. Name is a short label for
@@ -57,7 +57,7 @@ type Report struct {
 // A retriever failure on any single query aborts the whole run: silently
 // dropping a query would hide the failure behind an artificially lower
 // aggregate, which is the class of bug baselines exist to catch.
-func Run(retriever query.Retriever, queries []Query, cfg RunConfig) (*Report, error) {
+func Run(retriever retrieval.Retriever, queries []Query, cfg RunConfig) (*Report, error) {
 	rep := &Report{K: cfg.K, Queries: make([]QueryResult, 0, len(queries))}
 	if len(queries) == 0 {
 		return rep, nil

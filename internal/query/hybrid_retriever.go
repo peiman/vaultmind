@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/peiman/vaultmind/internal/index"
+	"github.com/peiman/vaultmind/internal/retrieval"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -20,18 +21,18 @@ const DefaultRRFK = 60
 // sub-retriever contributed what — useful for studying the 4-way RRF
 // contribution ("what did FTS add here vs dense?") during research.
 type HybridRetriever struct {
-	Retrievers []NamedRetriever
+	Retrievers []retrieval.NamedRetriever
 	K          int // RRF smoothing constant; zero-value falls back to DefaultRRFK
 }
 
 type rrfEntry struct {
-	result     ScoredResult
+	result     retrieval.ScoredResult
 	score      float64
 	components map[string]float64
 }
 
 // Search runs all retrievers concurrently, then fuses their ranked lists via RRF.
-func (h *HybridRetriever) Search(ctx context.Context, query string, limit, offset int, filters index.SearchFilters) ([]ScoredResult, int, error) {
+func (h *HybridRetriever) Search(ctx context.Context, query string, limit, offset int, filters index.SearchFilters) ([]retrieval.ScoredResult, int, error) {
 	k := h.K
 	if k <= 0 {
 		k = DefaultRRFK
@@ -51,7 +52,7 @@ func (h *HybridRetriever) Search(ctx context.Context, query string, limit, offse
 	}
 
 	type retrieverResult struct {
-		results []ScoredResult
+		results []retrieval.ScoredResult
 	}
 
 	perRetriever := make([]retrieverResult, len(h.Retrievers))
@@ -115,7 +116,7 @@ func (h *HybridRetriever) Search(ctx context.Context, query string, limit, offse
 		entries = entries[:limit]
 	}
 
-	results := make([]ScoredResult, len(entries))
+	results := make([]retrieval.ScoredResult, len(entries))
 	for i, e := range entries {
 		results[i] = e.result
 		results[i].Score = e.score

@@ -7,12 +7,13 @@ import (
 
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/query"
+	"github.com/peiman/vaultmind/internal/retrieval"
 	"github.com/peiman/vaultmind/internal/vault"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-var _ query.Retriever = (*query.FTSRetriever)(nil)
+var _ retrieval.Retriever = (*query.FTSRetriever)(nil)
 
 func buildRetrieverTestDB(t *testing.T) *index.DB {
 	t.Helper()

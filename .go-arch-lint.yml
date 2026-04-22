@@ -84,6 +84,7 @@ components:
       - internal/schema/**
       - internal/envelope/**
       - internal/index/**
+      - internal/retrieval/**
       - internal/embedding/**
       - internal/graph/**
       - internal/git/**
@@ -95,6 +96,8 @@ components:
       - internal/memory/**
       # VaultMind experiment framework (session tracking, activation scoring):
       - internal/experiment/**
+      # VaultMind baseline harness (golden-query retrieval-quality gate, test-only):
+      - internal/baseline/**
 
   # -------------------------------------------------------------------------
   # PROJECT-MANAGED: Business Logic Layer

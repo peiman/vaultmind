@@ -8,15 +8,16 @@ import (
 
 	"github.com/peiman/vaultmind/internal/envelope"
 	"github.com/peiman/vaultmind/internal/index"
+	"github.com/peiman/vaultmind/internal/retrieval"
 )
 
 // SearchResult is the JSON response for search.
 type SearchResult struct {
-	Query  string         `json:"query"`
-	Offset int            `json:"offset"`
-	Limit  int            `json:"limit"`
-	Hits   []ScoredResult `json:"hits"`
-	Total  int            `json:"total"`
+	Query  string                   `json:"query"`
+	Offset int                      `json:"offset"`
+	Limit  int                      `json:"limit"`
+	Hits   []retrieval.ScoredResult `json:"hits"`
+	Total  int                      `json:"total"`
 }
 
 // SearchConfig holds search parameters.
@@ -32,7 +33,7 @@ type SearchConfig struct {
 
 // RunSearch executes the search command logic and returns the result for
 // downstream use (e.g. experiment logging). Rendering is still written to w.
-func RunSearch(retriever Retriever, cfg SearchConfig, w io.Writer) (*SearchResult, error) {
+func RunSearch(retriever retrieval.Retriever, cfg SearchConfig, w io.Writer) (*SearchResult, error) {
 	results, total, err := retriever.Search(
 		context.Background(), cfg.Query, cfg.Limit, cfg.Offset,
 		index.SearchFilters{Type: cfg.TypeFilter, Tag: cfg.TagFilter},
@@ -42,7 +43,7 @@ func RunSearch(retriever Retriever, cfg SearchConfig, w io.Writer) (*SearchResul
 	}
 
 	if results == nil {
-		results = []ScoredResult{}
+		results = []retrieval.ScoredResult{}
 	}
 
 	out := &SearchResult{

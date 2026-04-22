@@ -7,6 +7,7 @@ import (
 
 	"github.com/peiman/vaultmind/internal/embedding"
 	"github.com/peiman/vaultmind/internal/index"
+	"github.com/peiman/vaultmind/internal/retrieval"
 )
 
 // EmbeddingRetriever searches by cosine similarity between query and stored note embeddings.
@@ -20,7 +21,7 @@ const snippetMaxLen = 200
 
 // Search embeds the query, computes cosine similarity against all stored embeddings,
 // and returns the top results sorted by score descending.
-func (r *EmbeddingRetriever) Search(ctx context.Context, query string, limit, offset int, filters index.SearchFilters) ([]ScoredResult, int, error) {
+func (r *EmbeddingRetriever) Search(ctx context.Context, query string, limit, offset int, filters index.SearchFilters) ([]retrieval.ScoredResult, int, error) {
 	queryVec, err := r.Embedder.Embed(ctx, query)
 	if err != nil {
 		return nil, 0, fmt.Errorf("embedding query: %w", err)
@@ -45,7 +46,7 @@ func (r *EmbeddingRetriever) Search(ctx context.Context, query string, limit, of
 
 	// Score, filter, and build results in one pass
 	type scored struct {
-		result ScoredResult
+		result retrieval.ScoredResult
 		score  float64
 	}
 	var results []scored
@@ -58,7 +59,7 @@ func (r *EmbeddingRetriever) Search(ctx context.Context, query string, limit, of
 		}
 		sim := CosineSimilarity(queryVec, ne.Embedding)
 		results = append(results, scored{
-			result: ScoredResult{
+			result: retrieval.ScoredResult{
 				ID:       ne.NoteID,
 				Type:     ne.Type,
 				Title:    ne.Title,
@@ -87,7 +88,7 @@ func (r *EmbeddingRetriever) Search(ctx context.Context, query string, limit, of
 		results = results[:limit]
 	}
 
-	out := make([]ScoredResult, len(results))
+	out := make([]retrieval.ScoredResult, len(results))
 	for i, s := range results {
 		out[i] = s.result
 	}

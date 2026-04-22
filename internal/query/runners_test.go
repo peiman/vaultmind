@@ -10,6 +10,7 @@ import (
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/memory"
 	"github.com/peiman/vaultmind/internal/query"
+	"github.com/peiman/vaultmind/internal/retrieval"
 	"github.com/peiman/vaultmind/internal/vault"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -512,7 +513,7 @@ func TestTruncate_Boundaries(t *testing.T) {
 func TestFormatAsk_HumanOutputCarriesHits(t *testing.T) {
 	r := &query.AskResult{
 		Query: "what is alpha",
-		TopHits: []query.ScoredResult{
+		TopHits: []retrieval.ScoredResult{
 			{ID: "concept-alpha", Title: "Alpha", Path: "alpha.md", Score: 0.8},
 		},
 	}
@@ -530,7 +531,7 @@ func TestFormatAsk_HumanOutputCarriesHits(t *testing.T) {
 func TestFormatAsk_RendersTargetAndContextItems(t *testing.T) {
 	r := &query.AskResult{
 		Query: "what is alpha",
-		TopHits: []query.ScoredResult{
+		TopHits: []retrieval.ScoredResult{
 			{ID: "concept-alpha", Title: "Alpha", Path: "alpha.md", Score: 0.8},
 		},
 		Context: &memory.ContextPackResult{

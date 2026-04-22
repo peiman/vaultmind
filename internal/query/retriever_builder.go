@@ -5,12 +5,13 @@ import (
 
 	"github.com/peiman/vaultmind/internal/embedding"
 	"github.com/peiman/vaultmind/internal/index"
+	"github.com/peiman/vaultmind/internal/retrieval"
 	"github.com/rs/zerolog/log"
 )
 
 // BuildRetriever creates the appropriate retriever for the given search mode.
 // Returns a cleanup function that must be deferred if non-nil.
-func BuildRetriever(mode string, db *index.DB) (Retriever, func(), error) {
+func BuildRetriever(mode string, db *index.DB) (retrieval.Retriever, func(), error) {
 	switch mode {
 	case "keyword", "":
 		return &FTSRetriever{DB: db}, nil, nil
@@ -52,14 +53,14 @@ func requireEmbeddings(db *index.DB) error {
 // Retriever is always non-nil. Embedder is nil in keyword-only mode (no embeddings).
 // Cleanup is always safe to call unconditionally (no-op in keyword-only mode).
 type AutoRetrieverResult struct {
-	Retriever Retriever
+	Retriever retrieval.Retriever
 	Embedder  embedding.Embedder // nil when keyword-only (no embeddings)
 	Cleanup   func()             // always non-nil; safe to defer unconditionally
 }
 
 // BuildAutoRetriever returns a hybrid retriever if embeddings exist, otherwise keyword.
 // Embedder initialization failure falls back to keyword silently.
-func BuildAutoRetriever(db *index.DB) (Retriever, func(), error) {
+func BuildAutoRetriever(db *index.DB) (retrieval.Retriever, func(), error) {
 	r := BuildAutoRetrieverFull(db)
 	return r.Retriever, r.Cleanup, nil
 }
@@ -89,13 +90,13 @@ func BuildAutoRetrieverFull(db *index.DB) AutoRetrieverResult {
 // buildHybridRetriever constructs the hybrid retriever with all available
 // sub-retrievers and returns the embedder separately. Shared by
 // BuildRetriever("hybrid") and BuildAutoRetrieverFull to avoid duplication.
-func buildHybridRetriever(db *index.DB) (Retriever, embedding.Embedder, func(), error) {
+func buildHybridRetriever(db *index.DB) (retrieval.Retriever, embedding.Embedder, func(), error) {
 	embedder, embedderCleanup, err := detectEmbedderForDB(db)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	retrievers := []NamedRetriever{
+	retrievers := []retrieval.NamedRetriever{
 		{Name: "fts", Retriever: &FTSRetriever{DB: db}},
 		{Name: "dense", Retriever: &EmbeddingRetriever{DB: db, Embedder: embedder}},
 	}
@@ -117,10 +118,10 @@ func buildHybridRetriever(db *index.DB) (Retriever, embedding.Embedder, func(), 
 	if hasSparse || hasColBERT {
 		if bgem3, ok := embedder.(*embedding.BGEM3Embedder); ok {
 			if hasSparse {
-				retrievers = append(retrievers, NamedRetriever{Name: "sparse", Retriever: &SparseRetriever{DB: db, EmbedSparse: bgem3.EmbedSparse}})
+				retrievers = append(retrievers, retrieval.NamedRetriever{Name: "sparse", Retriever: &SparseRetriever{DB: db, EmbedSparse: bgem3.EmbedSparse}})
 			}
 			if hasColBERT {
-				retrievers = append(retrievers, NamedRetriever{Name: "colbert", Retriever: &ColBERTRetriever{DB: db, EmbedColBERT: bgem3.EmbedColBERT, Dims: embedding.BGEM3Dims}})
+				retrievers = append(retrievers, retrieval.NamedRetriever{Name: "colbert", Retriever: &ColBERTRetriever{DB: db, EmbedColBERT: bgem3.EmbedColBERT, Dims: embedding.BGEM3Dims}})
 			}
 		}
 	}

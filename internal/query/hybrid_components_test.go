@@ -6,20 +6,21 @@ import (
 
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/query"
+	"github.com/peiman/vaultmind/internal/retrieval"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestHybridRetriever_PopulatesPerComponentScores(t *testing.T) {
 	retA := &staticRetriever{
-		results: []query.ScoredResult{
+		results: []retrieval.ScoredResult{
 			{ID: "note1", Score: 1.0},
 			{ID: "note2", Score: 0.5},
 		},
 		total: 2,
 	}
 	retB := &staticRetriever{
-		results: []query.ScoredResult{
+		results: []retrieval.ScoredResult{
 			{ID: "note2", Score: 1.0},
 			{ID: "note1", Score: 0.5},
 		},
@@ -27,7 +28,7 @@ func TestHybridRetriever_PopulatesPerComponentScores(t *testing.T) {
 	}
 
 	hybrid := &query.HybridRetriever{
-		Retrievers: []query.NamedRetriever{
+		Retrievers: []retrieval.NamedRetriever{
 			{Name: "fts", Retriever: retA},
 			{Name: "dense", Retriever: retB},
 		},
@@ -38,7 +39,7 @@ func TestHybridRetriever_PopulatesPerComponentScores(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, results, 2)
 
-	byID := map[string]query.ScoredResult{results[0].ID: results[0], results[1].ID: results[1]}
+	byID := map[string]retrieval.ScoredResult{results[0].ID: results[0], results[1].ID: results[1]}
 
 	// note1: rank 1 in fts, rank 2 in dense → components {fts: 1/61, dense: 1/62}
 	require.NotNil(t, byID["note1"].Components)
@@ -66,13 +67,13 @@ func TestHybridRetriever_NoComponentsWhenRetrieverAbsent(t *testing.T) {
 	// contains only that retriever's contribution — absent retrievers don't
 	// leak zero entries.
 	retA := &staticRetriever{
-		results: []query.ScoredResult{{ID: "only-fts", Score: 1.0}},
+		results: []retrieval.ScoredResult{{ID: "only-fts", Score: 1.0}},
 		total:   1,
 	}
 	retB := &staticRetriever{results: nil, total: 0}
 
 	hybrid := &query.HybridRetriever{
-		Retrievers: []query.NamedRetriever{
+		Retrievers: []retrieval.NamedRetriever{
 			{Name: "fts", Retriever: retA},
 			{Name: "dense", Retriever: retB},
 		},

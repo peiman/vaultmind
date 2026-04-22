@@ -7,6 +7,7 @@ import (
 	"github.com/peiman/vaultmind/internal/graph"
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/memory"
+	"github.com/peiman/vaultmind/internal/retrieval"
 	"github.com/rs/zerolog/log"
 )
 
@@ -37,7 +38,7 @@ type AskConfig struct {
 // isn't available via --json).
 type AskResult struct {
 	Query         string                    `json:"query"`
-	TopHits       []ScoredResult            `json:"top_hits"`
+	TopHits       []retrieval.ScoredResult  `json:"top_hits"`
 	Context       *memory.ContextPackResult `json:"context,omitempty"`
 	RetrievalMode string                    `json:"retrieval_mode,omitempty"`
 	Similarities  map[string]float64        `json:"-"` // raw cosine similarities (not serialized)
@@ -47,7 +48,7 @@ type AskResult struct {
 // (when an embedder is available), recomputes activation scores with
 // spreading activation (via ActivationFunc), then packs token-budgeted
 // context around the top hit. Context-pack failure is non-fatal.
-func Ask(ctx context.Context, retriever Retriever, resolver *graph.Resolver, db *index.DB, cfg AskConfig) (*AskResult, error) {
+func Ask(ctx context.Context, retriever retrieval.Retriever, resolver *graph.Resolver, db *index.DB, cfg AskConfig) (*AskResult, error) {
 	hits, _, err := retriever.Search(ctx, cfg.Query, cfg.SearchLimit, 0, index.SearchFilters{})
 	if err != nil {
 		return nil, err

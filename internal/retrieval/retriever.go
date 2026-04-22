@@ -1,4 +1,15 @@
-package query
+// Package retrieval defines the retrieval contract shared by every
+// search backend (FTS, dense/sparse/ColBERT embedding, hybrid fusion) and
+// by consumers that evaluate or compose them (baseline runner, ask/search
+// commands).
+//
+// It lives in the infrastructure layer because the retrieval contract is
+// a cross-cutting dependency: business packages and test harnesses both
+// depend on it without depending on any single backend. Keeping the
+// contract out of internal/query (which owns specific implementations)
+// lets measurement code (internal/baseline) import the interface without
+// crossing a business-to-business boundary (ADR-009).
+package retrieval
 
 import (
 	"context"

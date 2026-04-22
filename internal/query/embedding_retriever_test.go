@@ -6,12 +6,13 @@ import (
 
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/query"
+	"github.com/peiman/vaultmind/internal/retrieval"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // Compile-time interface check
-var _ query.Retriever = (*query.EmbeddingRetriever)(nil)
+var _ retrieval.Retriever = (*query.EmbeddingRetriever)(nil)
 
 // mockEmbedder returns a fixed vector for any input.
 type mockEmbedder struct {
