@@ -420,7 +420,7 @@ tasks:
       - task: generate:config:template
     silent: true
 
-  memory:lint:
+  validate:memory:
     desc: Validate Claude Code memory corpus (index bijection, frontmatter, refs)
     cmds:
       - "$HOME/.claude/projects/-Users-peiman-dev-cli-vaultmind/memory/lint.sh"
