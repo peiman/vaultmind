@@ -95,6 +95,16 @@ func logAskExperiment(cmd *cobra.Command, queryText, vaultPath, retrievalMode st
 		// computed and returned above.
 		log.Debug().Err(err).Msg("failed to log ask experiment event")
 	}
+
+	// Log top-hit note access so `ask` — the primary user-facing read path —
+	// produces access-history signal for spreading activation, not just
+	// `recall` and `note_get` (issue #18). Only on successful retrieval with
+	// at least one hit. silent-failure-ok: telemetry.
+	if retrievalErr == nil && result != nil && len(result.TopHits) > 0 {
+		if _, err := session.LogNoteAccessEvent(result.TopHits[0].ID, "ask"); err != nil {
+			log.Debug().Err(err).Msg("failed to log ask note_access event")
+		}
+	}
 }
 
 // contextNoteIDs extracts note IDs from context-pack items in rank order.
