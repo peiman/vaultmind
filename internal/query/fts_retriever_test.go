@@ -8,7 +8,7 @@ import (
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/query"
 	"github.com/peiman/vaultmind/internal/retrieval"
-	"github.com/peiman/vaultmind/internal/vault"
+	"github.com/peiman/vaultmind/internal/testvault"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -17,16 +17,8 @@ var _ retrieval.Retriever = (*query.FTSRetriever)(nil)
 
 func buildRetrieverTestDB(t *testing.T) *index.DB {
 	t.Helper()
-	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "index.db")
-	vaultPath := "../../vaultmind-vault"
-	cfg, err := vault.LoadConfig(vaultPath)
-	require.NoError(t, err)
-	idxr := index.NewIndexer(vaultPath, dbPath, cfg)
-	_, err = idxr.Rebuild()
-	require.NoError(t, err)
-	db, err := index.Open(dbPath)
-	require.NoError(t, err)
+	dbPath := filepath.Join(t.TempDir(), "index.db")
+	db := testvault.OpenSharedDB(t, testVaultPath, dbPath)
 	t.Cleanup(func() { _ = db.Close() })
 	return db
 }

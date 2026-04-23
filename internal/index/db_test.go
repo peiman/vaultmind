@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/index"
-	"github.com/peiman/vaultmind/internal/vault"
+	"github.com/peiman/vaultmind/internal/testvault"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -171,22 +171,12 @@ func openTestDB(t *testing.T) *index.DB {
 	return db
 }
 
-// buildIndexedDB indexes the test vault into a fresh temp DB and returns the
-// open *index.DB. The caller should not close it — t.Cleanup handles that.
+// buildIndexedDB returns an open *index.DB seeded from the shared per-process
+// vault build. The caller should not close it — t.Cleanup handles that.
 func buildIndexedDB(t *testing.T) *index.DB {
 	t.Helper()
-	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "index.db")
-
-	cfg, err := vault.LoadConfig(testVaultPath)
-	require.NoError(t, err)
-
-	idxr := index.NewIndexer(testVaultPath, dbPath, cfg)
-	_, err = idxr.Rebuild()
-	require.NoError(t, err)
-
-	db, err := index.Open(dbPath)
-	require.NoError(t, err)
+	dbPath := filepath.Join(t.TempDir(), "index.db")
+	db := testvault.OpenSharedDB(t, testVaultPath, dbPath)
 	t.Cleanup(func() { _ = db.Close() })
 	return db
 }

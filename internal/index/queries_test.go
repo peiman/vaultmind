@@ -5,25 +5,15 @@ import (
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/index"
-	"github.com/peiman/vaultmind/internal/vault"
+	"github.com/peiman/vaultmind/internal/testvault"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func rebuildAndOpenDB(t *testing.T) *index.DB {
 	t.Helper()
-	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "index.db")
-
-	cfg, err := vault.LoadConfig(testVaultPath)
-	require.NoError(t, err)
-
-	idxr := index.NewIndexer(testVaultPath, dbPath, cfg)
-	_, err = idxr.Rebuild()
-	require.NoError(t, err)
-
-	db, err := index.Open(dbPath)
-	require.NoError(t, err)
+	dbPath := filepath.Join(t.TempDir(), "index.db")
+	db := testvault.OpenSharedDB(t, testVaultPath, dbPath)
 	t.Cleanup(func() { _ = db.Close() })
 	return db
 }
@@ -133,23 +123,8 @@ func TestQueryFullNote_NotFound(t *testing.T) {
 
 func rebuildAndOpenBenchDB(b *testing.B) *index.DB {
 	b.Helper()
-	dir := b.TempDir()
-	dbPath := filepath.Join(dir, "index.db")
-
-	cfg, err := vault.LoadConfig(testVaultPath)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	idxr := index.NewIndexer(testVaultPath, dbPath, cfg)
-	if _, err = idxr.Rebuild(); err != nil {
-		b.Fatal(err)
-	}
-
-	db, err := index.Open(dbPath)
-	if err != nil {
-		b.Fatal(err)
-	}
+	dbPath := filepath.Join(b.TempDir(), "index.db")
+	db := testvault.OpenSharedDB(b, testVaultPath, dbPath)
 	b.Cleanup(func() { _ = db.Close() })
 	return db
 }
