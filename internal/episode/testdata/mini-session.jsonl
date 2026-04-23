@@ -1,0 +1,12 @@
+{"type":"permission-mode","permissionMode":"default","sessionId":"test-session-abc12345"}
+{"type":"user","message":{"role":"user","content":"hi there"},"timestamp":"2026-04-24T10:00:00.000Z","sessionId":"test-session-abc12345","cwd":"/home/test","gitBranch":"main"}
+{"type":"assistant","message":{"model":"claude-opus-4-7","role":"assistant","content":[{"type":"text","text":"Hello. Ready to work."}]},"timestamp":"2026-04-24T10:00:05.000Z","sessionId":"test-session-abc12345"}
+{"type":"user","message":{"role":"user","content":"run the tests please"},"timestamp":"2026-04-24T10:00:10.000Z","sessionId":"test-session-abc12345"}
+{"type":"assistant","message":{"model":"claude-opus-4-7","role":"assistant","content":[{"type":"thinking","text":"Let me think..."},{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"go test ./...","description":"Run tests"}}]},"timestamp":"2026-04-24T10:00:15.000Z","sessionId":"test-session-abc12345"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]},"timestamp":"2026-04-24T10:00:20.000Z","sessionId":"test-session-abc12345"}
+{"type":"assistant","message":{"model":"claude-opus-4-7","role":"assistant","content":[{"type":"tool_use","id":"t2","name":"Bash","input":{"command":"git commit -m 'fix: the bug'","description":"Commit fix"}}]},"timestamp":"2026-04-24T10:00:25.000Z","sessionId":"test-session-abc12345"}
+{"type":"assistant","message":{"model":"claude-opus-4-7","role":"assistant","content":[{"type":"tool_use","id":"t3","name":"Edit","input":{"file_path":"/home/test/foo.go","old_string":"x","new_string":"y"}}]},"timestamp":"2026-04-24T10:00:30.000Z","sessionId":"test-session-abc12345"}
+{"type":"user","message":{"role":"user","content":"<system-reminder>ignore me</system-reminder>"},"timestamp":"2026-04-24T10:00:35.000Z","sessionId":"test-session-abc12345"}
+{"type":"pr-link","sessionId":"test-session-abc12345","prNumber":42,"prUrl":"https://github.com/test/repo/pull/42","prRepository":"test/repo","timestamp":"2026-04-24T10:00:40.000Z"}
+{"type":"pr-link","sessionId":"test-session-abc12345","prNumber":42,"prUrl":"https://github.com/test/repo/pull/42","prRepository":"test/repo","timestamp":"2026-04-24T10:00:41.000Z"}
+{"type":"assistant","message":{"model":"claude-opus-4-7","role":"assistant","content":[{"type":"text","text":"Done. PR opened."}]},"timestamp":"2026-04-24T10:00:45.000Z","sessionId":"test-session-abc12345"}
