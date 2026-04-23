@@ -103,7 +103,12 @@ reports/sbom/
 vaultmind-vault/.vaultmind/index.db
 vaultmind-vault/.vaultmind/index.db-shm
 vaultmind-vault/.vaultmind/index.db-wal
+vaultmind-identity/.vaultmind/index.db
 vaultmind-identity/.vaultmind/index.db-shm
 vaultmind-identity/.vaultmind/index.db-wal
 coverage.raw.txt
 test/fixtures/baseline/vault/.vaultmind/index.db
+
+# Obsidian per-user UI state (tracked config: app.json, appearance.json, core-plugins.json)
+vaultmind-vault/.obsidian/workspace.json
+vaultmind-vault/.obsidian/graph.json
