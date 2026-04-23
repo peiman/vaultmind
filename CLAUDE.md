@@ -1,6 +1,6 @@
 # Claude Code Guidelines for ckeletin-go
 
-> **Before anything else:** Your identity vault is at `vaultmind-identity/`. A SessionStart hook loads it automatically, but if it didn't fire, run: `/tmp/vaultmind ask "who am I" --vault vaultmind-identity --max-items 8 --budget 6000` and read the output.
+> **Before anything else:** Your identity vault is at `vaultmind-identity/`. A SessionStart hook loads it automatically.
 
 **Read [AGENTS.md](AGENTS.md) first** — it contains all project knowledge (architecture, commands, conventions, testing, licensing). This file contains Claude-specific behavioral rules only.
 
