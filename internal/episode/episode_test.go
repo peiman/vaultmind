@@ -1,6 +1,9 @@
 package episode_test
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -57,6 +60,45 @@ func TestParseTranscript_ExtractsCommitSubjectNotFullHeredoc(t *testing.T) {
 	// Inline `-m` form: subject extracted cleanly.
 	require.Len(t, ep.Commits, 1)
 	assert.Equal(t, "fix: the bug", ep.Commits[0])
+}
+
+func TestExtractCommitSubject_HandlesKnownQuoteShapes(t *testing.T) {
+	// Pin the canonical shapes the heuristic must handle. If a future refactor
+	// breaks one, this table names exactly which form regressed.
+	cases := map[string]string{
+		`git commit -m "feat: add frobnicator"`:                                    "feat: add frobnicator",
+		`git commit -m 'fix: off-by-one'`:                                          "fix: off-by-one",
+		"git commit -m \"$(cat <<'EOF'\nfeat: multiline subject\n\nBody\nEOF\n)\"": "feat: multiline subject",
+	}
+	for shellCmd, want := range cases {
+		ep := parseOneBashCall(t, shellCmd)
+		require.Len(t, ep.Commits, 1, "for cmd %q", shellCmd)
+		assert.Equal(t, want, ep.Commits[0], "for cmd %q", shellCmd)
+	}
+}
+
+// parseOneBashCall builds a minimal one-record JSONL containing a single Bash
+// tool_use and runs it through ParseTranscript.
+func parseOneBashCall(t *testing.T, shellCmd string) *episode.Episode {
+	t.Helper()
+	inputJSON, err := json.Marshal(map[string]string{"command": shellCmd, "description": "x"})
+	require.NoError(t, err)
+	rec := map[string]any{
+		"type":      "assistant",
+		"sessionId": "test-cases",
+		"timestamp": "2026-04-24T00:00:00.000Z",
+		"message": map[string]any{
+			"role":    "assistant",
+			"content": []any{map[string]any{"type": "tool_use", "id": "t", "name": "Bash", "input": json.RawMessage(inputJSON)}},
+		},
+	}
+	recJSON, err := json.Marshal(rec)
+	require.NoError(t, err)
+	path := filepath.Join(t.TempDir(), "one.jsonl")
+	require.NoError(t, os.WriteFile(path, recJSON, 0o600))
+	ep, err := episode.ParseTranscript(path)
+	require.NoError(t, err)
+	return ep
 }
 
 func TestParseTranscript_DedupesRepeatedPRLinks(t *testing.T) {

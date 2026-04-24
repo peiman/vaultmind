@@ -16,7 +16,12 @@
 set -eu
 
 project_dir="${CLAUDE_PROJECT_DIR:-$(pwd)}"
-transcripts_dir="$HOME/.claude/projects/-Users-peiman-dev-cli-vaultmind"
+
+# Claude Code encodes the absolute project directory path into the transcripts
+# subdirectory name by replacing "/" with "-". Derive instead of hardcoding so
+# the hook works for any contributor's checkout path, not just Peiman's.
+transcripts_subdir=$(printf '%s' "$project_dir" | sed 's|/|-|g')
+transcripts_dir="$HOME/.claude/projects/$transcripts_subdir"
 output_dir="$project_dir/vaultmind-identity/episodes"
 binary="$project_dir/bin/vaultmind"
 
@@ -37,8 +42,12 @@ if [[ ! -t 0 ]]; then
 fi
 
 session_id=""
-if [[ -n "$payload" ]] && command -v jq >/dev/null 2>&1; then
-    session_id=$(printf '%s' "$payload" | jq -r '.session_id // empty' 2>/dev/null || true)
+if [[ -n "$payload" ]]; then
+    if command -v jq >/dev/null 2>&1; then
+        session_id=$(printf '%s' "$payload" | jq -r '.session_id // empty' 2>/dev/null || true)
+    else
+        echo "capture-episode: jq not found; falling back to most-recent transcript (risks capturing the wrong session under concurrent sessions in the same repo)" >&2
+    fi
 fi
 
 transcript=""
