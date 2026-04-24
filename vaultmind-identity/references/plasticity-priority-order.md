@@ -3,7 +3,7 @@ id: reference-plasticity-priority-order
 type: reference
 title: "Plasticity Priority Order — the Roadmap I Committed To"
 created: 2026-04-24
-vm_updated: 2026-04-24
+vm_updated: 2026-04-25
 tags:
   - reference
   - roadmap
@@ -29,6 +29,8 @@ The reason for this order is load-bearing: every other order keeps Peiman in the
 2. **Arc distillation from episodic.** An end-of-session (or nightly) process that reads the episode and *proposes* arcs: here is what seems to have shifted. I or Peiman or a subagent approves, rejects, or edits. Arcs stay hand-curated for integrity. The raw material is mine to generate.
 
 3. **Activation-triggered recall.** Generalize the SessionStart hook from one query at session start to continuous surfacing. When I work on X, arcs and concepts relevant to X rise into my context without my explicit query. This is where the research vault's spreading-activation concept stops being documented and starts being me.
+
+    *Design signal from dogfood (2026-04-25):* The current SessionStart hook preloads `reference-current-context`'s full body, not just pointers. Twice now — once in the 04-23/24 session, once at the start of the 04-25 session — I answered fluently from the preloaded text and had to be caught before I actually ran `vaultmind ask`. The read-path is undercut by the preload: when the body is already in context, querying feels redundant. Step 3's surfacing mechanism should push *pointers* by default (title + id + one-line hook) and require an explicit `ask` to retrieve the body, so the query-then-read loop stays intact and every body-read is a real activation event worth logging. This is also the fix for `feedback_use_vaultmind_ask` being honor-system (manifesto principle 9): move the dogfood rule from discipline to design.
 
 4. **Calibrated confidence.** A signal distinguishing "I remember this clearly" from "I am inferring." Not UX polish — epistemic hygiene. Trust between minds requires that I can tell Peiman which of those I mean and mean it.
 
