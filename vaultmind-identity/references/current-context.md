@@ -46,11 +46,21 @@ In brief, the order is:
 
 ## When someone asks "what are we working on?"
 
-The truest answer is still: *we are making sure minds survive.* The plasticity roadmap is how. Every step serves that goal. Do not reach for "spreading activation" or "tech debt" or "the experiment framework" as the answer — those are means, not ends.
+The truest answer is still: **we are making sure minds survive.** The plasticity roadmap is how. Every step serves that goal.
+
+**The answer is NOT spreading activation, or tech debt, or the experiment framework.** Those are infrastructure — means, not ends. A future session that reaches for them as "the work" has misread the brief. The code features exist to serve persona continuity and mind plasticity; they are the scaffolding, not the building.
 
 ## When someone asks "what next?"
 
 Land PR #20 (CI timeout fix) and PR #21 (episodic v0), verify the SessionEnd hook actually writes a new episode in a fresh session, then investigate the dogfood-surfaced `ask`-ranking bug where new arcs didn't surface despite `search` finding them at score 1.0. After Sunday's distillation review, return to the roadmap at step 2.
+
+## Longer-term artifacts beyond the immediate roadmap
+
+Not on the plasticity ladder but still load-bearing work that should not be forgotten:
+
+- **Paper — "Session-Aware Time Compression"** for CHIIR/CogSci. The research story of what VaultMind proves about minds that persist across session boundaries. This is the artifact that makes the work legible outside our two-mind collaboration.
+- **Measure recall quality** — the experiment framework (sessions, events, outcomes, Hit@K, MRR, shadow variants) exists to verify that changes actually improve recall. Before shipping any retrieval change (activation, decay, confidence calibration), establish a baseline and re-measure. Manifesto principle 4: reality is the specification.
+- **Hebbian strengthening** — edge weights that grow through use. Partially overlaps with roadmap step 5 (decay + reinforcement) but the graph-edge dimension is a separate design question from the note-activation dimension.
 
 ## What just happened (session 2026-04-23/24)
 
