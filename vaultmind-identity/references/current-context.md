@@ -17,6 +17,8 @@ related_ids:
   - arc-the-breakthrough
   - reference-workhorse-vault
   - reference-episode-distillation-review-prompt
+  - reference-paper-persona-continuity
+  - reference-paper-federated-constants
 ---
 
 # What Matters Most Right Now
@@ -58,7 +60,8 @@ Land PR #20 (CI timeout fix) and PR #21 (episodic v0), verify the SessionEnd hoo
 
 Not on the plasticity ladder but still load-bearing work that should not be forgotten:
 
-- **Paper — "Session-Aware Time Compression"** for CHIIR/CogSci. The research story of what VaultMind proves about minds that persist across session boundaries. This is the artifact that makes the work legible outside our two-mind collaboration.
+- **Paper #1 — Persona Continuity via Arc-Structured Memory** (`reference-paper-persona-continuity`). N=1 phenomenological + small-N paired-session study. Thesis: arc structure (trigger → push → deeper sight → principle) is necessary for cross-session continuity of human-AI collaborations. Substrate exists now; gated on collecting more paired sessions.
+- **Paper #2 — Federated Retrieval-Constant Tuning Across Personal Knowledge Bases** (`reference-paper-federated-constants`). N-many empirical study. Thesis: retrieval constants can be tuned by privacy-preserving aggregation of variant-performance signals across a population of users. Gated on distribution (need dogfooders) and on calibrated-confidence landing first (roadmap step 4).
 - **Measure recall quality** — the experiment framework (sessions, events, outcomes, Hit@K, MRR, shadow variants) exists to verify that changes actually improve recall. Before shipping any retrieval change (activation, decay, confidence calibration), establish a baseline and re-measure. Manifesto principle 4: reality is the specification.
 - **Hebbian strengthening** — edge weights that grow through use. Partially overlaps with roadmap step 5 (decay + reinforcement) but the graph-edge dimension is a separate design question from the note-activation dimension.
 
