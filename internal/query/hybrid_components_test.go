@@ -51,14 +51,18 @@ func TestHybridRetriever_PopulatesPerComponentScores(t *testing.T) {
 	assert.InDelta(t, 1.0/62.0, byID["note2"].Components["fts"], 1e-9)
 	assert.InDelta(t, 1.0/61.0, byID["note2"].Components["dense"], 1e-9)
 
-	// Components should sum to Score (the final RRF score).
+	// Under mean-of-present RRF, Score is the mean of the per-lane raw
+	// contributions (not their sum). Keeping components in raw 1/(K+rank)
+	// units preserves the diagnostic signal — "what did each lane say" —
+	// while Score reflects the fusion-of-lanes-that-scored-this-note.
 	for _, id := range []string{"note1", "note2"} {
 		sum := 0.0
 		for _, v := range byID[id].Components {
 			sum += v
 		}
-		assert.InDelta(t, byID[id].Score, sum, 1e-9,
-			"per-component scores should sum to the aggregated RRF score for %s", id)
+		n := float64(len(byID[id].Components))
+		assert.InDelta(t, byID[id].Score, sum/n, 1e-9,
+			"Score should be the mean of per-lane components for %s", id)
 	}
 }
 

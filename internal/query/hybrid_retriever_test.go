@@ -231,21 +231,22 @@ func TestHybridRetriever_OffsetBeyondResults(t *testing.T) {
 	assert.Empty(t, results)
 }
 
-// TestHybridRetriever_PartialCoverageCompressesRanking characterizes a bug
-// surfaced by dogfooding the identity vault on 2026-04-24: when a note is
-// missing from 2 of 4 retriever lanes (e.g. sparse and colbert were never
-// embedded), RRF's rank-sum penalizes it by exactly the missing lanes'
-// contribution — even if the note is rank 1 in every lane it does appear in.
+// TestHybridRetriever_PartialCoverageBeatsUbiquitousMediocre verifies the fix
+// for the 2026-04-24 ask-ranking incident: under mean-of-present RRF, a note
+// that scores rank 1 in every lane it appears in must beat a note that scores
+// rank 3 across all four lanes. Absence from a lane due to missing embedding
+// is treated as missing data, not a zero score.
 //
-// Concrete evidence: `ask "what matters most right now"` on vaultmind-identity
-// buried reference-current-context outside the top 5 despite FTS placing it at
-// rank 1 with score 1.0. The note had dense+FTS but no sparse/colbert.
+// Evidence that motivated the fix: `ask "what matters most right now"` on
+// vaultmind-identity buried reference-current-context outside the top 5
+// despite FTS placing it at rank 1 with score 1.0. The note had dense+FTS
+// but no sparse/colbert. Raw-sum RRF penalized it by the missing lanes'
+// contribution; mean-of-present does not.
 //
-// This test pins the buggy math down so a future fix (coverage-normalized RRF,
-// penalty for missing lanes, etc.) has a concrete red→green transition. Today
-// it passes because the bug is real; when retriever fairness is fixed, the
-// assertions below will need to flip — that's the point.
-func TestHybridRetriever_PartialCoverageCompressesRanking(t *testing.T) {
+// This test was originally the buggy-math characterization. When coverage
+// normalization landed, the assertion flipped from Greater to Less — same
+// setup, opposite verdict. That's the TDD red→green receipt.
+func TestHybridRetriever_PartialCoverageBeatsUbiquitousMediocre(t *testing.T) {
 	// Two notes compete:
 	//   partial-coverage-note: rank 1 in fts + dense, absent from sparse +
 	//                          colbert (simulates missing embeddings on
@@ -298,16 +299,12 @@ func TestHybridRetriever_PartialCoverageCompressesRanking(t *testing.T) {
 	require.NotEqual(t, -1, partialRank, "partial-coverage-note should appear in results")
 	require.NotEqual(t, -1, fullRank, "full-coverage-note should appear in results")
 
-	// Current (buggy) behavior: partial loses to full despite being rank 1
-	// in both its lanes, because RRF sums raw 1/(K+rank) across all lanes
-	// and missing lanes contribute zero. 2 × 1/61 ≈ 0.0328 loses to
-	// 4 × 1/65 ≈ 0.0615 even though the partial note is, by any reasonable
-	// semantics, the better match in the lanes where it was scoreable.
-	//
-	// When we fix HybridRetriever (e.g. normalize by eligible-lane count),
-	// this assertion will flip: partialRank < fullRank.
-	assert.Greater(t, partialRank, fullRank,
-		"bug characterization: partial-coverage note should beat full-coverage "+
-			"filler once coverage normalization lands. Flip this assertion "+
-			"(< instead of Greater) when the fix is in.")
+	// Mean-of-present RRF math (K=60):
+	//   partial = (1/61 + 1/61) / 2 = 0.01639
+	//   full    = (1/63 × 4)   / 4 = 0.01587
+	// Partial wins — its lanes judged it better, and the lanes that
+	// didn't judge it at all are treated as missing data, not negatives.
+	assert.Less(t, partialRank, fullRank,
+		"under mean-of-present RRF, a note that is rank 1 in every lane "+
+			"it appeared in must beat a note that is rank 3 across all four lanes")
 }

@@ -20,6 +20,20 @@ const DefaultRRFK = 60
 // Sub-retrievers are named so each note's Components map reports which
 // sub-retriever contributed what — useful for studying the 4-way RRF
 // contribution ("what did FTS add here vs dense?") during research.
+//
+// Fusion uses mean-of-present RRF: a note's score is the mean of its
+// 1/(K+rank) contributions across the lanes where it appeared. Absence
+// from a lane is treated as missing data, not a zero score. This is the
+// fix for the 2026-04-24 partial-coverage compression bug where newly-
+// added notes missing sparse/colbert embeddings lost to ubiquitous-
+// mediocre competitors even when they were rank 1 where they scored.
+//
+// In small vaults (fetchLimit ≥ note count) this is unambiguously
+// correct: absence from a lane's results means the modality wasn't
+// computed for that note. In very large vaults (where fetchLimit
+// truncates a lane's tail) absence could also mean "ranked below
+// cutoff" — a different failure mode worth separate attention, not
+// solved here.
 type HybridRetriever struct {
 	Retrievers []retrieval.NamedRetriever
 	K          int // RRF smoothing constant; zero-value falls back to DefaultRRFK
@@ -93,6 +107,14 @@ func (h *HybridRetriever) Search(ctx context.Context, query string, limit, offse
 					components: map[string]float64{name: rrfScore},
 				}
 			}
+		}
+	}
+
+	// Mean-of-present normalization: divide each note's raw RRF sum by
+	// the number of lanes it actually appeared in. See type doc above.
+	for _, e := range rrfScores {
+		if n := len(e.components); n > 0 {
+			e.score /= float64(n)
 		}
 	}
 
