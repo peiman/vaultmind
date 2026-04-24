@@ -63,11 +63,16 @@ func TestDoctor_ReportsBGEM3Embeddings(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	// Insert note with a BGE-M3-sized embedding (1024 float32 = 4096 bytes).
+	// BGE-M3 requires all three modalities in lockstep (migration 006).
+	// INSERT the full row so the parity trigger passes.
 	vec := make([]float32, 1024)
 	_, err = db.Exec(
-		`INSERT INTO notes (id, path, hash, mtime, title, is_domain, embedding) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		"n1", "n1.md", "h", 0, "T", true, index.EncodeEmbedding(vec),
+		`INSERT INTO notes (id, path, hash, mtime, title, is_domain, embedding, sparse_embedding, colbert_embedding)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		"n1", "n1.md", "h", 0, "T", true,
+		index.EncodeEmbedding(vec),
+		index.EncodeSparseEmbedding(map[int32]float32{0: 1.0}),
+		index.EncodeColBERTEmbedding([][]float32{vec}),
 	)
 	require.NoError(t, err)
 
@@ -133,13 +138,25 @@ func TestDoctor_BGEM3_FullCoverage_NoImbalance(t *testing.T) {
 // HasModalityImbalance must be TRUE when a BGE-M3 vault has dense embeddings
 // but any note is missing sparse or colbert. This is the 2026-04-24 incident:
 // 8 newly-added notes had dense but not sparse/colbert, silently compressing
-// hybrid RRF ranking. The whole point of this field is to surface that state
-// before it ships as degraded recall.
+// hybrid RRF ranking.
+//
+// As of migration 006 the schema trigger prevents this state from being
+// written in the first place — this doctor field is now defense-in-depth
+// (handles databases in the wild that pre-date migration 006, or that were
+// restored from an older backup). The test temporarily drops the trigger so
+// it can stage the failure state, verifies detection, then restores the
+// schema invariant. Bypassing the trigger in a test is the only supported
+// way to produce the state the doctor warning guards against.
 func TestDoctor_BGEM3_PartialCoverage_FlagsImbalance(t *testing.T) {
 	dbPath := t.TempDir() + "/idx.db"
 	db, err := index.Open(dbPath)
 	require.NoError(t, err)
 	defer db.Close()
+
+	_, err = db.Exec(`DROP TRIGGER IF EXISTS bgem3_modality_parity_insert`)
+	require.NoError(t, err)
+	_, err = db.Exec(`DROP TRIGGER IF EXISTS bgem3_modality_parity_update`)
+	require.NoError(t, err)
 
 	dense := make([]float32, 1024)
 	sparse := map[int32]float32{1: 0.5}
@@ -155,7 +172,8 @@ func TestDoctor_BGEM3_PartialCoverage_FlagsImbalance(t *testing.T) {
 		index.EncodeColBERTEmbedding(colbert),
 	)
 	require.NoError(t, err)
-	// Note 2: dense only — the failure mode.
+	// Note 2: dense only — the failure mode. Only stage-able with the
+	// trigger dropped above.
 	_, err = db.Exec(
 		`INSERT INTO notes (id, path, hash, mtime, title, is_domain, embedding) VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		"n2", "n2.md", "h2", 0, "T2", true, index.EncodeEmbedding(dense),

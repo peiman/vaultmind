@@ -502,18 +502,19 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 			storeErr := false
 			for j, out := range fullOutputs {
 				noteID := batch[j].id
-				if _, err := tx.Exec("UPDATE notes SET embedding = ? WHERE id = ?", EncodeEmbedding(out.Dense), noteID); err != nil {
-					log.Debug().Err(err).Str("id", noteID).Msg("storing dense failed")
-					storeErr = true
-					break
-				}
-				if _, err := tx.Exec("UPDATE notes SET sparse_embedding = ? WHERE id = ?", EncodeSparseEmbedding(out.Sparse), noteID); err != nil {
-					log.Debug().Err(err).Str("id", noteID).Msg("storing sparse failed")
-					storeErr = true
-					break
-				}
-				if _, err := tx.Exec("UPDATE notes SET colbert_embedding = ? WHERE id = ?", EncodeColBERTEmbedding(out.ColBERT), noteID); err != nil {
-					log.Debug().Err(err).Str("id", noteID).Msg("storing ColBERT failed")
+				// Atomic single-statement write across all three modalities.
+				// The bgem3_modality_parity trigger (migration 006) enforces
+				// that BGE-M3 dense cannot exist without sparse + colbert;
+				// separate UPDATEs would violate mid-flight. The atomic form
+				// is also simpler — one statement, one outcome.
+				if _, err := tx.Exec(
+					`UPDATE notes SET embedding = ?, sparse_embedding = ?, colbert_embedding = ? WHERE id = ?`,
+					EncodeEmbedding(out.Dense),
+					EncodeSparseEmbedding(out.Sparse),
+					EncodeColBERTEmbedding(out.ColBERT),
+					noteID,
+				); err != nil {
+					log.Debug().Err(err).Str("id", noteID).Msg("storing BGE-M3 embeddings failed")
 					storeErr = true
 					break
 				}

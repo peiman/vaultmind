@@ -201,9 +201,18 @@ func TestDetectEmbeddingDims_BGEM3(t *testing.T) {
 	row, _ := db.QueryNoteByPath("concepts/spreading-activation.md")
 	require.NotNil(t, row)
 
+	// BGE-M3 writes all three modalities in lockstep — the parity trigger
+	// (migration 006) rejects dense-alone. Mirror the real write shape.
 	vec1024 := make([]float32, 1024)
 	vec1024[0] = 1.0
-	require.NoError(t, index.StoreEmbedding(db, row.ID, vec1024))
+	_, err := db.Exec(
+		`UPDATE notes SET embedding = ?, sparse_embedding = ?, colbert_embedding = ? WHERE id = ?`,
+		index.EncodeEmbedding(vec1024),
+		index.EncodeSparseEmbedding(map[int32]float32{0: 1.0}),
+		index.EncodeColBERTEmbedding([][]float32{vec1024}),
+		row.ID,
+	)
+	require.NoError(t, err)
 
 	dims, err := index.DetectEmbeddingDims(db)
 	require.NoError(t, err)
