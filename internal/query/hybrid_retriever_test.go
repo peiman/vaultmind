@@ -230,3 +230,84 @@ func TestHybridRetriever_OffsetBeyondResults(t *testing.T) {
 	assert.Equal(t, 1, total)
 	assert.Empty(t, results)
 }
+
+// TestHybridRetriever_PartialCoverageCompressesRanking characterizes a bug
+// surfaced by dogfooding the identity vault on 2026-04-24: when a note is
+// missing from 2 of 4 retriever lanes (e.g. sparse and colbert were never
+// embedded), RRF's rank-sum penalizes it by exactly the missing lanes'
+// contribution — even if the note is rank 1 in every lane it does appear in.
+//
+// Concrete evidence: `ask "what matters most right now"` on vaultmind-identity
+// buried reference-current-context outside the top 5 despite FTS placing it at
+// rank 1 with score 1.0. The note had dense+FTS but no sparse/colbert.
+//
+// This test pins the buggy math down so a future fix (coverage-normalized RRF,
+// penalty for missing lanes, etc.) has a concrete red→green transition. Today
+// it passes because the bug is real; when retriever fairness is fixed, the
+// assertions below will need to flip — that's the point.
+func TestHybridRetriever_PartialCoverageCompressesRanking(t *testing.T) {
+	// Two notes compete:
+	//   partial-coverage-note: rank 1 in fts + dense, absent from sparse +
+	//                          colbert (simulates missing embeddings on
+	//                          a newly-added note).
+	//   full-coverage-note:    rank 3 in all four lanes (mediocre but
+	//                          present everywhere).
+	//
+	// RRF rank-sum math (K=60):
+	//   partial = 2 × 1/(60+1)  = 0.0328
+	//   full    = 4 × 1/(60+3)  = 0.0635
+	// Full wins despite losing every head-to-head rank comparison it's
+	// part of, because it collects contributions from two lanes the
+	// partial note can't reach. This is the real mechanism behind the
+	// 2026-04-24 ask-ranking compression on vaultmind-identity, where a
+	// reference scoring 1.0 in FTS lost to an arc scoring 0.0474 overall.
+	withFullAtRank3 := func(extra retrieval.ScoredResult) []retrieval.ScoredResult {
+		return []retrieval.ScoredResult{
+			extra, // rank 1
+			{ID: "filler-a", Title: "a"},
+			{ID: "full-coverage-note", Title: "full"}, // rank 3
+			{ID: "filler-b", Title: "b"},
+			{ID: "filler-c", Title: "c"},
+		}
+	}
+	partialLane := withFullAtRank3(retrieval.ScoredResult{ID: "partial-coverage-note", Title: "partial"})
+	absentLane := withFullAtRank3(retrieval.ScoredResult{ID: "filler-d", Title: "d"})
+
+	hybrid := &query.HybridRetriever{
+		Retrievers: []retrieval.NamedRetriever{
+			{Name: "fts", Retriever: &staticRetriever{results: partialLane, total: 5}},
+			{Name: "dense", Retriever: &staticRetriever{results: partialLane, total: 5}},
+			{Name: "sparse", Retriever: &staticRetriever{results: absentLane, total: 5}},
+			{Name: "colbert", Retriever: &staticRetriever{results: absentLane, total: 5}},
+		},
+		K: 60,
+	}
+
+	results, _, err := hybrid.Search(context.Background(), "test", 10, 0, index.SearchFilters{})
+	require.NoError(t, err)
+
+	var partialRank, fullRank int = -1, -1
+	for i, r := range results {
+		switch r.ID {
+		case "partial-coverage-note":
+			partialRank = i + 1
+		case "full-coverage-note":
+			fullRank = i + 1
+		}
+	}
+	require.NotEqual(t, -1, partialRank, "partial-coverage-note should appear in results")
+	require.NotEqual(t, -1, fullRank, "full-coverage-note should appear in results")
+
+	// Current (buggy) behavior: partial loses to full despite being rank 1
+	// in both its lanes, because RRF sums raw 1/(K+rank) across all lanes
+	// and missing lanes contribute zero. 2 × 1/61 ≈ 0.0328 loses to
+	// 4 × 1/65 ≈ 0.0615 even though the partial note is, by any reasonable
+	// semantics, the better match in the lanes where it was scoreable.
+	//
+	// When we fix HybridRetriever (e.g. normalize by eligible-lane count),
+	// this assertion will flip: partialRank < fullRank.
+	assert.Greater(t, partialRank, fullRank,
+		"bug characterization: partial-coverage note should beat full-coverage "+
+			"filler once coverage normalization lands. Flip this assertion "+
+			"(< instead of Greater) when the fix is in.")
+}

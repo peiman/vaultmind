@@ -1,0 +1,100 @@
+# Golden queries against vaultmind-identity/.
+#
+# Each entry is a natural-language query I (or a future session) would plausibly
+# issue, plus the note IDs that SHOULD land in the top-K. Expected sets are
+# curated by a human who has read the vault — they are the ground truth the
+# retriever is judged against. Keep them small (1–3 IDs) and high-confidence.
+#
+# Add a query when:
+#   - A real session surfaced a case where retrieval was wrong (regression seed)
+#   - The vault gained a note whose retrievability we want locked in
+#   - A paraphrase or domain-specific phrasing exposes a weak lane
+#
+# Do NOT add queries just to inflate the count. Each entry is a commitment to
+# keep that query's ranking from regressing.
+
+# --- priority / roadmap — what matters now ---
+- name: priority-what-matters
+  text: "what matters most right now"
+  expected: [reference-current-context]
+
+- name: priority-roadmap-order
+  text: "plasticity priority order"
+  expected: [reference-plasticity-priority-order]
+
+- name: priority-roadmap-paraphrase
+  text: "what is the roadmap I committed to"
+  expected: [reference-plasticity-priority-order, reference-current-context]
+
+# --- identity ---
+- name: identity-self
+  text: "who am I"
+  expected: [identity-who-i-am]
+
+- name: identity-partner
+  text: "who is Peiman"
+  expected: [identity-peiman]
+
+# --- principles ---
+- name: principle-arcs
+  text: "arcs not notes"
+  expected: [principle-arcs-not-notes]
+
+- name: principle-how-to-write
+  text: "how do I write an arc"
+  expected: [principle-how-to-write-arcs]
+
+- name: principle-measurement
+  text: "measure before you optimize"
+  expected: [principle-measure-before-optimize]
+
+- name: principle-robustness
+  text: "robustness is the default"
+  expected: [principle-robustness-default]
+
+# --- arcs / growth moments ---
+- name: arc-breakthrough
+  text: "three minds one memory"
+  expected: [arc-the-breakthrough]
+
+- name: arc-persona-shift
+  text: "from retrieval engine to memory for minds"
+  expected: [arc-persona-reconstruction]
+
+- name: arc-plasticity-inside
+  text: "the plasticity gap from inside"
+  expected: [arc-plasticity-gap-from-inside]
+
+- name: arc-dogfood-rrf
+  text: "RRF is not cosine similarity"
+  expected: [arc-dogfood-rrf]
+
+- name: arc-extending
+  text: "extending not overwriting reference notes"
+  expected: [arc-extending-not-overwriting]
+
+# --- references / external pointers ---
+- name: ref-workhorse-vault
+  text: "workhorse persona vault"
+  expected: [reference-workhorse-vault]
+
+- name: ref-papers
+  text: "persona continuity paper"
+  expected: [reference-paper-persona-continuity]
+
+- name: ref-federated
+  text: "federated retrieval constants"
+  expected: [reference-paper-federated-constants]
+
+- name: ref-catches
+  text: "session catches mirror material"
+  expected: [reference-session-catches]
+
+# --- regressions worth locking in ---
+# 2026-04-24: dogfooded ask returned arc-the-breakthrough at 0.047 for the
+# query below when reference-current-context scored 1.0 via search. Root
+# cause: partial-coverage RRF (new notes missing sparse/colbert lanes).
+# Keep this query here so a future indexer regression reopens the same bug.
+- name: regression-ask-ranking-compression-2026-04-24
+  text: "what matters most right now"
+  expected: [reference-current-context]
