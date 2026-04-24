@@ -507,6 +507,65 @@ func TestTruncate_Boundaries(t *testing.T) {
 	assert.Equal(t, "åäö...", query.Truncate("åäö world", 3))
 }
 
+// FormatAskExplain must render per-lane contributions so operators can see
+// the fusion math without --json + jq. Lanes sorted alphabetically for
+// diff-friendly output; "mean of N" must appear so imbalance ("mean of 2"
+// next to "mean of 4") is spottable at a glance.
+func TestFormatAskExplain_RendersLaneBreakdown(t *testing.T) {
+	r := &query.AskResult{
+		Query: "q",
+		TopHits: []retrieval.ScoredResult{
+			{
+				ID: "partial", Title: "Partial", Score: 0.0164,
+				Components: map[string]float64{
+					"fts":   0.01639,
+					"dense": 0.01639,
+				},
+			},
+			{
+				ID: "full", Title: "Full", Score: 0.01587,
+				Components: map[string]float64{
+					"fts": 0.01587, "dense": 0.01587, "sparse": 0.01587, "colbert": 0.01587,
+				},
+			},
+		},
+	}
+	var buf bytes.Buffer
+	require.NoError(t, query.FormatAskExplain(r, &buf))
+	out := buf.String()
+
+	assert.Contains(t, out, "lanes:", "must introduce the lane breakdown")
+	assert.Contains(t, out, "dense=0.01639", "must print each lane's contribution")
+	assert.Contains(t, out, "fts=0.01639")
+	assert.Contains(t, out, "mean of 2", "coverage count must be visible")
+	assert.Contains(t, out, "mean of 4")
+
+	// Alphabetical sort check: for the 4-lane hit, "colbert" must appear
+	// before "dense" in the output line.
+	fullIdx := bytes.Index([]byte(out), []byte("Full"))
+	require.Positive(t, fullIdx, "Full hit must be in output")
+	tail := out[fullIdx:]
+	assert.Less(t,
+		bytes.Index([]byte(tail), []byte("colbert")),
+		bytes.Index([]byte(tail), []byte("dense")),
+		"lanes must be alphabetized for reviewable diffs")
+}
+
+// Plain FormatAsk must NOT leak the lane breakdown — --explain is opt-in so
+// default output stays terse. A regression would flood terminals.
+func TestFormatAsk_DefaultSuppressesLaneBreakdown(t *testing.T) {
+	r := &query.AskResult{
+		Query: "q",
+		TopHits: []retrieval.ScoredResult{
+			{ID: "x", Title: "X", Score: 0.5, Components: map[string]float64{"fts": 0.5}},
+		},
+	}
+	var buf bytes.Buffer
+	require.NoError(t, query.FormatAsk(r, &buf))
+	assert.NotContains(t, buf.String(), "lanes:", "non-explain mode stays terse")
+	assert.NotContains(t, buf.String(), "mean of")
+}
+
 // FormatAsk human output includes a simple header + hit lines so users can
 // read the result without --json. Losing the structure would degrade the
 // terminal UX.

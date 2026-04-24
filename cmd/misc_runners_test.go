@@ -11,6 +11,7 @@ import (
 
 	"github.com/peiman/vaultmind/internal/embedding"
 	"github.com/peiman/vaultmind/internal/query"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -302,6 +303,38 @@ func TestAsk_ReturnsResultWithQuery(t *testing.T) {
 	require.NoError(t, json.Unmarshal(out.Bytes(), &env))
 	assert.Equal(t, "ok", env.Status)
 	assert.NotEmpty(t, env.Result)
+}
+
+// guardBGEM3SlowBackend must refuse by default when the binary would run
+// BGE-M3 indexing on pure-Go hugot. Silent slow paths are the class of bug
+// that cost 45 minutes on 8 notes during the 2026-04-24 investigation.
+// The refusal must include a concrete pointer at `task build:ort` so the
+// operator knows what to do next, not just what not to do.
+func TestGuardBGEM3SlowBackend_RefusesOnGoBackend(t *testing.T) {
+	if embedding.BackendName() != "go" {
+		t.Skip("guard only fires on pure-Go builds")
+	}
+	cmd := &cobra.Command{}
+	var stderr bytes.Buffer
+	cmd.SetErr(&stderr)
+
+	err := guardBGEM3SlowBackend(cmd, "bge-m3")
+	require.Error(t, err, "default-off allow flag must block the slow path")
+	assert.Contains(t, err.Error(), "--allow-slow-backend",
+		"error must name the override flag so the operator can opt in intentionally")
+	assert.Contains(t, stderr.String(), "task build:ort",
+		"warning must point at the supported fix path")
+}
+
+// MiniLM indexing (the other supported model) must never trigger the
+// guard — the slow-path warning is specifically about BGE-M3.
+func TestGuardBGEM3SlowBackend_PassesForMiniLM(t *testing.T) {
+	cmd := &cobra.Command{}
+	var stderr bytes.Buffer
+	cmd.SetErr(&stderr)
+
+	require.NoError(t, guardBGEM3SlowBackend(cmd, "minilm"))
+	assert.Empty(t, stderr.String(), "MiniLM must not trigger the BGE-M3 warning")
 }
 
 // ask on a zero-hit query in human mode must emit the keyword-only hint.

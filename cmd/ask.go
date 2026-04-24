@@ -98,7 +98,11 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	}
 
 	if !getConfigValueWithFlags[bool](cmd, "json", config.KeyAppAskJson) {
-		if err := query.FormatAsk(result, cmd.OutOrStdout()); err != nil {
+		formatter := query.FormatAsk
+		if getConfigValueWithFlags[bool](cmd, "explain", config.KeyAppAskExplain) {
+			formatter = query.FormatAskExplain
+		}
+		if err := formatter(result, cmd.OutOrStdout()); err != nil {
 			return err
 		}
 		writeZeroHitDiagnostics(cmd.OutOrStdout(), vdb.DB, args[0], mode, len(result.TopHits))

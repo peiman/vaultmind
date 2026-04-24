@@ -21,6 +21,11 @@ func newBGEM3Session() (*hugot.Session, error) {
 	return hugot.NewORTSession(opts...)
 }
 
+// BackendName identifies which hugot backend the binary was built against.
+// Mirror file in session_go.go returns "go". Callers use this to decide
+// whether to warn about BGE-M3 indexing being about to run on the slow path.
+func BackendName() string { return "ort" }
+
 // detectORTLibDir finds the ONNX Runtime library directory.
 func detectORTLibDir() string {
 	// Environment variable takes priority

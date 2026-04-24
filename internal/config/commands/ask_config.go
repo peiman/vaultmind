@@ -14,6 +14,7 @@ var AskMetadata = config.CommandMetadata{
 		"app.ask.budget":       "budget",
 		"app.ask.max_items":    "max-items",
 		"app.ask.search_limit": "search-limit",
+		"app.ask.explain":      "explain",
 	},
 }
 
@@ -25,6 +26,7 @@ func AskOptions() []config.ConfigOption {
 		{Key: "app.ask.budget", DefaultValue: 4000, Description: "Token budget for context-pack", Type: "int"},
 		{Key: "app.ask.max_items", DefaultValue: 8, Description: "Max context items", Type: "int"},
 		{Key: "app.ask.search_limit", DefaultValue: 5, Description: "Max search hits", Type: "int"},
+		{Key: "app.ask.explain", DefaultValue: false, Description: "Show per-lane RRF contributions for each hit", Type: "bool"},
 	}
 }
 

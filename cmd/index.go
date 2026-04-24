@@ -10,12 +10,26 @@ import (
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/config/commands"
+	"github.com/peiman/vaultmind/internal/embedding"
 	"github.com/peiman/vaultmind/internal/envelope"
 	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/vault"
 	"github.com/spf13/cobra"
 )
+
+// bgem3SlowPathWarning is the stderr banner that fires when `index --embed
+// --model bge-m3` is invoked on a binary built without -tags ORT. Pure-Go
+// hugot is documented as "hours for 130 notes"; an operator who sees
+// 45 minutes of silent CPU burn on 8 notes thinks it's an OOM (I did —
+// see the 2026-04-24/25 investigation). Surface the regime explicitly so
+// the mistake costs seconds of reading, not 45 minutes of waiting.
+const bgem3SlowPathWarning = `⚠ BGE-M3 embedding on the pure-Go hugot backend is very slow (hours for a medium vault).
+  For fast indexing, rebuild with:
+    task setup:ort && task build:ort
+    /tmp/vaultmind-ort index --embed --model bge-m3 --vault <vault>
+  To proceed on this binary anyway, re-run with --allow-slow-backend.
+`
 
 var indexCmd = MustNewCommand(commands.IndexMetadata, runIndex)
 
@@ -67,6 +81,9 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 
 	var embedResult *index.EmbedResult
 	if embed {
+		if err := guardBGEM3SlowBackend(cmd, model); err != nil {
+			return err
+		}
 		embedResult, err = idxr.RunEmbed(cmd.Context(), dbPath, model)
 		if err != nil {
 			return fmt.Errorf("embedding notes: %w", err)
@@ -127,5 +144,21 @@ func formatIndexResult(r index.IndexAndEmbedResult, w io.Writer) error {
 			return err
 		}
 	}
+	return nil
+}
+
+// guardBGEM3SlowBackend prints a visible warning (and blocks unless the
+// operator opts in) when BGE-M3 indexing would run on pure-Go hugot.
+// Any other model path — or ORT-built binaries — is a no-op.
+func guardBGEM3SlowBackend(cmd *cobra.Command, model string) error {
+	if model != "bge-m3" || embedding.BackendName() == "ort" {
+		return nil
+	}
+	allow := getConfigValueWithFlags[bool](cmd, "allow-slow-backend", config.KeyAppIndexAllowSlowBackend)
+	if !allow {
+		_, _ = fmt.Fprint(cmd.ErrOrStderr(), bgem3SlowPathWarning)
+		return fmt.Errorf("refusing to run BGE-M3 indexing on the pure-Go backend without --allow-slow-backend")
+	}
+	_, _ = fmt.Fprint(cmd.ErrOrStderr(), bgem3SlowPathWarning)
 	return nil
 }

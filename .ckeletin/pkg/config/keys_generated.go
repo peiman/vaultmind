@@ -31,6 +31,7 @@ const (
 	KeyAppAskBudget                     = "app.ask.budget"                      // Token budget for context-pack
 	KeyAppAskMaxItems                   = "app.ask.max_items"                   // Max context items
 	KeyAppAskSearchLimit                = "app.ask.search_limit"                // Max search hits
+	KeyAppAskExplain                    = "app.ask.explain"                     // Show per-lane RRF contributions for each hit
 	KeyAppCheckFailFast                 = "app.check.fail_fast"                 // Stop on first failed check
 	KeyAppCheckVerbose                  = "app.check.verbose"                   // Show verbose output including command details
 	KeyAppCheckParallel                 = "app.check.parallel"                  // Run checks within each category in parallel (disable with --parallel=false)
@@ -100,6 +101,7 @@ const (
 	KeyAppIndexFull                     = "app.index.full"                      // Force full rebuild instead of incremental index
 	KeyAppIndexEmbed                    = "app.index.embed"                     // Compute and store embeddings for note bodies
 	KeyAppIndexModel                    = "app.index.model"                     // Embedding model: minilm (384d, fast) or bge-m3 (1024d, 3-in-1)
+	KeyAppIndexAllowSlowBackend         = "app.index.allow_slow_backend"        // Allow BGE-M3 indexing on the pure-Go backend (hours for medium vaults)
 	KeyAppLinksVault                    = "app.links.vault"                     // Path to vault root
 	KeyAppLinksJson                     = "app.links.json"                      // Output in JSON format
 	KeyAppLinksEdgeType                 = "app.links.edge_type"                 // Filter by edge type

@@ -11,3 +11,9 @@ import "github.com/knights-analytics/hugot"
 func newBGEM3Session() (*hugot.Session, error) {
 	return hugot.NewGoSession()
 }
+
+// BackendName identifies which hugot backend the binary was built against.
+// Consumers (e.g. the index command) use this to warn when BGE-M3 indexing
+// is about to run on the slow pure-Go path so operators don't mistake
+// "hours-long indexing" for a hang or OOM. Reported by the build tag.
+func BackendName() string { return "go" }

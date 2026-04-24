@@ -11,11 +11,12 @@ By default, uses incremental indexing — only re-parses files whose content has
 Use --full to force a complete rebuild from scratch.`,
 	ConfigPrefix: "app.index",
 	FlagOverrides: map[string]string{
-		"app.index.vault": "vault",
-		"app.index.json":  "json",
-		"app.index.full":  "full",
-		"app.index.embed": "embed",
-		"app.index.model": "model",
+		"app.index.vault":              "vault",
+		"app.index.json":               "json",
+		"app.index.full":               "full",
+		"app.index.embed":              "embed",
+		"app.index.model":              "model",
+		"app.index.allow_slow_backend": "allow-slow-backend",
 	},
 }
 
@@ -61,6 +62,14 @@ func IndexOptions() []config.ConfigOption {
 			Type:         "string",
 			Required:     false,
 			Example:      "bge-m3",
+		},
+		{
+			Key:          "app.index.allow_slow_backend",
+			DefaultValue: false,
+			Description:  "Allow BGE-M3 indexing on the pure-Go backend (hours for medium vaults)",
+			Type:         "bool",
+			Required:     false,
+			Example:      "true",
 		},
 	}
 }
