@@ -112,6 +112,35 @@ func TestWriteEmbeddingStatus_ReadyPrintsCounts(t *testing.T) {
 	assert.Contains(t, out, "colbert 9/10")
 }
 
+// When the doctor flags modality imbalance, writeEmbeddingStatus must render
+// the warning line AND the remediation. A silent pass would defeat the whole
+// point of the field (surfacing the 2026-04-24 failure mode).
+func TestWriteEmbeddingStatus_ImbalancePrintsWarning(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, writeEmbeddingStatus(&buf, &query.DoctorEmbeddings{
+		SemanticReady: true, TotalNotes: 24, DenseCount: 24, Model: "bge-m3",
+		SparseCount: 16, ColBERTCount: 16,
+		HasModalityImbalance: true,
+	}))
+	out := buf.String()
+	assert.Contains(t, out, "Partial BGE-M3 coverage", "must name the failure mode")
+	assert.Contains(t, out, "8 note(s) missing sparse", "must report the exact deficit")
+	assert.Contains(t, out, "8 missing colbert", "must report the exact deficit")
+	assert.Contains(t, out, "vaultmind index --embed", "must name the remedy")
+}
+
+// Full coverage under BGE-M3 must NOT print the warning — a false alarm would
+// train users to ignore the line when it does matter.
+func TestWriteEmbeddingStatus_FullCoverageSilent(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, writeEmbeddingStatus(&buf, &query.DoctorEmbeddings{
+		SemanticReady: true, TotalNotes: 10, DenseCount: 10, Model: "bge-m3",
+		SparseCount: 10, ColBERTCount: 10,
+		HasModalityImbalance: false,
+	}))
+	assert.NotContains(t, buf.String(), "Partial BGE-M3 coverage")
+}
+
 // git status on a non-git vault must not error — users routinely initialise
 // a vault before `git init`. Silent success with repo_detected=false is
 // the contract.

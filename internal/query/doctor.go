@@ -23,13 +23,20 @@ type DoctorResult struct {
 // DoctorEmbeddings reports the vault's semantic-retrieval readiness. Surfaces
 // which embedding lanes are populated so a user can diagnose a keyword-only
 // fallback at a glance without running an ask query and hitting zero hits.
+//
+// HasModalityImbalance flags the failure mode where a BGE-M3 vault has dense
+// embeddings but some notes are missing sparse or colbert. Under hybrid RRF
+// this silently compresses ranking: a partially-covered note at rank 1 in 2
+// lanes loses to a ubiquitous rank-3 note across 4 lanes. Dense-only vaults
+// (MiniLM) are never flagged — sparse/colbert don't apply to that model.
 type DoctorEmbeddings struct {
-	TotalNotes    int    `json:"total_notes"`
-	DenseCount    int    `json:"dense_count"`
-	SparseCount   int    `json:"sparse_count"`
-	ColBERTCount  int    `json:"colbert_count"`
-	Model         string `json:"model"` // "bge-m3", "minilm", or "" when no dense embeddings
-	SemanticReady bool   `json:"semantic_ready"`
+	TotalNotes           int    `json:"total_notes"`
+	DenseCount           int    `json:"dense_count"`
+	SparseCount          int    `json:"sparse_count"`
+	ColBERTCount         int    `json:"colbert_count"`
+	Model                string `json:"model"` // "bge-m3", "minilm", or "" when no dense embeddings
+	SemanticReady        bool   `json:"semantic_ready"`
+	HasModalityImbalance bool   `json:"has_modality_imbalance"`
 }
 
 // DoctorIssues holds counts of vault health issues.
@@ -222,6 +229,12 @@ func collectEmbeddingStatus(db *index.DB, total int) (*DoctorEmbeddings, error) 
 		case 1024:
 			emb.Model = "bge-m3"
 		}
+	}
+	// Modality imbalance only makes sense under BGE-M3, where all three lanes
+	// are expected to be populated in lockstep. For MiniLM-sized vaults the
+	// sparse/colbert columns are by-design empty.
+	if emb.Model == "bge-m3" && (emb.SparseCount < emb.DenseCount || emb.ColBERTCount < emb.DenseCount) {
+		emb.HasModalityImbalance = true
 	}
 	return emb, nil
 }

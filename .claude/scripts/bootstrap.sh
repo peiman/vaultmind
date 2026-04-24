@@ -94,6 +94,18 @@ for vault in "$PROJECT_DIR"/vaultmind-identity "$PROJECT_DIR"/vaultmind-vault; d
   else
     echo "$PASS $name: $embedded/$notes embedded"
   fi
+
+  # Dense-count parity is necessary but not sufficient. Under BGE-M3, hybrid
+  # RRF ranking needs sparse and colbert in lockstep with dense; a partially-
+  # covered vault silently compresses ranking (see the 2026-04-24 incident).
+  # Delegate detection to `vaultmind doctor` so this script and the CLI share
+  # a single source of truth. Loud warning, non-blocking — imbalance doesn't
+  # stop other work; it just must not be invisible.
+  if [ -f "$db" ] && "$VAULTMIND" doctor --vault "$vault" 2>/dev/null \
+       | grep -q "Partial BGE-M3 coverage"; then
+    echo "$WARN $name: BGE-M3 modality imbalance — run:"
+    echo "     $VAULTMIND index --embed --model bge-m3 --vault $vault"
+  fi
 done
 if [ "$any_vault" = "0" ]; then
   echo "$WARN no vault directories found under $PROJECT_DIR"

@@ -23,7 +23,9 @@ func init() {
 // writeEmbeddingStatus prints the vault's semantic-retrieval readiness in a
 // human-readable form. When no dense embeddings exist, the output names the
 // remedy explicitly so users don't have to read ask's zero-hit hint to
-// discover it.
+// discover it. When BGE-M3 coverage is imbalanced (some notes missing sparse
+// or colbert), a warning line surfaces the failure mode that silently
+// compresses hybrid RRF ranking.
 func writeEmbeddingStatus(w io.Writer, emb *query.DoctorEmbeddings) error {
 	if emb == nil {
 		return nil
@@ -35,12 +37,22 @@ func writeEmbeddingStatus(w io.Writer, emb *query.DoctorEmbeddings) error {
 			emb.TotalNotes)
 		return err
 	}
-	_, err := fmt.Fprintf(w,
+	if _, err := fmt.Fprintf(w,
 		"Embeddings: dense %d/%d (%s), sparse %d/%d, colbert %d/%d\n",
 		emb.DenseCount, emb.TotalNotes, emb.Model,
 		emb.SparseCount, emb.TotalNotes,
-		emb.ColBERTCount, emb.TotalNotes)
-	return err
+		emb.ColBERTCount, emb.TotalNotes); err != nil {
+		return err
+	}
+	if emb.HasModalityImbalance {
+		_, err := fmt.Fprintf(w,
+			"⚠ Partial BGE-M3 coverage: %d note(s) missing sparse, %d missing colbert — "+
+				"hybrid RRF ranking will be compressed for these notes.\n"+
+				"  run: vaultmind index --embed --model bge-m3 --vault <vault>\n",
+			emb.DenseCount-emb.SparseCount, emb.DenseCount-emb.ColBERTCount)
+		return err
+	}
+	return nil
 }
 
 func runDoctor(cmd *cobra.Command, _ []string) error {
