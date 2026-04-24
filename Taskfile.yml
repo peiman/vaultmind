@@ -108,8 +108,15 @@ tasks:
       - bash .claude/scripts/test-hook.sh
 
   check:fast:
-    desc: Run fast quality checks
-    cmds: [task: ckeletin:check:fast]
+    desc: Run fast quality checks (XDG_DATA_HOME isolated — issue #17)
+    cmds:
+      # Mirrors the XDG export in `test` above. check:fast runs the framework's
+      # test:unit which does NOT export XDG_DATA_HOME, so the isolation guard
+      # in internal/experiment/isolation_test.go fails on PR CI without this.
+      - cmd: |
+          export XDG_DATA_HOME=$(mktemp -d -t vm-check-fast.XXXXXX)
+          trap 'rm -rf "$XDG_DATA_HOME"' EXIT
+          task ckeletin:check:fast
 
   check:deps:
     desc: Run all dependency checks
