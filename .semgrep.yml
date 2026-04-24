@@ -54,6 +54,7 @@ rules:
         - internal/marker/render.go  # Reads/writes vault note files and section templates (user-provided vault path)
         - internal/plan/executor.go  # Reads vault note files for backup/rollback (user-provided vault path, validated by safePath)
         - internal/testvault/  # Test-only helper; paths are controlled by test code (t.TempDir)
+        - internal/episode/  # Reads Claude Code session transcripts (CLI tool, user-provided path arg)
         - internal/template/process.go  # Reads template file from user-provided --template flag (controlled config path)
         - cmd/apply.go  # Reads user-specified plan JSON file (positional arg)
         - cmd/frontmatter_merge.go  # Reads user-specified YAML merge file (--file flag)

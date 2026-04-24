@@ -1,0 +1,10 @@
+vault:
+  exclude:
+    - ".git"
+    - ".obsidian"
+    - ".trash"
+    - ".vaultmind"
+    - "episodes"
+
+index:
+  db_path: .vaultmind/index.db
