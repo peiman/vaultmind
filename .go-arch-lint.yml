@@ -98,6 +98,8 @@ components:
       - internal/experiment/**
       # VaultMind baseline harness (golden-query retrieval-quality gate, test-only):
       - internal/baseline/**
+      # VaultMind shared test vault fixture (per-process vault rebuild, test-only):
+      - internal/testvault/**
 
   # -------------------------------------------------------------------------
   # PROJECT-MANAGED: Business Logic Layer
