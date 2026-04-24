@@ -17,14 +17,27 @@ import (
 )
 
 var (
-	sharedOnce sync.Once
-	sharedPath string
-	sharedErr  error
+	sharedOnce      sync.Once
+	sharedPath      string
+	sharedVaultPath string
+	sharedErr       error
 )
 
 // SharedIndexDBPath returns the filesystem path of an index DB built from
 // vaultPath, rebuilt exactly once per test process. Callers must NOT mutate
 // the returned file — use OpenSharedDB to obtain a writable per-test copy.
+//
+// The first caller's vaultPath wins for the process lifetime; a subsequent
+// call with a different vaultPath fails loudly rather than silently
+// returning the first vault's DB. Every caller in this repo uses the same
+// research vault, so the single-path lock is the honest contract.
+//
+// WAL/SHM sidecars are intentionally not copied: Indexer.Rebuild closes the
+// only DB handle before returning, which triggers SQLite's default WAL
+// checkpoint/truncation, leaving all committed state in the main .db file.
+// If a future change keeps the DB open after Rebuild, or disables
+// wal_autocheckpoint, the sidecars would need to be copied too — otherwise
+// per-test copies silently lose the tail of the rebuild.
 func SharedIndexDBPath(tb testing.TB, vaultPath string) string {
 	tb.Helper()
 	sharedOnce.Do(func() {
@@ -45,9 +58,14 @@ func SharedIndexDBPath(tb testing.TB, vaultPath string) string {
 			return
 		}
 		sharedPath = dbPath
+		sharedVaultPath = vaultPath
 	})
 	if sharedErr != nil {
 		tb.Fatalf("testvault: build shared DB: %v", sharedErr)
+	}
+	if vaultPath != sharedVaultPath {
+		tb.Fatalf("testvault: vaultPath mismatch — first caller built %q, this caller requested %q; the shared-DB contract is one vault per test process",
+			sharedVaultPath, vaultPath)
 	}
 	return sharedPath
 }
