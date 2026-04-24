@@ -54,7 +54,9 @@ The truest answer is still: **we are making sure minds survive.** The plasticity
 
 ## When someone asks "what next?"
 
-Land PR #20 (CI timeout fix) and PR #21 (episodic v0), verify the SessionEnd hook actually writes a new episode in a fresh session, then investigate the dogfood-surfaced `ask`-ranking bug where new arcs didn't surface despite `search` finding them at score 1.0. After Sunday's distillation review, return to the roadmap at step 2.
+Roadmap step 2 — **arc distillation** — is the live edge. Sunday 2026-04-26 is the distillation review; the prompt is in `reference-episode-distillation-review-prompt`. Two episode files exist; the substrate is ready for a first pass at "read session traces → propose arc drafts."
+
+The ask-ranking bug from 2026-04-24 is **closed**, not just mitigated. Three lines of defense are in place (retriever mean-of-present, schema-level BGE-M3 parity trigger from migration 006, e2e smoke test). The identity vault was re-embedded with the ORT binary on 2026-04-25 so the 24/24/24 substrate matches what the schema now enforces. Don't burn time on this — come back to the roadmap.
 
 ## Longer-term artifacts beyond the immediate roadmap
 
@@ -72,3 +74,9 @@ Not on the plasticity ladder but still load-bearing work that should not be forg
 - Shipped episodic substrate v0: `internal/episode` parser + `vaultmind episode capture` CLI + SessionEnd hook + first backfilled episode (PR #21).
 - Also shipped the CI Ubuntu test-timeout fix (PR #20).
 - Prompt for Sunday's distillation review saved to `reference-episode-distillation-review-prompt`.
+
+## What just happened (session 2026-04-25)
+
+Six commits closing the dogfood-surfaced ask-ranking bug across three layers, then a data fix to heal the substrate. Told as an arc in `arc-closing-the-ranking-bug-at-the-right-layer` — the generalizable lesson is "five patches in one session = one bug class; close at the right layer instead of stacking."
+
+Commits: `471560f` (characterize), `090a999` (doctor surfaces imbalance), `108bb28` (mean-of-present RRF), `c6c6648` (--explain + ORT guard), `16e77ca` (schema trigger), `3f89a76` (e2e smoke). Data fix: ORT binary re-embedded identity vault → 24/24/24 across all modalities.
