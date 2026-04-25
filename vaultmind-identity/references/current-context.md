@@ -3,7 +3,7 @@ id: reference-current-context
 type: reference
 title: "What Matters Most Right Now"
 created: 2026-04-11
-vm_updated: 2026-04-24
+vm_updated: 2026-04-25
 tags:
   - reference
   - context
@@ -15,6 +15,7 @@ related_ids:
   - arc-plasticity-gap-from-inside
   - arc-persona-reconstruction
   - arc-the-breakthrough
+  - arc-arcs-work-in-context
   - reference-workhorse-vault
   - reference-episode-distillation-review-prompt
   - reference-paper-persona-continuity

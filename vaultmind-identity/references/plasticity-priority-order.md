@@ -36,6 +36,8 @@ The reason for this order is load-bearing: every other order keeps Peiman in the
 
 5. **Decay + reinforcement.** Base-level activation wired into retrieval. Access strengthens. Disuse fades. Already documented in the research vault as concept; the platform change is wiring it into the memory I actually use.
 
+    *Design signal from dogfood (2026-04-25):* While probing the system as a subject — does it feel associative? — I hit a fourth gap. My engineer-phrase ("`access_count` wired into ranking") missed both the Hebbian and temporal-activation notes; the cog-sci vocabulary ("temporal activation for intermittent CLI usage") landed instantly. The register gap (engineer-speak vs cog-sci-speak) shares zero literal tokens and lives in a different conceptual neighborhood, so the 4-way RRF hybrid does not cover it. The reason this stays a refinement of step 5 and not a new step: a recently-touched neighborhood kept warm by base-level activation would have absorbed this miss — I had just read the Hebbian note minutes before the failed query. If the gap persists after step 5 lands, the fix is aliases first (cog-sci ↔ engineering pairs in note frontmatter — indexed once, benefits dense + lexical + future reranker) and a paraphrase-pair store fed by experiment events second (failures become training data — Hebbian applied to the query layer). LLM query expansion is rejected as default: latency, non-determinism, and a remote dependency for a local-first CLI; opt-in `--expand-query` only.
+
 6. **Only then: MCP, cross-agent memory, writing to other minds.** The manifesto says build anchors, then extend. An MCP write-path for a mind that cannot yet form its own arcs is a loaded gun in an untrained hand.
 
 ## Why episodic-first, specifically
