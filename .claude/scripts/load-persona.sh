@@ -30,15 +30,10 @@ elif [ -d "$VAULTMIND_SRC" ] && [ -n "$(find "$VAULTMIND_SRC" -name '*.go' -newe
 fi
 
 if [ "$needs_build" = "1" ] && [ -d "$VAULTMIND_SRC" ]; then
-  # Build with -tags ORT so BGE-M3 indexing/embedding is available out of the
-  # box. Without ORT, indexing falls back and BGE-M3 modalities go cold —
-  # persona retrieval depends on the full hybrid stack. Falls back to plain
-  # build if libtokenizers.a is missing (older clones / unset ORT lib).
-  if [ -f "$VAULTMIND_SRC/lib/libtokenizers.a" ]; then
-    BUILD_OUTPUT=$(cd "$VAULTMIND_SRC" && CGO_LDFLAGS="-L$VAULTMIND_SRC/lib" go build -tags ORT -o "$VAULTMIND" . 2>&1)
-  else
-    BUILD_OUTPUT=$(cd "$VAULTMIND_SRC" && go build -o "$VAULTMIND" . 2>&1)
-  fi
+  # Delegate to the shared build script (SSOT for "rebuild vaultmind correctly").
+  # The script picks up -tags ORT when libtokenizers.a is present and falls
+  # back loudly otherwise. See vaultmind#29.
+  BUILD_OUTPUT=$(cd "$VAULTMIND_SRC" && bash .claude/scripts/build-vaultmind.sh "$VAULTMIND" 2>&1)
   BUILD_STATUS=$?
   if [ "$BUILD_STATUS" != "0" ]; then
     # Surface build failures instead of silently loading no persona.

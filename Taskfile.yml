@@ -98,8 +98,11 @@ tasks:
     desc: Verify VaultMind setup (binary, vaults, hook wiring, smoke test)
     cmds:
       # Rebuild first — format/generate steps in ckeletin:check touch .go files
-      # and would otherwise leave the binary "stale" at this point.
-      - go build -o /tmp/vaultmind .
+      # and would otherwise leave the binary "stale" at this point. Delegates
+      # to build-vaultmind.sh (SSOT for the build invocation) so this stays in
+      # sync with the SessionStart hook rebuild and never silently strips
+      # -tags ORT. See vaultmind#29 for the regression this prevents.
+      - bash .claude/scripts/build-vaultmind.sh /tmp/vaultmind
       - bash .claude/scripts/bootstrap.sh --check
 
   check:hook:
