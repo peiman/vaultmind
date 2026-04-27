@@ -112,3 +112,5 @@ test/fixtures/baseline/vault/.vaultmind/index.db
 # Obsidian per-user UI state (tracked config: app.json, appearance.json, core-plugins.json)
 vaultmind-vault/.obsidian/workspace.json
 vaultmind-vault/.obsidian/graph.json
+vaultmind-identity/.obsidian/workspace.json
+vaultmind-identity/.obsidian/graph.json
