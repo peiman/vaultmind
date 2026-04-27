@@ -18,6 +18,21 @@ ALLOWED_LICENSES="${LICENSE_ALLOWED:-MIT,Apache-2.0,BSD-2-Clause,BSD-3-Clause,IS
 # Get module path to ignore self
 MODULE_PATH=$(go list -m 2>/dev/null || echo "github.com/peiman/ckeletin-go")
 
+# Additional modules whose license go-licenses cannot classify even though the
+# license is permissive and present. License-binary (lichen) handles these
+# correctly via binary metadata; this list narrows go-licenses to where it is
+# accurate. Override per-project with LICENSE_IGNORE_EXTRA="path1,path2".
+LICENSE_IGNORE_EXTRA="${LICENSE_IGNORE_EXTRA:-modernc.org/mathutil}"
+
+# Build --ignore flags: always self, then any extras (comma-separated).
+IGNORE_FLAGS="--ignore='$MODULE_PATH'"
+if [ -n "$LICENSE_IGNORE_EXTRA" ]; then
+    IFS=',' read -ra EXTRA_IGNORES <<< "$LICENSE_IGNORE_EXTRA"
+    for ignore in "${EXTRA_IGNORES[@]}"; do
+        IGNORE_FLAGS="$IGNORE_FLAGS --ignore='$ignore'"
+    done
+fi
+
 check_header "Checking dependency licenses (source-based)"
 
 # Check if go-licenses is installed
@@ -28,7 +43,7 @@ if ! command -v go-licenses &> /dev/null; then
 fi
 
 # Run license check
-if run_check "go-licenses check --allowed_licenses='$ALLOWED_LICENSES' --ignore='$MODULE_PATH' ./... 2>&1"; then
+if run_check "go-licenses check --allowed_licenses='$ALLOWED_LICENSES' $IGNORE_FLAGS ./... 2>&1"; then
     check_success "All dependency licenses compliant"
     check_note "Source-based check. Run 'task check:license:binary' for release verification."
     exit 0
