@@ -55,10 +55,17 @@ type PostIndexWarning struct {
 }
 
 // EmbedResult holds the outcome of an embedding pass.
+//
+// EmptyOutput counts notes whose embedder returned without error but with
+// empty Sparse and/or ColBERT outputs — the heads produced no usable tokens.
+// These notes are NOT counted as Embedded (their sparse_embedding /
+// colbert_embedding columns would be NULL); they remain pending for the next
+// run. See vaultmind#22 for the silent-failure pattern this surfaces.
 type EmbedResult struct {
-	Embedded int `json:"embedded"`
-	Skipped  int `json:"skipped"`
-	Errors   int `json:"errors"`
+	Embedded    int `json:"embedded"`
+	Skipped     int `json:"skipped"`
+	Errors      int `json:"errors"`
+	EmptyOutput int `json:"empty_output,omitempty"`
 }
 
 // IndexAndEmbedResult combines index and optional embed results for command output.
@@ -500,8 +507,27 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 			}
 
 			storeErr := false
+			emptyInBatch := 0
 			for j, out := range fullOutputs {
 				noteID := batch[j].id
+				// Empty Sparse/ColBERT output means the heads produced no
+				// usable tokens for this note (e.g. body tokenizes to only
+				// special tokens, or the truncated text yields no per-token
+				// signal). Skip the UPDATE — without it the modality_parity
+				// trigger (migration 006) would refuse the row anyway, but
+				// more importantly we must NOT count this note as Embedded
+				// or it disappears from the next-pass pending list while its
+				// sparse/colbert columns remain NULL forever. vaultmind#22.
+				if len(out.Sparse) == 0 || len(out.ColBERT) == 0 {
+					log.Warn().
+						Str("id", noteID).
+						Int("body_len", len(batch[j].body)).
+						Int("sparse_terms", len(out.Sparse)).
+						Int("colbert_tokens", len(out.ColBERT)).
+						Msg("BGE-M3 produced empty Sparse or ColBERT — note remains pending for next embed pass")
+					emptyInBatch++
+					continue
+				}
 				// Atomic single-statement write across all three modalities.
 				// The bgem3_modality_parity trigger (migration 006) enforces
 				// that BGE-M3 dense cannot exist without sparse + colbert;
@@ -530,7 +556,8 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 				result.Errors += len(batch)
 				continue
 			}
-			result.Embedded += len(batch)
+			result.Embedded += len(batch) - emptyInBatch
+			result.EmptyOutput += emptyInBatch
 		} else {
 			// MiniLM path: dense only
 			vectors, embedErr := embedder.EmbedBatch(ctx, texts)

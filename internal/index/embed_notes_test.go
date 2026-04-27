@@ -152,6 +152,71 @@ func TestEmbedNotes_FullEmbedderStoresAllThreeColumns(t *testing.T) {
 	assert.True(t, hasColBERT, "colbert column must be populated")
 }
 
+// fakeEmptyOutputEmbedder satisfies FullEmbedder but returns one note's
+// Sparse and ColBERT outputs as empty — the silent-failure shape captured
+// in vaultmind#22, where bge-m3's heads produce empty maps/slices for some
+// inputs and the indexer used to count those as Embedded successfully.
+type fakeEmptyOutputEmbedder struct {
+	fakeDenseEmbedder
+	emptyIndex int // texts[emptyIndex] gets empty Sparse/ColBERT
+}
+
+func (f fakeEmptyOutputEmbedder) EmbedFullBatch(_ context.Context, texts []string) ([]*embedding.BGEM3Output, error) {
+	out := make([]*embedding.BGEM3Output, len(texts))
+	for i := range texts {
+		if i == f.emptyIndex {
+			out[i] = &embedding.BGEM3Output{
+				Dense:   []float32{1, 0, 0, 0},
+				Sparse:  map[int32]float32{}, // empty — heads produced no usable tokens
+				ColBERT: nil,                 // empty — heads produced no usable tokens
+			}
+			continue
+		}
+		out[i] = &embedding.BGEM3Output{
+			Dense:   []float32{1, 0, 0, 0},
+			Sparse:  map[int32]float32{1: 0.5},
+			ColBERT: [][]float32{{0.1, 0.2}},
+		}
+	}
+	return out, nil
+}
+
+var _ embedding.FullEmbedder = fakeEmptyOutputEmbedder{}
+
+// EmbedNotes must NOT count notes with empty Sparse/ColBERT as Embedded —
+// they would silently leave NULL in the sparse_embedding/colbert_embedding
+// columns, producing the doctor warning "Partial BGE-M3 coverage" with no
+// per-note diagnostic at indexing time. See vaultmind#22.
+func TestEmbedNotes_FullEmbedder_EmptyOutputCountedSeparately(t *testing.T) {
+	vaultRoot, dbPath := buildEmbedTestVault(t)
+	cfg, err := vault.LoadConfig(vaultRoot)
+	require.NoError(t, err)
+	idxr := index.NewIndexer(vaultRoot, dbPath, cfg)
+
+	// Three notes; one of them gets an empty-output result from the embedder.
+	emb := fakeEmptyOutputEmbedder{
+		fakeDenseEmbedder: fakeDenseEmbedder{dims: 4},
+		emptyIndex:        1,
+	}
+	r, err := idxr.EmbedNotes(context.Background(), dbPath, emb)
+	require.NoError(t, err)
+
+	// Two notes embedded successfully (full modalities), one had empty
+	// Sparse/ColBERT and must be reported separately rather than silently
+	// counted as Embedded.
+	assert.Equal(t, 2, r.Embedded, "only notes with full modality coverage count as Embedded")
+	assert.Equal(t, 1, r.EmptyOutput, "notes with empty Sparse/ColBERT must be surfaced via EmptyOutput")
+
+	// Re-running embed must pick the empty-output note up as still-pending,
+	// not treat it as already embedded — the existing skip query already
+	// requires all three columns to be NOT NULL on the BGE-M3 path, so this
+	// is a regression guard.
+	emb2 := fakeFullEmbedder{fakeDenseEmbedder: fakeDenseEmbedder{dims: 4}}
+	r2, err := idxr.EmbedNotes(context.Background(), dbPath, emb2)
+	require.NoError(t, err)
+	assert.Equal(t, 1, r2.Embedded, "the previously empty-output note is still pending and gets embedded now")
+}
+
 // After EmbedNotes runs, HasEmbeddings must report true — this is the
 // signal BuildAutoRetrieverFull reads to decide whether to wire the hybrid
 // retriever or fall back to keyword.

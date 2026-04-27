@@ -143,6 +143,18 @@ func formatIndexResult(r index.IndexAndEmbedResult, w io.Writer) error {
 			r.Embed.Embedded, r.Embed.Skipped, r.Embed.Errors); err != nil {
 			return err
 		}
+		// Surface empty-output count loudly when non-zero — these notes have
+		// dense BGE-M3 but missing sparse/ColBERT and stay pending for the
+		// next embed pass. Without this line the operator only learns about
+		// the gap from `vaultmind doctor`'s post-hoc warning, after the
+		// substrate is already partial. See vaultmind#22.
+		if r.Embed.EmptyOutput > 0 {
+			if _, err := fmt.Fprintf(w,
+				"⚠ %d note(s) produced empty Sparse/ColBERT output and remain pending — see warn logs for IDs and body lengths.\n",
+				r.Embed.EmptyOutput); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

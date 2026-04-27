@@ -359,6 +359,28 @@ func TestFormatIndexResult_IncrementalMessageBreakdown(t *testing.T) {
 	assert.Contains(t, out, "1 updated")
 	assert.Contains(t, out, "2 added")
 	assert.Contains(t, out, "Embedded 3 notes")
+	// EmptyOutput == 0 — no warning line should appear, otherwise every
+	// successful run pollutes the operator's signal-to-noise.
+	assert.NotContains(t, out, "empty Sparse/ColBERT")
+}
+
+// When the embed pass produces empty Sparse/ColBERT outputs for some notes
+// (vaultmind#22's silent-failure shape), the formatter MUST surface the count
+// loudly so the operator sees it at indexing time, not just from a later
+// `vaultmind doctor` post-hoc warning.
+func TestFormatIndexResult_EmptyOutputSurfacedWhenNonZero(t *testing.T) {
+	var buf bytes.Buffer
+	err := formatIndexResult(index.IndexAndEmbedResult{
+		Index: &index.IndexResult{
+			FullRebuild: false, Skipped: 5, Updated: 0, Added: 0, Deleted: 0,
+		},
+		Embed: &index.EmbedResult{Embedded: 3, Skipped: 0, Errors: 0, EmptyOutput: 2},
+	}, &buf)
+	require.NoError(t, err)
+	out := buf.String()
+	assert.Contains(t, out, "Embedded 3 notes", "embedded count reflects only fully-embedded notes")
+	assert.Contains(t, out, "2 note(s) produced empty Sparse/ColBERT", "empty-output count must be loud")
+	assert.Contains(t, out, "remain pending", "operator must know the notes are still pending")
 }
 
 // memory related human output includes edge_type and confidence with each
