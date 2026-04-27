@@ -130,6 +130,28 @@ func TestWriteEmbeddingStatus_ImbalancePrintsWarning(t *testing.T) {
 	assert.Contains(t, out, "vaultmind index --embed", "must name the remedy")
 }
 
+// In a mixed-state vault, writeEmbeddingStatus must surface the per-model
+// breakdown — without this line, the operator only sees "(mixed)" in the
+// summary and can't tell whether the vault is mostly upgraded (5 minilm /
+// 76 bge-m3) or mostly stale (47 minilm / 31 bge-m3). See vaultmind#22.
+func TestWriteEmbeddingStatus_MixedStateSurfacesBreakdown(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, writeEmbeddingStatus(&buf, &query.DoctorEmbeddings{
+		SemanticReady: true, TotalNotes: 78, DenseCount: 78, Model: "mixed",
+		SparseCount: 31, ColBERTCount: 31,
+		MixedModel: []query.DoctorModelBreakdown{
+			{Model: "minilm", Count: 47},
+			{Model: "bge-m3", Count: 31},
+		},
+		HasModalityImbalance: true,
+	}))
+	out := buf.String()
+	assert.Contains(t, out, "(mixed)", "summary line must name the model as mixed")
+	assert.Contains(t, out, "mixed-model state:", "breakdown line must appear")
+	assert.Contains(t, out, "47 minilm", "breakdown must show MiniLM count")
+	assert.Contains(t, out, "31 bge-m3", "breakdown must show BGE-M3 count")
+}
+
 // Full coverage under BGE-M3 must NOT print the warning — a false alarm would
 // train users to ignore the line when it does matter.
 func TestWriteEmbeddingStatus_FullCoverageSilent(t *testing.T) {

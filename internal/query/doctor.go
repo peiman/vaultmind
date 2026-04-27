@@ -34,9 +34,21 @@ type DoctorEmbeddings struct {
 	DenseCount           int    `json:"dense_count"`
 	SparseCount          int    `json:"sparse_count"`
 	ColBERTCount         int    `json:"colbert_count"`
-	Model                string `json:"model"` // "bge-m3", "minilm", or "" when no dense embeddings
+	Model                string `json:"model"` // "bge-m3", "minilm", "mixed", or "" when no dense embeddings
 	SemanticReady        bool   `json:"semantic_ready"`
 	HasModalityImbalance bool   `json:"has_modality_imbalance"`
+	// MixedModel is non-nil when the vault has notes embedded with more than
+	// one model (e.g. mid-upgrade from MiniLM to BGE-M3). Each entry pairs a
+	// model name with its row count. When set, Model == "mixed". Surfacing
+	// this explicitly prevents the silent-failure shape where doctor reports
+	// "bge-m3" while half the rows are still MiniLM. See vaultmind#22.
+	MixedModel []DoctorModelBreakdown `json:"mixed_model,omitempty"`
+}
+
+// DoctorModelBreakdown is one entry in DoctorEmbeddings.MixedModel.
+type DoctorModelBreakdown struct {
+	Model string `json:"model"` // "bge-m3", "minilm", or "unknown"
+	Count int    `json:"count"`
 }
 
 // DoctorIssues holds counts of vault health issues.
@@ -219,22 +231,52 @@ func collectEmbeddingStatus(db *index.DB, total int) (*DoctorEmbeddings, error) 
 	}
 	emb.SemanticReady = emb.DenseCount > 0
 	if emb.DenseCount > 0 {
-		dims, err := index.DetectEmbeddingDims(db)
+		// Use the per-dims breakdown so mixed-state vaults (e.g. partial
+		// upgrade from MiniLM to BGE-M3) are surfaced explicitly rather than
+		// classified by whichever row SQLite scans first. vaultmind#22.
+		counts, err := index.DetectEmbeddingDimsCounts(db)
 		if err != nil {
-			return nil, fmt.Errorf("detecting embedding dims: %w", err)
+			return nil, fmt.Errorf("counting embedding dims: %w", err)
 		}
-		switch dims {
-		case 384:
-			emb.Model = "minilm"
-		case 1024:
-			emb.Model = "bge-m3"
+		switch len(counts) {
+		case 0:
+			// No dense rows — leave Model empty.
+		case 1:
+			emb.Model = modelNameForDims(counts[0].Dims)
+		default:
+			emb.Model = "mixed"
+			emb.MixedModel = make([]DoctorModelBreakdown, 0, len(counts))
+			for _, c := range counts {
+				emb.MixedModel = append(emb.MixedModel, DoctorModelBreakdown{
+					Model: modelNameForDims(c.Dims),
+					Count: c.Count,
+				})
+			}
 		}
 	}
-	// Modality imbalance only makes sense under BGE-M3, where all three lanes
-	// are expected to be populated in lockstep. For MiniLM-sized vaults the
-	// sparse/colbert columns are by-design empty.
-	if emb.Model == "bge-m3" && (emb.SparseCount < emb.DenseCount || emb.ColBERTCount < emb.DenseCount) {
+	// Modality imbalance only makes sense when BGE-M3 is involved — sparse
+	// and colbert lanes are populated in lockstep with BGE-M3 dense. Mixed
+	// vaults flag imbalance because the BGE-M3 fraction must be in lockstep
+	// for hybrid RRF to work; the MiniLM fraction has no sparse/colbert by
+	// design but is also not delivering hybrid retrieval anyway, which is
+	// the operator-visible problem.
+	if (emb.Model == "bge-m3" || emb.Model == "mixed") &&
+		(emb.SparseCount < emb.DenseCount || emb.ColBERTCount < emb.DenseCount) {
 		emb.HasModalityImbalance = true
 	}
 	return emb, nil
+}
+
+// modelNameForDims maps a dense embedding length (in float32 elements) to
+// the canonical model name. Centralised so doctor and any future caller
+// agree.
+func modelNameForDims(dims int) string {
+	switch dims {
+	case 384:
+		return "minilm"
+	case 1024:
+		return "bge-m3"
+	default:
+		return "unknown"
+	}
 }

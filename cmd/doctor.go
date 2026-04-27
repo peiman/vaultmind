@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/internal/cmdutil"
@@ -43,6 +44,20 @@ func writeEmbeddingStatus(w io.Writer, emb *query.DoctorEmbeddings) error {
 		emb.SparseCount, emb.TotalNotes,
 		emb.ColBERTCount, emb.TotalNotes); err != nil {
 		return err
+	}
+	if emb.Model == "mixed" && len(emb.MixedModel) > 0 {
+		// Surface the per-model breakdown explicitly. Without this, the
+		// summary line says "(mixed)" which tells the operator something is
+		// off but not what fraction is which model. Knowing the split lets
+		// the operator decide whether to wait for incremental embed to
+		// converge or run a full --embed pass right away. See vaultmind#22.
+		parts := make([]string, 0, len(emb.MixedModel))
+		for _, m := range emb.MixedModel {
+			parts = append(parts, fmt.Sprintf("%d %s", m.Count, m.Model))
+		}
+		if _, err := fmt.Fprintf(w, "  mixed-model state: %s\n", strings.Join(parts, ", ")); err != nil {
+			return err
+		}
 	}
 	if emb.HasModalityImbalance {
 		_, err := fmt.Fprintf(w,

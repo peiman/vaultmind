@@ -1,6 +1,7 @@
 package query_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/index"
@@ -81,6 +82,55 @@ func TestDoctor_ReportsBGEM3Embeddings(t *testing.T) {
 	require.NotNil(t, result.Embeddings)
 	assert.Equal(t, "bge-m3", result.Embeddings.Model)
 	assert.True(t, result.Embeddings.SemanticReady)
+}
+
+// In a mixed-state vault (some notes MiniLM, others BGE-M3), doctor must
+// surface the per-model breakdown as Model="mixed" with MixedModel populated
+// — not silently classify the vault as one model based on whichever row
+// SQLite scans first. See vaultmind#22 dig.
+func TestDoctor_MixedModelState_SurfacedExplicitly(t *testing.T) {
+	dbPath := t.TempDir() + "/idx.db"
+	db, err := index.Open(dbPath)
+	require.NoError(t, err)
+	defer db.Close()
+
+	// Two MiniLM rows.
+	miniVec := make([]float32, 384)
+	for i := 0; i < 2; i++ {
+		_, err = db.Exec(
+			`INSERT INTO notes (id, path, hash, mtime, title, is_domain, embedding)
+			 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			fmt.Sprintf("m%d", i), fmt.Sprintf("m%d.md", i), "h", 0, "T", true,
+			index.EncodeEmbedding(miniVec),
+		)
+		require.NoError(t, err)
+	}
+	// One BGE-M3 row (must include sparse + colbert per the parity trigger).
+	bgeVec := make([]float32, 1024)
+	_, err = db.Exec(
+		`INSERT INTO notes (id, path, hash, mtime, title, is_domain, embedding, sparse_embedding, colbert_embedding)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		"b0", "b0.md", "h", 0, "T", true,
+		index.EncodeEmbedding(bgeVec),
+		index.EncodeSparseEmbedding(map[int32]float32{0: 1.0}),
+		index.EncodeColBERTEmbedding([][]float32{bgeVec}),
+	)
+	require.NoError(t, err)
+
+	result, err := query.Doctor(db, "/vault")
+	require.NoError(t, err)
+	require.NotNil(t, result.Embeddings)
+	assert.Equal(t, "mixed", result.Embeddings.Model,
+		"vault with both MiniLM and BGE-M3 rows must classify as 'mixed', not one or the other")
+	require.Len(t, result.Embeddings.MixedModel, 2,
+		"MixedModel must carry a breakdown entry per distinct model")
+	// Counts ordered descending by count → MiniLM first (2 vs 1).
+	assert.Equal(t, "minilm", result.Embeddings.MixedModel[0].Model)
+	assert.Equal(t, 2, result.Embeddings.MixedModel[0].Count)
+	assert.Equal(t, "bge-m3", result.Embeddings.MixedModel[1].Model)
+	assert.Equal(t, 1, result.Embeddings.MixedModel[1].Count)
+	assert.True(t, result.Embeddings.HasModalityImbalance,
+		"mixed-state with MiniLM rows lacking sparse/colbert is an imbalance — operator should know")
 }
 
 // HasModalityImbalance must be false when a vault is MiniLM-only: sparse and

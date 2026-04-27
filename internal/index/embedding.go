@@ -189,6 +189,11 @@ func LoadAllEmbeddings(d *DB) ([]NoteEmbedding, error) {
 
 // DetectEmbeddingDims returns the dimensionality of stored embeddings, or 0 if none exist.
 // Uses a single-row query — does not load all embeddings.
+//
+// In mixed-state vaults (some notes embedded with MiniLM, others with BGE-M3
+// after a model upgrade) this returns whichever row SQLite happens to scan
+// first, so the result is not authoritative for "what model is this vault
+// using." Use DetectEmbeddingDimsCounts when you need the full picture.
 func DetectEmbeddingDims(d *DB) (int, error) {
 	var length int
 	err := d.QueryRow("SELECT LENGTH(embedding) FROM notes WHERE embedding IS NOT NULL LIMIT 1").Scan(&length)
@@ -199,6 +204,39 @@ func DetectEmbeddingDims(d *DB) (int, error) {
 		return 0, fmt.Errorf("detecting embedding dims: %w", err)
 	}
 	return length / 4, nil // each float32 is 4 bytes
+}
+
+// EmbeddingDimsCount is one (dimensions, count) pair from a vault.
+type EmbeddingDimsCount struct {
+	Dims  int // 384 = MiniLM, 1024 = BGE-M3, 0 = no dense
+	Count int
+}
+
+// DetectEmbeddingDimsCounts returns the count of notes per dense-embedding
+// dimensionality. A consistent vault has exactly one entry; a mixed-state
+// vault (mid-upgrade from MiniLM to BGE-M3, or partial-rebuild) returns
+// multiple. Used by `doctor` to surface mixed state explicitly instead of
+// claiming a single model name. See vaultmind#22 dig.
+func DetectEmbeddingDimsCounts(d *DB) ([]EmbeddingDimsCount, error) {
+	rows, err := d.Query(`
+		SELECT LENGTH(embedding) AS bytes, COUNT(*) AS n
+		FROM notes
+		WHERE embedding IS NOT NULL
+		GROUP BY LENGTH(embedding)
+		ORDER BY n DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("counting embeddings by dims: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := make([]EmbeddingDimsCount, 0, 2)
+	for rows.Next() {
+		var bytes, n int
+		if err := rows.Scan(&bytes, &n); err != nil {
+			return nil, fmt.Errorf("scanning dims count: %w", err)
+		}
+		out = append(out, EmbeddingDimsCount{Dims: bytes / 4, Count: n})
+	}
+	return out, rows.Err()
 }
 
 // HasEmbeddings returns true if any note in the index has a stored embedding.
