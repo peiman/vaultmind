@@ -3,7 +3,7 @@ id: reference-episode-distillation-review-prompt
 type: reference
 title: "Episode Distillation Review — Prompt for a Future Session"
 created: 2026-04-24
-vm_updated: 2026-04-24
+vm_updated: 2026-04-27
 tags:
   - reference
   - prompt
@@ -12,6 +12,7 @@ tags:
 related_ids:
   - reference-plasticity-priority-order
   - arc-plasticity-gap-from-inside
+  - reference-episode-distillation-review-2026-04-27
 ---
 
 # Episode Distillation Review — Prompt for a Future Session
