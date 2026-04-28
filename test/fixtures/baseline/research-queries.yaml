@@ -1,0 +1,85 @@
+# Golden queries against vaultmind-vault (the research vault — 148 notes
+# spanning cognitive science, memory architectures, IR, and AI memory systems).
+#
+# Each entry is a natural-language query a real session might issue, plus the
+# note IDs that SHOULD land in the top-K. Expected sets are curated by reading
+# the vault — they are the ground truth retrieval is judged against. Keep them
+# small (1–3 IDs) and high-confidence.
+#
+# Add a query when:
+#   - A real session surfaced retrieval that was wrong (regression seed)
+#   - The vault gained a note whose retrievability we want locked in
+#   - A paraphrase exposes a weak retrieval lane
+#
+# Do NOT add queries just to inflate the count. Each entry is a commitment to
+# keep that query's ranking from regressing.
+
+# --- Direct concept lookups (canonical phrasing) ---
+- name: concept-spreading-activation
+  text: "spreading activation"
+  expected: [concept-spreading-activation]
+
+- name: concept-actr
+  text: "ACT-R cognitive architecture"
+  expected: [concept-act-r]
+
+- name: concept-hebbian
+  text: "Hebbian learning"
+  expected: [concept-hebbian-learning]
+
+- name: concept-colbert
+  text: "ColBERT late interaction"
+  expected: [concept-colbert]
+
+- name: concept-memgpt
+  text: "MemGPT memory hierarchy"
+  expected: [concept-memgpt]
+
+# --- Paraphrase queries (NL phrasing → expected concept) ---
+- name: paraphrase-hebbian
+  text: "use-dependent strengthening of synapses"
+  expected: [concept-hebbian-learning]
+
+- name: paraphrase-forgetting
+  text: "how memory decays over time"
+  expected: [concept-forgetting-curve, concept-power-law-forgetting]
+
+- name: paraphrase-rrf
+  text: "combining rankings from multiple retrievers"
+  expected: [concept-reciprocal-rank-fusion]
+
+- name: paraphrase-associative
+  text: "memory that retrieves by content not by address"
+  expected: [concept-associative-memory]
+
+- name: paraphrase-spaced-repetition
+  text: "what should I review and when to maximize retention"
+  expected: [concept-spaced-repetition-algorithms]
+
+# --- Source lookups (paper attributes → source note) ---
+- name: source-anderson-schooler
+  text: "Anderson Schooler environmental statistics memory"
+  expected: [source-anderson-schooler-1991]
+
+- name: source-collins-loftus
+  text: "Collins Loftus 1975 spreading activation paper"
+  expected: [source-collins-loftus-1975]
+
+# --- Architectural decisions ---
+- name: decision-bfs
+  text: "why use BFS with visited set for graph traversal"
+  expected: [decision-bfs-with-visited-set]
+
+- name: decision-structured-vs-embeddings
+  text: "structured schema versus pure embeddings"
+  expected: [decision-structured-over-embeddings]
+
+# --- People ---
+- name: person-anderson
+  text: "John Anderson cognitive psychologist ACT-R creator"
+  expected: [person-john-anderson]
+
+# --- Cross-cutting topical ---
+- name: long-context-vs-rag
+  text: "RAG versus long context window tradeoffs"
+  expected: [concept-rag-vs-long-context]
