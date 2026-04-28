@@ -624,6 +624,58 @@ func TestFormatAsk_RendersTargetAndContextItems(t *testing.T) {
 	assert.Contains(t, out, "Beta uses Alpha", "context item body included when BodyIncluded=true")
 }
 
+// FormatAskPointersOnly is the principle-9 fix for the dogfood-preload
+// trap (arc-plasticity-gap-from-inside, the 2026-04-25 design signal under
+// step 3 of plasticity-priority-order). Asserts: target body and context
+// item bodies are SKIPPED even when present and BodyIncluded=true; titles
+// + ids + types DO render; the trailing hint names the next move so the
+// agent treats pointers as a menu, not as the answer.
+func TestFormatAskPointersOnly_SkipsBodiesEvenWhenIncluded(t *testing.T) {
+	r := &query.AskResult{
+		Query: "what is alpha",
+		TopHits: []retrieval.ScoredResult{
+			{ID: "concept-alpha", Title: "Alpha", Path: "alpha.md", Score: 0.8},
+		},
+		Context: &memory.ContextPackResult{
+			TargetID:     "concept-alpha",
+			BudgetTokens: 1000, UsedTokens: 120,
+			Target: &memory.ContextPackTarget{
+				ID: "concept-alpha",
+				Frontmatter: map[string]interface{}{
+					"type": "concept", "title": "Alpha",
+				},
+				Body: "TARGET BODY MUST NOT APPEAR — pointers-only contract",
+			},
+			Context: []memory.ContextItem{
+				{
+					ID:           "proj-beta",
+					Frontmatter:  map[string]interface{}{"type": "project", "title": "Beta"},
+					BodyIncluded: true,
+					Body:         "NEIGHBOR BODY MUST NOT APPEAR — pointers-only contract",
+				},
+			},
+		},
+	}
+	var buf bytes.Buffer
+	require.NoError(t, query.FormatAskPointersOnly(r, &buf))
+	out := buf.String()
+	// Pointers ARE rendered.
+	assert.Contains(t, out, "[concept] Alpha", "target pointer (type + title) must render")
+	assert.Contains(t, out, "[project] Beta", "context-item pointer must render")
+	assert.Contains(t, out, "concept-alpha", "target id must appear so agent can ask for body")
+	// Bodies ARE NOT rendered, even though BodyIncluded=true on the item
+	// and Body is non-empty on the target. This is the load-bearing
+	// principle-9 assertion: discipline → design.
+	assert.NotContains(t, out, "TARGET BODY",
+		"target body MUST be skipped — pointers-only is the dogfood-loop fix")
+	assert.NotContains(t, out, "NEIGHBOR BODY",
+		"context-item body MUST be skipped — pointers-only is the dogfood-loop fix")
+	// The hint names the next move, so the agent knows the loop closes by
+	// querying, not by waiting for context.
+	assert.Contains(t, out, "pointers only", "trailing hint must surface the mode")
+	assert.Contains(t, out, "vaultmind ask", "trailing hint must name the next-move command")
+}
+
 // Context items with BodyIncluded=false must NOT leak their body into the
 // output. This is the slim-mode contract consumers rely on.
 func TestFormatAsk_SlimContextItemOmitsBody(t *testing.T) {

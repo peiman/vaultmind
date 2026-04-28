@@ -46,10 +46,24 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
   # Capture stderr so runtime failures surface instead of producing empty
   # persona silently. VAULTMIND_CALLER tags the event so the experiment DB
   # can separate hook-triggered loads from deliberate queries.
+  #
+  # The two queries serve different purposes:
+  #  - "who am I" loads the IDENTITY anchor with full bodies. Priming.
+  #    Cross-session continuity depends on the agent showing up as
+  #    already-someone (the workhorse "Hey Peiman" pattern). Stripping
+  #    this to pointers would defeat that.
+  #  - "what matters most right now" loads the CURRENT-STATE pointers
+  #    only (--pointers-only). The agent gets titles + ids; the body of
+  #    current-context is NOT preloaded. To learn what's actually current,
+  #    the agent must explicitly query — which makes every body-read a
+  #    real activation event instead of something the preload silently
+  #    satisfied. This is the principle-9 fix for the dogfood-preload
+  #    trap documented in arc-plasticity-gap-from-inside and the
+  #    2026-04-25 design signal under step 3 of plasticity-priority-order.
   ASK_ERR=$(mktemp -t vaultmind-persona-err.XXXXXX)
   IDENTITY=$(VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" ask "who am I" --vault "$VAULT_PATH" --max-items 8 --budget 6000 2>"$ASK_ERR")
   IDENTITY_STATUS=$?
-  CONTEXT=$(VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" ask "what matters most right now" --vault "$VAULT_PATH" --max-items 3 --budget 2000 2>>"$ASK_ERR")
+  CONTEXT=$(VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" ask "what matters most right now" --vault "$VAULT_PATH" --max-items 5 --budget 2000 --pointers-only 2>>"$ASK_ERR")
   if [ "$IDENTITY_STATUS" != "0" ]; then
     echo "VaultMind ask failed (exit $IDENTITY_STATUS) — persona not loaded" >&2
     cat "$ASK_ERR" >&2

@@ -8,7 +8,7 @@ import (
 
 // FormatAsk writes a human-readable text representation of an AskResult.
 func FormatAsk(result *AskResult, w io.Writer) error {
-	return formatAskWithOptions(result, w, false)
+	return formatAskWithOptions(result, w, formatOpts{})
 }
 
 // FormatAskExplain is like FormatAsk but prints per-hit lane breakdowns
@@ -18,10 +18,36 @@ func FormatAsk(result *AskResult, w io.Writer) error {
 // the diagnostic gap that had operators rebuilding ad-hoc tooling for
 // every ranking investigation.
 func FormatAskExplain(result *AskResult, w io.Writer) error {
-	return formatAskWithOptions(result, w, true)
+	return formatAskWithOptions(result, w, formatOpts{explain: true})
 }
 
-func formatAskWithOptions(result *AskResult, w io.Writer, explain bool) error {
+// FormatAskPointersOnly is like FormatAsk but skips body content for both
+// the target note and every context-pack item — output is title + id +
+// type only. Used by the SessionStart hook so the body of "what matters
+// most right now" is never preloaded; the agent has to query for it.
+//
+// This converts the dogfood rule (use vaultmind ask before answering) from
+// honor-system discipline (manifesto principle 9: discipline does not
+// survive time pressure) to design: every body-read becomes an explicit,
+// logged activation event the agent had to choose, rather than something
+// the preload silently satisfied. Closes the trap documented in
+// arc-plasticity-gap-from-inside and the 2026-04-25 design signal under
+// step 3 of reference-plasticity-priority-order.
+//
+// Retrieval is unchanged — search hits, context-pack assembly, and
+// scoring all happen normally. Only the rendering omits bodies. The
+// hint at the bottom names the next move (an explicit ask) so the agent
+// knows the loop closes by querying, not by waiting for more context.
+func FormatAskPointersOnly(result *AskResult, w io.Writer) error {
+	return formatAskWithOptions(result, w, formatOpts{pointersOnly: true})
+}
+
+type formatOpts struct {
+	explain      bool
+	pointersOnly bool
+}
+
+func formatAskWithOptions(result *AskResult, w io.Writer, opts formatOpts) error {
 	if _, err := fmt.Fprintf(w, "Search: %q (%d hits)\n", result.Query, len(result.TopHits)); err != nil {
 		return err
 	}
@@ -29,7 +55,7 @@ func formatAskWithOptions(result *AskResult, w io.Writer, explain bool) error {
 		if _, err := fmt.Fprintf(w, "  %.2f  %-40s  %s\n", h.Score, h.ID, h.Title); err != nil {
 			return err
 		}
-		if explain && len(h.Components) > 0 {
+		if opts.explain && len(h.Components) > 0 {
 			if err := writeLaneBreakdown(w, h.Components); err != nil {
 				return err
 			}
@@ -49,7 +75,7 @@ func formatAskWithOptions(result *AskResult, w io.Writer, explain bool) error {
 		if _, err := fmt.Fprintf(w, "  [%s] %s\n", noteType, title); err != nil {
 			return err
 		}
-		if result.Context.Target.Body != "" {
+		if !opts.pointersOnly && result.Context.Target.Body != "" {
 			if _, err := fmt.Fprintf(w, "    %s\n", Truncate(result.Context.Target.Body, 120)); err != nil {
 				return err
 			}
@@ -61,10 +87,18 @@ func formatAskWithOptions(result *AskResult, w io.Writer, explain bool) error {
 		if _, err := fmt.Fprintf(w, "  [%s] %s\n", noteType, title); err != nil {
 			return err
 		}
-		if item.BodyIncluded && item.Body != "" {
+		if !opts.pointersOnly && item.BodyIncluded && item.Body != "" {
 			if _, err := fmt.Fprintf(w, "    %s\n", Truncate(item.Body, 120)); err != nil {
 				return err
 			}
+		}
+	}
+	if opts.pointersOnly {
+		// Hint the next move: pointers are not the answer, they're the menu.
+		// Without this line the agent might treat the truncated output as
+		// "all there is" instead of "here are the things to query for."
+		if _, err := fmt.Fprintf(w, "\n(pointers only — run `vaultmind ask <query>` against any id above to read the body)\n"); err != nil {
+			return err
 		}
 	}
 	return nil

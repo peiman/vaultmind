@@ -99,7 +99,14 @@ func runAsk(cmd *cobra.Command, args []string) error {
 
 	if !getConfigValueWithFlags[bool](cmd, "json", config.KeyAppAskJson) {
 		formatter := query.FormatAsk
-		if getConfigValueWithFlags[bool](cmd, "explain", config.KeyAppAskExplain) {
+		// Flags are mutually exclusive in semantics; explain shows the lane
+		// math, pointers-only strips bodies. If both are set, pointers-only
+		// wins because it's the stronger constraint (force the ask-to-read
+		// loop) and pairs naturally with --json for hook consumers anyway.
+		switch {
+		case getConfigValueWithFlags[bool](cmd, "pointers-only", config.KeyAppAskPointersOnly):
+			formatter = query.FormatAskPointersOnly
+		case getConfigValueWithFlags[bool](cmd, "explain", config.KeyAppAskExplain):
 			formatter = query.FormatAskExplain
 		}
 		if err := formatter(result, cmd.OutOrStdout()); err != nil {
