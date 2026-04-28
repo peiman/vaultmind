@@ -22,8 +22,16 @@ type HugotEmbedder struct {
 const approxCharsPerToken = 3
 
 // TruncateForEmbedding truncates text to fit within the model's token limit.
-// Uses a character-based approximation (4 chars/token for English).
+// Uses a character-based approximation (3 chars/token, conservative).
 // Breaks at word boundaries when possible.
+//
+// Tail loss: content beyond maxTokens × ~3 chars is dropped before tokenization
+// — the head is embedded correctly but the tail is invisible to semantic
+// retrieval (lexical FTS still sees the full body). For long-form notes where
+// the tail carries information not in the head, this under-covers retrieval.
+// Tracked as a quality improvement in vaultmind#30 (chunk-and-pool); not a
+// silent failure or robustness bug, just a coverage limit. Build the chunking
+// fix when retrieval visibly misses tail content; don't preempt.
 func TruncateForEmbedding(text string, maxTokens int) string {
 	if maxTokens <= 0 {
 		return ""
