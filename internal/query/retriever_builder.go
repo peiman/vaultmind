@@ -142,28 +142,55 @@ func newDefaultEmbedder() (*embedding.HugotEmbedder, error) {
 	return embedder, nil
 }
 
-// detectEmbedderForDB inspects stored embedding dimensions to determine the correct embedder.
-// Uses a single-row LENGTH query instead of loading all embeddings (C3 fix).
+// detectEmbedderForDB inspects stored embedding dimensions to determine the
+// correct embedder. Uses the per-dims breakdown so mixed-state vaults
+// (mid-migration from MiniLM to BGE-M3) load BGE-M3 — picking BGE-M3 when
+// any rows are BGE-M3 is strictly safer than the inverse. BGE-M3 queries
+// can match against BGE-M3 rows via all four lanes (dense + sparse +
+// colbert + fts); the minority MiniLM rows are temporarily un-matchable on
+// dense (dim mismatch, 384 vs 1024) until they're re-embedded. Loading
+// MiniLM on a mostly-BGE-M3 vault would lose sparse + colbert entirely AND
+// fail to match the BGE-M3 majority's dense rows. See vaultmind#32.
 func detectEmbedderForDB(db *index.DB) (embedding.Embedder, func(), error) {
-	dims, err := index.DetectEmbeddingDims(db)
+	counts, err := index.DetectEmbeddingDimsCounts(db)
 	if err != nil {
-		// silent-failure-ok: dim detection falls back to the MiniLM default,
+		// silent-failure-ok: dims detection falls back to MiniLM default,
 		// which is the correct choice for a vault that hasn't been embedded
-		// at all. A broken detection wouldn't lose data; worst case is
-		// attempting to load MiniLM when the vault expects BGE-M3, which
-		// fails loudly at the embedder init boundary (not silently here).
-		log.Debug().Err(err).Msg("failed to detect embedding dims, falling back to MiniLM")
+		// at all. The embedder init boundary fails loudly if the model
+		// can't load.
+		log.Debug().Err(err).Msg("failed to count embedding dims, falling back to MiniLM")
+		return newMiniLMEmbedder()
 	}
-	if err == nil && dims == embedding.BGEM3Dims {
+	hasBGEM3 := false
+	hasMiniLM := false
+	for _, c := range counts {
+		switch c.Dims {
+		case embedding.BGEM3Dims:
+			hasBGEM3 = true
+		case 384:
+			hasMiniLM = true
+		}
+	}
+	if hasBGEM3 && hasMiniLM {
+		log.Warn().Msg("vault is in mixed-model state (MiniLM + BGE-M3); loading BGE-M3 — run 'vaultmind index --embed --model bge-m3' to converge")
+	}
+	if hasBGEM3 {
 		bgem3, bgem3Err := embedding.NewBGEM3Embedder(embedding.BGEM3Config())
 		if bgem3Err != nil {
 			return nil, nil, fmt.Errorf("creating BGE-M3 embedder: %w", bgem3Err)
 		}
 		return bgem3, func() { _ = bgem3.Close() }, nil
 	}
-	embedder, defaultErr := newDefaultEmbedder()
-	if defaultErr != nil {
-		return nil, nil, defaultErr
+	return newMiniLMEmbedder()
+}
+
+// newMiniLMEmbedder constructs the default MiniLM embedder with a uniform
+// cleanup signature. Extracted to keep the mixed-model branching in
+// detectEmbedderForDB readable.
+func newMiniLMEmbedder() (embedding.Embedder, func(), error) {
+	embedder, err := newDefaultEmbedder()
+	if err != nil {
+		return nil, nil, err
 	}
 	return embedder, func() { _ = embedder.Close() }, nil
 }
