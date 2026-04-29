@@ -38,4 +38,4 @@ This is the strongest theoretical basis for adding retrieval frequency tracking 
 
 The environmental regularity finding is particularly relevant: Anderson & Schooler showed that the statistical pattern of word appearance in newspapers, library book checkouts, and email frequency all follow the same power-law decay — the same pattern the activation equation captures.
 
-[[source-honda-2024|Honda et al. (2024)]] directly applied the base-level learning equation to LLM dialogue agents, validating that ACT-R activation produces human-like remembering and forgetting patterns in AI systems. They use standard wall-clock time for temporal decay; VaultMind extends this with session-aware time compression.
+[[source-honda-2025|Honda et al. (2025)]] directly applied the base-level learning equation to LLM dialogue agents, validating that ACT-R activation produces human-like remembering and forgetting patterns in AI systems. They use standard wall-clock time for temporal decay; VaultMind extends this with session-aware time compression.

@@ -215,4 +215,4 @@ Based on the analysis and expert discussion:
 
 [[source-pavlik-anderson-2005|Pavlik & Anderson (2005)]] modified ACT-R's base-level learning with a time-scaling factor of 0.025 for between-experiment intervals. This is conceptually the closest prior art to the compressed idle time approach described here. The key differences: (1) Pavlik & Anderson use a binary scaling (in-experiment vs between-experiment), while VaultMind uses continuous session-based partitioning. (2) Their scaling is embedded in a variable decay-rate mechanism; VaultMind modifies the time variable directly, preserving the power-law form. (3) Their work targets vocabulary learning in laboratory settings; VaultMind targets information retrieval in intermittent-use CLI tools.
 
-[[source-honda-2024|Honda et al. (2024)]] validated ACT-R activation for LLM agent memory but used standard wall-clock time without session awareness. VaultMind extends their approach with the gamma parameter.
+[[source-honda-2025|Honda et al. (2025)]] validated ACT-R activation for LLM agent memory but used standard wall-clock time without session awareness. VaultMind extends their approach with the gamma parameter.

@@ -4,7 +4,7 @@ type: source
 title: "Ebbinghaus. Über das Gedächtnis / Memory: A Contribution to Experimental Psychology (1885)"
 created: 2026-04-03
 vm_updated: 2026-04-03
-url: "https://doi.org/10.5214/ans.0972-7531.1020103"
+url: "https://archive.org/details/memorycontributi00ebbiuoft"
 aliases:
   - Ebbinghaus 1885
   - Memory book
