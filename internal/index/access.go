@@ -42,11 +42,54 @@ func RecordNoteAccess(d *DB, noteID string) error {
 
 // NoteAccessStats reports the access counters for a single note. Useful
 // for doctor / debugging / verifying that RecordNoteAccess is firing on
-// the paths it's supposed to.
+// the paths it's supposed to. Title and NoteType are populated by
+// ListAccessedNotes so the self-rendering layer can produce
+// human-readable output without a separate join. LookupNoteAccess
+// leaves them empty (single-id callers don't need them).
 type NoteAccessStats struct {
 	NoteID         string
 	AccessCount    int
 	LastAccessedAt string // RFC3339Nano UTC, empty when never accessed
+	Title          string
+	NoteType       string
+}
+
+// ListAccessedNotes returns access stats for every note with
+// access_count > 0, sorted newest-first by last_accessed_at. Backs
+// `vaultmind self`'s "recent" view and the activation-driven hot/stale
+// views; the renderer downstream sorts/filters by activation score
+// without re-querying. Title and NoteType are joined in so the renderer
+// can produce human-readable output without a follow-up lookup per row.
+// Returns an empty slice when the vault is freshly indexed and nothing
+// has been touched yet — that's a valid "blank-slate self" state.
+func ListAccessedNotes(d *DB) ([]NoteAccessStats, error) {
+	rows, err := d.Query(`
+		SELECT id, access_count, last_accessed_at, COALESCE(title, ''), COALESCE(type, '')
+		FROM notes
+		WHERE access_count > 0
+		ORDER BY last_accessed_at DESC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("listing accessed notes: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []NoteAccessStats
+	for rows.Next() {
+		var s NoteAccessStats
+		var lastAccessed *string
+		if err := rows.Scan(&s.NoteID, &s.AccessCount, &lastAccessed, &s.Title, &s.NoteType); err != nil {
+			return nil, fmt.Errorf("scanning accessed-notes row: %w", err)
+		}
+		if lastAccessed != nil {
+			s.LastAccessedAt = *lastAccessed
+		}
+		out = append(out, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating accessed-notes rows: %w", err)
+	}
+	return out, nil
 }
 
 // LookupNoteAccess returns the access stats for a single note, or

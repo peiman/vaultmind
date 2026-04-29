@@ -155,6 +155,8 @@ const (
 	KeyAppSearchType                    = "app.search.type"                     // Filter by note type
 	KeyAppSearchTag                     = "app.search.tag"                      // Filter by tag
 	KeyAppSearchMode                    = "app.search.mode"                     // Search mode: keyword, semantic, or hybrid
+	KeyAppSelfVault                     = "app.self.vault"                      // Path to vault root
+	KeyAppSelfLimit                     = "app.self.limit"                      // Max rows per section (recent/hot/stale)
 	KeyAppVaultstatusVault              = "app.vaultstatus.vault"               // Path to vault root
 	KeyAppVaultstatusJson               = "app.vaultstatus.json"                // Output in JSON format
 )
