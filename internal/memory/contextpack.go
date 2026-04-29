@@ -447,7 +447,12 @@ func collectTraverseCandidates(resolver *graph.Resolver, targetID string, maxDep
 		StartID:       targetID,
 		MaxDepth:      maxDepth,
 		MinConfidence: "low",
-		MaxNodes:      200,
+		// Cap large enough that depth-2 traversals on a multi-hundred-note
+		// vault still include every depth-1 neighbor before truncating —
+		// otherwise the contract "depth-2 ⊇ depth-1" breaks once the
+		// breadth at distance 1 alone exceeds the cap. 5000 is well above
+		// realistic per-target neighborhood size while still bounded.
+		MaxNodes: 5000,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("BFS traversal from %q: %w", targetID, err)

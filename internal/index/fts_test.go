@@ -128,7 +128,10 @@ func TestSearchFTS_SingleResult_ScoreIsOne(t *testing.T) {
 
 func TestCountFTS_ReturnsTotal(t *testing.T) {
 	db := rebuildTestIndex(t)
-	allResults, err := index.SearchFTS(db, "memory", 100, 0)
+	// Use a limit large enough that vault growth doesn't cap allResults below
+	// CountFTS's true total. The previous limit of 100 silently truncated
+	// once the research vault crossed 100 "memory" hits.
+	allResults, err := index.SearchFTS(db, "memory", 10000, 0)
 	require.NoError(t, err)
 	totalExpected := len(allResults)
 	require.Greater(t, totalExpected, 3, "need more than 3 results for this test")
