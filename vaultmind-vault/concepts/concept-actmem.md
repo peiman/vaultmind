@@ -36,6 +36,6 @@ The result is a memory that reasons over stored information, not just retrieves 
 
 ActMem's causal edge types represent an extension of what VaultMind's `related_ids` currently captures. VaultMind edges are associative (this note is related to that note); ActMem's edges are causal (this event caused that outcome, this constraint implies that behavior).
 
-For VaultMind's use case — a personal research knowledge base — the distinction matters for design decision notes. A [[concept-semantic-networks|Semantic Networks]] of design decisions with causal edges would let an agent reason about consequences: "if we changed the embedding model, which decisions would be invalidated?" This is beyond current VaultMind scope but ActMem points to the direction.
+For VaultMind's use case — a personal research knowledge base — the distinction matters for design decision notes. A [[semantic-networks|Semantic Networks]] of design decisions with causal edges would let an agent reason about consequences: "if we changed the embedding model, which decisions would be invalidated?" This is beyond current VaultMind scope but ActMem points to the direction.
 
-See [[concept-semantic-networks|Semantic Networks]] for the graph model that causal edges would extend.
+See [[semantic-networks|Semantic Networks]] for the graph model that causal edges would extend.

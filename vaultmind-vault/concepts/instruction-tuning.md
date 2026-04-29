@@ -27,7 +27,7 @@ source_ids:
 
 Instruction tuning is the supervised fine-tuning stage that turns a raw pretrained language model into something that follows natural-language instructions. The training data consists of (instruction, response) pairs covering a diverse mixture of tasks — summarization, translation, question answering, code, math, creative writing — with each task expressed in plain-language instruction form. The model is fine-tuned to imitate the responses given the instructions.
 
-Introduced as a research program by [[source-wei-2021-flan|Wei et al. 2021]] (FLAN), with concurrent work T0 (Sanh et al. 2021) and Super-NaturalInstructions (Wang et al. 2022), instruction tuning is now a non-negotiable stage of every modern LLM pipeline. It is the SFT step that precedes [[concept-rlhf|RLHF]] / [[concept-dpo|DPO]] in the alignment stack.
+Introduced as a research program by [[source-wei-2021-flan|Wei et al. 2021]] (FLAN), with concurrent work T0 (Sanh et al. 2021) and Super-NaturalInstructions (Wang et al. 2022), instruction tuning is now a non-negotiable stage of every modern LLM pipeline. It is the SFT step that precedes [[rlhf|RLHF]] / [[dpo|DPO]] in the alignment stack.
 
 ## How It Works
 
@@ -44,7 +44,7 @@ Introduced as a research program by [[source-wei-2021-flan|Wei et al. 2021]] (FL
 
 ## Recent Developments
 
-- **FLAN-T5 / FLAN-PaLM (2022)** — scaling instruction tuning across tasks, model sizes, and chain-of-thought data. Showed [[concept-chain-of-thought|CoT]] traces in instruction data substantially improve reasoning.
+- **FLAN-T5 / FLAN-PaLM (2022)** — scaling instruction tuning across tasks, model sizes, and chain-of-thought data. Showed [[chain-of-thought|CoT]] traces in instruction data substantially improve reasoning.
 - **Self-Instruct (Wang et al. 2022) / Alpaca (Stanford 2023)** — bootstrap instruction data from a strong model, drastically lowering the cost of producing alignment datasets.
 - **Open-source instruction datasets** — OpenHermes, UltraChat, WizardLM, Nectar, Tülu — community-curated mixtures became a competitive ecosystem.
 - **Multi-turn instruction tuning** — explicit modeling of conversational state for chat assistants.
@@ -54,7 +54,7 @@ Introduced as a research program by [[source-wei-2021-flan|Wei et al. 2021]] (FL
 
 ## Connections
 
-Instruction tuning is the SFT step in the modern post-training stack: pretraining → instruction tuning → preference optimization ([[concept-rlhf|RLHF]] / [[concept-dpo|DPO]] / [[concept-constitutional-ai|RLAIF]]). It is the bridge between the raw [[concept-gpt|GPT-style]] pretrained completion engine and the chat assistants users interact with.
+Instruction tuning is the SFT step in the modern post-training stack: pretraining → instruction tuning → preference optimization ([[rlhf|RLHF]] / [[dpo|DPO]] / [[constitutional-ai|RLAIF]]). It is the bridge between the raw [[gpt|GPT-style]] pretrained completion engine and the chat assistants users interact with.
 
 The LIMA finding — that 1000 examples can suffice — suggests instruction tuning is mostly about format and behavior elicitation rather than capability injection. The model already knows things from pretraining; instruction tuning teaches it which subset of that knowledge to surface and in what shape. This connects to the "alignment surfaces what's already there" framing that runs through alignment research.
 

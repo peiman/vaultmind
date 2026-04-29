@@ -54,7 +54,7 @@ Key practical concerns:
 
 ## Connections
 
-MoE is the dominant lever for pushing past Chinchilla-optimal capacity at fixed inference cost: it changes the [[concept-scaling-laws|scaling law]] curve along the active-vs-total-parameter axis. Together with [[concept-flash-attention|FlashAttention]] (which attacks the attention cost) and quantization, it forms the modern frontier-efficiency stack.
+MoE is the dominant lever for pushing past Chinchilla-optimal capacity at fixed inference cost: it changes the [[scaling-laws|scaling law]] curve along the active-vs-total-parameter axis. Together with [[flash-attention|FlashAttention]] (which attacks the attention cost) and quantization, it forms the modern frontier-efficiency stack.
 
 The conceptual relative is the brain's sparse coding: only a small fraction of neurons fire for any given stimulus, and which fire is content-dependent. MoE's gating is a coarse-grained, learned analog.
 

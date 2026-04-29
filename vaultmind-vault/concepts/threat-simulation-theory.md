@@ -47,11 +47,11 @@ The theory also predicts that PTSD nightmares represent an over-activation of th
 ## Recent Developments
 
 - **Social simulation extension:** Valli and Revonsuo subsequently extended TST to include social threats, not just physical ones — reflecting that for social species, exclusion, status loss, and relationship conflict are major fitness-relevant hazards.
-- **Competing theories:** TST competes with emotional memory regulation accounts ([[concept-emotional-memory-regulation|Emotional Memory Regulation]]) that also predict negative dream content but attribute it to off-line emotional processing rather than evolved rehearsal. The empirical predictions partially overlap, making clean dissociation difficult.
-- **Dream control and rehearsal:** Lucid dreamers ([[concept-lucid-dreaming|Lucid Dreaming]]) can deliberately alter dream outcomes; TST would predict this could reduce the rehearsal benefit.
+- **Competing theories:** TST competes with emotional memory regulation accounts ([[emotional-memory-regulation|Emotional Memory Regulation]]) that also predict negative dream content but attribute it to off-line emotional processing rather than evolved rehearsal. The empirical predictions partially overlap, making clean dissociation difficult.
+- **Dream control and rehearsal:** Lucid dreamers ([[lucid-dreaming|Lucid Dreaming]]) can deliberately alter dream outcomes; TST would predict this could reduce the rehearsal benefit.
 
 ## Connections
 
-TST is a functional complement to the mechanistic [[concept-activation-synthesis|Activation-Synthesis Hypothesis]] — it explains *why* the brain has the circuitry for threat-scenario generation. It shares conceptual territory with [[concept-emotional-memory-regulation|Emotional Memory Regulation]] (both predict negative affect as adaptive) but differs in treating the rehearsal itself — not the decoupling of affect from memory — as the fitness benefit. The prevalence of threat in [[concept-dream-content-memory|Dream Content]] is TST's main empirical anchor.
+TST is a functional complement to the mechanistic [[activation-synthesis|Activation-Synthesis Hypothesis]] — it explains *why* the brain has the circuitry for threat-scenario generation. It shares conceptual territory with [[emotional-memory-regulation|Emotional Memory Regulation]] (both predict negative affect as adaptive) but differs in treating the rehearsal itself — not the decoupling of affect from memory — as the fitness benefit. The prevalence of threat in [[dream-content-memory|Dream Content]] is TST's main empirical anchor.
 
 For VaultMind: the threat-simulation perspective suggests a "proactive surface" function for a memory system — surfacing not just what is most recently activated, but what is most consequential, with negative valence carrying information about what scenarios deserve further processing cycles.

@@ -47,4 +47,4 @@ A-RAG is the direct design basis for VaultMind's planned MCP server, which expos
 
 The graph traversal tool is VaultMind's differentiator: A-RAG retrieves documents but cannot follow relationship edges. VaultMind's knowledge graph enables activation spreading across the note network, surfacing indirectly related notes that pure vector search would miss.
 
-See [[decision-vaultmind-mcp-server|MCP Server Decision]] for the full six-tool design and [[concept-rag|RAG]] for the retrieval-augmented generation foundation.
+See [[decision-vaultmind-mcp-server|MCP Server Decision]] for the full six-tool design and [[rag|RAG]] for the retrieval-augmented generation foundation.

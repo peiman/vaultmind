@@ -53,8 +53,8 @@ Mamba blocks combine selective SSMs with gated MLPs and skip the MLP block of st
 
 ## Connections
 
-Mamba/SSMs are the most credible architectural alternative to the [[concept-transformer|transformer]]. Both attack long-context cost from different angles: SSMs do so structurally (linear-time recurrence), while [[concept-flash-attention|FlashAttention]] does so systems-side (IO-aware exact attention). Hybrid designs combine both — using attention for fine-grained recall and SSMs for coarse compressed memory.
+Mamba/SSMs are the most credible architectural alternative to the [[transformer|transformer]]. Both attack long-context cost from different angles: SSMs do so structurally (linear-time recurrence), while [[flash-attention|FlashAttention]] does so systems-side (IO-aware exact attention). Hybrid designs combine both — using attention for fine-grained recall and SSMs for coarse compressed memory.
 
-The cognitive analog to selective SSMs is content-addressable working memory: a fixed-capacity store that compresses some signals and amplifies others based on relevance. The S4 HiPPO derivation has the flavor of an optimal forgetting curve under a chosen weighting, which connects loosely to [[concept-forgetting-curve|Ebbinghaus]]-style memory decay.
+The cognitive analog to selective SSMs is content-addressable working memory: a fixed-capacity store that compresses some signals and amplifies others based on relevance. The S4 HiPPO derivation has the flavor of an optimal forgetting curve under a chosen weighting, which connects loosely to [[forgetting-curve|Ebbinghaus]]-style memory decay.
 
 For VaultMind, the conceptual transfer is bounded-memory summarization of session history: keep a fixed-size compressed state of past notes accessed, updated content-dependently, alongside the explicit retrieval index.

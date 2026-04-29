@@ -43,9 +43,9 @@ The idea traces to the **two-stage model** proposed by Marr (1971) and revived b
 
 **Layer 2 — Spindles** (thalamocortex): The UP state excites thalamocortical relay neurons via corticothalamic feedback, triggering the reticular nucleus to generate a spindle (0.5–3 s burst at 11–16 Hz). Spindles cluster at the peak of the UP state (~0.5 s after onset), as first shown by [[source-molle-2002|Mölle et al. (2002)]].
 
-**Layer 3 — Sharp-wave ripples** (hippocampus): Each spindle creates a depolarised trough in CA1. Hippocampal [[concept-sharp-wave-ripples|SPW-Rs]] preferentially fire during these spindle troughs, driven by the same corticohippocampal excitation that sustains the spindle. The ripple (~100 ms) carries temporally compressed replay of a waking episode.
+**Layer 3 — Sharp-wave ripples** (hippocampus): Each spindle creates a depolarised trough in CA1. Hippocampal [[sharp-wave-ripples|SPW-Rs]] preferentially fire during these spindle troughs, driven by the same corticohippocampal excitation that sustains the spindle. The ripple (~100 ms) carries temporally compressed replay of a waking episode.
 
-**Information flow:** Hippocampal output during the ripple travels via direct entorhinal→neocortical and indirect hippocampal→prefrontal projections. Because cortex is in its maximally excitable UP state (further excited by the spindle), the cortical targets can undergo synaptic modification from the arriving hippocampal signal — the Hebbian conditions for [[concept-long-term-potentiation|LTP]] are met.
+**Information flow:** Hippocampal output during the ripple travels via direct entorhinal→neocortical and indirect hippocampal→prefrontal projections. Because cortex is in its maximally excitable UP state (further excited by the spindle), the cortical targets can undergo synaptic modification from the arriving hippocampal signal — the Hebbian conditions for [[long-term-potentiation|LTP]] are met.
 
 ## Key Findings
 
@@ -63,6 +63,6 @@ The idea traces to the **two-stage model** proposed by Marr (1971) and revived b
 
 ## Connections
 
-The hippocampal-cortical dialogue is the mechanistic implementation of the [[concept-active-systems-consolidation|Active Systems Consolidation]] hypothesis. It requires intact [[concept-slow-wave-activity|slow oscillations]], [[concept-sleep-spindles|sleep spindles]], and [[concept-sharp-wave-ripples|sharp-wave ripples]] — the failure of any one layer disrupts consolidation. The dialogue is complementary to (and partially in tension with) the [[concept-synaptic-homeostasis-hypothesis|Synaptic Homeostasis Hypothesis]]: the two theories agree on the importance of NREM sleep but differ on whether synaptic changes during sleep are net potentiation (consolidation view) or net depression (homeostasis view).
+The hippocampal-cortical dialogue is the mechanistic implementation of the [[active-systems-consolidation|Active Systems Consolidation]] hypothesis. It requires intact [[slow-wave-activity|slow oscillations]], [[sleep-spindles|sleep spindles]], and [[sharp-wave-ripples|sharp-wave ripples]] — the failure of any one layer disrupts consolidation. The dialogue is complementary to (and partially in tension with) the [[synaptic-homeostasis-hypothesis|Synaptic Homeostasis Hypothesis]]: the two theories agree on the importance of NREM sleep but differ on whether synaptic changes during sleep are net potentiation (consolidation view) or net depression (homeostasis view).
 
 For VaultMind, the triple coupling architecture illustrates a pull-based transfer protocol: the slow oscillation creates periodic fetch windows; spindles signal "ready to receive"; ripples deliver compressed payloads. Data transfer is not push-driven by the hippocampus alone — it requires the neocortex to be in the right state to accept the write.

@@ -45,7 +45,7 @@ L = E_{t, x_0, ε} [‖ε − ε_θ(x_t, t)‖²]
 
 ## Recent Developments
 
-- **[[concept-latent-diffusion|Latent diffusion / Stable Diffusion (2022)]]** — run the diffusion in a compressed VAE latent space; an order of magnitude cheaper than pixel-space diffusion.
+- **[[latent-diffusion|Latent diffusion / Stable Diffusion (2022)]]** — run the diffusion in a compressed VAE latent space; an order of magnitude cheaper than pixel-space diffusion.
 - **DiT (Diffusion Transformers, 2023)** — replace the U-Net denoiser with a transformer; the architecture behind Sora and Stable Diffusion 3.
 - **Rectified Flow / Flow Matching (2022–23)** — reformulate the noise schedule as a straight-line ODE, enabling much faster (sometimes single-step) generation.
 - **Consistency Models (Song et al. 2023)** — distill a multi-step diffusion model into a single-step generator.
@@ -54,8 +54,8 @@ L = E_{t, x_0, ε} [‖ε − ε_θ(x_t, t)‖²]
 
 ## Connections
 
-Diffusion sits opposite the autoregressive [[concept-gpt|GPT]] paradigm in the generative-modeling design space: it generates the entire output in parallel via iterative refinement, rather than left-to-right one token at a time. Each paradigm dominates different modalities — autoregression for language, diffusion for continuous-valued media — though the boundary is blurring (image transformers, language diffusion).
+Diffusion sits opposite the autoregressive [[gpt|GPT]] paradigm in the generative-modeling design space: it generates the entire output in parallel via iterative refinement, rather than left-to-right one token at a time. Each paradigm dominates different modalities — autoregression for language, diffusion for continuous-valued media — though the boundary is blurring (image transformers, language diffusion).
 
-[[concept-latent-diffusion|Latent diffusion]] is the most consequential descendant — it enabled consumer-grade text-to-image. [[concept-flash-attention|FlashAttention]] is part of the same systems-efficiency trend that lets diffusion transformers train at scale.
+[[latent-diffusion|Latent diffusion]] is the most consequential descendant — it enabled consumer-grade text-to-image. [[flash-attention|FlashAttention]] is part of the same systems-efficiency trend that lets diffusion transformers train at scale.
 
 The cognitive analog is more speculative — generative models in the brain are an active research area (Hinton's Forward-Forward, predictive coding, generative replay during sleep), and diffusion-style iterative refinement has been proposed as a model of perceptual inference.

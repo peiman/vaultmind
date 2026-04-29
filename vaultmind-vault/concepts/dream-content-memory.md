@@ -37,7 +37,7 @@ Together, these effects indicate that sleeping memory processing selects, fragme
 
 ## How It Works
 
-The hippocampus is active during REM sleep and is thought to feed episodic memory fragments into ongoing dream construction. However, Fosse et al. (2003) found that only 1–2% of dream reports contained intact episodic replay of specific past events ([[source-fosse-2003|Fosse et al. 2003]]). The vast majority of memory incorporation is at the level of semantic content (persons, places, themes) and emotional tone rather than full narrative episodes. This pattern is consistent with the Lewis & Durrant schema-building framework: sleep extracts common elements while diluting episode-specific detail ([[concept-memory-schema-integration|Memory Schema Integration]]).
+The hippocampus is active during REM sleep and is thought to feed episodic memory fragments into ongoing dream construction. However, Fosse et al. (2003) found that only 1–2% of dream reports contained intact episodic replay of specific past events ([[source-fosse-2003|Fosse et al. 2003]]). The vast majority of memory incorporation is at the level of semantic content (persons, places, themes) and emotional tone rather than full narrative episodes. This pattern is consistent with the Lewis & Durrant schema-building framework: sleep extracts common elements while diluting episode-specific detail ([[memory-schema-integration|Memory Schema Integration]]).
 
 The dream-lag effect's 5–7 day window aligns with evidence that hippocampal-to-cortical memory transfer operates over multiple nights of sleep, with episodic traces becoming gradually more cortically encoded and schematised before re-appearing in dream content.
 
@@ -50,12 +50,12 @@ The dream-lag effect's 5–7 day window aligns with evidence that hippocampal-to
 
 ## Recent Developments
 
-- **Targeted memory reactivation and dream content:** TMR studies (playing odour or sound cues during NREM that were paired with prior learning) sometimes influence subsequent dream content, suggesting that external reactivation signals can bias what memories enter the dream-construction process. (See [[concept-targeted-memory-reactivation|Targeted Memory Reactivation]] — forward ref, other subagent.)
+- **Targeted memory reactivation and dream content:** TMR studies (playing odour or sound cues during NREM that were paired with prior learning) sometimes influence subsequent dream content, suggesting that external reactivation signals can bias what memories enter the dream-construction process. (See [[targeted-memory-reactivation|Targeted Memory Reactivation]] — forward ref, other subagent.)
 - **Wamsley et al. (2010):** Showed that dream content during NREM nap specifically reflected prior maze-navigation experience in participants who later showed better maze performance — connecting dream content to task-specific memory consolidation.
 - **Emotional tagging:** Stickgold & Walker proposed that REM preferentially replays emotional memories (those tagged by the amygdala), providing a mechanism for emotional salience to determine what gets incorporated and reprocessed.
 
 ## Connections
 
-Dream content incorporation is tightly linked to [[concept-episodic-memory|Episodic Memory]] and [[concept-memory-consolidation|Memory Consolidation]]. The schema-building process described by [[concept-memory-schema-integration|Memory Schema Integration]] explains why incorporated memories are typically fragmentary. The emotional bias of incorporation is the experiential counterpart of [[concept-emotional-memory-regulation|Emotional Memory Regulation]] during REM.
+Dream content incorporation is tightly linked to [[episodic-memory|Episodic Memory]] and [[memory-consolidation|Memory Consolidation]]. The schema-building process described by [[memory-schema-integration|Memory Schema Integration]] explains why incorporated memories are typically fragmentary. The emotional bias of incorporation is the experiential counterpart of [[emotional-memory-regulation|Emotional Memory Regulation]] during REM.
 
 For VaultMind: the day-residue and dream-lag effects suggest that a memory system should not weight recency as the sole factor in proactive retrieval. A "temporal gradient" that includes both recent context and a delayed window (approximately one consolidation cycle back) would better model how biological memory selects what to surface during idle processing.

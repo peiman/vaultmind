@@ -40,7 +40,7 @@ Even moderate sleep restriction — 6 hours per night for two weeks — produces
 
 **Consolidation failure:** Post-learning sleep deprivation prevents the hippocampal-cortical replay (SWR → spindle → slow oscillation cascade) that transfers memories to long-term storage. Without sleep, newly encoded hippocampal traces decay because the corticohippocampal transfer window never opens. Studies using selective NREM disruption show that SWS (not total sleep) is the critical stage for declarative memory consolidation failure.
 
-**Glymphatic impairment:** Chronic sleep deprivation reduces [[concept-glymphatic-system|glymphatic clearance]], allowing amyloid-β and tau to accumulate in the interstitial space — a proposed mechanism linking habitual sleep loss to long-term Alzheimer's risk.
+**Glymphatic impairment:** Chronic sleep deprivation reduces [[glymphatic-system|glymphatic clearance]], allowing amyloid-β and tau to accumulate in the interstitial space — a proposed mechanism linking habitual sleep loss to long-term Alzheimer's risk.
 
 ## Key Findings
 
@@ -59,6 +59,6 @@ Even moderate sleep restriction — 6 hours per night for two weeks — produces
 
 ## Connections
 
-Sleep deprivation is the "negative space" that maps the positive contributions of sleep to memory. It confirms that [[concept-active-systems-consolidation|active consolidation]] requires the actual sleep state (not just rest), that [[concept-slow-wave-activity|slow-wave activity]] specifically supports hippocampal-cortical transfer, and that the [[concept-glymphatic-system|glymphatic system]]'s clearance function is time-sensitive. The progressive nature of cumulative sleep debt and its underestimation by sleepers is directly relevant to lab and field study design — participants cannot self-report whether they are impaired.
+Sleep deprivation is the "negative space" that maps the positive contributions of sleep to memory. It confirms that [[active-systems-consolidation|active consolidation]] requires the actual sleep state (not just rest), that [[slow-wave-activity|slow-wave activity]] specifically supports hippocampal-cortical transfer, and that the [[glymphatic-system|glymphatic system]]'s clearance function is time-sensitive. The progressive nature of cumulative sleep debt and its underestimation by sleepers is directly relevant to lab and field study design — participants cannot self-report whether they are impaired.
 
 For VaultMind, sleep deprivation research establishes a hard constraint: there is no substitute for the offline window. Continuous, always-on indexing without periodic quiescent consolidation phases is the equivalent of chronic sleep restriction — it keeps the system nominally functional but degrades its ability to form and access durable representations over time.

@@ -28,7 +28,7 @@ source_ids:
 
 ## Overview
 
-This note focuses on the **sleep-specific aspects of glymphatic function** and extends the mechanistic account in [[concept-glymphatic-system|Glymphatic System]]. While the glymphatic network operates continuously, its throughput is dramatically upregulated during sleep — and specifically during slow-wave sleep (N3). The Xie et al. (2013) finding that interstitial space expands ~60% during sleep, accelerating amyloid-β and tau clearance, has been followed by work identifying the precise neural correlates of maximal glymphatic efficiency within the sleep period.
+This note focuses on the **sleep-specific aspects of glymphatic function** and extends the mechanistic account in [[glymphatic-system|Glymphatic System]]. While the glymphatic network operates continuously, its throughput is dramatically upregulated during sleep — and specifically during slow-wave sleep (N3). The Xie et al. (2013) finding that interstitial space expands ~60% during sleep, accelerating amyloid-β and tau clearance, has been followed by work identifying the precise neural correlates of maximal glymphatic efficiency within the sleep period.
 
 The key advance from [[source-hablitz-2019|Hablitz et al. (2019)]] was quantifying the within-sleep gradient: glymphatic influx (CSF inflow) is not uniform across sleep stages but is highest during periods of maximal EEG **delta power** (0.5–4 Hz), corresponding to deep slow-wave sleep. This directly links the electroencephalographic signature of SWS — which is independently known to be the stage of hippocampal replay — to the metabolic housekeeping that maintains the biochemical environment for plasticity.
 
@@ -54,6 +54,6 @@ Hablitz et al. (2019) showed in mice that artificially increasing slow-wave EEG 
 
 ## Connections
 
-This concept extends [[concept-glymphatic-system|Glymphatic System]] by pinpointing the within-sleep dynamics: peak clearance during [[concept-slow-wave-activity|slow-wave activity]] means that the same oscillatory regime that drives [[concept-hippocampal-cortical-dialogue|hippocampal-cortical memory consolidation]] also drives waste clearance. Both processes are suppressed by the same manipulation — locus coeruleus activation, noradrenaline release, arousal — and both benefit from deep, undisturbed N3 sleep. Sleep deprivation effects on memory ([[concept-sleep-deprivation-memory|Sleep Deprivation and Memory]]) include both consolidation failure and clearance failure.
+This concept extends [[glymphatic-system|Glymphatic System]] by pinpointing the within-sleep dynamics: peak clearance during [[slow-wave-activity|slow-wave activity]] means that the same oscillatory regime that drives [[hippocampal-cortical-dialogue|hippocampal-cortical memory consolidation]] also drives waste clearance. Both processes are suppressed by the same manipulation — locus coeruleus activation, noradrenaline release, arousal — and both benefit from deep, undisturbed N3 sleep. Sleep deprivation effects on memory ([[sleep-deprivation-memory|Sleep Deprivation and Memory]]) include both consolidation failure and clearance failure.
 
 For VaultMind, this note reinforces the coupling of "write consolidation" and "substrate maintenance" as co-scheduled operations: they run together during the same idle window, not as competing processes.

@@ -34,7 +34,7 @@ The mechanism is an LLM call that takes the candidate memory and the current que
 
 ## Connections
 
-MemR3's reflective check could enhance VaultMind's [[concept-context-pack|Context Pack]] assembly. Currently, context-pack includes notes based on graph proximity, activation score, and token budget — all structural signals. A reflective reasoning step before inclusion would add a semantic validity check: "Is this note actually useful for the current query, or is it just structurally adjacent?"
+MemR3's reflective check could enhance VaultMind's [[context-pack|Context Pack]] assembly. Currently, context-pack includes notes based on graph proximity, activation score, and token budget — all structural signals. A reflective reasoning step before inclusion would add a semantic validity check: "Is this note actually useful for the current query, or is it just structurally adjacent?"
 
 This is particularly relevant for graph-traversal-based inclusion: two notes may be strongly linked (high edge weight, frequent co-activation) but one may be irrelevant to the specific query being answered. MemR3's filter would catch this case.
 

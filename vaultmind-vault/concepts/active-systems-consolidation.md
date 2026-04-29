@@ -40,11 +40,11 @@ The hypothesis builds on the classic **two-stage model** (Marr 1971; McClelland 
 
 **Encoding:** During waking, sensory experience drives LTP-like strengthening of hippocampal synapses, encoding an episode in a sparse, rapidly formed representation. Neocortical representations formed simultaneously are incomplete and unstable.
 
-**Offline reactivation:** During NREM sleep, the hippocampus spontaneously reactivates recent memory traces — the physiological mechanism being [[concept-sharp-wave-ripples|sharp-wave ripples]] (SPW-Rs) carrying compressed replay. These reactivation events are timed to the [[concept-hippocampal-cortical-dialogue|hippocampal-cortical dialogue]] (slow oscillation UP states → spindles → ripples).
+**Offline reactivation:** During NREM sleep, the hippocampus spontaneously reactivates recent memory traces — the physiological mechanism being [[sharp-wave-ripples|sharp-wave ripples]] (SPW-Rs) carrying compressed replay. These reactivation events are timed to the [[hippocampal-cortical-dialogue|hippocampal-cortical dialogue]] (slow oscillation UP states → spindles → ripples).
 
 **Neocortical integration:** Repeated reactivation gradually strengthens neocortical representations through Hebbian plasticity at hippocampal-cortical synapses. Over many sleep cycles, the memory becomes less hippocampus-dependent and more neocortically autonomous — explaining why hippocampal damage (amnesia) has a temporally graded effect on memory (remote memories spared, recent memories lost).
 
-**Selective reactivation:** Not all experiences are reactivated equally. Prior reward prediction, emotional salience (via noradrenaline/dopamine tags), and schema-congruence all bias which traces are selected for ripple replay. The [[concept-memory-engrams|engram cell]] perspective suggests that the same cells active during encoding are preferentially reactivated during sleep.
+**Selective reactivation:** Not all experiences are reactivated equally. Prior reward prediction, emotional salience (via noradrenaline/dopamine tags), and schema-congruence all bias which traces are selected for ripple replay. The [[memory-engrams|engram cell]] perspective suggests that the same cells active during encoding are preferentially reactivated during sleep.
 
 ## Key Findings
 
@@ -55,12 +55,12 @@ The hypothesis builds on the classic **two-stage model** (Marr 1971; McClelland 
 
 ## Recent Developments
 
-- **Complementary with SHY:** The leading view now reconciles ASC and the [[concept-synaptic-homeostasis-hypothesis|Synaptic Homeostasis Hypothesis]]: SHY describes the background of global downscaling (restoring dynamic range), while ASC describes the selective overlay of replay-driven potentiation at specific synapses. The net effect is proportional normalisation plus trace preservation.
+- **Complementary with SHY:** The leading view now reconciles ASC and the [[synaptic-homeostasis-hypothesis|Synaptic Homeostasis Hypothesis]]: SHY describes the background of global downscaling (restoring dynamic range), while ASC describes the selective overlay of replay-driven potentiation at specific synapses. The net effect is proportional normalisation plus trace preservation.
 - **REM role in ASC:** Born's group has argued that REM sleep, following NREM consolidation, serves a distinct function — generalisation and schema abstraction — rather than raw trace transfer, suggesting the two stages work in sequence rather than redundantly.
 - **Emotional memory:** REM sleep, not NREM, appears to be the primary stage for consolidating emotional memories (Walker & van der Helm 2009), particularly for fear extinction — a finding that drives ongoing clinical interest in sleep and PTSD.
 
 ## Connections
 
-ASC provides the functional framework that explains why [[concept-hippocampal-cortical-dialogue|hippocampal-cortical dialogue]] matters for memory. It requires [[concept-slow-wave-activity|slow oscillations]] and [[concept-sleep-spindles|spindles]] as the temporal scaffold, [[concept-sharp-wave-ripples|SPW-Rs]] as the replay carrier, and [[concept-neural-replay|neural replay]] as the information payload. It is directly supported by the [[source-diekelmann-born-2010|Diekelmann & Born (2010)]] review, which is the field's most cited synthesis.
+ASC provides the functional framework that explains why [[hippocampal-cortical-dialogue|hippocampal-cortical dialogue]] matters for memory. It requires [[slow-wave-activity|slow oscillations]] and [[sleep-spindles|spindles]] as the temporal scaffold, [[sharp-wave-ripples|SPW-Rs]] as the replay carrier, and [[neural-replay|neural replay]] as the information payload. It is directly supported by the [[source-diekelmann-born-2010|Diekelmann & Born (2010)]] review, which is the field's most cited synthesis.
 
 For VaultMind, ASC maps directly to the design: the vault's background indexing and link-inference jobs are the "offline replay" pass — they take recently added notes, find their relations to existing knowledge, and write those connections into the graph. The selectivity of reactivation (salience-weighted replay) informs how VaultMind might prioritise which recently-added notes get deep relationship analysis versus shallow embedding passes.

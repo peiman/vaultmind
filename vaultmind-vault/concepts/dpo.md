@@ -43,7 +43,7 @@ Operationally:
 2. For each preference pair, compute the four log-probabilities — π and π_ref on y_w and y_l.
 3. Take a gradient step on L_DPO. β controls the KL strength (small β → more aggressive optimization).
 
-That's it. A standard supervised-learning loop replaces the entire [[concept-rlhf|RLHF]] PPO stage.
+That's it. A standard supervised-learning loop replaces the entire [[rlhf|RLHF]] PPO stage.
 
 ## Recent Developments
 
@@ -57,8 +57,8 @@ DPO seeded a rapidly-growing family of preference-optimization methods:
 
 ## Connections
 
-DPO is the simpler, often-equivalent alternative to [[concept-rlhf|PPO-RLHF]]; the two share the same theoretical objective. Practical comparisons remain debated: PPO-RLHF can outperform DPO when reward signals are dense and high-quality, while DPO is more sample-efficient and less brittle.
+DPO is the simpler, often-equivalent alternative to [[rlhf|PPO-RLHF]]; the two share the same theoretical objective. Practical comparisons remain debated: PPO-RLHF can outperform DPO when reward signals are dense and high-quality, while DPO is more sample-efficient and less brittle.
 
-DPO composes cleanly with [[concept-constitutional-ai|Constitutional AI / RLAIF]] — the preference labels can come from AI critics rather than humans, and the rest of the pipeline is unchanged.
+DPO composes cleanly with [[constitutional-ai|Constitutional AI / RLAIF]] — the preference labels can come from AI critics rather than humans, and the rest of the pipeline is unchanged.
 
 For VaultMind, DPO offers a clean path to learning a personalized retrieval/answer policy: collect pairs of "this answer was useful / this one wasn't" and DPO-train an answer-ranking or summary-generation head against them.

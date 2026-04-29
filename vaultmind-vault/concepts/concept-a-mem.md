@@ -38,4 +38,4 @@ A-MEM's memory evolution mechanism is what VaultMind plans to implement as Hebbi
 
 The structured attribute generation (keywords, connections) maps directly to VaultMind's existing note frontmatter — `tags`, `related_ids`, and `source_ids` are already a structured attribute system. A-MEM's contribution is making these attributes dynamic rather than static.
 
-See [[concept-spreading-activation|Spreading Activation]] for the graph traversal mechanism that A-MEM's network connections enable.
+See [[spreading-activation|Spreading Activation]] for the graph traversal mechanism that A-MEM's network connections enable.

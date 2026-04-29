@@ -41,14 +41,14 @@ Why does intermediate-step generation help? Several explanations, mostly compati
 ## Recent Developments
 
 - **Self-consistency (Wang et al. 2022)** — sample many CoT traces, then majority-vote the final answers. A simple addition that consistently improves CoT.
-- **[[concept-tree-of-thought|Tree-of-Thoughts (Yao et al. 2023)]]** — generalize the linear chain to a search tree with proposal, self-evaluation, and backtracking.
+- **[[tree-of-thought|Tree-of-Thoughts (Yao et al. 2023)]]** — generalize the linear chain to a search tree with proposal, self-evaluation, and backtracking.
 - **Program-aided reasoning (PAL, PoT)** — generate a Python program that computes the answer rather than executing math in natural language.
-- **[[concept-react|ReAct]]** — interleave reasoning steps with tool calls (search, calculator) to ground intermediate state externally.
+- **[[react|ReAct]]** — interleave reasoning steps with tool calls (search, calculator) to ground intermediate state externally.
 - **Process reward models** — supervised at the step level, used to train models (o1, o3, DeepSeek-R1) where the chain of thought is internalized and refined via RL.
 - **Chain-of-thought faithfulness** — research showing that the verbalized chain doesn't always reflect the actual computation. The model's stated reasoning may diverge from what's load-bearing in its hidden activations.
 
 ## Connections
 
-CoT sits at the root of the modern inference-time-compute paradigm. Reasoning models (o1, o3, R1, Gemini Thinking) are essentially CoT scaled up: instead of generating one short chain at inference, they generate very long internal chains, optimized via [[concept-rlhf|RL]] against a process reward model. The progression CoT → self-consistency → [[concept-tree-of-thought|ToT]] → search-augmented reasoning → reasoning-trained models is one line of the field's history.
+CoT sits at the root of the modern inference-time-compute paradigm. Reasoning models (o1, o3, R1, Gemini Thinking) are essentially CoT scaled up: instead of generating one short chain at inference, they generate very long internal chains, optimized via [[rlhf|RL]] against a process reward model. The progression CoT → self-consistency → [[tree-of-thought|ToT]] → search-augmented reasoning → reasoning-trained models is one line of the field's history.
 
 The cognitive analog is verbal mediation in problem-solving — children solve hard arithmetic by saying steps out loud, and adults who suppress sub-vocalization perform worse on novel multi-step problems. CoT is the LLM equivalent of "show your work."

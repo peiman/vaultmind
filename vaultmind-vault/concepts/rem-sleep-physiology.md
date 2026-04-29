@@ -59,6 +59,6 @@ REM sleep constitutes roughly 20–25% of total sleep in healthy adults, increas
 
 ## Connections
 
-REM sleep physiology provides a distinct consolidation environment from NREM: where NREM is structured (hierarchical oscillatory coupling), REM is associative and exploratory (high ACh, theta, near-absent NA/5-HT). Together, the two stages constitute the full consolidation cycle described in the [[concept-active-systems-consolidation|Active Systems Consolidation]] hypothesis — NREM for hippocampus→cortex transfer, REM for generalisation and emotional processing. The PGO system links REM to the [[concept-default-mode-network|Default Mode Network]] patterns of spontaneous thought.
+REM sleep physiology provides a distinct consolidation environment from NREM: where NREM is structured (hierarchical oscillatory coupling), REM is associative and exploratory (high ACh, theta, near-absent NA/5-HT). Together, the two stages constitute the full consolidation cycle described in the [[active-systems-consolidation|Active Systems Consolidation]] hypothesis — NREM for hippocampus→cortex transfer, REM for generalisation and emotional processing. The PGO system links REM to the [[default-mode-network|Default Mode Network]] patterns of spontaneous thought.
 
 For VaultMind, the REM/NREM distinction maps to two kinds of background processing: **structured consolidation** (NREM — run the indexer, write explicit links) versus **associative enrichment** (REM — find unexpected cross-domain connections, generate candidate hypotheses from loose embedding proximity).

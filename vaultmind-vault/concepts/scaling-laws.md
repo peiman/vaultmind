@@ -42,12 +42,12 @@ The discrepancy was traced to differences in learning-rate schedules: Kaplan's r
 ## Recent Developments
 
 - **Inference-aware scaling:** Once inference cost dominates total lifetime compute (frontier deployment), it is rational to over-train a smaller model far past compute-optimal — this is the LLaMA-3 / Mistral / Qwen recipe of training 7B–70B models on 10–15T tokens.
-- **MoE scaling laws:** [[concept-mixture-of-experts|Sparse-expert]] models follow distinct scaling curves with respect to active vs. total parameters; both quantities matter and the relationship is still an open research question.
+- **MoE scaling laws:** [[mixture-of-experts|Sparse-expert]] models follow distinct scaling curves with respect to active vs. total parameters; both quantities matter and the relationship is still an open research question.
 - **Inference-time-compute scaling:** A new axis appeared with o1-style models — quality scales with thinking-token count at fixed parameter count, suggesting reasoning is a separable scaling dimension.
 - **Data limits:** With ~15T tokens of high-quality web text already in use, "data wall" concerns have driven interest in synthetic data, repetition, and multimodal scaling.
 
 ## Connections
 
-Scaling laws are the empirical scaffolding behind the entire modern LLM enterprise. They explain why [[concept-gpt|GPT]]-lineage labs invest in massive compute, why [[concept-mixture-of-experts|MoE]] is attractive (it changes the active-parameter side of the curve), and why [[concept-flash-attention|FlashAttention]] matters (it lowers the constant in C ≈ 6ND, effectively shifting the budget).
+Scaling laws are the empirical scaffolding behind the entire modern LLM enterprise. They explain why [[gpt|GPT]]-lineage labs invest in massive compute, why [[mixture-of-experts|MoE]] is attractive (it changes the active-parameter side of the curve), and why [[flash-attention|FlashAttention]] matters (it lowers the constant in C ≈ 6ND, effectively shifting the budget).
 
 For VaultMind, the analog is a "retrieval scaling law" question: how does answer quality scale with vault size, retrieval budget, and re-ranking compute? The framework is portable even though the constants differ.

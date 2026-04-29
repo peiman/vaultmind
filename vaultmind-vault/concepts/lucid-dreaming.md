@@ -37,7 +37,7 @@ Lucid dreaming is scientifically important because it creates a unique experimen
 
 The critical neural difference between lucid and non-lucid REM sleep is partial re-engagement of the dorsolateral prefrontal cortex (DLPFC). Voss et al. ([[source-voss-2009|2009]]) found that lucid REM episodes, compared to matched non-lucid REM from the same participants, showed elevated 40 Hz (gamma-band) power over frontal and frontolateral scalp regions. This frequency band is associated with conscious awareness and metacognitive monitoring in waking. The DLPFC, normally deactivated in REM, contributes the self-monitoring function that allows the dreamer to recognise "this is a dream."
 
-The AIM model ([[concept-aim-model|AIM Model]]) places lucid dreaming in a hybrid zone: REM-level activation (A high), internally generated input (I internal), but partially shifted back toward aminergic modulation (M) compared to non-lucid REM — consistent with the partial DLPFC reactivation.
+The AIM model ([[aim-model|AIM Model]]) places lucid dreaming in a hybrid zone: REM-level activation (A high), internally generated input (I internal), but partially shifted back toward aminergic modulation (M) compared to non-lucid REM — consistent with the partial DLPFC reactivation.
 
 ## Key Findings
 
@@ -55,6 +55,6 @@ The AIM model ([[concept-aim-model|AIM Model]]) places lucid dreaming in a hybri
 
 ## Connections
 
-Lucid dreaming is the sharpest empirical test of the [[concept-aim-model|AIM Model]] and the [[concept-rem-neural-correlates|REM Neural Correlates]] literature because it provides a within-subject, within-night comparison of two closely related states differing in a single behavioural property (metacognition). It connects to [[concept-nrem-dreaming-posterior-hot-zone|NREM Dreaming]] insofar as the posterior hot zone shows that consciousness during sleep is not REM-specific — but lucidity appears to require the frontal reactivation that is specifically a feature of REM. The two-way communication paradigm of [[source-konkoly-2021|Konkoly et al. (2021)]] has opened a new experimental lane: interactive cognitive neuroscience inside the dream state.
+Lucid dreaming is the sharpest empirical test of the [[aim-model|AIM Model]] and the [[rem-neural-correlates|REM Neural Correlates]] literature because it provides a within-subject, within-night comparison of two closely related states differing in a single behavioural property (metacognition). It connects to [[nrem-dreaming-posterior-hot-zone|NREM Dreaming]] insofar as the posterior hot zone shows that consciousness during sleep is not REM-specific — but lucidity appears to require the frontal reactivation that is specifically a feature of REM. The two-way communication paradigm of [[source-konkoly-2021|Konkoly et al. (2021)]] has opened a new experimental lane: interactive cognitive neuroscience inside the dream state.
 
 For VaultMind: lucid dreaming is the cognitive-science argument for meta-awareness within a default retrieval process. The VaultMind analogue would be an agent that can monitor and modulate its own associative processing — observing when a retrieval pass is looping, when a connection is spurious, and switching modes without fully exiting the exploratory state.

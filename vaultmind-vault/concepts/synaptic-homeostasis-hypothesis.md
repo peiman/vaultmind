@@ -51,12 +51,12 @@ The molecular route proposed involves several candidates: reduced AMPA receptor 
 
 ## Recent Developments
 
-- **Tension with active consolidation:** SHY predicts net synaptic weakening during sleep; the [[concept-active-systems-consolidation|Active Systems Consolidation]] hypothesis predicts selective strengthening at specific synapses (for consolidated memories). These are not mutually exclusive — SHY can be the background trend while potentiation occurs at selected trace synapses — but the empirical debate is active (Rasch & Born 2013).
+- **Tension with active consolidation:** SHY predicts net synaptic weakening during sleep; the [[active-systems-consolidation|Active Systems Consolidation]] hypothesis predicts selective strengthening at specific synapses (for consolidated memories). These are not mutually exclusive — SHY can be the background trend while potentiation occurs at selected trace synapses — but the empirical debate is active (Rasch & Born 2013).
 - **SHY extension:** The "Synaptic Homeostasis with Memory" elaboration (Frank 2012; Tononi & Cirelli 2019) proposes that important memories are "tagged" during encoding and protected from downscaling, while untagged synapses are depressed. This preserves information while restoring dynamic range.
 - **REM sleep role in SHY:** Tononi and Cirelli initially focused on NREM; subsequent work suggests REM may serve a distinct refinement function — pruning synapses that were downscaled insufficiently during NREM.
 
 ## Connections
 
-SHY explains why [[concept-slow-wave-activity|slow-wave activity]] is tightly coupled to the amount of prior learning and explains the homeostatic regulation of [[concept-sleep-stages|sleep stages]]. It partially conflicts with and partially complements the [[concept-active-systems-consolidation|Active Systems Consolidation]] hypothesis: both theories need [[concept-hebbian-learning|Hebbian mechanisms]] and both invoke NREM sleep, but they differ on whether the net synaptic change during sleep is depression or potentiation.
+SHY explains why [[slow-wave-activity|slow-wave activity]] is tightly coupled to the amount of prior learning and explains the homeostatic regulation of [[sleep-stages|sleep stages]]. It partially conflicts with and partially complements the [[active-systems-consolidation|Active Systems Consolidation]] hypothesis: both theories need [[hebbian-learning|Hebbian mechanisms]] and both invoke NREM sleep, but they differ on whether the net synaptic change during sleep is depression or potentiation.
 
 For VaultMind, SHY maps cleanly to the idea of **scheduled pruning**: not all embeddings, links, and graph edges should be preserved forever. Periodic downscaling — merging near-duplicate nodes, removing low-confidence links, pruning stale content — restores the resolution of the knowledge graph and prepares it for the next round of learning, just as sleep restores the dynamic range of cortical circuits.

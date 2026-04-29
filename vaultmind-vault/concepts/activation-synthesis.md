@@ -45,11 +45,11 @@ The cortex then attempts **synthesis**: drawing on stored memories, schemas, and
 
 - **Revision toward meaning:** Hobson later softened the "random" claim, acknowledging that activation is not fully random — PGO waves fire preferentially in pathways recently potentiated by waking experience, providing a biologically principled link between waking life and dream content.
 - **Solms dissociation:** Lesion studies showed that dreams can be abolished by forebrain (not brainstem) damage, complicating the model's emphasis on pontine activation ([[source-solms-2000|Solms 2000]]).
-- **AIM model:** Hobson later elaborated activation-synthesis into the three-dimensional [[concept-aim-model|AIM model]], which better handles the continuum of states from deep sleep to waking to psychosis.
+- **AIM model:** Hobson later elaborated activation-synthesis into the three-dimensional [[aim-model|AIM model]], which better handles the continuum of states from deep sleep to waking to psychosis.
 - **Posterior hot zone challenge:** Siclari et al.'s identification of a posterior cortical zone as the key correlate of dream presence shifts emphasis from the source of activation to where the synthesis occurs.
 
 ## Connections
 
-Activation-synthesis is the precursor to the [[concept-aim-model|AIM Model]] and remains the theoretical anchor for understanding REM neurophysiology in dreaming research. It stands in contrast to threat-simulation ([[concept-threat-simulation-theory|Threat-Simulation Theory]]) and memory-integration accounts that assign functional significance to dream content. The [[concept-rem-neural-correlates|REM Neural Correlates]] are its empirical support.
+Activation-synthesis is the precursor to the [[aim-model|AIM Model]] and remains the theoretical anchor for understanding REM neurophysiology in dreaming research. It stands in contrast to threat-simulation ([[threat-simulation-theory|Threat-Simulation Theory]]) and memory-integration accounts that assign functional significance to dream content. The [[rem-neural-correlates|REM Neural Correlates]] are its empirical support.
 
 For VaultMind: activation-synthesis is the "noise-becomes-narrative" paradigm. A retrieval system that presents lightly connected memories to a synthesising agent — even without a strong initial query — mirrors this bottom-up to top-down construction process, and may generate novel associative connections the agent would not produce from directed search alone.

@@ -43,7 +43,7 @@ The three-way combination explains why REM dreaming has waking-level vividness (
 
 ## Key Findings
 
-- **Lucid dreaming as hybrid state:** Lucid dreamers occupy an unusual AIM position — high A, internal I, but partially recovered aminergic M (reflected in gamma-band frontal EEG). This accurately predicts the lucid dreamer's ability to reflect on and remember their state ([[concept-lucid-dreaming|Lucid Dreaming]]).
+- **Lucid dreaming as hybrid state:** Lucid dreamers occupy an unusual AIM position — high A, internal I, but partially recovered aminergic M (reflected in gamma-band frontal EEG). This accurately predicts the lucid dreamer's ability to reflect on and remember their state ([[lucid-dreaming|Lucid Dreaming]]).
 - **Psychosis analogy:** Acute psychosis maps near REM in AIM space (high A, partially internal I, possibly shifted M), explaining why schizophrenic hallucinations share phenomenological features with REM dreams.
 - **Anaesthesia and coma:** States of unconsciousness occupy the low-A corner, regardless of I or M — consistent with global workspace theories of consciousness requiring a minimum activation threshold.
 
@@ -55,6 +55,6 @@ The three-way combination explains why REM dreaming has waking-level vividness (
 
 ## Connections
 
-AIM is the theoretical successor to [[concept-activation-synthesis|Activation-Synthesis]] and provides the conceptual framework within which [[concept-rem-neural-correlates|REM Neural Correlates]] are interpreted. The M dimension directly underpins [[concept-emotional-memory-regulation|Emotional Memory Regulation]] (low NE during REM) and [[concept-rem-creativity-insight|REM Creativity]] (cholinergic associativity). [[concept-lucid-dreaming|Lucid Dreaming]] is the empirical test-case for the model's predictive precision.
+AIM is the theoretical successor to [[activation-synthesis|Activation-Synthesis]] and provides the conceptual framework within which [[rem-neural-correlates|REM Neural Correlates]] are interpreted. The M dimension directly underpins [[emotional-memory-regulation|Emotional Memory Regulation]] (low NE during REM) and [[rem-creativity-insight|REM Creativity]] (cholinergic associativity). [[lucid-dreaming|Lucid Dreaming]] is the empirical test-case for the model's predictive precision.
 
 For VaultMind: the AIM model suggests that the mode of memory access should vary with neuromodulatory state, not just query intent. An agent's "retrieval mode" could be characterised along activation × associativity axes, with a dedicated low-constraint exploration pass (REM-like) versus a high-precision recall pass (waking-like).

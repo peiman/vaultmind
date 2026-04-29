@@ -43,7 +43,7 @@ The constitution comprises ~16 principles drawn from sources like the UN Declara
 - Sample pairs of responses from the SL-CAI model.
 - An AI critic, prompted with a constitutional principle, picks which response is more aligned with it.
 - Train a preference model on the AI-generated labels.
-- Fine-tune the policy via PPO (or [[concept-dpo|DPO]]) against the AI-trained preference model.
+- Fine-tune the policy via PPO (or [[dpo|DPO]]) against the AI-trained preference model.
 
 Mixing AI-generated harmlessness preferences with human-generated helpfulness preferences gives a model that is both helpful and harmless — the paper showed this Pareto-dominates pure-RLHF training on both axes.
 
@@ -56,7 +56,7 @@ Mixing AI-generated harmlessness preferences with human-generated helpfulness pr
 
 ## Connections
 
-CAI is a sibling of [[concept-rlhf|RLHF]]; the only structural difference is who labels the preferences. The same Bradley-Terry reward modeling, KL-regularized policy optimization, and SFT bootstrap apply. CAI composes with [[concept-dpo|DPO]] — the AI-labeled preference pairs feed any preference-optimization method.
+CAI is a sibling of [[rlhf|RLHF]]; the only structural difference is who labels the preferences. The same Bradley-Terry reward modeling, KL-regularized policy optimization, and SFT bootstrap apply. CAI composes with [[dpo|DPO]] — the AI-labeled preference pairs feed any preference-optimization method.
 
 The conceptual move — using model-generated supervision to train the next iteration of the model — is the same engine driving inference-time-compute scaling (o1/o3 use process reward models trained on AI-judged reasoning steps) and self-rewarding LMs. CAI was an early demonstration that scalable AI oversight of AI is tractable for at least narrow safety goals.
 

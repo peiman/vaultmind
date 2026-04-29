@@ -30,7 +30,7 @@ BERT-large set new state-of-the-art on 11 NLP benchmarks at release (GLUE, SQuAD
 
 ## How It Works
 
-**Architecture.** A stack of transformer encoder blocks (no decoder, no causal masking). BERT-base has 12 layers, 768 hidden dim, 12 attention heads (~110M parameters). BERT-large has 24 layers, 1024 hidden dim, 16 heads (~340M parameters). All [[concept-attention-mechanism|attention]] is fully bidirectional.
+**Architecture.** A stack of transformer encoder blocks (no decoder, no causal masking). BERT-base has 12 layers, 768 hidden dim, 12 attention heads (~110M parameters). BERT-large has 24 layers, 1024 hidden dim, 16 heads (~340M parameters). All [[attention-mechanism|attention]] is fully bidirectional.
 
 **Tokenization.** WordPiece subword tokenizer with a 30K vocabulary. A special `[CLS]` token prepended to every input serves as a sequence-level representation; `[SEP]` separates segments.
 
@@ -49,14 +49,14 @@ The BERT lineage has many descendants:
 - **DeBERTa (He et al. 2020)** — disentangled position/content attention; the strongest pure-encoder model for many years.
 - **ELECTRA (Clark et al. 2020)** — replace MLM with a more sample-efficient discriminative objective (real-vs-replaced token detection).
 - **Sentence-BERT / SBERT (Reimers 2019)** — siamese fine-tuning for sentence embeddings.
-- **DPR ([[concept-dense-passage-retrieval|Dense Passage Retrieval]], Karpukhin 2020)** — BERT bi-encoder for open-domain question answering retrieval.
-- **[[concept-colbert|ColBERT]] (2020)** — token-level late interaction over BERT representations.
+- **DPR ([[dense-passage-retrieval|Dense Passage Retrieval]], Karpukhin 2020)** — BERT bi-encoder for open-domain question answering retrieval.
+- **[[colbert|ColBERT]] (2020)** — token-level late interaction over BERT representations.
 - **BGE-M3, E5, GTE, mxbai** — modern multilingual / multi-task BERT-lineage embedding models that power most production retrieval systems, including VaultMind.
 
 ## Connections
 
-BERT and [[concept-gpt|GPT]] are the two great branches of the [[concept-transformer|transformer]] family tree — encoder-only vs decoder-only, bidirectional MLM vs left-to-right LM, fine-tune-per-task vs prompt-and-generate. They were once direct competitors; today they specialize. BERT-lineage encoders dominate where you need a vector representation (retrieval, classification, semantic search). GPT-lineage decoders dominate where you need to generate text (chat, completion, reasoning).
+BERT and [[gpt|GPT]] are the two great branches of the [[transformer|transformer]] family tree — encoder-only vs decoder-only, bidirectional MLM vs left-to-right LM, fine-tune-per-task vs prompt-and-generate. They were once direct competitors; today they specialize. BERT-lineage encoders dominate where you need a vector representation (retrieval, classification, semantic search). GPT-lineage decoders dominate where you need to generate text (chat, completion, reasoning).
 
-For VaultMind specifically, BERT is everywhere upstream: BGE-M3 (the embedding model VaultMind uses for indexing) is a BERT-lineage encoder, and every dense retrieval architecture in the codebase ([[concept-dense-passage-retrieval|DPR]], [[concept-colbert|ColBERT]], [[concept-hybrid-search|hybrid search]]) traces directly to it.
+For VaultMind specifically, BERT is everywhere upstream: BGE-M3 (the embedding model VaultMind uses for indexing) is a BERT-lineage encoder, and every dense retrieval architecture in the codebase ([[dense-passage-retrieval|DPR]], [[colbert|ColBERT]], [[hybrid-search|hybrid search]]) traces directly to it.
 
 The cognitive analog is the bidirectional context-fitting that humans do when reading: you don't strictly process left-to-right; you continuously revise interpretations of earlier words based on later ones. MLM trains exactly this.

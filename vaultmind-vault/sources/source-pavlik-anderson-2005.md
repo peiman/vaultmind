@@ -35,6 +35,6 @@ The key differences between Pavlik & Anderson's scaling and VaultMind's approach
 
 3. **Domain**: Pavlik & Anderson target vocabulary learning in controlled laboratory settings with uniform participant populations. VaultMind targets information retrieval for a single user's personal knowledge base across bursty, irregular usage patterns.
 
-This paper is the essential citation for the compressed idle-time approach. See [[concept-temporal-activation-for-intermittent-systems|Temporal Activation]] for the full analysis and [[concept-base-level-activation|Base-Level Activation]] for the equation being modified.
+This paper is the essential citation for the compressed idle-time approach. See [[temporal-activation-for-intermittent-systems|Temporal Activation]] for the full analysis and [[base-level-activation|Base-Level Activation]] for the equation being modified.
 
 Citation: Pavlik, P.I. & Anderson, J.R. (2005). Practice and Forgetting Effects on Vocabulary Memory: An Activation-Based Model of the Spacing Effect. *Cognitive Science*, 29(4), 559-586. DOI: 10.1207/s15516709cog0000_14

@@ -40,7 +40,7 @@ The **MemCube** abstraction unifies these tiers: each memory unit carries a meta
 
 The MemOS three-tier model maps directly to VaultMind's architecture:
 - Plaintext tier = vault notes on disk (the `.md` files)
-- Activation tier = in-session activation scores computed by [[concept-base-level-activation|Base-Level Activation]]
+- Activation tier = in-session activation scores computed by [[base-level-activation|Base-Level Activation]]
 - Parametric tier = BGE-M3 embeddings that encode semantic knowledge implicitly
 
 VaultMind's activation scoring is precisely the MemScheduler's job: decide which plaintext memories to promote to the effective "hot" tier for context-pack assembly. The MemCube metadata header corresponds to VaultMind's frontmatter fields (`id`, `tags`, `related_ids`, activation scores).
