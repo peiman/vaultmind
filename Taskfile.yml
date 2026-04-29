@@ -94,6 +94,11 @@ tasks:
           export XDG_DATA_HOME="${XDG_DATA_HOME:-$(mktemp -d -t vm-test.XXXXXX)}"
           go test -tags dev -count=1 -run TestBaseline_GoldenFixture ./internal/baseline/... -baseline-update
 
+  check:citations:
+    desc: Verify every source note's URL resolves and the cited title matches the authoritative metadata (CrossRef for DOIs, arXiv API for arXiv). Network-dependent; not in `task check`.
+    cmds:
+      - python3 scripts/verify_citations.py --vault vaultmind-vault
+
   check:bootstrap:
     desc: Verify VaultMind setup (binary, vaults, hook wiring, smoke test)
     cmds:
