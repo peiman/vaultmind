@@ -21,10 +21,40 @@ the inference engine in Go, swap engines through a process boundary.
 | Path | Wall time | CPU | Notes |
 |---|---|---|---|
 | In-process ORT+CPU | 3:42 | 700%+ sustained | Fans saturated |
-| Sidecar PyTorch+MPS | 1:11 | 17% | 4-second startup, 0.7s/note inference |
+| Sidecar PyTorch+MPS | ~1:15 | ~17% | ~5s startup, ~0.6s/note inference |
 
 ~3x faster wall time, ~40x less CPU saturation. Heat reduction is the
 load-bearing win — fans barely engage because most work is on GPU.
+
+## Numerical equivalence (correctness gate)
+
+The sidecar produces embeddings **numerically equivalent** to the in-process
+ORT+CPU reference. Verified by `TestSidecar_NumericalEquivalence_VsInProcess`:
+
+- Dense cosine ≥ 0.9999 across all tested texts
+- ColBERT per-token cosine ≥ 0.9999
+- Sparse top-10 token overlap ≥ 0.7 (small differences are tokenization
+  variance, not engine drift)
+
+This means switching between sidecar and in-process is safe: a vault
+embedded via the sidecar produces the same retrieval rankings as a vault
+embedded in-process. Mixed-state vaults (some notes via sidecar, others
+in-process) work correctly.
+
+**Why each text gets its own forward pass:** when multiple variable-length
+texts are batched together for a single forward pass, BGE-M3's attention
+masking diverges between PyTorch+MPS and ORT+CPU on shorter-than-max texts
+in the batch — empirically dense cosine drops to 0.15-0.36 for affected
+texts. The sidecar loops one text at a time internally; the JSON protocol
+stays batched so the Go side is unchanged. Speed cost of singleton vs
+batched mode: ~1.04x (measured) — essentially free, because the work IS
+the transformer forward pass and that fully utilizes MPS regardless.
+Correctness restored at no perceptible cost.
+
+This was caught by probe-before-commit: the 4.28x "speedup" measured on
+the original batched-mode sidecar was on incorrect outputs. Running the
+numerical equivalence probe BEFORE shipping caught the regression. Lesson
+captured in `reference-probe-before-commit` (identity vault).
 
 ## Setup (one-time)
 

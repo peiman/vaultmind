@@ -100,60 +100,78 @@ def main():
             continue
 
         try:
-            with torch.no_grad():
-                enc = tokenizer(
-                    texts,
-                    padding=True,
-                    truncation=True,
-                    max_length=max_len,
-                    return_tensors="pt",
-                ).to(device)
-
-                outputs = model(**enc, return_dict=True)
-                hidden = outputs.last_hidden_state
-
-                dense = hidden[:, 0, :]
-                dense = torch.nn.functional.normalize(dense, p=2, dim=1)
-
-                sparse_scores = torch.relu(hidden @ sparse_w.t() + sparse_b).squeeze(-1)
-                input_ids = enc["input_ids"]
-                special_mask = enc.get("special_tokens_mask")
-                if special_mask is None:
-                    special_ids = set(tokenizer.all_special_ids)
-                    special_mask = torch.zeros_like(input_ids)
-                    for sid in special_ids:
-                        special_mask = special_mask | (input_ids == sid).int()
-
-                colbert = (hidden @ colbert_w.t() + colbert_b)
-                colbert = torch.nn.functional.normalize(colbert, p=2, dim=2)
-
-            dense_list = dense.cpu().float().tolist()
+            # Process each text in its own forward pass.
+            #
+            # Why one-at-a-time: when multiple variable-length texts are
+            # batched into a single forward pass, BGE-M3's attention
+            # masking diverges between this PyTorch+MPS path and
+            # vaultmind's reference in-process ORT path, producing
+            # dense_cos drift of 0.15-0.36 for shorter-than-max texts
+            # within the batch. Single-text forwards produce dense_cos
+            # = 1.0000 against the reference. Speed cost: ~1.04x slower
+            # vs batched (measured via TestSidecar_Speed_SingleVsBatched).
+            # Correctness restoration is essentially free.
+            #
+            # The protocol stays batched at the JSON layer so callers do
+            # not change. Future: if upstream attention-mask handling is
+            # fixed for batched inputs, we can swap back without
+            # touching the Go side.
+            dense_list = []
             sparse_list = []
             colbert_list = []
-            for b in range(len(texts)):
-                sparse_dict = {}
-                ss = sparse_scores[b].cpu().float()
-                ids = input_ids[b].cpu()
-                mask = special_mask[b].cpu()
-                attn = enc["attention_mask"][b].cpu()
-                for i in range(len(ss)):
-                    if mask[i] == 1 or attn[i] == 0:
-                        continue
-                    val = float(ss[i])
-                    if val <= 0:
-                        continue
-                    tid = int(ids[i])
-                    if val > sparse_dict.get(tid, 0.0):
-                        sparse_dict[tid] = val
-                sparse_list.append({str(k): v for k, v in sparse_dict.items()})
+            with torch.no_grad():
+                for text in texts:
+                    enc = tokenizer(
+                        [text],
+                        padding=True,
+                        truncation=True,
+                        max_length=max_len,
+                        return_tensors="pt",
+                    ).to(device)
 
-                cb = colbert[b].cpu().float()
-                kept = []
-                for i in range(1, cb.shape[0]):
-                    if mask[i] == 1 or attn[i] == 0:
-                        continue
-                    kept.append(cb[i].tolist())
-                colbert_list.append(kept)
+                    outputs = model(**enc, return_dict=True)
+                    hidden = outputs.last_hidden_state  # [1, L, 1024]
+
+                    dense = torch.nn.functional.normalize(hidden[:, 0, :], p=2, dim=1)
+
+                    sparse_scores = torch.relu(hidden @ sparse_w.t() + sparse_b).squeeze(-1)
+                    input_ids = enc["input_ids"]
+                    special_mask = enc.get("special_tokens_mask")
+                    if special_mask is None:
+                        special_ids = set(tokenizer.all_special_ids)
+                        special_mask = torch.zeros_like(input_ids)
+                        for sid in special_ids:
+                            special_mask = special_mask | (input_ids == sid).int()
+
+                    colbert = torch.nn.functional.normalize(
+                        hidden @ colbert_w.t() + colbert_b, p=2, dim=2,
+                    )
+
+                    dense_list.append(dense[0].cpu().float().tolist())
+
+                    sparse_dict = {}
+                    ss = sparse_scores[0].cpu().float()
+                    ids = input_ids[0].cpu()
+                    mask = special_mask[0].cpu()
+                    attn = enc["attention_mask"][0].cpu()
+                    for i in range(len(ss)):
+                        if mask[i] == 1 or attn[i] == 0:
+                            continue
+                        val = float(ss[i])
+                        if val <= 0:
+                            continue
+                        tid = int(ids[i])
+                        if val > sparse_dict.get(tid, 0.0):
+                            sparse_dict[tid] = val
+                    sparse_list.append({str(k): v for k, v in sparse_dict.items()})
+
+                    cb = colbert[0].cpu().float()
+                    kept = []
+                    for i in range(1, cb.shape[0]):
+                        if mask[i] == 1 or attn[i] == 0:
+                            continue
+                        kept.append(cb[i].tolist())
+                    colbert_list.append(kept)
 
             emit({"dense": dense_list, "sparse": sparse_list, "colbert": colbert_list})
         except Exception as e:
