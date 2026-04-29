@@ -17,3 +17,8 @@ func newBGEM3Session() (*hugot.Session, error) {
 // is about to run on the slow pure-Go path so operators don't mistake
 // "hours-long indexing" for a hang or OOM. Reported by the build tag.
 func BackendName() string { return "go" }
+
+// Acceleration mirrors the ORT-build's Acceleration() so callers don't
+// need to special-case build tags. Pure-Go has no GPU path; "go-cpu"
+// names the slow path explicitly.
+func Acceleration() string { return "go-cpu" }
