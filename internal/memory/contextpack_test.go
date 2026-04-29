@@ -30,6 +30,35 @@ func TestContextPack_IncludesContext(t *testing.T) {
 	// We only verify that context items exist; body inclusion is tested separately.
 }
 
+// ContextPack items and the target must carry `type` and `title` in their
+// Frontmatter map. FullNote stores those as struct fields, not map keys;
+// extractFrontmatter injects them so downstream formatters (FormatAsk,
+// FormatAskPointersOnly) can render `[type] title` for each item without
+// a separate query. Without this, --pointers-only mode renders empty
+// `[]` brackets for context items — vaultmind#33.
+func TestContextPack_ContextItemsCarryTypeAndTitle(t *testing.T) {
+	db := buildTestDB(t)
+	resolver := graph.NewResolver(db)
+	result, err := memory.ContextPack(resolver, db, memory.ContextPackConfig{Input: "proj-vaultmind", Budget: 8192})
+	require.NoError(t, err)
+	require.Greater(t, len(result.Context), 0, "fixture must produce context items for this assertion to be meaningful")
+
+	for i, item := range result.Context {
+		fmType, _ := item.Frontmatter["type"].(string)
+		fmTitle, _ := item.Frontmatter["title"].(string)
+		assert.NotEmpty(t, fmType,
+			"context item %d (id=%s) Frontmatter[\"type\"] must be populated — formatters render [%%s] from this", i, item.ID)
+		assert.NotEmpty(t, fmTitle,
+			"context item %d (id=%s) Frontmatter[\"title\"] must be populated — formatters render the title from this", i, item.ID)
+	}
+
+	require.NotNil(t, result.Target)
+	targetType, _ := result.Target.Frontmatter["type"].(string)
+	targetTitle, _ := result.Target.Frontmatter["title"].(string)
+	assert.NotEmpty(t, targetType, "target Frontmatter[\"type\"] must be populated")
+	assert.NotEmpty(t, targetTitle, "target Frontmatter[\"title\"] must be populated")
+}
+
 func TestContextPack_SmallBudget_Truncates(t *testing.T) {
 	db := buildTestDB(t)
 	resolver := graph.NewResolver(db)

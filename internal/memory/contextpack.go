@@ -278,20 +278,38 @@ func packTwoPass(
 
 // extractFrontmatter returns the note's frontmatter, optionally slimmed.
 // Returns an empty map if the note is nil.
+//
+// FullNote stores `type` and `title` as struct fields at the top level
+// (FullNote.Type, FullNote.Title) rather than inside the Frontmatter map.
+// The map is populated from frontmatter_kv table contents plus a few
+// projected columns (status, created, updated, aliases, tags), but type
+// and title never make it in. Downstream formatters that read
+// `frontmatter["type"]` and `frontmatter["title"]` would get empty
+// strings — visible in `vaultmind ask` output as bare `[] ` brackets
+// in the context-item rendering, especially noticeable in
+// --pointers-only mode where bodies are stripped and the type+title is
+// the only label. See vaultmind#33.
+//
+// Inject them here so the contract "Frontmatter contains everything a
+// caller needs to label the note" holds. The struct fields stay
+// authoritative; the map is the consumer-friendly view.
 func extractFrontmatter(noteFull *index.FullNote, slim bool) map[string]interface{} {
 	if noteFull == nil {
 		return map[string]interface{}{}
 	}
-	fm := noteFull.Frontmatter
+	// Copy so we don't mutate the loader's map (callers may share refs)
+	fm := make(map[string]interface{}, len(noteFull.Frontmatter)+2)
+	for k, v := range noteFull.Frontmatter {
+		fm[k] = v
+	}
+	if noteFull.Type != "" {
+		fm["type"] = noteFull.Type
+	}
+	if noteFull.Title != "" {
+		fm["title"] = noteFull.Title
+	}
 	if slim {
-		var noteType, noteTitle string
-		if t, ok := fm["type"].(string); ok {
-			noteType = t
-		}
-		if t, ok := fm["title"].(string); ok {
-			noteTitle = t
-		}
-		return slimFrontmatter(fm, noteType, noteTitle)
+		return slimFrontmatter(fm, noteFull.Type, noteFull.Title)
 	}
 	return fm
 }
@@ -310,13 +328,17 @@ func slimFrontmatter(fm map[string]interface{}, noteType, title string) map[stri
 // It always accounts for frontmatter tokens in UsedTokens and returns the target and
 // the remaining token budget after packing.
 func packTargetContent(full *index.FullNote, budget int, result *ContextPackResult) (*ContextPackTarget, int) {
-	fmJSON, _ := json.Marshal(full.Frontmatter)
+	// Inject type+title from FullNote struct fields into the Frontmatter
+	// map — they're stored as struct fields, not map keys (see
+	// extractFrontmatter for the full reasoning). vaultmind#33.
+	fm := extractFrontmatter(full, false)
+	fmJSON, _ := json.Marshal(fm)
 	fmTokens := EstimateTokens(string(fmJSON))
 	bodyTokens := EstimateTokens(full.Body)
 
 	target := &ContextPackTarget{
 		ID:          full.ID,
-		Frontmatter: full.Frontmatter,
+		Frontmatter: fm,
 	}
 
 	// Always account for frontmatter tokens, even if they exceed the budget.
