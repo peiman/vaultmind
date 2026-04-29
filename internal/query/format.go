@@ -48,7 +48,17 @@ type formatOpts struct {
 }
 
 func formatAskWithOptions(result *AskResult, w io.Writer, opts formatOpts) error {
-	if _, err := fmt.Fprintf(w, "Search: %q (%d hits)\n", result.Query, len(result.TopHits)); err != nil {
+	header := fmt.Sprintf("Search: %q (%d hits)", result.Query, len(result.TopHits))
+	// Surface top-hit confidence inline when computable. This is the
+	// signal the agent uses to distinguish "I'm sure about top-1" from
+	// "top-1 might be coincidental, treat top-N as candidates." First
+	// slice of plasticity-priority-order step 4 (calibrated confidence).
+	// Hidden when confidence is empty (single-hit results, ill-defined
+	// denominator) so the line stays terse for clear cases.
+	if result.TopHitConfidence != "" {
+		header += fmt.Sprintf("  [top-hit confidence: %s]", result.TopHitConfidence)
+	}
+	if _, err := fmt.Fprintln(w, header); err != nil {
 		return err
 	}
 	for _, h := range result.TopHits {

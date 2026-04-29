@@ -36,12 +36,68 @@ type AskConfig struct {
 // Surfacing it in the JSON envelope lets agent consumers detect keyword-only
 // fallback programmatically (the human-readable hint prints on stdout and
 // isn't available via --json).
+//
+// TopHitConfidence is one of "strong" | "moderate" | "weak" | "", derived
+// from the normalized gap between the top hit's score and the next-lower
+// score. First slice of plasticity-priority-order step 4 (calibrated
+// confidence). Empirical thresholds from probes on identity + research
+// vaults: canonical-match queries show ~8.6% relative gap; rank-2 / rank-6
+// failure-mode queries show ~1.6-2% gap. The 5% / 2% cutoffs separate
+// those populations on the small sample we have. See computeTopHitConfidence.
 type AskResult struct {
-	Query         string                    `json:"query"`
-	TopHits       []retrieval.ScoredResult  `json:"top_hits"`
-	Context       *memory.ContextPackResult `json:"context,omitempty"`
-	RetrievalMode string                    `json:"retrieval_mode,omitempty"`
-	Similarities  map[string]float64        `json:"-"` // raw cosine similarities (not serialized)
+	Query            string                    `json:"query"`
+	TopHits          []retrieval.ScoredResult  `json:"top_hits"`
+	Context          *memory.ContextPackResult `json:"context,omitempty"`
+	RetrievalMode    string                    `json:"retrieval_mode,omitempty"`
+	TopHitConfidence string                    `json:"top_hit_confidence,omitempty"`
+	Similarities     map[string]float64        `json:"-"` // raw cosine similarities (not serialized)
+}
+
+// Confidence tier strings — exported so tests + future calibration tooling
+// can reference them by name rather than string literals.
+const (
+	ConfidenceStrong   = "strong"
+	ConfidenceModerate = "moderate"
+	ConfidenceWeak     = "weak"
+)
+
+// Empirical thresholds on the relative gap between top-1 and top-2 scores,
+// derived from probes on identity + research vaults at 2026-04-29:
+//
+//	canonical-match query "Hebbian learning" → top-1 dominates → gap 8.62%
+//	low-confidence query (rank-6 miss)        → many close hits → gap 1.60%
+//	low-confidence query (rank-2 case)        → anchor-density  → gap 1.94%
+//
+// 5% separates the strong-hit case from the borderline cases; 2% separates
+// borderline from cases where top-1 might be coincidental and the agent
+// should treat top-N as candidates rather than committing to top-1. Both
+// cutoffs are tunable as more data accumulates.
+const (
+	confidenceStrongThreshold   = 0.05 // top1-top2 relative gap >= 5% → strong
+	confidenceModerateThreshold = 0.02 // 2-5% → moderate; <2% → weak
+)
+
+// computeTopHitConfidence classifies the top hit's confidence based on the
+// relative score gap to the next-ranked hit. Returns "" when fewer than 2
+// hits exist (no comparison possible) or when top-1's score is non-positive
+// (ill-defined denominator).
+func computeTopHitConfidence(hits []retrieval.ScoredResult) string {
+	if len(hits) < 2 {
+		return ""
+	}
+	top := hits[0].Score
+	if top <= 0 {
+		return ""
+	}
+	gap := (top - hits[1].Score) / top
+	switch {
+	case gap >= confidenceStrongThreshold:
+		return ConfidenceStrong
+	case gap >= confidenceModerateThreshold:
+		return ConfidenceModerate
+	default:
+		return ConfidenceWeak
+	}
 }
 
 // Ask searches the vault for the query, computes raw cosine similarities
@@ -55,8 +111,9 @@ func Ask(ctx context.Context, retriever retrieval.Retriever, resolver *graph.Res
 	}
 
 	result := &AskResult{
-		Query:   cfg.Query,
-		TopHits: hits,
+		Query:            cfg.Query,
+		TopHits:          hits,
+		TopHitConfidence: computeTopHitConfidence(hits),
 	}
 
 	if len(hits) == 0 {
