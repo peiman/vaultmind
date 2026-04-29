@@ -152,5 +152,19 @@ func Ask(ctx context.Context, retriever retrieval.Retriever, resolver *graph.Res
 	}
 
 	result.Context = packResult
+
+	// Plasticity roadmap step 5 first slice: record this note as accessed.
+	// "Context-pack succeeded around target T" is the strongest non-
+	// explicit retrieval-access signal vaultmind emits — the agent now
+	// has T's frontmatter (and possibly body) in working context. This
+	// makes access_count + last_accessed_at meaningful for future
+	// ACT-R-style activation scoring (slice 2). Best-effort: a
+	// tracking miss is logged at debug and never fails the user query.
+	if packResult != nil && packResult.TargetID != "" {
+		if recErr := index.RecordNoteAccess(db, packResult.TargetID); recErr != nil {
+			log.Debug().Err(recErr).Str("note_id", packResult.TargetID).Msg("recording note access failed (non-fatal)")
+		}
+	}
+
 	return result, nil
 }
