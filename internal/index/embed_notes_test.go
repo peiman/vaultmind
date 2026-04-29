@@ -217,6 +217,48 @@ func TestEmbedNotes_FullEmbedder_EmptyOutputCountedSeparately(t *testing.T) {
 	assert.Equal(t, 1, r2.Embedded, "the previously empty-output note is still pending and gets embedded now")
 }
 
+// RunEmbed must NOT load the embedder when there are no pending notes.
+// Loading the BGE-M3 model is ~2.2GB of memory and a CPU-spinning ORT
+// session creation; doing that on every no-op index call is wasted heat.
+// The lazy-load path counts pending notes first and returns early when
+// pending == 0. We verify by calling RunEmbed against a fully-embedded
+// vault with a model name that would FAIL to construct (the model files
+// don't exist) — if the lazy path works, RunEmbed succeeds without
+// touching the model; if it eagerly loads, the construction failure
+// surfaces as an error.
+func TestRunEmbed_LazyLoad_SkipsModelWhenNoPendingWork(t *testing.T) {
+	vaultRoot, dbPath := buildEmbedTestVault(t)
+	cfg, err := vault.LoadConfig(vaultRoot)
+	require.NoError(t, err)
+	idxr := index.NewIndexer(vaultRoot, dbPath, cfg)
+
+	// Fully embed first using the fake dense embedder so all rows have
+	// the dense column populated.
+	emb := fakeDenseEmbedder{dims: 8}
+	r1, err := idxr.EmbedNotes(context.Background(), dbPath, emb)
+	require.NoError(t, err)
+	require.Equal(t, 3, r1.Embedded)
+
+	// Now call RunEmbed with model name "minilm" (the default Hugot path).
+	// Pending count will be 0 because all rows already have dense.
+	// If RunEmbed lazy-loads correctly, it returns without invoking the
+	// embedder — therefore without requiring the MiniLM model files to
+	// exist or any network access. If it eagerly loads, it will try to
+	// download or load the model and either succeed (slow, requires
+	// model on disk) or fail.
+	//
+	// We can't directly observe "embedder was not constructed" without
+	// instrumenting the indexer. The signal we use: the call is fast and
+	// returns Skipped=3, Embedded=0 with no error. Hugot's MiniLM
+	// constructor would attempt a model download if the model isn't
+	// cached, which would either error out or be slow — neither happens
+	// here when lazy-load works.
+	r2, err := idxr.RunEmbed(context.Background(), dbPath, "minilm")
+	require.NoError(t, err, "lazy-load: RunEmbed must succeed without constructing the embedder when nothing is pending")
+	assert.Equal(t, 0, r2.Embedded, "no notes should be embedded — already all done")
+	assert.Equal(t, 3, r2.Skipped, "all 3 already-embedded notes counted as skipped")
+}
+
 // After EmbedNotes runs, HasEmbeddings must report true — this is the
 // signal BuildAutoRetrieverFull reads to decide whether to wire the hybrid
 // retriever or fall back to keyword.

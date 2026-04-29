@@ -15,20 +15,37 @@ import (
 // Requires libonnxruntime installed on the system.
 //
 // CoreML execution provider is wired but disabled by default — see
-// shouldEnableCoreML(). The CoreML EP path is incompatible with BGE-M3 in
-// the current hugot v0.7.0 + onnxruntime 1.25 combination: session
-// creation fails with "ReadExternalDataForTensor Failed to get file size"
-// because CoreML's external-data resolver can't locate the 2.27GB
-// model.onnx_data companion file (the canonical ONNX-with-external-data
-// layout BGE-M3 ships in). All CoreML options tried — MLComputeUnits =
-// ALL/CPUAndGPU/CPUAndNeuralEngine, ModelFormat = NeuralNetwork/MLProgram —
-// reproduce the same error. The fix is upstream: either hugot exposing a
-// session-init callback that lets us pre-flatten the model, or a
-// model-conversion step that merges external data into a single ONNX.
-// Tracked as future work; the Go-side wiring stays in place so the fix
-// lands cheaply once the upstream gap closes.
+// shouldEnableCoreML(). Three independent blockers confirmed during the
+// 2026-04-29 investigation prevent the CoreML path from working with
+// BGE-M3 in the current hugot v0.7.0 + onnxruntime 1.25 stack:
 //
-// To opt in for experimentation: set VAULTMIND_ENABLE_COREML=1.
+//  1. CoreML EP fails at session creation with
+//     "ReadExternalDataForTensor Failed to get file size ... std::filesystem
+//     error: Not a directory" because its external-data resolver appears
+//     to treat the model file path as a directory base. Reproduced across
+//     MLComputeUnits = ALL / CPUAndGPU / CPUAndNeuralEngine and
+//     ModelFormat = NeuralNetwork / MLProgram. ORT CPU path resolves the
+//     same model fine.
+//  2. Rewriting the model proto to use absolute external-data location
+//     (the obvious workaround for blocker #1) hits ORT's path-validation
+//     guard: "Absolute path not allowed for external data location" — a
+//     security boundary, not a bug.
+//  3. Flattening the external data into a single self-contained ONNX
+//     hits protobuf's 2GB hard serialization limit (BGE-M3 weights are
+//     ~2.2GB).
+//
+// The fix is upstream: hugot/ORT need a path that supports CoreML's
+// init expectations for ONNX-with-external-data, OR a CoreML-native
+// model conversion step (.mlmodelc), OR a different ML framework
+// entirely. None of those are runtime knobs we can flip from Go.
+//
+// The wiring stays in place so opt-in testing is one env var
+// (VAULTMIND_ENABLE_COREML=1) and the diagnostic catalog above stays
+// next to the code that would benefit from re-trying CoreML once the
+// upstream gap closes. Future-me reading this: try the env var, see
+// what error message you get NOW, compare to the catalog above. If it
+// matches, the gap is still open. If it's different or works, the
+// upstream fix landed and you can flip the default.
 func newBGEM3Session() (*hugot.Session, error) {
 	var opts []options.WithOption
 	if libDir := detectORTLibDir(); libDir != "" {

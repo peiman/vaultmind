@@ -74,10 +74,33 @@ type IndexAndEmbedResult struct {
 	Embed *EmbedResult `json:"embed,omitempty"`
 }
 
-// RunEmbed creates an embedder for the given model, runs EmbedNotes, and cleans up.
+// RunEmbed runs an embedding pass against the index DB. The embedder is
+// constructed lazily — only when there's pending work to do.
+//
+// Why lazy: the BGE-M3 model is ~2.2GB on disk and CGO+ORT session
+// creation pegs a CPU core for ~1s every time it's invoked. Running
+// `vaultmind index --embed --model bge-m3` against a fully-embedded
+// vault (which happens whenever the user re-runs after editing zero
+// notes — hooks, scripts, retries, doctor checks) used to pay that
+// load cost unconditionally. Heat without work. Counting pending notes
+// first lets us skip the model load entirely when there's nothing to do.
 func (idx *Indexer) RunEmbed(ctx context.Context, dbPath, model string) (*EmbedResult, error) {
+	// Count pending notes first, without instantiating the embedder.
+	// The pending-row condition matches what EmbedNotes would later use:
+	// for BGE-M3 (FullEmbedder) all three columns must be present; for
+	// MiniLM only the dense column.
+	//
+	//nolint:contextcheck // countPendingForModel calls Open which does not accept a context; the heavy work in EmbedNotes uses ctx properly
+	pending, skipped, err := countPendingForModel(dbPath, model)
+	if err != nil {
+		return nil, err
+	}
+	if pending == 0 {
+		return &EmbedResult{Skipped: skipped}, nil
+	}
+
+	// There IS work to do — pay the model-load cost now.
 	var embedder embedding.Embedder
-	var err error
 	switch model {
 	case "bge-m3":
 		embedder, err = embedding.NewBGEM3Embedder(embedding.BGEM3Config())
@@ -90,6 +113,33 @@ func (idx *Indexer) RunEmbed(ctx context.Context, dbPath, model string) (*EmbedR
 	defer func() { _ = embedder.Close() }()
 
 	return idx.EmbedNotes(ctx, dbPath, embedder)
+}
+
+// countPendingForModel reports how many notes need embedding under the
+// given model and how many already have full coverage. Mirrors the
+// pending/skip queries inside EmbedNotes so the lazy-load decision
+// agrees with what the actual embedding pass would do.
+func countPendingForModel(dbPath, model string) (pending int, skipped int, err error) {
+	db, err := Open(dbPath) //nolint:contextcheck // Open does not accept a context; this helper is called from RunEmbed which passes ctx through to EmbedNotes when work exists
+	if err != nil {
+		return 0, 0, fmt.Errorf("opening index database for pending count: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+	var pendingQuery, skipQuery string
+	if model == "bge-m3" {
+		pendingQuery = "SELECT COUNT(*) FROM notes WHERE embedding IS NULL OR sparse_embedding IS NULL OR colbert_embedding IS NULL"
+		skipQuery = "SELECT COUNT(*) FROM notes WHERE embedding IS NOT NULL AND sparse_embedding IS NOT NULL AND colbert_embedding IS NOT NULL"
+	} else {
+		pendingQuery = "SELECT COUNT(*) FROM notes WHERE embedding IS NULL"
+		skipQuery = "SELECT COUNT(*) FROM notes WHERE embedding IS NOT NULL"
+	}
+	if err := db.QueryRow(pendingQuery).Scan(&pending); err != nil {
+		return 0, 0, fmt.Errorf("counting pending notes: %w", err)
+	}
+	if err := db.QueryRow(skipQuery).Scan(&skipped); err != nil {
+		return 0, 0, fmt.Errorf("counting skipped notes: %w", err)
+	}
+	return pending, skipped, nil
 }
 
 // Indexer orchestrates vault scanning, parsing, and SQLite storage.
