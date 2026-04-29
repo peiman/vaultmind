@@ -13,6 +13,14 @@ rules:
       # Exclude hardcoded safe commands (string literals are safe)
       - pattern-not: exec.Command("...", ...)
       - pattern-not: exec.CommandContext($CTX, "...", ...)
+    paths:
+      exclude:
+        # Sidecar's Python interpreter path comes from operator-controlled
+        # env vars (VAULTMIND_SIDECAR_PYTHON), not user-supplied input.
+        # The whole point is to let the operator point at their venv. The
+        # rule's "user-controlled" trigger doesn't apply — operator config
+        # is the same trust tier as the binary itself.
+        - "internal/embedding/sidecar.go"
     message: "Potential command injection. Ensure $CMD is not user-controlled."
     languages: [go]
     severity: WARNING

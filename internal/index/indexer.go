@@ -100,15 +100,38 @@ func (idx *Indexer) RunEmbed(ctx context.Context, dbPath, model string) (*EmbedR
 	}
 
 	// There IS work to do — pay the model-load cost now.
+	//
+	// BGE-M3 has an experimental sidecar path: when VAULTMIND_USE_SIDECAR
+	// is set (and we're indexing with bge-m3), inference happens in a
+	// Python subprocess running PyTorch+MPS on Apple Silicon. Empirically
+	// 4x faster than in-process ORT+CPU, with a ~4s one-time startup cost
+	// that amortizes across the indexing pass. See vaultmind#34 for the
+	// design context. Falls back to in-process on any sidecar-startup
+	// failure so the embed pass still completes — graceful degradation
+	// rather than blocking on a fragile new path.
 	var embedder embedding.Embedder
-	switch model {
-	case "bge-m3":
-		embedder, err = embedding.NewBGEM3Embedder(embedding.BGEM3Config())
-	default:
-		embedder, err = embedding.NewHugotEmbedder(embedding.DefaultHugotConfig())
+	if model == "bge-m3" && os.Getenv("VAULTMIND_USE_SIDECAR") != "" {
+		side, sideErr := embedding.NewSidecarBGEM3(embedding.SidecarBGEM3Config{
+			Python:     os.Getenv("VAULTMIND_SIDECAR_PYTHON"),
+			ScriptPath: os.Getenv("VAULTMIND_SIDECAR_SCRIPT"),
+		})
+		if sideErr == nil {
+			embedder = side
+			log.Info().Str("device", side.Device()).Msg("BGE-M3 sidecar active for indexing")
+		} else {
+			log.Warn().Err(sideErr).Msg("sidecar startup failed; falling back to in-process embedder")
+		}
 	}
-	if err != nil {
-		return nil, fmt.Errorf("creating embedder: %w", err)
+	if embedder == nil {
+		switch model {
+		case "bge-m3":
+			embedder, err = embedding.NewBGEM3Embedder(embedding.BGEM3Config())
+		default:
+			embedder, err = embedding.NewHugotEmbedder(embedding.DefaultHugotConfig())
+		}
+		if err != nil {
+			return nil, fmt.Errorf("creating embedder: %w", err)
+		}
 	}
 	defer func() { _ = embedder.Close() }()
 
