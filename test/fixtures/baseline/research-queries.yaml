@@ -83,3 +83,103 @@
 - name: long-context-vs-rag
   text: "RAG versus long context window tradeoffs"
   expected: [concept-rag-vs-long-context]
+
+# --- Sleep & memory consolidation (added 2026-04-29 after sleep wave) ---
+- name: sleep-stages-overview
+  text: "sleep stages NREM REM what each stage does"
+  expected: [concept-sleep-stages]
+
+- name: sharp-wave-ripples
+  text: "sharp wave ripples hippocampus consolidation"
+  expected: [concept-sharp-wave-ripples]
+
+- name: hippocampal-cortical-dialogue
+  text: "slow oscillations spindles ripples coupling"
+  expected: [concept-hippocampal-cortical-dialogue]
+
+- name: synaptic-homeostasis
+  text: "synaptic homeostasis hypothesis Tononi Cirelli"
+  expected: [concept-synaptic-homeostasis-hypothesis]
+
+- name: active-systems-consolidation
+  text: "active systems consolidation Born two-stage model"
+  expected: [concept-active-systems-consolidation]
+
+- name: tmr-cuing
+  text: "targeted memory reactivation odor cue during sleep"
+  expected: [concept-targeted-memory-reactivation]
+
+- name: rem-creativity
+  text: "REM sleep creative insight problem solving"
+  expected: [concept-rem-creativity-insight]
+
+- name: sleep-spindles
+  text: "sleep spindles thalamocortical 11 Hz"
+  expected: [concept-sleep-spindles]
+
+- name: lucid-dreaming
+  text: "lucid dreaming awareness during REM"
+  expected: [concept-lucid-dreaming]
+
+- name: dream-content-memory
+  text: "day residue dream lag episodic fragments"
+  expected: [concept-dream-content-memory]
+
+# --- Sleep paraphrases — practical vs technical phrasing ---
+- name: paraphrase-sleep-practical
+  text: "what should I do during sleep to remember better"
+  expected: [concept-targeted-memory-reactivation, concept-sleep-before-after-learning]
+
+- name: paraphrase-why-we-dream
+  text: "why do we dream what is the function"
+  expected: [concept-activation-synthesis, concept-threat-simulation-theory, concept-dream-content-memory]
+
+- name: paraphrase-sleep-deprivation
+  text: "what does losing sleep do to memory"
+  expected: [concept-sleep-deprivation-memory]
+
+# --- Brain anatomy / neural mechanisms (added 2026-04-29) ---
+- name: action-potential
+  text: "how does a neuron fire action potential"
+  expected: [concept-action-potential]
+
+- name: place-cells
+  text: "hippocampal place cells spatial map"
+  expected: [concept-place-cells]
+
+- name: grid-cells
+  text: "entorhinal cortex grid cells hexagonal"
+  expected: [concept-grid-cells]
+
+- name: stdp
+  text: "spike timing dependent plasticity Bi Poo"
+  expected: [concept-spike-timing-dependent-plasticity]
+
+- name: predictive-coding
+  text: "predictive coding hierarchical brain prediction error"
+  expected: [concept-predictive-coding]
+
+- name: free-energy-principle
+  text: "free energy principle Friston unified brain theory"
+  expected: [concept-free-energy-principle]
+
+- name: dopamine-reward
+  text: "dopamine reward prediction error Schultz"
+  expected: [concept-dopaminergic-neurons]
+
+# --- Source lookups for new corpus ---
+- name: source-buzsaki
+  text: "Buzsaki sharp wave ripple cognitive biomarker"
+  expected: [source-buzsaki-2015]
+
+- name: source-tononi-cirelli
+  text: "Tononi Cirelli sleep price of plasticity"
+  expected: [source-tononi-cirelli-2014]
+
+- name: source-walker-creativity
+  text: "Wagner sleep inspires insight number reduction"
+  expected: [source-wagner-2004]
+
+- name: source-rasch-tmr
+  text: "Rasch odor cues slow wave sleep declarative"
+  expected: [source-rasch-2007]

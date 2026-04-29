@@ -99,6 +99,16 @@ tasks:
     cmds:
       - python3 scripts/verify_citations.py --vault vaultmind-vault
 
+  check:retrieval:
+    desc: Run live golden-query baseline on identity + research vaults; gate on Hit@5/MRR floors set in live_baseline_test.go. Requires ORT-tagged binary and embedded vaults; not in `task check` (needs live vault state).
+    cmds:
+      - cmd: |
+          CGO_LDFLAGS="-L$(pwd)/lib" VAULTMIND_LIVE_BASELINE=identity \
+            go test -tags "dev ORT" -v -run TestLiveBaseline ./internal/baseline/...
+      - cmd: |
+          CGO_LDFLAGS="-L$(pwd)/lib" VAULTMIND_LIVE_BASELINE=research \
+            go test -tags "dev ORT" -v -run TestLiveBaseline ./internal/baseline/...
+
   check:bootstrap:
     desc: Verify VaultMind setup (binary, vaults, hook wiring, smoke test)
     cmds:
