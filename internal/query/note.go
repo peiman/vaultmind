@@ -8,6 +8,7 @@ import (
 	"github.com/peiman/vaultmind/internal/envelope"
 	"github.com/peiman/vaultmind/internal/graph"
 	"github.com/peiman/vaultmind/internal/index"
+	"github.com/rs/zerolog/log"
 )
 
 // NoteGetConfig holds parameters for the note get operation.
@@ -54,6 +55,16 @@ func RunNoteGet(db *index.DB, cfg NoteGetConfig, w io.Writer) error {
 	}
 	if note == nil {
 		return fmt.Errorf("note %q not found in index", resolved.Matches[0].ID)
+	}
+
+	// Plasticity roadmap step 5 (Track A.2): explicit `note get <id>` is
+	// the highest-signal retrieval-access event vaultmind emits — an
+	// agent or user named this note by id and got back its body. Record
+	// before rendering so the increment is observable to any downstream
+	// reader of access_count. Best-effort: a tracking miss is logged at
+	// debug and never fails the user query.
+	if recErr := index.RecordNoteAccess(db, note.ID); recErr != nil {
+		log.Debug().Err(recErr).Str("note_id", note.ID).Msg("recording note-get access failed (non-fatal)")
 	}
 
 	if cfg.FrontmatterOnly {

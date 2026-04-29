@@ -153,16 +153,30 @@ func Ask(ctx context.Context, retriever retrieval.Retriever, resolver *graph.Res
 
 	result.Context = packResult
 
-	// Plasticity roadmap step 5 first slice: record this note as accessed.
-	// "Context-pack succeeded around target T" is the strongest non-
-	// explicit retrieval-access signal vaultmind emits — the agent now
-	// has T's frontmatter (and possibly body) in working context. This
-	// makes access_count + last_accessed_at meaningful for future
-	// ACT-R-style activation scoring (slice 2). Best-effort: a
-	// tracking miss is logged at debug and never fails the user query.
-	if packResult != nil && packResult.TargetID != "" {
-		if recErr := index.RecordNoteAccess(db, packResult.TargetID); recErr != nil {
-			log.Debug().Err(recErr).Str("note_id", packResult.TargetID).Msg("recording note access failed (non-fatal)")
+	// Plasticity roadmap step 5 reinforcement signal — record every note
+	// that genuinely entered the agent's working context as a result of
+	// this Ask. Track A.2 of the 2026-04-29 zoom-out widened this from
+	// just the context-pack target to also cover every neighbor included
+	// in the pack. Rationale: the neighbor frontmatter (and possibly
+	// body) is now in the agent's context window — that's a real
+	// retrieval-access event by ACT-R lights, not just framing for the
+	// target. Uniform +1 per accessed note; weighting can come later
+	// once the ranking layer actually consumes the counts (slice 5b').
+	// Best-effort: each per-note tracking miss is logged at debug and
+	// never fails the user query.
+	if packResult != nil {
+		if packResult.TargetID != "" {
+			if recErr := index.RecordNoteAccess(db, packResult.TargetID); recErr != nil {
+				log.Debug().Err(recErr).Str("note_id", packResult.TargetID).Msg("recording note access failed (non-fatal)")
+			}
+		}
+		for _, item := range packResult.Context {
+			if item.ID == "" {
+				continue
+			}
+			if recErr := index.RecordNoteAccess(db, item.ID); recErr != nil {
+				log.Debug().Err(recErr).Str("note_id", item.ID).Msg("recording context-pack neighbor access failed (non-fatal)")
+			}
 		}
 	}
 
