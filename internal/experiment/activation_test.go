@@ -163,3 +163,62 @@ func TestCombinedScore_SimilarityOnly(t *testing.T) {
 	score := CombinedScore(0.0, 0.0, 0.95, 0.0, 0.0, 1.0)
 	assert.InDelta(t, 0.95, score, 0.001)
 }
+
+// Track A.3 — ComputeApproxRetrieval. The live retrieval path only has
+// (access_count, last_accessed_at) per note, not the full per-event
+// history that ComputeRetrieval needs. This approximator collapses both
+// sources of information by treating every recorded access as happening
+// at last_accessed_at, then deferring to ComputeRetrieval. With all N
+// timestamps equal to t, the sum reduces to N*t^(-d), so the score is
+// ln(N) - d*ln(t) — preserves the count-amplifies and elapsed-decays
+// monotonicity the ranking layer needs without requiring a per-event
+// access-times table.
+
+func TestComputeApproxRetrieval_ZeroAccessCountReturnsZero(t *testing.T) {
+	now := time.Date(2026, 4, 29, 12, 0, 0, 0, time.UTC)
+	got := ComputeApproxRetrieval(0, now.Add(-time.Hour), now, nil, 1.0, 0.5)
+	assert.Equal(t, 0.0, got)
+}
+
+func TestComputeApproxRetrieval_ZeroLastAccessedReturnsZero(t *testing.T) {
+	now := time.Date(2026, 4, 29, 12, 0, 0, 0, time.UTC)
+	got := ComputeApproxRetrieval(5, time.Time{}, now, nil, 1.0, 0.5)
+	assert.Equal(t, 0.0, got)
+}
+
+func TestComputeApproxRetrieval_SingleAccessOneHourAgo(t *testing.T) {
+	now := time.Date(2026, 4, 29, 12, 0, 0, 0, time.UTC)
+	last := now.Add(-time.Hour)
+	got := ComputeApproxRetrieval(1, last, now, nil, 1.0, 0.5)
+	// ln(1) - 0.5*ln(1) = 0 - 0 = 0.
+	assert.InDelta(t, 0.0, got, 0.001)
+}
+
+func TestComputeApproxRetrieval_TenAccessesOneHourAgo(t *testing.T) {
+	now := time.Date(2026, 4, 29, 12, 0, 0, 0, time.UTC)
+	last := now.Add(-time.Hour)
+	got := ComputeApproxRetrieval(10, last, now, nil, 1.0, 0.5)
+	// ln(10) - 0.5*ln(1) = 2.3026.
+	assert.InDelta(t, 2.3026, got, 0.001)
+}
+
+func TestComputeApproxRetrieval_MoreElapsedDecaysMore(t *testing.T) {
+	now := time.Date(2026, 4, 29, 12, 0, 0, 0, time.UTC)
+	recent := ComputeApproxRetrieval(5, now.Add(-time.Hour), now, nil, 1.0, 0.5)
+	stale := ComputeApproxRetrieval(5, now.Add(-30*24*time.Hour), now, nil, 1.0, 0.5)
+	assert.Greater(t, recent, stale, "30-days-ago must score lower than 1-hour-ago at equal count")
+}
+
+func TestComputeApproxRetrieval_MoreCountAmplifies(t *testing.T) {
+	now := time.Date(2026, 4, 29, 12, 0, 0, 0, time.UTC)
+	last := now.Add(-time.Hour)
+	one := ComputeApproxRetrieval(1, last, now, nil, 1.0, 0.5)
+	hundred := ComputeApproxRetrieval(100, last, now, nil, 1.0, 0.5)
+	assert.Greater(t, hundred, one, "count=100 must score higher than count=1 at equal elapsed")
+}
+
+func TestComputeApproxRetrieval_FreshAccessBoostsAboveZero(t *testing.T) {
+	now := time.Date(2026, 4, 29, 12, 0, 0, 0, time.UTC)
+	got := ComputeApproxRetrieval(1, now, now, nil, 1.0, 0.5)
+	assert.Greater(t, got, 0.0, "an access happening right now must produce positive activation")
+}

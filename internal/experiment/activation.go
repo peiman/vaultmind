@@ -102,6 +102,30 @@ func ComputeStorage(accessCount int) float64 {
 	return math.Log(1.0 + float64(accessCount))
 }
 
+// ComputeApproxRetrieval is the live-retrieval-path approximation of
+// ComputeRetrieval. The notes table stores only (access_count,
+// last_accessed_at) — a scalar count and a single timestamp — not the
+// full per-event access history that ComputeRetrieval consumes. To use
+// the same ACT-R math without a per-event access-times table, this
+// approximator treats every recorded access as if it had happened at
+// last_accessed_at, then defers to ComputeRetrieval. With all N
+// timestamps equal to t, sum(t_k^(-d)) reduces to N*t^(-d), so the
+// score collapses to ln(N) - d*ln(t) — preserving both the
+// count-amplifies and elapsed-decays monotonic properties the ranking
+// layer needs (Track A.4, slice 5b'). Returns 0 for the degenerate
+// cases (no accesses, or no timestamp) so the caller doesn't have to
+// guard against -Inf from log of zero or non-positive elapsed.
+func ComputeApproxRetrieval(accessCount int, lastAccessedAt, now time.Time, windows []SessionWindow, gamma, d float64) float64 {
+	if accessCount <= 0 || lastAccessedAt.IsZero() {
+		return 0.0
+	}
+	accessTimes := make([]time.Time, accessCount)
+	for i := range accessTimes {
+		accessTimes[i] = lastAccessedAt
+	}
+	return ComputeRetrieval(accessTimes, now, windows, gamma, d)
+}
+
 // CombinedScore returns score = alpha * retrieval + beta * storage + delta * similarity.
 // This implements the full ACT-R model: base-level activation (retrieval),
 // dual-strength storage (Bjork), and spreading activation (similarity).
