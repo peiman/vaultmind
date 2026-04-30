@@ -59,22 +59,43 @@ const (
 	ConfidenceStrong   = "strong"
 	ConfidenceModerate = "moderate"
 	ConfidenceWeak     = "weak"
+	// ConfidenceNoMatch — top results are essentially tied. The agent
+	// should treat the result list as "no clear winner" rather than
+	// committing to top-1. Added 2026-04-30 after a fresh-session
+	// evaluation found that nonsense queries silently landed "weak" with
+	// the same shape as borderline real queries — there was no return
+	// state for "I don't know."
+	ConfidenceNoMatch = "no_match"
 )
 
-// Empirical thresholds on the relative gap between top-1 and top-2 scores,
-// derived from probes on identity + research vaults at 2026-04-29:
+// Empirical thresholds on the relative gap between top-1 and top-2 scores.
+// Re-probed 2026-04-30 against the post-sleep-wave research vault (391+
+// notes) after a different agent's evaluation surfaced two failure modes
+// in the original 5%/2% calibration:
 //
-//	canonical-match query "Hebbian learning" → top-1 dominates → gap 8.62%
-//	low-confidence query (rank-6 miss)        → many close hits → gap 1.60%
-//	low-confidence query (rank-2 case)        → anchor-density  → gap 1.94%
+//  1. "Spreading activation" — a clearly canonical query — landed at 1.97%
+//     gap and was binned "weak", same label as nonsense. False negative.
+//  2. Nonsense queries ("the cake is a lie", "what's the weather") landed
+//     at 0–0.7% gap, also "weak". No way to distinguish "borderline real"
+//     from "no real signal at all."
 //
-// 5% separates the strong-hit case from the borderline cases; 2% separates
-// borderline from cases where top-1 might be coincidental and the agent
-// should treat top-N as candidates rather than committing to top-1. Both
-// cutoffs are tunable as more data accumulates.
+// Re-probed gap distribution across 19 queries (real, paraphrase, gibberish):
+//
+//	canonical match  Hebbian learning             5.66%
+//	good matches     memory consolidation, REM    3.0–4.1%
+//	mid matches      spreading-activation, ACT-R  1.6–2.8%
+//	close-but-real   synaptic plasticity, weather 0.5–1.5%
+//	tied / nonsense  cake-is-a-lie, plasticity    0–0.5%
+//
+// New thresholds put each of these in a label that means something:
+// - 5%   strong: top-1 clearly ahead — commit to it
+// - 1.5% moderate: top-1 ahead but candidates exist — top-2/3 are real options
+// - 0.5% weak: top-1 barely ahead — treat top-N as candidates
+// - <0.5% no_match: top results essentially tied — no clear winner.
 const (
-	confidenceStrongThreshold   = 0.05 // top1-top2 relative gap >= 5% → strong
-	confidenceModerateThreshold = 0.02 // 2-5% → moderate; <2% → weak
+	confidenceStrongThreshold   = 0.05  // gap >= 5%   → strong
+	confidenceModerateThreshold = 0.015 // gap >= 1.5% → moderate
+	confidenceWeakThreshold     = 0.005 // gap >= 0.5% → weak; below → no_match
 )
 
 // computeTopHitConfidence classifies the top hit's confidence based on the
@@ -95,8 +116,10 @@ func computeTopHitConfidence(hits []retrieval.ScoredResult) string {
 		return ConfidenceStrong
 	case gap >= confidenceModerateThreshold:
 		return ConfidenceModerate
-	default:
+	case gap >= confidenceWeakThreshold:
 		return ConfidenceWeak
+	default:
+		return ConfidenceNoMatch
 	}
 }
 

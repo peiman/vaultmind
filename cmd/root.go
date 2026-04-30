@@ -366,7 +366,13 @@ ANTI-PATTERNS
                                   reading. Combining --budget with tail wastes
                                   the compute the budget asked for.
 
-Powered by Cobra, Viper, Zerolog, and Bubble Tea with enforced architecture patterns.`, binaryName)
+NOTE ON 'memory' vs 'ask'
+
+  ask is the high-level wrapper most queries should use — it composes search
+  + spreading-activation + context-pack + token budget. The 'memory' subtree
+  exposes the underlying primitives (recall, related, context-pack) for
+  callers that need the components individually. Reach for ask first; drop
+  to memory only when you need finer control.`, binaryName)
 
 	configPaths := ConfigPaths()
 

@@ -51,60 +51,86 @@ func TestComputeTopHitConfidence_Strong(t *testing.T) {
 	assert.Equal(t, ConfidenceStrong, computeTopHitConfidence(hits2))
 }
 
-// Moderate tier: 2-5% relative gap — top-1 leads but not decisively.
-// The agent should consider the next hit too but probably trust top-1.
+// Moderate tier: 1.5–5% relative gap — top-1 leads but candidates exist.
+// Empirically this is where most real-but-non-canonical queries land
+// (re-probed 2026-04-30: REM sleep 3.01%, ACT-R 2.77%, place cells 2.72%,
+// spreading activation 1.97%). The agent should consider top-2/3 too.
 func TestComputeTopHitConfidence_Moderate(t *testing.T) {
 	hits := []retrieval.ScoredResult{
 		{ID: "a", Score: 0.10},
 		{ID: "b", Score: 0.097}, // 3% gap
 	}
 	assert.Equal(t, ConfidenceModerate, computeTopHitConfidence(hits))
+
+	// Exactly at the 1.5% threshold — should be moderate (>=).
+	hits2 := []retrieval.ScoredResult{
+		{ID: "a", Score: 1.0},
+		{ID: "b", Score: 0.985}, // 1.5%
+	}
+	assert.Equal(t, ConfidenceModerate, computeTopHitConfidence(hits2))
 }
 
-// Weak tier: <2% relative gap — top-1 might be coincidental.
-// Empirically this matches the failure-mode queries on the baselines
-// (research rank-6 miss at 1.60%, identity rank-2 case at 1.94%). The
-// agent should treat top-N as candidates rather than committing to top-1.
+// Weak tier: 0.5–1.5% relative gap — top-1 barely ahead but real signal
+// still exists. Re-probed examples: synaptic plasticity 1.15%, vaultmind
+// self 0.67%. Above no_match (where the gap signal stops being meaningful).
 func TestComputeTopHitConfidence_Weak(t *testing.T) {
 	hits := []retrieval.ScoredResult{
 		{ID: "a", Score: 0.01622},
-		{ID: "b", Score: 0.01596}, // 1.60% — the actual research rank-6 case
+		{ID: "b", Score: 0.01604}, // 1.10% gap — synaptic plasticity area
 	}
 	assert.Equal(t, ConfidenceWeak, computeTopHitConfidence(hits))
 
 	hits2 := []retrieval.ScoredResult{
-		{ID: "a", Score: 0.01613},
-		{ID: "b", Score: 0.01582}, // 1.92% — the actual identity rank-2 case
+		{ID: "a", Score: 0.01639},
+		{ID: "b", Score: 0.01628}, // 0.67% — vaultmind self area
 	}
 	assert.Equal(t, ConfidenceWeak, computeTopHitConfidence(hits2))
 }
 
-// Tied scores → 0% gap → weak. The agent definitely shouldn't commit to
-// top-1 when top-2 has the same score.
-func TestComputeTopHitConfidence_TiedScores(t *testing.T) {
+// no_match tier (added 2026-04-30 after fresh-session evaluation):
+// gap < 0.5% means top results are essentially tied — no clear winner.
+// Empirically this catches both nonsense queries (cake-is-a-lie 0%,
+// what's-the-weather 0.7%) AND ill-formed real queries that the vault
+// can't disambiguate ("what is plasticity" 0.02%). The agent should
+// treat the result list as candidates, not commit to top-1.
+func TestComputeTopHitConfidence_NoMatch(t *testing.T) {
 	hits := []retrieval.ScoredResult{
+		{ID: "a", Score: 0.5},
+		{ID: "b", Score: 0.499}, // 0.2% gap — effectively tied
+	}
+	assert.Equal(t, ConfidenceNoMatch, computeTopHitConfidence(hits))
+
+	// Tied scores → 0% gap → no_match (was "weak" pre-retune).
+	hits2 := []retrieval.ScoredResult{
 		{ID: "a", Score: 0.5},
 		{ID: "b", Score: 0.5},
 	}
-	assert.Equal(t, ConfidenceWeak, computeTopHitConfidence(hits))
+	assert.Equal(t, ConfidenceNoMatch, computeTopHitConfidence(hits2))
 }
 
-// Regression-pin: the exact gap percentages from the 2026-04-29 probes
-// must classify as expected. If the thresholds change later, this test
-// must be updated explicitly — that's the point.
-func TestComputeTopHitConfidence_ProbedQueries_2026_04_29(t *testing.T) {
+// Regression-pin: the exact gap percentages from the 2026-04-30 re-probes
+// must classify under the retuned thresholds. The probes spanned 19
+// queries (canonical, real, paraphrase, gibberish) and produced the gap
+// distribution that drove the 5% / 1.5% / 0.5% / no_match scheme.
+func TestComputeTopHitConfidence_ProbedQueries_2026_04_30(t *testing.T) {
 	tests := []struct {
 		name string
 		top1 float64
 		top2 float64
 		want string
 	}{
-		// "Hebbian learning" on research vault → canonical match
-		{"hebbian-canonical", 0.01639, 0.01498, ConfidenceStrong},
-		// "structured schema versus pure embeddings" → rank-6 miss
-		{"structured-rank6-miss", 0.01622, 0.01596, ConfidenceWeak},
-		// "what is the roadmap I committed to" → identity rank-2 case
-		{"roadmap-paraphrase-rank2", 0.01613, 0.01582, ConfidenceWeak},
+		// "Hebbian learning" — canonical match → strong (5.66%)
+		{"hebbian-canonical", 0.01639, 0.01546, ConfidenceStrong},
+		// "memory consolidation" — good match → moderate (4.1%)
+		{"memory-consolidation-good", 0.01639, 0.01572, ConfidenceModerate},
+		// "spreading activation" — was-falsely-weak, now moderate (1.97%)
+		{"spreading-activation-fixed", 0.01626, 0.01594, ConfidenceModerate},
+		// "synaptic plasticity" — real but close → weak (1.15%)
+		{"synaptic-plasticity-close", 0.01639, 0.01620, ConfidenceWeak},
+		// "what is plasticity" — multiple ties, no winner → no_match (0.02%)
+		{"plasticity-no-winner", 0.01622, 0.016216, ConfidenceNoMatch},
+		// "the cake is a lie" — pure nonsense, no winner → no_match (0%)
+		{"nonsense-perfect-tie", 0.0156, 0.0156, ConfidenceNoMatch},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

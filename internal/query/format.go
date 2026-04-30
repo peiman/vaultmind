@@ -69,7 +69,15 @@ func formatAskWithOptions(result *AskResult, w io.Writer, opts formatOpts) error
 	// Hidden when confidence is empty (single-hit results, ill-defined
 	// denominator) so the line stays terse for clear cases.
 	if result.TopHitConfidence != "" {
-		header += fmt.Sprintf("  [top-hit confidence: %s]", result.TopHitConfidence)
+		// no_match gets a longer label so the agent doesn't pattern-match
+		// it as "weak" + a synonym. The whole point of the tier is to
+		// distinguish "no clear winner" from "barely ahead but real."
+		switch result.TopHitConfidence {
+		case ConfidenceNoMatch:
+			header += "  [top-hit confidence: no clear winner — top results essentially tied]"
+		default:
+			header += fmt.Sprintf("  [top-hit confidence: %s]", result.TopHitConfidence)
+		}
 	}
 	if _, err := fmt.Fprintln(w, header); err != nil {
 		return err
