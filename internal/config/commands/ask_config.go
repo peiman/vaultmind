@@ -16,6 +16,7 @@ var AskMetadata = config.CommandMetadata{
 		"app.ask.search_limit":  "search-limit",
 		"app.ask.explain":       "explain",
 		"app.ask.pointers_only": "pointers-only",
+		"app.ask.preview":       "preview",
 	},
 }
 
@@ -29,6 +30,7 @@ func AskOptions() []config.ConfigOption {
 		{Key: "app.ask.search_limit", DefaultValue: 5, Description: "Max search hits", Type: "int"},
 		{Key: "app.ask.explain", DefaultValue: false, Description: "Show per-lane RRF contributions for each hit", Type: "bool"},
 		{Key: "app.ask.pointers_only", DefaultValue: false, Description: "Skip context-pack bodies; render only id+title+type pointers (forces ask-to-read loop instead of letting the preload satisfy curiosity)", Type: "bool"},
+		{Key: "app.ask.preview", DefaultValue: false, Description: "Render a one-line body snippet under each ranked hit; bridges --pointers-only (titles only) and the full context-pack output", Type: "bool"},
 	}
 }
 

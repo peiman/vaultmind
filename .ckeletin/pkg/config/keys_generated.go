@@ -33,6 +33,7 @@ const (
 	KeyAppAskSearchLimit                = "app.ask.search_limit"                // Max search hits
 	KeyAppAskExplain                    = "app.ask.explain"                     // Show per-lane RRF contributions for each hit
 	KeyAppAskPointersOnly               = "app.ask.pointers_only"               // Skip context-pack bodies; render only id+title+type pointers (forces ask-to-r...
+	KeyAppAskPreview                    = "app.ask.preview"                     // Render a one-line body snippet under each ranked hit; bridges --pointers-only...
 	KeyAppCheckFailFast                 = "app.check.fail_fast"                 // Stop on first failed check
 	KeyAppCheckVerbose                  = "app.check.verbose"                   // Show verbose output including command details
 	KeyAppCheckParallel                 = "app.check.parallel"                  // Run checks within each category in parallel (disable with --parallel=false)

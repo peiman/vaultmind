@@ -42,9 +42,22 @@ func FormatAskPointersOnly(result *AskResult, w io.Writer) error {
 	return formatAskWithOptions(result, w, formatOpts{pointersOnly: true})
 }
 
+// FormatAskPreview renders each ranked hit with a one-line snippet from
+// the note body underneath the title — bridging the gap between
+// pointers-only (titles, no body context) and full-body Ask (3000+
+// tokens of context pack). Closes the AX gap named in the felt-
+// experience inventory: with pointers-only I see ids and titles but
+// often can't tell what a note actually is until I query its body.
+// The snippet was already being populated by every retriever; this
+// just renders it.
+func FormatAskPreview(result *AskResult, w io.Writer) error {
+	return formatAskWithOptions(result, w, formatOpts{preview: true})
+}
+
 type formatOpts struct {
 	explain      bool
 	pointersOnly bool
+	preview      bool
 }
 
 func formatAskWithOptions(result *AskResult, w io.Writer, opts formatOpts) error {
@@ -64,6 +77,11 @@ func formatAskWithOptions(result *AskResult, w io.Writer, opts formatOpts) error
 	for _, h := range result.TopHits {
 		if _, err := fmt.Fprintf(w, "  %.2f  %-40s  %s\n", h.Score, h.ID, h.Title); err != nil {
 			return err
+		}
+		if opts.preview && h.Snippet != "" {
+			if _, err := fmt.Fprintf(w, "        ↳ %s\n", Truncate(h.Snippet, 110)); err != nil {
+				return err
+			}
 		}
 		if opts.explain && len(h.Components) > 0 {
 			if err := writeLaneBreakdown(w, h.Components); err != nil {

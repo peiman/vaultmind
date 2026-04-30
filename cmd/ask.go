@@ -99,13 +99,19 @@ func runAsk(cmd *cobra.Command, args []string) error {
 
 	if !getConfigValueWithFlags[bool](cmd, "json", config.KeyAppAskJson) {
 		formatter := query.FormatAsk
-		// Flags are mutually exclusive in semantics; explain shows the lane
-		// math, pointers-only strips bodies. If both are set, pointers-only
-		// wins because it's the stronger constraint (force the ask-to-read
-		// loop) and pairs naturally with --json for hook consumers anyway.
+		// Flags are mutually exclusive in semantics. Precedence (strongest
+		// constraint first):
+		//   --pointers-only  — strips all bodies; forces the ask-to-read loop
+		//   --preview        — adds a 1-line snippet under each ranked hit
+		//                      (bridges titles ↔ full body)
+		//   --explain        — shows lane math under each hit
+		// pointers-only wins over preview when both are set (pointers-only
+		// is the stricter "no body content at all" promise).
 		switch {
 		case getConfigValueWithFlags[bool](cmd, "pointers-only", config.KeyAppAskPointersOnly):
 			formatter = query.FormatAskPointersOnly
+		case getConfigValueWithFlags[bool](cmd, "preview", config.KeyAppAskPreview):
+			formatter = query.FormatAskPreview
 		case getConfigValueWithFlags[bool](cmd, "explain", config.KeyAppAskExplain):
 			formatter = query.FormatAskExplain
 		}

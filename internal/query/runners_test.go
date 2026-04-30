@@ -607,6 +607,72 @@ func TestFormatAsk_HumanOutputCarriesHits(t *testing.T) {
 	assert.Contains(t, out, "Alpha")
 }
 
+// FormatAskPreview renders a one-line body snippet under each ranked
+// hit. Bridges the AX gap between --pointers-only (titles only — agent
+// often can't tell what a note is) and full Ask (3000+ tokens of
+// context pack). Snippet field is already populated by every
+// retriever; this test pins that the renderer surfaces it.
+func TestFormatAskPreview_RendersSnippetUnderEachHit(t *testing.T) {
+	r := &query.AskResult{
+		Query: "spreading activation",
+		TopHits: []retrieval.ScoredResult{
+			{
+				ID: "concept-spreading", Title: "Spreading Activation",
+				Snippet: "A method for searching associative networks where activation propagates from a source node along weighted edges.",
+				Score:   0.8,
+			},
+			{
+				ID: "concept-rrf", Title: "Reciprocal Rank Fusion",
+				Snippet: "A simple parameter-light method for combining multiple ranked result lists into a unified ranking.",
+				Score:   0.6,
+			},
+		},
+	}
+	var buf bytes.Buffer
+	require.NoError(t, query.FormatAskPreview(r, &buf))
+	out := buf.String()
+	// Hits still render with id+title.
+	assert.Contains(t, out, "concept-spreading")
+	assert.Contains(t, out, "concept-rrf")
+	// Snippet line appears under each hit (truncated at 110 runes).
+	assert.Contains(t, out, "↳", "preview must use the indented marker so the snippet visually attaches to its hit")
+	assert.Contains(t, out, "associative networks", "the snippet content must surface")
+	assert.Contains(t, out, "ranked result lists", "the second hit's snippet must surface too")
+}
+
+// Hits with empty snippets render without the snippet line — no
+// dangling "↳" markers when there's nothing to show.
+func TestFormatAskPreview_OmitsSnippetLineWhenEmpty(t *testing.T) {
+	r := &query.AskResult{
+		Query: "x",
+		TopHits: []retrieval.ScoredResult{
+			{ID: "no-snippet", Title: "No Snippet", Score: 0.5},
+		},
+	}
+	var buf bytes.Buffer
+	require.NoError(t, query.FormatAskPreview(r, &buf))
+	out := buf.String()
+	assert.Contains(t, out, "no-snippet")
+	assert.NotContains(t, out, "↳", "no snippet → no marker line")
+}
+
+// FormatAsk default behavior unchanged: no snippet line under hits.
+// Pins that adding --preview did not regress the default rendering.
+func TestFormatAsk_DefaultDoesNotRenderHitSnippetLine(t *testing.T) {
+	r := &query.AskResult{
+		Query: "x",
+		TopHits: []retrieval.ScoredResult{
+			{ID: "with-snippet", Title: "Has Snippet",
+				Snippet: "this content should not appear under the hit in default mode",
+				Score:   0.5},
+		},
+	}
+	var buf bytes.Buffer
+	require.NoError(t, query.FormatAsk(r, &buf))
+	assert.NotContains(t, buf.String(), "↳")
+	assert.NotContains(t, buf.String(), "should not appear")
+}
+
 // FormatAsk with a context pack attached must render the target's
 // type+title and each context item. The context section is the critical
 // output for agents that use `ask` as a retrieval front-end — losing it
