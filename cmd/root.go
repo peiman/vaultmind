@@ -334,6 +334,38 @@ func init() {
 	// so we need to set these after the fallback is applied.
 	RootCmd.Use = binaryName
 	RootCmd.Long = fmt.Sprintf(`%s is an associative memory system for AI agents over Git-backed Obsidian vaults.
+
+THREE COMMAND SHAPES YOU'LL USE MOST
+
+  ask <query>      Search the vault, pick the top hit, return token-budgeted context.
+                   The default front door for "what do I know about X?"
+  note get <id>    Read one specific note's body. Fires access tracking, the
+                   tracked-read path you want when you already know the id.
+  self             Show your own memory state — recent / hot / stale notes.
+                   First-person introspection of what you've been thinking about.
+
+THREE RENDERING MODES FOR ask
+
+  ask "X" --pointers-only   Cheapest: ids + titles, no body. Use as a menu.
+  ask "X" --preview         Menu + one-line snippet under each hit. Bridges
+                            "I know the id" and "I want the full body."
+  ask "X"                   Default: full token-budgeted context-pack around
+                            the top hit. Use when you want bodies in scope.
+
+QUALITY GATES
+
+  task check:citations      Every source URL resolves and the cited title
+                            matches CrossRef / arxiv. Run after vault edits.
+  task check:retrieval      Hit@5 / MRR floors on identity + research vaults.
+                            Run after vault content waves or ranking changes.
+
+ANTI-PATTERNS
+
+  ask "X" --budget N | tail -M   Don't double-clip. Pick one: pointers-only
+                                  for menus, preview for scanning, default for
+                                  reading. Combining --budget with tail wastes
+                                  the compute the budget asked for.
+
 Powered by Cobra, Viper, Zerolog, and Bubble Tea with enforced architecture patterns.`, binaryName)
 
 	configPaths := ConfigPaths()

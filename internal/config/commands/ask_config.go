@@ -4,9 +4,44 @@ import "github.com/peiman/vaultmind/.ckeletin/pkg/config"
 
 // AskMetadata defines metadata for the ask command.
 var AskMetadata = config.CommandMetadata{
-	Use:          "ask <query>",
-	Short:        "Compound search + context-pack: answer 'what do I know about X?'",
-	Long:         "Search the vault, pick the top hit, and pack token-budgeted context around it. One command replaces the manual search → recall → summarize chain.",
+	Use:   "ask <query>",
+	Short: "Compound search + context-pack: answer 'what do I know about X?'",
+	Long: `Search the vault, pick the top hit, and pack token-budgeted context around it.
+One command replaces the manual search → recall → summarize chain.
+
+CHOOSE A RENDERING MODE BY INTENT
+
+  vaultmind ask "spreading activation" --pointers-only
+      Menu of relevant ids + titles. Cheapest. Use when you want to see what's
+      relevant without reading bodies — then 'note get <id>' the one you want.
+
+  vaultmind ask "spreading activation" --preview
+      Menu + one-line snippet under each hit. Use when titles aren't enough
+      to know what each note is about. Bridges --pointers-only and default.
+
+  vaultmind ask "spreading activation"
+      Default. Full token-budgeted context-pack around the top hit. Use when
+      you want bodies in working context (not just to identify the right id).
+
+  vaultmind ask "spreading activation" --explain
+      Each hit shows per-lane RRF math (dense / sparse / colbert / fts).
+      For investigating ranking decisions, not for answering content questions.
+
+ANTI-PATTERN — AVOID
+
+  vaultmind ask "X" --budget 3000 | tail -20
+      Don't double-clip. The budget asks the system to compute 3000 tokens of
+      context-pack; the tail then throws most of it away. Pick one shape that
+      fits the intent:
+        --pointers-only           if you want a menu, no bodies
+        --preview                 if you want a menu with body snippets
+        --budget=N (no tail)      if you really want N tokens of context
+
+OUTPUT INCLUDES
+
+  Search:    [top-hit confidence: strong|moderate|weak]
+  Per-hit:   score, id, title, optional snippet (--preview), optional lanes (--explain)
+  Context:   target frontmatter + body, then ranked context items (default mode only)`,
 	ConfigPrefix: "app.ask",
 	FlagOverrides: map[string]string{
 		"app.ask.vault":         "vault",
