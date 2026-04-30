@@ -120,7 +120,7 @@ func TestRunSelf_NoStaleNotesPrintsNoneLine(t *testing.T) {
 	}, &buf))
 
 	out := buf.String()
-	assert.Contains(t, out, "Stale (older than 168h0m0s): none")
+	assert.Contains(t, out, "Stale (older than 7 days): none")
 }
 
 // agoString covers each branch (just-now, minutes, hours, days, ?). Pure

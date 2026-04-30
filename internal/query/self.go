@@ -96,27 +96,62 @@ func RunSelf(db *index.DB, cfg SelfConfig, w io.Writer) error {
 			return err
 		}
 	}
+	// Normalize activation column so the top hit shows 0.00 and others
+	// show how-much-below. Raw activations can go negative when the
+	// decay term dominates (correct math, confusing to read at a glance).
+	// Shifting by the max is order-preserving and turns the column into
+	// a relative-distance signal that doesn't snag the eye on minus signs.
+	hotMax := topActivation(hot)
+	staleMax := topActivation(stale)
+
 	if _, err = fmt.Fprintln(w, "\nHot (top activation):"); err != nil {
 		return err
 	}
 	for _, r := range hot {
-		if _, err = fmt.Fprintf(w, "  %5.2f  %-50s  count %d, %s\n", r.activation, selfTruncate(r.NoteID, 50), r.AccessCount, agoString(r.NoteAccessStats, cfg.Now)); err != nil {
+		if _, err = fmt.Fprintf(w, "  %+5.2f  %-50s  count %d, %s\n", r.activation-hotMax, selfTruncate(r.NoteID, 50), r.AccessCount, agoString(r.NoteAccessStats, cfg.Now)); err != nil {
 			return err
 		}
 	}
 	if len(stale) == 0 {
-		_, err = fmt.Fprintf(w, "\nStale (older than %s): none\n", cfg.StaleThreshold)
+		_, err = fmt.Fprintf(w, "\nStale (older than %s): none\n", humanDuration(cfg.StaleThreshold))
 		return err
 	}
-	if _, err = fmt.Fprintf(w, "\nStale (older than %s, drifting away):\n", cfg.StaleThreshold); err != nil {
+	if _, err = fmt.Fprintf(w, "\nStale (older than %s, drifting away):\n", humanDuration(cfg.StaleThreshold)); err != nil {
 		return err
 	}
 	for _, r := range stale {
-		if _, err = fmt.Fprintf(w, "  %5.2f  %-50s  count %d, %s\n", r.activation, selfTruncate(r.NoteID, 50), r.AccessCount, agoString(r.NoteAccessStats, cfg.Now)); err != nil {
+		if _, err = fmt.Fprintf(w, "  %+5.2f  %-50s  count %d, %s\n", r.activation-staleMax, selfTruncate(r.NoteID, 50), r.AccessCount, agoString(r.NoteAccessStats, cfg.Now)); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// topActivation returns the highest activation in a sorted-desc rows
+// slice, or 0 when empty (so subtraction is a no-op for the empty case).
+func topActivation(rows []selfRow) float64 {
+	if len(rows) == 0 {
+		return 0
+	}
+	return rows[0].activation
+}
+
+// humanDuration formats a duration as "Nd" / "Nh" / "Nm" — the same
+// units agoString uses, so the stale-threshold label matches the
+// per-row "ago" column instead of mixing "168h0m0s" with "7d".
+func humanDuration(d time.Duration) string {
+	switch {
+	case d >= 24*time.Hour:
+		days := int(d.Hours() / 24)
+		if days == 1 {
+			return "1 day"
+		}
+		return fmt.Sprintf("%d days", days)
+	case d >= time.Hour:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	}
 }
 
 type selfRow struct {

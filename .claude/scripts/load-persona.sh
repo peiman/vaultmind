@@ -17,7 +17,7 @@ VAULT_PATH="$PROJECT_DIR/vaultmind-identity"
 LOG_DIR="${HOME}/.vaultmind/persona-eval"
 mkdir -p "$LOG_DIR" 2>/dev/null
 TIMESTAMP=$(date +%Y%m%dT%H%M%S)
-HOOK_VERSION="v4-hardened"
+HOOK_VERSION="v5-self-state"
 
 # Rebuild when binary is absent OR any .go source is newer than the binary.
 # Keeps the dogfood loop self-updating — any VaultMind commit propagates to
@@ -64,6 +64,22 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
   IDENTITY=$(VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" ask "who am I" --vault "$VAULT_PATH" --max-items 8 --budget 6000 2>"$ASK_ERR")
   IDENTITY_STATUS=$?
   CONTEXT=$(VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" ask "what matters most right now" --vault "$VAULT_PATH" --max-items 5 --budget 2000 --pointers-only 2>>"$ASK_ERR")
+
+  # Self-state injection — surface the agent's own activation state
+  # (recent / hot / stale notes) without requiring an explicit query.
+  # Same template as the per-turn UserPromptSubmit pointers: ambient,
+  # zero cognitive cost. Two vaults because the agent operates across
+  # both: identity carries arcs/principles/references, research vault
+  # carries the broader knowledge graph where most reinforcement signal
+  # accumulates. Best-effort — if either fails, the persona above still
+  # loads. See feat(self) commit and feedback_use_vaultmind_ask.
+  RESEARCH_VAULT="$PROJECT_DIR/vaultmind-vault"
+  SELF_IDENTITY=$(VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" self --vault "$VAULT_PATH" --limit 5 2>>"$ASK_ERR" || true)
+  SELF_RESEARCH=""
+  if [ -d "$RESEARCH_VAULT" ]; then
+    SELF_RESEARCH=$(VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" self --vault "$RESEARCH_VAULT" --limit 5 2>>"$ASK_ERR" || true)
+  fi
+
   if [ "$IDENTITY_STATUS" != "0" ]; then
     echo "VaultMind ask failed (exit $IDENTITY_STATUS) — persona not loaded" >&2
     cat "$ASK_ERR" >&2
@@ -78,10 +94,22 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
     echo "CURRENT CONTEXT:"
     echo ""
     echo "$CONTEXT"
+    if [ -n "$SELF_IDENTITY" ]; then
+      echo ""
+      echo "MEMORY STATE — IDENTITY VAULT:"
+      echo ""
+      echo "$SELF_IDENTITY"
+    fi
+    if [ -n "$SELF_RESEARCH" ]; then
+      echo ""
+      echo "MEMORY STATE — RESEARCH VAULT:"
+      echo ""
+      echo "$SELF_RESEARCH"
+    fi
 
     # Sidecar log — write injection manifest (agent never sees this)
-    printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","vault_path":"%s","identity_length":%d,"context_length":%d,"injection_success":true}\n' \
-      "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$VAULT_PATH" "${#IDENTITY}" "${#CONTEXT}" \
+    printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","vault_path":"%s","identity_length":%d,"context_length":%d,"self_identity_length":%d,"self_research_length":%d,"injection_success":true}\n' \
+      "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$VAULT_PATH" "${#IDENTITY}" "${#CONTEXT}" "${#SELF_IDENTITY}" "${#SELF_RESEARCH}" \
       > "$LOG_DIR/${TIMESTAMP}-injection.json" 2>/dev/null
   else
     # Hook fired but injection was empty — log the failure
