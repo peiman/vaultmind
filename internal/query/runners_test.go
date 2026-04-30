@@ -142,8 +142,14 @@ func TestRunNoteGet_FrontmatterOnlyStripsBody(t *testing.T) {
 	assert.Empty(t, env.Result.Body, "FrontmatterOnly must strip body")
 }
 
-// Human mode: a short one-liner identifying the note.
-func TestRunNoteGet_HumanModeOneLiner(t *testing.T) {
+// Human mode: header line plus the note's body. Pre-2026-04-30 this
+// returned only the one-line header — which forced agents to fall back
+// to the Read tool when they wanted bodies, bypassing the access
+// tracker. The path of least resistance was the unmonitored path. The
+// fix makes `note get` the cleanest read AND a tracked one in the same
+// invocation. See feedback_vaultmind_query_shape and the AX evaluation
+// in the felt-experience inventory of plasticity step 5.
+func TestRunNoteGet_HumanModeShowsHeaderAndBody(t *testing.T) {
 	db, dir := smallIndexedVault(t)
 	var buf bytes.Buffer
 	err := query.RunNoteGet(db, query.NoteGetConfig{
@@ -151,9 +157,27 @@ func TestRunNoteGet_HumanModeOneLiner(t *testing.T) {
 	}, &buf)
 	require.NoError(t, err)
 	out := buf.String()
+	// Header still present.
 	assert.Contains(t, out, "concept-alpha")
 	assert.Contains(t, out, "Alpha")
 	assert.Contains(t, out, "concept")
+	// Body now present too — fixture's body is "See [[proj-beta]]."
+	assert.Contains(t, out, "proj-beta", "human mode must include the note body so agents don't fall back to Read")
+}
+
+// FrontmatterOnly still strips the body in human mode — when the
+// caller explicitly asked for "no body," we honor it. The default
+// (no flag) is the body-included path above.
+func TestRunNoteGet_HumanModeFrontmatterOnlyStripsBody(t *testing.T) {
+	db, dir := smallIndexedVault(t)
+	var buf bytes.Buffer
+	err := query.RunNoteGet(db, query.NoteGetConfig{
+		Input: "concept-alpha", FrontmatterOnly: true, VaultPath: dir,
+	}, &buf)
+	require.NoError(t, err)
+	out := buf.String()
+	assert.Contains(t, out, "concept-alpha", "header must still print")
+	assert.NotContains(t, out, "proj-beta", "FrontmatterOnly must omit body content even in human mode")
 }
 
 // RunResolve: a known ID resolves to itself (identity round-trip).

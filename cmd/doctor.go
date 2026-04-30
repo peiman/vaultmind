@@ -102,14 +102,21 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 	if err = writeEmbeddingStatus(w, result.Embeddings); err != nil {
 		return err
 	}
+	summaryOnly := getConfigValueWithFlags[bool](cmd, "summary", config.KeyAppDoctorSummary)
 	if result.Issues.ObsidianIncompatibleLinks > 0 {
 		if _, err = fmt.Fprintf(w, "Obsidian-incompatible links: %d\n", result.Issues.ObsidianIncompatibleLinks); err != nil {
 			return err
 		}
-		for _, il := range result.Issues.IncompatibleLinkDetails {
-			if _, err = fmt.Fprintf(w, "  %s: [[%s]] → [[%s|%s]]\n",
-				il.SourcePath, il.TargetRaw, il.SuggestedFix, il.TargetRaw); err != nil {
+		if summaryOnly {
+			if _, err = fmt.Fprintln(w, "  (run without --summary to see per-link details, or pipe through scripts/fix_wikilinks.py)"); err != nil {
 				return err
+			}
+		} else {
+			for _, il := range result.Issues.IncompatibleLinkDetails {
+				if _, err = fmt.Fprintf(w, "  %s: [[%s]] → [[%s|%s]]\n",
+					il.SourcePath, il.TargetRaw, il.SuggestedFix, il.TargetRaw); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -117,10 +124,16 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		if _, err = fmt.Fprintf(w, "Dead link references: %d\n", result.Issues.PathPseudoIDLinks); err != nil {
 			return err
 		}
-		for _, pl := range result.Issues.PathPseudoIDDetails {
-			if _, err = fmt.Fprintf(w, "  %s: [[%s]] → target file does not exist\n",
-				pl.SourcePath, pl.TargetRaw); err != nil {
+		if summaryOnly {
+			if _, err = fmt.Fprintln(w, "  (run without --summary to see per-link details)"); err != nil {
 				return err
+			}
+		} else {
+			for _, pl := range result.Issues.PathPseudoIDDetails {
+				if _, err = fmt.Fprintf(w, "  %s: [[%s]] → target file does not exist\n",
+					pl.SourcePath, pl.TargetRaw); err != nil {
+					return err
+				}
 			}
 		}
 	}

@@ -79,6 +79,18 @@ func RunNoteGet(db *index.DB, cfg NoteGetConfig, w io.Writer) error {
 		return json.NewEncoder(w).Encode(env)
 	}
 
-	_, err = fmt.Fprintf(w, "%s (%s) — %s\n", note.ID, note.Type, note.Title)
-	return err
+	if _, err = fmt.Fprintf(w, "%s (%s) — %s\n", note.ID, note.Type, note.Title); err != nil {
+		return err
+	}
+	// Render the body in human mode unless the caller asked for
+	// frontmatter-only. Pre-2026-04-30 human mode returned only the
+	// header; agents fell back to the Read tool for bodies, which
+	// silently bypassed the access tracker. Printing the body here
+	// makes `note get` both the cleanest and the tracked read path.
+	if !cfg.FrontmatterOnly && note.Body != "" {
+		if _, err = fmt.Fprintf(w, "\n%s\n", note.Body); err != nil {
+			return err
+		}
+	}
+	return nil
 }

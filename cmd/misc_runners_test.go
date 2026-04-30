@@ -82,6 +82,52 @@ func TestDoctor_HumanOutputSurfacesObsidianIncompatibleLinks(t *testing.T) {
 		"the specific incompatible target must be named so the user can fix it")
 }
 
+// --summary on a clean vault (no incompatible links, no dead refs)
+// should print just the headline counts — no extra noise, no empty
+// "but you can see details with..." dangling line.
+func TestDoctor_SummaryFlagOnCleanVaultIsTerse(t *testing.T) {
+	// Build a tiny vault with no broken links — alpha and beta both
+	// resolve correctly via aliases.
+	vault := buildIndexedTestVault(t)
+	out, _, err := runRootCmd(t, "doctor", "--vault", vault, "--summary")
+	require.NoError(t, err)
+	text := out.String()
+	// Headline lines always present.
+	assert.Contains(t, text, "Vault:")
+	assert.Contains(t, text, "Notes:")
+	// "without --summary" hint only prints when issues exist.
+	if !strings.Contains(text, "Obsidian-incompatible") && !strings.Contains(text, "Dead link") {
+		assert.NotContains(t, text, "without --summary",
+			"clean vault must not show the summary-mode hint")
+	}
+}
+
+// --summary flag suppresses per-link details, leaving only the count
+// header plus a hint about how to see the full list. Pre-2026-04-30 the
+// command printed every broken link inline (174 lines on the live vault
+// at one point), drowning out the summary stats. The flag is the
+// "value-without-cognitive-cost" fix for the doctor firehose.
+func TestDoctor_SummaryFlagSuppressesLinkDetails(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	full, _, err := runRootCmd(t, "doctor", "--vault", vault)
+	require.NoError(t, err)
+	summary, _, err := runRootCmd(t, "doctor", "--vault", vault, "--summary")
+	require.NoError(t, err)
+
+	// Summary has the header.
+	assert.Contains(t, summary.String(), "Obsidian-incompatible links",
+		"summary must still show the count header")
+	// But not the per-link arrow detail that the full output has.
+	assert.NotContains(t, summary.String(), "→ [[",
+		"summary must NOT print per-link rewrite arrows")
+	// And the hint on how to see them is present.
+	assert.Contains(t, summary.String(), "without --summary",
+		"summary must point the user at the full output flag")
+	// Sanity: the full output DID have the arrows.
+	assert.Contains(t, full.String(), "→ [[",
+		"full output must show per-link arrows so the test catches a regression in either direction")
+}
+
 // writeEmbeddingStatus unit-level contract: nil input is a no-op, semantic
 // ready renders counts, semantic-not-ready renders the remedy line.
 func TestWriteEmbeddingStatus_NilInputIsNoop(t *testing.T) {
@@ -98,6 +144,51 @@ func TestWriteEmbeddingStatus_NotReadyPrintsRemedy(t *testing.T) {
 	out := buf.String()
 	assert.Contains(t, out, "Embeddings: none (12 notes)")
 	assert.Contains(t, out, "vaultmind index --embed")
+}
+
+// Mixed-model state surfaces the per-model breakdown so the operator
+// can see what fraction is which model. Without this branch the
+// "Embeddings: ... (mixed)" line tells operators something is off but
+// not what — leaving them with no path to "wait or re-embed."
+func TestWriteEmbeddingStatus_MixedModelSurfacesBreakdown(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, writeEmbeddingStatus(&buf, &query.DoctorEmbeddings{
+		SemanticReady: true,
+		TotalNotes:    100,
+		Model:         "mixed",
+		DenseCount:    100,
+		SparseCount:   100,
+		ColBERTCount:  100,
+		MixedModel: []query.DoctorModelBreakdown{
+			{Model: "bge-m3", Count: 60},
+			{Model: "minilm", Count: 40},
+		},
+	}))
+	out := buf.String()
+	assert.Contains(t, out, "mixed-model state:")
+	assert.Contains(t, out, "60 bge-m3")
+	assert.Contains(t, out, "40 minilm")
+}
+
+// Modality imbalance branch — when sparse or colbert counts diverge
+// from dense, the warning line names the fix command. Locks in the
+// operator's path-to-remedy.
+func TestWriteEmbeddingStatus_ModalityImbalanceSurfacesRemedy(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, writeEmbeddingStatus(&buf, &query.DoctorEmbeddings{
+		SemanticReady:        true,
+		TotalNotes:           100,
+		Model:                "bge-m3",
+		DenseCount:           100,
+		SparseCount:          80,
+		ColBERTCount:         70,
+		HasModalityImbalance: true,
+	}))
+	out := buf.String()
+	assert.Contains(t, out, "Partial BGE-M3 coverage")
+	assert.Contains(t, out, "20 note(s) missing sparse")
+	assert.Contains(t, out, "30 missing colbert")
+	assert.Contains(t, out, "vaultmind index --embed --model bge-m3")
 }
 
 func TestWriteEmbeddingStatus_ReadyPrintsCounts(t *testing.T) {
