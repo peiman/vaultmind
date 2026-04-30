@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"io"
 	"sort"
+
+	"github.com/peiman/vaultmind/internal/memory"
+	"github.com/peiman/vaultmind/internal/retrieval"
 )
 
 // FormatAsk writes a human-readable text representation of an AskResult.
@@ -61,17 +64,34 @@ type formatOpts struct {
 }
 
 func formatAskWithOptions(result *AskResult, w io.Writer, opts formatOpts) error {
+	if err := writeAskHeader(w, result); err != nil {
+		return err
+	}
+	if err := writeAskHits(w, result.TopHits, opts); err != nil {
+		return err
+	}
+	if result.Context == nil {
+		return nil
+	}
+	withBodies := countItemsWithBodies(result.Context.Context, opts)
+	if err := writeContextHeader(w, result.Context, withBodies, opts); err != nil {
+		return err
+	}
+	if err := writeContextTarget(w, result.Context.Target, opts); err != nil {
+		return err
+	}
+	if err := writeContextItems(w, result.Context.Context, opts); err != nil {
+		return err
+	}
+	return writeContextFooter(w, result.Context, withBodies, opts)
+}
+
+// writeAskHeader emits "Search: ... [top-hit confidence: ...]". Confidence
+// surfaces only when computable; ConfidenceNoMatch gets a longer label so
+// the agent doesn't read it as another "weak" synonym.
+func writeAskHeader(w io.Writer, result *AskResult) error {
 	header := fmt.Sprintf("Search: %q (%d hits)", result.Query, len(result.TopHits))
-	// Surface top-hit confidence inline when computable. This is the
-	// signal the agent uses to distinguish "I'm sure about top-1" from
-	// "top-1 might be coincidental, treat top-N as candidates." First
-	// slice of plasticity-priority-order step 4 (calibrated confidence).
-	// Hidden when confidence is empty (single-hit results, ill-defined
-	// denominator) so the line stays terse for clear cases.
 	if result.TopHitConfidence != "" {
-		// no_match gets a longer label so the agent doesn't pattern-match
-		// it as "weak" + a synonym. The whole point of the tier is to
-		// distinguish "no clear winner" from "barely ahead but real."
 		switch result.TopHitConfidence {
 		case ConfidenceNoMatch:
 			header += "  [top-hit confidence: no clear winner — top results essentially tied]"
@@ -79,10 +99,14 @@ func formatAskWithOptions(result *AskResult, w io.Writer, opts formatOpts) error
 			header += fmt.Sprintf("  [top-hit confidence: %s]", result.TopHitConfidence)
 		}
 	}
-	if _, err := fmt.Fprintln(w, header); err != nil {
-		return err
-	}
-	for _, h := range result.TopHits {
+	_, err := fmt.Fprintln(w, header)
+	return err
+}
+
+// writeAskHits emits one line per ranked hit, optionally with a snippet
+// (--preview) and per-lane RRF math (--explain) underneath.
+func writeAskHits(w io.Writer, hits []retrieval.ScoredResult, opts formatOpts) error {
+	for _, h := range hits {
 		if _, err := fmt.Fprintf(w, "  %.2f  %-40s  %s\n", h.Score, h.ID, h.Title); err != nil {
 			return err
 		}
@@ -97,27 +121,61 @@ func formatAskWithOptions(result *AskResult, w io.Writer, opts formatOpts) error
 			}
 		}
 	}
-	if result.Context == nil {
+	return nil
+}
+
+// countItemsWithBodies returns the number of context items whose Body
+// is actually rendered in the current opts. Returns 0 in pointers-only
+// mode (no bodies render at all).
+func countItemsWithBodies(items []memory.ContextItem, opts formatOpts) int {
+	if opts.pointersOnly {
+		return 0
+	}
+	n := 0
+	for _, item := range items {
+		if item.BodyIncluded && item.Body != "" {
+			n++
+		}
+	}
+	return n
+}
+
+// writeContextHeader emits "Context from: ... (N items[, M with bodies], used/budget tokens)".
+// The M-with-bodies count appears only when not all items got bodies —
+// keeps the line terse when nothing was truncated. See the truncation
+// footer for the matching remedy hint.
+func writeContextHeader(w io.Writer, ctx *memory.ContextPackResult, withBodies int, opts formatOpts) error {
+	suffix := ""
+	if !opts.pointersOnly && len(ctx.Context) > 0 && withBodies < len(ctx.Context) {
+		suffix = fmt.Sprintf(", %d with bodies", withBodies)
+	}
+	_, err := fmt.Fprintf(w, "\nContext from: %s (%d items%s, %d/%d tokens)\n",
+		ctx.TargetID, len(ctx.Context), suffix, ctx.UsedTokens, ctx.BudgetTokens)
+	return err
+}
+
+// writeContextTarget emits the target note's [type] title plus body
+// (unless pointers-only). Tolerates a nil target.
+func writeContextTarget(w io.Writer, target *memory.ContextPackTarget, opts formatOpts) error {
+	if target == nil {
 		return nil
 	}
-	if _, err := fmt.Fprintf(w, "\nContext from: %s (%d items, %d/%d tokens)\n",
-		result.Context.TargetID, len(result.Context.Context),
-		result.Context.UsedTokens, result.Context.BudgetTokens); err != nil {
+	noteType, _ := target.Frontmatter["type"].(string)
+	title, _ := target.Frontmatter["title"].(string)
+	if _, err := fmt.Fprintf(w, "  [%s] %s\n", noteType, title); err != nil {
 		return err
 	}
-	if result.Context.Target != nil {
-		noteType, _ := result.Context.Target.Frontmatter["type"].(string)
-		title, _ := result.Context.Target.Frontmatter["title"].(string)
-		if _, err := fmt.Fprintf(w, "  [%s] %s\n", noteType, title); err != nil {
-			return err
-		}
-		if !opts.pointersOnly && result.Context.Target.Body != "" {
-			if _, err := fmt.Fprintf(w, "    %s\n", Truncate(result.Context.Target.Body, 120)); err != nil {
-				return err
-			}
-		}
+	if !opts.pointersOnly && target.Body != "" {
+		_, err := fmt.Fprintf(w, "    %s\n", Truncate(target.Body, 120))
+		return err
 	}
-	for _, item := range result.Context.Context {
+	return nil
+}
+
+// writeContextItems emits one block per context-pack neighbor —
+// [type] title, plus body when included by the budget.
+func writeContextItems(w io.Writer, items []memory.ContextItem, opts formatOpts) error {
+	for _, item := range items {
 		noteType, _ := item.Frontmatter["type"].(string)
 		title, _ := item.Frontmatter["title"].(string)
 		if _, err := fmt.Fprintf(w, "  [%s] %s\n", noteType, title); err != nil {
@@ -129,15 +187,36 @@ func formatAskWithOptions(result *AskResult, w io.Writer, opts formatOpts) error
 			}
 		}
 	}
+	return nil
+}
+
+// writeContextFooter emits the closing hint — either a budget-truncation
+// note (when bodies were omitted to fit the budget) or the pointers-only
+// menu hint. At most one fires.
+func writeContextFooter(w io.Writer, ctx *memory.ContextPackResult, withBodies int, opts formatOpts) error {
+	if !opts.pointersOnly && len(ctx.Context) > 0 && withBodies < len(ctx.Context) {
+		omitted := len(ctx.Context) - withBodies
+		_, err := fmt.Fprintf(w,
+			"\n(%d item%s above had body omitted to fit the %d-token budget — increase --budget to see more)\n",
+			omitted, pluralS(omitted), ctx.BudgetTokens)
+		return err
+	}
 	if opts.pointersOnly {
-		// Hint the next move: pointers are not the answer, they're the menu.
-		// Without this line the agent might treat the truncated output as
-		// "all there is" instead of "here are the things to query for."
-		if _, err := fmt.Fprintf(w, "\n(pointers only — run `vaultmind ask <query>` against any id above to read the body)\n"); err != nil {
-			return err
-		}
+		_, err := fmt.Fprintf(w, "\n(pointers only — run `vaultmind ask <query>` against any id above to read the body)\n")
+		return err
 	}
 	return nil
+}
+
+// pluralS returns "s" for non-singular counts so messages read naturally
+// ("1 item above had body omitted" vs "3 items above had bodies omitted"
+// — the verb form differs but the script doesn't, so the suffix carries
+// the agreement). Returns "" for n==1; "s" otherwise.
+func pluralS(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
 }
 
 // Truncate shortens a string to maxLen runes, appending "..." if truncated.

@@ -656,6 +656,79 @@ func TestFormatAskPreview_OmitsSnippetLineWhenEmpty(t *testing.T) {
 	assert.NotContains(t, out, "↳", "no snippet → no marker line")
 }
 
+// When some context items are truncated to fit the token budget, the
+// header shows the with-bodies count AND a footer hint names the exact
+// remedy. Pre-2026-04-30 the truncation was silent — the agent saw a
+// mix of items-with-bodies and items-without-bodies and read it as
+// "feels arbitrary" (per the fresh-session evaluation). Surfacing the
+// budget math turns the inconsistency into an honest, actionable signal.
+func TestFormatAsk_SurfacesBudgetTruncationToContextItems(t *testing.T) {
+	r := &query.AskResult{
+		Query: "x",
+		TopHits: []retrieval.ScoredResult{
+			{ID: "concept-x", Title: "X", Score: 0.5},
+		},
+		Context: &memory.ContextPackResult{
+			TargetID:     "concept-x",
+			BudgetTokens: 100, UsedTokens: 95,
+			Target: &memory.ContextPackTarget{
+				ID:          "concept-x",
+				Frontmatter: map[string]interface{}{"type": "concept", "title": "X"},
+				Body:        "X target body.",
+			},
+			Context: []memory.ContextItem{
+				{ID: "a", Frontmatter: map[string]interface{}{"type": "concept", "title": "A"}, Body: "A body", BodyIncluded: true},
+				{ID: "b", Frontmatter: map[string]interface{}{"type": "concept", "title": "B"}, Body: "B body", BodyIncluded: true},
+				{ID: "c", Frontmatter: map[string]interface{}{"type": "concept", "title": "C"}, Body: "C body", BodyIncluded: false},
+				{ID: "d", Frontmatter: map[string]interface{}{"type": "concept", "title": "D"}, Body: "D body", BodyIncluded: false},
+			},
+		},
+	}
+	var buf bytes.Buffer
+	require.NoError(t, query.FormatAsk(r, &buf))
+	out := buf.String()
+	assert.Contains(t, out, "4 items, 2 with bodies",
+		"header must show the with-bodies count when not all items got bodies")
+	assert.Contains(t, out, "2 items above had body omitted",
+		"footer must name how many were truncated")
+	assert.Contains(t, out, "increase --budget",
+		"footer must point at the remedy")
+}
+
+// When all context items got their bodies, the header stays terse
+// (no with-bodies count) and there's no truncation hint. Avoids
+// noisy output when the budget was sufficient.
+func TestFormatAsk_NoTruncationHintWhenAllBodiesIncluded(t *testing.T) {
+	r := &query.AskResult{
+		Query: "x",
+		TopHits: []retrieval.ScoredResult{
+			{ID: "concept-x", Title: "X", Score: 0.5},
+		},
+		Context: &memory.ContextPackResult{
+			TargetID:     "concept-x",
+			BudgetTokens: 4000, UsedTokens: 200,
+			Target: &memory.ContextPackTarget{
+				ID:          "concept-x",
+				Frontmatter: map[string]interface{}{"type": "concept", "title": "X"},
+				Body:        "X target body.",
+			},
+			Context: []memory.ContextItem{
+				{ID: "a", Frontmatter: map[string]interface{}{"type": "concept", "title": "A"}, Body: "A body", BodyIncluded: true},
+				{ID: "b", Frontmatter: map[string]interface{}{"type": "concept", "title": "B"}, Body: "B body", BodyIncluded: true},
+			},
+		},
+	}
+	var buf bytes.Buffer
+	require.NoError(t, query.FormatAsk(r, &buf))
+	out := buf.String()
+	assert.Contains(t, out, "(2 items, 200/4000 tokens)",
+		"clean header (no with-bodies count) when nothing was truncated")
+	assert.NotContains(t, out, "with bodies",
+		"no with-bodies count when all items got bodies")
+	assert.NotContains(t, out, "had body omitted",
+		"no truncation hint when nothing was truncated")
+}
+
 // FormatAsk default behavior unchanged: no snippet line under hits.
 // Pins that adding --preview did not regress the default rendering.
 func TestFormatAsk_DefaultDoesNotRenderHitSnippetLine(t *testing.T) {
