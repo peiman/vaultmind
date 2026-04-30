@@ -640,6 +640,56 @@ func TestFormatAskPreview_RendersSnippetUnderEachHit(t *testing.T) {
 	assert.Contains(t, out, "ranked result lists", "the second hit's snippet must surface too")
 }
 
+// previewSnippet strips leading markdown headings and collapses
+// internal newlines so the snippet shown under a hit doesn't waste
+// width echoing what we already printed as the title. The fresh-session
+// evaluator flagged this: "--preview snippet is often the title echoed
+// + first line. Not always informative for deciding what to read."
+func TestFormatAskPreview_StripsLeadingHeadingsFromSnippet(t *testing.T) {
+	r := &query.AskResult{
+		Query: "x",
+		TopHits: []retrieval.ScoredResult{
+			{
+				ID: "concept-x", Title: "X",
+				// Real-shape snippet: a section heading then content.
+				Snippet: "## Overview\n\nThe actual content of this note begins here and is what the agent actually wants to see when scanning.",
+				Score:   0.5,
+			},
+		},
+	}
+	var buf bytes.Buffer
+	require.NoError(t, query.FormatAskPreview(r, &buf))
+	out := buf.String()
+	assert.Contains(t, out, "↳ The actual content of this note begins here",
+		"the snippet line must lead with the actual body content, not the heading")
+	assert.NotContains(t, out, "↳ ## Overview",
+		"the leading heading must be stripped before display")
+	// Newlines collapsed to spaces.
+	assert.NotContains(t, out, "\n\n",
+		"internal newlines must collapse so the preview stays one line")
+}
+
+// Multiple stacked headings (# Title\n## Section\n) all get stripped.
+func TestFormatAskPreview_StripsMultipleStackedHeadings(t *testing.T) {
+	r := &query.AskResult{
+		Query: "x",
+		TopHits: []retrieval.ScoredResult{
+			{
+				ID: "x", Title: "X",
+				Snippet: "# Memory Consolidation\n\n## Overview\n\nMemory consolidation is the process by which fragile traces stabilize.",
+				Score:   0.5,
+			},
+		},
+	}
+	var buf bytes.Buffer
+	require.NoError(t, query.FormatAskPreview(r, &buf))
+	out := buf.String()
+	assert.Contains(t, out, "↳ Memory consolidation is the process",
+		"both leading headings must be stripped, leaving the actual body")
+	assert.NotContains(t, out, "## Overview",
+		"second heading must be stripped too")
+}
+
 // Hits with empty snippets render without the snippet line — no
 // dangling "↳" markers when there's nothing to show.
 func TestFormatAskPreview_OmitsSnippetLineWhenEmpty(t *testing.T) {

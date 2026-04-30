@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
 
 	"github.com/peiman/vaultmind/internal/memory"
 	"github.com/peiman/vaultmind/internal/retrieval"
@@ -111,8 +112,11 @@ func writeAskHits(w io.Writer, hits []retrieval.ScoredResult, opts formatOpts) e
 			return err
 		}
 		if opts.preview && h.Snippet != "" {
-			if _, err := fmt.Fprintf(w, "        ↳ %s\n", Truncate(h.Snippet, 110)); err != nil {
-				return err
+			snippet := previewSnippet(h.Snippet, 110)
+			if snippet != "" {
+				if _, err := fmt.Fprintf(w, "        ↳ %s\n", snippet); err != nil {
+					return err
+				}
 			}
 		}
 		if opts.explain && len(h.Components) > 0 {
@@ -217,6 +221,56 @@ func pluralS(n int) string {
 		return ""
 	}
 	return "s"
+}
+
+// previewSnippet prepares a retriever-supplied snippet for one-line
+// rendering under a ranked hit (--preview). Strips leading markdown
+// headings and blank lines that waste the first ~10 visible characters
+// — common pattern is "# Title\n\n## Overview\n\n<actual content>"
+// where the headings repeat what we already rendered above as the hit's
+// title. Also normalises internal newlines to single spaces so the
+// preview stays one line. Truncates last so the visible content
+// dominates the available width.
+func previewSnippet(s string, maxLen int) string {
+	s = stripLeadingHeadings(s)
+	// Collapse internal newlines so the preview stays one line.
+	s = strings.ReplaceAll(s, "\n", " ")
+	// Collapse runs of whitespace produced by the line collapse.
+	for strings.Contains(s, "  ") {
+		s = strings.ReplaceAll(s, "  ", " ")
+	}
+	s = strings.TrimSpace(s)
+	return Truncate(s, maxLen)
+}
+
+// stripLeadingHeadings drops leading markdown heading lines (## Foo,
+// # Bar) and the blank lines around them, returning what's left from
+// the first non-heading content line onward. Pure string work — no
+// markdown parsing — so it's cheap and predictable.
+func stripLeadingHeadings(s string) string {
+	for {
+		s = strings.TrimLeft(s, " \t\n\r")
+		if s == "" {
+			return ""
+		}
+		// Heading line starts with one-to-six '#' followed by a space.
+		if !strings.HasPrefix(s, "#") {
+			return s
+		}
+		hashEnd := 0
+		for hashEnd < len(s) && hashEnd < 6 && s[hashEnd] == '#' {
+			hashEnd++
+		}
+		if hashEnd >= len(s) || s[hashEnd] != ' ' {
+			return s
+		}
+		// Skip past this heading line (to and including the next \n).
+		nl := strings.IndexByte(s, '\n')
+		if nl < 0 {
+			return ""
+		}
+		s = s[nl+1:]
+	}
 }
 
 // Truncate shortens a string to maxLen runes, appending "..." if truncated.
