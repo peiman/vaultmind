@@ -64,7 +64,47 @@ tasks:
           task ckeletin:test
 
   build:
-    desc: Build the binary
+    desc: Build the binary — ORT-tagged (BGE-M3 acceleration) when libtokenizers is installed; pure-Go fallback with loud warning otherwise.
+    summary: |
+      Default build path. Behavior:
+
+        - When lib/libtokenizers.a is present: builds with -tags "dev ORT"
+          and CGO_LDFLAGS pointing at lib/. BGE-M3 sparse + ColBERT lanes
+          are enabled; indexing is ~10x faster than the pure-Go path.
+        - When libtokenizers.a is absent: prints a remediation message
+          and falls back to pure-Go (-tags dev). The binary still works
+          for queries, but BGE-M3 indexing is hour-slow.
+
+      For first-time setup, run: task setup:ort && task build
+      For fast-iteration on Go-only changes: task build:fast
+    vars:
+      VERSION:
+        sh: git describe --tags --always --dirty 2>/dev/null || echo "dev"
+      COMMIT:
+        sh: git rev-parse HEAD 2>/dev/null || echo "unknown"
+      DATE:
+        sh: date -u '+%Y-%m-%d_%H:%M:%S'
+      LDFLAGS: >-
+        -ldflags=" -X '{{.MODULE_PATH}}/cmd.binaryName={{.BINARY_NAME}}'
+        -X '{{.MODULE_PATH}}/cmd.Version={{.VERSION}}'
+        -X '{{.MODULE_PATH}}/cmd.Commit={{.COMMIT}}'
+        -X '{{.MODULE_PATH}}/cmd.Date={{.DATE}}' "
+    silent: true
+    cmds:
+      - cmd: |
+          if [ -f "$(pwd)/lib/libtokenizers.a" ]; then
+            CGO_LDFLAGS="-L$(pwd)/lib" go build -tags "dev ORT" {{.LDFLAGS}} -o ./{{.BINARY_NAME}} . > /dev/null
+            echo "✅ Built ./{{.BINARY_NAME}} with -tags ORT (BGE-M3 sparse + ColBERT acceleration enabled)"
+          else
+            echo "⚠ lib/libtokenizers.a missing — falling back to pure-Go build."
+            echo "  BGE-M3 indexing on this binary will be hour-slow; MiniLM embedding is fine."
+            echo "  To enable BGE-M3 acceleration: task setup:ort && task build"
+            go build -tags dev {{.LDFLAGS}} -o ./{{.BINARY_NAME}} . > /dev/null
+            echo "✅ Built ./{{.BINARY_NAME}} (pure-Go, no ORT)"
+          fi
+
+  build:fast:
+    desc: Fast-iteration pure-Go build (no ORT, no CGO required) — for Go-only changes during development
     cmds: [task: ckeletin:build]
 
   check:

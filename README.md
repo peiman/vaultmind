@@ -18,7 +18,15 @@ The fastest path from zero to a working agent memory:
 
 ```bash
 # 1. Build vaultmind from source (no binary releases yet)
-git clone https://github.com/peiman/vaultmind && cd vaultmind && task build
+git clone https://github.com/peiman/vaultmind && cd vaultmind
+
+# 1a. (recommended) Install ORT acceleration for BGE-M3 indexing.
+#     One-time. Requires libonnxruntime — `brew install onnxruntime` on macOS.
+task setup:ort
+
+# 1b. Build. Picks up ORT automatically when libtokenizers is present;
+#     falls back to a pure-Go binary with a loud warning otherwise.
+task build
 
 # 2. Scaffold a fresh persona-shaped vault wherever makes sense for you
 ./vaultmind init "$HOME/.vaultmind/persona"
@@ -31,6 +39,21 @@ cd "$HOME/.vaultmind/persona"
 # 4. See what your agent would see
 /path/to/vaultmind ask "who am I" --vault .
 ```
+
+### About the build
+
+`task build` produces an ORT-tagged binary when `lib/libtokenizers.a` is
+present (installed by `task setup:ort`). ORT enables BGE-M3 sparse +
+ColBERT lanes — the 4-way hybrid retrieval that VaultMind is built
+around, and what the papers in `docs/` measure against.
+
+Without ORT, the build falls back to pure-Go MiniLM-only embeddings
+plus FTS — a working but degraded 2-lane retriever. The fallback is
+loud (it tells you to run `task setup:ort`) and the binary still
+works for the read path; only BGE-M3 indexing is hour-slow.
+
+For fast inner-loop iteration on Go-only changes, `task build:fast`
+skips ORT and produces a pure-Go binary in seconds.
 
 `vaultmind init` produces a complete vault: type registry, vault README, starter notes for identity and current-context, and template arcs/principles to fill in. Edit `identity/who-am-i.md` and `references/current-context.md` from your agent's voice — those two files are the foundation everything else builds on.
 
