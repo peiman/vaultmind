@@ -64,7 +64,13 @@ func runAskRead(cmd *cobra.Command, queryStr, readArg string, ret query.AutoRetr
 		// the body via note get if they want JSON-structured body.
 		return errAskReadJSONNotYetSupported
 	}
-	return query.FormatAskRead(hits, note, cmd.OutOrStdout())
+	// --read + --explain compose: the menu shows per-lane RRF math
+	// under each hit (so the agent can see why their chosen rank
+	// ranked where it did), then the chosen body renders below.
+	// Round-3 evaluator flagged the silent-drop pre-fix as the worst
+	// of three options; explicit composition is the fix.
+	explain := getConfigValueWithFlags[bool](cmd, "explain", config.KeyAppAskExplain)
+	return query.FormatAskReadWithOptions(hits, note, cmd.OutOrStdout(), explain)
 }
 
 // resolveAskReadTarget maps a --read argument (a 1-indexed rank or an

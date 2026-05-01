@@ -818,6 +818,71 @@ func TestFormatAsk_NoMatchConfidenceForcesPointersOnly(t *testing.T) {
 	assert.Contains(t, out, "pointers only", "auto-degraded mode must surface the pointers-only hint")
 }
 
+// Auto-degrade extends to "weak" confidence as well as "no_match".
+// Round-3 evaluator caught the gap: kanye-class false positives
+// (FTS substring matches that lexically score well) land "weak" not
+// "no_match", so degrading only no_match left the louder problem
+// untouched. Pin that any sub-moderate confidence forces pointers-
+// only rendering. Escape hatch for "I want the body anyway" is
+// `--read 1` on the agent side; the formatter doesn't second-guess.
+func TestFormatAsk_WeakConfidenceForcesPointersOnly(t *testing.T) {
+	r := &query.AskResult{
+		Query:            "x",
+		TopHitConfidence: query.ConfidenceWeak,
+		TopHits: []retrieval.ScoredResult{
+			{ID: "a", Title: "A", Score: 0.5},
+		},
+		Context: &memory.ContextPackResult{
+			TargetID:     "a",
+			BudgetTokens: 4000, UsedTokens: 3944,
+			Target: &memory.ContextPackTarget{
+				ID:          "a",
+				Frontmatter: map[string]interface{}{"type": "concept", "title": "A"},
+				Body:        "body of weak top hit must not render",
+			},
+			Context: []memory.ContextItem{
+				{ID: "n", Frontmatter: map[string]interface{}{"type": "concept", "title": "N"}, Body: "neighbor body must not render", BodyIncluded: true},
+			},
+		},
+	}
+	var buf bytes.Buffer
+	require.NoError(t, query.FormatAsk(r, &buf))
+	out := buf.String()
+	assert.Contains(t, out, "weak", "weak label must surface in header")
+	assert.NotContains(t, out, "body of weak top hit must not render",
+		"weak confidence must auto-degrade to pointers-only — no body")
+	assert.NotContains(t, out, "neighbor body must not render",
+		"weak confidence must suppress neighbor bodies too")
+	assert.Contains(t, out, "pointers only",
+		"degraded mode must surface the pointers-only footer hint")
+}
+
+// "moderate" and "strong" confidence still render full bodies — only
+// weak/no_match auto-degrade. Pin the threshold so a future
+// retune doesn't accidentally widen the auto-degrade trap.
+func TestFormatAsk_ModerateConfidenceStillRendersBody(t *testing.T) {
+	r := &query.AskResult{
+		Query:            "x",
+		TopHitConfidence: query.ConfidenceModerate,
+		TopHits: []retrieval.ScoredResult{
+			{ID: "a", Title: "A", Score: 0.5},
+		},
+		Context: &memory.ContextPackResult{
+			TargetID:     "a",
+			BudgetTokens: 4000, UsedTokens: 200,
+			Target: &memory.ContextPackTarget{
+				ID:          "a",
+				Frontmatter: map[string]interface{}{"type": "concept", "title": "A"},
+				Body:        "moderate-confidence body should render",
+			},
+		},
+	}
+	var buf bytes.Buffer
+	require.NoError(t, query.FormatAsk(r, &buf))
+	assert.Contains(t, buf.String(), "moderate-confidence body should render",
+		"moderate confidence must render bodies normally")
+}
+
 // FormatAskRead renders search header + hits + the chosen note's body
 // inline. Backs `vaultmind ask <query> --read N`. Pins that the menu
 // is preserved (so the agent sees what they chose from) and the body
@@ -846,6 +911,57 @@ func TestFormatAskRead_RendersHitsPlusChosenBody(t *testing.T) {
 	assert.Contains(t, out, "concept-rrf (concept) — Reciprocal Rank Fusion")
 	assert.Contains(t, out, "RRF combines multiple ranked lists",
 		"chosen note's full body must render, not truncated")
+}
+
+// FormatAskReadWithOptions(explain=true) renders the per-lane RRF
+// breakdown under each ranked hit, in addition to the chosen note's
+// body. Round-3 evaluator caught that `--read N --explain` silently
+// dropped --explain pre-fix; this pins that the explain-aware variant
+// honors both flags.
+func TestFormatAskReadWithOptions_ExplainRendersLaneBreakdown(t *testing.T) {
+	r := &query.AskResult{
+		Query: "x",
+		TopHits: []retrieval.ScoredResult{
+			{
+				ID: "a", Title: "A", Score: 0.5,
+				Components: map[string]float64{"fts": 0.0164, "dense": 0.0161},
+			},
+		},
+	}
+	note := &index.FullNote{
+		ID: "a", Type: "concept", Title: "A",
+		Body: "body of A renders below the menu",
+	}
+	var buf bytes.Buffer
+	require.NoError(t, query.FormatAskReadWithOptions(r, note, &buf, true))
+	out := buf.String()
+	// Lane breakdown surfaces under the menu hit.
+	assert.Contains(t, out, "lanes:", "explain mode must render the per-lane breakdown header")
+	assert.Contains(t, out, "fts=", "explain mode must show the fts lane contribution")
+	assert.Contains(t, out, "dense=", "explain mode must show the dense lane contribution")
+	// Body still renders normally.
+	assert.Contains(t, out, "body of A renders below the menu",
+		"chosen body must still render after the explained menu")
+}
+
+// FormatAskRead (no explain) preserves the pre-existing minimal
+// rendering — locks the contract that --read alone doesn't surface
+// lane math.
+func TestFormatAskRead_DoesNotRenderLaneBreakdownByDefault(t *testing.T) {
+	r := &query.AskResult{
+		Query: "x",
+		TopHits: []retrieval.ScoredResult{
+			{
+				ID: "a", Title: "A", Score: 0.5,
+				Components: map[string]float64{"fts": 0.0164},
+			},
+		},
+	}
+	note := &index.FullNote{ID: "a", Type: "concept", Title: "A", Body: "body"}
+	var buf bytes.Buffer
+	require.NoError(t, query.FormatAskRead(r, note, &buf))
+	assert.NotContains(t, buf.String(), "lanes:",
+		"FormatAskRead default must not render lane breakdown")
 }
 
 // FormatAsk default behavior unchanged: no snippet line under hits.

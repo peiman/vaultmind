@@ -66,11 +66,26 @@ func FormatAskPreview(result *AskResult, w io.Writer) error {
 // `vaultmind ask --read <id>`. The note argument is the resolved
 // chosen hit's full body; the caller fetches it (cmd/ask.go) so this
 // renderer stays in the format layer without taking a DB dependency.
+//
+// FormatAskRead always renders without explain. To get per-lane RRF
+// math under each hit when --read and --explain are combined, use
+// FormatAskReadWithOptions.
 func FormatAskRead(result *AskResult, note *index.FullNote, w io.Writer) error {
+	return FormatAskReadWithOptions(result, note, w, false)
+}
+
+// FormatAskReadWithOptions is the explain-aware form of FormatAskRead.
+// When explain is true, each ranked hit in the menu shows its per-lane
+// RRF contribution underneath — matching what `vaultmind ask --explain`
+// renders in default mode. Round-3 inter-agent review caught that
+// `--read N --explain` was silently dropping --explain because runAskRead
+// short-circuited before the explain path was read; this is the
+// rendering side of the fix.
+func FormatAskReadWithOptions(result *AskResult, note *index.FullNote, w io.Writer, explain bool) error {
 	if err := writeAskHeader(w, result); err != nil {
 		return err
 	}
-	if err := writeAskHits(w, result.TopHits, formatOpts{}); err != nil {
+	if err := writeAskHits(w, result.TopHits, formatOpts{explain: explain}); err != nil {
 		return err
 	}
 	if note == nil {
@@ -94,17 +109,30 @@ type formatOpts struct {
 }
 
 func formatAskWithOptions(result *AskResult, w io.Writer, opts formatOpts) error {
-	// When confidence is "no clear winner" the top results are
-	// essentially tied — committing to top-1 is misleading. Auto-
-	// degrade to pointers-only so the system doesn't spend the agent's
-	// working-context budget rendering bodies (and a context-pack of
-	// neighbors) around a top-1 that the confidence label has already
-	// said we shouldn't trust. Defense in depth: the confidence label
-	// alone is a signal the agent has to read; this makes the rendering
-	// itself reflect the same epistemic posture. Round-2 inter-agent
-	// review evidence: nonsense query landed weak/no_match label but
-	// still received a 1762-token context-pack around an unrelated note.
-	if result.TopHitConfidence == ConfidenceNoMatch {
+	// When confidence is below "moderate" — either "weak" (top-1 barely
+	// ahead) or "no clear winner" (top-1 essentially tied with the
+	// field) — committing to top-1 is misleading. Auto-degrade to
+	// pointers-only so the system doesn't spend the agent's working-
+	// context budget rendering bodies (and a context-pack of neighbors)
+	// around a top-1 the confidence label has already said we shouldn't
+	// trust.
+	//
+	// Round-2 review caught the no_match case (1762-token pack around
+	// an unrelated note); round-3 review caught the binding constraint:
+	// the kanye-class FTS false positive lands at "weak", not
+	// "no_match", so degrading only no_match leaves the louder problem
+	// untouched. Round-3 evaluator's framing: "weak is closer to no
+	// clear winner than to moderate in terms of what the agent should
+	// do with the result." The escape hatch for "I want the body of a
+	// weak top hit anyway" is `vaultmind ask "X" --read 1` (shipped
+	// the same round) — explicit override, single command, exactly the
+	// shape that says "I read the menu and I want this body."
+	//
+	// Defense-in-depth philosophy: the confidence label alone is a
+	// signal the agent has to read; this makes the rendering itself
+	// reflect the same epistemic posture without the agent having to
+	// remember to check.
+	if result.TopHitConfidence == ConfidenceNoMatch || result.TopHitConfidence == ConfidenceWeak {
 		opts.pointersOnly = true
 	}
 	if err := writeAskHeader(w, result); err != nil {
