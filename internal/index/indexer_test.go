@@ -30,24 +30,12 @@ func TestRebuild_IndexesAllNotes(t *testing.T) {
 }
 
 func TestRebuild_PopulatesNotesTable(t *testing.T) {
-	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "index.db")
-
-	cfg, err := vault.LoadConfig(testVaultPath)
-	require.NoError(t, err)
-
-	idxr := index.NewIndexer(testVaultPath, dbPath, cfg)
-	_, err = idxr.Rebuild()
-	require.NoError(t, err)
-
-	db, err := index.Open(dbPath)
-	require.NoError(t, err)
-	defer db.Close()
+	db := rebuildTestIndex(t)
 
 	// Check a known domain note
 	var id, title string
 	var isDomain bool
-	err = db.QueryRow("SELECT id, title, is_domain FROM notes WHERE id = ?", "concept-act-r").
+	err := db.QueryRow("SELECT id, title, is_domain FROM notes WHERE id = ?", "concept-act-r").
 		Scan(&id, &title, &isDomain)
 	require.NoError(t, err)
 	assert.Equal(t, "concept-act-r", id)
@@ -71,19 +59,7 @@ func TestRebuild_IndexesDomainAndUnstructured(t *testing.T) {
 }
 
 func TestRebuild_PopulatesAliases(t *testing.T) {
-	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "index.db")
-
-	cfg, err := vault.LoadConfig(testVaultPath)
-	require.NoError(t, err)
-
-	idxr := index.NewIndexer(testVaultPath, dbPath, cfg)
-	_, err = idxr.Rebuild()
-	require.NoError(t, err)
-
-	db, err := index.Open(dbPath)
-	require.NoError(t, err)
-	defer db.Close()
+	db := rebuildTestIndex(t)
 
 	// ACT-R has aliases
 	var aliasCount int
@@ -92,19 +68,7 @@ func TestRebuild_PopulatesAliases(t *testing.T) {
 }
 
 func TestRebuild_PopulatesLinks(t *testing.T) {
-	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "index.db")
-
-	cfg, err := vault.LoadConfig(testVaultPath)
-	require.NoError(t, err)
-
-	idxr := index.NewIndexer(testVaultPath, dbPath, cfg)
-	_, err = idxr.Rebuild()
-	require.NoError(t, err)
-
-	db, err := index.Open(dbPath)
-	require.NoError(t, err)
-	defer db.Close()
+	db := rebuildTestIndex(t)
 
 	// ACT-R body has wikilinks to Context Pack, Spreading Activation, etc.
 	var linkCount int
@@ -113,19 +77,7 @@ func TestRebuild_PopulatesLinks(t *testing.T) {
 }
 
 func TestRebuild_PopulatesFTS(t *testing.T) {
-	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "index.db")
-
-	cfg, err := vault.LoadConfig(testVaultPath)
-	require.NoError(t, err)
-
-	idxr := index.NewIndexer(testVaultPath, dbPath, cfg)
-	_, err = idxr.Rebuild()
-	require.NoError(t, err)
-
-	db, err := index.Open(dbPath)
-	require.NoError(t, err)
-	defer db.Close()
+	db := rebuildTestIndex(t)
 
 	// Search for "cognitive architecture" should find ACT-R
 	rows, err := db.Query("SELECT note_id FROM fts_notes WHERE fts_notes MATCH ?", "cognitive architecture")
@@ -144,19 +96,7 @@ func TestRebuild_PopulatesFTS(t *testing.T) {
 }
 
 func TestRebuild_UsesCorrectEdgeTypes(t *testing.T) {
-	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "index.db")
-
-	cfg, err := vault.LoadConfig(testVaultPath)
-	require.NoError(t, err)
-
-	idxr := index.NewIndexer(testVaultPath, dbPath, cfg)
-	_, err = idxr.Rebuild()
-	require.NoError(t, err)
-
-	db, err := index.Open(dbPath)
-	require.NoError(t, err)
-	defer db.Close()
+	db := rebuildTestIndex(t)
 
 	// Body wikilinks should be stored as "explicit_link", not "wikilink"
 	var explicitLinkCount int

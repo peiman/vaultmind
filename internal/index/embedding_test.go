@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/index"
-	"github.com/peiman/vaultmind/internal/vault"
+	"github.com/peiman/vaultmind/internal/testvault"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -36,18 +36,14 @@ func TestDecodeEmbedding_Empty(t *testing.T) {
 	assert.Nil(t, decoded)
 }
 
+// buildEmbeddingTestDB returns a writable per-test DB seeded from the
+// shared vault rebuild. Pre-2026-05-01 this re-ran the full indexer
+// per test; switching to the shared-DB pattern brings each call from
+// ~5s (live-vault rebuild) to ~50ms (file copy of the cached build).
 func buildEmbeddingTestDB(t *testing.T) *index.DB {
 	t.Helper()
-	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "index.db")
-	vaultPath := "../../vaultmind-vault"
-	cfg, err := vault.LoadConfig(vaultPath)
-	require.NoError(t, err)
-	idxr := index.NewIndexer(vaultPath, dbPath, cfg)
-	_, err = idxr.Rebuild()
-	require.NoError(t, err)
-	db, err := index.Open(dbPath)
-	require.NoError(t, err)
+	dbPath := filepath.Join(t.TempDir(), "index.db")
+	db := testvault.OpenSharedDB(t, "../../vaultmind-vault", dbPath)
 	t.Cleanup(func() { _ = db.Close() })
 	return db
 }

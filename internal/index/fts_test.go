@@ -5,25 +5,30 @@ import (
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/index"
-	"github.com/peiman/vaultmind/internal/vault"
+	"github.com/peiman/vaultmind/internal/testvault"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+// rebuildTestIndex returns a writable per-test DB seeded from the shared
+// vault rebuild. Pre-2026-05-01 this re-ran NewIndexer.Rebuild() against
+// the live `vaultmind-vault` (~400 notes) for every caller — ~5s per
+// test, with ~30 tests in this package, dominating `task check` runtime
+// (88% of total: 284s of ~322s on a representative run, blocking commits
+// and pushing pathological runs past 1h). The shared-DB pattern
+// (testvault.OpenSharedDB) builds the index ONCE per test process and
+// gives each caller a copied, isolated, writable file. Same on-disk
+// shape as before; same rebuild path; just amortised across the
+// package.
+//
+// Any caller that mutates schema or content of the DB should keep using
+// per-test isolation (which OpenSharedDB provides via copyFile); any
+// caller that needs to test the rebuild path itself should NewIndexer +
+// Rebuild directly rather than going through this helper.
 func rebuildTestIndex(t *testing.T) *index.DB {
 	t.Helper()
-	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "index.db")
-
-	cfg, err := vault.LoadConfig(testVaultPath)
-	require.NoError(t, err)
-
-	idxr := index.NewIndexer(testVaultPath, dbPath, cfg)
-	_, err = idxr.Rebuild()
-	require.NoError(t, err)
-
-	db, err := index.Open(dbPath)
-	require.NoError(t, err)
+	dbPath := filepath.Join(t.TempDir(), "index.db")
+	db := testvault.OpenSharedDB(t, testVaultPath, dbPath)
 	t.Cleanup(func() { _ = db.Close() })
 	return db
 }
