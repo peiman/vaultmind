@@ -102,6 +102,8 @@ components:
       - internal/testvault/**
       # VaultMind episodic substrate (session transcript → episode markdown, v0):
       - internal/episode/**
+      # VaultMind vault scaffold (vaultmind init — embedded persona-shaped templates):
+      - internal/initvault/**
 
   # -------------------------------------------------------------------------
   # PROJECT-MANAGED: Business Logic Layer
