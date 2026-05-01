@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/memory"
 	"github.com/peiman/vaultmind/internal/retrieval"
 )
@@ -58,6 +59,34 @@ func FormatAskPreview(result *AskResult, w io.Writer) error {
 	return formatAskWithOptions(result, w, formatOpts{preview: true})
 }
 
+// FormatAskRead renders the ask menu (search header + ranked hits) plus
+// the body of one specific note inline — the single-command shortcut
+// for the probe→read workflow when the agent already knows which hit
+// from the menu they want. Backs `vaultmind ask --read N` and
+// `vaultmind ask --read <id>`. The note argument is the resolved
+// chosen hit's full body; the caller fetches it (cmd/ask.go) so this
+// renderer stays in the format layer without taking a DB dependency.
+func FormatAskRead(result *AskResult, note *index.FullNote, w io.Writer) error {
+	if err := writeAskHeader(w, result); err != nil {
+		return err
+	}
+	if err := writeAskHits(w, result.TopHits, formatOpts{}); err != nil {
+		return err
+	}
+	if note == nil {
+		return nil
+	}
+	if _, err := fmt.Fprintf(w, "\n%s (%s) — %s\n", note.ID, note.Type, note.Title); err != nil {
+		return err
+	}
+	if note.Body != "" {
+		if _, err := fmt.Fprintf(w, "\n%s\n", note.Body); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 type formatOpts struct {
 	explain      bool
 	pointersOnly bool
@@ -65,6 +94,19 @@ type formatOpts struct {
 }
 
 func formatAskWithOptions(result *AskResult, w io.Writer, opts formatOpts) error {
+	// When confidence is "no clear winner" the top results are
+	// essentially tied — committing to top-1 is misleading. Auto-
+	// degrade to pointers-only so the system doesn't spend the agent's
+	// working-context budget rendering bodies (and a context-pack of
+	// neighbors) around a top-1 that the confidence label has already
+	// said we shouldn't trust. Defense in depth: the confidence label
+	// alone is a signal the agent has to read; this makes the rendering
+	// itself reflect the same epistemic posture. Round-2 inter-agent
+	// review evidence: nonsense query landed weak/no_match label but
+	// still received a 1762-token context-pack around an unrelated note.
+	if result.TopHitConfidence == ConfidenceNoMatch {
+		opts.pointersOnly = true
+	}
 	if err := writeAskHeader(w, result); err != nil {
 		return err
 	}
