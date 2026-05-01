@@ -857,6 +857,29 @@ func TestFormatAsk_WeakConfidenceForcesPointersOnly(t *testing.T) {
 		"degraded mode must surface the pointers-only footer hint")
 }
 
+// The weak label carries an explanatory suffix that names the
+// auto-degrade behaviour AND the override path. Without the suffix an
+// agent seeing menu-only output for a weak hit might think their
+// --budget was ignored or the system was broken. Round-4 inter-agent
+// review caught the silent suppression as a real AX gap.
+func TestFormatAsk_WeakConfidenceLabelExplainsSuppression(t *testing.T) {
+	r := &query.AskResult{
+		Query:            "x",
+		TopHitConfidence: query.ConfidenceWeak,
+		TopHits: []retrieval.ScoredResult{
+			{ID: "a", Title: "A", Score: 0.5},
+		},
+	}
+	var buf bytes.Buffer
+	require.NoError(t, query.FormatAsk(r, &buf))
+	out := buf.String()
+	assert.Contains(t, out, "weak", "label tier name still appears")
+	assert.Contains(t, out, "body suppressed",
+		"weak label must name the auto-degrade behavior")
+	assert.Contains(t, out, "--read N",
+		"weak label must surface the override path")
+}
+
 // "moderate" and "strong" confidence still render full bodies — only
 // weak/no_match auto-degrade. Pin the threshold so a future
 // retune doesn't accidentally widen the auto-degrade trap.

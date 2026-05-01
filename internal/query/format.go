@@ -163,9 +163,21 @@ func formatAskWithOptions(result *AskResult, w io.Writer, opts formatOpts) error
 func writeAskHeader(w io.Writer, result *AskResult) error {
 	header := fmt.Sprintf("Search: %q (%d hits)", result.Query, len(result.TopHits))
 	if result.TopHitConfidence != "" {
+		// Tiers that auto-degrade to pointers-only get an explanatory
+		// suffix so the agent reading the output knows BOTH what the
+		// label means AND why the rendering is what it is. Without the
+		// suffix an agent who doesn't know the auto-degrade exists
+		// might see menu+pointers and wonder whether their --budget
+		// was honored, whether the system is broken, or whether
+		// something happened that they should know about. Round-4
+		// inter-agent review caught this gap on the weak label
+		// specifically — the no_match label already carried its
+		// suffix from earlier.
 		switch result.TopHitConfidence {
 		case ConfidenceNoMatch:
 			header += "  [top-hit confidence: no clear winner — top results essentially tied]"
+		case ConfidenceWeak:
+			header += "  [top-hit confidence: weak — body suppressed; use --read N to override]"
 		default:
 			header += fmt.Sprintf("  [top-hit confidence: %s]", result.TopHitConfidence)
 		}
