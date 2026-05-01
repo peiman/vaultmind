@@ -89,7 +89,7 @@ func logAskExperiment(cmd *cobra.Command, queryText, vaultPath, retrievalMode st
 		}
 	}
 
-	if _, err := session.LogAskEvent(queryText, experiment.BuildAskEventData(params)); err != nil {
+	if _, err := session.LogAskEvent(queryText, params.PrimaryVariant, experiment.BuildAskEventData(params)); err != nil {
 		// silent-failure-ok: telemetry-only. Failing to log the event
 		// must never block the user's ask — the result has already been
 		// computed and returned above.

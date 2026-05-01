@@ -54,17 +54,25 @@ func (s *Session) LogSearchEvent(query, mode string, data map[string]any) (strin
 	})
 }
 
-// LogAskEvent logs an ask event from this session.
-func (s *Session) LogAskEvent(query string, data map[string]any) (string, error) {
+// LogAskEvent logs an ask event from this session. primaryVariant is
+// the activation experiment's chosen variant name (empty when the
+// activation experiment is disabled or the event has no context pack);
+// it populates the events.primary_variant column so per-variant
+// rollups can group on it without parsing event_data JSON. Without
+// this, the activation experiment's variant choice landed only in
+// the event_data blob and the column stayed NULL — silently breaking
+// VariantPerformance and `vaultmind export --rollup`.
+func (s *Session) LogAskEvent(query, primaryVariant string, data map[string]any) (string, error) {
 	if data == nil {
 		data = map[string]any{}
 	}
 	return s.DB.LogEvent(Event{
-		SessionID: s.ID,
-		Type:      EventAsk,
-		VaultPath: s.VaultPath,
-		QueryText: query,
-		Data:      data,
+		SessionID:      s.ID,
+		Type:           EventAsk,
+		VaultPath:      s.VaultPath,
+		QueryText:      query,
+		PrimaryVariant: primaryVariant,
+		Data:           data,
 	})
 }
 
