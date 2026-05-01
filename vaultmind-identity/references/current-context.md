@@ -55,22 +55,43 @@ The truest answer is still: **we are making sure minds survive.** The plasticity
 
 ## When someone asks "what next?"
 
-**As of 2026-05-02**, the live edge is **measurement-driven validation of slice 5b'** (activation as 5th RRF lane, opt-in via `BuildAutoRetrieverWithActivation`, shipped 499cbef).
+**As of 2026-05-02**, the live edge is **redesigning slice 5b'** — the parallel-lane implementation degrades retrieval per the activation-lane probe. The original 5b' (commit `499cbef`) is shipped opt-in but should NOT be enabled by default in its current form.
 
-The measurement-driven chain — do these in order; (3) gates (1):
+The measurement spoke (probe `e29ee10`):
 
-3. **Smoke test the activation lane** on real queries against the 1444-session experiment DB. Do rankings shift in useful ways? This is the gate. Per `principle-measure-before-optimize`, don't ship default-on or recalibrate thresholds until measurement justifies it.
-4. **Flip the activation experiment** to `enabled: true` so `primary_variant` populates on every ask and `vaultmind export --rollup` actually has variant data — independent of (3), but produces the signal (3) reads.
+  identity vault (n=19, 30/32 notes accessed):
+    Hit@5  1.000 → 1.000   (0)
+    MRR    0.921 → 0.750   (-0.171)
+  research vault (n=40, 136/407 notes accessed):
+    Hit@5  0.975 → 0.900   (-0.075)
+    MRR    0.822 → 0.552   (-0.270)
 
-Conditional on (3) showing useful shift:
+Drown-out: mean-of-present RRF gives high single-lane scores when a note appears ONLY in the activation lane — recently-accessed-but-query-irrelevant notes get rank 1 in activation, divided by 1, beating relevant notes whose 4-lane mean is divided by 4. The priority-order doc anticipated this when it constrained the activation lane to "candidates from the 4-way RRF"; my implementation followed the literal "5th lane" reading and returns ALL accessed notes, which is the bug.
 
-1. **Re-probe TopHitConfidence thresholds** against the 5-way score-gap distribution. The 5%/2% tier cutoffs were calibrated on 4-way RRF; adding the activation lane shifts the distribution. Without re-probing, strong/moderate/weak labels silently miscalibrate.
+The redesign options for next session:
+
+A. **Constrain ActivationRetriever** to only score notes that appear in the 4-way result. Breaks the parallel-lane abstraction (the lane needs to know other lanes' results) but matches the priority-order doc's intent.
+
+B. **Post-RRF rerank**: run 4-way RRF, take top-N, blend activation into the final ranking. Doesn't pretend to be a parallel lane — admits it's a different mechanism. Probably the most honest framing.
+
+C. **Different fusion**: weight activation lower, or only count it when a note appears in another lane. Keeps the parallel-lane shape but breaks the symmetry of mean-of-present.
+
+(B) feels most honest. Worth a probe-before-commit pass on the redesign before coding.
+
+What's already done from the chain:
+
+- (3) **Smoke test ✅** — `internal/baseline/activation_compare_test.go` ships as the regression gate. Set `VAULTMIND_ACTIVATION_COMPARE=identity|research` to re-run.
+- (4) **Activation experiment config flip ✅** — `~/.config/vaultmind/config.yaml` has `experiments.activation.enabled: true`. Discovered + fixed a real bug along the way: `LogAskEvent` wasn't populating `events.primary_variant` (commit `369e4f1`). The variant rollup payload now actually has data.
+
+What's NOT to do until (B/A/C) lands:
+
+- (1) **Re-probe TopHitConfidence thresholds** is moot — the 5-way distribution is the wrong baseline since 5-way is degraded. Recalibrate ONLY after a redesigned activation mechanism shows useful lift.
 
 Standalone, no order dependency:
 
-2. **Receiver endpoint decision** for telemetry. The export pipeline is complete locally; what's missing is where uploaded payloads land. This is a real architecture commitment — hosting, retention, audit log — worth a separate design pass, not folded into a coding session.
+2. **Receiver endpoint decision** for telemetry. The export pipeline is complete locally — vault fingerprint, vault features, variant rollup all populating now. What's missing is where uploaded payloads land. Real architecture commitment — hosting, retention, audit log — worth a separate design pass, not folded into a coding session.
 
-Don't burn time on the ask-ranking bug from 2026-04-24 — closed, three lines of defense in place. Don't burn time on telemetry export shape — pipeline is solid, the bottleneck is the receiver decision, not more local code.
+Don't burn time on the ask-ranking bug from 2026-04-24 — closed, three lines of defense in place. Don't burn time on telemetry export shape — pipeline is solid; the bottleneck is the receiver decision and the activation redesign.
 
 ## Longer-term artifacts beyond the immediate roadmap
 
