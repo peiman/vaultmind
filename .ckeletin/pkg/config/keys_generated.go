@@ -71,6 +71,8 @@ const (
 	KeyExperimentsTelemetry             = "experiments.telemetry"               // Telemetry level: anonymous, full, off
 	KeyExperimentsOutcomeWindowSessions = "experiments.outcome_window_sessions" // Sessions to look back for outcome linkage
 	KeyExperimentsActivationDelta       = "experiments.activation.delta"        // Spreading activation weight (0.0 disables similarity component)
+	KeyAppExportOutput                  = "app.export.output"                   // Output file path (empty = stdout)
+	KeyAppExportTier                    = "app.export.tier"                     // Override telemetry tier (off|anonymous|full); empty = use experiments.telemet...
 	KeyAppFrontmatterVault              = "app.frontmatter.vault"               // Path to vault root
 	KeyAppFrontmatterJson               = "app.frontmatter.json"                // Output in JSON format
 	KeyAppFrontmatterLive               = "app.frontmatter.live"                // Validate raw .md files on disk instead of the indexed database
