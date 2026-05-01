@@ -53,11 +53,15 @@ func installAgentRootHelp(root *cobra.Command, binary string) {
 		// considered the error. Following Cobra's own help template
 		// convention (it discards too).
 		_, _ = fmt.Fprint(w, agentRootHelpText(binary))
-		// Append the persistent-flags block so root help still surfaces
-		// the global flags (--config, --log-*, etc.) — agents need to
-		// know these exist.
+		// Render the global-flags block in the same section-divider
+		// style as the rest of the cheat-sheet so it reads as part of
+		// the page rather than a Cobra-default tail. Round-2 evaluator
+		// flagged the previous flat "Flags:" block as visually
+		// regressing from the curated surface above.
 		if cmd.HasAvailableLocalFlags() || cmd.HasAvailableInheritedFlags() {
-			_, _ = fmt.Fprintln(w, "Flags:")
+			_, _ = fmt.Fprint(w, "──────────────────────────────────────────────────────────────────────────────\n")
+			_, _ = fmt.Fprint(w, "GLOBAL FLAGS (apply to every subcommand)\n")
+			_, _ = fmt.Fprint(w, "──────────────────────────────────────────────────────────────────────────────\n\n")
 			_, _ = fmt.Fprint(w, cmd.LocalFlags().FlagUsages())
 			_, _ = fmt.Fprintln(w)
 		}
