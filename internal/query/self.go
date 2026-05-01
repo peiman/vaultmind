@@ -50,18 +50,21 @@ func SelfDefaults(cfg SelfConfig) SelfConfig {
 // blank-slate from rendering failure.
 func RunSelf(db *index.DB, cfg SelfConfig, w io.Writer) error {
 	cfg = SelfDefaults(cfg)
-	// Default `self` view filters out hook accesses — the SessionStart
-	// persona load and per-turn pointer recall fire RecordNoteAccess
-	// across many notes before the agent does any deliberate work, and
-	// counting that traffic in the proprioceptive view pollutes the
-	// "what have I been engaging with" signal `self` exists to surface.
-	// Caught in 2026-05-01 inter-agent review (docs/reviews/help-redesign-
-	// review-response.md) — the right-layer fix lives in the schema
-	// (caller column on note_accesses) rather than in `self` second-
-	// guessing the data. Caller-aware filtering also unlocks future
-	// "show me what the harness touched separately" views without
-	// shipping a parallel pollution-recovery patch on top.
-	all, err := index.ListAccessedNotesExcludingCaller(db, index.CallerHook)
+	// Default `self` view shows ONLY deliberate-target accesses —
+	// excluding both hook fan-outs (CallerHook) and Ask context-pack
+	// neighbors (CallerAgentNeighbor). Round-1 review caught hook
+	// pollution; round-2 review caught the next-louder source: a single
+	// Ask fires N+1 access events and an off-target nonsense query's
+	// neighbor fan-out dominates the hot list, pushing the agent's
+	// real engagement below the visible cutoff. Both pollutions close
+	// at the same caller-dimension layer the schema already provides
+	// — CallerAgent stays in (Ask target + note get), everything else
+	// stays out by default. See docs/reviews/help-redesign-followup-
+	// response.md for the round-2 evidence.
+	all, err := index.ListAccessedNotesExcludingCallers(db, []string{
+		index.CallerHook,
+		index.CallerAgentNeighbor,
+	})
 	if err != nil {
 		return fmt.Errorf("self: listing accessed notes: %w", err)
 	}

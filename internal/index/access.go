@@ -184,13 +184,44 @@ func ListAccessedNotesByCaller(d *DB, caller string) ([]NoteAccessStats, error) 
 }
 
 // ListAccessedNotesExcludingCaller returns access stats from all
-// callers EXCEPT the one named. The default `self` view uses this with
-// CallerHook to show deliberate engagement minus the harness footprint.
+// callers EXCEPT the one named. Single-caller exclusion form;
+// see ListAccessedNotesExcludingCallers for the multi-caller form.
 func ListAccessedNotesExcludingCaller(d *DB, excludedCaller string) ([]NoteAccessStats, error) {
 	if excludedCaller == "" {
 		return ListAccessedNotes(d)
 	}
-	rows, err := d.Query(`
+	return ListAccessedNotesExcludingCallers(d, []string{excludedCaller})
+}
+
+// ListAccessedNotesExcludingCallers returns access stats from all
+// callers EXCEPT the ones named. Used by `vaultmind self` to filter
+// out *both* hook fan-outs (CallerHook) and Ask context-pack neighbors
+// (CallerAgentNeighbor) so the proprioceptive view reflects only
+// deliberate-target accesses (CallerAgent — Ask top-hit + note get).
+//
+// Round-1 review caught hook pollution; round-2 review caught the
+// next-louder source: a single Ask fires N+1 access events (target +
+// N neighbors) and an off-target nonsense query's neighbor fan-out
+// dominates the hot list. Both pollutions close at the same caller-
+// dimension layer the schema already provides.
+//
+// Empty list returns the unfiltered view (matches ListAccessedNotes).
+func ListAccessedNotesExcludingCallers(d *DB, excludedCallers []string) ([]NoteAccessStats, error) {
+	if len(excludedCallers) == 0 {
+		return ListAccessedNotes(d)
+	}
+	// Build the IN-list dynamically — SQLite param expansion doesn't
+	// support slices natively, so we emit (?, ?, ?, ...).
+	placeholders := ""
+	args := make([]any, 0, len(excludedCallers))
+	for i, c := range excludedCallers {
+		if i > 0 {
+			placeholders += ", "
+		}
+		placeholders += "?"
+		args = append(args, c)
+	}
+	q := `
 		SELECT
 			n.id,
 			COUNT(e.rowid) AS access_count,
@@ -199,12 +230,13 @@ func ListAccessedNotesExcludingCaller(d *DB, excludedCaller string) ([]NoteAcces
 			COALESCE(n.type, '')
 		FROM notes n
 		JOIN note_accesses e ON e.note_id = n.id
-		WHERE e.caller <> ?
+		WHERE e.caller NOT IN (` + placeholders + `)
 		GROUP BY n.id
 		ORDER BY last_accessed_at DESC
-	`, excludedCaller)
+	`
+	rows, err := d.Query(q, args...)
 	if err != nil {
-		return nil, fmt.Errorf("listing accessed notes excluding caller %q: %w", excludedCaller, err)
+		return nil, fmt.Errorf("listing accessed notes excluding callers %v: %w", excludedCallers, err)
 	}
 	defer func() { _ = rows.Close() }()
 	return scanAccessRows(rows)
