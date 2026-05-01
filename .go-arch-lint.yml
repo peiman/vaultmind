@@ -104,6 +104,8 @@ components:
       - internal/episode/**
       # VaultMind vault scaffold (vaultmind init — embedded persona-shaped templates):
       - internal/initvault/**
+      # VaultMind telemetry primitives (vault fingerprint, content-free aggregate features):
+      - internal/telemetry/**
 
   # -------------------------------------------------------------------------
   # PROJECT-MANAGED: Business Logic Layer

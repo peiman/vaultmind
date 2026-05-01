@@ -5,6 +5,7 @@ import (
 
 	"github.com/peiman/vaultmind/internal/config/commands"
 	"github.com/peiman/vaultmind/internal/initvault"
+	"github.com/peiman/vaultmind/internal/telemetry"
 	"github.com/spf13/cobra"
 )
 
@@ -22,6 +23,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 	res, err := initvault.Init(args[0])
 	if err != nil {
 		return err
+	}
+	if _, err := telemetry.EnsureFingerprint(res.VaultPath); err != nil {
+		return fmt.Errorf("generate fingerprint: %w", err)
 	}
 	w := cmd.OutOrStdout()
 	_, _ = fmt.Fprintf(w, "✅ Vault scaffolded at %s (%d files)\n\n", res.VaultPath, res.FilesAdded)

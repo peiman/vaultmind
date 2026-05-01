@@ -50,8 +50,11 @@ internal/experiment/export_test.go. If the tests change, the contract
 documented in telemetry.go must change too.`,
 	ConfigPrefix: "app.export",
 	FlagOverrides: map[string]string{
-		"app.export.output": "output",
-		"app.export.tier":   "tier",
+		"app.export.output":  "output",
+		"app.export.tier":    "tier",
+		"app.export.rollup":  "rollup",
+		"app.export.vault":   "vault",
+		"app.export.preview": "preview",
 	},
 }
 
@@ -60,6 +63,9 @@ func ExportOptions() []config.ConfigOption {
 	return []config.ConfigOption{
 		{Key: "app.export.output", DefaultValue: "", Description: "Output file path (empty = stdout)", Type: "string"},
 		{Key: "app.export.tier", DefaultValue: "", Description: "Override telemetry tier (off|anonymous|full); empty = use experiments.telemetry from config", Type: "string"},
+		{Key: "app.export.rollup", DefaultValue: false, Description: "Emit a federated-aggregator-shaped rollup (vault fingerprint + features + variant stats) instead of raw events", Type: "bool"},
+		{Key: "app.export.vault", DefaultValue: ".", Description: "Vault path (required when --rollup is set; reads index DB and fingerprint)", Type: "string"},
+		{Key: "app.export.preview", DefaultValue: false, Description: "Print a human-readable summary instead of writing the JSON payload (useful for auditing before sharing)", Type: "bool"},
 	}
 }
 

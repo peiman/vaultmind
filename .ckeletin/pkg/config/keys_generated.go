@@ -73,6 +73,9 @@ const (
 	KeyExperimentsActivationDelta       = "experiments.activation.delta"        // Spreading activation weight (0.0 disables similarity component)
 	KeyAppExportOutput                  = "app.export.output"                   // Output file path (empty = stdout)
 	KeyAppExportTier                    = "app.export.tier"                     // Override telemetry tier (off|anonymous|full); empty = use experiments.telemet...
+	KeyAppExportRollup                  = "app.export.rollup"                   // Emit a federated-aggregator-shaped rollup (vault fingerprint + features + var...
+	KeyAppExportVault                   = "app.export.vault"                    // Vault path (required when --rollup is set; reads index DB and fingerprint)
+	KeyAppExportPreview                 = "app.export.preview"                  // Print a human-readable summary instead of writing the JSON payload (useful fo...
 	KeyAppFrontmatterVault              = "app.frontmatter.vault"               // Path to vault root
 	KeyAppFrontmatterJson               = "app.frontmatter.json"                // Output in JSON format
 	KeyAppFrontmatterLive               = "app.frontmatter.live"                // Validate raw .md files on disk instead of the indexed database
