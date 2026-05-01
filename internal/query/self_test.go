@@ -13,6 +13,32 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// seedAccessedNote inserts a note and N "agent"-caller access events at
+// the given timestamp. Wraps the post-migration-007 fixture pattern:
+// the events table is the source of truth for self/list-accessed views,
+// while the scalar columns on notes stay populated for backward-compat
+// LookupNoteAccess. Both are written so callers and tests see consistent
+// data either way.
+func seedAccessedNote(t *testing.T, db *index.DB, id, title string, count int, lastAccessedAt time.Time) {
+	t.Helper()
+	_, err := db.Exec(
+		`INSERT INTO notes (id, path, type, title, hash, mtime) VALUES (?, ?, ?, ?, ?, ?)`,
+		id, id+".md", "concept", title, "h", 0,
+	)
+	require.NoError(t, err)
+	if count <= 0 {
+		return
+	}
+	ts := lastAccessedAt.UTC().Format(time.RFC3339Nano)
+	for i := 0; i < count; i++ {
+		_, err = db.Exec(
+			`INSERT INTO note_accesses (note_id, caller, accessed_at) VALUES (?, ?, ?)`,
+			id, "agent", ts,
+		)
+		require.NoError(t, err)
+	}
+}
+
 // seedSelfDB returns a DB with three notes:
 //
 //	hot     — accessed 10x, 5 minutes ago
@@ -27,6 +53,10 @@ func seedSelfDB(t *testing.T, now time.Time) *index.DB {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 
+	// Post-migration-007 self reads from the note_accesses events table,
+	// so seed events directly with controlled timestamps. The "agent"
+	// caller is what self surfaces by default (hook accesses are
+	// filtered out via ListAccessedNotesExcludingCaller).
 	rows := []struct {
 		id, title, last string
 		count           int
@@ -36,12 +66,62 @@ func seedSelfDB(t *testing.T, now time.Time) *index.DB {
 		{"stale-note", "Stale", now.Add(-30 * 24 * time.Hour).UTC().Format(time.RFC3339Nano), 5},
 	}
 	for _, r := range rows {
-		_, err = db.Exec(`INSERT INTO notes (id, path, type, title, hash, mtime, access_count, last_accessed_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			r.id, r.id+".md", "concept", r.title, "h", 0, r.count, r.last)
+		_, err = db.Exec(`INSERT INTO notes (id, path, type, title, hash, mtime) VALUES (?, ?, ?, ?, ?, ?)`,
+			r.id, r.id+".md", "concept", r.title, "h", 0)
 		require.NoError(t, err)
+		for i := 0; i < r.count; i++ {
+			_, err = db.Exec(`INSERT INTO note_accesses (note_id, caller, accessed_at) VALUES (?, ?, ?)`,
+				r.id, "agent", r.last)
+			require.NoError(t, err)
+		}
 	}
 	return db
+}
+
+// `vaultmind self` filters out hook accesses so the proprioceptive view
+// reflects deliberate engagement, not the SessionStart hook's pre-load
+// fan-out. Pin the contract end-to-end: an agent-touched note appears,
+// a hook-touched note doesn't, a mixed note's count reflects only the
+// agent events. Right-layer fix per docs/reviews/help-redesign-review-
+// response.md ("self is a first-person command and the hook is a
+// third-party action — they shouldn't be indistinguishable in the
+// activation history").
+func TestRunSelf_FiltersHookAccessesFromProprioceptiveView(t *testing.T) {
+	now := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
+	dir := t.TempDir()
+	db, err := index.Open(filepath.Join(dir, "test.db"))
+	require.NoError(t, err)
+	defer db.Close()
+
+	for _, id := range []string{"engaged-note", "preloaded-note", "mixed-note"} {
+		_, err = db.Exec(`INSERT INTO notes (id, path, type, title, hash, mtime) VALUES (?, ?, ?, ?, ?, ?)`,
+			id, id+".md", "concept", id, "h", 0)
+		require.NoError(t, err)
+	}
+
+	// Agent-only access.
+	_, err = db.Exec(`INSERT INTO note_accesses (note_id, caller, accessed_at) VALUES (?, ?, ?)`,
+		"engaged-note", "agent", now.Add(-1*time.Minute).UTC().Format(time.RFC3339Nano))
+	require.NoError(t, err)
+	// Hook-only access — must not surface in self.
+	_, err = db.Exec(`INSERT INTO note_accesses (note_id, caller, accessed_at) VALUES (?, ?, ?)`,
+		"preloaded-note", "hook", now.Add(-30*time.Second).UTC().Format(time.RFC3339Nano))
+	require.NoError(t, err)
+	// Mixed: hook + agent. Self should see only the agent count.
+	_, err = db.Exec(`INSERT INTO note_accesses (note_id, caller, accessed_at) VALUES (?, ?, ?)`,
+		"mixed-note", "hook", now.Add(-2*time.Minute).UTC().Format(time.RFC3339Nano))
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO note_accesses (note_id, caller, accessed_at) VALUES (?, ?, ?)`,
+		"mixed-note", "agent", now.Add(-90*time.Second).UTC().Format(time.RFC3339Nano))
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+	require.NoError(t, query.RunSelf(db, query.SelfConfig{Now: now}, &buf))
+	out := buf.String()
+
+	assert.Contains(t, out, "engaged-note", "agent-touched note must appear")
+	assert.Contains(t, out, "mixed-note", "note with at least one agent access must appear")
+	assert.NotContains(t, out, "preloaded-note", "hook-only note must NOT pollute the proprioceptive view")
 }
 
 // Empty vault prints a recognisable blank-slate message; never silent.
@@ -108,10 +188,7 @@ func TestRunSelf_NoStaleNotesPrintsNoneLine(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	_, err = db.Exec(`INSERT INTO notes (id, path, type, title, hash, mtime, access_count, last_accessed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		"fresh", "fresh.md", "concept", "Fresh", "h", 0, 1, now.Add(-time.Minute).UTC().Format(time.RFC3339Nano))
-	require.NoError(t, err)
+	seedAccessedNote(t, db, "fresh", "Fresh", 1, now.Add(-time.Minute))
 
 	var buf bytes.Buffer
 	require.NoError(t, query.RunSelf(db, query.SelfConfig{
@@ -144,11 +221,7 @@ func TestRunSelf_RendersAgoBucketsAcrossElapsedRanges(t *testing.T) {
 		{"a-day", 5 * 24 * time.Hour, "5d"},
 	}
 	for _, c := range cases {
-		_, err = db.Exec(`INSERT INTO notes (id, path, type, title, hash, mtime, access_count, last_accessed_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			c.id, c.id+".md", "concept", c.id, "h", 0, 1,
-			now.Add(-c.elapsed).UTC().Format(time.RFC3339Nano))
-		require.NoError(t, err)
+		seedAccessedNote(t, db, c.id, c.id, 1, now.Add(-c.elapsed))
 	}
 
 	var buf bytes.Buffer
@@ -169,10 +242,7 @@ func TestRunSelf_TruncatesLongIDsInOutput(t *testing.T) {
 	defer db.Close()
 
 	longID := "concept-this-is-a-deliberately-long-identifier-that-exceeds-the-fifty-rune-truncation-window"
-	_, err = db.Exec(`INSERT INTO notes (id, path, type, title, hash, mtime, access_count, last_accessed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		longID, longID+".md", "concept", "Long", "h", 0, 1, now.UTC().Format(time.RFC3339Nano))
-	require.NoError(t, err)
+	seedAccessedNote(t, db, longID, "Long", 1, now)
 
 	var buf bytes.Buffer
 	require.NoError(t, query.RunSelf(db, query.SelfConfig{Now: now}, &buf))
@@ -189,11 +259,7 @@ func TestRunSelf_LimitCapsRowsPerSection(t *testing.T) {
 
 	for i := 0; i < 15; i++ {
 		id := "note-" + string(rune('a'+i))
-		_, err = db.Exec(`INSERT INTO notes (id, path, type, title, hash, mtime, access_count, last_accessed_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			id, id+".md", "concept", "T", "h", int64(i), 1,
-			now.Add(-time.Duration(i)*time.Minute).UTC().Format(time.RFC3339Nano))
-		require.NoError(t, err)
+		seedAccessedNote(t, db, id, "T", 1, now.Add(-time.Duration(i)*time.Minute))
 	}
 
 	var buf bytes.Buffer

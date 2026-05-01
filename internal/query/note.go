@@ -62,8 +62,9 @@ func RunNoteGet(db *index.DB, cfg NoteGetConfig, w io.Writer) error {
 	// agent or user named this note by id and got back its body. Record
 	// before rendering so the increment is observable to any downstream
 	// reader of access_count. Best-effort: a tracking miss is logged at
-	// debug and never fails the user query.
-	if recErr := index.RecordNoteAccess(db, note.ID); recErr != nil {
+	// debug and never fails the user query. CallerAgent because direct
+	// id-naming is the most deliberate retrieval signal we have.
+	if recErr := index.RecordNoteAccessAs(db, note.ID, index.CallerAgent); recErr != nil {
 		log.Debug().Err(recErr).Str("note_id", note.ID).Msg("recording note-get access failed (non-fatal)")
 	}
 

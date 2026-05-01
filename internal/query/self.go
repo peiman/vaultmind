@@ -50,7 +50,18 @@ func SelfDefaults(cfg SelfConfig) SelfConfig {
 // blank-slate from rendering failure.
 func RunSelf(db *index.DB, cfg SelfConfig, w io.Writer) error {
 	cfg = SelfDefaults(cfg)
-	all, err := index.ListAccessedNotes(db)
+	// Default `self` view filters out hook accesses — the SessionStart
+	// persona load and per-turn pointer recall fire RecordNoteAccess
+	// across many notes before the agent does any deliberate work, and
+	// counting that traffic in the proprioceptive view pollutes the
+	// "what have I been engaging with" signal `self` exists to surface.
+	// Caught in 2026-05-01 inter-agent review (docs/reviews/help-redesign-
+	// review-response.md) — the right-layer fix lives in the schema
+	// (caller column on note_accesses) rather than in `self` second-
+	// guessing the data. Caller-aware filtering also unlocks future
+	// "show me what the harness touched separately" views without
+	// shipping a parallel pollution-recovery patch on top.
+	all, err := index.ListAccessedNotesExcludingCaller(db, index.CallerHook)
 	if err != nil {
 		return fmt.Errorf("self: listing accessed notes: %w", err)
 	}

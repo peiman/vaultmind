@@ -249,10 +249,14 @@ func TestHelpCommand(t *testing.T) {
 		wantOutputContains string
 	}{
 		{
+			// Post-2026-05-01 root help renders an agent-first cheat sheet
+			// (cmd/help_template.go) instead of Cobra's default
+			// "Available Commands" listing. Pin a string from the cheat
+			// sheet so the test catches regression in either direction.
 			name:               "Root help",
 			args:               []string{"--help"},
 			wantExitCode:       0,
-			wantOutputContains: "Available Commands",
+			wantOutputContains: "WHEN YOU WANT TO",
 		},
 		{
 			name:               "Ping help",

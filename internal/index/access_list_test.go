@@ -22,18 +22,31 @@ func TestListAccessedNotes_ReturnsOnlyAccessedNotesNewestFirst(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	// Seed three notes: two accessed, one untouched. Use direct INSERTs
-	// so the test doesn't depend on the indexer pipeline. hash + mtime
-	// are NOT NULL per the schema; values are arbitrary for this test.
-	_, err = db.Exec(`INSERT INTO notes (id, path, type, title, hash, mtime, access_count, last_accessed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, "n1", "n1.md", "concept", "Note One", "h1", 0, 3, "2026-04-29T10:00:00Z")
+	// Seed three notes: two accessed, one untouched. Post-migration-007
+	// the source of truth is the note_accesses events table, so we
+	// insert events directly with controlled timestamps. The scalar
+	// columns are still maintained by RecordNoteAccess for backward
+	// compat but ListAccessedNotes reads from events.
+	for _, n := range []struct{ id, title, hash string }{
+		{"n1", "Note One", "h1"},
+		{"n2", "Note Two", "h2"},
+		{"n3", "Note Three", "h3"},
+	} {
+		_, err = db.Exec(`INSERT INTO notes (id, path, type, title, hash, mtime) VALUES (?, ?, ?, ?, ?, ?)`,
+			n.id, n.id+".md", "concept", n.title, n.hash, 0)
+		require.NoError(t, err)
+	}
+	// n1 — three events, latest at 10:00.
+	for i := 0; i < 3; i++ {
+		_, err = db.Exec(`INSERT INTO note_accesses (note_id, caller, accessed_at) VALUES (?, ?, ?)`,
+			"n1", "agent", "2026-04-29T10:00:00Z")
+		require.NoError(t, err)
+	}
+	// n2 — one event at 12:00 (newest).
+	_, err = db.Exec(`INSERT INTO note_accesses (note_id, caller, accessed_at) VALUES (?, ?, ?)`,
+		"n2", "agent", "2026-04-29T12:00:00Z")
 	require.NoError(t, err)
-	_, err = db.Exec(`INSERT INTO notes (id, path, type, title, hash, mtime, access_count, last_accessed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, "n2", "n2.md", "concept", "Note Two", "h2", 0, 1, "2026-04-29T12:00:00Z")
-	require.NoError(t, err)
-	_, err = db.Exec(`INSERT INTO notes (id, path, type, title, hash, mtime, access_count, last_accessed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, "n3", "n3.md", "concept", "Note Three", "h3", 0, 0, nil)
-	require.NoError(t, err)
+	// n3 — no events; must not appear in results.
 
 	stats, err := index.ListAccessedNotes(db)
 	require.NoError(t, err)
@@ -59,6 +72,82 @@ func TestListAccessedNotes_EmptyDBReturnsEmptySlice(t *testing.T) {
 	stats, err := index.ListAccessedNotes(db)
 	require.NoError(t, err)
 	assert.Empty(t, stats)
+}
+
+// ListAccessedNotesExcludingCaller is the right-layer fix for the
+// SessionStart-pollution bug: hook accesses inflate access_count and
+// pollute the proprioceptive view. Filtering by caller != "hook" gives
+// `vaultmind self` a clean engagement-only signal. Pins the contract
+// that hook events are visible in the underlying log (via the
+// unfiltered view) but suppressed from the default agent-facing view.
+func TestListAccessedNotesExcludingCaller_FiltersHookAccessesFromAgentView(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
+	db, err := index.Open(dbPath)
+	require.NoError(t, err)
+	defer db.Close()
+
+	for _, n := range []string{"engaged", "preloaded", "mixed"} {
+		_, err = db.Exec(
+			`INSERT INTO notes (id, path, type, title, hash, mtime) VALUES (?, ?, ?, ?, ?, ?)`,
+			n, n+".md", "concept", n, "h", 0,
+		)
+		require.NoError(t, err)
+	}
+
+	// "engaged" is touched only by agent (deliberate read).
+	require.NoError(t, index.RecordNoteAccessAs(db, "engaged", index.CallerAgent))
+	// "preloaded" is touched only by hook (SessionStart fan-out).
+	require.NoError(t, index.RecordNoteAccessAs(db, "preloaded", index.CallerHook))
+	// "mixed" gets one of each — should still surface in the agent view
+	// because it has at least one non-hook access.
+	require.NoError(t, index.RecordNoteAccessAs(db, "mixed", index.CallerHook))
+	require.NoError(t, index.RecordNoteAccessAs(db, "mixed", index.CallerAgent))
+
+	all, err := index.ListAccessedNotes(db)
+	require.NoError(t, err)
+	require.Len(t, all, 3, "unfiltered view must include every accessed note regardless of caller")
+
+	agentView, err := index.ListAccessedNotesExcludingCaller(db, index.CallerHook)
+	require.NoError(t, err)
+	ids := make(map[string]int)
+	for _, s := range agentView {
+		ids[s.NoteID] = s.AccessCount
+	}
+	assert.Contains(t, ids, "engaged", "engaged note (agent-only) must appear in agent view")
+	assert.Contains(t, ids, "mixed", "mixed note (one agent access) must appear in agent view")
+	assert.NotContains(t, ids, "preloaded", "hook-only note must NOT pollute the agent view")
+	assert.Equal(t, 1, ids["engaged"], "engaged: 1 agent access counted")
+	assert.Equal(t, 1, ids["mixed"], "mixed: only the agent access counted, hook excluded")
+}
+
+// VAULTMIND_CALLER env var routes to the hook bucket when its value
+// contains "hook". Pre-existing persona scripts already set
+// VAULTMIND_CALLER=vaultmind-persona-hook so this is what makes them
+// classify correctly without touching the scripts.
+func TestRecordNoteAccess_ClassifiesEnvHookCallerAsHook(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
+	db, err := index.Open(dbPath)
+	require.NoError(t, err)
+	defer db.Close()
+
+	_, err = db.Exec(`INSERT INTO notes (id, path, type, title, hash, mtime) VALUES (?, ?, ?, ?, ?, ?)`,
+		"n", "n.md", "concept", "N", "h", 0)
+	require.NoError(t, err)
+
+	t.Setenv("VAULTMIND_CALLER", "vaultmind-persona-hook")
+	require.NoError(t, index.RecordNoteAccess(db, "n"))
+
+	// The hook caller wrote one event but the agent view filters it out.
+	agentView, err := index.ListAccessedNotesExcludingCaller(db, index.CallerHook)
+	require.NoError(t, err)
+	assert.Empty(t, agentView, "env-set hook caller must not pollute the agent view")
+
+	all, err := index.ListAccessedNotes(db)
+	require.NoError(t, err)
+	require.Len(t, all, 1, "the hook event is still in the underlying log")
+	assert.Equal(t, "n", all[0].NoteID)
 }
 
 // ListAccessedNotes integrates with RecordNoteAccess: every note

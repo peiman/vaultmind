@@ -26,10 +26,7 @@ func TestRunSelf_PropagatesWriterError(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	_, err = db.Exec(`INSERT INTO notes (id, path, type, title, hash, mtime, access_count, last_accessed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		"a", "a.md", "concept", "A", "h", 0, 1, now.UTC().Format(time.RFC3339Nano))
-	require.NoError(t, err)
+	seedAccessedNote(t, db, "a", "A", 1, now)
 
 	err = query.RunSelf(db, query.SelfConfig{Now: now}, errWriter{})
 	require.Error(t, err, "writer error must propagate")
@@ -55,10 +52,7 @@ func TestRunSelf_PropagatesWriterErrorOnStalePath(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	_, err = db.Exec(`INSERT INTO notes (id, path, type, title, hash, mtime, access_count, last_accessed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		"old", "old.md", "concept", "Old", "h", 0, 1, now.Add(-30*24*time.Hour).UTC().Format(time.RFC3339Nano))
-	require.NoError(t, err)
+	seedAccessedNote(t, db, "old", "Old", 1, now.Add(-30*24*time.Hour))
 
 	err = query.RunSelf(db, query.SelfConfig{Now: now, StaleThreshold: 7 * 24 * time.Hour}, errWriter{})
 	require.Error(t, err)

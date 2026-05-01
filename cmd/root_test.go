@@ -275,7 +275,13 @@ func TestExecute_ErrorPropagation(t *testing.T) {
 func TestRootCmdMetadataInitializedFromBinaryName(t *testing.T) {
 	assert.NotEmpty(t, binaryName, "binaryName fallback should be set during init")
 	assert.Equal(t, binaryName, RootCmd.Use, "RootCmd.Use should match binaryName")
-	assert.Contains(t, RootCmd.Long, binaryName, "RootCmd.Long should include binaryName")
+	// Post-2026-05-01 the root command uses a custom help func
+	// (see installAgentRootHelp) instead of Cobra's default Long-text
+	// rendering. Long is intentionally empty; binaryName surfaces in
+	// Short and in the rendered help body. Pin both so we don't lose
+	// the binary-name signal in either place.
+	assert.Empty(t, RootCmd.Long, "RootCmd.Long is empty; agent help func renders the long form")
+	assert.Contains(t, RootCmd.Short, binaryName, "RootCmd.Short should include binaryName")
 }
 
 // TestConfigPaths tests the ConfigPaths function that returns the configuration paths

@@ -333,46 +333,15 @@ func init() {
 	// Package-level var declarations capture binaryName="" before init() runs,
 	// so we need to set these after the fallback is applied.
 	RootCmd.Use = binaryName
-	RootCmd.Long = fmt.Sprintf(`%s is an associative memory system for AI agents over Git-backed Obsidian vaults.
-
-THREE COMMAND SHAPES YOU'LL USE MOST
-
-  ask <query>      Search the vault, pick the top hit, return token-budgeted context.
-                   The default front door for "what do I know about X?"
-  note get <id>    Read one specific note's body. Fires access tracking, the
-                   tracked-read path you want when you already know the id.
-  self             Show your own memory state — recent / hot / stale notes.
-                   First-person introspection of what you've been thinking about.
-
-THREE RENDERING MODES FOR ask
-
-  ask "X" --pointers-only   Cheapest: ids + titles, no body. Use as a menu.
-  ask "X" --preview         Menu + one-line snippet under each hit. Bridges
-                            "I know the id" and "I want the full body."
-  ask "X"                   Default: full token-budgeted context-pack around
-                            the top hit. Use when you want bodies in scope.
-
-QUALITY GATES
-
-  task check:citations      Every source URL resolves and the cited title
-                            matches CrossRef / arxiv. Run after vault edits.
-  task check:retrieval      Hit@5 / MRR floors on identity + research vaults.
-                            Run after vault content waves or ranking changes.
-
-ANTI-PATTERNS
-
-  ask "X" --budget N | tail -M   Don't double-clip. Pick one: pointers-only
-                                  for menus, preview for scanning, default for
-                                  reading. Combining --budget with tail wastes
-                                  the compute the budget asked for.
-
-NOTE ON 'memory' vs 'ask'
-
-  ask is the high-level wrapper most queries should use — it composes search
-  + spreading-activation + context-pack + token budget. The 'memory' subtree
-  exposes the underlying primitives (recall, related, context-pack) for
-  callers that need the components individually. Reach for ask first; drop
-  to memory only when you need finer control.`, binaryName)
+	RootCmd.Short = fmt.Sprintf("%s — your associative memory across sessions", binaryName)
+	// Long is intentionally empty — the custom help func renders the
+	// intent-organised cheat-sheet for root only. Subcommands keep
+	// Cobra's default help layout (reference-shaped — flags, usage,
+	// inherited flags) which is the right shape for "give me the syntax
+	// for THIS command." Co-designed via inter-agent review:
+	// docs/reviews/help-redesign-review-*.md.
+	RootCmd.Long = ""
+	installAgentRootHelp(RootCmd, binaryName)
 
 	configPaths := ConfigPaths()
 
