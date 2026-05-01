@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/peiman/vaultmind/internal/embedding"
+	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/retrieval"
 	"github.com/rs/zerolog/log"
@@ -132,6 +133,42 @@ func buildHybridRetriever(db *index.DB) (retrieval.Retriever, embedding.Embedder
 		}
 	}
 	return &HybridRetriever{Retrievers: retrievers, K: DefaultRRFK}, embedder, cleanup, nil
+}
+
+// BuildAutoRetrieverWithActivation is BuildAutoRetrieverFull plus the
+// activation lane (slice 5b' from reference-plasticity-priority-order).
+// When expDB is non-nil and the underlying retriever is hybrid, an
+// ActivationRetriever is appended as a 5th RRF lane named "activation".
+// Notes with access_count = 0 simply don't appear in this lane, so
+// cold-start vaults degrade cleanly to 4-way RRF.
+//
+// IMPORTANT calibration obligation: enabling activation shifts the
+// rank-1/rank-2 score gap distribution that step-4's TopHitConfidence
+// thresholds (5% / 2%) were calibrated against. Callers turning this
+// on for the default ask path must re-probe the gap distribution and
+// update the threshold constants in internal/query/format.go, or the
+// strong/moderate/weak labels silently miscalibrate. See the priority-
+// order doc for the full step-4 ↔ step-5 coupling.
+func BuildAutoRetrieverWithActivation(db *index.DB, expDB *experiment.DB) AutoRetrieverResult {
+	res := BuildAutoRetrieverFull(db)
+	if expDB == nil {
+		return res
+	}
+	hr, ok := res.Retriever.(*HybridRetriever)
+	if !ok {
+		// 4-way isn't available (no embeddings) — keyword-only fallback,
+		// no activation lane to add. Same shape as the current contract.
+		return res
+	}
+	hr.Retrievers = append(hr.Retrievers, retrieval.NamedRetriever{
+		Name: "activation",
+		Retriever: &ActivationRetriever{
+			DB:     db,
+			ExpDB:  expDB,
+			Params: experiment.DefaultActivationParams(0.5),
+		},
+	})
+	return res
 }
 
 func newDefaultEmbedder() (*embedding.HugotEmbedder, error) {
