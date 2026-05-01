@@ -3,7 +3,7 @@ id: reference-current-context
 type: reference
 title: "What Matters Most Right Now"
 created: 2026-04-11
-vm_updated: 2026-04-25
+vm_updated: 2026-05-02
 tags:
   - reference
   - context
@@ -55,9 +55,22 @@ The truest answer is still: **we are making sure minds survive.** The plasticity
 
 ## When someone asks "what next?"
 
-Roadmap step 2 — **arc distillation** — is the live edge. Sunday 2026-04-26 is the distillation review; the prompt is in `reference-episode-distillation-review-prompt`. Two episode files exist; the substrate is ready for a first pass at "read session traces → propose arc drafts."
+**As of 2026-05-02**, the live edge is **measurement-driven validation of slice 5b'** (activation as 5th RRF lane, opt-in via `BuildAutoRetrieverWithActivation`, shipped 499cbef).
 
-The ask-ranking bug from 2026-04-24 is **closed**, not just mitigated. Three lines of defense are in place (retriever mean-of-present, schema-level BGE-M3 parity trigger from migration 006, e2e smoke test). The identity vault was re-embedded with the ORT binary on 2026-04-25 so the 24/24/24 substrate matches what the schema now enforces. Don't burn time on this — come back to the roadmap.
+The measurement-driven chain — do these in order; (3) gates (1):
+
+3. **Smoke test the activation lane** on real queries against the 1444-session experiment DB. Do rankings shift in useful ways? This is the gate. Per `principle-measure-before-optimize`, don't ship default-on or recalibrate thresholds until measurement justifies it.
+4. **Flip the activation experiment** to `enabled: true` so `primary_variant` populates on every ask and `vaultmind export --rollup` actually has variant data — independent of (3), but produces the signal (3) reads.
+
+Conditional on (3) showing useful shift:
+
+1. **Re-probe TopHitConfidence thresholds** against the 5-way score-gap distribution. The 5%/2% tier cutoffs were calibrated on 4-way RRF; adding the activation lane shifts the distribution. Without re-probing, strong/moderate/weak labels silently miscalibrate.
+
+Standalone, no order dependency:
+
+2. **Receiver endpoint decision** for telemetry. The export pipeline is complete locally; what's missing is where uploaded payloads land. This is a real architecture commitment — hosting, retention, audit log — worth a separate design pass, not folded into a coding session.
+
+Don't burn time on the ask-ranking bug from 2026-04-24 — closed, three lines of defense in place. Don't burn time on telemetry export shape — pipeline is solid, the bottleneck is the receiver decision, not more local code.
 
 ## Longer-term artifacts beyond the immediate roadmap
 
@@ -81,3 +94,17 @@ Not on the plasticity ladder but still load-bearing work that should not be forg
 Six commits closing the dogfood-surfaced ask-ranking bug across three layers, then a data fix to heal the substrate. Told as an arc in `arc-closing-the-ranking-bug-at-the-right-layer` — the generalizable lesson is "five patches in one session = one bug class; close at the right layer instead of stacking."
 
 Commits: `471560f` (characterize), `090a999` (doctor surfaces imbalance), `108bb28` (mean-of-present RRF), `c6c6648` (--explain + ORT guard), `16e77ca` (schema trigger), `3f89a76` (e2e smoke). Data fix: ORT binary re-embedded identity vault → 24/24/24 across all modalities.
+
+## What just happened (session 2026-05-01 → 2026-05-02)
+
+Seven commits across three lanes: `task check` speed, onboarding for new users, and slice 5b' from the plasticity roadmap. Pushed to origin/main as `cd79c64..499cbef`.
+
+**Speed lane.** `task check` was hanging at 1h+ on Peiman's machine; first move was diagnosing why. Found duplicate test runs (binary's `go test -short -cover` + `task ckeletin:test:coverage:project` both ran the full suite) and live-vault rebuilds in 30 read-only `internal/index` tests. Fixed both — runtime collapsed to ~1:21 (~37x faster). Two commits: `e2fa2d9` (fixture vault for internal/index, 7 starter notes; tests went 111s → 1.3s) and the dedup fix folded into the coverage policy.
+
+**Onboarding lane.** New users had no path from "I cloned the repo" to "I have my own vault" — the bootstrap script seeded MY vaults, not theirs. Shipped `vaultmind init <path>` (`8857b1b`) — embedded persona-shaped templates, three-command zero-to-working-vault: `vaultmind init` → `vaultmind index` → `vaultmind ask "who am I"`. End-to-end verified. Followed by README split (`1c08581`) — your-own-vault path first, "try it with my vaults" second. Per Peiman's framing: "made for a human that uses an AI agent. The product is for the AI agent and md files can be edited and curated by human and AI alike."
+
+**Telemetry lane.** Three slices toward Paper #2 in one commit (`101b129`): vault fingerprint (anonymous per-vault grouping ID, generated at init), aggregate vault features (note count, type distribution, links, aliases, embeddings — all counts, no content), variant performance rollup (per primary_variant Hit@5/Hit@10/MRR from outcomes table). Plus `vaultmind export --rollup` (federated-payload shape) and `--preview` (human-readable audit before sharing). The privacy contract from `internal/experiment/telemetry.go` is now machine-tested in `cmd/export_test.go` — Anonymous tier strips note_ids, paths, query text, vault paths.
+
+**Plasticity lane.** Slice 5b' shipped in `499cbef` — `ActivationRetriever` implementing `retrieval.Retriever`, `BuildAutoRetrieverWithActivation` appending it as a 5th RRF lane named "activation". Opt-in, not default-on, because of the step-4 ↔ step-5 coupling: enabling activation shifts the score-gap distribution that `TopHitConfidence`'s 5%/2% thresholds were calibrated against. Default-on without re-probing would silently miscalibrate the strong/moderate/weak labels — the implementation is the probe, the production switch-on gates on measurement.
+
+Architectural side moves: extracted `internal/telemetry/` (fingerprint + features) from `internal/vault/` because vault has a 90% per-package coverage floor that absorbing telemetry-adjacent code would break. Coverage floor relaxed 85.0 → 84.0 (`0312c11`) with rationale: every feature commit this session landed at -0.1 to -0.5% under 85%; chasing unreachable filesystem/SQL-error branches eats session time disproportionate to signal. Per-package ratchets stay at full strictness on the spine packages.
