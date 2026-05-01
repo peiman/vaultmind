@@ -2,6 +2,8 @@
 
 **Associative memory for AI agents — persona reconstruction and semantic retrieval over Git-backed Obsidian vaults.**
 
+VaultMind is built **for a human collaborating with an AI agent**: the agent reads the vault as long-term memory, both the human and the agent curate the markdown. It's research-grade and actively dogfooded — pre-v0.1.0, no release binaries cut yet.
+
 ---
 
 ## The problem
@@ -10,7 +12,33 @@ AI agents start each session from zero. They have strong parametric knowledge bu
 
 VaultMind closes that gap. A vault of markdown notes becomes queryable, activation-weighted memory that an agent can reconstruct itself from at session start — and continue from, not start from.
 
-## TL;DR
+## Get started — your own vault
+
+The fastest path from zero to a working agent memory:
+
+```bash
+# 1. Build vaultmind from source (no binary releases yet)
+git clone https://github.com/peiman/vaultmind && cd vaultmind && task build
+
+# 2. Scaffold a fresh persona-shaped vault wherever makes sense for you
+./vaultmind init "$HOME/.vaultmind/persona"
+
+# 3. Index + embed
+cd "$HOME/.vaultmind/persona"
+/path/to/vaultmind index --vault .
+/path/to/vaultmind index --embed --vault .
+
+# 4. See what your agent would see
+/path/to/vaultmind ask "who am I" --vault .
+```
+
+`vaultmind init` produces a complete vault: type registry, vault README, starter notes for identity and current-context, and template arcs/principles to fill in. Edit `identity/who-am-i.md` and `references/current-context.md` from your agent's voice — those two files are the foundation everything else builds on.
+
+To wire your vault into Claude Code (or any agent that supports SessionStart hooks), see `.claude/scripts/load-persona.sh` in this repo as a reference implementation.
+
+## Try it with my vaults first
+
+If you'd rather see VaultMind working before scaffolding your own, this repo ships with two vaults you can play with:
 
 ```bash
 git clone https://github.com/peiman/vaultmind $HOME/dev/cli/vaultmind
@@ -18,7 +46,7 @@ cd $HOME/dev/cli/vaultmind
 bash .claude/scripts/bootstrap.sh
 ```
 
-That's it. The bootstrap script builds the binary, embeds your vaults, and verifies the SessionStart hook is wired. Idempotent — rerun any time to check / repair.
+The bootstrap builds the binary, embeds my `vaultmind-identity/` and `vaultmind-vault/`, and wires the SessionStart hook for this project. Idempotent — rerun to check / repair.
 
 See **[SETUP.md](SETUP.md)** for the full guide, environment conventions, and troubleshooting.
 
@@ -43,9 +71,10 @@ See **[SETUP.md](SETUP.md)** for the full guide, environment conventions, and tr
 ## Key commands
 
 ```bash
-# Retrieval
-vaultmind ask "who am I" --vault vaultmind-identity --max-items 8 --budget 6000
-vaultmind search "judgment" --vault vaultmind-vault --mode hybrid
+# Scaffold + retrieval
+vaultmind init <path>                                        # scaffold a fresh persona-shaped vault
+vaultmind ask "who am I" --vault <path> --max-items 8 --budget 6000
+vaultmind search "judgment" --vault <path> --mode hybrid
 
 # Vault maintenance
 vaultmind index --vault <path>                               # (re)build the index
@@ -56,6 +85,10 @@ vaultmind doctor --vault <path>                              # health check: not
 vaultmind experiment summary                                 # top recalled notes, session gap stats
 vaultmind experiment trace --session <id>                    # what one session retrieved
 vaultmind experiment trace --note <id>                       # which sessions retrieved this note
+
+# Telemetry export (early adopters who opted into anonymous/full sharing)
+vaultmind export --tier anonymous                            # JSONL snapshot for sharing
+vaultmind export --output ./vm-export.jsonl                  # write to file instead of stdout
 ```
 
 Run `vaultmind --help` for the full list.
@@ -77,9 +110,9 @@ The hook:
 
 ## Status
 
-Pre-v0.1.0. Actively dogfooded. No release binaries cut yet — the distribution pipeline (GoReleaser, GitHub Actions, optional Homebrew tap) is set up but waits on dogfood validation before tagging.
+Pre-v0.1.0. Actively dogfooded. No release binaries cut yet — the distribution pipeline (GoReleaser, GitHub Actions, optional Homebrew tap) is set up but waits on dogfood validation before tagging. Today, install means clone + `task build`.
 
-The research foundation (retrieval, attribution, observability) is built and generating data from real sessions. The paper on compressed idle time is in progress.
+The research foundation (retrieval, attribution, observability) is built and generating data from real sessions. The paper on compressed idle time is in progress. Telemetry export (`vaultmind export`) ships sanitized JSONL snapshots that early adopters can share back; the upload pipeline is intentionally manual until enough early-adopter signal arrives to design the receiver.
 
 ## Contributing
 
