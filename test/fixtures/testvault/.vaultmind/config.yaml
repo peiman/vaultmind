@@ -1,0 +1,36 @@
+vault:
+  exclude:
+    - ".git"
+    - ".obsidian"
+    - ".trash"
+    - ".vaultmind"
+
+types:
+  concept:
+    required: [title]
+    optional: [aliases, tags, related_ids, source_ids, parent_id]
+    statuses: []
+  source:
+    required: [title, url]
+    optional: [aliases, tags, related_ids]
+    statuses: []
+  project:
+    required: [status, title]
+    optional: [owner_id, due, area, tags, aliases, related_ids, source_ids]
+    statuses: [active, paused, completed, cancelled]
+
+git:
+  policy:
+    dirty_unrelated: warn
+    dirty_target: refuse
+    detached_head: warn
+    merge_in_progress: refuse
+    no_repo: warn
+
+index:
+  db_path: .vaultmind/index.db
+
+memory:
+  alias_min_length: 3
+  tag_overlap_threshold: 2.0
+  context_pack_default_budget: 4096

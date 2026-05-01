@@ -10,7 +10,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const researchVaultPath = "../../vaultmind-vault"
+// researchVaultPath used to point at the live `vaultmind-vault`. Switched
+// to the fixture testvault on 2026-05-01: shared-DB contract tests don't
+// need real-scale content, and the 40s rebuild was wasted on testvault's
+// own tests.
+const researchVaultPath = "../../test/fixtures/testvault"
 
 func TestSharedIndexDBPath_ReturnsSamePathAcrossCalls(t *testing.T) {
 	first := testvault.SharedIndexDBPath(t, researchVaultPath)

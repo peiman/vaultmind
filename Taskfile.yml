@@ -72,10 +72,18 @@ tasks:
     cmds:
       # Same isolation as `task test` — one tmp dir for the whole check run,
       # inherited by every test subprocess below (issue #17).
+      #
+      # We pass --category=... to skip the binary's `tests` category. The
+      # binary's check would otherwise run `go test -short -cover ./...`,
+      # then `task ckeletin:test:coverage:project` would run the full
+      # gotestsum+coverpkg suite via `deps: [test]`. That's the same suite
+      # twice (~115s + ~140s = the bulk of the original 6m+ runtime).
+      # Coverage:project does the authoritative test pass; the binary stays
+      # for the non-test categories.
       - cmd: |
           export XDG_DATA_HOME=$(mktemp -d -t vm-test.XXXXXX)
           trap 'rm -rf "$XDG_DATA_HOME"' EXIT
-          task ckeletin:check \
+          task ckeletin:check -- --category=environment,quality,architecture,security,dependencies \
             && task ckeletin:test:coverage:project \
             && task test:baseline \
             && task check:bootstrap

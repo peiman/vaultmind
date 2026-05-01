@@ -43,7 +43,7 @@ func TestDecodeEmbedding_Empty(t *testing.T) {
 func buildEmbeddingTestDB(t *testing.T) *index.DB {
 	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "index.db")
-	db := testvault.OpenSharedDB(t, "../../vaultmind-vault", dbPath)
+	db := testvault.OpenSharedDB(t, testVaultPath, dbPath)
 	t.Cleanup(func() { _ = db.Close() })
 	return db
 }
