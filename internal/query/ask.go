@@ -123,6 +123,27 @@ func computeTopHitConfidence(hits []retrieval.ScoredResult) string {
 	}
 }
 
+// AskHits is the search-only equivalent of Ask — runs the retriever
+// and computes top-hit confidence, but skips context-pack assembly,
+// activation re-scoring, and the RecordNoteAccess fan-out that Ask
+// fires on (target + N neighbors). Used by callers that want the menu
+// without committing to the top hit, e.g. `vaultmind ask --read 2`
+// reads hit #2's body — so packing context around hit #1 would
+// mis-attribute access events to a note the agent didn't read. The
+// caller is responsible for firing access on whatever it chooses to
+// read.
+func AskHits(ctx context.Context, retriever retrieval.Retriever, query string, searchLimit int) (*AskResult, error) {
+	hits, _, err := retriever.Search(ctx, query, searchLimit, 0, index.SearchFilters{})
+	if err != nil {
+		return nil, err
+	}
+	return &AskResult{
+		Query:            query,
+		TopHits:          hits,
+		TopHitConfidence: computeTopHitConfidence(hits),
+	}, nil
+}
+
 // Ask searches the vault for the query, computes raw cosine similarities
 // (when an embedder is available), recomputes activation scores with
 // spreading activation (via ActivationFunc), then packs token-budgeted

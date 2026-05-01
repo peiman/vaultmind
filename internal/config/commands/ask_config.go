@@ -52,6 +52,7 @@ OUTPUT INCLUDES
 		"app.ask.explain":       "explain",
 		"app.ask.pointers_only": "pointers-only",
 		"app.ask.preview":       "preview",
+		"app.ask.read":          "read",
 	},
 }
 
@@ -66,6 +67,7 @@ func AskOptions() []config.ConfigOption {
 		{Key: "app.ask.explain", DefaultValue: false, Description: "Show per-lane RRF contributions for each hit", Type: "bool"},
 		{Key: "app.ask.pointers_only", DefaultValue: false, Description: "Skip context-pack bodies; render only id+title+type pointers (forces ask-to-read loop instead of letting the preload satisfy curiosity)", Type: "bool"},
 		{Key: "app.ask.preview", DefaultValue: false, Description: "Render a one-line body snippet under each ranked hit; bridges --pointers-only (titles only) and the full context-pack output", Type: "bool"},
+		{Key: "app.ask.read", DefaultValue: "", Description: "Read the body of the named hit inline after the menu — accepts a 1-indexed rank (e.g. --read 2) or an exact id (e.g. --read concept-foo). Single-command shortcut for probe→read when you already know which hit from the titles", Type: "string"},
 	}
 }
 

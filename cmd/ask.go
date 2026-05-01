@@ -73,6 +73,18 @@ func runAsk(cmd *cobra.Command, args []string) error {
 
 	resolver := graph.NewResolver(vdb.DB)
 	delta := getConfigValueWithFlags[float64](cmd, "activation-delta", config.KeyExperimentsActivationDelta)
+
+	// --read short-circuits the full Ask path. When set, we run the
+	// search-only AskHits (which doesn't fire access tracking on the
+	// top hit + neighbors), resolve the chosen rank/id, fetch its body,
+	// and render the menu plus the chosen body. The deliberate-read
+	// access fires on the chosen note specifically, avoiding the
+	// mis-attribution that would happen if Ask packed context around
+	// the top hit when the agent intended to read a different rank.
+	if readArg := getConfigValueWithFlags[string](cmd, "read", config.KeyAppAskRead); readArg != "" {
+		return runAskRead(cmd, args[0], readArg, ret, vdb)
+	}
+
 	activationScores := computeActivationScores(cmd.Context(), nil, delta)
 
 	result, err := query.Ask(cmd.Context(), ret.Retriever, resolver, vdb.DB, query.AskConfig{

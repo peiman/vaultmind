@@ -779,6 +779,75 @@ func TestFormatAsk_NoTruncationHintWhenAllBodiesIncluded(t *testing.T) {
 		"no truncation hint when nothing was truncated")
 }
 
+// FormatAsk auto-degrades to pointers-only when confidence is no_match.
+// The principle: don't render a 2000-token apparatus around a top-1
+// the system has labelled "essentially tied with the field." Round-2
+// evaluator caught the original behaviour: nonsense query landed
+// no_match label but still got a 1762-token context-pack around an
+// unrelated note.
+func TestFormatAsk_NoMatchConfidenceForcesPointersOnly(t *testing.T) {
+	r := &query.AskResult{
+		Query:            "x",
+		TopHitConfidence: query.ConfidenceNoMatch,
+		TopHits: []retrieval.ScoredResult{
+			{ID: "a", Title: "A", Score: 0.5},
+		},
+		Context: &memory.ContextPackResult{
+			TargetID:     "a",
+			BudgetTokens: 4000, UsedTokens: 1762,
+			Target: &memory.ContextPackTarget{
+				ID:          "a",
+				Frontmatter: map[string]interface{}{"type": "concept", "title": "A"},
+				Body:        "this body should not render in no_match mode",
+			},
+			Context: []memory.ContextItem{
+				{ID: "n", Frontmatter: map[string]interface{}{"type": "concept", "title": "N"}, Body: "neighbor body", BodyIncluded: true},
+			},
+		},
+	}
+	var buf bytes.Buffer
+	require.NoError(t, query.FormatAsk(r, &buf))
+	out := buf.String()
+	assert.Contains(t, out, "no clear winner", "no_match label must surface in header")
+	assert.NotContains(t, out, "this body should not render",
+		"no_match must auto-degrade to pointers-only — no body content")
+	assert.NotContains(t, out, "neighbor body",
+		"context-pack neighbor bodies must also be suppressed under no_match")
+	// Pointers-only footer hint should fire (signals the agent that
+	// the menu is the menu — re-query the named hit if you want bodies).
+	assert.Contains(t, out, "pointers only", "auto-degraded mode must surface the pointers-only hint")
+}
+
+// FormatAskRead renders search header + hits + the chosen note's body
+// inline. Backs `vaultmind ask <query> --read N`. Pins that the menu
+// is preserved (so the agent sees what they chose from) and the body
+// renders as the full body, not a truncation.
+func TestFormatAskRead_RendersHitsPlusChosenBody(t *testing.T) {
+	r := &query.AskResult{
+		Query: "spreading activation",
+		TopHits: []retrieval.ScoredResult{
+			{ID: "concept-spreading", Title: "Spreading Activation", Score: 0.5},
+			{ID: "concept-rrf", Title: "Reciprocal Rank Fusion", Score: 0.4},
+		},
+	}
+	note := &index.FullNote{
+		ID:    "concept-rrf",
+		Type:  "concept",
+		Title: "Reciprocal Rank Fusion",
+		Body:  "RRF combines multiple ranked lists by summing 1/(k + rank).",
+	}
+	var buf bytes.Buffer
+	require.NoError(t, query.FormatAskRead(r, note, &buf))
+	out := buf.String()
+	// Menu preserved.
+	assert.Contains(t, out, "concept-spreading")
+	assert.Contains(t, out, "concept-rrf")
+	// Chosen note's header + body inline.
+	assert.Contains(t, out, "concept-rrf (concept) — Reciprocal Rank Fusion")
+	assert.Contains(t, out, "RRF combines multiple ranked lists",
+		"chosen note's full body must render, not truncated")
+}
+
 // FormatAsk default behavior unchanged: no snippet line under hits.
 // Pins that adding --preview did not regress the default rendering.
 func TestFormatAsk_DefaultDoesNotRenderHitSnippetLine(t *testing.T) {
