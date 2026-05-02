@@ -24,9 +24,7 @@
             "command": "bash \"$CLAUDE_PROJECT_DIR\"/.ckeletin/scripts/check-commit-msg.sh"
           }
         ]
-      }
-    ],
-    "PostToolUse": [
+      },
       {
         "matcher": "Read",
         "hooks": [

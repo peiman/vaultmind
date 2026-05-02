@@ -1,73 +1,53 @@
 #!/bin/bash
-# PostToolUse hook — fire RecordNoteAccess when the agent uses the Read
-# tool on a vault note, plugging the bypass that was draining the
-# reinforcement signal.
+# PreToolUse hook on Read — when the agent reads a vault note, fire
+# RecordNoteAccess via `vaultmind note get` AND inject a visible header
+# naming the canonical retrieval command. Allow Read to proceed.
 #
-# Why this exists (cross-session diagnosis, 2026-05-02): the
-# pointers-only fix (28acebd) closed the SessionStart-preload bypass
-# — agent reads vault content only by querying. But a second bypass
-# stayed open: agent queries with `vaultmind ask`, gets a pointer
-# list, then uses Claude Code's Read tool on the file path to fetch
-# the body. Read is registered at the same tier as Bash, semantically
-# above `vaultmind note get` (a Bash subcommand), so it wins on
-# ergonomics. The result: bodies are read, but
-# index.RecordNoteAccess never fires because Read doesn't go through
-# the vaultmind binary. Reinforcement signal silently degrades.
+# This is flavor B of the read-bypass design discussion (2026-05-02):
+# substitute-and-allow. The hook surfaces the right command name on
+# every vault Read so the muscle memory shifts. Read still works,
+# Edit on vault notes still works (since Read isn't blocked).
 #
-# This hook intercepts Read PostToolUse and, when the path falls
-# under a known vault directory, calls `vaultmind note get <path>`
-# with output discarded. The resolution-by-path branch of note get
-# triggers RecordNoteAccess; the printed body is dropped (the agent
-# already has it from Read's return value). Net effect: every
-# Read-on-vault becomes a tracked event without the agent learning a
-# new habit.
+# Lifecycle history:
+#   - Originally PostToolUse(Read) (commit f219f0e). Closed the
+#     bookkeeping bypass (access tracking) but stayed silent — agent
+#     never learned the canonical command.
+#   - Now PreToolUse(Read) with additionalContext injection. Same
+#     tracking, plus visibility. Probe-before-commit on flavor C.
 #
-# Caller labeling: events fire as "agent" because `note get` calls
-# RecordNoteAccessAs with an explicit CallerAgent that wins over the
-# env var (resolveCaller precedence: env-with-"hook" > explicit > env >
-# default). The original design called for "agent-read" to let
-# analytics break out Read-routed traffic from ask/note-get traffic;
-# punted because it requires either (a) a --caller flag on note get,
-# (b) a new dedicated `vaultmind index access` subcommand, or (c)
-# changing resolveCaller's precedence. None of those is hard, none
-# is in scope for the bypass-fix slice. The reinforcement signal is
-# correct as of this commit; granular caller breakout is a follow-up.
+# Flavor C (block-and-redirect) is preserved on disk in
+# vault-block-read.sh + test-vault-block-read.sh, unwired, ready to
+# enable if B's data shows visibility-only isn't sufficient to shift
+# retrieval pattern.
 #
-# Output strategy: silent. Hooks shouldn't add noise — particularly
-# PostToolUse hooks that fire on every Read. Failures are silently
-# discarded; the user never sees anything from this hook in normal
-# operation.
+# Mechanism: detect vault paths, run `vaultmind note get` synchronously
+# (captures output to detect whether the path actually resolves to an
+# indexed note — note get exits 0 even for unresolved ids, printing
+# "No note found"). On resolution, emit JSON
+# `hookSpecificOutput.additionalContext` to inject a header the agent
+# sees. On non-resolution (episode files, frontmatter quirks, transient
+# errors), silently allow Read — no misleading header.
+#
+# Output strategy: low-noise. The header is a single short line
+# pointing at the canonical command. Exit 0 always — this hook is
+# non-blocking by design.
 
 set -uo pipefail
 
-# Read tool envelope from stdin (Claude Code JSON shape).
 HOOK_INPUT=$(cat)
 
-# Extract tool_name and tool_input.file_path. python3 over jq for
-# parity with vault-recall.sh and to avoid an extra dep on systems
-# where jq isn't installed.
 TOOL_NAME=$(echo "$HOOK_INPUT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('tool_name',''))" 2>/dev/null || echo "")
 FILE_PATH=$(echo "$HOOK_INPUT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('tool_input',{}).get('file_path',''))" 2>/dev/null || echo "")
 
-# Only fire on Read with a non-empty file path. Other tools (Bash,
-# Grep, Edit, Write) don't go through this hook.
 if [ "$TOOL_NAME" != "Read" ] || [ -z "$FILE_PATH" ]; then
   exit 0
 fi
 
-# Path filter: only vault notes (markdown, under a vaultmind-* dir).
-# Cheap regex — no need to walk filesystem looking for .vaultmind
-# config dirs. The "vaultmind-" prefix is the convention this project
-# uses for both shipped vaults and any user-init'd vault following
-# the README.
 case "$FILE_PATH" in
   */vaultmind-*/*.md) ;;
   *) exit 0 ;;
 esac
 
-# Resolve vault root: walk up from file path looking for a
-# .vaultmind/ directory. This is robust to vaults at non-standard
-# paths and to subdirectories (concepts/, arcs/, references/, etc.).
 VAULT_ROOT=$(dirname "$FILE_PATH")
 while [ "$VAULT_ROOT" != "/" ] && [ "$VAULT_ROOT" != "." ]; do
   if [ -d "$VAULT_ROOT/.vaultmind" ]; then
@@ -81,20 +61,54 @@ fi
 
 VAULTMIND="/tmp/vaultmind"
 if [ ! -x "$VAULTMIND" ]; then
-  # Substrate not ready — silently no-op. The SessionStart hook
-  # surfaces build/wiring problems; this hook stays out of that
-  # conversation.
   exit 0
 fi
 
-# Compute path relative to vault root for note get's resolver.
 REL_PATH="${FILE_PATH#"$VAULT_ROOT"/}"
 
-# Fire the access. Output discarded, errors discarded. Background
-# (&) so the agent's Read return doesn't wait on this bookkeeping —
-# the agent already has the body; access tracking is best-effort.
-"$VAULTMIND" note get "$REL_PATH" --vault "$VAULT_ROOT" >/dev/null 2>&1 &
+# Sidecar log directory — captures invocations for verification.
+LOG_DIR="${HOME}/.vaultmind/preread-track"
+mkdir -p "$LOG_DIR" 2>/dev/null
+TIMESTAMP=$(date +%Y%m%dT%H%M%S)
 
-# Don't wait for the background access to complete — the agent
-# already has the body from Read's return; this is just bookkeeping.
+# Run note get synchronously. Output discarded (the agent will get
+# the body from Read itself). We only need the exit status + first
+# line to detect resolution.
+NOTE_OUTPUT=$(VAULTMIND_CALLER=vaultmind-preread-track "$VAULTMIND" note get "$REL_PATH" --vault "$VAULT_ROOT" 2>/dev/null)
+NOTE_STATUS=$?
+
+NOTE_RESOLVED=1
+if [ "$NOTE_STATUS" != "0" ] || [ -z "$NOTE_OUTPUT" ]; then
+  NOTE_RESOLVED=0
+elif echo "$NOTE_OUTPUT" | head -1 | grep -q "^No note found"; then
+  NOTE_RESOLVED=0
+fi
+
+if [ "$NOTE_RESOLVED" = "0" ]; then
+  printf '{"timestamp":"%s","file_path":"%s","note_status":%d,"injected":false,"reason":"note_get_failed"}\n' \
+    "$TIMESTAMP" "$FILE_PATH" "$NOTE_STATUS" \
+    > "$LOG_DIR/${TIMESTAMP}-skip.json" 2>/dev/null
+  exit 0
+fi
+
+# Inject a visible header via Claude Code's PreToolUse JSON contract.
+# The agent sees additionalContext as model-visible context attached to
+# this tool call — same channel as UserPromptSubmit injections, just
+# scoped to the tool boundary.
+HEADER="[vault-track-read] Read on vault note \"$REL_PATH\" — access recorded via \`vaultmind note get\`. Canonical retrieval for next time: vaultmind note get $REL_PATH --vault $VAULT_ROOT (or by id: vaultmind note get <id> --vault $VAULT_ROOT)."
+
+python3 -c "
+import json, sys
+print(json.dumps({
+    'hookSpecificOutput': {
+        'hookEventName': 'PreToolUse',
+        'additionalContext': sys.argv[1],
+    }
+}))
+" "$HEADER"
+
+printf '{"timestamp":"%s","file_path":"%s","injected":true,"header_chars":%d}\n' \
+  "$TIMESTAMP" "$FILE_PATH" "${#HEADER}" \
+  > "$LOG_DIR/${TIMESTAMP}-inject.json" 2>/dev/null
+
 exit 0
