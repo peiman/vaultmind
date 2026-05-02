@@ -148,8 +148,32 @@ func (r *Registry) ValidStatus(typeName, status string) bool {
 }
 
 // IsFieldAllowed checks if a field name is allowed for a type.
-// Core fields and graph-tier fields are always allowed.
+// Core fields and graph-tier fields are always allowed. Registered aliases
+// for any allowed canonical are also allowed — without this, mutation
+// (`frontmatter set last_updated=...`) would reject the user's existing
+// field name even when the alias was explicitly registered. M1 from the
+// 2026-05-02 review.
 func (r *Registry) IsFieldAllowed(typeName, field string) bool {
+	if r.isFieldCanonicallyAllowed(typeName, field) {
+		return true
+	}
+	// Alias check: is `field` a registered alias for any canonical that is
+	// itself allowed for this type?
+	for canonical, aliases := range r.aliases {
+		for _, a := range aliases {
+			if a == field && r.isFieldCanonicallyAllowed(typeName, canonical) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// isFieldCanonicallyAllowed checks if a canonical field name is allowed for
+// a type — core, graph, type-required, or type-optional. Used by
+// IsFieldAllowed both directly (for canonical lookup) and as the
+// allow-list check when resolving aliases.
+func (r *Registry) isFieldCanonicallyAllowed(typeName, field string) bool {
 	for _, f := range coreFields {
 		if f == field {
 			return true

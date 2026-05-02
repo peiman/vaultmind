@@ -123,6 +123,63 @@ func TestRegistry_EmptyValueDoesNotSatisfy(t *testing.T) {
 		"whitespace-only alias should not satisfy presence")
 }
 
+// TestRegistry_IsFieldAllowed_AcceptsAliases — IsFieldAllowed must accept
+// registered aliases for canonical fields. Without this, mutation
+// (`frontmatter set last_updated=...`) fails with unknown_key even when
+// the alias is explicitly registered. M1 from the 2026-05-02 review.
+func TestRegistry_IsFieldAllowed_AcceptsAliases(t *testing.T) {
+	reg := schema.NewRegistryWithAliases(map[string]vault.TypeDef{
+		"research": {
+			Required: []string{"title"},
+			Optional: []string{"owner"},
+		},
+	}, map[string][]string{
+		"updated": {"last_updated"},  // alias for core field
+		"owner":   {"owner_email"},   // alias for type-optional field
+		"tags":    {"keywords"},      // alias for graph-tier field
+		"title":   {"display_title"}, // alias for type-required field
+	})
+
+	cases := []struct {
+		name  string
+		typ   string
+		field string
+		want  bool
+	}{
+		{"canonical core field (updated)", "research", "updated", true},
+		{"alias for core field", "research", "last_updated", true},
+		{"canonical graph field (tags)", "research", "tags", true},
+		{"alias for graph field", "research", "keywords", true},
+		{"canonical type-required (title)", "research", "title", true},
+		{"alias for type-required", "research", "display_title", true},
+		{"canonical type-optional (owner)", "research", "owner", true},
+		{"alias for type-optional", "research", "owner_email", true},
+		{"unknown field with no alias", "research", "random_xyz", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, reg.IsFieldAllowed(tc.typ, tc.field))
+		})
+	}
+}
+
+// TestRegistry_IsFieldAllowed_NoAliases_BackwardCompat — without alias
+// config, IsFieldAllowed behavior is unchanged.
+func TestRegistry_IsFieldAllowed_NoAliases_BackwardCompat(t *testing.T) {
+	reg := schema.NewRegistry(map[string]vault.TypeDef{
+		"research": {
+			Required: []string{"title"},
+			Optional: []string{"owner"},
+		},
+	})
+
+	assert.True(t, reg.IsFieldAllowed("research", "title"))
+	assert.True(t, reg.IsFieldAllowed("research", "owner"))
+	assert.True(t, reg.IsFieldAllowed("research", "tags"))
+	assert.False(t, reg.IsFieldAllowed("research", "last_updated"))
+	assert.False(t, reg.IsFieldAllowed("research", "random_xyz"))
+}
+
 // TestRegistry_FieldNamesForLookup — returns canonical first, then aliases
 // in registration order. Use case: alias-aware DB-backed validation that
 // must iterate alternative key names, canonical-first so canonical wins

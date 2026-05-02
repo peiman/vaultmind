@@ -107,6 +107,11 @@ func validateDomainNote(
 		}
 	}
 
+	// Status aliasing intentionally not supported here — same deferral as
+	// validate.go's fieldValue. The dedicated `status` column is populated
+	// by the indexer from the canonical field name; live validation reads
+	// the canonical key directly. Aliasing `status` is rare in practice;
+	// defer until a real use case surfaces.
 	if status, ok := fm["status"].(string); ok && status != "" {
 		if len(td.Statuses) > 0 && !reg.ValidStatus(noteType, status) {
 			result.Issues = append(result.Issues, ValidateIssue{

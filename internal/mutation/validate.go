@@ -51,11 +51,43 @@ func validateUnset(req MutationRequest, note ParsedNoteInfo, reg *schema.Registr
 	if slices.Contains(immutableFields, req.Key) {
 		return &MutationError{Code: "immutable_field", Message: fmt.Sprintf("field %q cannot be modified", req.Key), Field: req.Key}
 	}
+	// Determine which canonical required field, if any, this unset would
+	// affect. If req.Key is itself canonical and required, it's the obvious
+	// candidate. If req.Key is a registered alias, the canonical it aliases
+	// might be required. Either way, the question is the same: after the
+	// unset, is the canonical's role still satisfied by another key (the
+	// canonical itself or another registered alias) on this note?
 	required := reg.RequiredFields(note.Type)
-	if slices.Contains(required, req.Key) {
-		return &MutationError{Code: "missing_required_field", Message: fmt.Sprintf("field %q is required for type %q and cannot be removed", req.Key, note.Type), Field: req.Key}
+	canonical := req.Key
+	if !slices.Contains(required, canonical) {
+		// req.Key is not directly required; check whether it's an alias of
+		// some required canonical.
+		for _, c := range required {
+			if reg.IsAlias(c, req.Key) {
+				canonical = c
+				break
+			}
+		}
 	}
-	return nil
+	if !slices.Contains(required, canonical) {
+		// Neither canonical-required nor an alias of a required canonical.
+		// Optional/unknown fields can be unset freely.
+		return nil
+	}
+	// canonical is required for this type. After unsetting req.Key, would
+	// the canonical's role still be satisfied? Yes iff another key on the
+	// note carries the canonical's value — either the canonical itself or
+	// any registered alias other than req.Key.
+	candidates := reg.FieldNamesForLookup(canonical)
+	for _, name := range candidates {
+		if name == req.Key {
+			continue
+		}
+		if slices.Contains(note.Keys, name) {
+			return nil
+		}
+	}
+	return &MutationError{Code: "missing_required_field", Message: fmt.Sprintf("field %q is required for type %q and cannot be removed", req.Key, note.Type), Field: req.Key}
 }
 
 func validateMerge(req MutationRequest, note ParsedNoteInfo, reg *schema.Registry) error {
