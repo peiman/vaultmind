@@ -123,6 +123,48 @@ func TestRegistry_EmptyValueDoesNotSatisfy(t *testing.T) {
 		"whitespace-only alias should not satisfy presence")
 }
 
+// TestRegistry_FieldNamesForLookup — returns canonical first, then aliases
+// in registration order. Use case: alias-aware DB-backed validation that
+// must iterate alternative key names, canonical-first so canonical wins
+// when both are present in the index.
+func TestRegistry_FieldNamesForLookup(t *testing.T) {
+	t.Run("no aliases registered", func(t *testing.T) {
+		reg := schema.NewRegistry(map[string]vault.TypeDef{
+			"research": {Required: []string{"title"}},
+		})
+		assert.Equal(t, []string{"updated"}, reg.FieldNamesForLookup("updated"))
+	})
+
+	t.Run("single alias", func(t *testing.T) {
+		reg := schema.NewRegistryWithAliases(map[string]vault.TypeDef{
+			"research": {Required: []string{"title"}},
+		}, map[string][]string{
+			"updated": {"last_updated"},
+		})
+		assert.Equal(t, []string{"updated", "last_updated"}, reg.FieldNamesForLookup("updated"))
+	})
+
+	t.Run("multiple aliases preserve order", func(t *testing.T) {
+		reg := schema.NewRegistryWithAliases(map[string]vault.TypeDef{
+			"research": {Required: []string{"title"}},
+		}, map[string][]string{
+			"updated": {"last_updated", "modified", "date_updated"},
+		})
+		assert.Equal(t, []string{"updated", "last_updated", "modified", "date_updated"},
+			reg.FieldNamesForLookup("updated"))
+	})
+
+	t.Run("canonical with no aliases for that key", func(t *testing.T) {
+		reg := schema.NewRegistryWithAliases(map[string]vault.TypeDef{
+			"research": {Required: []string{"title"}},
+		}, map[string][]string{
+			"updated": {"last_updated"},
+		})
+		// `created` has no aliases registered — returns just [canonical].
+		assert.Equal(t, []string{"created"}, reg.FieldNamesForLookup("created"))
+	})
+}
+
 // TestRegistry_FieldTypes_PresenceSemantics — frontmatter values can be
 // strings, lists, maps, scalars (numbers, bools). Empty collections count
 // as absent (consistent with how human-curated YAML expresses "no value");

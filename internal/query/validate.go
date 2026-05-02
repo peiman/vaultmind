@@ -78,7 +78,7 @@ func Validate(db *index.DB, reg *schema.Registry) (*ValidateResult, error) {
 		if reg.HasType(n.noteType) {
 			td, _ := reg.GetTypeDef(n.noteType)
 			for _, req := range td.Required {
-				val := fieldValue(n, req, db)
+				val := fieldValue(n, req, db, reg)
 				if val == "" {
 					result.Issues = append(result.Issues, ValidateIssue{
 						Path: n.path, ID: n.id, Severity: "error",
@@ -130,8 +130,12 @@ type noteInfo struct {
 	isDomain bool
 }
 
-func fieldValue(n noteInfo, field string, db *index.DB) string {
-	// Check dedicated columns first
+func fieldValue(n noteInfo, field string, db *index.DB, reg *schema.Registry) string {
+	// Check dedicated columns first. Aliases on status/title are not yet
+	// supported here — the dedicated columns are populated by the indexer
+	// from the canonical field name, so an aliased status/title would not
+	// reach this point. Status/title aliasing is a follow-on; defer until
+	// reality demands it.
 	switch field {
 	case "status":
 		if n.status != "" {
@@ -142,11 +146,17 @@ func fieldValue(n noteInfo, field string, db *index.DB) string {
 			return n.title
 		}
 	}
-	// Check frontmatter_kv for domain-tier fields (e.g., url, owner_id)
-	var val sql.NullString
-	_ = db.QueryRow("SELECT value_json FROM frontmatter_kv WHERE note_id = ? AND key = ?", n.id, field).Scan(&val)
-	if val.Valid && val.String != "" && val.String != `""` {
-		return val.String
+	// Check frontmatter_kv for the canonical name and any registered
+	// aliases. Iterate canonical-first so canonical wins when both are
+	// present. The indexer keys frontmatter_kv by the user's actual field
+	// name (no normalization), so a vault with `last_updated` only stores
+	// `last_updated` — the alias lookup is what makes it satisfy `updated`.
+	for _, name := range reg.FieldNamesForLookup(field) {
+		var val sql.NullString
+		_ = db.QueryRow("SELECT value_json FROM frontmatter_kv WHERE note_id = ? AND key = ?", n.id, name).Scan(&val)
+		if val.Valid && val.String != "" && val.String != `""` {
+			return val.String
+		}
 	}
 	return ""
 }

@@ -104,6 +104,75 @@ func TestValidate_DetectsUnknownType(t *testing.T) {
 	assert.True(t, found, "should detect unknown type")
 }
 
+// TestValidate_AliasSatisfiesRequiredField — DB-backed validate must
+// honor schema.aliases the same way validate_live does. Without this,
+// migrating users (e.g. shahname-rts: `last_updated` instead of `updated`)
+// see spurious missing_required_field errors after indexing — the
+// silent-failure-across-layers shape that the close-at-the-right-layer
+// arc warned against.
+func TestValidate_AliasSatisfiesRequiredField(t *testing.T) {
+	db := openTestDB(t)
+
+	// Note carries `last_updated` in frontmatter_kv (the user's existing
+	// field name) but not the canonical `updated`. With aliasing in the
+	// registry, validate must treat `last_updated` as satisfying `updated`.
+	rec := index.NoteRecord{
+		ID: "research-foo", Path: "research/foo.md", Type: "research",
+		Title: "Foo", Hash: "abc", MTime: 1, IsDomain: true,
+		ExtraKV: map[string]interface{}{
+			"last_updated": "2026-05-01",
+		},
+	}
+	require.NoError(t, index.StoreNote(db, rec))
+
+	aliases := map[string][]string{
+		"updated": {"last_updated"},
+	}
+	reg := schema.NewRegistryWithAliases(map[string]vault.TypeDef{
+		"research": {Required: []string{"updated"}},
+	}, aliases)
+
+	result, err := query.Validate(db, reg)
+	require.NoError(t, err)
+
+	for _, issue := range result.Issues {
+		if issue.Rule == "missing_required_field" && issue.Field == "updated" {
+			t.Fatalf("alias `last_updated` should satisfy required `updated`; got %+v", issue)
+		}
+	}
+}
+
+// TestValidate_NoAlias_BackwardCompat — without an alias config, the
+// missing-required-field rule still fires on the canonical name.
+// Pins the backward-compat contract.
+func TestValidate_NoAlias_BackwardCompat(t *testing.T) {
+	db := openTestDB(t)
+
+	rec := index.NoteRecord{
+		ID: "research-bar", Path: "research/bar.md", Type: "research",
+		Title: "Bar", Hash: "abc", MTime: 1, IsDomain: true,
+		ExtraKV: map[string]interface{}{
+			"last_updated": "2026-05-01",
+		},
+	}
+	require.NoError(t, index.StoreNote(db, rec))
+
+	reg := schema.NewRegistry(map[string]vault.TypeDef{
+		"research": {Required: []string{"updated"}},
+	})
+
+	result, err := query.Validate(db, reg)
+	require.NoError(t, err)
+
+	var found bool
+	for _, issue := range result.Issues {
+		if issue.Rule == "missing_required_field" && issue.Field == "updated" {
+			found = true
+		}
+	}
+	assert.True(t, found, "without alias config, canonical `updated` should be reported missing")
+}
+
 // openTestDB creates a fresh empty DB for unit tests.
 func openTestDB(t *testing.T) *index.DB {
 	t.Helper()

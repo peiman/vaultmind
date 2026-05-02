@@ -48,6 +48,19 @@ func (r *Registry) Aliases(canonical string) []string {
 	return r.aliases[canonical]
 }
 
+// FieldNamesForLookup returns the canonical name first, followed by any
+// registered aliases. Use this to resolve a field across alternative names
+// when looking it up in stores that key by exact field name (e.g. the
+// frontmatter_kv table) — try names in order, first non-empty wins.
+//
+// Canonical-first ordering preserves the canonical-precedence contract:
+// when both canonical and alias are present, the canonical value is used.
+func (r *Registry) FieldNamesForLookup(canonical string) []string {
+	names := []string{canonical}
+	names = append(names, r.aliases[canonical]...)
+	return names
+}
+
 // IsAlias reports whether candidate is registered as an alias for canonical.
 // Returns false when candidate equals canonical — a field is not its own alias.
 func (r *Registry) IsAlias(canonical, candidate string) bool {
