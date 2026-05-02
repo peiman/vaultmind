@@ -16,16 +16,24 @@ type HugotEmbedder struct {
 	maxTokens int
 }
 
-// approxCharsPerToken is a conservative estimate for English text.
-// Transformer subword tokenizers average 3-4 characters per token.
-// We use 3 (conservative) to avoid exceeding the model's context window.
-const approxCharsPerToken = 3
+// approxCharsPerToken is the empirical floor for chars-per-token across
+// the content the indexer actually sees. Transformer subword tokenizers
+// average 3-4 chars/token on English prose, but dense / code-heavy /
+// non-English content tokenizes much denser — workhorse-vault hit
+// ~2 chars/token on 30/126 notes, producing >512 tokens after the
+// "conservative" 3-chars/token truncation and triggering ONNX axis-1
+// mismatch in the BGE-M3 path ([N 547 384] vs [1 512 384]).
+//
+// 2 is the safer floor until chunk-and-pool (vaultmind#30) ships.
+// Costs more tail-loss on shorter notes (head-only embedding for content
+// >maxTokens*2 chars) but unblocks dense-content embedding today.
+const approxCharsPerToken = 2
 
 // TruncateForEmbedding truncates text to fit within the model's token limit.
-// Uses a character-based approximation (3 chars/token, conservative).
+// Uses a character-based approximation (2 chars/token, empirically derived).
 // Breaks at word boundaries when possible.
 //
-// Tail loss: content beyond maxTokens × ~3 chars is dropped before tokenization
+// Tail loss: content beyond maxTokens × 2 chars is dropped before tokenization
 // — the head is embedded correctly but the tail is invisible to semantic
 // retrieval (lexical FTS still sees the full body). For long-form notes where
 // the tail carries information not in the head, this under-covers retrieval.

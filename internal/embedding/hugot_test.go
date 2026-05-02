@@ -112,9 +112,9 @@ func TestTruncateForEmbedding(t *testing.T) {
 				assert.Empty(t, result)
 				return
 			}
-			maxChars := tt.maxTokens * 3 // approx 3 chars per token
+			maxChars := tt.maxTokens * 2 // approxCharsPerToken — see hugot.go
 			assert.LessOrEqual(t, len(result), maxChars,
-				"result should be at most maxTokens*4 chars")
+				"result should be at most maxTokens*approxCharsPerToken chars")
 			if len(tt.text) <= maxChars {
 				assert.Equal(t, tt.text, result, "short text should be unchanged")
 			}
@@ -123,13 +123,34 @@ func TestTruncateForEmbedding(t *testing.T) {
 }
 
 func TestTruncateForEmbedding_BreaksAtSpace(t *testing.T) {
-	// 20 tokens * 3 chars = 60 char limit
+	// 20 tokens * 2 chars = 40 char limit
 	text := strings.Repeat("abcdefgh ", 20) // 180 chars, 9 chars per word+space
 	result := embedding.TruncateForEmbedding(text, 20)
-	assert.LessOrEqual(t, len(result), 60)
+	assert.LessOrEqual(t, len(result), 40)
 	// Should not end mid-word
 	assert.NotContains(t, result[len(result)-5:], "abcde",
 		"should break at space, not mid-word")
+}
+
+// TestTruncateForEmbedding_DenseContentFitsModelMax pins the empirical
+// floor for chars/token. The original 3-chars/token ratio failed on
+// dense / code-heavy / non-English content: 30/126 notes in workhorse-vault
+// tokenized to >512 tokens and the BGE-M3 ONNX runtime rejected the batch
+// with axis-1 mismatch ([N 547 384] vs [1 512 384]). 2 is the empirically
+// safer floor until chunk-and-pool (vaultmind#30) ships.
+//
+// If a future change bumps approxCharsPerToken back up, reproduce the
+// overflow on a dense code-heavy ~2000-char note before reverting.
+func TestTruncateForEmbedding_DenseContentFitsModelMax(t *testing.T) {
+	// Punctuation and short identifiers tokenize at ~2 chars/token —
+	// representative of the failure class. ~7400 chars; with the old
+	// 3:1 ratio this would truncate to 1536 chars, which still tokenizes
+	// to >512 tokens. With 2:1 it caps at 1024 chars and stays under
+	// the model limit for content of this density.
+	text := strings.Repeat("if x := 1; x > 0 { fmt.Println(\"k\") }\n", 200)
+	result := embedding.TruncateForEmbedding(text, 512)
+	assert.LessOrEqual(t, len(result), 512*2,
+		"truncation must use chars/token=2 to keep dense content under the 512-token model limit")
 }
 
 // cosine computes cosine similarity between two vectors.
@@ -151,7 +172,7 @@ func sqrt(x float64) float64 {
 		return 0
 	}
 	z := x
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		z = (z + x/z) / 2
 	}
 	return z
