@@ -66,6 +66,7 @@ Paper #1 argues that a mind with the *right memory structure* can continue acros
 - **Experiment framework:** sessions, events, outcomes, shadow variants, Hit@K / MRR measurement. In tree. Being used for single-vault experiments.
 - **Two vaults:** workhorse + vaultmind-vault. N=2 is insufficient for any of the hypotheses above, but useful for infrastructure validation (the pipeline works end-to-end on real vaults).
 - **Privacy groundwork:** nothing concrete yet. The only work so far is the instinct to separate content from scores.
+- **Architectural prerequisite — federation read:** the consumer-facing infrastructure that this paper's substrate depends on is the cross-vault retrieval layer (federation read, plasticity step 5.5). Same vault fingerprint, same per-vault isolation, same anonymized rollup shape — paper-time aggregation goes to a remote server with consent + DP, user-time federation merges locally. See `reference-federation-architecture` for mechanics, three-layer reranking design, plasticity-locality choice, and open design questions; see `reference-plasticity-priority-order` step 5.5 for roadmap placement.
 
 ## What we need before drafting
 
