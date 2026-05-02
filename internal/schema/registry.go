@@ -3,6 +3,7 @@ package schema
 
 import (
 	"sort"
+	"strings"
 
 	"github.com/peiman/vaultmind/internal/vault"
 )
@@ -17,12 +18,87 @@ var graphFields = []string{"title", "status", "aliases", "tags", "parent_id", "r
 
 // Registry holds the type definitions and provides validation methods.
 type Registry struct {
-	types map[string]vault.TypeDef
+	types   map[string]vault.TypeDef
+	aliases map[string][]string
 }
 
-// NewRegistry creates a Registry from config type definitions.
+// NewRegistry creates a Registry from config type definitions with no aliases.
 func NewRegistry(types map[string]vault.TypeDef) *Registry {
 	return &Registry{types: types}
+}
+
+// NewRegistryWithAliases creates a Registry that recognizes per-vault
+// frontmatter field aliases. Aliases let migrating users keep their existing
+// field names (e.g. `last_updated`) while vaultmind validates against
+// canonical names (e.g. `updated`). The map is canonical → list of aliases.
+//
+// Aliasing is intentionally non-destructive: vaultmind never rewrites
+// frontmatter to normalize field names. The alias and the canonical are
+// equivalent at validation time only.
+func NewRegistryWithAliases(types map[string]vault.TypeDef, aliases map[string][]string) *Registry {
+	return &Registry{types: types, aliases: aliases}
+}
+
+// Aliases returns the registered aliases for a canonical field name, or nil
+// if the canonical name has no aliases.
+func (r *Registry) Aliases(canonical string) []string {
+	if r.aliases == nil {
+		return nil
+	}
+	return r.aliases[canonical]
+}
+
+// IsAlias reports whether candidate is registered as an alias for canonical.
+// Returns false when candidate equals canonical — a field is not its own alias.
+func (r *Registry) IsAlias(canonical, candidate string) bool {
+	if canonical == candidate {
+		return false
+	}
+	for _, a := range r.aliases[canonical] {
+		if a == candidate {
+			return true
+		}
+	}
+	return false
+}
+
+// IsFieldPresent reports whether the canonical field OR any of its
+// registered aliases is present in fm with a non-empty value. This is the
+// alias-aware variant of the package-private fmFieldPresent check used by
+// validators — a single point that all required-field checks should call
+// instead of inspecting fm directly.
+func (r *Registry) IsFieldPresent(fm map[string]interface{}, canonical string) bool {
+	if isFmFieldPresent(fm, canonical) {
+		return true
+	}
+	for _, alias := range r.aliases[canonical] {
+		if isFmFieldPresent(fm, alias) {
+			return true
+		}
+	}
+	return false
+}
+
+// isFmFieldPresent reports whether field is present in fm with a non-empty
+// value. Empty strings, empty arrays, and empty maps count as absent —
+// matching how human-curated frontmatter expresses "I have no value here."
+// Lifted to the registry from query/validate_live.go so alias-aware presence
+// checks share a single contract.
+func isFmFieldPresent(fm map[string]interface{}, field string) bool {
+	raw, ok := fm[field]
+	if !ok || raw == nil {
+		return false
+	}
+	switch v := raw.(type) {
+	case string:
+		return strings.TrimSpace(v) != ""
+	case []interface{}:
+		return len(v) > 0
+	case map[string]interface{}:
+		return len(v) > 0
+	default:
+		return true
+	}
 }
 
 // HasType returns whether a type name is registered.

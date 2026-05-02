@@ -51,7 +51,7 @@ func LoadRegistry(vaultPath string) (*schema.Registry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("loading config: %w", err)
 	}
-	return schema.NewRegistry(cfg.Types), nil
+	return schema.NewRegistryWithAliases(cfg.Types, cfg.Schema.Aliases), nil
 }
 
 // OpenVaultDB loads config, opens the index DB, and creates the type registry.
@@ -75,7 +75,7 @@ func OpenVaultDB(vaultPath string) (*VaultDB, error) {
 	vdb := &VaultDB{
 		DB:     db,
 		Config: cfg,
-		Reg:    schema.NewRegistry(cfg.Types),
+		Reg:    schema.NewRegistryWithAliases(cfg.Types, cfg.Schema.Aliases),
 		dbPath: dbPath,
 	}
 	vdb.indexHash = vdb.IndexHash()

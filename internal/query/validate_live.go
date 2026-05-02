@@ -96,7 +96,7 @@ func validateDomainNote(
 	hasIssue := false
 	td, _ := reg.GetTypeDef(noteType)
 	for _, req := range td.Required {
-		if !fmFieldPresent(fm, req) {
+		if !reg.IsFieldPresent(fm, req) {
 			result.Issues = append(result.Issues, ValidateIssue{
 				Path: path, ID: id, Severity: "error",
 				Rule:    "missing_required_field",
@@ -120,22 +120,4 @@ func validateDomainNote(
 	}
 
 	return hasIssue
-}
-
-// fmFieldPresent reports whether field is present in fm with a non-empty value.
-func fmFieldPresent(fm map[string]interface{}, field string) bool {
-	raw, ok := fm[field]
-	if !ok || raw == nil {
-		return false
-	}
-	switch v := raw.(type) {
-	case string:
-		return strings.TrimSpace(v) != ""
-	case []interface{}:
-		return len(v) > 0
-	case map[string]interface{}:
-		return len(v) > 0
-	default:
-		return true
-	}
 }

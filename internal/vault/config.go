@@ -16,6 +16,17 @@ type Config struct {
 	Git    GitPolicyConfig    `yaml:"git"`
 	Index  IndexConfig        `yaml:"index"`
 	Memory MemoryConfig       `yaml:"memory"`
+	Schema SchemaConfig       `yaml:"schema"`
+}
+
+// SchemaConfig holds per-vault schema settings beyond the type registry.
+// Aliases let migrating users keep their existing frontmatter field names
+// (e.g. `last_updated`) while vaultmind validates against canonical names
+// (e.g. `updated`). The map is canonical → list of aliases. Aliasing is
+// non-destructive: vaultmind never rewrites frontmatter to normalize field
+// names; the alias and the canonical are equivalent at validation only.
+type SchemaConfig struct {
+	Aliases map[string][]string `yaml:"aliases"`
 }
 
 // VaultConfig holds vault scanning settings.

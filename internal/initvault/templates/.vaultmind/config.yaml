@@ -5,6 +5,19 @@ vault:
     - ".trash"
     - ".vaultmind"
 
+# schema.aliases — per-vault frontmatter field aliases. When you migrate
+# notes that already use a field name (e.g. `last_updated`), you don't have
+# to rename them. Map vaultmind's canonical name to your existing one(s):
+#
+# schema:
+#   aliases:
+#     updated: [last_updated]
+#     created: [created_at, date_created]
+#
+# Aliases are non-destructive — vaultmind never rewrites your frontmatter.
+# A required field is satisfied if the canonical name OR any registered
+# alias is present with a non-empty value.
+
 # Types are the schema of your vault. Each type defines required and optional
 # frontmatter fields. The types here are the persona-shaped defaults — they
 # match what VaultMind optimizes for: an AI agent reconstructing itself from
