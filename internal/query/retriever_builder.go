@@ -189,9 +189,10 @@ func BuildAutoRetrieverWithActivation(db *index.DB, expDB *experiment.DB) AutoRe
 // threshold constants in internal/query/format.go, or the strong/moderate/
 // weak labels silently miscalibrate.
 //
-// Zero-value alpha/beta fall back to defaults documented in
-// reference-activation-rerank-decision (currently 0.7 / 0.3 — to be
-// finalized after the α/β probe).
+// Zero-value alpha/beta fall back to defaults pinned 2026-05-03 from
+// the α/β probe across {0.5/0.5, 0.7/0.3, 0.9/0.1, 0.95/0.05} — see
+// reference-activation-rerank-decision for the data and rationale.
+// Current defaults: α=0.9 / β=0.1.
 func BuildAutoRetrieverWithRerank(db *index.DB, expDB *experiment.DB, alpha, beta float64) AutoRetrieverResult {
 	res := BuildAutoRetrieverFull(db)
 	if expDB == nil {

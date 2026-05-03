@@ -71,10 +71,22 @@ LOG_DIR="${HOME}/.vaultmind/preread-track"
 mkdir -p "$LOG_DIR" 2>/dev/null
 TIMESTAMP=$(date +%Y%m%dT%H%M%S)
 
-# Run note get synchronously. Output discarded (the agent will get
-# the body from Read itself). We only need the exit status + first
-# line to detect resolution.
-NOTE_OUTPUT=$(VAULTMIND_CALLER=vaultmind-preread-track "$VAULTMIND" note get "$REL_PATH" --vault "$VAULT_ROOT" 2>/dev/null)
+# Run note get synchronously with a 3s timeout. PreToolUse hooks
+# block the agent until they exit; a hung binary (corrupt index.db,
+# deadlocked SQLite, disk I/O stall) would wedge the session with no
+# visible error. Three seconds is generous for a SQLite point-lookup
+# but tight enough to fail fast on real hangs. macOS doesn't ship
+# `timeout` by default — fall back to `gtimeout` (coreutils via brew),
+# then to a no-timeout call as a last resort. Output discarded (the
+# agent gets the body from Read itself); only exit status + first
+# line matter for resolution detection.
+TIMEOUT_CMD=""
+if command -v timeout >/dev/null 2>&1; then
+  TIMEOUT_CMD="timeout 3"
+elif command -v gtimeout >/dev/null 2>&1; then
+  TIMEOUT_CMD="gtimeout 3"
+fi
+NOTE_OUTPUT=$(VAULTMIND_CALLER=vaultmind-preread-track $TIMEOUT_CMD "$VAULTMIND" note get "$REL_PATH" --vault "$VAULT_ROOT" 2>/dev/null)
 NOTE_STATUS=$?
 
 NOTE_RESOLVED=1

@@ -1,4 +1,11 @@
 #!/bin/bash
+# STATUS: PARKED — not wired in .claude/settings.json. The active flavor is
+# vault-track-read.sh (non-blocking, header-injection). This file is preserved
+# unwired as the documented escalation per arc-the-lighter-move-is-the-work;
+# enable only if dogfood data shows the non-blocking variant is insufficient.
+# DO NOT WIRE without re-reading reference-activation-rerank-decision and the
+# arc above.
+#
 # PreToolUse hook on Read — when the agent tries to Read a vault note,
 # block the Read and surface the body via `vaultmind note get` instead.
 #
