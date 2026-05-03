@@ -14,6 +14,7 @@ import (
 	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/query"
+	"github.com/peiman/vaultmind/internal/retrieval"
 	"github.com/peiman/vaultmind/internal/xdg"
 	"github.com/stretchr/testify/require"
 )
@@ -354,6 +355,125 @@ func TestActivationRerankDeepDive(t *testing.T) {
 		dump("4-way:", r4.ResultIDs, r4.Expected)
 		dump("rerank:", r5.ResultIDs, r5.Expected)
 	}
+}
+
+// TestConfidenceCalibrationProbe captures the rank-1/rank-2 score gap
+// distribution under both 4-way and 5b” rerank for the same query
+// corpus. The 2026-04-30 calibration set TopHitConfidence thresholds
+// 5% / 1.5% / 0.5% based on the 4-way distribution; this probe answers:
+// does the rerank's blended-score distribution land on the same thresholds,
+// or do they need re-tuning?
+//
+// Output: per-query gap% under each retriever, plus histogram of how
+// queries classify under the current thresholds. If the histograms
+// match between 4-way and rerank, current thresholds work. If many
+// queries shift labels (strong → moderate, etc.), thresholds need
+// re-calibration before 5b” can be wired as default.
+//
+// Set VAULTMIND_CONFIDENCE_CALIBRATION=<vault> to run.
+func TestConfidenceCalibrationProbe(t *testing.T) {
+	name := os.Getenv("VAULTMIND_CONFIDENCE_CALIBRATION")
+	if name == "" {
+		t.Skip("set VAULTMIND_CONFIDENCE_CALIBRATION=identity|research to run")
+	}
+
+	type vaultSpec struct {
+		dir     string
+		queries string
+	}
+	vaults := map[string]vaultSpec{
+		"identity": {dir: "../../vaultmind-identity", queries: "../../test/fixtures/baseline/identity-queries.yaml"},
+		"research": {dir: "../../vaultmind-vault", queries: "../../test/fixtures/baseline/research-queries.yaml"},
+	}
+	spec, ok := vaults[name]
+	if !ok {
+		t.Fatalf("unknown vault %q", name)
+	}
+	queries, err := baseline.LoadQueries(spec.queries)
+	require.NoError(t, err)
+
+	db, err := index.Open(filepath.Join(spec.dir, ".vaultmind", "index.db"))
+	require.NoError(t, err)
+	defer db.Close()
+	xdg.SetAppName("vaultmind")
+	expDBPath, err := xdg.DataFile("experiments.db")
+	require.NoError(t, err)
+	expDB, err := experiment.Open(expDBPath)
+	require.NoError(t, err)
+	defer func() { _ = expDB.Close() }()
+
+	// Helper: run retriever on all queries, capture (top1, top2) scores
+	// per query.
+	type gapRow struct {
+		query string
+		top1  float64
+		top2  float64
+		gap   float64 // (top1 - top2) / top1
+	}
+	captureGaps := func(label string, ret retrieval.Retriever) []gapRow {
+		rows := make([]gapRow, 0, len(queries))
+		for _, q := range queries {
+			results, _, runErr := ret.Search(context.Background(), q.Text, 10, 0, index.SearchFilters{})
+			require.NoError(t, runErr)
+			if len(results) < 2 || results[0].Score <= 0 {
+				rows = append(rows, gapRow{query: q.Text, top1: 0, top2: 0, gap: 0})
+				continue
+			}
+			gap := (results[0].Score - results[1].Score) / results[0].Score
+			rows = append(rows, gapRow{query: q.Text, top1: results[0].Score, top2: results[1].Score, gap: gap})
+		}
+		return rows
+	}
+	classify := func(gap float64) string {
+		switch {
+		case gap >= 0.05:
+			return "strong"
+		case gap >= 0.015:
+			return "moderate"
+		case gap >= 0.005:
+			return "weak"
+		default:
+			return "no_match"
+		}
+	}
+	histogram := func(rows []gapRow) map[string]int {
+		h := map[string]int{"strong": 0, "moderate": 0, "weak": 0, "no_match": 0}
+		for _, r := range rows {
+			h[classify(r.gap)]++
+		}
+		return h
+	}
+
+	// 4-way baseline.
+	res4 := query.BuildAutoRetrieverFull(db)
+	rows4 := captureGaps("4-way", res4.Retriever)
+	res4.Cleanup()
+
+	// 5b'' rerank with shipping defaults α=0.9/β=0.1.
+	rer := query.BuildAutoRetrieverWithRerank(db, expDB, 0.9, 0.1)
+	rows5 := captureGaps("rerank", rer.Retriever)
+	rer.Cleanup()
+
+	t.Logf("")
+	t.Logf("=== CONFIDENCE CALIBRATION PROBE — vault %q (n=%d) ===", name, len(queries))
+	h4 := histogram(rows4)
+	h5 := histogram(rows5)
+	t.Logf("                      strong  moderate  weak  no_match")
+	t.Logf("  4-way (baseline)    %6d  %8d  %4d  %8d", h4["strong"], h4["moderate"], h4["weak"], h4["no_match"])
+	t.Logf("  rerank α0.9/β0.1    %6d  %8d  %4d  %8d", h5["strong"], h5["moderate"], h5["weak"], h5["no_match"])
+	t.Logf("")
+	t.Logf("Per-query gap shifts (only when classification differs):")
+	for i := range queries {
+		c4 := classify(rows4[i].gap)
+		c5 := classify(rows5[i].gap)
+		if c4 != c5 {
+			t.Logf("  %-50s  4-way %.3f%% (%s)  →  rerank %.3f%% (%s)",
+				truncate(queries[i].Text, 50),
+				rows4[i].gap*100, c4, rows5[i].gap*100, c5)
+		}
+	}
+	t.Logf("")
+	t.Logf("Decision: if rerank histogram matches 4-way within ±2 queries per bucket, current thresholds (5%%/1.5%%/0.5%%) hold. If buckets shift more, propose new thresholds and pin via TDD.")
 }
 
 // splitCSVColon splits "a:b:c" into ["a","b","c"].

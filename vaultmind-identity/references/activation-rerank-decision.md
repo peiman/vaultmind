@@ -200,6 +200,34 @@ When access distribution evolves (Siavoush dogfooding adds breadth; the broad-an
 - Activation source variation: count-only vs last-accessed-only vs combined ACT-R formula. Probe might show last-accessed-only is less broad-anchor-biased than count.
 - Per-query activation: what's "warm" for THIS topic, not "warm" globally. Requires topic-conditional activation modeling — open research direction.
 
+## Confidence calibration re-probe (2026-05-03)
+
+Per the shipping decision above ("default-on switch waits for the calibrated-confidence threshold re-probe"), ran the same gold-query corpora through both 4-way and 5b''-rerank with α=0.9/β=0.1 to capture the rank-1/rank-2 score gap distribution under each. Histograms classified by current thresholds (5% strong / 1.5% moderate / 0.5% weak / below = no_match):
+
+| Vault | 4-way: strong / moderate / weak / no_match | 5b'' rerank: strong / moderate / weak / no_match |
+|---|---|---|
+| identity (n=19) | 1 / 16 / 2 / 0 | **0 / 5 / 8 / 6** |
+| research (n=44) | 2 / 25 / 10 / 3 | **0 / 4 / 34 / 2** |
+
+**Distribution massively compressed under rerank.** Canonical-strong queries collapse:
+- "Hebbian learning" — 4-way 5.66% strong → rerank 2.98% moderate.
+- "memory that retrieves by content not by address" — 4-way 7.32% strong → rerank 1.47% weak.
+- "session catches mirror material" — 4-way 5.08% strong → rerank 0.25% no_match.
+
+**Mechanism**: rank-based RRF blending (α=0.9/β=0.1) confines each lane's contribution to the bounded `1/(K+rank+1)` range. Top-N candidate scores cluster within a narrow window; raw gap percentages compress 3-10x relative to 4-way. The threshold values calibrated against the 4-way distribution don't apply.
+
+**Decision: gate is real and confirmed.** Slice 5b'' MUST stay opt-in until thresholds are re-calibrated. Wiring `BuildAutoRetrieverWithRerank` as the default `BuildAutoRetriever` path right now would silently mis-label almost every result as weak/no_match.
+
+**What proper re-calibration requires** (deferred — separate work):
+1. A new probe query set built for the blended distribution: canonical-match queries (where the right answer is unambiguously rank-1 with strong gap), failure-mode queries (rank-2/rank-6 cases), nonsense queries (no real winner). The 4-way set may not be reusable verbatim — gaps measure something different now.
+2. Actually run those queries through `BuildAutoRetrieverWithRerank` and measure where the gap-population separation lives.
+3. Pin new thresholds via a 5b''-specific calibration test (mirror of `TestComputeTopHitConfidence_ProbedQueries_2026_04_30`).
+4. Add retriever-aware threshold selection in `computeTopHitConfidence` — different retrievers, different thresholds.
+
+**Probe-tooling artifact added**: `TestConfidenceCalibrationProbe` (env-gated `VAULTMIND_CONFIDENCE_CALIBRATION=identity|research`) in `internal/baseline/activation_compare_test.go`. Reusable for the proper re-calibration work; current run produced the histograms above.
+
+**Bottom line for shipping**: 5b'' stays callable via `BuildAutoRetrieverWithRerank`, NOT default. The calibration gate held. Future re-calibration work is anchored — the probe tooling exists and the data shows a shift large enough to matter.
+
 ## What this is not
 
 - **Not a final calibrated-confidence fix** (step 4 of the plasticity roadmap). The TopHitConfidence thresholds were calibrated against 4-way distribution. Slice 5b'' shifts the rank-1/rank-2 score gap distribution for queries where activation contributes; thresholds need re-probing post-5b''. Same step-4 ↔ step-5 coupling caught while dogfooding 5b'.
