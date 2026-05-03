@@ -9,8 +9,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// canonicalKeyOrder defines the canonical ordering for frontmatter keys
+// emitted by SortKeys. Order: identity (id, type), display (status,
+// title), graph (aliases, tags), vaultmind-managed timestamps (created,
+// vm_updated), human-managed timestamp (updated). Other keys sort
+// alphabetically after.
 var canonicalKeyOrder = []string{
-	"id", "type", "status", "title", "aliases", "tags", "created", "updated",
+	"id", "type", "status", "title", "aliases", "tags", "created", "vm_updated", "updated",
 }
 
 // SortKeys sorts the keys of a YAML mapping node: canonical keys first (in
@@ -85,6 +90,10 @@ func ScalarToList(mapping *yaml.Node, key string) bool {
 	return false
 }
 
+// dateFields are normalized to YYYY-MM-DD (date-only). vm_updated is
+// intentionally NOT included — it's a vaultmind-owned datetime stamp
+// (RFC3339, with time component) used to detect "vaultmind-touched
+// since human edit" precision; date-only would lose that signal.
 var dateFields = map[string]bool{"created": true, "updated": true, "due": true}
 
 var dateTimeFormats = []string{

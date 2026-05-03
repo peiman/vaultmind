@@ -74,7 +74,10 @@ func SubstituteVars(content string, vars map[string]string) (string, []string) {
 //  2. Build variable map and substitute placeholders
 //  3. Parse frontmatter
 //  4. Apply field overrides from cfg.Fields
-//  5. Ensure core fields (id, type, created, vm_updated) are present
+//  5. Ensure core fields (id, type) and vaultmind-owned fields
+//     (created, vm_updated) are present — see schema/registry.go for
+//     the four-tier taxonomy. Vaultmind owns created + vm_updated;
+//     this template path is one of the auto-maintenance write sites.
 //  6. Override body if cfg.Body is set
 //  7. Serialize and return
 func Process(cfg ProcessConfig) (*ProcessResult, error) {
