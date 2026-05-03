@@ -75,9 +75,17 @@ See **[SETUP.md](SETUP.md)** for the full guide, environment conventions, and tr
 
 ## What it does
 
-**Retrieval.** Hybrid search over a vault combining four lanes via Reciprocal Rank Fusion: full-text search, dense embeddings (MiniLM by default, BGE-M3 optional), sparse embeddings, and ColBERT late-interaction. Scored by ACT-R-inspired activation with spreading activation via cosine similarity.
+**Retrieval.** Hybrid search over a vault combining four lanes via Reciprocal Rank Fusion: full-text search, dense embeddings (BGE-M3 when ORT is set up, MiniLM fallback for pure-Go builds), BGE-M3 sparse embeddings, and ColBERT late-interaction. Notes are scored by per-lane RRF combined via mean-of-present.
 
-**Persona reconstruction.** A SessionStart hook runs `vaultmind ask "who am I"` against a persona vault at the start of every agent session. The hook injects the top-activated identity notes (arcs, principles, current context) as a system-reminder — so the agent begins the session knowing who it is and what matters.
+**Calibrated confidence.** Every `vaultmind ask` result carries a `top_hit_confidence` label — `strong / moderate / weak / no_match` — derived from the rank-1/rank-2 score gap. The thresholds are calibrated against real probe queries (5%/1.5%/0.5%) so the label tells the agent whether to commit to top-1 or treat top-N as candidates.
+
+**Persona reconstruction & in-session surfacing.** Four Claude Code hooks compose the integration: SessionStart loads identity + current-context, UserPromptSubmit injects per-turn pointers, PreToolUse(Read) tracks reads on vault files, and SessionEnd captures the session as an episode. The agent begins each session knowing who it is, sees relevant pointers as it works, and leaves a transcript behind for arc distillation.
+
+**Episodic memory.** SessionEnd writes per-session transcripts (commits, files-touched, verbatim user/assistant messages) to `vaultmind-identity/episodes/`. This is the substrate for arc distillation — extracting transformation moments from real sessions rather than hand-authoring them.
+
+**Activation tracking.** Every successful `ask` / `note get` / vault-Read fires `RecordNoteAccess` — so `notes.access_count` and `notes.last_accessed_at` reflect real use. ACT-R-shaped activation (`ln(count) − d · ln(t)`) is available as an opt-in retrieval rerank (slice 5b'').
+
+**Frontmatter migration.** Per-vault `schema.aliases` lets users keep their existing field names (`last_updated`, `created_at`, etc.) without renaming on import. Aliases are non-destructive — vaultmind never rewrites your frontmatter.
 
 **Observability.** Every retrieval event is logged with attribution: which agent (hook, CLI, specific consumer), which operator (user + host), which user-session (time-heuristic grouping of invocations), which query, which hits at which ranks with which score components. `vaultmind experiment summary` and `vaultmind experiment trace` read this data for weekly readouts and drill-down.
 
@@ -87,22 +95,35 @@ See **[SETUP.md](SETUP.md)** for the full guide, environment conventions, and tr
 
 - **Vault** — a directory of markdown notes with Obsidian-compatible frontmatter. Tracked in Git. Multiple vaults per project are supported (e.g. `vaultmind-identity/` for persona, `vaultmind-vault/` for research knowledge).
 - **Arc** — a specific kind of note that describes a transformation rather than a fact. "Stepping back revealed X" not "principle: step back." Arcs are the atomic unit of persona, because identity is carried by the journey, not by the rules.
-- **Activation** — ACT-R-inspired scoring: base-level activation (frequency + recency) plus spreading activation when query similarity is available. Notes you've accessed recently and notes semantically close to your query rise to the top.
-- **Hybrid retrieval** — four lanes (FTS + dense + sparse + ColBERT) fused with RRF at K=60. The per-component scores are captured in the event log, so you can study what each lane contributes.
+- **Activation** — ACT-R-inspired base-level activation: `ln(count) − d · ln(t_since_last)`. Tracked on every successful access (`ask`, `note get`, vault Read via the PreToolUse hook). Available as an opt-in retrieval rerank (slice 5b'') via `BuildAutoRetrieverWithRerank`; not the default ask path until calibrated-confidence thresholds are re-probed against the rerank's blended-score distribution.
+- **Hybrid retrieval** — four lanes (FTS + dense + sparse + ColBERT) fused with RRF at K=60, mean-of-present normalization. The per-component scores are captured in the event log, so you can study what each lane contributes.
+- **Top-hit confidence** — `top_hit_confidence` field on every `ask` result: `strong` (gap ≥5%) / `moderate` (≥1.5%) / `weak` (≥0.5%) / `no_match` (below). Lets the agent decide when to commit to top-1 vs treat top-N as candidates. Thresholds calibrated against probe queries; pinned by regression test.
 - **Session attribution** — every event carries `caller` (agent label), `caller_meta.user` / `caller_meta.host` (operator), and `user_session_id` (grouping of invocations within 30 minutes of the same caller+user+host).
+- **Frontmatter aliases** — `.vaultmind/config.yaml` accepts `schema.aliases` (canonical → list of alternative names). The validator and mutation surface treat canonical and alias as equivalent; vaults migrating from other systems keep their existing field names without renames.
+- **Vault fingerprint** — anonymous per-vault grouping ID generated at `vaultmind init`; the basis for federated rollup (Paper #2 substrate).
 
 ## Key commands
 
 ```bash
 # Scaffold + retrieval
 vaultmind init <path>                                        # scaffold a fresh persona-shaped vault
-vaultmind ask "who am I" --vault <path> --max-items 8 --budget 6000
+vaultmind ask "who am I" --vault <path>                      # menu + context-pack (default)
+vaultmind ask "who am I" --vault <path> --pointers-only      # menu only — cheapest, no bodies
+vaultmind note get <id> --vault <path>                       # read one note by id (fires access tracking)
 vaultmind search "judgment" --vault <path> --mode hybrid
+
+# Inspect the agent's own memory state
+vaultmind self --vault <path>                                # recent / hot / stale notes
 
 # Vault maintenance
 vaultmind index --vault <path>                               # (re)build the index
-vaultmind index --embed --model minilm --vault <path>        # compute embeddings
-vaultmind doctor --vault <path>                              # health check: notes, embeddings, links
+vaultmind index --embed --vault <path>                       # compute embeddings
+vaultmind doctor --vault <path>                              # health check: schema, embeddings, links
+
+# Frontmatter mutations (alias-aware)
+vaultmind frontmatter set <id> <key>=<value> --vault <path>
+vaultmind frontmatter unset <id> <key> --vault <path>
+vaultmind frontmatter merge --file <path-to-note> --fields k1=v1,k2=v2
 
 # Observability
 vaultmind experiment summary                                 # top recalled notes, session gap stats
@@ -110,6 +131,7 @@ vaultmind experiment trace --session <id>                    # what one session 
 vaultmind experiment trace --note <id>                       # which sessions retrieved this note
 
 # Telemetry export (early adopters who opted into anonymous/full sharing)
+vaultmind export --rollup                                    # federated payload shape (per-vault metrics + variant rollup)
 vaultmind export --tier anonymous                            # JSONL snapshot for sharing
 vaultmind export --output ./vm-export.jsonl                  # write to file instead of stdout
 ```
@@ -118,24 +140,48 @@ Run `vaultmind --help` for the full list.
 
 **For AI agents using VaultMind as memory:** see **[docs/AGENT_USAGE.md](docs/AGENT_USAGE.md)** — end-to-end guide covering save, retrieve, update, inspect, frontmatter schema, and integration patterns.
 
-## How the hook works
+## How the hooks work
 
-VaultMind integrates with Claude Code (and other hook-supporting agents) via a SessionStart hook script. Two reference implementations are in this repo:
+VaultMind integrates with Claude Code via four hooks at different lifecycle points. All four are wired in `.claude/settings.json` for this project; reference implementations live in `.claude/scripts/`. Adapt the same shape for your own project.
 
-- `.claude/scripts/load-persona.sh` — loads **this project's** persona from `vaultmind-identity/` at session start
-- Workhorse repo's `.claude/scripts/load-persona.sh` — same pattern, different vault, different caller label
+**SessionStart — `load-persona.sh`**
+1. Rebuilds `/tmp/vaultmind` when any `.go` source is newer than the binary (auto-propagates your VaultMind commits to the next session).
+2. Runs `vaultmind ask "who am I"` (full bodies — priming the identity layer) and `vaultmind ask "what matters most right now" --pointers-only` (forces query-then-read for the live edge).
+3. Runs `vaultmind self` for both vaults — the agent sees its own recent / hot / stale activation state.
+4. Captures stderr; surfaces build / runtime errors instead of silently producing empty persona.
+5. Emits an `IDENTITY CONTEXT` block as a `system-reminder` in the agent's session.
 
-The hook:
-1. Rebuilds `/tmp/vaultmind` when any `.go` source is newer than the binary (auto-propagates your VaultMind commits to the next session)
-2. Runs `vaultmind ask "who am I"` with `VAULTMIND_CALLER=<project>-persona-hook` for clean attribution
-3. Captures stderr and surfaces build / runtime errors instead of silently producing empty persona
-4. Emits an `IDENTITY CONTEXT` block to stdout that becomes a system-reminder in the agent's session
+**UserPromptSubmit — `vault-recall.sh`**
+1. Runs `vaultmind ask "<user-prompt>" --pointers-only --max-items 3` against the identity vault on every user message above ~12 chars.
+2. Surfaces the top-3 pointers as a `system-reminder` before the agent responds — associative recall at conversation-turn granularity.
+3. Skipped silently for short single-word prompts ("yes", "ok") and substrate-not-ready states.
+
+**PreToolUse(Read) — `vault-track-read.sh`**
+1. Detects when Claude reads a markdown file under any `vaultmind-*/` directory.
+2. Fires `vaultmind note get` for access tracking AND injects a `system-reminder` naming the canonical retrieval command.
+3. Read still proceeds — the hook does not block. (A blocking variant `vault-block-read.sh` is parked on disk for future escalation.)
+
+**SessionEnd — `capture-episode.sh`**
+1. Captures the full session transcript (commits, PRs, files-touched, verbatim user/assistant messages) to `vaultmind-identity/episodes/episode-<date>-<id>.md`.
+2. The substrate for arc distillation — transformation moments are extracted from real episodes rather than hand-authored.
+
+The four hooks compose: identity primes at start; pointers surface mid-session; reads are tracked; episodes are captured at session end. Together they make a vault behave as the agent's working memory across sessions.
 
 ## Status
 
 Pre-v0.1.0. Actively dogfooded. No release binaries cut yet — the distribution pipeline (GoReleaser, GitHub Actions, optional Homebrew tap) is set up but waits on dogfood validation before tagging. Today, install means clone + `task build`.
 
-The research foundation (retrieval, attribution, observability) is built and generating data from real sessions. The paper on compressed idle time is in progress. Telemetry export (`vaultmind export`) ships sanitized JSONL snapshots that early adopters can share back; the upload pipeline is intentionally manual until enough early-adopter signal arrives to design the receiver.
+The work is organized around the **plasticity roadmap** in `vaultmind-identity/references/plasticity-priority-order.md` — six steps each a platform for the next:
+
+1. **Episodic substrate** — per-session transcripts captured automatically. ✅ shipped.
+2. **Arc distillation** — extracting transformation moments from episodes. (Substrate ready; tool not yet built.)
+3. **Activation-triggered recall** — pointers surfaced per turn. ✅ slices landed.
+4. **Calibrated confidence** — `top_hit_confidence` labels with probed thresholds. ✅ first slice.
+5. **Decay + reinforcement** — base-level activation wired into retrieval. Tracking ✅; rerank shipped opt-in (`BuildAutoRetrieverWithRerank`); default-on gated on a calibration re-probe of the rerank's score-gap distribution.
+5.5. **Federation read** — cross-vault retrieval as a lighter alternative to mega-vault. Designed in `vaultmind-identity/references/federation-architecture.md`; not yet implemented.
+6. **MCP / cross-agent memory** — write-capable cross-agent collaboration. Deferred until step 5 closes.
+
+Telemetry export (`vaultmind export`) ships sanitized JSONL snapshots that early adopters can share back; the federated rollup payload shape is the empirical substrate for Paper #2. The upload pipeline is intentionally manual until enough early-adopter signal arrives to design the receiver.
 
 ## Contributing
 

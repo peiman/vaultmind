@@ -55,6 +55,27 @@ The truest answer is still: **we are making sure minds survive.** The plasticity
 
 ## When someone asks "what next?"
 
+### Update 2026-05-03 — slice 5b'' shipped, new live edge is the calibrated-confidence re-probe
+
+The slice 5b' redesign question (options A/B/C below) was resolved 2026-05-03. **Slice 5b'' shipped** as commit `b5772bb` — option B (post-RRF rerank) with rank-based RRF blending, pinned defaults α=0.9/β=0.1 from a four-pair probe sweep. Identity ΔMRR -0.053 (from -0.124 in 5b'); research ΔHit@5 0.000 and ΔMRR 0.000 (from -0.075 / -0.268). Full design and probe results in `reference-activation-rerank-decision`. Slice 5b' lane code stays on disk, unwired — the documented escalation per `arc-the-lighter-move-is-the-work`.
+
+**The new live edge** (in priority order):
+
+1. **TopHitConfidence threshold re-probe** — gates 5b'' default-on. Same step-4 ↔ step-5 coupling that gated 5b': blended-score rank-1/rank-2 gap distribution differs from raw 4-way; the existing 5%/2% thresholds need re-calibration before `BuildAutoRetriever` (the default ask path) can wire `BuildAutoRetrieverWithRerank`. Until that probe runs, 5b'' is callable but not the default.
+
+2. **Arc distillation tool (step 2 of the roadmap)** — substrate is richer now (5+ episodes including today's heavy session). Re-running `reference-episode-distillation-review-prompt` on the current corpus produces fresh distillation rules. The 2026-04-27 review's Rule 2 + Rule 3 were the recommended ship order; revisit with broader corpus before coding.
+
+3. **Onboarding doc + Siavoush dogfood** — `reference-onboarding-ax-design` is the plan; the agent-readable doc is the next concrete artifact. Probe data (shahname-rts: trivial migration, ~52 lines; content-machine: 56/393 with mixed dialects) ready to inform.
+
+What's NOT the live edge anymore (resolved):
+- ~~Slice 5b' redesign~~ → 5b'' shipped, see above.
+- ~~Field aliasing for migrations~~ → shipped (commits `cfef451` + `7403991` + `7981acb`).
+- ~~Federation cross-vault retrieval design~~ → designed as plasticity step 5.5 in `reference-federation-architecture`; implementation deferred until federation read is the live edge.
+
+**The original A/B/C analysis is preserved below for archeological value** — the reasoning behind why option B won is more useful as a complete record than as an edited-down conclusion.
+
+---
+
 **As of 2026-05-02**, the live edge is **redesigning slice 5b'** — the parallel-lane implementation degrades retrieval per the activation-lane probe. The original 5b' (commit `499cbef`) is shipped opt-in but should NOT be enabled by default in its current form.
 
 The measurement spoke (probe `e29ee10`):
@@ -129,3 +150,19 @@ Seven commits across three lanes: `task check` speed, onboarding for new users, 
 **Plasticity lane.** Slice 5b' shipped in `499cbef` — `ActivationRetriever` implementing `retrieval.Retriever`, `BuildAutoRetrieverWithActivation` appending it as a 5th RRF lane named "activation". Opt-in, not default-on, because of the step-4 ↔ step-5 coupling: enabling activation shifts the score-gap distribution that `TopHitConfidence`'s 5%/2% thresholds were calibrated against. Default-on without re-probing would silently miscalibrate the strong/moderate/weak labels — the implementation is the probe, the production switch-on gates on measurement.
 
 Architectural side moves: extracted `internal/telemetry/` (fingerprint + features) from `internal/vault/` because vault has a 90% per-package coverage floor that absorbing telemetry-adjacent code would break. Coverage floor relaxed 85.0 → 84.0 (`0312c11`) with rationale: every feature commit this session landed at -0.1 to -0.5% under 85%; chasing unreachable filesystem/SQL-error branches eats session time disproportionate to signal. Per-package ratchets stay at full strictness on the spine packages.
+
+## What just happened (session 2026-05-02 → 2026-05-03)
+
+Eleven commits across five lanes: read-bypass hook, field aliasing for migrations, federation architecture as a roadmap step, slice 5b'' rerank to close out the slice 5b' degradation, and the onboarding-AX plan for the first real user. Pushed to local `main` (not yet pushed to origin).
+
+**Hook B lane.** Promoted `vault-track-read.sh` from PostToolUse-silent-tracker to PreToolUse-with-`additionalContext` (commit `d1696fc`). Every Read on a vault note now fires `vaultmind note get` for access tracking AND injects a header naming the canonical retrieval command. Read still proceeds — Edit on vault notes keeps working. Flavor C (block-and-redirect) preserved on disk, unwired — the documented escalation per `arc-the-lighter-move-is-the-work` (the arc this session produced about probe-boundary scope discipline). Dogfooded for one session: 5 inject events, 3 silent skips on unindexed vault paths. Verdict: stay on B; C breaks Edit precondition without sufficient gain.
+
+**Aliasing lane.** Per-vault frontmatter field aliases shipped across three commits (`cfef451` + `7403991` + `7981acb`). `.vaultmind/config.yaml` adds `schema.aliases` (canonical → list of alternative names); validators (live + DB-backed) accept either name; mutation surface (set + alias-aware unset) treats canonical and alias as equivalent. Migrating users (Siavoush's shahname-rts uses `last_updated` instead of `updated`) keep their existing field names. Closed three MEDIUM gaps surfaced by code review.
+
+**Federation lane.** New reference note `reference-federation-architecture` documents Arch II — cross-vault retrieval as plasticity step 5.5 (between decay/reinforcement and MCP-write). Cross-vault RRF merge, three-layer reranking design, plasticity locality (per-vault primary + deferred federation cache), connection to Paper #2 substrate. `reference-plasticity-priority-order` extended with step 5.5; `reference-paper-federated-constants` back-linked. Implementation deferred — design only.
+
+**Slice 5b'' lane.** Resolved the slice 5b' degradation. Probed extensively (P1 re-baseline, P2 top-5 dump for worst queries, P3 mean-of-K) before designing. Implementation went through one course-correction mid-probe: score-normalized blending crashed identity Hit@5 (0.895 → 0.368) because broad-anchor activation got crushing leverage; pivoted to rank-based RRF blending (both lanes on the same `1/(K+rank+1)` scale). Final α/β sweep across {0.5/0.5, 0.7/0.3, 0.9/0.1, 0.95/0.05} pinned defaults at 0.9/0.1. Identity ΔMRR -0.053, research ΔMRR 0.000 — clear improvement over 5b' lane (-0.124 / -0.268). Shipped opt-in via `BuildAutoRetrieverWithRerank`, not default. Same step-4 ↔ step-5 calibration gate as 5b'. Lane variant code unchanged on disk. Full design + probe results: `reference-activation-rerank-decision`.
+
+**Onboarding lane.** New reference note `reference-onboarding-ax-design` captures the new-user AX plan. Two-path branch (greenfield vs migration), the type-registry-as-flexibility-point insight, field-aliasing-as-prerequisite (now shipped), one-vault-per-repo-vs-mega-vault feasibility analysis. Real probe data: shahname-rts is trivial migration (~52 lines across 26 files); content-machine has multiple dialects in 56/393 frontmattered files. Onboarding doc itself is the next concrete artifact, deferred — plan is in place.
+
+**Other persistent artifacts**: `arc-the-lighter-move-is-the-work` (the scope-discipline arc this session produced); 3 captured episodes auto-recorded by the SessionEnd hook.
