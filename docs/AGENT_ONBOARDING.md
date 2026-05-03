@@ -23,13 +23,24 @@ What this doc is **not**: a reference manual for using vaultmind day-to-day (see
 
 Before talking to the user, verify the binary is reachable and explain to the user what's about to happen.
 
-### 1a. Verify binary
+### 1a. Locate the binary
+
+`task build` produces `./vaultmind` IN the vaultmind repo — it does NOT install to PATH. Find the working binary in this priority order:
 
 ```bash
-vaultmind --version
+which vaultmind 2>/dev/null                       # 1. on PATH (rare today)
+test -x /tmp/vaultmind && echo /tmp/vaultmind     # 2. SessionStart hook builds here
+test -x ./vaultmind && echo ./vaultmind           # 3. cwd is the vaultmind repo
+test -x <user-clone-path>/vaultmind && echo ...   # 4. ask user where they cloned
 ```
 
-If this fails: tell the user, "vaultmind binary isn't on your PATH. Install via `task build` in the vaultmind repo (see SETUP.md) and re-paste the onboarding sentence to me." Stop.
+**Use whichever found path as `<vm>` for every subsequent command in this doc.** Wherever this doc shows `vaultmind <args>`, substitute `<vm> <args>`.
+
+```bash
+<vm> --version
+```
+
+If no binary is reachable: tell the user, "I need a built vaultmind binary. Run `task build` inside your vaultmind clone. Then tell me the path." Stop.
 
 ### 1b. Check working directory
 
@@ -168,11 +179,22 @@ Skip if the user explicitly doesn't use Claude Code. Otherwise: §6.
 ### 5a. Survey
 
 ```bash
-find . -name "*.md" -not -path "./node_modules/*" -not -path "./.git/*" -not -path "./output/*" -not -path "./archive/*" | head -40
+find . -name "*.md" \
+  -not -path "./node_modules/*" \
+  -not -path "./.git/*" \
+  -not -path "./output/*" \
+  -not -path "./archive/*" \
+  -not -path "./.claude/*" \
+  -not -path "./vendor/*" \
+  | head -40
 find . -name "*.md" | while read f; do head -1 "$f" | grep -q "^---" && echo "$f"; done | wc -l
 ```
 
 This gives you (a) a sample of paths, (b) how many files have line-1 frontmatter.
+
+**Filter agent-spec dirs explicitly** — `.claude/agents/`, `.cursor/`, etc. contain agent definitions, not user content. If `.claude/` slipped past the exclude (e.g. nested differently), surface to the user: *"I see `.claude/agents/...` files. These look like Claude Code agent definitions, not knowledge content. Skip them?"*
+
+**Watch for YAML-config-as-markdown files**. Some `.md` files have YAML frontmatter that's actually configuration (design tokens, schema definitions) rather than knowledge content. Inspect a sample of frontmatter dialects (§5b); if you find a file whose entire content is `name:`, `version:`, `tokens:`, etc. — that's config. Confirm with the user before including: *"`<path>` looks like config-as-markdown. Skip from indexing?"*
 
 ### 5b. Inspect existing frontmatter dialect
 
@@ -191,11 +213,35 @@ Identify the user's **type vocabulary** (`grep -h "^type:" *.md | sort -u`) and 
 
 Vaultmind's default registry is persona-shaped (`identity, principle, arc, reference`). It's a starting suggestion, not a fixed schema.
 
-Ask the user:
+Run the type-vocabulary probe:
 
-> Your existing files use these types: [list]. I'll register them in vaultmind so they pass validation as-is — adopt them into the registry, or remap to vaultmind's persona-shaped defaults? **Default: adopt.** Vaultmind's types are per-vault.
+```bash
+grep -h "^type:" $(find . -name "*.md" | while read f; do head -1 "$f" | grep -q "^---" && echo "$f"; done) 2>/dev/null \
+  | sed 's/type: *//' | sort | uniq -c | sort -rn
+```
 
-If they say adopt: when you write `.vaultmind/config.yaml`, include each user-type with `required: [title]` and reasonable `optional` and `statuses` fields.
+**Three branches** based on what you see:
+
+**Branch A — non-empty vocabulary** (the common-rich case, e.g. shahname-rts uses `contract, plan, log, research, process, spec, manifesto, architecture`):
+
+> Your existing files use these types: [list with counts]. I'll register them in vaultmind so they pass validation as-is — adopt them into the registry, or remap to vaultmind's persona-shaped defaults? **Default: adopt.** Vaultmind's types are per-vault.
+
+If adopt: when you write `.vaultmind/config.yaml`, include each user-type with `required: [title]` and reasonable `optional` and `statuses`.
+
+**Branch B — empty vocabulary** (no `type:` field anywhere, common case in markdown-as-prose corpora like content-machine):
+
+> Your files don't use a `type:` field today. Vaultmind requires `type` on every indexed note (it's how the schema knows what fields are required). I'll add `type:` to each file along with the other vaultmind core fields. Two options:
+>
+> 1. **Single type** — all files become `type: reference` (simplest, lossy classification).
+> 2. **Inferred from path** — files in `knowledge_base/` become `type: concept`, files in `style_guide/` become `type: reference`, etc. (preserves your directory semantics).
+>
+> Which?
+
+Default to (2) when directory structure is meaningful. Show the user the inference rules before applying.
+
+**Branch C — mixed (some files have `type:`, others don't)**:
+
+Combine A and B — adopt the existing types AND inferred types for files without one. Show the user the merged registry before applying.
 
 ### 5d. Field aliasing for missing core fields
 
@@ -327,9 +373,30 @@ For each file, show a diff before writing.
  }
 ```
 
-`.claude/scripts/load-persona.sh`, `vault-recall.sh`, `vault-track-read.sh`, `capture-episode.sh`: copy the templates from the vaultmind repo, **path-templated against the user's vault path** (replace `vaultmind-identity` with their vault path).
+**Hook scripts to copy and path-template:**
 
-If you can't reach the vaultmind repo, refuse: *"I need the vaultmind repo at `<known-path>` to copy hook templates. Either point me at a clone or skip Claude Code wiring."*
+The four scripts live in the vaultmind repo at `.claude/scripts/load-persona.sh`, `.claude/scripts/vault-recall.sh`, `.claude/scripts/vault-track-read.sh`, `.ckeletin/scripts/capture-episode.sh`. Three of them have hardcoded references to Peiman's vault directories that MUST be edited for the user. `vault-track-read.sh` walks up to find `.vaultmind/` dynamically and needs no edits.
+
+**Concrete path-template work** — for each file, copy verbatim then edit these specific lines:
+
+| Source script | Line(s) to edit | Original | Replace with |
+|---|---|---|---|
+| `load-persona.sh` | 14 | `VAULT_PATH="$PROJECT_DIR/vaultmind-identity"` | `VAULT_PATH="<user's vault path>"` |
+| `load-persona.sh` | 76 | `RESEARCH_VAULT="$PROJECT_DIR/vaultmind-vault"` | Either `<user's project-vault path>` if hybrid, OR delete the line + the `if [ -d ... ]` block (lines 76–81) if persona-only |
+| `vault-recall.sh` | 35 | `VAULT_PATH="$CLAUDE_PROJECT_DIR/vaultmind-identity"` | `VAULT_PATH="<user's vault path>"` |
+| `capture-episode.sh` | 25 | `output_dir="$project_dir/vaultmind-identity/episodes"` | `output_dir="<user's vault path>/episodes"` |
+| `vault-track-read.sh` | — | (no edits — walks up to find `.vaultmind/`) | — |
+
+If the user's vault is OUTSIDE the project (e.g. `~/.vaultmind/persona/`), prefer the absolute path. If inside (e.g. `<project>/vaultmind-identity/`), `$CLAUDE_PROJECT_DIR/<dir>` keeps it portable across machines.
+
+After copying:
+```bash
+chmod +x <project>/.claude/scripts/{load-persona,vault-recall,vault-track-read}.sh
+chmod +x <project>/.ckeletin/scripts/capture-episode.sh
+```
+(Or wherever the project keeps its hook scripts; `.ckeletin/scripts/` is conventional in ckeletin-go projects but not required.)
+
+If you can't reach the vaultmind repo to read the templates, refuse: *"I need the vaultmind repo at `<known-path>` to read hook templates. Either point me at a clone or skip Claude Code wiring."*
 
 ### 6c. Confirm before write
 
@@ -410,8 +477,20 @@ Tell the user:
 
 ---
 
+## Known issues for v2 (surfaced by 2026-05-04 dogfood)
+
+These were caught walking this doc against a real local repo (greenfield via `/tmp/dogfood-onboarding`, migration shape via `daana-content-machine`). They're real but not push-blocking; named here so the next iteration knows what to fix.
+
+- **`vaultmind ask` returns `_path:README.md` hits in top-2.** The vault's own README hits its own retrieval. Fix candidate: exclude README.md from indexing by default, or filter in the retriever's domain-note branch.
+- **`related: [/path/to/file.md]` (Obsidian-style path links)** in migrated files don't auto-resolve to vaultmind ids. Vaultmind tolerates it (passes through unchanged), but cross-note retrieval doesn't follow these links. v2 candidate: alias `related` → `related_ids` AND a path-to-id resolver pass during indexing.
+- **Debug log on stdout** during retrieval (`INF Using config file...`). Annoying for the agent's grep/parse. Fix candidate: log to stderr only by default; stdout reserved for command output.
+- **Vaultmind's own `Next steps` output uses bare `vaultmind`** (PATH-assumption — same root cause as §1a's first-version bug). Fix candidate: vaultmind detects how it was invoked and uses that in its hint output.
+- **No URL fallback for this doc.** The entry sentence assumes the user has a local clone. If they `go install` (future) or use a release binary, the local path doesn't exist. Fix candidate once the repo is public: the entry sentence cites both a local path AND a GitHub URL, agent uses whichever the user has.
+- **Per-vault adapter for non-Claude-Code agents** (Cursor, Codex, Aider, etc.) — §6 + §9 acknowledge this is out of scope; v2+ deserves a dedicated doc per agent.
+
 ## Source
 
 - Plan note: `vaultmind-identity/references/onboarding-ax-design.md` — the full design rationale, lens-walked decisions, probe data on shahname-rts and content-machine.
 - Companion arc: `arc-the-lighter-move-is-the-work` — the discipline this doc honors. v1 covers greenfield + migration; hybrid and adapter-for-other-agents are deferred until reality demands.
 - First real user: Siavoush. This doc is the script he'll be onboarded with. Capture what breaks; it informs v2.
+- Dogfood pass: 2026-05-04, surfaced 5 critical/important fixes (PATH assumption, `.claude/` exclude, empty type vocabulary, config-as-markdown filter, hook path-templating) and 5 nice-to-haves (above).
