@@ -59,6 +59,12 @@ skips ORT and produces a pure-Go binary in seconds.
 
 To wire your vault into Claude Code (or any agent that supports SessionStart hooks), see `.claude/scripts/load-persona.sh` in this repo as a reference implementation.
 
+**Or — let the agent set it up for you.** After `task build`, paste this sentence to Claude Code:
+
+> *I just installed vaultmind — walk me through onboarding using `<your-vaultmind-clone>/docs/AGENT_ONBOARDING.md`.*
+
+The agent reads the doc, asks you a few questions about who you are and what should be remembered, inspects your project, shows a diff-preview of every file it'll touch, and gets you to a wired vault. Greenfield (fresh persona) and migration (existing markdown) are both handled. See **[docs/AGENT_ONBOARDING.md](docs/AGENT_ONBOARDING.md)** for the full script.
+
 ## Try it with my vaults first
 
 If you'd rather see VaultMind working before scaffolding your own, this repo ships with two vaults you can play with:
@@ -139,6 +145,8 @@ vaultmind export --output ./vm-export.jsonl                  # write to file ins
 Run `vaultmind --help` for the full list.
 
 **For AI agents using VaultMind as memory:** see **[docs/AGENT_USAGE.md](docs/AGENT_USAGE.md)** — end-to-end guide covering save, retrieve, update, inspect, frontmatter schema, and integration patterns.
+
+**For AI agents helping a new user set vaultmind up:** see **[docs/AGENT_ONBOARDING.md](docs/AGENT_ONBOARDING.md)** — one-time setup walkthrough covering preflight, project read, greenfield + migration paths, hook wiring with diff-preview, verification, and failure modes.
 
 ## How the hooks work
 
