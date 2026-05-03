@@ -15,7 +15,7 @@ import (
 // conflicting notes under the same ID.
 func TestDoctor_DuplicateIDCounterExistsAndReturnsZeroForCleanVault(t *testing.T) {
 	db, dir := smallIndexedVault(t)
-	result, err := query.Doctor(db, dir)
+	result, err := query.Doctor(db, dir, nil)
 	require.NoError(t, err)
 	assert.Equal(t, 0, result.Issues.DuplicateIDs,
 		"clean vault must report zero duplicate IDs")
@@ -26,7 +26,7 @@ func TestDoctor_DuplicateIDCounterExistsAndReturnsZeroForCleanVault(t *testing.T
 // zero-value string would force every consumer to branch on empty-vs-set.
 func TestDoctor_IndexStatusIsAlwaysPopulated(t *testing.T) {
 	db, dir := smallIndexedVault(t)
-	result, err := query.Doctor(db, dir)
+	result, err := query.Doctor(db, dir, nil)
 	require.NoError(t, err)
 	assert.NotEmpty(t, result.IndexStatus,
 		"IndexStatus must always have a value so JSON consumers don't branch on empty")
@@ -37,7 +37,7 @@ func TestDoctor_IndexStatusIsAlwaysPopulated(t *testing.T) {
 // they fan out across multiple.
 func TestDoctor_VaultPathEchoesInput(t *testing.T) {
 	db, dir := smallIndexedVault(t)
-	result, err := query.Doctor(db, dir)
+	result, err := query.Doctor(db, dir, nil)
 	require.NoError(t, err)
 	assert.Equal(t, dir, result.VaultPath)
 }

@@ -316,7 +316,7 @@ func TestRunLinks_OutDirectionFindsOutboundEdge(t *testing.T) {
 // broke any would show up here as an error or a zero count.
 func TestDoctor_CoreCountsPopulateCleanly(t *testing.T) {
 	db, dir := smallIndexedVault(t)
-	result, err := query.Doctor(db, dir)
+	result, err := query.Doctor(db, dir, nil)
 	require.NoError(t, err)
 	assert.Equal(t, 3, result.TotalFiles, "vault has 3 .md files")
 	assert.Equal(t, 3, result.DomainNotes, "all three are domain notes")
@@ -331,7 +331,7 @@ func TestDoctor_CoreCountsPopulateCleanly(t *testing.T) {
 // what Doctor expects.
 func TestDoctor_IncompatibleLinkDetectedE2E(t *testing.T) {
 	db, dir := smallIndexedVault(t)
-	result, err := query.Doctor(db, dir)
+	result, err := query.Doctor(db, dir, nil)
 	require.NoError(t, err)
 	// alpha.md has [[proj-beta]] which resolves to beta.md (stem=beta).
 	// proj-beta != beta → this must surface as incompatible.
@@ -357,7 +357,7 @@ func TestDoctor_IssueArraysAreAlwaysInitialized(t *testing.T) {
 	// Use smallIndexedVault which does have issues; we just check the
 	// array fields are allocated (either empty or populated, never nil).
 	db, dir := smallIndexedVault(t)
-	result, err := query.Doctor(db, dir)
+	result, err := query.Doctor(db, dir, nil)
 	require.NoError(t, err)
 	assert.NotNil(t, result.Issues.IncompatibleLinkDetails, "IncompatibleLinkDetails must not be nil")
 	assert.NotNil(t, result.Issues.PathPseudoIDDetails, "PathPseudoIDDetails must not be nil")
@@ -372,7 +372,7 @@ func TestDoctor_EmbeddingsStatusAfterDenseEmbed(t *testing.T) {
 	db, dir := smallIndexedVault(t)
 
 	// Verify pre-state
-	result, err := query.Doctor(db, dir)
+	result, err := query.Doctor(db, dir, nil)
 	require.NoError(t, err)
 	assert.Equal(t, 0, result.Embeddings.DenseCount)
 	assert.False(t, result.Embeddings.SemanticReady)
@@ -387,7 +387,7 @@ func TestDoctor_EmbeddingsStatusAfterDenseEmbed(t *testing.T) {
 // embeddings, SemanticReady must be false and the note count must match.
 func TestDoctor_EmbeddingsStatusReflectsAbsence(t *testing.T) {
 	db, dir := smallIndexedVault(t)
-	result, err := query.Doctor(db, dir)
+	result, err := query.Doctor(db, dir, nil)
 	require.NoError(t, err)
 	require.NotNil(t, result.Embeddings, "embeddings field must always be populated")
 	assert.False(t, result.Embeddings.SemanticReady, "no embeddings = SemanticReady false")

@@ -173,6 +173,39 @@ func TestValidate_NoAlias_BackwardCompat(t *testing.T) {
 	assert.True(t, found, "without alias config, canonical `updated` should be reported missing")
 }
 
+// TestDoctor_PopulatesMissingRequiredFields — when a registry is passed,
+// Doctor calls Validate and surfaces the count of missing type-required
+// fields. The 2026-05-04 fix made the previously-dead MissingRequiredFields
+// counter actually populate (silent-failure shape per the pre-push code
+// review). The validator iterates td.Required only — vaultmind-owned
+// fields (created, vm_updated) are auto-maintained by vaultmind itself,
+// not user-required, so they're not counted here.
+func TestDoctor_PopulatesMissingRequiredFields(t *testing.T) {
+	db := openTestDB(t)
+
+	// Note: missing url (type-required for "source"). Expect counter == 1.
+	require.NoError(t, index.StoreNote(db, index.NoteRecord{
+		ID: "src-no-url", Path: "n1.md", Type: "source",
+		Title: "X", Hash: "abc", MTime: 1, IsDomain: true,
+	}))
+
+	reg := schema.NewRegistry(map[string]vault.TypeDef{
+		"source": {Required: []string{"url"}},
+	})
+
+	// With registry: counter populated.
+	result, err := query.Doctor(db, "/vault", reg)
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Issues.MissingRequiredFields,
+		"doctor should count the missing type-required url field")
+
+	// Without registry: counter stays 0 (backward-compat with pre-fix callers).
+	resultNil, err := query.Doctor(db, "/vault", nil)
+	require.NoError(t, err)
+	assert.Equal(t, 0, resultNil.Issues.MissingRequiredFields,
+		"doctor with nil registry should not populate the counter (caller hasn't loaded a registry)")
+}
+
 // openTestDB creates a fresh empty DB for unit tests.
 func openTestDB(t *testing.T) *index.DB {
 	t.Helper()

@@ -136,8 +136,16 @@ func TestValidateMutation_UnsetImmutableField(t *testing.T) {
 	assert.Equal(t, "immutable_field", err.(*MutationError).Code)
 }
 
-// testRegistryWithAliases returns a registry that aliases `last_updated` to
-// the core canonical `updated`. Used by the alias-aware mutation tests.
+// testRegistryWithAliases returns a registry that aliases `creation_date` to
+// the vaultmind-owned canonical `created`. Used by the alias-aware mutation
+// tests — `created` IS in RequiredFields (as a vaultmind-owned field), so
+// alias-of-required-field unset semantics can be exercised honestly.
+//
+// Earlier this aliased `last_updated` → `updated`, but the 2026-05-04
+// schema audit moved `updated` into humanCompatFields (not required —
+// file mtime is the SSOT for "edited"). `created` is the right canonical
+// to test against now: vaultmind owns it, RequiredFields includes it,
+// alias-of-required semantics still apply.
 func testRegistryWithAliases() *schema.Registry {
 	return schema.NewRegistryWithAliases(map[string]vault.TypeDef{
 		"project": {
@@ -146,19 +154,19 @@ func testRegistryWithAliases() *schema.Registry {
 			Statuses: []string{"active", "paused", "completed"},
 		},
 	}, map[string][]string{
-		"updated": {"last_updated"},
+		"created": {"creation_date"},
 	})
 }
 
 // TestValidateMutation_SetAliasField — IsFieldAllowed must accept registered
-// aliases. Previously `frontmatter set last_updated=...` would fail with
+// aliases. Previously `frontmatter set creation_date=...` would fail with
 // unknown_key even when the alias was explicitly registered (M1 in the
-// review). Migrating users like Siavoush hit this the first time they try
-// to update a field they keep under their existing name.
+// review). Migrating users hit this the first time they try to update a
+// field they keep under their existing name.
 func TestValidateMutation_SetAliasField(t *testing.T) {
 	reg := testRegistryWithAliases()
-	note := ParsedNoteInfo{ID: "proj-1", Type: "project", IsDomain: true, Keys: []string{"id", "type", "status", "title", "last_updated"}}
-	req := MutationRequest{Op: OpSet, Key: "last_updated", Value: "2026-05-02"}
+	note := ParsedNoteInfo{ID: "proj-1", Type: "project", IsDomain: true, Keys: []string{"id", "type", "status", "title", "creation_date"}}
+	req := MutationRequest{Op: OpSet, Key: "creation_date", Value: "2026-05-02"}
 	err := ValidateMutation(req, note, reg)
 	assert.NoError(t, err, "alias for canonical should be allowed without --allow-extra")
 }
@@ -168,19 +176,19 @@ func TestValidateMutation_SetAliasField(t *testing.T) {
 // Otherwise the unset leaves the canonical required-field unsatisfied
 // silently (M3 in the review — the silent-failure-across-layers shape).
 func TestValidateMutation_UnsetAliasOnlySatisfaction(t *testing.T) {
-	// updated is core-required (always required for domain notes). Note
-	// carries `last_updated` only — it's the alias's only satisfaction
-	// of the `updated` canonical. Unsetting it must block.
+	// `created` is in RequiredFields (vaultmind-owned). Note carries
+	// `creation_date` only — it's the alias's only satisfaction of the
+	// `created` canonical. Unsetting it must block.
 	reg := testRegistryWithAliases()
 	note := ParsedNoteInfo{
 		ID: "proj-1", Type: "project", IsDomain: true,
-		Keys: []string{"id", "type", "status", "title", "last_updated"},
+		Keys: []string{"id", "type", "status", "title", "creation_date"},
 	}
-	req := MutationRequest{Op: OpUnset, Key: "last_updated"}
+	req := MutationRequest{Op: OpUnset, Key: "creation_date"}
 	err := ValidateMutation(req, note, reg)
 	require.Error(t, err)
 	assert.Equal(t, "missing_required_field", err.(*MutationError).Code)
-	assert.Equal(t, "last_updated", err.(*MutationError).Field)
+	assert.Equal(t, "creation_date", err.(*MutationError).Field)
 }
 
 // TestValidateMutation_UnsetAliasWithCanonicalPresent — unsetting an alias
@@ -190,9 +198,9 @@ func TestValidateMutation_UnsetAliasWithCanonicalPresent(t *testing.T) {
 	reg := testRegistryWithAliases()
 	note := ParsedNoteInfo{
 		ID: "proj-1", Type: "project", IsDomain: true,
-		Keys: []string{"id", "type", "status", "title", "updated", "last_updated"},
+		Keys: []string{"id", "type", "status", "title", "created", "creation_date"},
 	}
-	req := MutationRequest{Op: OpUnset, Key: "last_updated"}
+	req := MutationRequest{Op: OpUnset, Key: "creation_date"}
 	err := ValidateMutation(req, note, reg)
 	assert.NoError(t, err, "canonical still satisfies the required field after alias unset")
 }
@@ -207,9 +215,9 @@ func TestValidateMutation_UnsetCanonicalWithAliasPresent(t *testing.T) {
 	reg := testRegistryWithAliases()
 	note := ParsedNoteInfo{
 		ID: "proj-1", Type: "project", IsDomain: true,
-		Keys: []string{"id", "type", "status", "title", "updated", "last_updated"},
+		Keys: []string{"id", "type", "status", "title", "created", "creation_date"},
 	}
-	req := MutationRequest{Op: OpUnset, Key: "updated"}
+	req := MutationRequest{Op: OpUnset, Key: "created"}
 	err := ValidateMutation(req, note, reg)
 	assert.NoError(t, err, "alias still satisfies the required field after canonical unset")
 }

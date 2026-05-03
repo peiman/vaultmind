@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/peiman/vaultmind/internal/index"
+	"github.com/peiman/vaultmind/internal/schema"
 )
 
 // DoctorResult is the JSON-serializable output of the doctor command.
@@ -84,7 +85,14 @@ type IncompatibleLink struct {
 }
 
 // Doctor runs vault health diagnostics against the indexed database.
-func Doctor(db *index.DB, vaultPath string) (*DoctorResult, error) {
+//
+// When reg is non-nil, the missing_required_fields counter is populated
+// by running the schema validator and summing missing-field issues. When
+// reg is nil, the counter stays 0 (caller hasn't loaded a registry —
+// usually a misconfiguration). The signature was extended 2026-05-04 to
+// close the silent-failure shape where MissingRequiredFields was a
+// declared output that never got populated.
+func Doctor(db *index.DB, vaultPath string, reg *schema.Registry) (*DoctorResult, error) {
 	result := &DoctorResult{
 		VaultPath:   vaultPath,
 		IndexStatus: "current",
@@ -98,6 +106,21 @@ func Doctor(db *index.DB, vaultPath string) (*DoctorResult, error) {
 		return nil, fmt.Errorf("counting domain notes: %w", err)
 	}
 	result.UnstructuredNotes = result.TotalFiles - result.DomainNotes
+
+	// missing_required_fields — call Validate and count. Single source
+	// of truth for what counts as "missing required field"; doctor
+	// surfaces the aggregate, validate surfaces per-note details.
+	if reg != nil {
+		validateRes, err := Validate(db, reg)
+		if err != nil {
+			return nil, fmt.Errorf("validating for missing-required-fields: %w", err)
+		}
+		for _, issue := range validateRes.Issues {
+			if issue.Rule == "missing_required_field" {
+				result.Issues.MissingRequiredFields++
+			}
+		}
+	}
 
 	// Unresolved links
 	if err := db.QueryRow("SELECT COUNT(*) FROM links WHERE resolved = FALSE AND dst_note_id IS NULL").Scan(&result.Issues.UnresolvedLinks); err != nil {

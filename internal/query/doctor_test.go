@@ -24,7 +24,7 @@ func buildIndexedDB(t *testing.T) *index.DB {
 func TestDoctor_ReturnsVaultSummary(t *testing.T) {
 	db := buildIndexedDB(t)
 
-	result, err := query.Doctor(db, testVaultPath)
+	result, err := query.Doctor(db, testVaultPath, nil)
 	require.NoError(t, err)
 
 	assert.Equal(t, testVaultPath, result.VaultPath)
@@ -37,7 +37,7 @@ func TestDoctor_ReturnsVaultSummary(t *testing.T) {
 func TestDoctor_ReportsUnresolvedLinks(t *testing.T) {
 	db := buildIndexedDB(t)
 
-	result, err := query.Doctor(db, testVaultPath)
+	result, err := query.Doctor(db, testVaultPath, nil)
 	require.NoError(t, err)
 
 	// Body wikilinks are unresolved (dst_note_id is NULL)
@@ -56,7 +56,7 @@ func TestDoctor_DetectsPathPseudoIDLinks(t *testing.T) {
 		"test-src-pseudo", "_path:NonExistent.md", "NonExistent", "explicit_link", true, "high")
 	require.NoError(t, err)
 
-	result, docErr := query.Doctor(db, testVaultPath)
+	result, docErr := query.Doctor(db, testVaultPath, nil)
 	require.NoError(t, docErr)
 
 	assert.Greater(t, result.Issues.PathPseudoIDLinks, 0,
@@ -90,7 +90,7 @@ func TestDoctor_DetectsObsidianIncompatibleLinks(t *testing.T) {
 		"test-source", "test-target", "Test Target", "explicit_link", true, "high")
 	require.NoError(t, err)
 
-	result, docErr := query.Doctor(db, testVaultPath)
+	result, docErr := query.Doctor(db, testVaultPath, nil)
 	require.NoError(t, docErr)
 
 	assert.Greater(t, result.Issues.ObsidianIncompatibleLinks, 0,

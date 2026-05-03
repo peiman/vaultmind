@@ -81,7 +81,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 	}
 	defer vdb.Close()
 
-	result, err := query.Doctor(vdb.DB, vaultPath)
+	result, err := query.Doctor(vdb.DB, vaultPath, vdb.Reg)
 	if err != nil {
 		return fmt.Errorf("running doctor: %w", err)
 	}

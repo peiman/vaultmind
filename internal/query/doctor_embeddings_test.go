@@ -25,7 +25,7 @@ func TestDoctor_ReportsNoEmbeddingsStatus(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	result, err := query.Doctor(db, "/vault")
+	result, err := query.Doctor(db, "/vault", nil)
 	require.NoError(t, err)
 	require.NotNil(t, result.Embeddings)
 	assert.Equal(t, 2, result.Embeddings.TotalNotes)
@@ -50,7 +50,7 @@ func TestDoctor_ReportsDenseMiniLMEmbeddings(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	result, err := query.Doctor(db, "/vault")
+	result, err := query.Doctor(db, "/vault", nil)
 	require.NoError(t, err)
 	require.NotNil(t, result.Embeddings)
 	assert.Equal(t, 1, result.Embeddings.DenseCount)
@@ -77,7 +77,7 @@ func TestDoctor_ReportsBGEM3Embeddings(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	result, err := query.Doctor(db, "/vault")
+	result, err := query.Doctor(db, "/vault", nil)
 	require.NoError(t, err)
 	require.NotNil(t, result.Embeddings)
 	assert.Equal(t, "bge-m3", result.Embeddings.Model)
@@ -117,7 +117,7 @@ func TestDoctor_MixedModelState_SurfacedExplicitly(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	result, err := query.Doctor(db, "/vault")
+	result, err := query.Doctor(db, "/vault", nil)
 	require.NoError(t, err)
 	require.NotNil(t, result.Embeddings)
 	assert.Equal(t, "mixed", result.Embeddings.Model,
@@ -148,7 +148,7 @@ func TestDoctor_MiniLM_NoImbalanceReported(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	result, err := query.Doctor(db, "/vault")
+	result, err := query.Doctor(db, "/vault", nil)
 	require.NoError(t, err)
 	require.NotNil(t, result.Embeddings)
 	assert.False(t, result.Embeddings.HasModalityImbalance,
@@ -177,7 +177,7 @@ func TestDoctor_BGEM3_FullCoverage_NoImbalance(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	result, err := query.Doctor(db, "/vault")
+	result, err := query.Doctor(db, "/vault", nil)
 	require.NoError(t, err)
 	require.NotNil(t, result.Embeddings)
 	assert.Equal(t, "bge-m3", result.Embeddings.Model)
@@ -230,7 +230,7 @@ func TestDoctor_BGEM3_PartialCoverage_FlagsImbalance(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	result, err := query.Doctor(db, "/vault")
+	result, err := query.Doctor(db, "/vault", nil)
 	require.NoError(t, err)
 	require.NotNil(t, result.Embeddings)
 	assert.Equal(t, "bge-m3", result.Embeddings.Model)
