@@ -171,6 +171,50 @@ func BuildAutoRetrieverWithActivation(db *index.DB, expDB *experiment.DB) AutoRe
 	return res
 }
 
+// BuildAutoRetrieverWithRerank returns a 4-way HybridRetriever wrapped in
+// an ActivationReranker (slice 5b”). The reranker takes the top FetchN
+// candidates from 4-way and reorders them by blending RRF score with
+// activation score using Alpha/Beta weights.
+//
+// Replaces BuildAutoRetrieverWithActivation (slice 5b' — 5th-lane variant)
+// for the default activation-aware path. The lane variant stays on disk,
+// unwired, as the documented escalation that didn't pan out — see
+// reference-activation-rerank-decision in the identity vault.
+//
+// IMPORTANT calibration obligation (carried over from 5b'): enabling this
+// reranker shifts the rank-1/rank-2 score gap distribution that step-4's
+// TopHitConfidence thresholds (5% / 2%) were calibrated against. The
+// blended score's gap distribution differs from the raw RRF gap; callers
+// turning this on for the default ask path must re-probe and update the
+// threshold constants in internal/query/format.go, or the strong/moderate/
+// weak labels silently miscalibrate.
+//
+// Zero-value alpha/beta fall back to defaults documented in
+// reference-activation-rerank-decision (currently 0.7 / 0.3 — to be
+// finalized after the α/β probe).
+func BuildAutoRetrieverWithRerank(db *index.DB, expDB *experiment.DB, alpha, beta float64) AutoRetrieverResult {
+	res := BuildAutoRetrieverFull(db)
+	if expDB == nil {
+		return res
+	}
+	scorer := func(ids []string) (map[string]float64, error) {
+		params := experiment.DefaultActivationParams(0.5)
+		scores, _, err := experiment.ComputeBatchScores(expDB, ids, params, nil)
+		return scores, err
+	}
+	return AutoRetrieverResult{
+		Retriever: &ActivationReranker{
+			Base:  res.Retriever,
+			Score: scorer,
+			Alpha: alpha,
+			Beta:  beta,
+			// FetchN zero-value → reranker uses its default (10).
+		},
+		Embedder: res.Embedder,
+		Cleanup:  res.Cleanup,
+	}
+}
+
 func newDefaultEmbedder() (*embedding.HugotEmbedder, error) {
 	embedder, err := embedding.NewHugotEmbedder(embedding.DefaultHugotConfig())
 	if err != nil {
