@@ -44,13 +44,7 @@ func Init(vaultPath string) (*Result, error) {
 	}
 
 	now := time.Now().UTC()
-	// Both formats use the canonical SSOT constants from schema package
-	// (per principle 7). vm_updated is RFC3339 second-precision UTC so
-	// doctor's drift detector can parse it consistently. created stays
-	// date-only — it's a humanish "when was this born" stamp, not a
-	// vaultmind-processed-on tracker.
 	today := now.Format(schema.CreatedDateFormat)
-	vmUpdated := now.Format(schema.VMUpdatedFormat)
 	count := 0
 
 	walkErr := fs.WalkDir(templates, "templates", func(p string, d fs.DirEntry, err error) error {
@@ -72,7 +66,7 @@ func Init(vaultPath string) (*Result, error) {
 		if readErr != nil {
 			return fmt.Errorf("read template %s: %w", p, readErr)
 		}
-		body = renderTemplate(body, today, vmUpdated)
+		body = renderTemplate(body, today)
 
 		if err := os.MkdirAll(filepath.Dir(dst), 0o750); err != nil {
 			return fmt.Errorf("create dir for %s: %w", dst, err)
@@ -91,28 +85,17 @@ func Init(vaultPath string) (*Result, error) {
 }
 
 // renderTemplate fills in date placeholders in the embedded templates.
-// Frontmatter `created:` (date-only) and `vm_updated:` (RFC3339
-// datetime per schema.VMUpdatedFormat) are inserted dynamically so
-// every fresh vault starts with today's stamps — keeps the index
-// honest instead of pinning everyone to the date the templates were
-// authored.
+// Frontmatter `created:` is inserted dynamically so every fresh vault
+// starts with today's stamp — keeps the index honest instead of
+// pinning everyone to the date the templates were authored.
 //
-// vm_updated takes the RFC3339 form (with colons) — YAML auto-quotes
-// the resulting value, which is correct YAML. The format matches the
-// mutator's auto-bump path so doctor's `mtime > vm_updated` parser
-// can read both write sites uniformly.
-func renderTemplate(body []byte, today, vmUpdated string) []byte {
-	// Templates intentionally OMIT created/vm_updated fields. We inject
-	// them after the leading frontmatter `---` so dates are always fresh.
-	// Files without leading frontmatter (README.md, .vaultmind/config.yaml)
-	// pass through unchanged.
+// Files without leading frontmatter (README.md, .vaultmind/config.yaml)
+// pass through unchanged.
+func renderTemplate(body []byte, today string) []byte {
 	const fmStart = "---\n"
 	if len(body) < len(fmStart) || string(body[:len(fmStart)]) != fmStart {
 		return body
 	}
-	// vm_updated is YAML-quoted because RFC3339 contains colons that
-	// YAML would otherwise parse as a mapping. Quoting here makes the
-	// intent explicit and matches what SetKey would emit.
-	dateLines := fmt.Sprintf("created: %s\nvm_updated: %q\n", today, vmUpdated)
-	return append(append([]byte(fmStart), []byte(dateLines)...), body[len(fmStart):]...)
+	dateLine := fmt.Sprintf("created: %s\n", today)
+	return append(append([]byte(fmStart), []byte(dateLine)...), body[len(fmStart):]...)
 }

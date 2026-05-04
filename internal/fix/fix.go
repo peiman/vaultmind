@@ -1,22 +1,23 @@
-// Package fix implements the `vaultmind frontmatter fix --backfill`
-// command's logic — walking the vault and identifying domain notes that
-// are missing vaultmind-owned frontmatter fields (created, vm_updated),
-// then optionally writing the missing fields via the existing mutator.
+// Package fix implements the `vaultmind frontmatter fix` command's
+// logic — walking the vault and identifying domain notes that are
+// missing the `created` field, then optionally writing it via the
+// existing mutator.
 //
-// Per the four-tier frontmatter taxonomy in schema/registry.go,
-// vaultmind-owned fields are vaultmind's responsibility. The mutator
-// auto-maintains them on every operation; this command exists for
-// existing-vault audits and migration scenarios where the auto-write
-// contract didn't yet apply (notes pre-dating the auto-maintenance).
+// Scope was originally `created` + `vm_updated` (the four-tier
+// vaultmind-owned tier). The 2026-05-04 dogfood pass retired
+// vm_updated entirely (no read-side consumer survived the false-
+// positive collapse of mtime-based drift), so this command now
+// covers only `created` — a tolerated optional field worth filling
+// for migration vaults where notes pre-date any auto-stamp era.
 //
 // Default mode is dry-run. Apply is opt-in. Per arc-extending-not-
 // overwriting, vaultmind never silently rewrites user files; the
 // human/agent must explicitly --apply to commit the changes.
 //
-// User-owned fields (title, status, tags, related_ids, etc.) are NEVER
-// touched. The mutator's existing infrastructure (atomic writes,
-// conflict detection, schema validation, vm_updated auto-bump) handles
-// the actual write — this package is the discovery + iteration layer.
+// User-owned fields (title, status, tags, related_ids, etc.) are
+// NEVER touched. The mutator's existing infrastructure (atomic
+// writes, conflict detection, schema validation) handles the actual
+// write — this package is the discovery + iteration layer.
 package fix
 
 import (
@@ -178,33 +179,29 @@ func processNote(cfg Config, reg *schema.Registry, mutator *mutation.Mutator, pa
 		return Item{}, false, nil
 	}
 
-	// Determine which vaultmind-owned fields are missing. We use
-	// IsFieldPresent to honor any per-vault aliases the user may have
-	// configured (principle 7: SSOT — alias-resolution lives in
-	// schema, not duplicated here).
+	// Determine whether `created` is missing. IsFieldPresent honors
+	// any per-vault aliases the user has configured (principle 7:
+	// alias resolution lives in schema, not duplicated here).
+	//
+	// Scope is only `created` after the 2026-05-04 chain retraction.
+	// vm_updated was retired (no read-side consumer); `updated` is
+	// optional human-managed metadata that vaultmind never owned.
 	missing := []string{}
 	if !reg.IsFieldPresent(fm, "created") {
 		missing = append(missing, "created")
-	}
-	if !reg.IsFieldPresent(fm, "vm_updated") {
-		missing = append(missing, "vm_updated")
 	}
 	if len(missing) == 0 {
 		return Item{}, false, nil
 	}
 
-	// Compute proposed values and sources.
+	// Compute proposed values and sources for each missing field.
 	proposed := map[string]string{}
 	sources := map[string]string{}
 	for _, field := range missing {
-		switch field {
-		case "created":
+		if field == "created" {
 			val, src := cfg.CreatedResolver(path)
 			proposed[field] = val
 			sources[field] = src
-		case "vm_updated":
-			proposed[field] = time.Now().UTC().Format(schema.VMUpdatedFormat)
-			sources[field] = "today"
 		}
 	}
 
@@ -216,12 +213,6 @@ func processNote(cfg Config, reg *schema.Registry, mutator *mutation.Mutator, pa
 		Sources:        sources,
 	}
 
-	// Build the merge fields. The mutator's auto-bump on OpMerge will
-	// also update vm_updated to today — that's exactly what we want
-	// for "vm_updated missing" cases. For "vm_updated present but stale"
-	// the mutator's auto-bump still applies; per the vaultmind-owned
-	// contract, vm_updated represents "when vaultmind last touched
-	// this," and this fix run IS that touch.
 	fields := map[string]interface{}{}
 	for k, v := range proposed {
 		fields[k] = v
@@ -259,8 +250,7 @@ func relPath(vaultPath, path string) string {
 // DefaultCreatedDateResolver tries git first-commit, falls back to file
 // mtime, falls back to today. Returns (date-string, source) where source
 // is "git", "mtime", or "today". Date is YYYY-MM-DD (date-only) — created
-// is a humanish "when this was born" stamp, not a sub-day-precision
-// processing tracker (that's vm_updated's job).
+// is a humanish "when this was born" stamp.
 func DefaultCreatedDateResolver(absPath string) (string, string) {
 	// 1. Try git log first-commit. Use --diff-filter=A --follow to get
 	//    the actual creation commit (handles renames). Format %as gives

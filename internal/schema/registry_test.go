@@ -27,8 +27,13 @@ func TestRegistry_RequiredFields(t *testing.T) {
 	assert.Contains(t, fields, "title")
 	assert.Contains(t, fields, "id")
 	assert.Contains(t, fields, "type")
-	assert.Contains(t, fields, "created")
-	assert.Contains(t, fields, "vm_updated")
+	// `created` is recognized but not required after the 2026-05-04
+	// retraction; `vm_updated` was retired entirely (no read-side
+	// consumer survived). RequiredFields = coreFields ∪ td.Required.
+	assert.NotContains(t, fields, "created",
+		"created is optional/tolerated, not required (post-retraction)")
+	assert.NotContains(t, fields, "vm_updated",
+		"vm_updated was retired in the 2026-05-04 chain")
 }
 
 func TestRegistry_ValidStatus(t *testing.T) {
@@ -65,26 +70,21 @@ func TestRegistry_IsFieldAllowed(t *testing.T) {
 }
 
 // TestRegistry_FieldCategorization pins the truthful frontmatter
-// taxonomy that emerged from the 2026-05-04 schema audit
+// taxonomy that emerged from the 2026-05-04 chain + retraction
 // (reference-current-context). Per manifesto principles 1, 5, 9:
 //
-//   - coreFields = [id, type] — gated at parser classification.
-//   - vaultmindOwnedFields = [created, vm_updated] — auto-maintained
-//     by vaultmind itself; recognized in IsFieldAllowed; included in
-//     RequiredFields (so mutation can't unset them — meaningless
-//     since vaultmind would refill).
-//   - humanCompatFields = [updated] — Obsidian-compat tolerated, NOT
-//     auto-maintained, NOT in RequiredFields (file mtime is the SSOT
-//     for "edited" per principle 7).
-//   - graphFields = [title, status, aliases, tags, parent_id,
-//     related_ids, source_ids] — recognized on any type.
+//   - coreFields = [id, type] — gated at parser classification;
+//     the only fields RequiredFields reports beyond td.Required.
+//   - recognizedFields = [title, status, aliases, tags, parent_id,
+//     related_ids, source_ids, created, updated] — recognized on
+//     any type via IsFieldAllowed; never required by vaultmind,
+//     never auto-maintained.
 //
-// Earlier the schema declared coreFields = [id, type, created,
-// updated, vm_updated] but no enforcement teeth existed for the
-// dating triplet beyond mutation guards — pure documentation
-// drift (manifesto principle 9: "suggestions don't survive time
-// pressure"). The new shape makes each category's enforcement
-// path explicit.
+// Earlier shapes declared `vaultmindOwnedFields = [created, vm_updated]`
+// (auto-maintained, unset-protected). The dogfood pass retired
+// vm_updated entirely (no read-side consumer survived the false-
+// positive collapse of mtime drift); `created` joined the tolerated
+// tier. Same truth-seeking lens applied recursively.
 func TestRegistry_FieldCategorization(t *testing.T) {
 	reg := schema.NewRegistry(map[string]vault.TypeDef{
 		"source": {Required: []string{"url"}, Optional: []string{"author"}},
@@ -97,22 +97,22 @@ func TestRegistry_FieldCategorization(t *testing.T) {
 		assert.Contains(t, reg.RequiredFields("source"), "type")
 	})
 
-	t.Run("vaultmindOwnedFields are allowed and unset-protected", func(t *testing.T) {
+	t.Run("created and updated are tolerated, not required", func(t *testing.T) {
 		assert.True(t, reg.IsFieldAllowed("source", "created"))
-		assert.True(t, reg.IsFieldAllowed("source", "vm_updated"))
-		// In RequiredFields so mutation unset-guard blocks them.
-		assert.Contains(t, reg.RequiredFields("source"), "created")
-		assert.Contains(t, reg.RequiredFields("source"), "vm_updated")
-	})
-
-	t.Run("humanCompatFields are allowed but NOT required", func(t *testing.T) {
 		assert.True(t, reg.IsFieldAllowed("source", "updated"))
-		// Critically: NOT in RequiredFields. mtime is the SSOT for
-		// "edited"; vaultmind doesn't write or require this field.
+		assert.NotContains(t, reg.RequiredFields("source"), "created")
 		assert.NotContains(t, reg.RequiredFields("source"), "updated")
 	})
 
-	t.Run("graphFields recognized regardless of type-required/optional", func(t *testing.T) {
+	t.Run("vm_updated is no longer recognized", func(t *testing.T) {
+		// Retired in the 2026-05-04 chain. If this passes (i.e. allowed
+		// returns false), the retirement held; if it returns true, the
+		// field crept back in somewhere.
+		assert.False(t, reg.IsFieldAllowed("source", "vm_updated"),
+			"vm_updated was retired; recognizedFields must not list it")
+	})
+
+	t.Run("graph metadata recognized regardless of type-required/optional", func(t *testing.T) {
 		assert.True(t, reg.IsFieldAllowed("source", "tags"))
 		assert.True(t, reg.IsFieldAllowed("source", "aliases"))
 		assert.True(t, reg.IsFieldAllowed("source", "related_ids"))

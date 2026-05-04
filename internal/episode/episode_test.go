@@ -143,39 +143,23 @@ func TestRenderMarkdown_EmitsExpectedSections(t *testing.T) {
 	assert.Contains(t, md, "#42")
 }
 
-// TestRenderMarkdown_HonorsSchemaOwnershipContract — every emitted
-// episode MUST carry vaultmind-owned fields (created, vm_updated)
-// per the four-tier taxonomy in schema/registry.go. The episode-
-// capture path was bypassing this contract before slice 8: it wrote
-// id/type/session_id/started_at/ended_at/cwd/git_branch/tags but
-// not created or vm_updated. The 2026-05-04 dogfood pass surfaced
-// 8/8 captured episodes flagged by `vaultmind frontmatter fix`,
-// which is the contract violation this test pins shut.
-//
-// `created` for an episode is the started_at date (when the
-// session occurred — the episode's semantic "birthday"), NOT today.
-// vm_updated is the canonical SSOT format applied at render time.
-func TestRenderMarkdown_HonorsSchemaOwnershipContract(t *testing.T) {
+// TestRenderMarkdown_StampsCreatedFromStartedAt — every emitted
+// episode carries `created` derived from started_at (when the
+// session happened — the episode's semantic birthday), NOT today.
+// Captures the post-2026-05-04-retraction contract: `created` is a
+// tolerated optional field that capture stamps as a human-friendly
+// convenience; vm_updated was retired (no read-side consumer
+// survived the dogfood pass).
+func TestRenderMarkdown_StampsCreatedFromStartedAt(t *testing.T) {
 	ep, err := episode.ParseTranscript(fixturePath)
 	require.NoError(t, err)
 
 	md := episode.RenderMarkdown(ep)
 
-	// `created` is the started_at date portion (YYYY-MM-DD). Episodes
-	// describe a session; the session is when they happened. This
-	// matches the semantic of `created` for other note types
-	// (when this thing was born), and avoids the
-	// git-commit-vs-filename surprise the 2026-05-04 dogfood
-	// surfaced for legacy episodes.
 	assert.Contains(t, md, "created: 2026-04-24",
 		"created MUST be the started_at date (YYYY-MM-DD), not today")
-
-	// vm_updated MUST be present and in canonical RFC3339 second-
-	// precision UTC form (schema.VMUpdatedFormat). Doctor's drift
-	// detector parses with the SSOT constant; an unquoted or wrongly-
-	// formatted value here would silently fail every drift check.
-	assert.Regexp(t, `vm_updated: "?20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"?`, md,
-		"vm_updated MUST be present in canonical RFC3339 second-precision UTC")
+	assert.NotContains(t, md, "vm_updated",
+		"vm_updated was retired in the 2026-05-04 chain; episodes must not emit it")
 }
 
 // TestRenderMarkdown_CreatedFallsBackToTodayOnDegenerateStartedAt —

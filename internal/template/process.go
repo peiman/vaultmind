@@ -14,15 +14,14 @@ import (
 
 // knownVars is the set of variable names recognised in templates.
 var knownVars = map[string]struct{}{
-	"id":         {},
-	"type":       {},
-	"title":      {},
-	"created":    {},
-	"updated":    {},
-	"vm_updated": {},
-	"date":       {},
-	"datetime":   {},
-	"path":       {},
+	"id":       {},
+	"type":     {},
+	"title":    {},
+	"created":  {},
+	"updated":  {},
+	"date":     {},
+	"datetime": {},
+	"path":     {},
 }
 
 // varPattern matches <%=word%> placeholders.
@@ -75,18 +74,13 @@ func SubstituteVars(content string, vars map[string]string) (string, []string) {
 //  2. Build variable map and substitute placeholders
 //  3. Parse frontmatter
 //  4. Apply field overrides from cfg.Fields
-//  5. Ensure core fields (id, type) and vaultmind-owned fields
-//     (created, vm_updated) are present — see schema/registry.go for
-//     the four-tier taxonomy. Vaultmind owns created + vm_updated;
-//     this template path is one of the auto-maintenance write sites.
+//  5. Ensure core fields (id, type) are present and a `created` stamp
+//     is set — see schema/registry.go for the field taxonomy.
 //  6. Override body if cfg.Body is set
 //  7. Serialize and return
 func Process(cfg ProcessConfig) (*ProcessResult, error) {
 	now := time.Now().UTC()
-	// Both formats use the canonical SSOT constants from schema package —
-	// per principle 7, every write site MUST reference these constants.
 	dateStr := now.Format(schema.CreatedDateFormat)
-	datetimeStr := now.Format(schema.VMUpdatedFormat)
 
 	// Determine the effective ID (may be overridden by a Fields["id"] later).
 	generatedID := GenerateID(cfg.Path, cfg.Type)
@@ -99,24 +93,17 @@ func Process(cfg ProcessConfig) (*ProcessResult, error) {
 		title = base
 	}
 
-	// Build variable substitution map. created and updated are date-only
-	// (Obsidian convention for human-readable timestamps). vm_updated
-	// is RFC3339 datetime — vaultmind owns it and the doctor's
-	// "edited since vaultmind processed" check needs sub-day precision
-	// to avoid false-positive drift within the same calendar day. The
-	// mutator at internal/mutation/mutator.go bumps vm_updated on every
-	// successful operation; this is the init-side write site keeping
-	// the format consistent.
+	// Build variable substitution map. created and updated are
+	// date-only (Obsidian convention for human-readable timestamps).
 	vars := map[string]string{
-		"id":         generatedID,
-		"type":       cfg.Type,
-		"title":      title,
-		"created":    dateStr,
-		"updated":    dateStr,
-		"vm_updated": datetimeStr,
-		"date":       dateStr,
-		"datetime":   datetimeStr,
-		"path":       cfg.Path,
+		"id":       generatedID,
+		"type":     cfg.Type,
+		"title":    title,
+		"created":  dateStr,
+		"updated":  dateStr,
+		"date":     dateStr,
+		"datetime": dateStr,
+		"path":     cfg.Path,
 	}
 
 	var warnings []string
@@ -167,11 +154,6 @@ func Process(cfg ProcessConfig) (*ProcessResult, error) {
 	if _, ok := fm["created"]; !ok {
 		fm["created"] = dateStr
 	}
-	if _, ok := fm["vm_updated"]; !ok {
-		// vm_updated is RFC3339 datetime (sub-day precision) — see the
-		// vars map above for the rationale.
-		fm["vm_updated"] = datetimeStr
-	}
 
 	// Apply body override if provided.
 	if cfg.Body != "" {
@@ -198,11 +180,11 @@ func Process(cfg ProcessConfig) (*ProcessResult, error) {
 // with empty string defaults.
 func buildMinimalTemplate(requiredFields []string) string {
 	var sb strings.Builder
-	sb.WriteString("---\nid: <%=id%>\ntype: <%=type%>\ntitle: <%=title%>\ncreated: <%=created%>\nvm_updated: <%=vm_updated%>\n")
+	sb.WriteString("---\nid: <%=id%>\ntype: <%=type%>\ntitle: <%=title%>\ncreated: <%=created%>\n")
 	for _, f := range requiredFields {
 		// Only add fields that are not already core fields in the template.
 		switch f {
-		case "id", "type", "title", "created", "vm_updated", "updated":
+		case "id", "type", "title", "created", "updated":
 			// already included
 		default:
 			sb.WriteString(f)

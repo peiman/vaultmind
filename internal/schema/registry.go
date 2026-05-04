@@ -18,81 +18,49 @@ import (
 // `updated`, `vm_updated` here, but those are not gated at parser
 // classification and were never enforced by validators — pure
 // declaration without teeth, which principle 9 calls "suggestions"
-// (suggestions don't survive time pressure). They're now categorized
-// honestly: `created` and `vm_updated` as vaultmindOwnedFields (auto-
-// maintained by vaultmind, unset-protected); `updated` as
-// humanCompatFields (recognized for Obsidian compat, not maintained,
-// not required — file mtime is the SSOT for "edited").
+// (suggestions don't survive time pressure).
 var coreFields = []string{"id", "type"}
 
-// vaultmindOwnedFields are auto-maintained by vaultmind. Listed here
-// to be unset-protected by the mutation guard (the user can't unset
-// them — vaultmind owns them and would just refill on next mutation,
-// so unset is meaningless) and to be recognized in IsFieldAllowed.
-// Vaultmind itself maintains presence and freshness via auto-write
-// paths: template (init), mutator (every frontmatter set/unset/merge),
-// `vaultmind frontmatter fix --backfill` (migration tooling).
+// recognizedFields are tolerated optional fields — graph-tier metadata
+// used by retrieval and traversal, plus a few human-convenience
+// timestamps that vaultmind reads but never enforces. Recognized via
+// IsFieldAllowed; no validator demands them; vaultmind does not
+// maintain them after note creation.
 //
-//   - `created`: when the note was first created. Auto-filled on init
-//     and on `frontmatter fix --backfill` (from git first-commit when
-//     possible, file mtime, or today's date). Read by no logic; useful
-//     to humans for context.
-//   - `vm_updated`: when vaultmind last wrote this note's frontmatter.
-//     Distinct from file mtime (which catches any edit, including
-//     direct vim/Obsidian/sed). Vault-portable processing tracker —
-//     survives DB destruction, machine moves, git transfers. Used by
-//     doctor to surface "edited since vaultmind processed" drift.
-var vaultmindOwnedFields = []string{"created", "vm_updated"}
-
-// humanCompatFields are recognized but neither required nor auto-
-// maintained. Tolerated for backward compat with Obsidian-style
-// frontmatter on existing user notes. File mtime is the SSOT for
-// "last edited" (principle 7); `updated` in frontmatter is duplicate
-// data that drifts. Vaultmind doesn't write it; vaultmind doesn't
-// require it; users who already have it in their notes are not forced
-// to remove it.
-var humanCompatFields = []string{"updated"}
-
-// graphFields are recognized graph-tier metadata used by retrieval
-// and graph traversal. Tolerated on any type via IsFieldAllowed.
-var graphFields = []string{"title", "status", "aliases", "tags", "parent_id", "related_ids", "source_ids"}
-
-// VMUpdatedFormat is the canonical format for the vm_updated field —
-// RFC3339 second-precision UTC. Per manifesto principle 7 (SSOT),
-// every write site for vm_updated MUST format with this constant:
+//   - `created`: human-friendly birthdate stamp. Set on init/template/
+//     episode-capture; surfaced via `vaultmind note get`. Real
+//     consumer (display); kept.
+//   - `updated`: Obsidian-compat human-managed timestamp. File mtime
+//     is the SSOT for "last edited" (principle 7); `updated` is
+//     legacy convention tolerated for migration vaults.
 //
-//   - internal/mutation/mutator.go (auto-bump on every operation)
-//   - internal/template/process.go (init / scaffold)
-//   - internal/initvault/initvault.go (vault scaffold dates)
-//   - internal/episode/render.go (SessionEnd capture)
-//   - internal/fix/fix.go (frontmatter fix --apply backfill)
-//   - internal/query/doctor.go (drift detector — parse + display)
-//
-// The format has sub-day precision because doctor's drift detector
-// (commit 5 in this chain) compares file mtime against vm_updated
-// to surface "edited since vaultmind processed" — date-only would
-// produce false-positive drift within the same calendar day.
-//
-// Note: contains colons, so YAML serialization auto-quotes the
-// emitted value. That's correct YAML; readers should strip surrounding
-// quotes for parse comparisons.
-const VMUpdatedFormat = "2006-01-02T15:04:05Z"
+// `vm_updated` was previously also in this category as a vaultmind-
+// managed processing tracker. The 2026-05-04 dogfood pass revealed it
+// had no read-side consumer except a doctor drift detector that
+// produced ~95% false positives on real vaults (mtime-based). The
+// detector was rewritten to use content-hash comparison; vm_updated
+// became orphaned ceremony and was retired entirely. Same truth-
+// seeking lens that drove the original schema rescope, applied
+// recursively.
+var recognizedFields = []string{
+	"title", "status", "aliases", "tags",
+	"parent_id", "related_ids", "source_ids",
+	"created", "updated",
+}
 
 // CreatedDateFormat is the canonical format for the `created` field —
 // YYYY-MM-DD date-only UTC. Per manifesto principle 7 (SSOT), every
 // write site for `created` MUST format with this constant:
 //
-//   - internal/fix/fix.go (DefaultCreatedDateResolver: git/mtime/today)
 //   - internal/template/process.go (init / scaffold default)
 //   - internal/initvault/initvault.go (vault scaffold dates)
 //   - internal/episode/render.go (SessionEnd capture: started_at date)
 //   - internal/mutation/normalize.go (date-field canonicalization)
+//   - internal/fix/fix.go (DefaultCreatedDateResolver: git/mtime/today)
 //
-// `created` is a humanish "when was this born" stamp, not a sub-day
-// processing tracker (that's vm_updated's job). Date-only matches both
-// `git log --format=%as` (author short-date) and the conventional
-// frontmatter date form, so YAML emits unquoted (no colon, no quotes
-// needed).
+// `created` is a humanish "when was this born" stamp. Date-only
+// matches both `git log --format=%as` (author short-date) and the
+// conventional frontmatter date form, so YAML emits unquoted.
 const CreatedDateFormat = "2006-01-02"
 
 // Registry holds the type definitions and provides validation methods.
@@ -199,19 +167,15 @@ func (r *Registry) HasType(typeName string) bool {
 	return ok
 }
 
-// RequiredFields returns the union of fields that mutation must protect
-// from unset: coreFields (id, type — gating classification),
-// vaultmindOwnedFields (created, vm_updated — vaultmind auto-maintains;
-// unsetting is meaningless because vaultmind would just refill them),
+// RequiredFields returns the union of fields that mutation must
+// protect from unset: coreFields (id, type — gating classification)
 // and the type's td.Required (the type's user-supplied contract).
 //
 // NOT used by validators for the missing-required-field rule —
-// validators iterate td.Required only (vaultmind-owned fields are
-// auto-maintained, not user-required; humanCompatFields are tolerated,
-// not required). Used by mutation/validate.go's unset guard.
+// validators iterate td.Required only. Used by mutation/validate.go's
+// unset guard.
 func (r *Registry) RequiredFields(typeName string) []string {
 	fields := append([]string{}, coreFields...)
-	fields = append(fields, vaultmindOwnedFields...)
 	if td, ok := r.types[typeName]; ok {
 		fields = append(fields, td.Required...)
 	}
@@ -259,27 +223,16 @@ func (r *Registry) IsFieldAllowed(typeName, field string) bool {
 }
 
 // isFieldCanonicallyAllowed checks if a canonical field name is allowed for
-// a type — coreFields, vaultmindOwnedFields, humanCompatFields, graphFields,
-// type-required, or type-optional. Used by IsFieldAllowed both directly
-// (for canonical lookup) and as the allow-list check when resolving
-// aliases.
+// a type — coreFields, recognizedFields, type-required, or type-optional.
+// Used by IsFieldAllowed both directly (for canonical lookup) and as the
+// allow-list check when resolving aliases.
 func (r *Registry) isFieldCanonicallyAllowed(typeName, field string) bool {
 	for _, f := range coreFields {
 		if f == field {
 			return true
 		}
 	}
-	for _, f := range vaultmindOwnedFields {
-		if f == field {
-			return true
-		}
-	}
-	for _, f := range humanCompatFields {
-		if f == field {
-			return true
-		}
-	}
-	for _, f := range graphFields {
+	for _, f := range recognizedFields {
 		if f == field {
 			return true
 		}

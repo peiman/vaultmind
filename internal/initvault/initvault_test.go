@@ -71,16 +71,8 @@ func TestInit_FrontmatterDatesAreToday(t *testing.T) {
 	s := string(body)
 	require.True(t, strings.HasPrefix(s, "---\n"), "starter note must start with frontmatter")
 	assert.Contains(t, s, "\ncreated: 20", "frontmatter must include a created: 20YY-MM-DD line")
-	// vm_updated is YAML-quoted because it contains colons (RFC3339).
-	// The shape `vm_updated: "20YY-MM-DDTHH:MM:SSZ"` confirms the
-	// canonical schema.VMUpdatedFormat is in use, distinguishing it
-	// from a stale date-only `vm_updated: 2026-05-04` write. Regex
-	// pinned to the precise RFC3339 second-precision UTC pattern.
-	assert.Regexp(t,
-		`vm_updated: "20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"`,
-		s,
-		"vm_updated must be RFC3339 second-precision UTC, YAML-quoted (schema.VMUpdatedFormat)",
-	)
+	assert.NotContains(t, s, "vm_updated",
+		"vm_updated was retired in the 2026-05-04 chain — init must not emit it")
 }
 
 // Init refuses to overwrite an existing path. Vaults are stateful —
@@ -97,8 +89,8 @@ func TestInit_RefusesExistingPath(t *testing.T) {
 }
 
 // README and config files (no leading frontmatter) pass through the
-// template renderer unchanged — they don't get a created:/vm_updated:
-// injection, since they aren't notes.
+// template renderer unchanged — they don't get a created: injection,
+// since they aren't notes.
 func TestInit_NonNoteFilesAreNotMutated(t *testing.T) {
 	dst := filepath.Join(t.TempDir(), "my-vault")
 	_, err := initvault.Init(dst)
@@ -106,9 +98,13 @@ func TestInit_NonNoteFilesAreNotMutated(t *testing.T) {
 
 	readme, err := os.ReadFile(filepath.Join(dst, "README.md"))
 	require.NoError(t, err)
-	assert.NotContains(t, string(readme), "vm_updated:", "README must not get note-style frontmatter injection")
+	assert.NotContains(t, string(readme), "created:",
+		"README must not get note-style frontmatter injection")
 
 	cfg, err := os.ReadFile(filepath.Join(dst, ".vaultmind", "config.yaml"))
 	require.NoError(t, err)
-	assert.NotContains(t, string(cfg), "vm_updated:", "config.yaml must not get note-style frontmatter injection")
+	// config.yaml is YAML; it may legitimately contain `created` as a
+	// schema field name. Just ensure no leading `---` injection happened.
+	assert.False(t, strings.HasPrefix(string(cfg), "---\ncreated:"),
+		"config.yaml must not get note-style created: injection at the top")
 }

@@ -29,16 +29,11 @@ func RenderMarkdown(ep *Episode) string {
 		fmt.Fprintf(&b, "git_branch: %s\n", ep.GitBranch)
 	}
 	b.WriteString("tags:\n  - episode\n")
-	// Vaultmind-owned fields per the four-tier taxonomy in
-	// schema/registry.go. `created` is the started_at date portion —
-	// when the session happened, the episode's semantic birthday.
-	// vm_updated uses the SSOT format (RFC3339 second-precision UTC)
-	// so doctor's drift detector parses it. %q quotes the timestamp
-	// because it contains a colon (YAML auto-quotes anyway, but being
-	// explicit avoids producer/consumer drift if YAML serializer
-	// changes).
+	// `created` is the started_at date portion — when the session
+	// happened, the episode's semantic birthday. Tolerated optional
+	// field per schema.recognizedFields; vaultmind sets it on capture
+	// but doesn't enforce its presence later.
 	fmt.Fprintf(&b, "created: %s\n", startedAtDate(ep.StartedAt))
-	fmt.Fprintf(&b, "vm_updated: %q\n", time.Now().UTC().Format(schema.VMUpdatedFormat))
 	b.WriteString("---\n\n")
 
 	fmt.Fprintf(&b, "# Episode — %s\n\n", ep.ID)

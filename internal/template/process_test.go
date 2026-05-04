@@ -23,24 +23,22 @@ func writeTempTemplate(t *testing.T, content string) string {
 
 func TestSubstituteVars_AllKnownVars(t *testing.T) {
 	vars := map[string]string{
-		"id":         "project-foo",
-		"type":       "project",
-		"title":      "Foo Project",
-		"created":    "2026-04-04",
-		"updated":    "2026-04-04T12:00:00Z",
-		"vm_updated": "2026-04-04T12:00:00Z",
-		"date":       "2026-04-04",
-		"datetime":   "2026-04-04T12:00:00Z",
-		"path":       "projects/foo.md",
+		"id":       "project-foo",
+		"type":     "project",
+		"title":    "Foo Project",
+		"created":  "2026-04-04",
+		"updated":  "2026-04-04",
+		"date":     "2026-04-04",
+		"datetime": "2026-04-04",
+		"path":     "projects/foo.md",
 	}
-	content := "id: <%=id%>\ntype: <%=type%>\ntitle: <%=title%>\ncreated: <%=created%>\nupdated: <%=updated%>\nvm_updated: <%=vm_updated%>\ndate: <%=date%>\ndatetime: <%=datetime%>\npath: <%=path%>"
+	content := "id: <%=id%>\ntype: <%=type%>\ntitle: <%=title%>\ncreated: <%=created%>\nupdated: <%=updated%>\ndate: <%=date%>\ndatetime: <%=datetime%>\npath: <%=path%>"
 	result, warnings := SubstituteVars(content, vars)
 	assert.Empty(t, warnings)
 	assert.Contains(t, result, "id: project-foo")
 	assert.Contains(t, result, "type: project")
 	assert.Contains(t, result, "title: Foo Project")
 	assert.Contains(t, result, "created: 2026-04-04")
-	assert.Contains(t, result, "vm_updated: 2026-04-04T12:00:00Z")
 	assert.Contains(t, result, "path: projects/foo.md")
 }
 
@@ -72,7 +70,6 @@ id: <%=id%>
 type: <%=type%>
 title: <%=title%>
 created: <%=created%>
-vm_updated: <%=vm_updated%>
 ---
 # <%=title%>
 
@@ -103,7 +100,6 @@ id: <%=id%>
 type: <%=type%>
 title: <%=title%>
 created: <%=created%>
-vm_updated: <%=vm_updated%>
 status: draft
 ---
 Body.
@@ -129,7 +125,6 @@ id: <%=id%>
 type: <%=type%>
 title: <%=title%>
 created: <%=created%>
-vm_updated: <%=vm_updated%>
 ---
 Body.
 `
@@ -155,7 +150,6 @@ id: <%=id%>
 type: <%=type%>
 title: <%=title%>
 created: <%=created%>
-vm_updated: <%=vm_updated%>
 ---
 Original template body.
 `
@@ -224,7 +218,8 @@ Body text.
 	assert.Contains(t, content, "id:")
 	assert.Contains(t, content, "type:")
 	assert.Contains(t, content, "created:")
-	assert.Contains(t, content, "vm_updated:")
+	// vm_updated retired in 2026-05-04 chain — must NOT appear.
+	assert.NotContains(t, content, "vm_updated:")
 }
 
 // ─── FinalFrontmatter ─────────────────────────────────────────────────────────
@@ -235,7 +230,6 @@ id: <%=id%>
 type: <%=type%>
 title: <%=title%>
 created: <%=created%>
-vm_updated: <%=vm_updated%>
 status: draft
 ---
 Body.

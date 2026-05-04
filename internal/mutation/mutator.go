@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/peiman/vaultmind/internal/git"
 	"github.com/peiman/vaultmind/internal/schema"
@@ -71,45 +70,6 @@ func (m *Mutator) Run(req MutationRequest) (*MutationResult, error) {
 
 	if err := applyOperation(req, mapping, result); err != nil {
 		return nil, err
-	}
-
-	// Vaultmind-owned auto-maintenance: bump vm_updated to today's
-	// UTC datetime after every successful operation. Per the four-tier
-	// frontmatter taxonomy in schema/registry.go, vm_updated is a
-	// vaultmind-owned field — vaultmind itself maintains it; the user
-	// never has to. The mutator is one of the auto-write sites
-	// (template/process.go on init is the other).
-	//
-	// Format: RFC3339 (second-precision UTC). Sub-day precision is
-	// load-bearing: doctor's "edited since vaultmind processed" check
-	// compares file mtime against vm_updated, and date-only would
-	// produce false-positive drift within the same calendar day.
-	//
-	// Gated on noteInfo.IsDomain: non-domain notes (no id+type) are
-	// not vaultmind-tracked content, so vaultmind doesn't add
-	// auto-fields to them. (Today, resolveTarget already rejects
-	// non-domain note paths before reaching here, but this guard
-	// makes the contract explicit if future paths reach Run on a
-	// non-domain mapping.)
-	//
-	// Idempotent ops (e.g. OpNormalize on an already-normalized file)
-	// still bump vm_updated. The semantic is "vaultmind processed
-	// this on date X" — even confirming-no-change-needed is processing.
-	// LOAD-BEARING (not defense-in-depth): ValidateMutation has an
-	// early-return for OpNormalize (the `if req.Op == OpNormalize { return nil }`
-	// at the top of the function) BEFORE the IsDomain check. So an
-	// OpNormalize on a non-domain note passes validation and reaches
-	// this point. Without this guard, a stray markdown file (no id+type)
-	// that happens to be the target of `vaultmind frontmatter normalize`
-	// would receive a vm_updated auto-field — vaultmind would be mutating
-	// non-domain content, which violates the four-tier taxonomy contract.
-	// The IsDomain gate here is the only thing preventing that.
-	// Pinned by TestMutator_Run_OpNormalizeNonDomainSkipsBump.
-	if noteInfo.IsDomain {
-		nowUTC := time.Now().UTC().Format(schema.VMUpdatedFormat)
-		if setErr := SetKey(mapping, "vm_updated", nowUTC); setErr != nil {
-			return nil, &MutationError{Code: "vm_updated_bump_error", Message: fmt.Sprintf("auto-maintaining vm_updated: %v", setErr)}
-		}
 	}
 
 	// Step 5: Generate diff
