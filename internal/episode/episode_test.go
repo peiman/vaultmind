@@ -184,19 +184,33 @@ func TestRenderMarkdown_HonorsSchemaOwnershipContract(t *testing.T) {
 // torn or malformed transcripts. Without this fallback, a degenerate
 // transcript could produce a note with empty `created`, which the
 // fix command would then re-flag as missing.
+//
+// Two distinct fallback paths are pinned: (1) empty/short string
+// (fails the length check); (2) long-but-unparseable string (passes
+// length, fails time.Parse). Without (2) the time.Parse branch was
+// untested — a future refactor swapping the helper for a regex match
+// could regress without lint or test failure.
 func TestRenderMarkdown_CreatedFallsBackToTodayOnDegenerateStartedAt(t *testing.T) {
-	ep := &episode.Episode{
-		ID:        "episode-degenerate",
-		SessionID: "test",
-		StartedAt: "", // degenerate
-		EndedAt:   "",
+	cases := []struct {
+		name      string
+		startedAt string
+	}{
+		{"empty string fails length check", ""},
+		{"long-but-unparseable fails time.Parse", "not-a-real-date-value-but-long"},
 	}
-	md := episode.RenderMarkdown(ep)
-
-	// Some date matching today's format must be present; we don't
-	// pin the exact value because t.Now varies by run.
-	assert.Regexp(t, `created: 20\d{2}-\d{2}-\d{2}`, md,
-		"empty started_at must fall back to today (never empty created)")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ep := &episode.Episode{
+				ID:        "episode-degenerate",
+				SessionID: "test",
+				StartedAt: tc.startedAt,
+				EndedAt:   "",
+			}
+			md := episode.RenderMarkdown(ep)
+			assert.Regexp(t, `created: 20\d{2}-\d{2}-\d{2}`, md,
+				"degenerate started_at must fall back to today (never empty created)")
+		})
+	}
 }
 
 func TestEpisodeID_DerivedFromSessionDateAndIDPrefix(t *testing.T) {

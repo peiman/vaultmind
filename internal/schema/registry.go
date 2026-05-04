@@ -64,6 +64,9 @@ var graphFields = []string{"title", "status", "aliases", "tags", "parent_id", "r
 //   - internal/mutation/mutator.go (auto-bump on every operation)
 //   - internal/template/process.go (init / scaffold)
 //   - internal/initvault/initvault.go (vault scaffold dates)
+//   - internal/episode/render.go (SessionEnd capture)
+//   - internal/fix/fix.go (frontmatter fix --apply backfill)
+//   - internal/query/doctor.go (drift detector — parse + display)
 //
 // The format has sub-day precision because doctor's drift detector
 // (commit 5 in this chain) compares file mtime against vm_updated
@@ -82,6 +85,8 @@ const VMUpdatedFormat = "2006-01-02T15:04:05Z"
 //   - internal/fix/fix.go (DefaultCreatedDateResolver: git/mtime/today)
 //   - internal/template/process.go (init / scaffold default)
 //   - internal/initvault/initvault.go (vault scaffold dates)
+//   - internal/episode/render.go (SessionEnd capture: started_at date)
+//   - internal/mutation/normalize.go (date-field canonicalization)
 //
 // `created` is a humanish "when was this born" stamp, not a sub-day
 // processing tracker (that's vm_updated's job). Date-only matches both
