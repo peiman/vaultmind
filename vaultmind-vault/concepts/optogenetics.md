@@ -3,7 +3,6 @@ id: concept-optogenetics
 type: concept
 title: Optogenetics
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Light-controlled neurons
   - Channelrhodopsin

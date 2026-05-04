@@ -3,7 +3,6 @@ id: concept-constitutional-ai
 type: concept
 title: Constitutional AI
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - CAI
   - RLAIF

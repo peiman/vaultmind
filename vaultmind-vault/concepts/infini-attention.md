@@ -3,7 +3,6 @@ id: concept-infini-attention
 type: concept
 title: Infini-Attention
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - Infinite Attention
   - Leave No Context Behind

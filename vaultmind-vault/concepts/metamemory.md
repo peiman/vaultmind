@@ -3,7 +3,6 @@ id: concept-metamemory
 type: concept
 title: Metamemory
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - Memory About Memory
   - Metacognitive Memory

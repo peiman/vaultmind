@@ -3,7 +3,6 @@ id: concept-tdcs-sleep-stimulation
 type: concept
 title: Transcranial Direct Current Stimulation During Sleep
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - tDCS Sleep
   - Oscillatory tDCS

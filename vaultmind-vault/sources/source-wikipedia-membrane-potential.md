@@ -3,7 +3,6 @@ id: source-wikipedia-membrane-potential
 type: source
 title: "Wikipedia. Membrane potential"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://en.wikipedia.org/wiki/Membrane_potential"
 aliases:
   - Membrane potential Wikipedia

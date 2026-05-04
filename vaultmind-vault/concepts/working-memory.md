@@ -3,7 +3,6 @@ id: concept-working-memory
 type: concept
 title: Working Memory
 created: 2026-04-03
-vm_updated: 2026-04-03
 aliases:
   - Short-Term Memory
   - Active Memory

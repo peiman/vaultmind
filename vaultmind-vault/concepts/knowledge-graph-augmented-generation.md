@@ -3,7 +3,6 @@ id: concept-knowledge-graph-augmented-generation
 type: concept
 title: Knowledge Graph-Augmented Generation
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - KGAG
   - KG-Augmented Generation

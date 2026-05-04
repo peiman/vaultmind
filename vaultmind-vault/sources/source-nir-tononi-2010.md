@@ -3,7 +3,6 @@ id: source-nir-tononi-2010
 type: source
 title: "Nir, Y. & Tononi, G. Dreaming and the brain: from phenomenology to neurophysiology (2010)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1016/j.tics.2009.12.001"
 aliases:
   - nir tononi 2010

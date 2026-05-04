@@ -3,7 +3,6 @@ id: source-van-der-helm-2011
 type: source
 title: "van der Helm, E., Yao, J., Dutt, S., Rao, V., Saletin, J.M. & Walker, M.P. REM Sleep Depotentiates Amygdala Activity to Previous Emotional Experiences (2011)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1016/j.cub.2011.10.052"
 aliases:
   - van der helm 2011

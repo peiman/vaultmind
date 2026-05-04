@@ -3,7 +3,6 @@ id: source-kaplan-2020
 type: source
 title: "Kaplan et al. Scaling Laws for Neural Language Models (2020)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://arxiv.org/abs/2001.08361"
 tags:
   - llms

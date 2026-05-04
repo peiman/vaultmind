@@ -3,7 +3,6 @@ id: source-hochreiter-1997
 type: source
 title: "Hochreiter & Schmidhuber. Long Short-Term Memory (1997)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1162/neco.1997.9.8.1735"
 aliases:
   - LSTM paper

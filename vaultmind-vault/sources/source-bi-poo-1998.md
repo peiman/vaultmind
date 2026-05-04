@@ -3,7 +3,6 @@ id: source-bi-poo-1998
 type: source
 title: "Bi & Poo. Synaptic Modifications in Cultured Hippocampal Neurons (1998)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1523/JNEUROSCI.18-24-10464.1998"
 tags:
   - neuroscience

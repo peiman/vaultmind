@@ -3,7 +3,6 @@ id: concept-mixture-of-experts
 type: concept
 title: Mixture of Experts
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - MoE
   - Sparse Mixture of Experts

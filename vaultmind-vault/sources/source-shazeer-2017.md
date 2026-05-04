@@ -3,7 +3,6 @@ id: source-shazeer-2017
 type: source
 title: "Shazeer et al. Outrageously Large Neural Networks: The Sparsely-Gated Mixture-of-Experts Layer (2017)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://arxiv.org/abs/1701.06538"
 tags:
   - llms

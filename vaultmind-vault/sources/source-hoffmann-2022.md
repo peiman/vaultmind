@@ -3,7 +3,6 @@ id: source-hoffmann-2022
 type: source
 title: "Hoffmann et al. Training Compute-Optimal Large Language Models (2022)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://arxiv.org/abs/2203.15556"
 tags:
   - llms

@@ -3,7 +3,6 @@ id: reference-paper-federated-constants
 type: reference
 title: "Paper #2 — Federated Retrieval-Constant Tuning Across Personal Knowledge Bases"
 created: 2026-04-24
-vm_updated: 2026-04-24
 tags:
   - reference
   - paper

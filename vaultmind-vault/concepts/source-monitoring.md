@@ -3,7 +3,6 @@ id: concept-source-monitoring
 type: concept
 title: Source Monitoring
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - Source Monitoring Framework
   - SMF

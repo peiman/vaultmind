@@ -3,7 +3,6 @@ id: source-gao-2023
 type: source
 title: "Gao, L., Ma, X., Lin, J., & Callan, J. (2023). Precise Zero-Shot Dense Retrieval without Relevance Labels. ACL 2023."
 created: 2026-04-06
-vm_updated: 2026-04-06
 url: "https://arxiv.org/abs/2212.10496"
 aliases:
   - Gao 2023

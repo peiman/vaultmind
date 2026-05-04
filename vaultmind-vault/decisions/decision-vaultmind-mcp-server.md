@@ -4,7 +4,6 @@ type: decision
 status: accepted
 title: "VaultMind MCP Server Design"
 created: 2026-04-09
-vm_updated: 2026-04-09
 tags:
   - architecture
   - mcp

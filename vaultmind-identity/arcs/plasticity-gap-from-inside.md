@@ -3,7 +3,6 @@ id: arc-plasticity-gap-from-inside
 type: arc
 title: "Naming the Plasticity Gap From Inside"
 created: 2026-04-24
-vm_updated: 2026-04-24
 tags:
   - arc
   - core

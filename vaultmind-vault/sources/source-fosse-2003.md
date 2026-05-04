@@ -3,7 +3,6 @@ id: source-fosse-2003
 type: source
 title: "Fosse, M.J., Fosse, R., Hobson, J.A. & Stickgold, R. Dreaming and Episodic Memory: A Functional Dissociation? (2003)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1162/089892903321107774"
 aliases:
   - fosse 2003

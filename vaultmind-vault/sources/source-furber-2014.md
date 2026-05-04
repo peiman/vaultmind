@@ -3,7 +3,6 @@ id: source-furber-2014
 type: source
 title: "Furber et al. The SpiNNaker Project (2014)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1109/JPROC.2014.2304638"
 tags:
   - neuromorphic

@@ -3,7 +3,6 @@ id: concept-a-rag
 type: concept
 title: A-RAG (Agentic RAG)
 created: 2026-04-09
-vm_updated: 2026-04-09
 aliases:
   - Agentic RAG
   - A-RAG

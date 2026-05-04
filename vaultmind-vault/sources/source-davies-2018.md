@@ -3,7 +3,6 @@ id: source-davies-2018
 type: source
 title: "Davies et al. Loihi: A Neuromorphic Manycore Processor with On-Chip Learning (2018)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1109/MM.2018.112130359"
 tags:
   - neuromorphic

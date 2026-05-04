@@ -3,7 +3,6 @@ id: source-borgeaud-2022
 type: source
 title: "Borgeaud, S., et al. (2022). Improving language models by retrieving from trillions of tokens. ICML 2022."
 created: 2026-04-06
-vm_updated: 2026-04-06
 url: "https://arxiv.org/abs/2112.04426"
 aliases:
   - Borgeaud 2022

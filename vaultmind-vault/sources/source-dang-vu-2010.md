@@ -3,7 +3,6 @@ id: source-dang-vu-2010
 type: source
 title: "Dang-Vu, T. T., McKinney, S. M., Buxton, O. M., Solet, J. M., & Ellenbogen, J. M. (2010). Spontaneous brain rhythms predict sleep stability in the face of noise. Current Biology, 20(15), R626-R627."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1016/j.cub.2010.06.032"
 aliases:
   - Dang-Vu 2010 Curr Biol

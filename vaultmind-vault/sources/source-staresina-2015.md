@@ -3,7 +3,6 @@ id: source-staresina-2015
 type: source
 title: "Staresina, B. P., Bergmann, T. O., Bonhage, C., Hauptmann, C., Breska, A., & Engel, A. K. (2015). Hierarchical nesting of slow oscillations, spindles and ripples in the human hippocampus during sleep. Nature Neuroscience, 18(11), 1679-1686."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1038/nn.4119"
 aliases:
   - Staresina 2015 Nat Neurosci

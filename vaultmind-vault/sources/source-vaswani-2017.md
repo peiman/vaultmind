@@ -3,7 +3,6 @@ id: source-vaswani-2017
 type: source
 title: "Vaswani et al. Attention Is All You Need (2017)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://arxiv.org/abs/1706.03762"
 aliases:
   - Attention Is All You Need

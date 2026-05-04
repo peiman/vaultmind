@@ -3,7 +3,6 @@ id: source-stickgold-2005
 type: source
 title: "Stickgold, R. (2005). Sleep-dependent memory consolidation. Nature, 437(7063), 1272-1278."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1038/nature04286"
 aliases:
   - Stickgold 2005 Nature

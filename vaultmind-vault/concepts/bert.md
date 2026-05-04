@@ -3,7 +3,6 @@ id: concept-bert
 type: concept
 title: BERT
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Bidirectional Encoder Representations from Transformers
 tags:

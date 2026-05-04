@@ -3,7 +3,6 @@ id: source-jeong-2024
 type: source
 title: "Jeong, S., et al. (2024). Adaptive-RAG: Learning to Adapt Retrieval-Augmented Large Language Models through Question Complexity. NAACL 2024."
 created: 2026-04-06
-vm_updated: 2026-04-06
 url: "https://arxiv.org/abs/2403.14403"
 aliases:
   - Jeong 2024

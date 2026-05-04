@@ -3,7 +3,6 @@ id: reference-federation-architecture
 type: reference
 title: "Federation Architecture — Cross-Vault Retrieval as a Lighter Read-Only Path"
 created: 2026-05-02
-vm_updated: 2026-05-02
 tags:
   - federation
   - architecture

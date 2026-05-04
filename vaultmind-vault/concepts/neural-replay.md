@@ -3,7 +3,6 @@ id: concept-neural-replay
 type: concept
 title: Neural Replay
 created: 2026-04-26
-vm_updated: 2026-04-26
 tags:
   - neuroscience
   - hippocampus

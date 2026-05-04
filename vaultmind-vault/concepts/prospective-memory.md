@@ -3,7 +3,6 @@ id: concept-prospective-memory
 type: concept
 title: Prospective Memory
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - Future Intention Memory
   - Remembering to Remember

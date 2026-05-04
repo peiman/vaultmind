@@ -3,7 +3,6 @@ id: source-ahrens-2017
 type: source
 title: "Ahrens, S. (2017). How to Take Smart Notes: One Simple Technique to Boost Writing, Learning and Thinking. CreateSpace."
 created: 2026-04-06
-vm_updated: 2026-04-06
 url: "https://www.soenkeahrens.de/en/takesmartnotes"
 aliases:
   - Ahrens 2017

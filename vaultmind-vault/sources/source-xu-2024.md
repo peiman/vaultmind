@@ -3,7 +3,6 @@ id: source-xu-2024
 type: source
 title: "Xu, P., et al. (2024). Retrieval Augmented Generation or Long-Context LLMs? A Comprehensive Study and Hybrid Approach. ICLR 2024."
 created: 2026-04-06
-vm_updated: 2026-04-06
 url: "https://arxiv.org/abs/2407.16833"
 aliases:
   - Xu 2024

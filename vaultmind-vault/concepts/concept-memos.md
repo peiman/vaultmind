@@ -3,7 +3,6 @@ id: concept-memos
 type: concept
 title: MemOS (Memory Operating System)
 created: 2026-04-09
-vm_updated: 2026-04-09
 aliases:
   - Memory Operating System
   - MemOS

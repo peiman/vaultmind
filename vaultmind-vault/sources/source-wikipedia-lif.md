@@ -3,7 +3,6 @@ id: source-wikipedia-lif
 type: source
 title: "Wikipedia. Biological Neuron Model (Leaky Integrate-and-Fire)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://en.wikipedia.org/wiki/Biological_neuron_model"
 tags:
   - bio-inspired-ai

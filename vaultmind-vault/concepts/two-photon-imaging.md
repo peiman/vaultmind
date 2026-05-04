@@ -3,7 +3,6 @@ id: concept-two-photon-imaging
 type: concept
 title: Two-Photon Calcium Imaging
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - 2P imaging
   - Two-photon microscopy

@@ -3,7 +3,6 @@ id: concept-leaky-integrate-and-fire
 type: concept
 title: Leaky Integrate-and-Fire (LIF) Neuron
 created: 2026-04-29
-vm_updated: 2026-04-29
 tags:
   - bio-inspired-ai
   - spiking-neural-network

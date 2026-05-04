@@ -3,7 +3,6 @@ id: source-wikipedia-neurotransmitter
 type: source
 title: "Wikipedia. Neurotransmitter"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://en.wikipedia.org/wiki/Neurotransmitter"
 aliases:
   - Neurotransmitter Wikipedia

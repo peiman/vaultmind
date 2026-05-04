@@ -3,7 +3,6 @@ id: concept-chain-of-thought
 type: concept
 title: Chain-of-Thought Prompting
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - CoT
   - Chain of Thought

@@ -3,7 +3,6 @@ id: source-walker-2009-nyas
 type: source
 title: "Walker, M. P. (2009). The role of sleep in cognition and emotion. Annals of the New York Academy of Sciences, 1156(1), 168-197."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1111/j.1749-6632.2009.04416.x"
 aliases:
   - Walker 2009 NYAS

@@ -3,7 +3,6 @@ id: reference-episode-distillation-review-2026-04-27
 type: reference
 title: "Episode Distillation Review — Result (2026-04-27)"
 created: 2026-04-27
-vm_updated: 2026-04-27
 tags:
   - reference
   - plasticity

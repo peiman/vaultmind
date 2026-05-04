@@ -3,7 +3,6 @@ id: source-dao-2022
 type: source
 title: "Dao et al. FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness (2022)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://arxiv.org/abs/2205.14135"
 tags:
   - deep-learning

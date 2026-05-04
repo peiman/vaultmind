@@ -3,7 +3,6 @@ id: concept-dense-passage-retrieval
 type: concept
 title: Dense Passage Retrieval
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - DPR
   - Dense Retrieval

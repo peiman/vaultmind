@@ -3,7 +3,6 @@ id: concept-ion-channels
 type: concept
 title: Ion Channels
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Ion channel
   - Membrane channels

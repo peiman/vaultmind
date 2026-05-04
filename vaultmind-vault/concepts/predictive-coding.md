@@ -3,7 +3,6 @@ id: concept-predictive-coding
 type: concept
 title: Predictive Coding
 created: 2026-04-26
-vm_updated: 2026-04-26
 tags:
   - neuroscience
   - computational-neuroscience

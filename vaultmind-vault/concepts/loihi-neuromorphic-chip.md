@@ -3,7 +3,6 @@ id: concept-loihi-neuromorphic-chip
 type: concept
 title: Intel Loihi Neuromorphic Chip
 created: 2026-04-29
-vm_updated: 2026-04-29
 tags:
   - neuromorphic
   - hardware

@@ -3,7 +3,6 @@ id: concept-memory-consolidation
 type: concept
 title: Memory Consolidation
 created: 2026-04-07
-vm_updated: 2026-04-07
 aliases:
   - Consolidation
   - Memory Stabilization

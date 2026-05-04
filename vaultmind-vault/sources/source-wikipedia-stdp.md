@@ -3,7 +3,6 @@ id: source-wikipedia-stdp
 type: source
 title: "Wikipedia. Spike-Timing-Dependent Plasticity"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://en.wikipedia.org/wiki/Spike-timing-dependent_plasticity"
 tags:
   - neuroscience

@@ -3,7 +3,6 @@ id: concept-multilayer-perceptron
 type: concept
 title: Multilayer Perceptron
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - MLP
   - Feedforward Neural Network

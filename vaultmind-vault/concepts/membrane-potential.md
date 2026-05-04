@@ -3,7 +3,6 @@ id: concept-membrane-potential
 type: concept
 title: Membrane Potential
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Resting potential
   - Transmembrane potential

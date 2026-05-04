@@ -3,7 +3,6 @@ id: source-tamminen-2010
 type: source
 title: "Tamminen, J., Payne, J.D., Stickgold, R., Wamsley, E.J. & Gaskell, M.G. Sleep Spindle Activity is Associated with the Integration of New Memories and Existing Knowledge (2010)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1523/JNEUROSCI.3028-10.2010"
 aliases:
   - tamminen 2010

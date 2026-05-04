@@ -3,7 +3,6 @@ id: source-bjork-1994
 type: source
 title: "Bjork, R. A. (1994). Memory and metamemory considerations in the training of human beings. In J. Metcalfe & A. Shimamura (Eds.), Metacognition: Knowing about knowing (pp. 185-205). MIT Press."
 created: 2026-04-06
-vm_updated: 2026-04-06
 url: "https://en.wikipedia.org/wiki/Desirable_difficulty"
 aliases:
   - Bjork 1994

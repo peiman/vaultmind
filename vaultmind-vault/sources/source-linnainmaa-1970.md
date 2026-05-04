@@ -3,7 +3,6 @@ id: source-linnainmaa-1970
 type: source
 title: "Linnainmaa, S. The Representation of the Cumulative Rounding Error of an Algorithm as a Taylor Expansion of the Local Rounding Errors (1970)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://en.wikipedia.org/wiki/Seppo_Linnainmaa"
 aliases:
   - Linnainmaa 1970

@@ -3,7 +3,6 @@ id: concept-emotional-memory-regulation
 type: concept
 title: REM Sleep and Emotional Memory Regulation
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - overnight therapy hypothesis
   - REM emotional processing

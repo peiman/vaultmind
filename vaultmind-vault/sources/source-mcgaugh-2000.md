@@ -3,7 +3,6 @@ id: source-mcgaugh-2000
 type: source
 title: "McGaugh, J. L. (2000). Memory—a century of consolidation. Science, 287(5451), 248-251."
 created: 2026-04-07
-vm_updated: 2026-04-07
 url: "https://doi.org/10.1126/science.287.5451.248"
 aliases:
   - McGaugh 2000

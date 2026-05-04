@@ -3,7 +3,6 @@ id: concept-long-term-depression
 type: concept
 title: Long-Term Depression (LTD)
 created: 2026-04-29
-vm_updated: 2026-04-29
 tags:
   - neuroscience
   - plasticity

@@ -3,7 +3,6 @@ id: source-wikipedia-perceptron
 type: source
 title: "Wikipedia. Perceptron"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://en.wikipedia.org/wiki/Perceptron"
 tags:
   - deep-learning

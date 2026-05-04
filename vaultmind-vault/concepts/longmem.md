@@ -3,7 +3,6 @@ id: concept-longmem
 type: concept
 title: LongMem
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - Long-Term Memory Framework
   - Augmenting LMs with Long-Term Memory

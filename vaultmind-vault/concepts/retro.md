@@ -3,7 +3,6 @@ id: concept-retro
 type: concept
 title: RETRO
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - Retrieval-Enhanced Transformer
   - RETRO Architecture

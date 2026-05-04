@@ -3,7 +3,6 @@ id: concept-dpo
 type: concept
 title: Direct Preference Optimization (DPO)
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Direct Preference Optimization
 tags:

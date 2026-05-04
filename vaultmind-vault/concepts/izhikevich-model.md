@@ -3,7 +3,6 @@ id: concept-izhikevich-model
 type: concept
 title: Izhikevich Neuron Model
 created: 2026-04-29
-vm_updated: 2026-04-29
 tags:
   - bio-inspired-ai
   - spiking-neural-network

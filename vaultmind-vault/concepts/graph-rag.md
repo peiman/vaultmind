@@ -3,7 +3,6 @@ id: concept-graph-rag
 type: concept
 title: GraphRAG
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - Graph RAG
   - Microsoft GraphRAG

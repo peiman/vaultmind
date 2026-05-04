@@ -3,7 +3,6 @@ id: source-liu-2012
 type: source
 title: "Liu, X. et al. (2012). Optogenetic stimulation of a hippocampal engram activates fear memory recall. Nature, 484, 381-385."
 created: 2026-04-26
-vm_updated: 2026-04-26
 url: "https://doi.org/10.1038/nature11028"
 tags:
   - neuroscience

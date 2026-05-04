@@ -3,7 +3,6 @@ id: source-hochberg-2006
 type: source
 title: "Hochberg et al. Neuronal Ensemble Control of Prosthetic Devices by a Human with Tetraplegia (2006)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1038/nature04970"
 tags:
   - bci

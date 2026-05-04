@@ -3,7 +3,6 @@ id: source-gu-2021
 type: source
 title: "Gu, Goel & Ré. Efficiently Modeling Long Sequences with Structured State Spaces (S4, 2021)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://arxiv.org/abs/2111.00396"
 tags:
   - deep-learning

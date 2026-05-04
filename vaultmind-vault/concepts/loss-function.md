@@ -3,7 +3,6 @@ id: concept-loss-function
 type: concept
 title: Loss Function
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Cost Function
   - Objective Function

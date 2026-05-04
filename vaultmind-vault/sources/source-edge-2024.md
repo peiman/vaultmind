@@ -3,7 +3,6 @@ id: source-edge-2024
 type: source
 title: "Edge, D., et al. (2024). From Local to Global: A Graph RAG Approach to Query-Focused Summarization. arXiv:2404.16130."
 created: 2026-04-06
-vm_updated: 2026-04-06
 url: "https://arxiv.org/abs/2404.16130"
 aliases:
   - Edge 2024

@@ -3,7 +3,6 @@ id: concept-entity-resolution
 type: concept
 title: Entity Resolution
 created: 2026-04-03
-vm_updated: 2026-04-03
 aliases:
   - Record Linkage
   - Entity Matching

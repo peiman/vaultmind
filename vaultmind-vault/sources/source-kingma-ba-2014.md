@@ -3,7 +3,6 @@ id: source-kingma-ba-2014
 type: source
 title: "Kingma, D. & Ba, J. Adam: A Method for Stochastic Optimization (2014)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://arxiv.org/abs/1412.6980"
 aliases:
   - Adam optimizer

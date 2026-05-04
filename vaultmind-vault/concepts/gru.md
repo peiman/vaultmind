@@ -3,7 +3,6 @@ id: concept-gru
 type: concept
 title: Gated Recurrent Unit
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - GRU
   - Gated Recurrent Unit

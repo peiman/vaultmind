@@ -3,7 +3,6 @@ id: reference-measurement-16-reopen-trigger
 type: reference
 title: "When to Re-open #16 (Spreading Activation Measurement)"
 created: 2026-04-23
-vm_updated: 2026-04-23
 tags:
   - reference
   - measurement

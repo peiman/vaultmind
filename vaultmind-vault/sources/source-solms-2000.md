@@ -3,7 +3,6 @@ id: source-solms-2000
 type: source
 title: "Solms, M. Dreaming and REM sleep are controlled by different brain mechanisms (2000)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1017/s0140525x00003988"
 aliases:
   - solms 2000

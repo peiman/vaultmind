@@ -3,7 +3,6 @@ id: source-microns-2025
 type: source
 title: "MICrONS Consortium. Functional connectomics reveals general wiring rule in mouse visual cortex (2025)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1038/s41586-025-08840-3"
 aliases:
   - MICrONS 2025

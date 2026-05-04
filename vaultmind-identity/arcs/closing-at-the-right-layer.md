@@ -3,7 +3,6 @@ id: arc-closing-the-ranking-bug-at-the-right-layer
 type: arc
 title: Close at the Right Layer, Don't Stack Patches
 created: 2026-04-25
-vm_updated: 2026-04-25
 tags:
   - growth
   - robustness

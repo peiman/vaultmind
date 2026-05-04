@@ -3,7 +3,6 @@ id: source-wikipedia-gradient-descent
 type: source
 title: "Wikipedia. Gradient Descent"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://en.wikipedia.org/wiki/Gradient_descent"
 tags:
   - optimization

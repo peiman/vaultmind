@@ -3,7 +3,6 @@ id: source-dosovitskiy-2020
 type: source
 title: "Dosovitskiy et al. An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale (2020)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://arxiv.org/abs/2010.11929"
 aliases:
   - ViT paper

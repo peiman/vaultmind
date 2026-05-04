@@ -3,7 +3,6 @@ id: concept-chunking-strategies
 type: concept
 title: Chunking Strategies
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - Document Chunking
   - Text Segmentation for Retrieval

@@ -3,7 +3,6 @@ id: source-ngo-2013
 type: source
 title: "Ngo, H.-V. V., Martinetz, T., Born, J., & Mölle, M. (2013). Auditory Closed-Loop Stimulation of the Sleep Slow Oscillation Enhances Memory. Neuron, 78(3), 545-553."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1016/j.neuron.2013.03.006"
 aliases:
   - Ngo 2013

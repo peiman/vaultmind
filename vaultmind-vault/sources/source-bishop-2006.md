@@ -3,7 +3,6 @@ id: source-bishop-2006
 type: source
 title: "Bishop, C. M. Pattern Recognition and Machine Learning (2006)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://link.springer.com/book/9780387310732"
 aliases:
   - PRML

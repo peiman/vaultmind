@@ -3,7 +3,6 @@ id: concept-dopaminergic-neurons
 type: concept
 title: Dopaminergic Neurons
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Dopamine Neurons
   - Midbrain Dopamine Neurons

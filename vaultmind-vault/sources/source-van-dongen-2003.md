@@ -3,7 +3,6 @@ id: source-van-dongen-2003
 type: source
 title: "Van Dongen, H. P. A., Maislin, G., Mullington, J. M., & Dinges, D. F. (2003). The Cumulative Cost of Additional Wakefulness: Dose-Response Effects on Neurobehavioral Functions and Sleep Physiology From Chronic Sleep Restriction and Total Sleep Deprivation. Sleep, 26(2), 117-126."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1093/sleep/26.2.117"
 aliases:
   - Van Dongen 2003

@@ -3,7 +3,6 @@ id: concept-colbert
 type: concept
 title: ColBERT
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - Contextualized Late Interaction
   - ColBERT Retrieval

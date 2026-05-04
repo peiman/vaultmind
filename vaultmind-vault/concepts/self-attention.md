@@ -3,7 +3,6 @@ id: concept-self-attention
 type: concept
 title: Self-Attention
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Multi-Head Self-Attention
   - Scaled Dot-Product Attention

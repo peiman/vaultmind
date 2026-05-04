@@ -3,7 +3,6 @@ id: concept-rem-neural-correlates
 type: concept
 title: REM Sleep Neural Correlates and Dreaming
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - REM sleep neuroanatomy
   - neural correlates of dreaming

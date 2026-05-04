@@ -3,7 +3,6 @@ id: concept-corrective-rag
 type: concept
 title: Corrective RAG
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - CRAG
   - Corrective Retrieval Augmented Generation

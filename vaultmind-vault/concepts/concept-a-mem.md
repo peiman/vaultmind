@@ -3,7 +3,6 @@ id: concept-a-mem
 type: concept
 title: A-MEM (Agentic Memory)
 created: 2026-04-09
-vm_updated: 2026-04-09
 aliases:
   - Agentic Memory
   - A-MEM

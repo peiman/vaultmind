@@ -3,7 +3,6 @@ id: source-tononi-cirelli-2006
 type: source
 title: "Tononi, G., & Cirelli, C. (2006). Sleep function and synaptic homeostasis. Sleep Medicine Reviews, 10(1), 49-62."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1016/j.smrv.2005.05.002"
 aliases:
   - Tononi Cirelli 2006 SHY

@@ -3,7 +3,6 @@ id: reference-onboarding-ax-design
 type: reference
 title: "Onboarding AX Design — Plan for the First Real User"
 created: 2026-05-02
-vm_updated: 2026-05-02
 tags:
   - onboarding
   - ax

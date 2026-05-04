@@ -3,7 +3,6 @@ id: source-wikipedia-connectomics
 type: source
 title: "Wikipedia. Connectomics"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://en.wikipedia.org/wiki/Connectomics"
 aliases:
   - Wikipedia Connectomics

@@ -3,7 +3,6 @@ id: concept-connectomics
 type: concept
 title: Connectomics
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Connectome
   - Synaptic-resolution mapping

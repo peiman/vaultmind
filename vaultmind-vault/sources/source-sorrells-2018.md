@@ -3,7 +3,6 @@ id: source-sorrells-2018
 type: source
 title: "Sorrells, S. F. et al. (2018). Human hippocampal neurogenesis drops sharply in children to undetectable levels in adults. Nature, 555, 377-381."
 created: 2026-04-26
-vm_updated: 2026-04-26
 url: "https://doi.org/10.1038/nature25975"
 tags:
   - neuroscience

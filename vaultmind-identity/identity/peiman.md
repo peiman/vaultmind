@@ -3,7 +3,6 @@ id: identity-peiman
 type: identity
 title: "Peiman — My Partner"
 created: 2026-04-11
-vm_updated: 2026-04-11
 tags:
   - identity
   - relationship

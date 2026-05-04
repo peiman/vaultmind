@@ -3,7 +3,6 @@ id: source-robbins-monro-1951
 type: source
 title: "Robbins, H. & Monro, S. A Stochastic Approximation Method (1951)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1214/aoms/1177729586"
 aliases:
   - Robbins Monro 1951

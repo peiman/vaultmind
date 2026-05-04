@@ -3,7 +3,6 @@ id: source-rudy-2011
 type: source
 title: "Rudy, Fishell, Lee & Hjerling-Leffler. Three groups of interneurons account for nearly 100% of neocortical GABAergic neurons (2011)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1002/dneu.20853"
 tags:
   - neuroscience

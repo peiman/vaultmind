@@ -3,7 +3,6 @@ id: source-rao-ballard-1999
 type: source
 title: "Rao, R. P. N. & Ballard, D. H. (1999). Predictive coding in the visual cortex: a functional interpretation of some extra-classical receptive-field effects. Nature Neuroscience, 2(1), 79-87."
 created: 2026-04-26
-vm_updated: 2026-04-26
 url: "https://doi.org/10.1038/4580"
 tags:
   - neuroscience

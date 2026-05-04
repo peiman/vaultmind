@@ -3,7 +3,6 @@ id: source-tulving-1972
 type: source
 title: "Tulving, E. (1972). Episodic and semantic memory. In E. Tulving & W. Donaldson (Eds.), Organization of Memory (pp. 381-403). Academic Press."
 created: 2026-04-07
-vm_updated: 2026-04-07
 url: "https://psycnet.apa.org/record/1973-08477-007"
 aliases:
   - Tulving 1972

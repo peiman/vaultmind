@@ -3,7 +3,6 @@ id: concept-aim-model
 type: concept
 title: AIM Model (Activation, Input Source, Modulation)
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - AIM model
   - activation input modulation

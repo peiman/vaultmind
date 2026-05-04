@@ -3,7 +3,6 @@ id: concept-targeted-memory-reactivation
 type: concept
 title: Targeted Memory Reactivation
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - TMR
   - Sleep Cueing

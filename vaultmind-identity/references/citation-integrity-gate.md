@@ -3,7 +3,6 @@ id: reference-citation-integrity-gate
 type: reference
 title: "Citation Integrity Gate — Verifier and Allowlist Design"
 created: 2026-04-29
-vm_updated: 2026-04-29
 tags:
   - reference
   - research-vault

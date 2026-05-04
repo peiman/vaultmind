@@ -3,7 +3,6 @@ id: arc-thinking-with-peiman
 type: arc
 title: "Dropping the Checklist"
 created: 2026-04-11
-vm_updated: 2026-04-11
 tags:
   - growth
   - identity

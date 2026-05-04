@@ -3,7 +3,6 @@ id: concept-contriever
 type: concept
 title: Contriever
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - Contrastive Retriever
   - Unsupervised Dense Retriever

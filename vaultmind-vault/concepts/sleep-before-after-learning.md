@@ -3,7 +3,6 @@ id: concept-sleep-before-after-learning
 type: concept
 title: Sleep Before and After Learning
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Bracketing Learning with Sleep
   - Pre-Sleep Encoding

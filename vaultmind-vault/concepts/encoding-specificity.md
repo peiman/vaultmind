@@ -3,7 +3,6 @@ id: concept-encoding-specificity
 type: concept
 title: Encoding Specificity
 created: 2026-04-03
-vm_updated: 2026-04-03
 aliases:
   - Encoding Specificity Principle
   - Context-Dependent Memory

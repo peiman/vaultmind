@@ -3,7 +3,6 @@ id: reference-activation-rerank-decision
 type: reference
 title: "Activation as Rerank — Slice 5b'' Design Decision"
 created: 2026-05-03
-vm_updated: 2026-05-03
 tags:
   - activation
   - retrieval

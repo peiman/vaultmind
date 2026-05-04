@@ -3,7 +3,6 @@ id: source-wei-2021-flan
 type: source
 title: "Wei et al. Finetuned Language Models Are Zero-Shot Learners (FLAN, 2021)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://arxiv.org/abs/2109.01652"
 tags:
   - llms

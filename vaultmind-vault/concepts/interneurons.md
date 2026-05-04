@@ -3,7 +3,6 @@ id: concept-interneurons
 type: concept
 title: Interneurons
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Inhibitory Interneurons
   - Local-Circuit Neurons

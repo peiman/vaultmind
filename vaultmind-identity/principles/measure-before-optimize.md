@@ -3,7 +3,6 @@ id: principle-measure-before-optimize
 type: principle
 title: "Measure Before You Optimize"
 created: 2026-04-11
-vm_updated: 2026-04-11
 tags:
   - principle
   - core

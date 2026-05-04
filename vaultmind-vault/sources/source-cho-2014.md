@@ -3,7 +3,6 @@ id: source-cho-2014
 type: source
 title: "Cho et al. Learning Phrase Representations using RNN Encoder-Decoder for Statistical Machine Translation (2014)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://arxiv.org/abs/1406.1078"
 aliases:
   - GRU paper

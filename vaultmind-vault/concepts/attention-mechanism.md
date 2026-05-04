@@ -3,7 +3,6 @@ id: concept-attention-mechanism
 type: concept
 title: Attention Mechanism
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Attention
   - Soft Attention

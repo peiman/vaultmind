@@ -3,7 +3,6 @@ id: concept-long-term-potentiation
 type: concept
 title: Long-Term Potentiation (LTP)
 created: 2026-04-29
-vm_updated: 2026-04-29
 tags:
   - neuroscience
   - plasticity

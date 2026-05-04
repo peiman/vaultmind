@@ -3,7 +3,6 @@ id: source-siclari-2017
 type: source
 title: "Siclari, F. et al. The neural correlates of dreaming (2017)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1038/nn.4545"
 aliases:
   - siclari 2017

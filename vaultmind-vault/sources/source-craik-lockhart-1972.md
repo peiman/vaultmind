@@ -3,7 +3,6 @@ id: source-craik-lockhart-1972
 type: source
 title: "Craik, F. I. M., & Lockhart, R. S. (1972). Levels of processing: A framework for memory research. Journal of Verbal Learning and Verbal Behavior, 11(6), 671-684."
 created: 2026-04-07
-vm_updated: 2026-04-07
 url: "https://doi.org/10.1016/S0022-5371(72)80001-X"
 aliases:
   - Craik Lockhart 1972

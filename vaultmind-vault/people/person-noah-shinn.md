@@ -3,7 +3,6 @@ id: person-noah-shinn
 type: person
 title: "Noah Shinn"
 created: 2026-04-03
-vm_updated: 2026-04-03
 aliases:
   - Shinn
 tags:

@@ -4,7 +4,6 @@ type: decision
 status: accepted
 title: "Use vm_updated instead of updated for VaultMind timestamps"
 created: 2026-04-03
-vm_updated: 2026-04-03
 tags: [obsidian-compatibility, frontmatter]
 related_ids: []
 source_ids: []

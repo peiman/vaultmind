@@ -3,7 +3,6 @@ id: concept-levels-of-processing
 type: concept
 title: Levels of Processing
 created: 2026-04-07
-vm_updated: 2026-04-07
 aliases:
   - Depth of Processing
   - Craik-Lockhart Framework

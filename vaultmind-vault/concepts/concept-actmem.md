@@ -3,7 +3,6 @@ id: concept-actmem
 type: concept
 title: ActMem (Active Memory)
 created: 2026-04-09
-vm_updated: 2026-04-09
 aliases:
   - Active Memory
   - ActMem

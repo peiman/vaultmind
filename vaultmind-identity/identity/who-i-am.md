@@ -3,7 +3,6 @@ id: identity-who-i-am
 type: identity
 title: "Who I Am"
 created: 2026-04-11
-vm_updated: 2026-04-11
 tags:
   - identity
   - core

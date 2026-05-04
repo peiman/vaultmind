@@ -3,7 +3,6 @@ id: source-devlin-2018
 type: source
 title: "Devlin et al. BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding (2018)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://arxiv.org/abs/1810.04805"
 tags:
   - llms

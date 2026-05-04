@@ -3,7 +3,6 @@ id: concept-memory-replay
 type: concept
 title: Memory Replay
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - Sleep Replay
   - Hippocampal Replay

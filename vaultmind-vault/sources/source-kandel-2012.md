@@ -3,7 +3,6 @@ id: source-kandel-2012
 type: source
 title: "Kandel, Schwartz, Jessell, Siegelbaum & Hudspeth. Principles of Neural Science, 5th edition (2012)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://www.mheducation.com/highered/mhp/product/principles-neural-science-fifth-edition.html"
 aliases:
   - Kandel 2012

@@ -3,7 +3,6 @@ id: concept-dmn-dreaming
 type: concept
 title: Default Mode Network and Dreaming
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - DMN dreaming
   - default network sleep

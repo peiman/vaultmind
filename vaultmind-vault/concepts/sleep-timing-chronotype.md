@@ -3,7 +3,6 @@ id: concept-sleep-timing-chronotype
 type: concept
 title: Sleep Timing, Chronotype, and Social Jetlag
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Chronotype
   - Social Jetlag

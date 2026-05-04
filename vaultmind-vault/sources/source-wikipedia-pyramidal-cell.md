@@ -3,7 +3,6 @@ id: source-wikipedia-pyramidal-cell
 type: source
 title: "Wikipedia. Pyramidal cell"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://en.wikipedia.org/wiki/Pyramidal_cell"
 tags:
   - neuroscience

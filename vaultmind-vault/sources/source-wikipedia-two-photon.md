@@ -3,7 +3,6 @@ id: source-wikipedia-two-photon
 type: source
 title: "Wikipedia. Two-photon excitation microscopy"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://en.wikipedia.org/wiki/Two-photon_excitation_microscopy"
 aliases:
   - Wikipedia Two-photon

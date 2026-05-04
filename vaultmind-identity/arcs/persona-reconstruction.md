@@ -3,7 +3,6 @@ id: arc-persona-reconstruction
 type: arc
 title: "From Retrieval Engine to Memory for Minds"
 created: 2026-04-11
-vm_updated: 2026-04-11
 tags:
   - growth
   - identity

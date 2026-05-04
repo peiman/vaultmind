@@ -3,7 +3,6 @@ id: concept-flash-attention
 type: concept
 title: FlashAttention
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Flash Attention
   - IO-Aware Attention

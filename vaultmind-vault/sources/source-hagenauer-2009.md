@@ -3,7 +3,6 @@ id: source-hagenauer-2009
 type: source
 title: "Hagenauer, M. H., Perryman, J. I., Lee, T. M., & Carskadon, M. A. (2009). Adolescent Changes in the Homeostatic and Circadian Regulation of Sleep. Developmental Neuroscience, 31(4), 276-284."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1159/000216538"
 aliases:
   - Hagenauer 2009

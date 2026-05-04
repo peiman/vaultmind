@@ -3,7 +3,6 @@ id: concept-place-cells
 type: concept
 title: Place Cells
 created: 2026-04-26
-vm_updated: 2026-04-26
 tags:
   - neuroscience
   - hippocampus

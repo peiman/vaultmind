@@ -3,7 +3,6 @@ id: concept-scaling-laws
 type: concept
 title: Scaling Laws
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Neural Scaling Laws
   - Chinchilla Scaling

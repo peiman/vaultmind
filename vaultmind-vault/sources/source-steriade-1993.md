@@ -3,7 +3,6 @@ id: source-steriade-1993
 type: source
 title: "Steriade, M., McCormick, D. A., & Sejnowski, T. J. (1993). Thalamocortical oscillations in the sleeping and aroused brain. Science, 262(5134), 679-685."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1126/science.8235588"
 aliases:
   - Steriade 1993 Science

@@ -3,7 +3,6 @@ id: source-park-2023
 type: source
 title: "Park et al. — Generative Agents: Interactive Simulacra of Human Behavior (2023)"
 created: 2026-04-03
-vm_updated: 2026-04-09
 url: "https://doi.org/10.1145/3586183.3606763"
 aliases:
   - Park 2023

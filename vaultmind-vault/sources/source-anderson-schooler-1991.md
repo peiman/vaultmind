@@ -3,7 +3,6 @@ id: source-anderson-schooler-1991
 type: source
 title: "Anderson & Schooler. Reflections of the Environment in Memory (1991)"
 created: 2026-04-03
-vm_updated: 2026-04-03
 url: "https://doi.org/10.1111/j.1467-9280.1991.tb00174.x"
 aliases:
   - Anderson Schooler 1991

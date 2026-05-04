@@ -3,7 +3,6 @@ id: source-schick-2023
 type: source
 title: "Schick, T., et al. (2023). Toolformer: Language Models Can Teach Themselves to Use Tools. NeurIPS 2023."
 created: 2026-04-06
-vm_updated: 2026-04-06
 url: "https://arxiv.org/abs/2302.04761"
 aliases:
   - Schick 2023

@@ -3,7 +3,6 @@ id: concept-lstm
 type: concept
 title: Long Short-Term Memory
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - LSTM
   - Long Short-Term Memory Network

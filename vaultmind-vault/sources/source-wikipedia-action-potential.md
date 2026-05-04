@@ -3,7 +3,6 @@ id: source-wikipedia-action-potential
 type: source
 title: "Wikipedia. Action potential"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://en.wikipedia.org/wiki/Action_potential"
 aliases:
   - Action potential Wikipedia

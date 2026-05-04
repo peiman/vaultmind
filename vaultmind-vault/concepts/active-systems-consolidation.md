@@ -3,7 +3,6 @@ id: concept-active-systems-consolidation
 type: concept
 title: Active Systems Consolidation Hypothesis
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Active Systems Consolidation
   - ASC Hypothesis

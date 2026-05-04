@@ -3,7 +3,6 @@ id: source-honda-2025
 type: source
 title: "Honda, Fujita, Zempo, Fukushima — Human-Like Remembering and Forgetting in LLM Agents: An ACT-R-Inspired Memory Architecture (2025)"
 created: 2026-04-09
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1145/3765766.3765803"
 aliases:
   - Honda 2025

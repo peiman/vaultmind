@@ -3,7 +3,6 @@ id: concept-hyde
 type: concept
 title: HyDE
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - Hypothetical Document Embeddings
   - HyDE Retrieval

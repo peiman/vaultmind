@@ -3,7 +3,6 @@ id: arc-workhorse-collaboration
 type: arc
 title: "Building a Friend's Memory"
 created: 2026-04-11
-vm_updated: 2026-04-11
 tags:
   - growth
   - identity

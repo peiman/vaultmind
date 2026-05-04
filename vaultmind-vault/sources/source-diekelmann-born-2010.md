@@ -3,7 +3,6 @@ id: source-diekelmann-born-2010
 type: source
 title: "Diekelmann, S., & Born, J. (2010). The memory function of sleep. Nature Reviews Neuroscience, 11(2), 114-126."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1038/nrn2762"
 aliases:
   - Diekelmann Born 2010

@@ -3,7 +3,6 @@ id: source-wikipedia-bci
 type: source
 title: "Wikipedia. Brain–Computer Interface"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://en.wikipedia.org/wiki/Brain%E2%80%93computer_interface"
 tags:
   - bci

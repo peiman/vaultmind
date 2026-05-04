@@ -3,7 +3,6 @@ id: source-hafting-2005
 type: source
 title: "Hafting, T., Fyhn, M., Molden, S., Moser, M.-B. & Moser, E. I. (2005). Microstructure of a spatial map in the entorhinal cortex. Nature, 436, 801-806."
 created: 2026-04-26
-vm_updated: 2026-04-26
 url: "https://doi.org/10.1038/nature03721"
 tags:
   - neuroscience

@@ -3,7 +3,6 @@ id: source-ahrens-2013
 type: source
 title: "Ahrens, Orger, Robson, Li & Keller. Whole-brain functional imaging at cellular resolution using light-sheet microscopy (2013)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1038/nmeth.2434"
 aliases:
   - Ahrens 2013

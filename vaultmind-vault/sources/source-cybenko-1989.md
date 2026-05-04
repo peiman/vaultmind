@@ -3,7 +3,6 @@ id: source-cybenko-1989
 type: source
 title: "Cybenko, G. Approximation by Superpositions of a Sigmoidal Function (1989)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1007/BF02551274"
 aliases:
   - Cybenko 1989

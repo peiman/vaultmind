@@ -3,7 +3,6 @@ id: source-molle-2002
 type: source
 title: "Mölle, M., Marshall, L., Gais, S., & Born, J. (2002). Grouping of spindle activity during slow oscillations in human non-rapid eye movement sleep. Journal of Neuroscience, 22(24), 10941-10947."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1523/jneurosci.22-24-10941.2002"
 aliases:
   - Mölle 2002 J Neurosci

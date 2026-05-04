@@ -3,7 +3,6 @@ id: source-asai-2023
 type: source
 title: "Asai, A., Wu, Z., Wang, Y., Sil, A., & Hajishirzi, H. (2023). Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection. ICLR 2024."
 created: 2026-04-06
-vm_updated: 2026-04-06
 url: "https://arxiv.org/abs/2310.11511"
 aliases:
   - Asai 2023

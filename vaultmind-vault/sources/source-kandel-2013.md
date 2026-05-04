@@ -3,7 +3,6 @@ id: source-kandel-2013
 type: source
 title: "Kandel, Schwartz, Jessell, Siegelbaum & Hudspeth. Principles of Neural Science, 5th ed. (2013)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://www.worldcat.org/isbn/9780071390118"
 tags:
   - neuroscience

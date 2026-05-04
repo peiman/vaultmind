@@ -3,7 +3,6 @@ id: concept-sleep-deprivation-memory
 type: concept
 title: Sleep Deprivation and Memory
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Sleep Loss and Memory
   - Sleep Deprivation Encoding

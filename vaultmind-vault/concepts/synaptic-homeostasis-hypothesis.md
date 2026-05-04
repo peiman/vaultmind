@@ -3,7 +3,6 @@ id: concept-synaptic-homeostasis-hypothesis
 type: concept
 title: Synaptic Homeostasis Hypothesis
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - SHY
   - Synaptic Downscaling During Sleep

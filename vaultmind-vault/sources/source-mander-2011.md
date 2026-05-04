@@ -3,7 +3,6 @@ id: source-mander-2011
 type: source
 title: "Mander, B. A., Santhanam, S., Saletin, J. M., & Walker, M. P. (2011). Wake deterioration and sleep restoration of human learning. Current Biology, 21(5), R183-R184."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1016/j.cub.2011.01.019"
 aliases:
   - Mander 2011

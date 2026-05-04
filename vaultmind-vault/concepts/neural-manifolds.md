@@ -3,7 +3,6 @@ id: concept-neural-manifolds
 type: concept
 title: Neural Manifolds
 created: 2026-04-26
-vm_updated: 2026-04-26
 tags:
   - neuroscience
   - computational-neuroscience

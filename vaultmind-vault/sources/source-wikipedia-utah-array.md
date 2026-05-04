@@ -3,7 +3,6 @@ id: source-wikipedia-utah-array
 type: source
 title: "Wikipedia. Microelectrode Array (Utah Array)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://en.wikipedia.org/wiki/Microelectrode_array"
 tags:
   - bci

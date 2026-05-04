@@ -3,7 +3,6 @@ id: concept-memory-engrams
 type: concept
 title: Memory Engrams
 created: 2026-04-26
-vm_updated: 2026-04-26
 tags:
   - neuroscience
   - memory

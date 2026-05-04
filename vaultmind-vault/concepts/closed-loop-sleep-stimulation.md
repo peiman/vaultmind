@@ -3,7 +3,6 @@ id: concept-closed-loop-sleep-stimulation
 type: concept
 title: Closed-Loop Sleep Stimulation
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Acoustic Sleep Enhancement
   - Phase-Locked Sleep Stimulation

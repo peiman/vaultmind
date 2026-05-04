@@ -3,7 +3,6 @@ id: source-rosenblatt-1958
 type: source
 title: "Rosenblatt, F. The Perceptron: A Probabilistic Model for Information Storage and Organization in the Brain (1958)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1037/h0042519"
 aliases:
   - Rosenblatt 1958

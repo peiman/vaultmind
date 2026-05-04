@@ -3,7 +3,6 @@ id: source-wei-2022-cot
 type: source
 title: "Wei et al. Chain-of-Thought Prompting Elicits Reasoning in Large Language Models (2022)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://arxiv.org/abs/2201.11903"
 tags:
   - llms

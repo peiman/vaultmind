@@ -3,7 +3,6 @@ id: source-wikipedia-chemical-synapse
 type: source
 title: "Wikipedia. Chemical synapse"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://en.wikipedia.org/wiki/Chemical_synapse"
 aliases:
   - Chemical synapse Wikipedia

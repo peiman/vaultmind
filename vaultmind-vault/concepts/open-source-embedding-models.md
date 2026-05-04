@@ -3,7 +3,6 @@ id: concept-open-source-embedding-models
 type: concept
 title: Open-Source Embedding Models
 created: 2026-04-06
-vm_updated: 2026-04-07
 aliases:
   - Embedding Model Landscape
   - Open Source Embeddings

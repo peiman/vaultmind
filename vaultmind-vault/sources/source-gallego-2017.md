@@ -3,7 +3,6 @@ id: source-gallego-2017
 type: source
 title: "Gallego, J. A., Perich, M. G., Miller, L. E. & Solla, S. A. (2017). Neural manifolds for the control of movement. Neuron, 94(5), 978-984."
 created: 2026-04-26
-vm_updated: 2026-04-26
 url: "https://doi.org/10.1016/j.neuron.2017.05.025"
 tags:
   - neuroscience

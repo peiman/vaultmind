@@ -3,7 +3,6 @@ id: source-rumelhart-1986
 type: source
 title: "Rumelhart, D., Hinton, G., & Williams, R. Learning Representations by Back-Propagating Errors (1986)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1038/323533a0"
 aliases:
   - Rumelhart Hinton Williams 1986

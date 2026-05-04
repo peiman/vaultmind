@@ -3,7 +3,6 @@ id: concept-convolutional-neural-network
 type: concept
 title: Convolutional Neural Network
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - CNN
   - ConvNet

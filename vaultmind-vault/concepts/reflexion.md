@@ -3,7 +3,6 @@ id: concept-reflexion
 type: concept
 title: Reflexion
 created: 2026-04-03
-vm_updated: 2026-04-03
 aliases:
   - Reflexion Architecture
   - Self-Reflecting Agents

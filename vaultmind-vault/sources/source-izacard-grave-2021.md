@@ -3,7 +3,6 @@ id: source-izacard-grave-2021
 type: source
 title: "Izacard, G., & Grave, E. (2021). Leveraging Passage Retrieval with Generative Models for Open Domain Question Answering. EACL 2021."
 created: 2026-04-06
-vm_updated: 2026-04-06
 url: "https://arxiv.org/abs/2007.01282"
 aliases:
   - Izacard Grave 2021

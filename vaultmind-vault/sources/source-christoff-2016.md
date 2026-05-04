@@ -3,7 +3,6 @@ id: source-christoff-2016
 type: source
 title: "Christoff, K., Irving, Z.C., Fox, K.C.R., Spreng, R.N. & Andrews-Hanna, J.R. Mind-wandering as spontaneous thought: a dynamic framework (2016)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1038/nrn.2016.113"
 aliases:
   - christoff 2016

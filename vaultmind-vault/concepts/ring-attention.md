@@ -3,7 +3,6 @@ id: concept-ring-attention
 type: concept
 title: Ring Attention
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - Blockwise Ring Attention
   - Distributed Attention

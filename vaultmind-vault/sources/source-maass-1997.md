@@ -3,7 +3,6 @@ id: source-maass-1997
 type: source
 title: "Maass, W. Networks of Spiking Neurons: The Third Generation of Neural Network Models (1997)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1016/S0893-6080(97)00011-7"
 tags:
   - bio-inspired-ai

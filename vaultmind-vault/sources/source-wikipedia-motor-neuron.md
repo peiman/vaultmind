@@ -3,7 +3,6 @@ id: source-wikipedia-motor-neuron
 type: source
 title: "Wikipedia. Motor neuron"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://en.wikipedia.org/wiki/Motor_neuron"
 tags:
   - neuroscience

@@ -3,7 +3,6 @@ id: source-raichle-2001
 type: source
 title: "Raichle, M. E., MacLeod, A. M., Snyder, A. Z., Powers, W. J., Gusnard, D. A. & Shulman, G. L. (2001). A default mode of brain function. PNAS, 98(2), 676-682."
 created: 2026-04-26
-vm_updated: 2026-04-26
 url: "https://doi.org/10.1073/pnas.98.2.676"
 tags:
   - neuroscience

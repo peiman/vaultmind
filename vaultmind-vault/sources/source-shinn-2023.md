@@ -3,7 +3,6 @@ id: source-shinn-2023
 type: source
 title: "Shinn et al. Reflexion: Language Agents with Verbal Reinforcement Learning (2023)"
 created: 2026-04-03
-vm_updated: 2026-04-03
 url: "https://arxiv.org/abs/2303.11366"
 aliases:
   - Shinn 2023

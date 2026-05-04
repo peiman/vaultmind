@@ -3,7 +3,6 @@ id: source-izacard-2022
 type: source
 title: "Izacard, G., et al. (2022). Unsupervised Dense Information Retrieval with Contrastive Learning. TMLR 2022."
 created: 2026-04-06
-vm_updated: 2026-04-06
 url: "https://arxiv.org/abs/2112.09118"
 aliases:
   - Izacard 2022

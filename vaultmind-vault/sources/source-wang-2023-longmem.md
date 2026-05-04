@@ -3,7 +3,6 @@ id: source-wang-2023-longmem
 type: source
 title: "Wang, W., et al. (2023). Augmenting Language Models with Long-Term Memory. NeurIPS 2023."
 created: 2026-04-06
-vm_updated: 2026-04-06
 url: "https://arxiv.org/abs/2306.07174"
 aliases:
   - Wang 2023 LongMem

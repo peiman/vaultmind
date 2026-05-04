@@ -3,7 +3,6 @@ id: source-musk-neuralink-2019
 type: source
 title: "Musk & Neuralink. An Integrated Brain-Machine Interface Platform with Thousands of Channels (2019)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.2196/16194"
 tags:
   - bci

@@ -3,7 +3,6 @@ id: source-walker-2009
 type: source
 title: "Walker, M.P. & van der Helm, E. Overnight therapy? The role of sleep in emotional brain processing (2009)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1037/a0016570"
 aliases:
   - walker van der helm 2009

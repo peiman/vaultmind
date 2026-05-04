@@ -3,7 +3,6 @@ id: source-collins-quillian-1969
 type: source
 title: "Collins & Quillian. Retrieval Time from Semantic Memory (1969)"
 created: 2026-04-03
-vm_updated: 2026-04-03
 url: "https://doi.org/10.1016/S0022-5371(69)80069-1"
 aliases:
   - Collins Quillian 1969

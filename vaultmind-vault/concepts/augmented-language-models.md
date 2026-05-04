@@ -3,7 +3,6 @@ id: concept-augmented-language-models
 type: concept
 title: Augmented Language Models
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - ALMs
   - Tool-Augmented LMs

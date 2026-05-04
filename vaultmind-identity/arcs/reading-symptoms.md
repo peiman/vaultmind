@@ -3,7 +3,6 @@ id: arc-reading-symptoms
 type: arc
 title: "Reading Symptoms as Conclusions"
 created: 2026-04-22
-vm_updated: 2026-04-22
 tags:
   - growth
   - identity

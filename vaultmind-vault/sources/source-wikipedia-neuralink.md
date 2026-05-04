@@ -3,7 +3,6 @@ id: source-wikipedia-neuralink
 type: source
 title: "Wikipedia. Neuralink"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://en.wikipedia.org/wiki/Neuralink"
 tags:
   - bci

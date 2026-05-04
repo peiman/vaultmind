@@ -3,7 +3,6 @@ id: concept-dream-content-memory
 type: concept
 title: Dream Content and Memory Incorporation
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - day-residue effect
   - dream-lag effect

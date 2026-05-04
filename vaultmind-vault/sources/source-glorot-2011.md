@@ -3,7 +3,6 @@ id: source-glorot-2011
 type: source
 title: "Glorot, X., Bordes, A., & Bengio, Y. Deep Sparse Rectifier Neural Networks (2011)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://proceedings.mlr.press/v15/glorot11a.html"
 aliases:
   - Glorot 2011

@@ -3,7 +3,6 @@ id: concept-sensory-neurons
 type: concept
 title: Sensory Neurons
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Afferent Neurons
   - Primary Sensory Neurons

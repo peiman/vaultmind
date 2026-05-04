@@ -3,7 +3,6 @@ id: source-munkhdalai-2024
 type: source
 title: "Munkhdalai, T., Faruqui, M., & Gopal, S. (2024). Leave No Context Behind: Efficient Infinite Context Transformers with Infini-attention. arXiv:2404.07143."
 created: 2026-04-06
-vm_updated: 2026-04-06
 url: "https://arxiv.org/abs/2404.07143"
 aliases:
   - Munkhdalai 2024

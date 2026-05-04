@@ -3,7 +3,6 @@ id: source-fedus-2021
 type: source
 title: "Fedus et al. Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efficient Sparsity (2021)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://arxiv.org/abs/2101.03961"
 tags:
   - llms

@@ -3,7 +3,6 @@ id: concept-rlhf
 type: concept
 title: RLHF (Reinforcement Learning from Human Feedback)
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Reinforcement Learning from Human Feedback
   - Preference Learning

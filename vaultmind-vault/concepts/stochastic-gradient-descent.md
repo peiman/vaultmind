@@ -3,7 +3,6 @@ id: concept-stochastic-gradient-descent
 type: concept
 title: Stochastic Gradient Descent
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - SGD
   - Mini-Batch Gradient Descent

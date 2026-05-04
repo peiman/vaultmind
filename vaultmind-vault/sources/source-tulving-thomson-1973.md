@@ -3,7 +3,6 @@ id: source-tulving-thomson-1973
 type: source
 title: "Tulving & Thomson. Encoding Specificity and Retrieval Processes in Episodic Memory (1973)"
 created: 2026-04-03
-vm_updated: 2026-04-03
 url: "https://doi.org/10.1037/h0020071"
 aliases:
   - Tulving Thomson 1973

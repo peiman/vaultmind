@@ -3,7 +3,6 @@ id: source-voss-2009
 type: source
 title: "Voss, U., Holzmann, R., Tuin, I. & Hobson, J.A. Lucid Dreaming: a State of Consciousness with Features of Both Waking and Non-Lucid Dreaming (2009)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1093/sleep/32.9.1191"
 aliases:
   - voss 2009

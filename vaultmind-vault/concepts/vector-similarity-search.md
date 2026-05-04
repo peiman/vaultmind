@@ -3,7 +3,6 @@ id: concept-vector-similarity-search
 type: concept
 title: Vector Similarity Search
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - Nearest Neighbor Search
   - ANN Search

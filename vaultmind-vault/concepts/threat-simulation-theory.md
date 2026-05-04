@@ -3,7 +3,6 @@ id: concept-threat-simulation-theory
 type: concept
 title: Threat-Simulation Theory of Dreaming
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - threat simulation theory
   - Revonsuo dream function

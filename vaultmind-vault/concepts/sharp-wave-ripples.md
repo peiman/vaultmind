@@ -3,7 +3,6 @@ id: concept-sharp-wave-ripples
 type: concept
 title: Sharp-Wave Ripples
 created: 2026-04-26
-vm_updated: 2026-04-26
 tags:
   - neuroscience
   - hippocampus

@@ -3,7 +3,6 @@ id: source-hobson-2009
 type: source
 title: "Hobson, J.A. REM sleep and dreaming: towards a theory of protoconsciousness (2009)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1038/nrn2716"
 aliases:
   - hobson 2009

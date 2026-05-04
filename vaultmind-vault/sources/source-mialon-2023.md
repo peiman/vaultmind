@@ -3,7 +3,6 @@ id: source-mialon-2023
 type: source
 title: "Mialon, G., et al. (2023). Augmented Language Models: a Survey. arXiv:2302.07842."
 created: 2026-04-06
-vm_updated: 2026-04-06
 url: "https://arxiv.org/abs/2302.07842"
 aliases:
   - Mialon 2023

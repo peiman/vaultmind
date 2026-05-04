@@ -3,7 +3,6 @@ id: concept-transformer
 type: concept
 title: Transformer
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Transformer Architecture
   - Encoder-Decoder Transformer

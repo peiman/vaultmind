@@ -3,7 +3,6 @@ id: source-curcio-2006
 type: source
 title: "Curcio, G., Ferrara, M., & De Gennaro, L. (2006). Sleep loss, learning capacity and academic performance. Sleep Medicine Reviews, 10(5), 323-337."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1016/j.smrv.2005.11.001"
 aliases:
   - Curcio 2006

@@ -3,7 +3,6 @@ id: concept-reciprocal-rank-fusion
 type: concept
 title: Reciprocal Rank Fusion
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - RRF
   - Rank Fusion

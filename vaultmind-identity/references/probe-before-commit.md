@@ -3,7 +3,6 @@ id: reference-probe-before-commit
 type: reference
 title: "Probe Before Committing — for Complex Work, Reality Refines the Estimate"
 created: 2026-04-29
-vm_updated: 2026-04-29
 tags:
   - reference
   - method

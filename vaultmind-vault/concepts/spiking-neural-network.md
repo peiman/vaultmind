@@ -3,7 +3,6 @@ id: concept-spiking-neural-network
 type: concept
 title: Spiking Neural Network (SNN)
 created: 2026-04-29
-vm_updated: 2026-04-29
 tags:
   - bio-inspired-ai
   - spiking-neural-network

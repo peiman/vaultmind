@@ -3,7 +3,6 @@ id: source-johnson-1993
 type: source
 title: "Johnson, M. K., Hashtroudi, S., & Lindsay, D. S. (1993). Source monitoring. Psychological Bulletin, 114(1), 3-28."
 created: 2026-04-06
-vm_updated: 2026-04-06
 url: "https://doi.org/10.1037/0033-2909.114.1.3"
 aliases:
   - Johnson 1993

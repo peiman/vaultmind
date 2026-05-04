@@ -3,7 +3,6 @@ id: concept-gpt
 type: concept
 title: GPT (Generative Pre-trained Transformer)
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - GPT
   - Generative Pre-trained Transformer

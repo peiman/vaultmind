@@ -3,7 +3,6 @@ id: concept-kv-cache
 type: concept
 title: KV Cache
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - Key-Value Cache
   - Attention Cache

@@ -3,7 +3,6 @@ id: source-pavlik-anderson-2005
 type: source
 title: "Pavlik & Anderson — Practice and Forgetting Effects on Vocabulary Memory (2005)"
 created: 2026-04-09
-vm_updated: 2026-04-09
 url: "https://doi.org/10.1207/s15516709cog0000_14"
 aliases:
   - Pavlik Anderson 2005

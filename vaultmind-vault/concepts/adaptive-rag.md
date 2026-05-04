@@ -3,7 +3,6 @@ id: concept-adaptive-rag
 type: concept
 title: Adaptive RAG
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - Adaptive Retrieval
   - RAG Routing

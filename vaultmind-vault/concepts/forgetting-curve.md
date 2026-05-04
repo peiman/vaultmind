@@ -3,7 +3,6 @@ id: concept-forgetting-curve
 type: concept
 title: Forgetting Curve
 created: 2026-04-03
-vm_updated: 2026-04-03
 aliases:
   - Ebbinghaus Curve
   - Memory Decay

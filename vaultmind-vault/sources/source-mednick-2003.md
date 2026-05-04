@@ -3,7 +3,6 @@ id: source-mednick-2003
 type: source
 title: "Mednick, S., Nakayama, K., & Stickgold, R. (2003). Sleep-dependent learning: a nap is as good as a night. Nature Neuroscience, 6(7), 697-698."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1038/nn1078"
 aliases:
   - Mednick 2003

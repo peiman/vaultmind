@@ -3,7 +3,6 @@ id: source-hendrycks-2016
 type: source
 title: "Hendrycks, D. & Gimpel, K. Gaussian Error Linear Units (GELUs) (2016)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://arxiv.org/abs/1606.08415"
 aliases:
   - GELU paper

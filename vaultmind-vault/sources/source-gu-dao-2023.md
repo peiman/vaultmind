@@ -3,7 +3,6 @@ id: source-gu-dao-2023
 type: source
 title: "Gu & Dao. Mamba: Linear-Time Sequence Modeling with Selective State Spaces (2023)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://arxiv.org/abs/2312.00752"
 tags:
   - llms

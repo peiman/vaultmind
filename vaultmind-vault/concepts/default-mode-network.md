@@ -3,7 +3,6 @@ id: concept-default-mode-network
 type: concept
 title: Default Mode Network
 created: 2026-04-26
-vm_updated: 2026-04-26
 tags:
   - neuroscience
   - resting-state

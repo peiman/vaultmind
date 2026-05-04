@@ -3,7 +3,6 @@ id: source-jun-2017
 type: source
 title: "Jun, Steinmetz, Siegle et al. Fully integrated silicon probes for high-density recording of neural activity (2017)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1038/nature24636"
 aliases:
   - Jun 2017

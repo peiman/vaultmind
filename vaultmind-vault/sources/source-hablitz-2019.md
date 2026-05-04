@@ -3,7 +3,6 @@ id: source-hablitz-2019
 type: source
 title: "Hablitz, L. M., Vinitsky, H. S., Sun, Q., Stæger, F. F., Sigurdsson, B., Snippe, K. P., & Nedergaard, M. (2019). Increased glymphatic influx is correlated with high EEG delta power and low heart rate in mice under anesthesia. Science Advances, 5(2), eaav5447."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1126/sciadv.aav5447"
 aliases:
   - Hablitz 2019 Sci Adv

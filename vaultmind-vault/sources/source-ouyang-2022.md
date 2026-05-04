@@ -3,7 +3,6 @@ id: source-ouyang-2022
 type: source
 title: "Ouyang et al. Training Language Models to Follow Instructions with Human Feedback (InstructGPT, 2022)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://arxiv.org/abs/2203.02155"
 tags:
   - llms

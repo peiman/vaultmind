@@ -3,7 +3,6 @@ id: source-wu-2022
 type: source
 title: "Wu, Y., Rabe, M. N., Hutchins, D., & Szegedy, C. (2022). Memorizing Transformers. ICLR 2022."
 created: 2026-04-06
-vm_updated: 2026-04-06
 url: "https://arxiv.org/abs/2203.08913"
 aliases:
   - Wu 2022

@@ -3,7 +3,6 @@ id: concept-neuralink
 type: concept
 title: Neuralink
 created: 2026-04-29
-vm_updated: 2026-04-29
 tags:
   - bci
   - neuralink

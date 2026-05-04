@@ -3,7 +3,6 @@ id: concept-query-expansion
 type: concept
 title: Query Expansion
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - Query Reformulation
   - Query Rewriting

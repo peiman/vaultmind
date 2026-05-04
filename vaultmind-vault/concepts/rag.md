@@ -3,7 +3,6 @@ id: concept-rag
 type: concept
 title: Retrieval-Augmented Generation
 created: 2026-04-03
-vm_updated: 2026-04-03
 aliases:
   - RAG
   - Retrieval Augmented Generation

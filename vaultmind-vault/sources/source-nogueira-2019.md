@@ -3,7 +3,6 @@ id: source-nogueira-2019
 type: source
 title: "Nogueira, R., & Cho, K. (2019). Passage Re-ranking with BERT. arXiv:1901.04085."
 created: 2026-04-06
-vm_updated: 2026-04-06
 url: "https://arxiv.org/abs/1901.04085"
 aliases:
   - Nogueira 2019

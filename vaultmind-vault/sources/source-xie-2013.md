@@ -3,7 +3,6 @@ id: source-xie-2013
 type: source
 title: "Xie, L. et al. (2013). Sleep drives metabolite clearance from the adult brain. Science, 342(6156), 373-377."
 created: 2026-04-26
-vm_updated: 2026-04-26
 url: "https://doi.org/10.1126/science.1241224"
 tags:
   - neuroscience

@@ -3,7 +3,6 @@ id: concept-semantic-memory
 type: concept
 title: Semantic Memory
 created: 2026-04-07
-vm_updated: 2026-04-07
 aliases:
   - Factual Memory
   - Knowledge Memory

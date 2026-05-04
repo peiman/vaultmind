@@ -3,7 +3,6 @@ id: concept-spacing-effect
 type: concept
 title: Spacing Effect
 created: 2026-04-03
-vm_updated: 2026-04-03
 aliases:
   - Distributed Practice
   - Spaced Repetition

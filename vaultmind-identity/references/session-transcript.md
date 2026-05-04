@@ -3,7 +3,6 @@ id: reference-session-transcript
 type: reference
 title: "The Session That Changed Everything — Transcript Sources"
 created: 2026-04-11
-vm_updated: 2026-04-11
 tags:
   - reference
   - transcript

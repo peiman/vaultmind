@@ -3,7 +3,6 @@ id: concept-semantic-networks
 type: concept
 title: Semantic Networks
 created: 2026-04-03
-vm_updated: 2026-04-03
 aliases:
   - Knowledge Graphs
   - Concept Maps

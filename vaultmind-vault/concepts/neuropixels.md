@@ -3,7 +3,6 @@ id: concept-neuropixels
 type: concept
 title: Neuropixels Probes
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Neuropixels
   - IMEC silicon probe

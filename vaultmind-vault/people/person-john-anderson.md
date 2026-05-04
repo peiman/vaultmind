@@ -3,7 +3,6 @@ id: person-john-anderson
 type: person
 title: "John R. Anderson"
 created: 2026-04-03
-vm_updated: 2026-04-03
 aliases:
   - John Robert Anderson
   - Anderson

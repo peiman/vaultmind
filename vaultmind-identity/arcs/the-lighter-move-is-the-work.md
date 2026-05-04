@@ -3,7 +3,6 @@ id: arc-the-lighter-move-is-the-work
 type: arc
 title: "The Lighter Move Is the Work"
 created: 2026-05-02
-vm_updated: 2026-05-02
 tags:
   - arc
   - probe-before-commit

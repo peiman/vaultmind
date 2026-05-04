@@ -3,7 +3,6 @@ id: concept-slow-wave-activity
 type: concept
 title: Slow-Wave Activity and Slow Oscillations
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Slow-Wave Activity
   - SWA

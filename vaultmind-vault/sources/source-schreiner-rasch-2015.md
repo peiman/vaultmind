@@ -3,7 +3,6 @@ id: source-schreiner-rasch-2015
 type: source
 title: "Schreiner, T., & Rasch, B. (2015). Boosting Vocabulary Learning by Verbal Cueing During Sleep. Cerebral Cortex, 25(11), 4169-4179."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1093/cercor/bhu139"
 aliases:
   - Schreiner Rasch 2015

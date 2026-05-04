@@ -3,7 +3,6 @@ id: source-hodgkin-huxley-1952
 type: source
 title: "Hodgkin & Huxley. A Quantitative Description of Membrane Current and Its Application to Conduction and Excitation in Nerve (1952)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1113/jphysiol.1952.sp004764"
 aliases:
   - Hodgkin Huxley 1952

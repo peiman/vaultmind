@@ -3,7 +3,6 @@ id: source-karpukhin-2020
 type: source
 title: "Karpukhin, V., et al. (2020). Dense Passage Retrieval for Open-Domain Question Answering. EMNLP 2020."
 created: 2026-04-06
-vm_updated: 2026-04-06
 url: "https://doi.org/10.18653/v1/2020.emnlp-main.550"
 aliases:
   - Karpukhin 2020

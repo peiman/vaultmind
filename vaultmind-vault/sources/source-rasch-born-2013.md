@@ -3,7 +3,6 @@ id: source-rasch-born-2013
 type: source
 title: "Rasch, B., & Born, J. (2013). About sleep's role in memory. Physiological Reviews, 93(2), 681-766."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1152/physrev.00032.2012"
 aliases:
   - Rasch Born 2013 Physiol Rev

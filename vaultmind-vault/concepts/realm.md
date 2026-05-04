@@ -3,7 +3,6 @@ id: concept-realm
 type: concept
 title: REALM
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - Retrieval-Augmented Language Model
   - REALM Pre-Training

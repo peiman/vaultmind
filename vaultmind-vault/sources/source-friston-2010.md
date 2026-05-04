@@ -3,7 +3,6 @@ id: source-friston-2010
 type: source
 title: "Friston, K. (2010). The free-energy principle: a unified brain theory? Nature Reviews Neuroscience, 11, 127-138."
 created: 2026-04-26
-vm_updated: 2026-04-26
 url: "https://doi.org/10.1038/nrn2787"
 tags:
   - neuroscience

@@ -3,7 +3,6 @@ id: concept-reranking
 type: concept
 title: Reranking
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - Cross-Encoder Reranking
   - Two-Stage Retrieval

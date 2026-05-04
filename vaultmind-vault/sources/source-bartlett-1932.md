@@ -3,7 +3,6 @@ id: source-bartlett-1932
 type: source
 title: "Bartlett, F. C. (1932). Remembering: A Study in Experimental and Social Psychology. Cambridge University Press."
 created: 2026-04-07
-vm_updated: 2026-04-07
 url: "https://doi.org/10.1017/CBO9780511759185"
 aliases:
   - Bartlett 1932

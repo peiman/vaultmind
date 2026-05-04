@@ -3,7 +3,6 @@ id: source-drummond-2000
 type: source
 title: "Drummond, S. P. A., Brown, G. G., Gillin, J. C., Stricker, J. L., Wong, E. C., & Buxton, R. B. (2000). Altered brain response to verbal learning following sleep deprivation. Nature, 403(6770), 655-657."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1038/35001068"
 aliases:
   - Drummond 2000

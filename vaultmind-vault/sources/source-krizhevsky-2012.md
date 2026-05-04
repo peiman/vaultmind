@@ -3,7 +3,6 @@ id: source-krizhevsky-2012
 type: source
 title: "Krizhevsky, Sutskever & Hinton. ImageNet Classification with Deep Convolutional Neural Networks (2012)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1145/3065386"
 aliases:
   - AlexNet paper

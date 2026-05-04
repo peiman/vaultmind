@@ -3,7 +3,6 @@ id: concept-glymphatic-sleep
 type: concept
 title: Glymphatic Clearance During Sleep
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Glymphatic Clearance
   - Sleep-Dependent Waste Clearance

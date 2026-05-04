@@ -3,7 +3,6 @@ id: source-rombach-2022
 type: source
 title: "Rombach et al. High-Resolution Image Synthesis with Latent Diffusion Models (Stable Diffusion, 2022)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://arxiv.org/abs/2112.10752"
 tags:
   - deep-learning

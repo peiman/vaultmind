@@ -3,7 +3,6 @@ id: concept-soar
 type: concept
 title: SOAR
 created: 2026-04-07
-vm_updated: 2026-04-07
 aliases:
   - State, Operator, and Result
   - SOAR Architecture

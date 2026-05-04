@@ -3,7 +3,6 @@ id: person-patrick-lewis
 type: person
 title: "Patrick Lewis"
 created: 2026-04-03
-vm_updated: 2026-04-03
 aliases:
   - Lewis
 tags:

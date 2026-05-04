@@ -3,7 +3,6 @@ id: source-merolla-2014
 type: source
 title: "Merolla et al. A Million Spiking-Neuron Integrated Circuit (2014)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1126/science.1254642"
 tags:
   - neuromorphic

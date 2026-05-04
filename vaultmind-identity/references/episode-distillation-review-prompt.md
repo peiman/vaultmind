@@ -3,7 +3,6 @@ id: reference-episode-distillation-review-prompt
 type: reference
 title: "Episode Distillation Review — Prompt for a Future Session"
 created: 2026-04-24
-vm_updated: 2026-04-27
 tags:
   - reference
   - prompt

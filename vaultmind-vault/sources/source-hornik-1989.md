@@ -3,7 +3,6 @@ id: source-hornik-1989
 type: source
 title: "Hornik, K., Stinchcombe, M., & White, H. Multilayer Feedforward Networks are Universal Approximators (1989)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1016/0893-6080(89)90020-8"
 aliases:
   - Hornik 1989

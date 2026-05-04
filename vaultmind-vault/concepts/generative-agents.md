@@ -3,7 +3,6 @@ id: concept-generative-agents
 type: concept
 title: Generative Agents
 created: 2026-04-03
-vm_updated: 2026-04-03
 aliases:
   - Smallville Agents
   - Park et al. Agents

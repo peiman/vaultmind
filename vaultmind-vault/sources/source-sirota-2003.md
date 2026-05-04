@@ -3,7 +3,6 @@ id: source-sirota-2003
 type: source
 title: "Sirota, A., Csicsvari, J., Buhl, D., & Buzsáki, G. (2003). Communication between neocortex and hippocampus during sleep in rodents. Proceedings of the National Academy of Sciences, 100(4), 2065-2069."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1073/pnas.0437938100"
 aliases:
   - Sirota 2003 PNAS

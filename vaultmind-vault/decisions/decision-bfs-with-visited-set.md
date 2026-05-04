@@ -4,7 +4,6 @@ type: decision
 status: accepted
 title: "Mandate BFS with visited set for all graph traversals"
 created: 2026-04-03
-vm_updated: 2026-04-03
 tags: [graph, correctness]
 related_ids:
   - concept-semantic-networks

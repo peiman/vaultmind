@@ -3,7 +3,6 @@ id: concept-schema-theory
 type: concept
 title: Schema Theory
 created: 2026-04-07
-vm_updated: 2026-04-07
 aliases:
   - Bartlett's Schema Theory
   - Constructive Memory

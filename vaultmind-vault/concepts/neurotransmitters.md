@@ -3,7 +3,6 @@ id: concept-neurotransmitters
 type: concept
 title: Neurotransmitters
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Neurotransmitter
   - Chemical messengers

@@ -3,7 +3,6 @@ id: person-allan-collins
 type: person
 title: "Allan M. Collins"
 created: 2026-04-03
-vm_updated: 2026-04-03
 aliases:
   - Allan Collins
   - Collins

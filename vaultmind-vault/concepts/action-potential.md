@@ -3,7 +3,6 @@ id: concept-action-potential
 type: concept
 title: Action Potential
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Nerve impulse
   - Spike

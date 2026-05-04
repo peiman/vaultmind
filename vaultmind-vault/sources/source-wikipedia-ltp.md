@@ -3,7 +3,6 @@ id: source-wikipedia-ltp
 type: source
 title: "Wikipedia. Long-Term Potentiation"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://en.wikipedia.org/wiki/Long-term_potentiation"
 tags:
   - neuroscience

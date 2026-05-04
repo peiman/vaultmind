@@ -3,7 +3,6 @@ id: source-iliff-2012
 type: source
 title: "Iliff, J. J. et al. (2012). A paravascular pathway facilitates CSF flow through the brain parenchyma and the clearance of interstitial solutes, including amyloid β. Science Translational Medicine, 4(147), 147ra111."
 created: 2026-04-26
-vm_updated: 2026-04-26
 url: "https://doi.org/10.1126/scitranslmed.3003748"
 tags:
   - neuroscience

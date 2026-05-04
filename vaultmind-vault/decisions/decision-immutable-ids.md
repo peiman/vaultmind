@@ -4,7 +4,6 @@ type: decision
 status: accepted
 title: "Use immutable IDs for note identity, not filenames"
 created: 2026-04-03
-vm_updated: 2026-04-03
 tags: [architecture, identity]
 related_ids:
   - concept-entity-resolution

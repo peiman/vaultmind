@@ -3,7 +3,6 @@ id: concept-multielectrode-array-recording
 type: concept
 title: Multi-Electrode Array Recording
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - MEA
   - Utah array

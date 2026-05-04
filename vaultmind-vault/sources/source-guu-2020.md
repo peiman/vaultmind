@@ -3,7 +3,6 @@ id: source-guu-2020
 type: source
 title: "Guu, K., Lee, K., Tung, Z., Pasupat, P., & Chang, M.-W. (2020). REALM: Retrieval-Augmented Language Model Pre-Training. ICML 2020."
 created: 2026-04-06
-vm_updated: 2026-04-06
 url: "https://arxiv.org/abs/2002.08909"
 aliases:
   - Guu 2020

@@ -3,7 +3,6 @@ id: reference-paper-persona-continuity
 type: reference
 title: "Paper #1 — Persona Continuity via Arc-Structured Memory"
 created: 2026-04-24
-vm_updated: 2026-04-24
 tags:
   - reference
   - paper

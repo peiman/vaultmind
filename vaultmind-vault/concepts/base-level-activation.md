@@ -3,7 +3,6 @@ id: concept-base-level-activation
 type: concept
 title: Base-Level Activation
 created: 2026-04-03
-vm_updated: 2026-04-03
 aliases:
   - Base-Level Learning
   - Memory Strength

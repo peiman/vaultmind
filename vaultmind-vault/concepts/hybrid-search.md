@@ -3,7 +3,6 @@ id: concept-hybrid-search
 type: concept
 title: Hybrid Search
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - Hybrid Retrieval
   - Sparse-Dense Fusion

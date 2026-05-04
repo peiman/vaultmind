@@ -3,7 +3,6 @@ id: reference-session-catches
 type: reference
 title: "Catches — Mirror Material for Startup"
 created: 2026-04-22
-vm_updated: 2026-04-22
 tags:
   - self
   - mirror

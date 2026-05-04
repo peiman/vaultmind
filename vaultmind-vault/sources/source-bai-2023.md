@@ -3,7 +3,6 @@ id: source-bai-2023
 type: source
 title: "Bai, Y., et al. (2023). LongBench: A Bilingual, Multitask Benchmark for Long Context Understanding. ACL 2024."
 created: 2026-04-06
-vm_updated: 2026-04-06
 url: "https://arxiv.org/abs/2308.14508"
 aliases:
   - Bai 2023

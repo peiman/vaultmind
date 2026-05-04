@@ -3,7 +3,6 @@ id: concept-neuromorphic-computing
 type: concept
 title: Neuromorphic Computing
 created: 2026-04-29
-vm_updated: 2026-04-29
 tags:
   - neuromorphic
   - hardware

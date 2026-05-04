@@ -3,7 +3,6 @@ id: source-papalambros-2017
 type: source
 title: "Papalambros, N. A., Santostasi, G., Malkani, R. G., Braun, R., Weintraub, S., Paller, K. A., & Zee, P. C. (2017). Acoustic Enhancement of Sleep Slow Oscillations and Concomitant Memory Improvement in Older Adults. Frontiers in Human Neuroscience, 11, 109."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.3389/fnhum.2017.00109"
 aliases:
   - Papalambros 2017

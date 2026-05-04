@@ -3,7 +3,6 @@ id: source-klinzing-2019
 type: source
 title: "Klinzing, J. G., Niethard, N., & Born, J. (2019). Mechanisms of systems memory consolidation during sleep. Nature Neuroscience, 22(10), 1598-1610."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1038/s41593-019-0467-3"
 aliases:
   - Klinzing Niethard Born 2019

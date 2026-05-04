@@ -3,7 +3,6 @@ id: concept-presleep-behavior-encoding
 type: concept
 title: Pre-Sleep Behaviors and Memory Encoding
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Pre-Sleep Review
   - Sleep On It

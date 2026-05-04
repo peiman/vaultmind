@@ -3,7 +3,6 @@ id: source-tononi-cirelli-2014
 type: source
 title: "Tononi, G., & Cirelli, C. (2014). Sleep and the price of plasticity: from synaptic and cellular homeostasis to memory consolidation and integration. Neuron, 81(1), 12-34."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1016/j.neuron.2013.12.025"
 aliases:
   - Tononi Cirelli 2014 Neuron

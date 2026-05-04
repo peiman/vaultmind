@@ -3,7 +3,6 @@ id: concept-adult-neurogenesis
 type: concept
 title: Adult Neurogenesis
 created: 2026-04-26
-vm_updated: 2026-04-26
 tags:
   - neuroscience
   - neurogenesis

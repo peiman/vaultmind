@@ -3,7 +3,6 @@ id: source-boldrini-2018
 type: source
 title: "Boldrini, M. et al. (2018). Human hippocampal neurogenesis persists throughout aging. Cell Stem Cell, 22(4), 589-599."
 created: 2026-04-26
-vm_updated: 2026-04-26
 url: "https://doi.org/10.1016/j.stem.2018.03.015"
 tags:
   - neuroscience

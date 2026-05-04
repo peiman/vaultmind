@@ -3,7 +3,6 @@ id: concept-sleep-stages
 type: concept
 title: Sleep Stages
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - NREM Sleep
   - REM Sleep

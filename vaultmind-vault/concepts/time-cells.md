@@ -3,7 +3,6 @@ id: concept-time-cells
 type: concept
 title: Time Cells
 created: 2026-04-26
-vm_updated: 2026-04-26
 tags:
   - neuroscience
   - hippocampus

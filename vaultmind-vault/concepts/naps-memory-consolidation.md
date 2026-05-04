@@ -3,7 +3,6 @@ id: concept-naps-memory-consolidation
 type: concept
 title: Naps and Memory Consolidation
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Napping
   - Power Naps

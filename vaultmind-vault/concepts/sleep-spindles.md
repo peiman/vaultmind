@@ -3,7 +3,6 @@ id: concept-sleep-spindles
 type: concept
 title: Sleep Spindles
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Sleep Spindle
   - Sigma Activity

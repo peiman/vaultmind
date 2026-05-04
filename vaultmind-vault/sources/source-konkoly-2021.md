@@ -3,7 +3,6 @@ id: source-konkoly-2021
 type: source
 title: "Konkoly, K.R. et al. Real-time dialogue between experimenters and dreamers during REM sleep (2021)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1016/j.cub.2021.01.026"
 aliases:
   - konkoly 2021

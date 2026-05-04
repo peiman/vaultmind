@@ -3,7 +3,6 @@ id: source-rudoy-2009
 type: source
 title: "Rudoy, J. D., Voss, J. L., Westerberg, C. E., & Paller, K. A. (2009). Strengthening Individual Memories by Reactivating Them During Sleep. Science, 326(5956), 1079."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1126/science.1179013"
 aliases:
   - Rudoy 2009

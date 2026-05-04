@@ -3,7 +3,6 @@ id: source-liu-2023-lost
 type: source
 title: "Liu, N. F., et al. (2023). Lost in the Middle: How Language Models Use Long Contexts. TACL 2024, 12, 157-173."
 created: 2026-04-06
-vm_updated: 2026-04-06
 url: "https://arxiv.org/abs/2307.03172"
 aliases:
   - Liu 2023 Lost in the Middle

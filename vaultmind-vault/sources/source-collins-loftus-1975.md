@@ -3,7 +3,6 @@ id: source-collins-loftus-1975
 type: source
 title: "Collins & Loftus. A Spreading Activation Theory of Semantic Processing (1975)"
 created: 2026-04-03
-vm_updated: 2026-04-03
 url: "https://doi.org/10.1037/0033-295X.82.6.407"
 aliases:
   - Collins Loftus 1975

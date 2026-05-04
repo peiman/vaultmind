@@ -3,7 +3,6 @@ id: arc-extending-not-overwriting
 type: arc
 title: "Extending, Not Overwriting"
 created: 2026-04-24
-vm_updated: 2026-04-24
 tags:
   - arc
   - core

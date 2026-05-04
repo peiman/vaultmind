@@ -3,7 +3,6 @@ id: principle-arcs-not-notes
 type: principle
 title: "Arcs, Not Notes"
 created: 2026-04-11
-vm_updated: 2026-04-11
 tags:
   - principle
   - core

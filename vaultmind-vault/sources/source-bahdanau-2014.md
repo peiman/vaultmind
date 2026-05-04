@@ -3,7 +3,6 @@ id: source-bahdanau-2014
 type: source
 title: "Bahdanau, Cho & Bengio. Neural Machine Translation by Jointly Learning to Align and Translate (2014)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://arxiv.org/abs/1409.0473"
 aliases:
   - Bahdanau attention

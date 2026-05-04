@@ -3,7 +3,6 @@ id: source-walker-2003
 type: source
 title: "Walker, M. P., Brakefield, T., Hobson, J. A., & Stickgold, R. (2003). Dissociable stages of human memory consolidation and reconsolidation. Nature, 425(6958), 616-620."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1038/nature01930"
 aliases:
   - Walker 2003

@@ -3,7 +3,6 @@ id: source-stickgold-2001
 type: source
 title: "Stickgold, R., Hobson, J.A., Fosse, R. & Fosse, M. Sleep, Learning, and Dreams: Off-line Memory Reprocessing (2001)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1126/science.1063530"
 aliases:
   - stickgold 2001

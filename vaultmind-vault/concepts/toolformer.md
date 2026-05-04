@@ -3,7 +3,6 @@ id: concept-toolformer
 type: concept
 title: Toolformer
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - Tool-Using LLM
   - Self-Supervised Tool Learning

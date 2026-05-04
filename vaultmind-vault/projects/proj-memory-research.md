@@ -4,7 +4,6 @@ type: project
 status: active
 title: "Memory Research Knowledge Base"
 created: 2026-04-03
-vm_updated: 2026-04-03
 aliases: []
 tags: [research, memory-systems]
 related_ids:

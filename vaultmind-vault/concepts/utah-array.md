@@ -3,7 +3,6 @@ id: concept-utah-array
 type: concept
 title: Utah Intracortical Electrode Array
 created: 2026-04-29
-vm_updated: 2026-04-29
 tags:
   - bci
   - hardware

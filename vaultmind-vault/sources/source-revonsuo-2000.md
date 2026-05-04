@@ -3,7 +3,6 @@ id: source-revonsuo-2000
 type: source
 title: "Revonsuo, A. The reinterpretation of dreams: An evolutionary hypothesis of the function of dreaming (2000)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1017/s0140525x00004015"
 aliases:
   - revonsuo 2000

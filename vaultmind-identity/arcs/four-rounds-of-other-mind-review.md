@@ -3,7 +3,6 @@ id: arc-four-rounds-of-other-mind-review
 type: arc
 title: "What the Other Mind Saw"
 created: 2026-05-01
-vm_updated: 2026-05-01
 tags:
   - growth
   - method

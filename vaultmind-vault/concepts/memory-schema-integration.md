@@ -3,7 +3,6 @@ id: concept-memory-schema-integration
 type: concept
 title: Memory Schemas and Overnight Integration
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - schema integration sleep
   - overnight schema building

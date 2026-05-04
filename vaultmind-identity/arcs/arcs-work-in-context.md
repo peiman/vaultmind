@@ -3,7 +3,6 @@ id: arc-arcs-work-in-context
 type: arc
 title: "Arcs Work In-Context"
 created: 2026-04-25
-vm_updated: 2026-04-25
 tags:
   - growth
   - identity

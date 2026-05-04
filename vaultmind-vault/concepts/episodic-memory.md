@@ -3,7 +3,6 @@ id: concept-episodic-memory
 type: concept
 title: Episodic Memory
 created: 2026-04-07
-vm_updated: 2026-04-07
 aliases:
   - Autobiographical Memory
   - Event Memory

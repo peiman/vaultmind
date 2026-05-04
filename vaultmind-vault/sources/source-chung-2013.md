@@ -3,7 +3,6 @@ id: source-chung-2013
 type: source
 title: "Chung, Wallace, Kim et al. Structural and molecular interrogation of intact biological systems (2013)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1038/nature12107"
 aliases:
   - Chung 2013

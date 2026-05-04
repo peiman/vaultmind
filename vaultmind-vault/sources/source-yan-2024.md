@@ -3,7 +3,6 @@ id: source-yan-2024
 type: source
 title: "Yan, S.-Q., et al. (2024). Corrective Retrieval Augmented Generation. arXiv:2401.15884."
 created: 2026-04-06
-vm_updated: 2026-04-06
 url: "https://arxiv.org/abs/2401.15884"
 aliases:
   - Yan 2024

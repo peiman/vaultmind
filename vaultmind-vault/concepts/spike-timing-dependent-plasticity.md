@@ -3,7 +3,6 @@ id: concept-spike-timing-dependent-plasticity
 type: concept
 title: Spike-Timing-Dependent Plasticity (STDP)
 created: 2026-04-29
-vm_updated: 2026-04-29
 tags:
   - neuroscience
   - plasticity

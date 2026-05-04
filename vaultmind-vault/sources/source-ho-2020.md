@@ -3,7 +3,6 @@ id: source-ho-2020
 type: source
 title: "Ho, Jain & Abbeel. Denoising Diffusion Probabilistic Models (DDPM, 2020)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://arxiv.org/abs/2006.11239"
 tags:
   - deep-learning

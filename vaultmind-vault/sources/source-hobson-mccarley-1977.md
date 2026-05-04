@@ -3,7 +3,6 @@ id: source-hobson-mccarley-1977
 type: source
 title: "Hobson, J.A. & McCarley, R.W. The brain as a dream state generator: an activation-synthesis hypothesis of the dream process (1977)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1176/ajp.134.12.1335"
 aliases:
   - activation-synthesis 1977

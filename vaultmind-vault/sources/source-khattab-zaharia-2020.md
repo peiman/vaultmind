@@ -3,7 +3,6 @@ id: source-khattab-zaharia-2020
 type: source
 title: "Khattab, O., & Zaharia, M. (2020). ColBERT: Efficient and Effective Passage Search via Contextualized Late Interaction over BERT. SIGIR 2020."
 created: 2026-04-06
-vm_updated: 2026-04-06
 url: "https://doi.org/10.1145/3397271.3401075"
 aliases:
   - Khattab Zaharia 2020

@@ -3,7 +3,6 @@ id: concept-matryoshka-embeddings
 type: concept
 title: Matryoshka Embeddings
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - Matryoshka Representation Learning
   - MRL

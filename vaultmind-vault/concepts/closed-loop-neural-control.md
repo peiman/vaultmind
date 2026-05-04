@@ -3,7 +3,6 @@ id: concept-closed-loop-neural-control
 type: concept
 title: Closed-Loop Neural Control
 created: 2026-04-29
-vm_updated: 2026-04-29
 tags:
   - bci
   - neuroscience

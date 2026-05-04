@@ -3,7 +3,6 @@ id: source-cauchy-1847
 type: source
 title: "Cauchy, A. Méthode Générale pour la Résolution des Systèmes d'Équations Simultanées (1847)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://en.wikipedia.org/wiki/Gradient_descent#History"
 aliases:
   - Cauchy 1847

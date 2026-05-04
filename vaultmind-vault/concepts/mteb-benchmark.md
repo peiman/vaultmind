@@ -3,7 +3,6 @@ id: concept-mteb-benchmark
 type: concept
 title: MTEB Benchmark
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - Massive Text Embedding Benchmark
   - MTEB Leaderboard

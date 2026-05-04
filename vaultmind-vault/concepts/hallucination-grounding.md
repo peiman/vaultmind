@@ -3,7 +3,6 @@ id: concept-hallucination-grounding
 type: concept
 title: Hallucination and Grounding
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - LLM Hallucination
   - Factual Grounding

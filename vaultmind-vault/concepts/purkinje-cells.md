@@ -3,7 +3,6 @@ id: concept-purkinje-cells
 type: concept
 title: Purkinje Cells
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Purkinje Neurons
   - Cerebellar Purkinje Cells

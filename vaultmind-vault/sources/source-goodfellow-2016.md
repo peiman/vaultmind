@@ -3,7 +3,6 @@ id: source-goodfellow-2016
 type: source
 title: "Goodfellow, I., Bengio, Y., & Courville, A. Deep Learning (2016)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://www.deeplearningbook.org/"
 aliases:
   - Deep Learning book

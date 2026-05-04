@@ -3,7 +3,6 @@ id: concept-cognitive-load-theory
 type: concept
 title: Cognitive Load Theory
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - Sweller's CLT
   - Cognitive Load

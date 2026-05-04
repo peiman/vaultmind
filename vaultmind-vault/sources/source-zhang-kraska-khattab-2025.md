@@ -3,7 +3,6 @@ id: source-zhang-kraska-khattab-2025
 type: source
 title: "Zhang, Kraska, Khattab — Recursive Language Models (2025)"
 created: 2026-04-09
-vm_updated: 2026-04-09
 url: "https://arxiv.org/abs/2512.24601"
 aliases:
   - Zhang Kraska Khattab 2025

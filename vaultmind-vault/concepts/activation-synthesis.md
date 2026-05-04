@@ -3,7 +3,6 @@ id: concept-activation-synthesis
 type: concept
 title: Activation-Synthesis Hypothesis
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - activation synthesis
   - Hobson McCarley dream theory

@@ -3,7 +3,6 @@ id: concept-zettelkasten
 type: concept
 title: Zettelkasten
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - Slip Box
   - Luhmann's Zettelkasten

@@ -3,7 +3,6 @@ id: concept-lost-in-the-middle
 type: concept
 title: Lost in the Middle
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - Position Bias in LLMs
   - U-shaped Attention

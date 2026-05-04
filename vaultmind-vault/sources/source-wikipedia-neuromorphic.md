@@ -3,7 +3,6 @@ id: source-wikipedia-neuromorphic
 type: source
 title: "Wikipedia. Neuromorphic Engineering"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://en.wikipedia.org/wiki/Neuromorphic_engineering"
 tags:
   - neuromorphic

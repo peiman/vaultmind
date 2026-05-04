@@ -4,7 +4,6 @@ type: decision
 status: accepted
 title: "Use structured graph retrieval instead of embeddings for v1"
 created: 2026-04-03
-vm_updated: 2026-04-03
 tags: [architecture, retrieval]
 related_ids:
   - concept-rag

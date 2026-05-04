@@ -3,7 +3,6 @@ id: source-newell-1990
 type: source
 title: "Newell, A. (1990). Unified Theories of Cognition. Harvard University Press."
 created: 2026-04-07
-vm_updated: 2026-04-07
 url: "https://www.hup.harvard.edu/books/9780674921016"
 aliases:
   - Newell 1990

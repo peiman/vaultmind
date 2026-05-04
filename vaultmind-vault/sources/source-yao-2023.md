@@ -3,7 +3,6 @@ id: source-yao-2023
 type: source
 title: "Yao, S., et al. (2023). ReAct: Synergizing Reasoning and Acting in Language Models. ICLR 2023."
 created: 2026-04-06
-vm_updated: 2026-04-06
 url: "https://arxiv.org/abs/2210.03629"
 aliases:
   - Yao 2023

@@ -3,7 +3,6 @@ id: source-wittmann-2006
 type: source
 title: "Wittmann, M., Dinich, J., Merrow, M., & Roenneberg, T. (2006). Social Jetlag: Misalignment of Biological and Social Time. Chronobiology International, 23(1-2), 497-509."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1080/07420520500545979"
 aliases:
   - Wittmann 2006

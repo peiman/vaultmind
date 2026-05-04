@@ -3,7 +3,6 @@ id: concept-rem-sleep-physiology
 type: concept
 title: REM Sleep Physiology
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - REM Sleep
   - Rapid Eye Movement Sleep

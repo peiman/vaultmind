@@ -3,7 +3,6 @@ id: concept-clarion
 type: concept
 title: CLARION
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - CLARION Architecture
   - Connectionist Learning with Adaptive Rule Induction

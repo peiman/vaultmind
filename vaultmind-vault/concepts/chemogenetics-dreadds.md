@@ -3,7 +3,6 @@ id: concept-chemogenetics-dreadds
 type: concept
 title: Chemogenetics (DREADDs)
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - DREADDs
   - Designer Receptors Exclusively Activated by Designer Drugs

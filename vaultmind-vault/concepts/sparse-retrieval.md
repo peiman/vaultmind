@@ -3,7 +3,6 @@ id: concept-sparse-retrieval
 type: concept
 title: Sparse Retrieval
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - BM25 Retrieval
   - Keyword-Based Retrieval

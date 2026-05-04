@@ -3,7 +3,6 @@ id: concept-nrem-dreaming-posterior-hot-zone
 type: concept
 title: NREM Dreaming and the Posterior Hot Zone
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - posterior hot zone
   - NREM dreaming

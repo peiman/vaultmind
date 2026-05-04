@@ -3,7 +3,6 @@ id: source-wikipedia-purkinje-cell
 type: source
 title: "Wikipedia. Purkinje cell"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://en.wikipedia.org/wiki/Purkinje_cell"
 tags:
   - neuroscience

@@ -3,7 +3,6 @@ id: source-lecun-1998
 type: source
 title: "LeCun, Bottou, Bengio & Haffner. Gradient-Based Learning Applied to Document Recognition (1998)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1109/5.726791"
 aliases:
   - LeNet paper

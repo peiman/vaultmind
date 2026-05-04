@@ -3,7 +3,6 @@ id: concept-free-energy-principle
 type: concept
 title: Free Energy Principle
 created: 2026-04-26
-vm_updated: 2026-04-26
 tags:
   - neuroscience
   - computational-neuroscience

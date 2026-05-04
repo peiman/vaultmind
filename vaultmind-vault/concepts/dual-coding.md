@@ -3,7 +3,6 @@ id: concept-dual-coding
 type: concept
 title: Dual Coding Theory
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - Paivio's Dual Coding
   - Verbal-Imagery Theory

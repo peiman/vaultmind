@@ -3,7 +3,6 @@ id: concept-self-rag
 type: concept
 title: Self-RAG
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - Self-Reflective RAG
   - Adaptive RAG

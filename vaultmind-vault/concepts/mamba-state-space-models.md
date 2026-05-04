@@ -3,7 +3,6 @@ id: concept-mamba-state-space-models
 type: concept
 title: Mamba and State Space Models
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Mamba
   - SSM

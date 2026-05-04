@@ -3,7 +3,6 @@ id: reference-complexity-not-time
 type: reference
 title: "Estimate Complexity, Not Time — and What That Protects Against"
 created: 2026-04-29
-vm_updated: 2026-04-29
 tags:
   - reference
   - method

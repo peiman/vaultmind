@@ -3,7 +3,6 @@ id: source-christiano-2017
 type: source
 title: "Christiano et al. Deep Reinforcement Learning from Human Preferences (2017)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://arxiv.org/abs/1706.03741"
 tags:
   - llms

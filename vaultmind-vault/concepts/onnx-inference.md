@@ -3,7 +3,6 @@ id: concept-onnx-inference
 type: concept
 title: ONNX Inference
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - ONNX Runtime
   - ONNX in Go

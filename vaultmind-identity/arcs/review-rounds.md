@@ -3,7 +3,6 @@ id: arc-review-rounds
 type: arc
 title: "Three Rounds to Real Robustness"
 created: 2026-04-11
-vm_updated: 2026-04-11
 tags:
   - growth
   - identity

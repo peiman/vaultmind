@@ -3,7 +3,6 @@ id: source-schultz-1998
 type: source
 title: "Schultz. Predictive Reward Signal of Dopamine Neurons (1998)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1152/jn.1998.80.1.1"
 tags:
   - neuroscience

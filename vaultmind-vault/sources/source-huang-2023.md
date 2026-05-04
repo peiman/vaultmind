@@ -3,7 +3,6 @@ id: source-huang-2023
 type: source
 title: "Huang, L., et al. (2023). A Survey on Hallucination in Large Language Models: Principles, Taxonomy, Challenges, and Open Questions. arXiv:2311.05232."
 created: 2026-04-06
-vm_updated: 2026-04-06
 url: "https://arxiv.org/abs/2311.05232"
 aliases:
   - Huang 2023

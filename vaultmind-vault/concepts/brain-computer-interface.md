@@ -3,7 +3,6 @@ id: concept-brain-computer-interface
 type: concept
 title: Brain-Computer Interface (BCI)
 created: 2026-04-29
-vm_updated: 2026-04-29
 tags:
   - bci
   - neuroscience

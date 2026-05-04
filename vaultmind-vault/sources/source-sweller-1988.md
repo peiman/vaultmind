@@ -3,7 +3,6 @@ id: source-sweller-1988
 type: source
 title: "Sweller, J. (1988). Cognitive load during problem solving: Effects on learning. Cognitive Science, 12(2), 257-285."
 created: 2026-04-06
-vm_updated: 2026-04-06
 url: "https://doi.org/10.1207/s15516709cog1202_4"
 aliases:
   - Sweller 1988

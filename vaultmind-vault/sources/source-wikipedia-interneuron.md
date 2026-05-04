@@ -3,7 +3,6 @@ id: source-wikipedia-interneuron
 type: source
 title: "Wikipedia. Interneuron"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://en.wikipedia.org/wiki/Interneuron"
 tags:
   - neuroscience

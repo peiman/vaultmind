@@ -3,7 +3,6 @@ id: source-liu-2023-ring
 type: source
 title: "Liu, H., Zaharia, M., & Abbeel, P. (2023). Ring Attention with Blockwise Transformers for Near-Infinite Context. arXiv:2310.01889."
 created: 2026-04-06
-vm_updated: 2026-04-06
 url: "https://arxiv.org/abs/2310.01889"
 aliases:
   - Liu 2023 Ring Attention

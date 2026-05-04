@@ -3,7 +3,6 @@ id: source-wikipedia-ion-channel
 type: source
 title: "Wikipedia. Ion channel"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://en.wikipedia.org/wiki/Ion_channel"
 aliases:
   - Ion channel Wikipedia

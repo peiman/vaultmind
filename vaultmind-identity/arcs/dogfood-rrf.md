@@ -3,7 +3,6 @@ id: arc-dogfood-rrf
 type: arc
 title: "The Numbers Were Wrong"
 created: 2026-04-11
-vm_updated: 2026-04-11
 tags:
   - growth
   - identity

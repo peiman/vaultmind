@@ -3,7 +3,6 @@ id: source-wikipedia-loss-function
 type: source
 title: "Wikipedia. Loss Function"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://en.wikipedia.org/wiki/Loss_function"
 tags:
   - machine-learning

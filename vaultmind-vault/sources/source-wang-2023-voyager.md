@@ -3,7 +3,6 @@ id: source-wang-2023-voyager
 type: source
 title: "Wang, G., et al. (2023). Voyager: An Open-Ended Embodied Agent with Large Language Models. arXiv:2305.16291."
 created: 2026-04-06
-vm_updated: 2026-04-06
 url: "https://arxiv.org/abs/2305.16291"
 aliases:
   - Wang 2023 Voyager

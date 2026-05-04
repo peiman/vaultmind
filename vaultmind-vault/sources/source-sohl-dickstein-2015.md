@@ -3,7 +3,6 @@ id: source-sohl-dickstein-2015
 type: source
 title: "Sohl-Dickstein et al. Deep Unsupervised Learning using Nonequilibrium Thermodynamics (2015)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://arxiv.org/abs/1503.03585"
 tags:
   - deep-learning

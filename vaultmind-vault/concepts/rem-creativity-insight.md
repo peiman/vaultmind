@@ -3,7 +3,6 @@ id: concept-rem-creativity-insight
 type: concept
 title: REM Sleep and Creative Problem Solving
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - REM creativity
   - sleep insight

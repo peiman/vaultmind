@@ -3,7 +3,6 @@ id: concept-latent-diffusion
 type: concept
 title: Latent Diffusion (Stable Diffusion)
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Stable Diffusion
   - LDM

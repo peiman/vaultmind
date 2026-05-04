@@ -3,7 +3,6 @@ id: source-ramirez-2013
 type: source
 title: "Ramirez, S. et al. (2013). Creating a false memory in the hippocampus. Science, 341(6144), 387-391."
 created: 2026-04-26
-vm_updated: 2026-04-26
 url: "https://doi.org/10.1126/science.1239073"
 tags:
   - neuroscience

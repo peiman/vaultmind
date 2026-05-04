@@ -3,7 +3,6 @@ id: concept-whole-brain-imaging
 type: concept
 title: Whole-Brain Imaging
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Light-sheet microscopy
   - Tissue clearing

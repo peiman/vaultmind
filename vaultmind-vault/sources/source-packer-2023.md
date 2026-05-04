@@ -3,7 +3,6 @@ id: source-packer-2023
 type: source
 title: "Packer et al. MemGPT: Towards LLMs as Operating Systems (2023)"
 created: 2026-04-03
-vm_updated: 2026-04-03
 url: "https://arxiv.org/abs/2310.08560"
 aliases:
   - Packer 2023

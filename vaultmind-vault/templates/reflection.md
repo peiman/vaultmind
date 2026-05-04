@@ -3,7 +3,6 @@ id: <%=id%>
 type: reflection
 title: <%=title%>
 created: <%=created%>
-vm_updated: <%=vm_updated%>
 aliases: []
 tags: []
 source_ids: []

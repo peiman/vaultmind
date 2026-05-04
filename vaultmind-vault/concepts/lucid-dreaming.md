@@ -3,7 +3,6 @@ id: concept-lucid-dreaming
 type: concept
 title: Lucid Dreaming
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - lucid dreaming
   - REM metacognition

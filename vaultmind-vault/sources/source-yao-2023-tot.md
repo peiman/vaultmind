@@ -3,7 +3,6 @@ id: source-yao-2023-tot
 type: source
 title: "Yao et al. Tree of Thoughts: Deliberate Problem Solving with Large Language Models (2023)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://arxiv.org/abs/2305.10601"
 tags:
   - llms

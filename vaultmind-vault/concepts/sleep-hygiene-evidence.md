@@ -3,7 +3,6 @@ id: concept-sleep-hygiene-evidence
 type: concept
 title: Sleep Hygiene — Evidence-Based Practices
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Sleep Hygiene
   - Sleep Environment Optimization

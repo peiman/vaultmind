@@ -3,7 +3,6 @@ id: concept-memr3
 type: concept
 title: MemR3 (Memory Retrieval via Reflective Reasoning)
 created: 2026-04-09
-vm_updated: 2026-04-09
 aliases:
   - Memory Retrieval via Reflective Reasoning
   - MemR3

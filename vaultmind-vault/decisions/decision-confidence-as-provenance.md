@@ -4,7 +4,6 @@ type: decision
 status: accepted
 title: "Confidence field indicates edge provenance tier, not epistemic certainty"
 created: 2026-04-03
-vm_updated: 2026-04-03
 tags: [memory-model, agent-contract]
 related_ids:
   - concept-spreading-activation

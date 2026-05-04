@@ -3,7 +3,6 @@ id: source-wikipedia-dopaminergic-pathways
 type: source
 title: "Wikipedia. Dopaminergic pathways"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://en.wikipedia.org/wiki/Dopaminergic_pathways"
 tags:
   - neuroscience

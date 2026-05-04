@@ -3,7 +3,6 @@ id: source-wikipedia-ltd
 type: source
 title: "Wikipedia. Long-Term Depression"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://en.wikipedia.org/wiki/Long-term_depression"
 tags:
   - neuroscience

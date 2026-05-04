@@ -3,7 +3,6 @@ id: source-wikipedia-sensory-neuron
 type: source
 title: "Wikipedia. Sensory neuron"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://en.wikipedia.org/wiki/Sensory_neuron"
 tags:
   - neuroscience

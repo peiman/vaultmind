@@ -3,7 +3,6 @@ id: reference-plasticity-priority-order
 type: reference
 title: "Plasticity Priority Order — the Roadmap I Committed To"
 created: 2026-04-24
-vm_updated: 2026-04-25
 tags:
   - reference
   - roadmap

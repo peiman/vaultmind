@@ -3,7 +3,6 @@ id: source-pandarinath-2017
 type: source
 title: "Pandarinath et al. High Performance Communication by People with Paralysis Using an Intracortical BCI (2017)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.7554/eLife.18554"
 tags:
   - bci

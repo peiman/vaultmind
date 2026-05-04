@@ -3,7 +3,6 @@ id: source-armbruster-2007
 type: source
 title: "Armbruster, Li, Pausch, Herlitze & Roth. Evolving the lock to fit the key to create a family of G protein-coupled receptors potently activated by an inert ligand (2007)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1073/pnas.0700293104"
 aliases:
   - Armbruster 2007

@@ -3,7 +3,6 @@ id: concept-desirable-difficulties
 type: concept
 title: Desirable Difficulties
 created: 2026-04-06
-vm_updated: 2026-04-06
 aliases:
   - Bjork's Desirable Difficulties
   - Productive Difficulty

@@ -3,7 +3,6 @@ id: source-rasch-2007
 type: source
 title: "Rasch, B., Büchel, C., Gais, S., & Born, J. (2007). Odor Cues During Slow-Wave Sleep Prompt Declarative Memory Consolidation. Science, 315(5817), 1426-1429."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1126/science.1138581"
 aliases:
   - Rasch 2007

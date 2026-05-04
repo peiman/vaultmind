@@ -3,7 +3,6 @@ id: source-steriade-nunez-amzica-1993
 type: source
 title: "Steriade, M., Nuñez, A., & Amzica, F. (1993). A novel slow (< 1 Hz) oscillation of neocortical neurons in vivo: depolarizing and hyperpolarizing components. Journal of Neuroscience, 13(8), 3252-3265."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1523/jneurosci.13-08-03252.1993"
 aliases:
   - Steriade Nunez Amzica 1993 J Neurosci

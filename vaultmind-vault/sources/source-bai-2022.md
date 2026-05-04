@@ -3,7 +3,6 @@ id: source-bai-2022
 type: source
 title: "Bai et al. Constitutional AI: Harmlessness from AI Feedback (2022)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://arxiv.org/abs/2212.08073"
 tags:
   - llms

@@ -3,7 +3,6 @@ id: reference-workhorse-vault
 type: reference
 title: "Workhorse Vault — First Persona Consumer"
 created: 2026-04-11
-vm_updated: 2026-04-29
 tags:
   - reference
   - workhorse

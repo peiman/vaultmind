@@ -3,7 +3,6 @@ id: source-wikipedia-neuron
 type: source
 title: "Wikipedia. Neuron"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://en.wikipedia.org/wiki/Neuron"
 aliases:
   - Neuron Wikipedia

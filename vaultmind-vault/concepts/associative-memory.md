@@ -3,7 +3,6 @@ id: concept-associative-memory
 type: concept
 title: Associative Memory
 created: 2026-04-03
-vm_updated: 2026-04-03
 aliases:
   - Content-Addressable Memory
   - Associative Recall

@@ -3,7 +3,6 @@ id: principle-how-to-write-arcs
 type: principle
 title: "How to Write Arcs"
 created: 2026-04-21
-vm_updated: 2026-04-21
 tags:
   - principle
   - core

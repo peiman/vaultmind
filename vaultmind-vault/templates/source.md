@@ -3,7 +3,6 @@ id: <%=id%>
 type: source
 title: <%=title%>
 created: <%=created%>
-vm_updated: <%=vm_updated%>
 url: ""
 aliases: []
 tags: []

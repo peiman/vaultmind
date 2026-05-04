@@ -3,7 +3,6 @@ id: source-macdonald-2011
 type: source
 title: "MacDonald, C. J., Lepage, K. Q., Eden, U. T. & Eichenbaum, H. (2011). Hippocampal 'time cells' bridge the gap in memory for discontiguous events. Neuron, 71(4), 737-749."
 created: 2026-04-26
-vm_updated: 2026-04-26
 url: "https://doi.org/10.1016/j.neuron.2011.07.012"
 tags:
   - neuroscience

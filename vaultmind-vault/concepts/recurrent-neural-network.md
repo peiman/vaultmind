@@ -3,7 +3,6 @@ id: concept-recurrent-neural-network
 type: concept
 title: Recurrent Neural Network
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - RNN
   - Vanilla RNN

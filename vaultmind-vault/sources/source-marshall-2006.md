@@ -3,7 +3,6 @@ id: source-marshall-2006
 type: source
 title: "Marshall, L., Helgadóttir, H., Mölle, M., & Born, J. (2006). Boosting slow oscillations during sleep potentiates memory. Nature, 444(7119), 610-613."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1038/nature05278"
 aliases:
   - Marshall 2006

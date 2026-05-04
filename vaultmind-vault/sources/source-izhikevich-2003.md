@@ -3,7 +3,6 @@ id: source-izhikevich-2003
 type: source
 title: "Izhikevich, E.M. Simple Model of Spiking Neurons (2003)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1109/TNN.2003.820440"
 tags:
   - neuroscience

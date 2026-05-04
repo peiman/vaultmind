@@ -3,7 +3,6 @@ id: concept-tree-of-thought
 type: concept
 title: Tree-of-Thoughts
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - ToT
   - Tree of Thoughts

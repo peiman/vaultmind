@@ -3,7 +3,6 @@ id: source-mazza-2016
 type: source
 title: "Mazza, S., Gerbier, E., Gustin, M.-P., Kasikci, Z., Koenig, O., Toppino, T. C., & Magnin, M. (2016). Relearn Faster and Retain Longer. Psychological Science, 27(10), 1321-1330."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1177/0956797616659930"
 aliases:
   - Mazza 2016

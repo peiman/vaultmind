@@ -3,7 +3,6 @@ id: source-minsky-papert-1969
 type: source
 title: "Minsky, M. & Papert, S. Perceptrons: An Introduction to Computational Geometry (1969)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://mitpress.mit.edu/9780262630221/perceptrons/"
 aliases:
   - Minsky Papert 1969

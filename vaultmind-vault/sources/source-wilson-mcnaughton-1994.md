@@ -3,7 +3,6 @@ id: source-wilson-mcnaughton-1994
 type: source
 title: "Wilson, M. A. & McNaughton, B. L. (1994). Reactivation of hippocampal ensemble memories during sleep. Science, 265(5172), 676-679."
 created: 2026-04-26
-vm_updated: 2026-04-26
 url: "https://doi.org/10.1126/science.8036517"
 tags:
   - neuroscience

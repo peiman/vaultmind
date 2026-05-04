@@ -3,7 +3,6 @@ id: source-okeefe-dostrovsky-1971
 type: source
 title: "O'Keefe, J. & Dostrovsky, J. (1971). The hippocampus as a spatial map. Preliminary evidence from unit activity in the freely-moving rat. Brain Research, 34(1), 171-175."
 created: 2026-04-26
-vm_updated: 2026-04-26
 url: "https://doi.org/10.1016/0006-8993(71)90358-1"
 tags:
   - neuroscience

@@ -3,7 +3,6 @@ id: concept-multi-store-model
 type: concept
 title: Multi-Store Model
 created: 2026-04-07
-vm_updated: 2026-04-07
 aliases:
   - Atkinson-Shiffrin Model
   - Modal Model of Memory

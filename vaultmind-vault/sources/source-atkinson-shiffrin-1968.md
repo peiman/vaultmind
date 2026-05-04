@@ -3,7 +3,6 @@ id: source-atkinson-shiffrin-1968
 type: source
 title: "Atkinson, R. C., & Shiffrin, R. M. (1968). Human memory: A proposed system and its control processes. In K. W. Spence & J. T. Spence (Eds.), The Psychology of Learning and Motivation (Vol. 2, pp. 89-195). Academic Press."
 created: 2026-04-07
-vm_updated: 2026-04-07
 url: "https://doi.org/10.1016/S0079-7421(08)60422-3"
 aliases:
   - Atkinson Shiffrin 1968

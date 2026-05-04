@@ -3,7 +3,6 @@ id: source-anderson-1983
 type: source
 title: "Anderson, J.R. The Architecture of Cognition (1983)"
 created: 2026-04-03
-vm_updated: 2026-04-03
 url: "https://doi.org/10.4324/9781315799438"
 aliases:
   - Anderson 1983

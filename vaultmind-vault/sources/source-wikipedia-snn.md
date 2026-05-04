@@ -3,7 +3,6 @@ id: source-wikipedia-snn
 type: source
 title: "Wikipedia. Spiking Neural Network"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://en.wikipedia.org/wiki/Spiking_neural_network"
 tags:
   - bio-inspired-ai

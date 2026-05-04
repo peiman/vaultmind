@@ -3,7 +3,6 @@ id: source-wikipedia-resting-potential
 type: source
 title: "Wikipedia. Resting potential"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://en.wikipedia.org/wiki/Resting_potential"
 aliases:
   - Resting potential Wikipedia

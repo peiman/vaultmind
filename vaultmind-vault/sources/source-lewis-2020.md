@@ -3,7 +3,6 @@ id: source-lewis-2020
 type: source
 title: "Lewis et al. Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks (2020)"
 created: 2026-04-03
-vm_updated: 2026-04-03
 url: "https://arxiv.org/abs/2005.11401"
 aliases:
   - Lewis 2020

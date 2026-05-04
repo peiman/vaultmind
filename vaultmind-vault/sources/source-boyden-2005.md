@@ -3,7 +3,6 @@ id: source-boyden-2005
 type: source
 title: "Boyden, Zhang, Bamberg, Nagel & Deisseroth. Millisecond-timescale, genetically targeted optical control of neural activity (2005)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1038/nn1525"
 aliases:
   - Boyden 2005

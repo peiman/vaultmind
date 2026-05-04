@@ -3,7 +3,6 @@ id: concept-synaptic-transmission
 type: concept
 title: Synaptic Transmission
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Synaptic signaling
   - Neurotransmission

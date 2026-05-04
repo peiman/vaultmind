@@ -3,7 +3,6 @@ id: source-buzsaki-2015
 type: source
 title: "Buzsáki, G. (2015). Hippocampal sharp wave-ripple: A cognitive biomarker for episodic memory and planning. Hippocampus, 25(10), 1073-1188."
 created: 2026-04-26
-vm_updated: 2026-04-26
 url: "https://doi.org/10.1002/hipo.22488"
 tags:
   - neuroscience

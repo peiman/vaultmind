@@ -4,7 +4,6 @@ type: decision
 status: accepted
 title: "BGE-M3 3-in-1 via ORT backend with Go heads"
 created: 2026-04-08
-vm_updated: 2026-04-09
 tags:
   - architecture
   - embedding

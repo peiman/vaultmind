@@ -3,7 +3,6 @@ id: source-yoo-2007
 type: source
 title: "Yoo, S. S., Hu, P. T., Gujar, N., Jolesz, F. A., & Walker, M. P. (2007). A deficit in the ability to form new human memories without sleep. Nature Neuroscience, 10(3), 385-392."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1038/nn1851"
 aliases:
   - Yoo 2007 Nat Neurosci

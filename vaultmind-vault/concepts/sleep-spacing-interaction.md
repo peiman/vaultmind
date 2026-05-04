@@ -3,7 +3,6 @@ id: concept-sleep-spacing-interaction
 type: concept
 title: Sleep–Spacing Interaction
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Sleep and Spaced Practice
   - Spacing Effect Sleep Multiplier

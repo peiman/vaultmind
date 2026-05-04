@@ -3,7 +3,6 @@ id: source-harrison-horne-1999
 type: source
 title: "Harrison, Y., & Horne, J. A. (1999). One Night of Sleep Loss Impairs Innovative Thinking and Flexible Decision Making. Organizational Behavior and Human Decision Processes, 78(2), 128-145."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1006/obhd.1999.2827"
 aliases:
   - Harrison Horne 1999

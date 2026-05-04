@@ -3,7 +3,6 @@ id: source-rafailov-2023
 type: source
 title: "Rafailov et al. Direct Preference Optimization: Your Language Model is Secretly a Reward Model (2023)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://arxiv.org/abs/2305.18290"
 tags:
   - llms

@@ -3,7 +3,6 @@ id: concept-memgpt
 type: concept
 title: MemGPT
 created: 2026-04-03
-vm_updated: 2026-04-03
 aliases:
   - Memory GPT
   - Virtual Context Management

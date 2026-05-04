@@ -3,7 +3,6 @@ id: concept-pyramidal-neurons
 type: concept
 title: Pyramidal Neurons
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Pyramidal Cells
   - Cortical Pyramidal Neurons

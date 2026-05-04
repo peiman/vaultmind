@@ -3,7 +3,6 @@ id: person-endel-tulving
 type: person
 title: "Endel Tulving"
 created: 2026-04-03
-vm_updated: 2026-04-03
 aliases:
   - Tulving
 tags:

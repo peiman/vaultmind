@@ -3,7 +3,6 @@ id: concept-perceptron
 type: concept
 title: Perceptron
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - Rosenblatt Perceptron
   - Single-Layer Perceptron

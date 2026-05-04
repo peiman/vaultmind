@@ -3,7 +3,6 @@ id: source-radford-2018
 type: source
 title: "Radford et al. Improving Language Understanding by Generative Pre-Training (GPT-1, 2018)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://cdn.openai.com/research-covers/language-unsupervised/language_understanding_paper.pdf"
 tags:
   - llms

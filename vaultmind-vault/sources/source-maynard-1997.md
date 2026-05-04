@@ -3,7 +3,6 @@ id: source-maynard-1997
 type: source
 title: "Maynard et al. The Utah Intracortical Electrode Array (1997)"
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1016/S0013-4694(96)95176-0"
 tags:
   - bci

@@ -3,7 +3,6 @@ id: concept-grid-cells
 type: concept
 title: Grid Cells
 created: 2026-04-26
-vm_updated: 2026-04-26
 tags:
   - neuroscience
   - entorhinal-cortex

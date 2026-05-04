@@ -3,7 +3,6 @@ id: source-plihal-born-1997
 type: source
 title: "Plihal, W., & Born, J. (1997). Effects of early and late nocturnal sleep on declarative and procedural memory. Journal of Cognitive Neuroscience, 9(4), 534-547."
 created: 2026-04-29
-vm_updated: 2026-04-29
 url: "https://doi.org/10.1162/jocn.1997.9.4.534"
 aliases:
   - Plihal Born 1997

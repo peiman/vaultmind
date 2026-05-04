@@ -3,7 +3,6 @@ id: concept-diffusion-models
 type: concept
 title: Diffusion Models
 created: 2026-04-29
-vm_updated: 2026-04-29
 aliases:
   - DDPM
   - Denoising Diffusion
