@@ -195,12 +195,12 @@ func TestMutator_Run_OpSetNonDomainErrorsBeforeBump(t *testing.T) {
 // TestMutator_Run_OpNormalizeNonDomainSkipsBump pins the LOAD-BEARING
 // IsDomain guard inside Run. ValidateMutation has an early-return for
 // OpNormalize that bypasses the IsDomain check — so a non-domain note
-// passes validation and reaches the bump code. The guard at
-// mutator.go:99-105 is the only thing preventing vm_updated from being
-// written to non-domain content. Without the guard, normalizing a
-// stray markdown file would silently add a vaultmind-owned field —
-// violating the four-tier taxonomy contract (vaultmind doesn't write
-// to content it doesn't track).
+// passes validation and reaches the bump code. The `if noteInfo.IsDomain`
+// guard around the auto-bump is the only thing preventing vm_updated
+// from being written to non-domain content. Without the guard,
+// normalizing a stray markdown file would silently add a vaultmind-
+// owned field — violating the four-tier taxonomy contract (vaultmind
+// doesn't write to content it doesn't track).
 //
 // Caught by 2026-05-04 review pass on commit b5ff2ea — the original
 // test only covered OpSet (which never reaches the bump because

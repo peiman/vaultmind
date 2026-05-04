@@ -96,14 +96,15 @@ func (m *Mutator) Run(req MutationRequest) (*MutationResult, error) {
 	// still bump vm_updated. The semantic is "vaultmind processed
 	// this on date X" — even confirming-no-change-needed is processing.
 	// LOAD-BEARING (not defense-in-depth): ValidateMutation has an
-	// early-return for OpNormalize at validate.go:16-17 BEFORE the
-	// IsDomain check. So an OpNormalize on a non-domain note passes
-	// validation and reaches this point. Without this guard, a stray
-	// markdown file (no id+type) that happens to be the target of
-	// `vaultmind frontmatter normalize` would receive a vm_updated
-	// auto-field — vaultmind would be mutating non-domain content,
-	// which violates the four-tier taxonomy contract. The IsDomain
-	// gate here is the only thing preventing that.
+	// early-return for OpNormalize (the `if req.Op == OpNormalize { return nil }`
+	// at the top of the function) BEFORE the IsDomain check. So an
+	// OpNormalize on a non-domain note passes validation and reaches
+	// this point. Without this guard, a stray markdown file (no id+type)
+	// that happens to be the target of `vaultmind frontmatter normalize`
+	// would receive a vm_updated auto-field — vaultmind would be mutating
+	// non-domain content, which violates the four-tier taxonomy contract.
+	// The IsDomain gate here is the only thing preventing that.
+	// Pinned by TestMutator_Run_OpNormalizeNonDomainSkipsBump.
 	if noteInfo.IsDomain {
 		nowUTC := time.Now().UTC().Format(schema.VMUpdatedFormat)
 		if setErr := SetKey(mapping, "vm_updated", nowUTC); setErr != nil {

@@ -72,12 +72,15 @@ func TestInit_FrontmatterDatesAreToday(t *testing.T) {
 	require.True(t, strings.HasPrefix(s, "---\n"), "starter note must start with frontmatter")
 	assert.Contains(t, s, "\ncreated: 20", "frontmatter must include a created: 20YY-MM-DD line")
 	// vm_updated is YAML-quoted because it contains colons (RFC3339).
-	// The bare-prefix shape `vm_updated: "20...T...Z"` confirms the
+	// The shape `vm_updated: "20YY-MM-DDTHH:MM:SSZ"` confirms the
 	// canonical schema.VMUpdatedFormat is in use, distinguishing it
-	// from a stale date-only `vm_updated: 2026-05-04` write.
-	assert.Contains(t, s, `vm_updated: "20`, "frontmatter must include a quoted RFC3339 vm_updated line")
-	assert.Contains(t, s, `T`, "vm_updated must include the RFC3339 'T' time separator")
-	assert.Contains(t, s, `Z"`, "vm_updated must end with the UTC 'Z' indicator")
+	// from a stale date-only `vm_updated: 2026-05-04` write. Regex
+	// pinned to the precise RFC3339 second-precision UTC pattern.
+	assert.Regexp(t,
+		`vm_updated: "20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"`,
+		s,
+		"vm_updated must be RFC3339 second-precision UTC, YAML-quoted (schema.VMUpdatedFormat)",
+	)
 }
 
 // Init refuses to overwrite an existing path. Vaults are stateful —
