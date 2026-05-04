@@ -124,8 +124,11 @@ unchanged body
 		hash, 100, true)
 	require.NoError(t, err)
 
-	// Simulate the "git checkout" effect: mtime changes, content does not.
-	// We rewrite the same content (no-op for hash) and let the OS bump mtime.
+	// Even if the file is rewritten with byte-identical content (mtime
+	// may or may not change depending on the FS), identical content
+	// means identical hash, so no drift can be reported. The detector
+	// is mtime-blind by construction; this assertion is what guarantees
+	// the false-positive class never returns.
 	require.NoError(t, os.WriteFile(notePath, []byte(body), 0o644))
 
 	drifts, err := query.DetectContentDrift(db, vault)

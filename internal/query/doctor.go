@@ -3,7 +3,6 @@ package query
 
 import (
 	"crypto/sha256"
-	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -358,14 +357,15 @@ func DetectContentDrift(db *index.DB, vaultPath string) ([]ContentDrift, error) 
 
 	drifts := make([]ContentDrift, 0)
 	for rows.Next() {
-		var id, path, storedHash sql.NullString
+		// Plain strings: schema declares id/path/hash as NOT NULL
+		// (001_baseline_schema.sql), so NullString defensiveness here
+		// would be dead code. If a future migration makes any nullable,
+		// add a typed guard with an explicit test for that path.
+		var id, path, storedHash string
 		if scanErr := rows.Scan(&id, &path, &storedHash); scanErr != nil {
 			return nil, fmt.Errorf("scanning domain note: %w", scanErr)
 		}
-		if !path.Valid || path.String == "" {
-			continue
-		}
-		abs := filepath.Join(vaultPath, path.String)
+		abs := filepath.Join(vaultPath, path)
 		// abs is vault root + DB-stored relative path, not raw user input.
 		content, readErr := os.ReadFile(abs) // #nosec G304
 		if readErr != nil {
@@ -373,12 +373,12 @@ func DetectContentDrift(db *index.DB, vaultPath string) ([]ContentDrift, error) 
 		}
 		h := sha256.Sum256(content)
 		currentHash := fmt.Sprintf("%x", h[:])
-		if currentHash != storedHash.String {
+		if currentHash != storedHash {
 			drifts = append(drifts, ContentDrift{
-				NoteID:      id.String,
-				Path:        path.String,
+				NoteID:      id,
+				Path:        path,
 				CurrentHash: currentHash,
-				StoredHash:  storedHash.String,
+				StoredHash:  storedHash,
 			})
 		}
 	}
