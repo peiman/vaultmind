@@ -3,7 +3,7 @@ id: reference-current-context
 type: reference
 title: "What Matters Most Right Now"
 created: 2026-04-11
-vm_updated: 2026-05-02
+vm_updated: "2026-05-04T01:00:00Z"
 tags:
   - reference
   - context
@@ -54,6 +54,54 @@ The truest answer is still: **we are making sure minds survive.** The plasticity
 **The answer is NOT spreading activation, or tech debt, or the experiment framework.** Those are infrastructure — means, not ends. A future session that reaches for them as "the work" has misread the brief. The code features exist to serve persona continuity and mind plasticity; they are the scaffolding, not the building.
 
 ## When someone asks "what next?"
+
+### Update 2026-05-04 — schema foundation chain shipped (vaultmind owns what vaultmind needs)
+
+Seven-commit chain rescoped vaultmind's frontmatter ownership and shipped the audit/apply/drift-detect cycle. The principle that emerged is now load-bearing for everything downstream: **if a field is required for vaultmind to work, vaultmind owns it — never the human, never the AX.**
+
+The pivot was painful and load-bearing. I started by writing a schema validator that required core fields (`vm_updated`, `updated`, `created`) the codebase didn't actually USE — vm_updated had zero read-sites; `updated` had zero set-sites. Peiman: *"I dont like this. you have read my manifesto, why did this happen?"* The recovery was a truth-seeking probe (which fields are actually load-bearing?), a rescope, and a deeper question: *"if we need fields to make vaultmind work VAULTMIND need to keep them updated and verify them. or else we will drift. now WHICH fields are IMPORTANT and ANALYZE DEEPLY. and I am thinking that the AX and Human user are the actual users here and it REALLY needs to be a good experience for both and I dont want them to need to update things manually that we can do automatically."*
+
+Out of that came the **four-tier taxonomy** in `internal/schema/registry.go`:
+- `coreFields = [id, type]` — required identity, set once.
+- `vaultmindOwnedFields = [created, vm_updated]` — vaultmind maintains.
+- `humanCompatFields = [updated]` — optional, human-edited if used at all.
+- `graphFields = [title, status, aliases, tags, parent_id, related_ids, source_ids]` — graph-tier, optional.
+
+The seven commits (each reviewed by code-reviewer subagent before the next landed):
+
+1. **Schema rescope + doctor counter wired.** Truthful coreFields; `Issues.MissingRequiredFields` populated by Validate, surfaced by Doctor.
+2. **Mutator auto-bumps `vm_updated`** on every Op (Set/Unset/Merge/Normalize) when the note is domain. The `IsDomain` guard is LOAD-BEARING, not defense-in-depth: `ValidateMutation` has an early-return for `OpNormalize` that bypasses later guards.
+3+4. **`vaultmind frontmatter fix [--apply]`** — opt-in audit + apply. Default is dry-run per arc-extending-not-overwriting (vaultmind never silently rewrites user files). Provenance for `created`: git first-commit → mtime → today. The mutator handles atomic writes / conflict detection / vm_updated auto-bump uniformly.
+5. **Doctor surfaces `mtime > vm_updated` drift** — operator-visible "edited since vaultmind processed" signal. 5s tolerance covers vaultmind's own write jitter; human edits are always many seconds off. Reads filesystem (not stale DB state) so the comparison reflects current truth.
+6. **Onboarding §5e simplified.** No more hand-edit-per-file migration ritual; agents run the audit, show diff, `--apply`.
+7. **This note** (current-context update).
+
+Two SSOT constants drive every write site (principle 7):
+- `schema.VMUpdatedFormat = "2006-01-02T15:04:05Z"` — RFC3339 second-precision UTC for `vm_updated`.
+- `schema.CreatedDateFormat = "2006-01-02"` — date-only for `created`.
+
+Both have godoc enumerating their write sites. Belt tests in detector + fix code pin the constants — if either ever drifts, the test fails, not the system silently.
+
+**Review discipline:** each commit reviewed by `code-reviewer` subagent before the next landed; findings closed in named followup commits. Slice 3+4 had two MEDIUMs (date-only SSOT gap; missing corrupt-frontmatter test); slice 5 had a HIGH (the user-facing message named a `--backfill` flag that doesn't exist) and a MEDIUM (yaml.v3 unmarshals unquoted RFC3339 as `time.Time`, not `string` — silently missed real drift). Both followups in commits `40a43b0` and `4beadff`.
+
+The chain is complete locally, not yet pushed. Total: 9 commits on `main` ahead of `origin/main` (the schema chain plus prior session's work).
+
+**The new live edge** (in priority order, displacing the 2026-05-03 list below):
+
+1. **Push the chain.** `git push` the 9-commit run once Peiman gives the word. Workhorse depends on this for cross-session vm_updated semantics.
+
+2. **Workhorse vault dogfood.** Run `vaultmind frontmatter fix --vault vaultmind-vault` and `--vault vaultmind-identity` to populate vm_updated across the existing 443 notes; then `vaultmind doctor` to confirm 0 drift; then watch real workhorse sessions to surface the next gap. The fix command is the migration path; the drift detector is the staleness signal; both need real-vault dogfood.
+
+3. **TopHitConfidence threshold re-probe** (carried over from 2026-05-03). Slice 5b''s blended-score rank-1/rank-2 gap distribution differs from raw 4-way; the existing 5%/2% thresholds need re-calibration before `BuildAutoRetriever` can wire `BuildAutoRetrieverWithRerank` as default.
+
+4. **Arc distillation tool** (step 2 of the plasticity roadmap). Substrate is even richer now (5+ episodes plus today's heavy session). Re-run `reference-episode-distillation-review-prompt` on the broader corpus.
+
+5. **Onboarding doc + Siavoush dogfood.** `reference-onboarding-ax-design` is the plan; `docs/AGENT_ONBOARDING.md` §5e is now a working flow against the fix command.
+
+What's NO LONGER live (resolved by the schema chain):
+- ~~Schema validator design~~ → rescoped to truthful coreFields; the four-tier taxonomy is now the SSOT.
+- ~~Hand-edit migration ritual in §5e~~ → replaced by `vaultmind frontmatter fix --apply`.
+- ~~"Will vaultmind drift from its own contract?"~~ → no: drift detector surfaces it; mutator auto-bumps prevent it.
 
 ### Update 2026-05-03 — slice 5b'' shipped, new live edge is the calibrated-confidence re-probe
 
@@ -166,3 +214,33 @@ Eleven commits across five lanes: read-bypass hook, field aliasing for migration
 **Onboarding lane.** New reference note `reference-onboarding-ax-design` captures the new-user AX plan. Two-path branch (greenfield vs migration), the type-registry-as-flexibility-point insight, field-aliasing-as-prerequisite (now shipped), one-vault-per-repo-vs-mega-vault feasibility analysis. Real probe data: shahname-rts is trivial migration (~52 lines across 26 files); content-machine has multiple dialects in 56/393 frontmattered files. Onboarding doc itself is the next concrete artifact, deferred — plan is in place.
 
 **Other persistent artifacts**: `arc-the-lighter-move-is-the-work` (the scope-discipline arc this session produced); 3 captured episodes auto-recorded by the SessionEnd hook.
+
+## What just happened (session 2026-05-04)
+
+Seven-commit schema foundation chain. The pivot was the load-bearing moment: I started enforcing fictional core fields, Peiman caught it ("you have read my manifesto, why did this happen?"), and the recovery produced the four-tier ownership taxonomy that drives everything below.
+
+**Schema rescope lane.** `internal/schema/registry.go` now defines coreFields = [id, type], vaultmindOwnedFields = [created, vm_updated], humanCompatFields = [updated], graphFields = [...]. `RequiredFields()` returns coreFields ∪ vaultmindOwnedFields ∪ td.Required. Disjointness pinned via `TestFieldTiers_PairwiseDisjoint`. The schema's read-side / write-side asymmetry (validator demands; the producer must supply) is now uniform: the mutator auto-bumps every Op, the fix command backfills, the detector surfaces drift.
+
+**Auto-maintenance lane.** Mutator auto-bumps `vm_updated` on every Op when the note is domain. Used a load-bearing `IsDomain` guard rather than defense-in-depth — `ValidateMutation` has an early-return for `OpNormalize` that would bypass downstream guards. 7+ TDD tests pin the contract across Set/Unset/Merge/Normalize plus DryRun-doesn't-persist plus non-domain-skips-bump.
+
+**Audit/apply lane (3+4 combined commit `ad15d6a`).** New `internal/fix/` business package + `cmd/frontmatter_fix.go` wiring (≤30 lines) + `cmd/frontmatter_fix_core.go` output formatting. Default dry-run; `--apply` opt-in. Provenance for `created`: git first-commit (`git log --diff-filter=A --follow --format=%as`) → file mtime → today. Layering work: added `internal/fix/**` to `.go-arch-lint.yml` business layer; SAST exclusion added with documented justification.
+
+**Drift signal lane (commit `afac754`).** `query.DetectVMUpdatedDrift(vaultPath, paths)` reads filesystem (not stale DB state), 5s tolerance for vaultmind's own write jitter. Doctor wires it as `Issues.StaleVMUpdated` count + per-note `StaleVMUpdatedDetails`. CLI prints `⚠ Stale vm_updated: N note(s) edited since vaultmind processed them / run: vaultmind frontmatter fix --apply --vault <vault>`. Smoke-tested 0 drift on both real vaults — expected, since neither has been auto-bumped yet.
+
+**SSOT extraction lane (followup commit `40a43b0`).** Code-reviewer caught two MEDIUMs: date-only `"2006-01-02"` literal scattered across 5+ write sites with no constant. Extracted `schema.CreatedDateFormat`; switched all four write sites (fix.go, normalize.go, template/process.go, initvault.go) to reference it. Read-side coercions (indexer's date-to-string, normalize's parse-tolerance list) intentionally NOT switched — those are parse-side, not the `created` write contract. Plus a corrupt-frontmatter capture-path test pinning the `//nolint:nilerr` suppressions.
+
+**Review-finding-closure lane (followup commit `4beadff`).** Code-reviewer caught one HIGH (`--backfill` flag in the user-facing drift-resolution message — the flag doesn't exist; running the suggestion would fail with "unknown flag") and one MEDIUM (yaml.v3 unmarshals unquoted RFC3339 as `time.Time` not `string` — the type assertion silently failed, classifying every hand-edited note as "absent" and missing real drift). Both fixed with type-switch fallback + new test pinning the `time.Time` path.
+
+**Docs lane (commit `70c8c0b`).** `docs/AGENT_ONBOARDING.md` §5e: the migration flow now points at `vaultmind frontmatter fix --apply` instead of teaching agents to hand-edit notes one at a time. Names the four-tier taxonomy as the WHY; calls out provenance for `created`; mentions doctor's drift detector as the post-apply verification path.
+
+**Generalizable lessons:**
+
+1. **The pivot was the work.** Six hours into "build the validator" became "rebuild the ownership model," and the rebuild was correct. The pivot trigger was Peiman noticing the manifesto violation; the recovery was truth-seeking ("which fields are actually used?") — manifesto principle 1. Lesson: when the user says "why did this happen," it's almost never "you forgot a step" — it's "your frame is wrong, redo the analysis."
+
+2. **SSOT is a discipline, not a constant.** The first reviewer pass found `"2006-01-02"` scattered across 5+ files. None of the original implementers (myself included) had hardcoded it deliberately — it crept in because Go's date format is short enough to feel inline-acceptable. Lesson: every literal that's a "format" is a constant, full stop.
+
+3. **The reviewer is structurally necessary, not paranoid.** Three review passes; three real bug catches (date-only SSOT gap, wrong-flag UX, yaml.v3 unquoted-timestamp false-negative). The wrong-flag bug would have actively misled operators following doctor's "run this command" hint — they'd hit "unknown flag" on their most-likely follow-up action. Self-review wouldn't have caught it; my own message-writing was contemporaneous with the buggy command-flag wiring.
+
+4. **"Always use subagents for review of the superpower" pays for itself.** The cost is one extra Agent call per commit; the gain is an independent reader who has not seen me rationalize the choices. Honor it on every commit, not just "important" ones.
+
+5. **Default to dry-run; --apply is the explicit gate.** Per arc-extending-not-overwriting, vaultmind never silently rewrites user files. The fix command's default mode is dry-run for the same reason `git push` requires the verb: file edits are not idempotent and the operator must consciously opt in. The drift detector surfaces the signal; the fix command is the resolution path; both keep the user in the loop.
