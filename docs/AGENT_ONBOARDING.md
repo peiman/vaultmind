@@ -243,14 +243,18 @@ Default to (2) when directory structure is meaningful. Show the user the inferen
 
 Combine A and B — adopt the existing types AND inferred types for files without one. Show the user the merged registry before applying.
 
-### 5d. Field aliasing for missing core fields
+### 5d. Field aliasing for migration vaults
 
-Vaultmind requires five core fields on every domain note: `id, type, created, updated, vm_updated`. Missing fields surface as `missing_required_field` errors at validation.
+Vaultmind requires only `id` and `type` on every domain note (per
+the schema taxonomy in `internal/schema/registry.go`). Beyond those,
+each type may declare its own required fields via the type registry
+(§5c). Other recognized fields like `created` and `updated` are
+tolerated but not required.
 
-If the user's existing files have:
-- `type` ✓ already covered.
-- `created` ✓ already covered.
-- `last_updated` (or similar) instead of `updated`: register an alias.
+If the user's existing files use a non-canonical name for a
+type-required field — e.g. `last_updated` instead of `updated`,
+or `creation_date` instead of `created` — register an alias instead
+of rewriting the user's files.
 
 Show the user:
 
@@ -266,13 +270,13 @@ Show the user:
 
 Ask whether they want any other field aliases (e.g., `last_verified`, `created_at`).
 
-### 5e. Add missing fields per-file (additive only)
+### 5e. Add missing `created` (and any required type fields) per-file
 
-The user picks which directories should be indexed. Vaultmind owns the
-`created` and `vm_updated` fields per the four-tier schema taxonomy
-(see `internal/schema/registry.go`); the user must never have to
-maintain them manually. The `frontmatter fix` command is the audit and
-backfill path.
+The user picks which directories should be indexed. Most existing
+notes already carry a `created` stamp; for any that don't, the
+`frontmatter fix` command is the audit and backfill path. Beyond
+`created`, vaultmind enforces only what the user's type registry
+(§5c) declares as required.
 
 **Audit first (dry-run is the default — no files written):**
 
@@ -283,20 +287,24 @@ vaultmind frontmatter fix --vault .
 Sample output:
 
 ```
-Scanned 412 files; 87 need backfill (dry-run)
-  knowledge_base/data_architecture/principles.md: missing [created vm_updated] → map[created:2024-03-12 vm_updated:2026-05-04T12:34:56Z]
+Scanned 412 files; 9 need backfill (dry-run)
+  knowledge_base/data_architecture/principles.md: missing [created] → map[created:2024-03-12]
   ...
 
 Dry-run only — re-run with --apply to write changes.
 ```
 
-**Show the user a single-file diff** (re-run with `--json` and pipe one
-item's `diff` field through `jq` if you want a sample). Then ask:
+The `created` value is resolved from git first-commit (when the file
+is tracked) → file mtime → today's date. The first successful
+resolution wins.
 
-> *"This is the shape of the change. [N] files would get vaultmind-owned
-> fields added — `created` (provenance: git first-commit / mtime / today)
-> and `vm_updated` (today, RFC3339). User-owned fields are never touched.
-> Continue with --apply, or revise the approach first?"*
+**Show the user a single-file diff** (re-run with `--json` and pipe
+one item's `diff` field through `jq` if you want a sample). Then ask:
+
+> *"This is the shape of the change. [N] files would get a `created`
+> stamp added (provenance: git first-commit / mtime / today). User-
+> owned fields are never touched. Continue with --apply, or revise
+> the approach first?"*
 
 **On confirmation, apply:**
 
@@ -304,21 +312,20 @@ item's `diff` field through `jq` if you want a sample). Then ask:
 vaultmind frontmatter fix --vault . --apply
 ```
 
-The mutator handles atomic writes, conflict detection, schema validation,
-and the vm_updated auto-bump uniformly across all 87 files. Per
-arc-extending-not-overwriting, vaultmind never silently rewrites user
-files: `--apply` is the explicit gate, and only `created` + `vm_updated`
-are added.
+The mutator handles atomic writes, conflict detection, and schema
+validation. Per arc-extending-not-overwriting, vaultmind never
+silently rewrites user files: `--apply` is the explicit gate.
 
-Need a unique `id` on a note that lacks one? That's a separate concern
-from this command (which only handles vaultmind-owned fields). Use
-`vaultmind frontmatter set --id <value>` per file, or run the user-owned
-field tooling described in §5d.
+Need a unique `id` on a note that lacks one? That's a separate
+concern from this command. Use `vaultmind frontmatter set --id
+<value>` per file, or run the user-owned field tooling described in
+§5d.
 
-After `--apply`, run `vaultmind doctor --vault .` — the drift detector
-(commit 5 of the schema chain) will report 0 stale notes immediately
-after backfill, and any future operator can re-run doctor to spot
-"edited since vaultmind processed" cases.
+After `--apply`, run `vaultmind index --vault .` to refresh the
+content hashes (so `vaultmind doctor` reports 0 stale-index drift).
+Doctor's drift detector compares current file content hash against
+the indexer's stored hash — `git checkout` and other VCS operations
+do NOT trigger drift (only actual content edits do).
 
 ### 5f. Init the .vaultmind/ scaffold
 
