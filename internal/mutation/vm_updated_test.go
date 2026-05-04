@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/peiman/vaultmind/internal/mutation"
+	"github.com/peiman/vaultmind/internal/schema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -31,7 +32,11 @@ import (
 //   - Dry-run shows the bump in the diff but doesn't persist.
 //   - Pre-existing vm_updated is overwritten with today's value.
 
-const vmUpdatedRFC3339 = "2006-01-02T15:04:05Z"
+// vmUpdatedRFC3339 references the canonical SSOT format from the schema
+// package. Per principle 7, the test reads the same constant the
+// mutator/template/initvault writes — drift between write and parse is
+// impossible by construction.
+var vmUpdatedRFC3339 = schema.VMUpdatedFormat
 
 func todayRFC3339Prefix(t *testing.T) string {
 	t.Helper()
