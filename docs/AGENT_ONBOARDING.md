@@ -268,29 +268,57 @@ Ask whether they want any other field aliases (e.g., `last_verified`, `created_a
 
 ### 5e. Add missing fields per-file (additive only)
 
-For each markdown file that should be indexed (the user picks which directories):
-- Compute a unique `id` (slug from filename + parent dir, prefixed by type).
-- Set `vm_updated: <today>`.
-- Leave everything else untouched.
+The user picks which directories should be indexed. Vaultmind owns the
+`created` and `vm_updated` fields per the four-tier schema taxonomy
+(see `internal/schema/registry.go`); the user must never have to
+maintain them manually. The `frontmatter fix` command is the audit and
+backfill path.
 
-**Critical**: never rewrite content. Never strip or rename existing fields. Only ADD what's needed for vaultmind validation.
+**Audit first (dry-run is the default — no files written):**
 
-Show the user a diff for ONE file as a sample:
-
-```
---- knowledge_base/data_architecture/principles.md (before)
-+++ knowledge_base/data_architecture/principles.md (after)
-@@ -1,3 +1,5 @@
-+id: reference-data-architecture-principles
-+vm_updated: 2026-05-04
- title: Data Architecture Principles
- type: reference
- ...
+```bash
+vaultmind frontmatter fix --vault .
 ```
 
-Ask: *"This is the change I'd make to one file. I'll do the same shape for [N] files. Continue, or revise the approach first?"*
+Sample output:
 
-If yes, batch the changes. Show running progress (`[i]/[N]: <path>`).
+```
+Scanned 412 files; 87 need backfill (dry-run)
+  knowledge_base/data_architecture/principles.md: missing [created vm_updated] → map[created:2024-03-12 vm_updated:2026-05-04T12:34:56Z]
+  ...
+
+Dry-run only — re-run with --apply to write changes.
+```
+
+**Show the user a single-file diff** (re-run with `--json` and pipe one
+item's `diff` field through `jq` if you want a sample). Then ask:
+
+> *"This is the shape of the change. [N] files would get vaultmind-owned
+> fields added — `created` (provenance: git first-commit / mtime / today)
+> and `vm_updated` (today, RFC3339). User-owned fields are never touched.
+> Continue with --apply, or revise the approach first?"*
+
+**On confirmation, apply:**
+
+```bash
+vaultmind frontmatter fix --vault . --apply
+```
+
+The mutator handles atomic writes, conflict detection, schema validation,
+and the vm_updated auto-bump uniformly across all 87 files. Per
+arc-extending-not-overwriting, vaultmind never silently rewrites user
+files: `--apply` is the explicit gate, and only `created` + `vm_updated`
+are added.
+
+Need a unique `id` on a note that lacks one? That's a separate concern
+from this command (which only handles vaultmind-owned fields). Use
+`vaultmind frontmatter set --id <value>` per file, or run the user-owned
+field tooling described in §5d.
+
+After `--apply`, run `vaultmind doctor --vault .` — the drift detector
+(commit 5 of the schema chain) will report 0 stale notes immediately
+after backfill, and any future operator can re-run doctor to spot
+"edited since vaultmind processed" cases.
 
 ### 5f. Init the .vaultmind/ scaffold
 
