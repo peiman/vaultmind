@@ -61,9 +61,9 @@ To wire your vault into Claude Code (or any agent that supports SessionStart hoo
 
 **Or — let the agent set it up for you.** After `task build`, paste this sentence to Claude Code:
 
-> *I just installed vaultmind — walk me through onboarding using `<your-vaultmind-clone>/docs/AGENT_ONBOARDING.md`.*
+> *I just installed vaultmind — walk me through onboarding. Run `vaultmind init --print-instructions` to read the agent-led setup script.*
 
-The agent reads the doc, asks you a few questions about who you are and what should be remembered, inspects your project, shows a diff-preview of every file it'll touch, and gets you to a wired vault. Greenfield (fresh persona) and migration (existing markdown) are both handled. See **[docs/AGENT_ONBOARDING.md](docs/AGENT_ONBOARDING.md)** for the full script.
+The agent runs the command, reads the embedded onboarding script, asks you a few questions about who you are and what should be remembered, inspects your project, shows a diff-preview of every file it'll touch, and gets you to a wired vault. Greenfield (fresh persona) and migration (existing markdown) are both handled. See **[internal/onboard/AGENT_ONBOARDING.md](internal/onboard/AGENT_ONBOARDING.md)** for the full script if you want to read it directly.
 
 ## Try it with my vaults first
 
@@ -146,7 +146,7 @@ Run `vaultmind --help` for the full list.
 
 **For AI agents using VaultMind as memory:** see **[docs/AGENT_USAGE.md](docs/AGENT_USAGE.md)** — end-to-end guide covering save, retrieve, update, inspect, frontmatter schema, and integration patterns.
 
-**For AI agents helping a new user set vaultmind up:** see **[docs/AGENT_ONBOARDING.md](docs/AGENT_ONBOARDING.md)** — one-time setup walkthrough covering preflight, project read, greenfield + migration paths, hook wiring with diff-preview, verification, and failure modes.
+**For AI agents helping a new user set vaultmind up:** run `vaultmind init --print-instructions` (the doc is embedded in the binary, so it works wherever vaultmind is installed). Source: **[internal/onboard/AGENT_ONBOARDING.md](internal/onboard/AGENT_ONBOARDING.md)** — one-time setup walkthrough covering preflight, project read, greenfield + migration paths, hook wiring with diff-preview, verification, and failure modes.
 
 ## How the hooks work
 

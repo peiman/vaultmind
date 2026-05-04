@@ -95,7 +95,7 @@ Manifesto-lens recap of the original chain (now retracted): strong on principles
 
 4. **Arc distillation tool** (plasticity step 2) — substrate is now even richer (today produced 3+ commits' worth of arcs).
 
-5. **Onboarding doc + Siavoush dogfood** — `docs/AGENT_ONBOARDING.md` is now post-retraction-correct.
+5. **Onboarding doc + Siavoush dogfood** — `internal/onboard/AGENT_ONBOARDING.md` is now post-retraction-correct and embedded in the binary, accessible via `vaultmind init --print-instructions`.
 
 What's NO LONGER live (resolved by the retraction):
 - ~~vm_updated as a load-bearing field~~ → retired.
@@ -143,7 +143,7 @@ The chain is complete locally, not yet pushed. Total: 9 commits on `main` ahead 
 
 4. **Arc distillation tool** (step 2 of the plasticity roadmap). Substrate is even richer now (5+ episodes plus today's heavy session). Re-run `reference-episode-distillation-review-prompt` on the broader corpus.
 
-5. **Onboarding doc + Siavoush dogfood.** `reference-onboarding-ax-design` is the plan; `docs/AGENT_ONBOARDING.md` §5e is now a working flow against the fix command.
+5. **Onboarding doc + Siavoush dogfood.** `reference-onboarding-ax-design` is the plan; `internal/onboard/AGENT_ONBOARDING.md` §5e is now a working flow against the fix command, accessible via `vaultmind init --print-instructions`.
 
 What's NO LONGER live (resolved by the schema chain):
 - ~~Schema validator design~~ → rescoped to truthful coreFields; the four-tier taxonomy is now the SSOT.

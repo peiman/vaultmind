@@ -41,12 +41,23 @@ EXAMPLES
       A vault outside the project tree — common when the agent's
       memory should persist across multiple repos.
 
+  vaultmind init --print-instructions
+      Print the embedded agent-onboarding script and exit. No vault
+      created. Use this when an AI agent is helping a new user wire
+      vaultmind into their environment — paste the output to the
+      agent and it walks the user through preflight, project read,
+      greenfield + migration paths, and Claude Code wiring with
+      diff-preview.
+
 NEXT STEPS
 
   cd <path>
   vaultmind index --vault .            # build the SQLite index
   vaultmind index --embed --vault .    # compute embeddings (one-time)
   vaultmind ask "who am I" --vault .   # see what the agent would see
+
+  For agent-led setup (interview, project read, migration, hooks),
+  run: vaultmind init --print-instructions
 
 THE MODEL
 
@@ -55,16 +66,27 @@ persona. Identity is carried by the journey, not by the rules. The
 default scaffold gives you placeholder identity + current-context
 notes and example templates for principles and arcs; let your real
 collaboration produce the rest.`,
-	ConfigPrefix:  "app.init",
-	FlagOverrides: map[string]string{},
+	ConfigPrefix: "app.init",
+	FlagOverrides: map[string]string{
+		"app.init.print_instructions": "print-instructions",
+	},
 }
 
-// InitOptions returns configuration options for the init command. The
-// command takes its only argument positionally (the path), so there
-// are no flags — but registering an empty options slice keeps the
-// pattern uniform with the other commands.
+// InitOptions returns configuration options for the init command.
+// The path argument is positional; --print-instructions is the one
+// flag, which prints the embedded onboarding doc and exits without
+// creating a vault. The flag is the answer to AX-design Q2 ("where
+// does the doc live?") — embedded in the binary, accessible
+// wherever vaultmind is installed.
 func InitOptions() []config.ConfigOption {
-	return []config.ConfigOption{}
+	return []config.ConfigOption{
+		{
+			Key:          "app.init.print_instructions",
+			DefaultValue: false,
+			Description:  "Print the embedded agent-onboarding script and exit (no vault created)",
+			Type:         "bool",
+		},
+	}
 }
 
 func init() {

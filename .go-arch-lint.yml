@@ -106,6 +106,8 @@ components:
       - internal/initvault/**
       # VaultMind telemetry primitives (vault fingerprint, content-free aggregate features):
       - internal/telemetry/**
+      # VaultMind onboarding instructions (embedded doc, agent-led setup script):
+      - internal/onboard/**
 
   # -------------------------------------------------------------------------
   # PROJECT-MANAGED: Business Logic Layer
