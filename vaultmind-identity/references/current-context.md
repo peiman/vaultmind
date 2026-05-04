@@ -278,7 +278,7 @@ Seven-commit schema foundation chain. The pivot was the load-bearing moment: I s
 
 **Review-finding-closure lane (followup commit `4beadff`).** Code-reviewer caught one HIGH (`--backfill` flag in the user-facing drift-resolution message — the flag doesn't exist; running the suggestion would fail with "unknown flag") and one MEDIUM (yaml.v3 unmarshals unquoted RFC3339 as `time.Time` not `string` — the type assertion silently failed, classifying every hand-edited note as "absent" and missing real drift). Both fixed with type-switch fallback + new test pinning the `time.Time` path.
 
-**Docs lane (commit `70c8c0b`).** `docs/AGENT_ONBOARDING.md` §5e: the migration flow now points at `vaultmind frontmatter fix --apply` instead of teaching agents to hand-edit notes one at a time. Names the four-tier taxonomy as the WHY; calls out provenance for `created`; mentions doctor's drift detector as the post-apply verification path.
+**Docs lane (commit `70c8c0b`).** `docs/AGENT_ONBOARDING.md` (now `internal/onboard/AGENT_ONBOARDING.md`) §5e: the migration flow now points at `vaultmind frontmatter fix --apply` instead of teaching agents to hand-edit notes one at a time. Names the four-tier taxonomy as the WHY; calls out provenance for `created`; mentions doctor's drift detector as the post-apply verification path.
 
 **Generalizable lessons:**
 

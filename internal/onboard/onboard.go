@@ -22,7 +22,10 @@ import (
 var instructions []byte
 
 // Instructions returns the embedded agent-onboarding doc as raw
-// bytes. Returns a copy-safe slice — callers should not mutate.
+// bytes. Returns the backing slice directly — callers must not mutate
+// the returned bytes. A defensive copy would be wasteful for a 25KB
+// doc; the only callers today are tests that immediately convert to
+// string. Production callers should prefer PrintInstructions.
 func Instructions() []byte {
 	return instructions
 }

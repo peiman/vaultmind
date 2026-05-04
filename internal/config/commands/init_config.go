@@ -11,7 +11,7 @@ import "github.com/peiman/vaultmind/.ckeletin/pkg/config"
 // starter notes match the persona-reconstruction model that makes
 // VaultMind distinct from a plain notes app.
 var InitMetadata = config.CommandMetadata{
-	Use:   "init <path>",
+	Use:   "init [path]",
 	Short: "Scaffold a fresh vault — persona-shaped, ready for you and your agent",
 	Long: `Create a new VaultMind vault at <path> with the standard persona-shaped
 type registry, a vault-level README, and starter notes that demonstrate
