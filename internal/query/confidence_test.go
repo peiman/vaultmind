@@ -112,6 +112,14 @@ func TestComputeTopHitConfidence_NoMatch(t *testing.T) {
 // must classify under the retuned thresholds. The probes spanned 19
 // queries (canonical, real, paraphrase, gibberish) and produced the gap
 // distribution that drove the 5% / 1.5% / 0.5% / no_match scheme.
+//
+// Re-probed 2026-05-04 against the post-retraction substrate (vm_updated
+// stripped, embeddings regenerated bge-m3-uniform). 8 of 9 probe gaps
+// reproduced to the second decimal; one shifted within tier. Thresholds
+// held without code change. See `vaultmind-identity/references/
+// tophit-reprobe-2026-05-04.md` for the full result table and the
+// generalizable insight ("uniform-content additions/removals don't
+// require threshold re-calibration").
 func TestComputeTopHitConfidence_ProbedQueries_2026_04_30(t *testing.T) {
 	tests := []struct {
 		name string
