@@ -3,7 +3,6 @@ id: concept-spreading-activation
 type: concept
 title: Spreading Activation
 created: 2026-04-03
-vm_updated: 2026-04-03
 aliases:
   - Activation Spreading
 tags:

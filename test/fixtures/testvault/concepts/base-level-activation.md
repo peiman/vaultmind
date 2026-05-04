@@ -3,7 +3,6 @@ id: concept-base-level-activation
 type: concept
 title: Base-Level Activation
 created: 2026-04-04
-vm_updated: 2026-04-04
 aliases: []
 tags:
   - cognitive-science

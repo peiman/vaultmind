@@ -11,7 +11,7 @@ import (
 )
 
 func TestParse_DomainNote(t *testing.T) {
-	content := []byte("---\nid: proj-payment-retries\ntype: project\nstatus: active\ntitle: Payment Retries\naliases:\n  - Retry Engine\ncreated: 2026-04-03\nvm_updated: 2026-04-03\ntags:\n  - billing\nrelated_ids:\n  - concept-idempotency\n---\n\n# Payment Retries\n\nThis project covers retry logic. See [[Idempotency]] and [[Billing Service|the billing service]].\n\n## Rationale\n\nWe need robust retries. ^rationale-block\n\n## Implementation\n\nSee ![[architecture-diagram.png]] for the overview.")
+	content := []byte("---\nid: proj-payment-retries\ntype: project\nstatus: active\ntitle: Payment Retries\naliases:\n  - Retry Engine\ncreated: 2026-04-03\ntags:\n  - billing\nrelated_ids:\n  - concept-idempotency\n---\n\n# Payment Retries\n\nThis project covers retry logic. See [[Idempotency]] and [[Billing Service|the billing service]].\n\n## Rationale\n\nWe need robust retries. ^rationale-block\n\n## Implementation\n\nSee ![[architecture-diagram.png]] for the overview.")
 
 	note, err := parser.Parse(content)
 	require.NoError(t, err)

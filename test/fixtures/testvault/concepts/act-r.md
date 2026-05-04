@@ -3,7 +3,6 @@ id: concept-act-r
 type: concept
 title: ACT-R
 created: 2026-04-03
-vm_updated: 2026-04-03
 aliases:
   - Adaptive Control of Thought-Rational
   - ACT-R Architecture

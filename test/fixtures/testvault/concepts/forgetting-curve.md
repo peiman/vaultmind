@@ -3,7 +3,6 @@ id: concept-forgetting-curve
 type: concept
 title: Forgetting Curve
 created: 2026-04-05
-vm_updated: 2026-04-05
 aliases:
   - Ebbinghaus Forgetting Curve
 tags:

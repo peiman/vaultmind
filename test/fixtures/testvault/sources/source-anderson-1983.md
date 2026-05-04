@@ -4,7 +4,6 @@ type: source
 title: "The Architecture of Cognition"
 url: https://example.org/anderson-1983
 created: 2026-04-03
-vm_updated: 2026-04-03
 aliases: []
 tags:
   - cognitive-science

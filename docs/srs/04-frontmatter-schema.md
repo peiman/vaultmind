@@ -16,11 +16,10 @@
 |-------|----------|------|-------|
 | `id` | yes | string | Globally unique. Immutable after creation. |
 | `type` | yes | string | Controlled vocabulary from [type registry](18-config-spec.md). |
-| `created` | yes | string | ISO 8601 date (`YYYY-MM-DD`) or datetime (`YYYY-MM-DDTHH:MM:SS`). Set once. |
-| `updated` | yes | string | ISO 8601. Human/Obsidian-managed. VaultMind reads but does not write this field. |
-| `vm_updated` | yes | string | ISO 8601. **VaultMind-managed.** Updated on every VaultMind mutation. |
+| `created` | optional | string | ISO 8601 date (`YYYY-MM-DD`). Set on creation; tolerated, not enforced. |
+| `updated` | optional | string | ISO 8601. Tolerated for Obsidian compat. VaultMind never reads or writes it; file mtime is the SSOT for "edited" (principle 7). |
 
-> **Why two timestamp fields?** Obsidian plugins (e.g., `update-time-on-edit`) commonly auto-update the `updated` field on every save. If VaultMind also wrote `updated`, the plugin would immediately rewrite it, causing hash conflicts that refuse subsequent VaultMind writes. `vm_updated` is VaultMind's own timestamp, immune to plugin interference. See [risks](16-risks.md).
+> **Schema retraction (2026-05-04).** Earlier versions of this spec listed `created`, `updated`, and `vm_updated` as required core fields. The 2026-05-04 dogfood pass revealed that vm_updated had no read-side consumer — its only purpose was a doctor drift detector that produced ~95% false positives because it compared file mtime (bumped by VCS operations) against the timestamp. The drift detector was rewritten to use content-hash comparison (`sha256(file content)` against the indexer's stored hash); vm_updated was retired entirely. `created` and `updated` were demoted to optional/tolerated. The truthful core is `[id, type]`. See `vaultmind-identity/references/current-context.md` for the full retraction story.
 | `title` | conditional | string | Required if display title differs from filename. |
 | `status` | conditional | string | Required on types with lifecycle. Values from type registry. |
 | `aliases` | optional | list of strings | YAML list only. Never scalar. |

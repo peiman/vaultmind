@@ -60,7 +60,7 @@ The `index` command's `Rebuild()` / `Incremental()` error paths (lines 53-63 of 
 
 - Flag wikilinks to CLI commands (backtick-code vs wikilink convention)
 - Detect notes with 0 inbound links (orphans) as warnings
-- Detect notes with stale `vm_updated` (older than file mtime)
+- ~~Detect notes with stale `vm_updated` (older than file mtime)~~ — **superseded 2026-05-04**: doctor now detects content-hash drift (current file `sha256` vs indexer's stored hash). Precise (no VCS-noise false positives) and replaces the vm_updated approach entirely.
 
 ---
 

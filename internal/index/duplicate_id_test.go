@@ -18,8 +18,8 @@ func TestRebuild_DetectsDuplicateIDs(t *testing.T) {
 	require.NoError(t, os.MkdirAll(vmDir, 0o750))
 	require.NoError(t, os.WriteFile(filepath.Join(vmDir, "config.yaml"), []byte("types: {}"), 0o644))
 
-	require.NoError(t, os.WriteFile(filepath.Join(vaultDir, "note-a.md"), []byte("---\nid: dupe-id\ntype: concept\ntitle: Note A\ncreated: 2026-04-03\nvm_updated: 2026-04-03\n---\nBody A"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(vaultDir, "note-b.md"), []byte("---\nid: dupe-id\ntype: concept\ntitle: Note B\ncreated: 2026-04-03\nvm_updated: 2026-04-03\n---\nBody B"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(vaultDir, "note-a.md"), []byte("---\nid: dupe-id\ntype: concept\ntitle: Note A\ncreated: 2026-04-03\n---\nBody A"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(vaultDir, "note-b.md"), []byte("---\nid: dupe-id\ntype: concept\ntitle: Note B\ncreated: 2026-04-03\n---\nBody B"), 0o644))
 
 	dbPath := filepath.Join(t.TempDir(), "index.db")
 	cfg, err := vault.LoadConfig(vaultDir)

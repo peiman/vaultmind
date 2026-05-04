@@ -16,7 +16,7 @@
 | Alias collisions across notes | Silent misresolution | Ambiguity detection; always surface candidates |
 | Short aliases causing false positive mentions | Noisy inferred edges | Minimum alias length (3 chars); word-boundary matching |
 | Large vaults causing slow initial index | Poor first-run experience | Incremental indexing; progress reporting; exclude patterns |
-| Obsidian auto-update plugins rewriting `updated` field | Hash conflicts refuse VaultMind writes; broken write-confirm loop | Document conflict; recommend plugin exclusion or distinct field name (`vm_updated`) |
+| Obsidian auto-update plugins rewriting `updated` field | Originally posed a hash-conflict risk for VaultMind writes that touched `updated`. **Resolved 2026-05-04**: VaultMind never writes `updated` — file mtime is the SSOT for "edited" (principle 7). The earlier mitigation (a separate `vm_updated` field) was retired in the same chain after dogfood revealed it had no read-side consumer. |
 | YAML 1.1 boolean coercion (`yes`/`no`/`true`/`false`) | Silent data corruption of status fields and aliases | Require YAML 1.2 strict mode parser (go-yaml v3 strict) |
 | Template syntax collision with Obsidian Templater | Templater auto-processes VaultMind templates, corrupting placeholders | Use `${variable}` syntax instead of `{{variable}}` |
 | Inline `#tags` in body text not indexed | Incomplete tag graph, inflated IDF specificity scores | Document as explicit boundary; consider body tag extraction in v2 |

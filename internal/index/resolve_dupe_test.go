@@ -18,11 +18,11 @@ func TestRebuild_DuplicateWikilinksDoNotCrashResolution(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(vmDir, "config.yaml"), []byte("types:\n  concept:\n    required: [title]"), 0o644))
 
 	require.NoError(t, os.WriteFile(filepath.Join(vaultDir, "target.md"),
-		[]byte("---\nid: target-note\ntype: concept\ntitle: Target\ncreated: 2026-04-03\nvm_updated: 2026-04-03\n---\nTarget body."), 0o644))
+		[]byte("---\nid: target-note\ntype: concept\ntitle: Target\ncreated: 2026-04-03\n---\nTarget body."), 0o644))
 
 	// This note links to [[Target]] twice in the body
 	require.NoError(t, os.WriteFile(filepath.Join(vaultDir, "source.md"),
-		[]byte("---\nid: source-note\ntype: concept\ntitle: Source\ncreated: 2026-04-03\nvm_updated: 2026-04-03\n---\nFirst ref to [[Target]] and second ref to [[Target]]."), 0o644))
+		[]byte("---\nid: source-note\ntype: concept\ntitle: Source\ncreated: 2026-04-03\n---\nFirst ref to [[Target]] and second ref to [[Target]]."), 0o644))
 
 	dbPath := filepath.Join(t.TempDir(), "index.db")
 	cfg, err := vault.LoadConfig(vaultDir)

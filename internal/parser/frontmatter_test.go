@@ -9,7 +9,7 @@ import (
 )
 
 func TestExtractFrontmatter_WithFrontmatter(t *testing.T) {
-	input := []byte("---\nid: proj-payment-retries\ntype: project\nstatus: active\ntitle: Payment Retries\naliases:\n  - Retry Engine\n  - Billing Retries\ncreated: 2026-04-03\nvm_updated: 2026-04-03\ntags:\n  - billing\n  - payments\nrelated_ids:\n  - concept-idempotency\n---\n\n# Body starts here\n\nSome body text.")
+	input := []byte("---\nid: proj-payment-retries\ntype: project\nstatus: active\ntitle: Payment Retries\naliases:\n  - Retry Engine\n  - Billing Retries\ncreated: 2026-04-03\ntags:\n  - billing\n  - payments\nrelated_ids:\n  - concept-idempotency\n---\n\n# Body starts here\n\nSome body text.")
 
 	fm, body, err := parser.ExtractFrontmatter(input)
 	require.NoError(t, err)
@@ -164,7 +164,7 @@ func TestExtractFrontmatter_FourDashesNotDelimiter(t *testing.T) {
 }
 
 func TestExtractFrontmatter_RealVaultNote(t *testing.T) {
-	input := []byte("---\nid: concept-act-r\ntype: concept\ntitle: ACT-R\ncreated: 2026-04-03\nvm_updated: 2026-04-03\naliases:\n  - Adaptive Control of Thought-Rational\n  - ACT-R Architecture\ntags:\n  - cognitive-science\n  - cognitive-architecture\nrelated_ids:\n  - concept-spreading-activation\n  - concept-forgetting-curve\nsource_ids:\n  - source-anderson-1983\n---\n\n## Overview\n\nACT-R is a cognitive architecture.\n\n## Connections\n\nSee [[Context Pack]] and [[Spreading Activation]].")
+	input := []byte("---\nid: concept-act-r\ntype: concept\ntitle: ACT-R\ncreated: 2026-04-03\naliases:\n  - Adaptive Control of Thought-Rational\n  - ACT-R Architecture\ntags:\n  - cognitive-science\n  - cognitive-architecture\nrelated_ids:\n  - concept-spreading-activation\n  - concept-forgetting-curve\nsource_ids:\n  - source-anderson-1983\n---\n\n## Overview\n\nACT-R is a cognitive architecture.\n\n## Connections\n\nSee [[Context Pack]] and [[Spreading Activation]].")
 
 	fm, body, err := parser.ExtractFrontmatter(input)
 	require.NoError(t, err)

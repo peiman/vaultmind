@@ -4,7 +4,6 @@ type: project
 status: active
 title: "VaultMind"
 created: 2026-04-03
-vm_updated: 2026-04-03
 aliases: []
 tags:
   - vaultmind

@@ -40,7 +40,6 @@ type: <%=type%>
 status: active
 title: <%=title%>
 created: <%=created%>
-vm_updated: <%=vm_updated%>
 tags: []
 related_ids: []
 ---
@@ -68,7 +67,7 @@ The generated ID is checked for uniqueness against the index before creation.
 1. All `<%=variable%>` placeholders are replaced. Unrecognized variables are left as-is (with a warning).
 2. `--field key=value` flags override template frontmatter values.
 3. `--body <text>` replaces the entire body section below the frontmatter.
-4. Core fields (`id`, `type`, `created`, `vm_updated`) are always set, even if the template omits them.
+4. Core fields (`id`, `type`) are always set, even if the template omits them. `created` is also set when not present (humanish "born" stamp; tolerated optional).
 5. The resulting file must pass [validation](13-validation-rules.md) before being written.
 
 ## Missing Template

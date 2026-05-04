@@ -123,8 +123,7 @@ Every note gets these core fields automatically:
 id: <type>-<slug>          # derived from filename; stable across edits
 type: <type>               # from --type
 title: "..."               # required via --field
-created: <date>            # set on creation
-vm_updated: <date>         # VaultMind-managed, set on save
+created: <date>            # set on creation (humanish "born" stamp)
 ```
 
 Additional recommended fields (all optional):
