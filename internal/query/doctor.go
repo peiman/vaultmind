@@ -2,11 +2,15 @@
 package query
 
 import (
+	"database/sql"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/peiman/vaultmind/internal/index"
+	"github.com/peiman/vaultmind/internal/parser"
 	"github.com/peiman/vaultmind/internal/schema"
 )
 
@@ -65,6 +69,25 @@ type DoctorIssues struct {
 	IncompatibleLinkDetails   []IncompatibleLink `json:"incompatible_link_details,omitempty"`
 	PathPseudoIDLinks         int                `json:"path_pseudo_id_links"`
 	PathPseudoIDDetails       []UnresolvedLink   `json:"path_pseudo_id_details,omitempty"`
+
+	// StaleVMUpdated counts domain notes whose file mtime is later than
+	// their vm_updated frontmatter timestamp — i.e. notes edited AFTER
+	// vaultmind last processed them. The operator-visible signal that
+	// downstream artifacts (index, embeddings) may be stale relative to
+	// source. Missing-vm_updated notes are NOT counted here; that's
+	// frontmatter fix's territory. See DetectVMUpdatedDrift for the
+	// detection contract and tolerance window.
+	StaleVMUpdated        int              `json:"stale_vm_updated"`
+	StaleVMUpdatedDetails []StaleVMUpdated `json:"stale_vm_updated_details,omitempty"`
+}
+
+// StaleVMUpdated describes one note whose file mtime is later than its
+// vm_updated frontmatter timestamp.
+type StaleVMUpdated struct {
+	NoteID    string `json:"note_id"`
+	Path      string `json:"path"`
+	Mtime     string `json:"mtime"`      // RFC3339-second UTC
+	VMUpdated string `json:"vm_updated"` // raw value from frontmatter
 }
 
 // UnresolvedLink describes a single unresolved link with source and target info.
@@ -234,6 +257,23 @@ func Doctor(db *index.DB, vaultPath string, reg *schema.Registry) (*DoctorResult
 	}
 	result.Embeddings = emb
 
+	// Drift detector: mtime > vm_updated. Surfaces "edited since
+	// vaultmind processed" so operators know when to reindex / re-embed
+	// / re-mark. Reads the filesystem (not stale DB state) so the
+	// signal reflects current truth.
+	domainPaths, err := collectDomainNotePaths(db)
+	if err != nil {
+		return nil, err
+	}
+	drifts, err := DetectVMUpdatedDrift(vaultPath, domainPaths)
+	if err != nil {
+		return nil, fmt.Errorf("detecting vm_updated drift: %w", err)
+	}
+	result.Issues.StaleVMUpdated = len(drifts)
+	if len(drifts) > 0 {
+		result.Issues.StaleVMUpdatedDetails = drifts
+	}
+
 	return result, nil
 }
 
@@ -288,6 +328,108 @@ func collectEmbeddingStatus(db *index.DB, total int) (*DoctorEmbeddings, error) 
 		emb.HasModalityImbalance = true
 	}
 	return emb, nil
+}
+
+// vmUpdatedDriftTolerance is the max mtime-vs-vm_updated gap that's
+// NOT counted as drift. vm_updated is second-precision; the file write
+// that sets it completes a fraction of a second later, so mtime is
+// naturally epsilon-ahead immediately after a vaultmind write. 5s
+// covers that gap with margin while still catching genuine human
+// edits (always many seconds, usually minutes/hours/days, off).
+const vmUpdatedDriftTolerance = 5 * time.Second
+
+// DetectVMUpdatedDrift compares each note's file mtime against its
+// vm_updated frontmatter timestamp and returns the notes whose file
+// has been edited since vaultmind last processed it.
+//
+// Reads the filesystem directly (not the index DB) so the comparison
+// reflects current reality, not last-index-pass state. The DB is the
+// source of paths-to-check; the filesystem is the source of truth for
+// mtime AND vm_updated.
+//
+// Notes with absent vm_updated are NOT counted — that's frontmatter
+// fix's territory (the four-tier taxonomy says vaultmind owns the
+// field; if it's absent, the contract is "vaultmind hasn't touched
+// this file yet," not "drift since last touch").
+//
+// Notes with unparseable vm_updated ARE counted: vaultmind writes the
+// field in a known format (schema.VMUpdatedFormat), so a value that
+// fails to parse means corruption, and the operator should run
+// `frontmatter fix --apply` to reset it. Surfacing it in drift makes
+// the resolution path obvious (same fix command resolves both stale
+// and corrupt cases).
+//
+// paths are vault-relative. Per-note IO failures are silently skipped
+// — the indexer would have already reported notes that don't read.
+// Doctor's job is health summary, not filesystem-error reporting.
+func DetectVMUpdatedDrift(vaultPath string, paths []string) ([]StaleVMUpdated, error) {
+	drifts := make([]StaleVMUpdated, 0)
+	for _, rel := range paths {
+		abs := filepath.Join(vaultPath, rel)
+		info, statErr := os.Stat(abs)
+		if statErr != nil {
+			continue
+		}
+		// abs is constructed from vault root + DB-stored relative path,
+		// not raw user input. Same trust tier as the indexer's reads.
+		content, readErr := os.ReadFile(abs) // #nosec G304
+		if readErr != nil {
+			continue
+		}
+		fm, _, parseErr := parser.ExtractFrontmatter(content)
+		if parseErr != nil || fm == nil {
+			continue
+		}
+		rawVMU, ok := fm["vm_updated"].(string)
+		if !ok || rawVMU == "" {
+			// Absent — fix's signal, not drift's.
+			continue
+		}
+		mtime := info.ModTime().UTC().Truncate(time.Second)
+		mtimeStr := mtime.Format(schema.VMUpdatedFormat)
+		noteID, _ := fm["id"].(string)
+		drift := StaleVMUpdated{
+			NoteID:    noteID,
+			Path:      rel,
+			Mtime:     mtimeStr,
+			VMUpdated: rawVMU,
+		}
+		vmuTime, parseTimeErr := time.Parse(schema.VMUpdatedFormat, rawVMU)
+		if parseTimeErr != nil {
+			drifts = append(drifts, drift)
+			continue
+		}
+		if mtime.Sub(vmuTime) > vmUpdatedDriftTolerance {
+			drifts = append(drifts, drift)
+		}
+	}
+	return drifts, nil
+}
+
+// collectDomainNotePaths returns vault-relative paths for all domain
+// notes — the population the drift detector inspects. Sorted for
+// deterministic output (doctor's JSON envelope is consumed by the
+// experiment framework; stable order avoids spurious diffs).
+func collectDomainNotePaths(db *index.DB) ([]string, error) {
+	rows, err := db.Query(`SELECT path FROM notes WHERE is_domain = TRUE ORDER BY path`)
+	if err != nil {
+		return nil, fmt.Errorf("querying domain note paths: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var paths []string
+	for rows.Next() {
+		var p sql.NullString
+		if scanErr := rows.Scan(&p); scanErr != nil {
+			return nil, fmt.Errorf("scanning domain note path: %w", scanErr)
+		}
+		if p.Valid && p.String != "" {
+			paths = append(paths, p.String)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return paths, nil
 }
 
 // modelNameForDims maps a dense embedding length (in float32 elements) to

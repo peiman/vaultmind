@@ -137,5 +137,21 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 			}
 		}
 	}
+	if result.Issues.StaleVMUpdated > 0 {
+		if _, err = fmt.Fprintf(w,
+			"⚠ Stale vm_updated: %d note(s) edited since vaultmind processed them\n"+
+				"  run: vaultmind frontmatter fix --backfill --apply --vault <vault>\n",
+			result.Issues.StaleVMUpdated); err != nil {
+			return err
+		}
+		if !summaryOnly {
+			for _, sv := range result.Issues.StaleVMUpdatedDetails {
+				if _, err = fmt.Fprintf(w, "  %s: mtime=%s vm_updated=%s\n",
+					sv.Path, sv.Mtime, sv.VMUpdated); err != nil {
+					return err
+				}
+			}
+		}
+	}
 	return nil
 }

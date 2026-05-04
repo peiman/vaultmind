@@ -72,6 +72,7 @@ rules:
         - internal/mutation/lint.go  # Reads/writes vault .md files via WalkDir (user-provided vault path, paths from filesystem walk)
         - internal/baseline/fixture.go  # Reads project-internal baseline fixture + snapshot paths from test callers (filepath.Clean applied, not user input at runtime)
         - internal/query/validate_live.go  # Reads vault .md files via filepath.WalkDir rooted at user-provided vault path (already #nosec G304)
+        - internal/query/doctor.go         # Reads vault .md files for vm_updated drift detection (paths from DB, joined under user-provided vault root)
     message: "Potential path traversal. Validate and sanitize file paths."
     languages: [go]
     severity: WARNING
