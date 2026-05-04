@@ -140,7 +140,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 	if result.Issues.StaleVMUpdated > 0 {
 		if _, err = fmt.Fprintf(w,
 			"⚠ Stale vm_updated: %d note(s) edited since vaultmind processed them\n"+
-				"  run: vaultmind frontmatter fix --backfill --apply --vault <vault>\n",
+				"  run: vaultmind frontmatter fix --apply --vault <vault>\n",
 			result.Issues.StaleVMUpdated); err != nil {
 			return err
 		}

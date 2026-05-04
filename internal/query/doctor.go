@@ -380,8 +380,21 @@ func DetectVMUpdatedDrift(vaultPath string, paths []string) ([]StaleVMUpdated, e
 		if parseErr != nil || fm == nil {
 			continue
 		}
-		rawVMU, ok := fm["vm_updated"].(string)
-		if !ok || rawVMU == "" {
+		// yaml.v3 unmarshals an unquoted RFC3339 scalar as time.Time, but
+		// a quoted one as string. Vaultmind always writes quoted (the
+		// canonical SSOT format contains a colon, which yaml.v3 auto-
+		// quotes), but human/agent edits may produce either form. Accept
+		// both so the detector doesn't silently miss drift on hand-edited
+		// files. The bare-bool/int paths intentionally fall through to
+		// "absent" — those values can't be a real timestamp.
+		var rawVMU string
+		switch v := fm["vm_updated"].(type) {
+		case string:
+			rawVMU = v
+		case time.Time:
+			rawVMU = v.UTC().Format(schema.VMUpdatedFormat)
+		}
+		if rawVMU == "" {
 			// Absent — fix's signal, not drift's.
 			continue
 		}

@@ -165,6 +165,35 @@ type: reference
 	assert.Equal(t, "a", drifts[0].NoteID)
 }
 
+// TestDetectVMUpdatedDrift_UnquotedYAMLTimestampParsedAsTime — when
+// vm_updated is written WITHOUT YAML quotes (e.g. by hand-editing or
+// a non-vaultmind tool), yaml.v3 unmarshals the value as time.Time
+// rather than string. The detector accepts BOTH forms; without this
+// fallback it would silently miss real drift on hand-edited files.
+// Vaultmind itself always writes the quoted form because the canonical
+// SSOT format contains a colon (which yaml.v3 auto-quotes), but the
+// detector cannot assume the producer was vaultmind.
+func TestDetectVMUpdatedDrift_UnquotedYAMLTimestampParsedAsTime(t *testing.T) {
+	vault := t.TempDir()
+	// Note: vm_updated is UNQUOTED here. yaml.v3 will parse this as
+	// time.Time, not string.
+	notePath := writeNoteFile(t, vault, "unquoted.md", `---
+id: ref-unquoted
+type: reference
+title: Unquoted
+vm_updated: 2026-01-01T00:00:00Z
+---
+body
+`)
+	touchFile(t, notePath, time.Date(2026, 1, 1, 6, 0, 0, 0, time.UTC))
+
+	drifts, err := query.DetectVMUpdatedDrift(vault, []string{"unquoted.md"})
+	require.NoError(t, err)
+	require.Len(t, drifts, 1, "unquoted RFC3339 must be detected as time.Time and compared")
+	assert.Equal(t, "2026-01-01T00:00:00Z", drifts[0].VMUpdated,
+		"the time.Time fallback re-formats to canonical SSOT for stable output")
+}
+
 // TestDetectVMUpdatedDrift_UsesSchemaSSOT — sanity belt: the format
 // the detector parses MUST be the same constant used by every write
 // site (mutator auto-bump, fix command, template, initvault). If this
