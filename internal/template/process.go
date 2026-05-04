@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/peiman/vaultmind/internal/schema"
 	"gopkg.in/yaml.v3"
 )
 
@@ -83,7 +84,9 @@ func SubstituteVars(content string, vars map[string]string) (string, []string) {
 func Process(cfg ProcessConfig) (*ProcessResult, error) {
 	now := time.Now().UTC()
 	dateStr := now.Format("2006-01-02")
-	datetimeStr := now.Format("2006-01-02T15:04:05Z")
+	// vm_updated uses the canonical SSOT format from schema package —
+	// per principle 7, every vm_updated write site MUST use this constant.
+	datetimeStr := now.Format(schema.VMUpdatedFormat)
 
 	// Determine the effective ID (may be overridden by a Fields["id"] later).
 	generatedID := GenerateID(cfg.Path, cfg.Type)

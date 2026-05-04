@@ -57,6 +57,24 @@ var humanCompatFields = []string{"updated"}
 // and graph traversal. Tolerated on any type via IsFieldAllowed.
 var graphFields = []string{"title", "status", "aliases", "tags", "parent_id", "related_ids", "source_ids"}
 
+// VMUpdatedFormat is the canonical format for the vm_updated field —
+// RFC3339 second-precision UTC. Per manifesto principle 7 (SSOT),
+// every write site for vm_updated MUST format with this constant:
+//
+//   - internal/mutation/mutator.go (auto-bump on every operation)
+//   - internal/template/process.go (init / scaffold)
+//   - internal/initvault/initvault.go (vault scaffold dates)
+//
+// The format has sub-day precision because doctor's drift detector
+// (commit 5 in this chain) compares file mtime against vm_updated
+// to surface "edited since vaultmind processed" — date-only would
+// produce false-positive drift within the same calendar day.
+//
+// Note: contains colons, so YAML serialization auto-quotes the
+// emitted value. That's correct YAML; readers should strip surrounding
+// quotes for parse comparisons.
+const VMUpdatedFormat = "2006-01-02T15:04:05Z"
+
 // Registry holds the type definitions and provides validation methods.
 type Registry struct {
 	types   map[string]vault.TypeDef

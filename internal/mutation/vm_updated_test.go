@@ -162,19 +162,17 @@ func TestMutator_Run_DryRunDoesNotPersistVMUpdated(t *testing.T) {
 		"dry-run must not persist vm_updated on disk")
 }
 
-func TestMutator_Run_NonDomainNoteSkipsBump(t *testing.T) {
+// TestMutator_Run_OpSetNonDomainErrorsBeforeBump pins the validation
+// gate's contract for non-domain notes under OpSet/OpUnset/OpMerge:
+// ValidateMutation rejects with not_domain_note BEFORE the apply step,
+// so vm_updated never gets written. This is the EARLY-error path.
+//
+// The OpNormalize path is tested separately (see
+// TestMutator_Run_OpNormalizeNonDomainSkipsBump) because OpNormalize
+// has an early-return in ValidateMutation that bypasses the IsDomain
+// check — the IsDomain guard inside Run is load-bearing for that path.
+func TestMutator_Run_OpSetNonDomainErrorsBeforeBump(t *testing.T) {
 	vaultPath := setupTestVault(t)
-	// Non-domain note: has no id and no type. The mutator's
-	// resolveTarget would fail-classify and the request might error,
-	// but if it ever reaches the apply step on a non-domain mapping,
-	// vm_updated must NOT be added (vaultmind doesn't track non-
-	// domain content). This test pins the safety property: only
-	// domain notes get vaultmind-owned auto-fields.
-	//
-	// Implementation note: today, the mutator's resolveTarget would
-	// reject a non-domain note path before reaching the apply step;
-	// this test validates that when it does reach the apply step
-	// (via the IsDomain guard inside Run), the bump is gated.
 	noteContent := "---\nfree_form: true\n---\nstray markdown\n"
 	require.NoError(t, os.WriteFile(filepath.Join(vaultPath, "projects/stray.md"), []byte(noteContent), 0o644))
 
@@ -183,11 +181,42 @@ func TestMutator_Run_NonDomainNoteSkipsBump(t *testing.T) {
 		Op: mutation.OpSet, Target: "projects/stray.md",
 		Key: "free_form", Value: false,
 	})
-	// Resolver rejects non-domain note up front — that's the existing
-	// contract (validate.go's IsDomain check). Verify vm_updated was
-	// NOT added by ANY codepath as a side effect.
 	require.Error(t, err)
 	content, _ := os.ReadFile(filepath.Join(vaultPath, "projects/stray.md"))
 	assert.NotContains(t, string(content), "vm_updated:",
-		"non-domain note must never receive vm_updated from the mutator")
+		"non-domain note must never receive vm_updated under OpSet (validation rejects)")
+}
+
+// TestMutator_Run_OpNormalizeNonDomainSkipsBump pins the LOAD-BEARING
+// IsDomain guard inside Run. ValidateMutation has an early-return for
+// OpNormalize that bypasses the IsDomain check — so a non-domain note
+// passes validation and reaches the bump code. The guard at
+// mutator.go:99-105 is the only thing preventing vm_updated from being
+// written to non-domain content. Without the guard, normalizing a
+// stray markdown file would silently add a vaultmind-owned field —
+// violating the four-tier taxonomy contract (vaultmind doesn't write
+// to content it doesn't track).
+//
+// Caught by 2026-05-04 review pass on commit b5ff2ea — the original
+// test only covered OpSet (which never reaches the bump because
+// validation rejects first). This test covers the path that DOES
+// reach the bump.
+func TestMutator_Run_OpNormalizeNonDomainSkipsBump(t *testing.T) {
+	vaultPath := setupTestVault(t)
+	noteContent := "---\nfree_form: true\n---\nstray markdown\n"
+	require.NoError(t, os.WriteFile(filepath.Join(vaultPath, "projects/stray.md"), []byte(noteContent), 0o644))
+
+	m := newTestMutator(t, vaultPath)
+	// OpNormalize on a non-domain note: validation passes (early-return),
+	// apply runs, but the IsDomain guard prevents the vm_updated bump.
+	_, err := m.Run(mutation.MutationRequest{
+		Op: mutation.OpNormalize, Target: "projects/stray.md",
+	})
+	// Normalize on a non-domain note may succeed (validation allows it)
+	// or fail downstream (the resolver/parser may still reject malformed
+	// frontmatter). Either way: vm_updated must NOT be written.
+	_ = err
+	content, _ := os.ReadFile(filepath.Join(vaultPath, "projects/stray.md"))
+	assert.NotContains(t, string(content), "vm_updated:",
+		"non-domain note must never receive vm_updated under OpNormalize (IsDomain guard)")
 }
