@@ -108,7 +108,7 @@ func TestExecuteNoteCreate_PathTraversal_ValidPathAccepted(t *testing.T) {
     optional: []
     template: .vaultmind/templates/note.md
 `
-	tmpl := "---\nid: <%=id%>\ntype: <%=type%>\ntitle: <%=title%>\ncreated: <%=created%>\nvm_updated: <%=vm_updated%>\n---\n"
+	tmpl := "---\nid: <%=id%>\ntype: <%=type%>\ntitle: <%=title%>\ncreated: <%=created%>\n---\n"
 	dir := setupNoteCreateVault(t, vaultCfg, map[string]string{
 		".vaultmind/templates/note.md": tmpl,
 	})
@@ -140,7 +140,7 @@ func TestExecuteNoteCreate_WriteHash_IsContentSHA256(t *testing.T) {
     optional: []
     template: .vaultmind/templates/project.md
 `
-	tmpl := "---\nid: <%=id%>\ntype: <%=type%>\ntitle: <%=title%>\ncreated: <%=created%>\nvm_updated: <%=vm_updated%>\n---\n"
+	tmpl := "---\nid: <%=id%>\ntype: <%=type%>\ntitle: <%=title%>\ncreated: <%=created%>\n---\n"
 	dir := setupNoteCreateVault(t, vaultCfg, map[string]string{
 		".vaultmind/templates/project.md": tmpl,
 	})
@@ -181,7 +181,7 @@ func TestExecuteNoteCreate_RequiredFieldMissing_ReturnsError(t *testing.T) {
     template: .vaultmind/templates/project.md
 `
 	// Template does NOT include the required "goal" field
-	tmpl := "---\nid: <%=id%>\ntype: <%=type%>\ntitle: <%=title%>\ncreated: <%=created%>\nvm_updated: <%=vm_updated%>\n---\n"
+	tmpl := "---\nid: <%=id%>\ntype: <%=type%>\ntitle: <%=title%>\ncreated: <%=created%>\n---\n"
 	dir := setupNoteCreateVault(t, vaultCfg, map[string]string{
 		".vaultmind/templates/project.md": tmpl,
 	})
@@ -212,7 +212,7 @@ func TestExecuteNoteCreate_RequiredFieldProvided_Succeeds(t *testing.T) {
     template: .vaultmind/templates/project.md
 `
 	// Template includes the required "goal" field
-	tmpl := "---\nid: <%=id%>\ntype: <%=type%>\ntitle: <%=title%>\ncreated: <%=created%>\nvm_updated: <%=vm_updated%>\ngoal: TBD\n---\n"
+	tmpl := "---\nid: <%=id%>\ntype: <%=type%>\ntitle: <%=title%>\ncreated: <%=created%>\ngoal: TBD\n---\n"
 	dir := setupNoteCreateVault(t, vaultCfg, map[string]string{
 		".vaultmind/templates/project.md": tmpl,
 	})
@@ -244,7 +244,7 @@ func TestExecuteNoteCreate_BodyStdin_ReplacesTemplateBody(t *testing.T) {
     template: .vaultmind/templates/concept.md
 `
 	// Template has a static body section that should be replaced by stdin content.
-	tmplContent := "---\nid: <%=id%>\ntype: <%=type%>\ntitle: <%=title%>\ncreated: <%=created%>\nvm_updated: <%=vm_updated%>\n---\n## Overview\n\n\n## Key Properties\n\n"
+	tmplContent := "---\nid: <%=id%>\ntype: <%=type%>\ntitle: <%=title%>\ncreated: <%=created%>\n---\n## Overview\n\n\n## Key Properties\n\n"
 	dir := setupNoteCreateVault(t, vaultCfg, map[string]string{
 		".vaultmind/templates/concept.md": tmplContent,
 	})

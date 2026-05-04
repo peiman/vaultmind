@@ -779,10 +779,14 @@ func buildNoteRecord(file vault.ScannedFile, content []byte, parsed *parser.Pars
 		rec.Aliases = fmStringList(parsed.Frontmatter, "aliases")
 		rec.Tags = fmStringList(parsed.Frontmatter, "tags")
 
-		// Collect extra KV (fields not in dedicated columns)
+		// Collect extra KV (fields not in dedicated columns).
+		// vm_updated was retired in the 2026-05-04 chain; it is
+		// intentionally NOT excluded here, so any legacy notes that
+		// still carry the field flow through to ExtraKV (visible as
+		// extra metadata) instead of being silently dropped.
 		knownKeys := map[string]bool{
 			"id": true, "type": true, "title": true, "status": true,
-			"created": true, "updated": true, "vm_updated": true,
+			"created": true, "updated": true,
 			"aliases": true, "tags": true, "parent_id": true,
 			"related_ids": true, "source_ids": true,
 		}

@@ -177,9 +177,9 @@ func TestValidate_NoAlias_BackwardCompat(t *testing.T) {
 // Doctor calls Validate and surfaces the count of missing type-required
 // fields. The 2026-05-04 fix made the previously-dead MissingRequiredFields
 // counter actually populate (silent-failure shape per the pre-push code
-// review). The validator iterates td.Required only — vaultmind-owned
-// fields (created, vm_updated) are auto-maintained by vaultmind itself,
-// not user-required, so they're not counted here.
+// review). The validator iterates td.Required only — `created` and
+// `updated` are tolerated optional fields (recognized but never required),
+// so they're not counted here.
 func TestDoctor_PopulatesMissingRequiredFields(t *testing.T) {
 	db := openTestDB(t)
 
