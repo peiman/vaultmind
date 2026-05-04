@@ -337,7 +337,7 @@ func TestFormatIndexResult_FullRebuildMessage(t *testing.T) {
 			FullRebuild: true, Indexed: 12,
 			DomainNotes: 10, UnstructuredNotes: 2, Errors: 0,
 		},
-	}, &buf)
+	}, "", &buf)
 	require.NoError(t, err)
 	out := buf.String()
 	assert.Contains(t, out, "Indexed 12 notes")
@@ -352,13 +352,15 @@ func TestFormatIndexResult_IncrementalMessageBreakdown(t *testing.T) {
 			FullRebuild: false, Skipped: 10, Updated: 1, Added: 2, Deleted: 0,
 		},
 		Embed: &index.EmbedResult{Embedded: 3, Skipped: 0, Errors: 0},
-	}, &buf)
+	}, "minilm", &buf)
 	require.NoError(t, err)
 	out := buf.String()
 	assert.Contains(t, out, "10 skipped")
 	assert.Contains(t, out, "1 updated")
 	assert.Contains(t, out, "2 added")
 	assert.Contains(t, out, "Embedded 3 notes")
+	assert.Contains(t, out, "[model: minilm]",
+		"embed line names the model so onboarding agents can tell users which embedding path is active")
 	// EmptyOutput == 0 — no warning line should appear, otherwise every
 	// successful run pollutes the operator's signal-to-noise.
 	assert.NotContains(t, out, "empty Sparse/ColBERT")
@@ -375,7 +377,7 @@ func TestFormatIndexResult_EmptyOutputSurfacedWhenNonZero(t *testing.T) {
 			FullRebuild: false, Skipped: 5, Updated: 0, Added: 0, Deleted: 0,
 		},
 		Embed: &index.EmbedResult{Embedded: 3, Skipped: 0, Errors: 0, EmptyOutput: 2},
-	}, &buf)
+	}, "bge-m3", &buf)
 	require.NoError(t, err)
 	out := buf.String()
 	assert.Contains(t, out, "Embedded 3 notes", "embedded count reflects only fully-embedded notes")

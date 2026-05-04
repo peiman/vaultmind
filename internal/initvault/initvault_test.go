@@ -1,8 +1,10 @@
 package initvault_test
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -86,6 +88,59 @@ func TestInit_RefusesExistingPath(t *testing.T) {
 	require.Error(t, err)
 	assert.Nil(t, res)
 	assert.Contains(t, err.Error(), "refuse to overwrite")
+}
+
+// TestInit_WikilinksAreObsidianCompatible — the 2026-05-04 onboarding
+// dogfood surfaced that scaffold templates shipped with Obsidian-
+// incompatible wikilinks: `[[Title|id]]` form instead of the
+// filename-stem-first `[[stem|Display]]` form Obsidian's resolver
+// expects. Doctor flagged it on day zero of every fresh vault.
+//
+// This test pins the contract: every `[[X|Y]]` wikilink in the
+// scaffold MUST have X matching the stem of an actual file in the
+// scaffold. If a future template edit reintroduces a title-first
+// link, this test catches it BEFORE reality (doctor) does.
+func TestInit_WikilinksAreObsidianCompatible(t *testing.T) {
+	dst := filepath.Join(t.TempDir(), "my-vault")
+	_, err := initvault.Init(dst)
+	require.NoError(t, err)
+
+	// Collect all .md filename stems in the scaffold (e.g. "current-
+	// context", "arc-example"). Wikilinks with these as left-of-pipe
+	// resolve in Obsidian.
+	stems := map[string]bool{}
+	require.NoError(t, filepath.WalkDir(dst, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(d.Name(), ".md") {
+			return err
+		}
+		stems[strings.TrimSuffix(d.Name(), ".md")] = true
+		return nil
+	}))
+
+	wikilinkRe := regexp.MustCompile(`\[\[([^\]|]+)(?:\|([^\]]*))?\]\]`)
+	require.NoError(t, filepath.WalkDir(dst, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(d.Name(), ".md") {
+			return err
+		}
+		body, readErr := os.ReadFile(path)
+		require.NoError(t, readErr)
+		for _, m := range wikilinkRe.FindAllStringSubmatch(string(body), -1) {
+			target := m[1]
+			assert.True(t, stems[target],
+				"%s contains wikilink [[%s|...]] — left-of-pipe must be a "+
+					"filename stem (Obsidian-compatible). Stems available: %v",
+				path, target, keysOf(stems))
+		}
+		return nil
+	}))
+}
+
+func keysOf(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
 }
 
 // README and config files (no leading frontmatter) pass through the

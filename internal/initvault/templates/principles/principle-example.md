@@ -34,4 +34,4 @@ disqualifies. What it permits.
 (Optional but powerful — link the arc that produced it. Principles
 without arcs are imported; principles WITH arcs are earned.)
 
-- See [[Example Arc|arc-example]]
+- See [[arc-example|Example Arc]]

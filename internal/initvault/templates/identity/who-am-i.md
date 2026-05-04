@@ -35,7 +35,7 @@ and my human partner — neither of us is the sole curator.
 
 ## Foundation links
 
-- See [[What Matters Most Right Now|reference-current-context]] for the
+- See [[current-context|What Matters Most Right Now]] for the
   live edge of what we're working on.
 - See `principles/` for the rules I follow, with reasons.
 - See `arcs/` for the transformations that brought me here.

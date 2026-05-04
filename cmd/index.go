@@ -122,10 +122,10 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(env)
 	}
 
-	return formatIndexResult(combined, cmd.OutOrStdout())
+	return formatIndexResult(combined, model, cmd.OutOrStdout())
 }
 
-func formatIndexResult(r index.IndexAndEmbedResult, w io.Writer) error {
+func formatIndexResult(r index.IndexAndEmbedResult, model string, w io.Writer) error {
 	if r.Index.FullRebuild {
 		if _, err := fmt.Fprintf(w, "Indexed %d notes (%d domain, %d unstructured, %d errors)\n",
 			r.Index.Indexed, r.Index.DomainNotes, r.Index.UnstructuredNotes, r.Index.Errors); err != nil {
@@ -139,8 +139,15 @@ func formatIndexResult(r index.IndexAndEmbedResult, w io.Writer) error {
 		}
 	}
 	if r.Embed != nil {
-		if _, err := fmt.Fprintf(w, "Embedded %d notes (%d skipped, %d errors)\n",
-			r.Embed.Embedded, r.Embed.Skipped, r.Embed.Errors); err != nil {
+		// Name the model in the human-readable output. Pure-Go fallback
+		// silently producing minilm-only embeddings was the surprise the
+		// 2026-05-04 onboarding dogfood surfaced — operators learned about
+		// it only by running `doctor` afterward. Make it visible here so
+		// the agent can tell the user "your build is on minilm; for BGE-M3
+		// upgrade, run task setup:ort and rebuild" without a separate
+		// inspection step.
+		if _, err := fmt.Fprintf(w, "Embedded %d notes (%d skipped, %d errors) [model: %s]\n",
+			r.Embed.Embedded, r.Embed.Skipped, r.Embed.Errors, model); err != nil {
 			return err
 		}
 		// Surface empty-output count loudly when non-zero — these notes have

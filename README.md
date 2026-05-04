@@ -59,11 +59,11 @@ skips ORT and produces a pure-Go binary in seconds.
 
 To wire your vault into Claude Code (or any agent that supports SessionStart hooks), see `.claude/scripts/load-persona.sh` in this repo as a reference implementation.
 
-**Or — let the agent set it up for you.** After `task build`, paste this sentence to Claude Code:
+**Or — let the agent set it up for you.** After `task build`, paste this sentence to Claude Code (substitute your actual clone path for `<vaultmind-clone>`):
 
-> *I just installed vaultmind — walk me through onboarding. Run `vaultmind init --print-instructions` to read the agent-led setup script.*
+> *I just installed vaultmind from `<vaultmind-clone>`. Walk me through onboarding — run `<vaultmind-clone>/vaultmind init --print-instructions` to read the agent-led setup script, then follow it.*
 
-The agent runs the command, reads the embedded onboarding script, asks you a few questions about who you are and what should be remembered, inspects your project, shows a diff-preview of every file it'll touch, and gets you to a wired vault. Greenfield (fresh persona) and migration (existing markdown) are both handled. See **[internal/onboard/AGENT_ONBOARDING.md](internal/onboard/AGENT_ONBOARDING.md)** for the full script if you want to read it directly.
+The clone path is required because `task build` produces `./vaultmind` inside the clone but does NOT install to PATH. Substituting the literal path lets the agent use it for every subsequent command in the onboarding flow without re-discovering it. The agent runs the command, reads the embedded onboarding script, asks you a few questions about who you are and what should be remembered, inspects your project, shows a diff-preview of every file it'll touch, and gets you to a wired vault. Greenfield (fresh persona) and migration (existing markdown) are both handled. See **[internal/onboard/AGENT_ONBOARDING.md](internal/onboard/AGENT_ONBOARDING.md)** for the full script if you want to read it directly.
 
 ## Try it with my vaults first
 
