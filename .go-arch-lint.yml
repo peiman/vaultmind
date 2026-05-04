@@ -128,6 +128,8 @@ components:
       # VaultMind business logic:
       - internal/query/**
       - internal/cmdutil/**
+      # VaultMind frontmatter fix (vaultmind frontmatter fix --backfill):
+      - internal/fix/**
 
   # pkg/ was cleaned by task init (checkmate is now an external dependency).
   # Re-add this section if you create new public packages in pkg/.

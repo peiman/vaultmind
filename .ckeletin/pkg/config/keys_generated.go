@@ -79,6 +79,9 @@ const (
 	KeyAppFrontmatterVault              = "app.frontmatter.vault"               // Path to vault root
 	KeyAppFrontmatterJson               = "app.frontmatter.json"                // Output in JSON format
 	KeyAppFrontmatterLive               = "app.frontmatter.live"                // Validate raw .md files on disk instead of the indexed database
+	KeyAppFrontmatterfixVault           = "app.frontmatterfix.vault"            // Path to vault root
+	KeyAppFrontmatterfixJson            = "app.frontmatterfix.json"             // Output in JSON format
+	KeyAppFrontmatterfixApply           = "app.frontmatterfix.apply"            // Apply changes (default: dry-run)
 	KeyAppFrontmattersetVault           = "app.frontmatterset.vault"            // Path to vault root
 	KeyAppFrontmattersetJson            = "app.frontmatterset.json"             // Output in JSON format
 	KeyAppFrontmattersetDryRun          = "app.frontmatterset.dry_run"          // Preview changes without writing
