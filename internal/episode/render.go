@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
+
+	"github.com/peiman/vaultmind/internal/schema"
 )
 
 // RenderMarkdown turns a parsed Episode into a vault-ready markdown file.
@@ -26,6 +29,16 @@ func RenderMarkdown(ep *Episode) string {
 		fmt.Fprintf(&b, "git_branch: %s\n", ep.GitBranch)
 	}
 	b.WriteString("tags:\n  - episode\n")
+	// Vaultmind-owned fields per the four-tier taxonomy in
+	// schema/registry.go. `created` is the started_at date portion —
+	// when the session happened, the episode's semantic birthday.
+	// vm_updated uses the SSOT format (RFC3339 second-precision UTC)
+	// so doctor's drift detector parses it. %q quotes the timestamp
+	// because it contains a colon (YAML auto-quotes anyway, but being
+	// explicit avoids producer/consumer drift if YAML serializer
+	// changes).
+	fmt.Fprintf(&b, "created: %s\n", startedAtDate(ep.StartedAt))
+	fmt.Fprintf(&b, "vm_updated: %q\n", time.Now().UTC().Format(schema.VMUpdatedFormat))
 	b.WriteString("---\n\n")
 
 	fmt.Fprintf(&b, "# Episode — %s\n\n", ep.ID)
@@ -127,6 +140,23 @@ func writeAssistantMessages(b *strings.Builder, ep *Episode) {
 		b.WriteString(m.Text)
 		b.WriteString("\n\n")
 	}
+}
+
+// startedAtDate extracts the YYYY-MM-DD prefix from an RFC3339 (or
+// loosely-RFC3339) timestamp like "2026-04-23T20:22:25.914Z". Falls
+// back to today's UTC date when the input is empty or shorter than
+// the date prefix — the caller can't produce a malformed `created`
+// even on degenerate transcripts.
+func startedAtDate(startedAt string) string {
+	const dateLen = len("2006-01-02")
+	if len(startedAt) >= dateLen {
+		// Validate it's actually a date prefix (cheap parse) — otherwise
+		// fall through to today.
+		if _, err := time.Parse(schema.CreatedDateFormat, startedAt[:dateLen]); err == nil {
+			return startedAt[:dateLen]
+		}
+	}
+	return time.Now().UTC().Format(schema.CreatedDateFormat)
 }
 
 func quoteBlock(s string) string {
