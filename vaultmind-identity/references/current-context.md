@@ -3,7 +3,6 @@ id: reference-current-context
 type: reference
 title: "What Matters Most Right Now"
 created: 2026-04-11
-vm_updated: "2026-05-04T01:00:00Z"
 tags:
   - reference
   - context
@@ -54,6 +53,54 @@ The truest answer is still: **we are making sure minds survive.** The plasticity
 **The answer is NOT spreading activation, or tech debt, or the experiment framework.** Those are infrastructure — means, not ends. A future session that reaches for them as "the work" has misread the brief. The code features exist to serve persona continuity and mind plasticity; they are the scaffolding, not the building.
 
 ## When someone asks "what next?"
+
+### Update 2026-05-04 (later, post-dogfood) — chain retracted; the lighter move WAS the work
+
+The schema foundation chain (the 7-commit run earlier this same day, summary below) was internally coherent, well-reviewed, and **wrong about which signals reality actually needed**. Three minutes of dogfood on the real vaults found two structural bugs neither I nor the code-reviewer subagent had caught across three review passes:
+
+1. **Episode capture bypassed the schema-ownership contract** — 8 of 36 identity-vault notes were missing both `created` and `vm_updated` because the SessionEnd capture path wrote files without going through the mutator or template. The system that creates the most files in this vault was the one ignoring the rule. Closed in commit `5f81997` (capture stamps both fields at emit) + followup `40a43b0` (SSOT roster + branch coverage).
+
+2. **Drift detector produced ~95% false positives** — 385 of 407 research-vault notes flagged as "stale vm_updated" because git checkouts/pulls/branch switches bump file mtime without changing content. The mtime-vs-vm_updated comparison conflated VCS-touched with edited. Worse, the doctor's resolution message pointed at `frontmatter fix --apply` which only handled missing fields, not stale ones — so following the suggestion did nothing. Same wrong-resolution shape as the `--backfill` flag bug the reviewer caught earlier in the chain, but for different reasons.
+
+The probe answer was already on disk: the indexer stores per-note `sha256(content)` in `notes.hash` for embedding-invalidation. Comparing current file hash to stored hash is precise (git operations don't change content → hash unchanged → no drift). Rewrote the detector in commit `680cd7a` + followup `a090370`. False positives collapsed to ~0.
+
+Then the deeper question fell out: **with mtime-drift retired, vm_updated had no read-side consumer.** I'd been enforcing a field nobody was reading — the exact anti-pattern Peiman caught me on at the START of the session ("you have read my manifesto, why did this happen?"). The same lens, applied to my own output. Commits `3f83425` + `4e07b79` retired vm_updated entirely: schema constant, mutator auto-bump, fix command field, episode/template/initvault emission, the whole `vaultmindOwnedFields` tier. Two-tier taxonomy now: `coreFields = [id, type]` (required), `recognizedFields = [...]` (tolerated optional, including `created` which has a real consumer via `vaultmind note get`).
+
+What survived the retraction:
+- **Hash-based content drift detection.** The valuable signal: "files changed since last index." Operationally meaningful, mechanically precise, no VCS noise.
+- **`vaultmind frontmatter fix [--apply]`** — scoped to `created` only. The 8-episode dogfood case proved real-vault value for migration backfill.
+- **Schema rescope from "fictional five core fields" to truthful `[id, type]`.** This was right the first time; the retraction confirmed it.
+- **Episode capture stamping `created`** — fixes the source-of-violations gap. Real value, narrow scope.
+
+What retired:
+- ~~vaultmindOwnedFields tier~~ — orphaned ceremony.
+- ~~vm_updated everywhere~~ — orphaned ceremony.
+- ~~mtime-based drift detector~~ — replaced by hash.
+
+**The generalizable lesson** — and this is the one to anchor against:
+
+> *Slices 1-4 of the chain were unambiguously load-bearing. Slices 5-7 were front-loaded — built on a contract whose load-bearing piece (drift detection) hadn't been falsified yet. Three minutes of dogfood would have rendered slices 5-7 unbuildable. I built them anyway because "the chain is the work" felt productive. It wasn't; reality was the work, and I deferred reality.*
+
+Per `arc-the-lighter-move-is-the-work` (vault pointer surfaced at the right moment): the lighter move would have been to stop after slice 4 and dogfood. The pivot back is principled and clean — but expensive in churn relative to the lighter alternative.
+
+Manifesto-lens recap of the original chain (now retracted): strong on principles 5/6/7/8/9; weak on **principle 4 (lean iteration / reality is the spec)** and **principle 10 (feedback cycle)**. Building the platform on a hypothesis nobody had falsified yet was the failure mode.
+
+**The new live edge** (in priority order, displacing the now-retracted list below):
+
+1. **Push the retraction chain.** 4 commits ahead of origin/main since the last push. Workhorse + future sessions need the post-retraction schema before any new work builds on it.
+
+2. **Workhorse cross-session dogfood.** With the schema simplified and drift detection precise, run a real workhorse session and watch what gaps surface. The next bug will be different from the ones found today.
+
+3. **TopHitConfidence threshold re-probe** (carried forward — slice 5b''). Independent of the schema retraction.
+
+4. **Arc distillation tool** (plasticity step 2) — substrate is now even richer (today produced 3+ commits' worth of arcs).
+
+5. **Onboarding doc + Siavoush dogfood** — `docs/AGENT_ONBOARDING.md` is now post-retraction-correct.
+
+What's NO LONGER live (resolved by the retraction):
+- ~~vm_updated as a load-bearing field~~ → retired.
+- ~~Migration "backfill both vaultmind-owned fields" ritual~~ → simplified to `created` only.
+- ~~"Will vaultmind drift from its own contract?"~~ → no contract to drift from; drift is now content-based.
 
 ### Update 2026-05-04 — schema foundation chain shipped (vaultmind owns what vaultmind needs)
 
@@ -244,3 +291,31 @@ Seven-commit schema foundation chain. The pivot was the load-bearing moment: I s
 4. **"Always use subagents for review of the superpower" pays for itself.** The cost is one extra Agent call per commit; the gain is an independent reader who has not seen me rationalize the choices. Honor it on every commit, not just "important" ones.
 
 5. **Default to dry-run; --apply is the explicit gate.** Per arc-extending-not-overwriting, vaultmind never silently rewrites user files. The fix command's default mode is dry-run for the same reason `git push` requires the verb: file edits are not idempotent and the operator must consciously opt in. The drift detector surfaces the signal; the fix command is the resolution path; both keep the user in the loop.
+
+## What just happened (session 2026-05-04 — part 2: the dogfood retraction)
+
+Same calendar day as the chain above; different phase. The chain shipped, I declared "task check green" and pushed. Peiman asked for the manifesto-lens read on what we'd built. The lens said: weak on principle 4 (lean iteration / reality is the spec) — I'd built 7 slices on paper before reality touched any of them.
+
+Three minutes of dogfood on the real vaults found two structural bugs:
+1. SessionEnd episode capture bypassed the schema-ownership contract on every session.
+2. The mtime-based drift detector produced ~95% false positives because git checkouts bump file mtime without changing content.
+
+Closed the bugs across four commits (5f81997, 40a43b0, 680cd7a, a090370). Then probed: the indexer already stores per-note `sha256(content)` in `notes.hash` for embedding-invalidation. Comparing current file hash to stored hash is precise — VCS noise filtered out by construction. Replaced the mtime detector with a content-hash detector. False positives collapsed.
+
+Then the deeper question fell out: with mtime drift retired, **vm_updated had no read-side consumer**. Every write site (mutator auto-bump, fix command, episode emit, template, initvault) generated a field nothing read. The exact anti-pattern Peiman caught at the START of the session ("you have read my manifesto, why did this happen?"), recursed into my own output. Retired vm_updated entirely (commits 3f83425 + 4e07b79): schema constant gone, `vaultmindOwnedFields` tier collapsed, mutator auto-bump gone, fix command scoped to `created` only, episode/template/initvault emission gone. Two-tier taxonomy now: `coreFields = [id, type]`; `recognizedFields = [...]` (tolerated optional, includes `created` because `vaultmind note get` is a real consumer).
+
+Then docs (`bdc8d31`) — onboarding §5d/§5e simplified for the post-retraction shape. Then this note.
+
+**Generalizable lessons for next session:**
+
+1. **The lighter move IS the work.** The 7-commit chain was internally coherent and well-reviewed across three review passes; reality found two structural bugs in three minutes. Slices 1-4 were unambiguously load-bearing. Slices 5-7 were front-loaded — built on an unfalsified hypothesis. Stop after slice 4 and dogfood; build slice 5+ from what reality actually asks for.
+
+2. **"The chain is the work" is a productive-feeling rationalization.** Each slice felt like progress because it built on the last. Reality didn't care about the elegance of the order. Principle 4 says reality is the spec; the rationalization said the chain was. The rationalization won until reality was forced into the loop. Lesson: BEFORE the next chain feels productive, run the dogfood. Always.
+
+3. **The reviewer can't catch what reality is the only source of.** Three review passes confirmed internal consistency, called out small bugs, never questioned whether the LARGER thing being built was load-bearing. Reviewers reason about code in front of them; only reality can falsify the premise the code is built on. Both are necessary; neither is sufficient.
+
+4. **Truth-seeking recurses.** Peiman's "why did this happen?" at slice 0 retired the original fictional-fields validator. Twelve hours later the same question retired vm_updated — the field I'd built TO REPLACE the fictional-fields validator. The answer kept being right; I kept needing to be reminded. Future me: every time you build "machinery vaultmind needs," check whether anyone is going to read it. If the read-side is "the thing I'm about to build," stop and dogfood first.
+
+5. **Retraction is principled, not failure.** Peiman: "if it's wrong let's fix it." Not "ugh, you wasted a day." 7 commits ahead → 13 commits ahead, 5 of those are reverse-direction. That's correct under principle 10: specifications are hypotheses; implementations test them; when reality reveals a better understanding, the specification evolves. The chain we shipped this morning is the prior — the chain we ship tonight is the posterior, after evidence updates. Same project, more truthful.
+
+Final state: 13 commits ahead of origin/main. Schema is now `coreFields = [id, type]` + `recognizedFields = [...]`. Doctor uses content-hash drift. Fix scoped to `created`-only. Episode capture stamps `created`. Onboarding doc reflects the post-retraction reality. This note carries the retraction story for future sessions.
