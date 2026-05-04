@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/peiman/vaultmind/internal/git"
 	"github.com/peiman/vaultmind/internal/schema"
@@ -70,6 +71,36 @@ func (m *Mutator) Run(req MutationRequest) (*MutationResult, error) {
 
 	if err := applyOperation(req, mapping, result); err != nil {
 		return nil, err
+	}
+
+	// Vaultmind-owned auto-maintenance: bump vm_updated to today's
+	// UTC datetime after every successful operation. Per the four-tier
+	// frontmatter taxonomy in schema/registry.go, vm_updated is a
+	// vaultmind-owned field — vaultmind itself maintains it; the user
+	// never has to. The mutator is one of the auto-write sites
+	// (template/process.go on init is the other).
+	//
+	// Format: RFC3339 (second-precision UTC). Sub-day precision is
+	// load-bearing: doctor's "edited since vaultmind processed" check
+	// compares file mtime against vm_updated, and date-only would
+	// produce false-positive drift within the same calendar day.
+	//
+	// Gated on noteInfo.IsDomain: non-domain notes (no id+type) are
+	// not vaultmind-tracked content, so vaultmind doesn't add
+	// auto-fields to them. (Today, resolveTarget already rejects
+	// non-domain note paths before reaching here, but this guard
+	// makes the contract explicit if future paths reach Run on a
+	// non-domain mapping.)
+	//
+	// Idempotent ops (e.g. OpNormalize on an already-normalized file)
+	// still bump vm_updated. The semantic is "vaultmind processed
+	// this on date X" — even confirming-no-change-needed is processing.
+	if noteInfo.IsDomain {
+		const vmUpdatedFormat = "2006-01-02T15:04:05Z"
+		nowUTC := time.Now().UTC().Format(vmUpdatedFormat)
+		if setErr := SetKey(mapping, "vm_updated", nowUTC); setErr != nil {
+			return nil, &MutationError{Code: "vm_updated_bump_error", Message: fmt.Sprintf("auto-maintaining vm_updated: %v", setErr)}
+		}
 	}
 
 	// Step 5: Generate diff

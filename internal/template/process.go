@@ -96,14 +96,21 @@ func Process(cfg ProcessConfig) (*ProcessResult, error) {
 		title = base
 	}
 
-	// Build variable substitution map.
+	// Build variable substitution map. created and updated are date-only
+	// (Obsidian convention for human-readable timestamps). vm_updated
+	// is RFC3339 datetime — vaultmind owns it and the doctor's
+	// "edited since vaultmind processed" check needs sub-day precision
+	// to avoid false-positive drift within the same calendar day. The
+	// mutator at internal/mutation/mutator.go bumps vm_updated on every
+	// successful operation; this is the init-side write site keeping
+	// the format consistent.
 	vars := map[string]string{
 		"id":         generatedID,
 		"type":       cfg.Type,
 		"title":      title,
 		"created":    dateStr,
 		"updated":    dateStr,
-		"vm_updated": dateStr,
+		"vm_updated": datetimeStr,
 		"date":       dateStr,
 		"datetime":   datetimeStr,
 		"path":       cfg.Path,
@@ -158,7 +165,9 @@ func Process(cfg ProcessConfig) (*ProcessResult, error) {
 		fm["created"] = dateStr
 	}
 	if _, ok := fm["vm_updated"]; !ok {
-		fm["vm_updated"] = dateStr
+		// vm_updated is RFC3339 datetime (sub-day precision) — see the
+		// vars map above for the rationale.
+		fm["vm_updated"] = datetimeStr
 	}
 
 	// Apply body override if provided.
