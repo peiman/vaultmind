@@ -25,8 +25,8 @@ WHAT YOU GET
     README.md                    Vault model + workflow
     identity/who-am-i.md         Foundational identity note (placeholder)
     references/current-context.md  Live-edge priority note (placeholder)
-    principles/example.md        Template — replace or delete
-    arcs/example.md              Template — replace or delete
+    principles/principle-example.md  Template — replace or delete
+    arcs/arc-example.md          Template — replace or delete
 
 The placeholder notes have today's date in their frontmatter so the
 index reads them cleanly without hand-editing. Replace the bodies with

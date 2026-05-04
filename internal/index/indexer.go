@@ -62,10 +62,11 @@ type PostIndexWarning struct {
 // colbert_embedding columns would be NULL); they remain pending for the next
 // run. See vaultmind#22 for the silent-failure pattern this surfaces.
 type EmbedResult struct {
-	Embedded    int `json:"embedded"`
-	Skipped     int `json:"skipped"`
-	Errors      int `json:"errors"`
-	EmptyOutput int `json:"empty_output,omitempty"`
+	Embedded    int    `json:"embedded"`
+	Skipped     int    `json:"skipped"`
+	Errors      int    `json:"errors"`
+	EmptyOutput int    `json:"empty_output,omitempty"`
+	Model       string `json:"model,omitempty"`
 }
 
 // IndexAndEmbedResult combines index and optional embed results for command output.

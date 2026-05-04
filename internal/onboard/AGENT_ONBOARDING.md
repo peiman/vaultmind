@@ -132,7 +132,7 @@ Default to (1) unless the user explicitly chooses otherwise.
 vaultmind init "<path>"
 ```
 
-This produces six files: `.vaultmind/config.yaml`, `README.md`, `identity/who-am-i.md`, `references/current-context.md`, `principles/example.md`, `arcs/example.md`.
+This produces six files: `.vaultmind/config.yaml`, `README.md`, `identity/who-am-i.md`, `references/current-context.md`, `principles/principle-example.md`, `arcs/arc-example.md`.
 
 If the path already exists, `vaultmind init` refuses. If you hit that, ask the user *"That path already has content. Use a different path, or back it up first?"*
 

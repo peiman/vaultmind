@@ -125,7 +125,14 @@ func TestInit_WikilinksAreObsidianCompatible(t *testing.T) {
 		body, readErr := os.ReadFile(path)
 		require.NoError(t, readErr)
 		for _, m := range wikilinkRe.FindAllStringSubmatch(string(body), -1) {
+			// Strip Obsidian header (#section) and block (^block-id)
+			// suffixes. `[[note#section|Display]]` and `[[note^block|Display]]`
+			// are valid Obsidian; only the prefix-before-the-marker is
+			// the filename stem we need to verify.
 			target := m[1]
+			if idx := strings.IndexAny(target, "#^"); idx != -1 {
+				target = target[:idx]
+			}
 			assert.True(t, stems[target],
 				"%s contains wikilink [[%s|...]] — left-of-pipe must be a "+
 					"filename stem (Obsidian-compatible). Stems available: %v",

@@ -115,6 +115,15 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 		})
 	}
 
+	if embedResult != nil {
+		// Stamp the model on the result so JSON consumers see it
+		// alongside Embedded/Skipped/Errors. Same purpose as
+		// `[model: <name>]` in the human-readable line: an agent
+		// running `vaultmind index --embed --json` should not have
+		// to call doctor separately to learn which embedding path
+		// the run used.
+		embedResult.Model = model
+	}
 	combined := index.IndexAndEmbedResult{Index: result, Embed: embedResult}
 	if jsonOut {
 		env := envelope.OK("index", combined)
