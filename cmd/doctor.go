@@ -137,21 +137,31 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 			}
 		}
 	}
-	if result.Issues.StaleVMUpdated > 0 {
+	if result.Issues.StaleIndex > 0 {
 		if _, err = fmt.Fprintf(w,
-			"⚠ Stale vm_updated: %d note(s) edited since vaultmind processed them\n"+
-				"  run: vaultmind frontmatter fix --apply --vault <vault>\n",
-			result.Issues.StaleVMUpdated); err != nil {
+			"⚠ Stale index: %d note(s) changed since last index pass\n"+
+				"  run: vaultmind index --vault <vault>\n",
+			result.Issues.StaleIndex); err != nil {
 			return err
 		}
 		if !summaryOnly {
-			for _, sv := range result.Issues.StaleVMUpdatedDetails {
-				if _, err = fmt.Fprintf(w, "  %s: mtime=%s vm_updated=%s\n",
-					sv.Path, sv.Mtime, sv.VMUpdated); err != nil {
+			for _, sv := range result.Issues.StaleIndexDetails {
+				if _, err = fmt.Fprintf(w, "  %s: current_hash=%s stored_hash=%s\n",
+					sv.Path, short(sv.CurrentHash), short(sv.StoredHash)); err != nil {
 					return err
 				}
 			}
 		}
 	}
 	return nil
+}
+
+// short truncates a sha256 hex string to its first 8 chars for
+// human-readable display. Full hashes are still in the JSON envelope
+// for consumers that need exact comparison.
+func short(hash string) string {
+	if len(hash) > 8 {
+		return hash[:8]
+	}
+	return hash
 }
