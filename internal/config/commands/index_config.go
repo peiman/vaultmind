@@ -57,8 +57,8 @@ func IndexOptions() []config.ConfigOption {
 		},
 		{
 			Key:          "app.index.model",
-			DefaultValue: "minilm",
-			Description:  "Embedding model: minilm (384d, fast) or bge-m3 (1024d, 3-in-1)",
+			DefaultValue: "",
+			Description:  "Embedding model: minilm (384d, fast) or bge-m3 (1024d, 3-in-1). Empty (default) auto-selects: bge-m3 on ORT-tagged builds, minilm on pure-Go.",
 			Type:         "string",
 			Required:     false,
 			Example:      "bge-m3",

@@ -43,6 +43,16 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 	fullRebuild := getConfigValueWithFlags[bool](cmd, "full", config.KeyAppIndexFull)
 	embed := getConfigValueWithFlags[bool](cmd, "embed", config.KeyAppIndexEmbed)
 	model := getConfigValueWithFlags[string](cmd, "model", config.KeyAppIndexModel)
+	// Empty model means "auto" — pick the right default for the
+	// binary's backend. Adapts to ORT-tagged vs pure-Go builds so a
+	// user running `vaultmind index --embed` on an ORT-capable build
+	// gets bge-m3 (the system's recommended path) instead of silently
+	// degrading to minilm. The 2026-05-05 onboarding/workhorse dogfood
+	// surfaced that the prior hardcoded "minilm" default contradicted
+	// the README's framing.
+	if model == "" {
+		model = embedding.DefaultModel()
+	}
 
 	info, err := os.Stat(vaultPath)
 	if err != nil || !info.IsDir() {

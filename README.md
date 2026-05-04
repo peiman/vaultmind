@@ -113,6 +113,7 @@ See **[SETUP.md](SETUP.md)** for the full guide, environment conventions, and tr
 ```bash
 # Scaffold + retrieval
 vaultmind init <path>                                        # scaffold a fresh persona-shaped vault
+vaultmind init --print-instructions                          # print the embedded agent-onboarding script (no vault created)
 vaultmind ask "who am I" --vault <path>                      # menu + context-pack (default)
 vaultmind ask "who am I" --vault <path> --pointers-only      # menu only — cheapest, no bodies
 vaultmind note get <id> --vault <path>                       # read one note by id (fires access tracking)
@@ -123,7 +124,8 @@ vaultmind self --vault <path>                                # recent / hot / st
 
 # Vault maintenance
 vaultmind index --vault <path>                               # (re)build the index
-vaultmind index --embed --vault <path>                       # compute embeddings
+vaultmind index --embed --vault <path>                       # compute embeddings (auto-default: bge-m3 on ORT, minilm on pure-Go)
+vaultmind index --embed --model minilm --vault <path>        # force minilm even on ORT (fast iteration during dev)
 vaultmind doctor --vault <path>                              # health check: schema, embeddings, links
 
 # Frontmatter mutations (alias-aware)

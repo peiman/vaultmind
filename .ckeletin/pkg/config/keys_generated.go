@@ -112,7 +112,7 @@ const (
 	KeyAppIndexJson                     = "app.index.json"                      // Output in JSON format
 	KeyAppIndexFull                     = "app.index.full"                      // Force full rebuild instead of incremental index
 	KeyAppIndexEmbed                    = "app.index.embed"                     // Compute and store embeddings for note bodies
-	KeyAppIndexModel                    = "app.index.model"                     // Embedding model: minilm (384d, fast) or bge-m3 (1024d, 3-in-1)
+	KeyAppIndexModel                    = "app.index.model"                     // Embedding model: minilm (384d, fast) or bge-m3 (1024d, 3-in-1). Empty (defaul...
 	KeyAppIndexAllowSlowBackend         = "app.index.allow_slow_backend"        // Allow BGE-M3 indexing on the pure-Go backend (hours for medium vaults)
 	KeyAppInitPrintInstructions         = "app.init.print_instructions"         // Print the embedded agent-onboarding script and exit (no vault created)
 	KeyAppLinksVault                    = "app.links.vault"                     // Path to vault root
