@@ -17,10 +17,12 @@ import (
 // silently got MiniLM-only embeddings, then learned about it from
 // doctor afterward.
 
-// TestDefaultModel_OrtBuild — when BackendName is "ort", the default
-// is bge-m3. Pinned to the build tag this test runs under: ORT
-// production builds (the one task build produces when
-// libtokenizers.a is present) MUST default to bge-m3.
+// TestDefaultModel_MatchesBackend — pin the contract under whichever
+// build tag this test runs against. ORT production builds (the one
+// task build produces when libtokenizers.a is present) MUST default
+// to bge-m3; pure-Go builds MUST default to minilm. CI running both
+// build configs exercises both branches; the t.Fatalf on unknown
+// backends forces explicit decision if a new backend is added.
 func TestDefaultModel_MatchesBackend(t *testing.T) {
 	switch embedding.BackendName() {
 	case "ort":
