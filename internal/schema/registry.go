@@ -75,6 +75,21 @@ var graphFields = []string{"title", "status", "aliases", "tags", "parent_id", "r
 // quotes for parse comparisons.
 const VMUpdatedFormat = "2006-01-02T15:04:05Z"
 
+// CreatedDateFormat is the canonical format for the `created` field —
+// YYYY-MM-DD date-only UTC. Per manifesto principle 7 (SSOT), every
+// write site for `created` MUST format with this constant:
+//
+//   - internal/fix/fix.go (DefaultCreatedDateResolver: git/mtime/today)
+//   - internal/template/process.go (init / scaffold default)
+//   - internal/initvault/initvault.go (vault scaffold dates)
+//
+// `created` is a humanish "when was this born" stamp, not a sub-day
+// processing tracker (that's vm_updated's job). Date-only matches both
+// `git log --format=%as` (author short-date) and the conventional
+// frontmatter date form, so YAML emits unquoted (no colon, no quotes
+// needed).
+const CreatedDateFormat = "2006-01-02"
+
 // Registry holds the type definitions and provides validation methods.
 type Registry struct {
 	types   map[string]vault.TypeDef

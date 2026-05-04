@@ -44,11 +44,12 @@ func Init(vaultPath string) (*Result, error) {
 	}
 
 	now := time.Now().UTC()
-	today := now.Format("2006-01-02")
-	// vm_updated uses the canonical SSOT format from schema package
-	// (RFC3339 second-precision UTC) so doctor's drift detector can
-	// parse it consistently. created stays date-only — it's a humanish
-	// "when was this born" stamp, not a vaultmind-processed-on tracker.
+	// Both formats use the canonical SSOT constants from schema package
+	// (per principle 7). vm_updated is RFC3339 second-precision UTC so
+	// doctor's drift detector can parse it consistently. created stays
+	// date-only — it's a humanish "when was this born" stamp, not a
+	// vaultmind-processed-on tracker.
+	today := now.Format(schema.CreatedDateFormat)
 	vmUpdated := now.Format(schema.VMUpdatedFormat)
 	count := 0
 

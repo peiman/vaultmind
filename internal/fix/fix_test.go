@@ -348,3 +348,60 @@ func TestDefaultCreatedDateResolver_UsesMtimeFallback(t *testing.T) {
 	assert.NotContains(t, strings.ToLower(source), "git",
 		"git path should not be claimed when no .git dir exists")
 }
+
+// TestRunBackfill_CorruptFrontmatterCapturedAndContinues — when one
+// note has malformed YAML frontmatter, RunBackfill captures the error
+// in that Item.Error and CONTINUES the walk, producing valid Items for
+// the remaining domain notes. This pins the capture-and-continue
+// contract behind the //nolint:nilerr suppressions in fix.go (per
+// principle 1: surface partial failures rather than silently dropping
+// data, AND principle 3: a single broken note must not abort the run).
+func TestRunBackfill_CorruptFrontmatterCapturedAndContinues(t *testing.T) {
+	vault := setupFixVault(t)
+	// Corrupt note: unclosed YAML frontmatter delimiter + invalid syntax.
+	corruptPath := writeNote(t, vault, "corrupt.md", `---
+id: bad
+type: reference
+title: T
+  this: is: not: valid: yaml: [
+---
+body
+`)
+	// Valid domain note that should still be processed after the corrupt
+	// one is captured.
+	writeNote(t, vault, "valid.md", `---
+id: ref-good
+type: reference
+title: Good
+---
+body
+`)
+
+	res, err := fix.RunBackfill(fix.Config{
+		VaultPath:       vault,
+		Apply:           false,
+		CreatedResolver: staticResolver("2024-01-01"),
+	})
+	require.NoError(t, err, "walk-level error must NOT abort on per-note failures")
+	require.NotNil(t, res)
+
+	// Both files should appear in items: the corrupt one with Error
+	// populated, the valid one with proposed values populated.
+	var corruptItem, validItem *fix.Item
+	for i := range res.Items {
+		switch res.Items[i].Path {
+		case filepath.Base(corruptPath):
+			corruptItem = &res.Items[i]
+		case "valid.md":
+			validItem = &res.Items[i]
+		}
+	}
+	require.NotNil(t, corruptItem, "corrupt note must surface in items with Error")
+	assert.NotEmpty(t, corruptItem.Error, "corrupt-frontmatter parse failure captured in Item.Error")
+	require.NotNil(t, validItem, "valid note must still be processed after corrupt note")
+	assert.Empty(t, validItem.Error, "valid note has no error")
+	assert.Contains(t, validItem.MissingFields, "vm_updated",
+		"valid note's missing fields are computed normally — walk continued past the corrupt one")
+	assert.Equal(t, schema.CreatedDateFormat, "2006-01-02",
+		"sanity: SSOT constant unchanged for this test's date format expectation")
+}

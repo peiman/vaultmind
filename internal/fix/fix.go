@@ -270,10 +270,10 @@ func DefaultCreatedDateResolver(absPath string) (string, string) {
 	}
 	// 2. File mtime fallback.
 	if info, err := os.Stat(absPath); err == nil {
-		return info.ModTime().UTC().Format("2006-01-02"), "mtime"
+		return info.ModTime().UTC().Format(schema.CreatedDateFormat), "mtime"
 	}
 	// 3. Today's date as final fallback.
-	return time.Now().UTC().Format("2006-01-02"), "today"
+	return time.Now().UTC().Format(schema.CreatedDateFormat), "today"
 }
 
 // gitFirstCommitDate runs `git log --diff-filter=A --follow --format=%as`

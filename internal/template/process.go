@@ -83,9 +83,9 @@ func SubstituteVars(content string, vars map[string]string) (string, []string) {
 //  7. Serialize and return
 func Process(cfg ProcessConfig) (*ProcessResult, error) {
 	now := time.Now().UTC()
-	dateStr := now.Format("2006-01-02")
-	// vm_updated uses the canonical SSOT format from schema package —
-	// per principle 7, every vm_updated write site MUST use this constant.
+	// Both formats use the canonical SSOT constants from schema package —
+	// per principle 7, every write site MUST reference these constants.
+	dateStr := now.Format(schema.CreatedDateFormat)
 	datetimeStr := now.Format(schema.VMUpdatedFormat)
 
 	// Determine the effective ID (may be overridden by a Fields["id"] later).
