@@ -76,8 +76,14 @@ jobs:
           deny-licenses: GPL-2.0-only, GPL-3.0-only, AGPL-3.0-only
 
   # ═══════════════════════════════════════════════════════════════════
-  # MULTI-OS TESTING (Main + Releases only - expensive runners)
-  # Tests across Ubuntu, macOS, and Windows to catch platform-specific issues
+  # MULTI-OS TESTING (Main + Releases only)
+  # Ubuntu-only on private repos: macOS and Windows runners are
+  # ~10× more expensive on private repos and to date have only
+  # surfaced platform-specific test issues (XDG path semantics,
+  # Windows newline/path handling) — not real product bugs the
+  # primary platform misses. Re-add macos-latest / windows-latest
+  # to the matrix when (a) the repo goes public (free runners),
+  # OR (b) a platform-specific bug actually ships to a user.
   # ═══════════════════════════════════════════════════════════════════
   test-matrix:
     name: Test on ${{ matrix.os }}
@@ -87,7 +93,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest]
 
     permissions:
       contents: read
