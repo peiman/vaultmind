@@ -90,6 +90,41 @@ func TestInit_RefusesExistingPath(t *testing.T) {
 	assert.Contains(t, err.Error(), "refuse to overwrite")
 }
 
+// TestInit_FoundationalPrinciplesShip — the 2026-05-05 workhorse
+// arc-shape exchange surfaced that consumer vaults didn't have the
+// canonical "how to write an arc" instructions inside them. Workhorse
+// had to ask the vaultmind agent because his vault couldn't tell him.
+// Closes that gap by shipping the two foundational principles
+// (arcs-not-notes, how-to-write-arcs) in every freshly-init'd vault.
+//
+// Pin the contract: a fresh init MUST produce both principles. Future
+// edits that drop or rename them break first-touch trust for any new
+// user (an agent loading a brand-new vault wouldn't be able to find
+// the canonical guidance for writing the very thing the vault is
+// designed around).
+func TestInit_FoundationalPrinciplesShip(t *testing.T) {
+	dst := filepath.Join(t.TempDir(), "my-vault")
+	_, err := initvault.Init(dst)
+	require.NoError(t, err)
+
+	for _, want := range []string{
+		"principles/arcs-not-notes.md",
+		"principles/how-to-write-arcs.md",
+	} {
+		path := filepath.Join(dst, want)
+		body, readErr := os.ReadFile(path)
+		require.NoError(t, readErr, "expected foundational principle %q to ship in init scaffold", want)
+		s := string(body)
+		assert.True(t, strings.HasPrefix(s, "---\n"),
+			"%s must have frontmatter — agents querying vault on first session need it indexed",
+			want)
+		assert.Contains(t, s, "type: principle",
+			"%s must declare type: principle", want)
+		assert.Contains(t, s, "id: principle-",
+			"%s must have an id with principle- prefix", want)
+	}
+}
+
 // TestInit_WikilinksAreObsidianCompatible — the 2026-05-04 onboarding
 // dogfood surfaced that scaffold templates shipped with Obsidian-
 // incompatible wikilinks: `[[Title|id]]` form instead of the

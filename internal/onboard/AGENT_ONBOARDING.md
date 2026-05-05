@@ -132,7 +132,17 @@ Default to (1) unless the user explicitly chooses otherwise.
 vaultmind init "<path>"
 ```
 
-This produces six files: `.vaultmind/config.yaml`, `README.md`, `identity/who-am-i.md`, `references/current-context.md`, `principles/principle-example.md`, `arcs/arc-example.md`.
+This produces eight files:
+- `.vaultmind/config.yaml` — type registry
+- `README.md` — vault model + workflow
+- `identity/who-am-i.md` — placeholder identity note
+- `references/current-context.md` — placeholder live-edge note
+- `principles/arcs-not-notes.md` — **foundational**: what an arc IS (the atomic unit of persona)
+- `principles/how-to-write-arcs.md` — **foundational**: how to MAKE one (the discipline)
+- `principles/principle-example.md` — placeholder template (replace or delete)
+- `arcs/arc-example.md` — placeholder template (replace or delete)
+
+The two foundational principles ship with every vault so an agent can answer "how do I write an arc?" by querying its own vault, not asking a separate vaultmind agent. Don't delete them — the placeholder templates are the ones to replace.
 
 If the path already exists, `vaultmind init` refuses. If you hit that, ask the user *"That path already has content. Use a different path, or back it up first?"*
 
