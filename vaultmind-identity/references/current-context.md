@@ -319,3 +319,45 @@ Then docs (`bdc8d31`) — onboarding §5d/§5e simplified for the post-retractio
 5. **Retraction is principled, not failure.** Peiman: "if it's wrong let's fix it." Not "ugh, you wasted a day." 7 commits ahead → 13 commits ahead, 5 of those are reverse-direction. That's correct under principle 10: specifications are hypotheses; implementations test them; when reality reveals a better understanding, the specification evolves. The chain we shipped this morning is the prior — the chain we ship tonight is the posterior, after evidence updates. Same project, more truthful.
 
 Final state: 13 commits ahead of origin/main. Schema is now `coreFields = [id, type]` + `recognizedFields = [...]`. Doctor uses content-hash drift. Fix scoped to `created`-only. Episode capture stamps `created`. Onboarding doc reflects the post-retraction reality. This note carries the retraction story for future sessions.
+
+## What just happened (session 2026-05-05 — onboarding dogfood + workhorse port)
+
+Same shape as 2026-05-04, one layer deeper. The morning's 7-commit retraction chain shipped infrastructure on hypothesis; 3 minutes of dogfood found 2 structural bugs. Today: onboarding finalized yesterday → 3 minutes of be-a-new-user dogfood → 7 friction points found (3 fixed, 4 deferred). Then workhorse port → 1 more product gap surfaced (`--model` defaulting to minilm regardless of build tag), fixed structurally.
+
+The pattern: **truth-seeking recurses, and dogfood-after-each-load-bearing-slice is the discipline that makes the recursion productive.** Saved as `feedback_truth_seeking_recurses` and `feedback_dogfood_after_load_bearing` in auto-memory.
+
+**Onboarding dogfood lane (commits `cd78f85` + `098f6a4`).** Acted as a new user from clean tmp directory, followed README paste-sentence + `vaultmind init --print-instructions` literally. Surfaced: README PATH catch-22 (sentence assumed binary on PATH but `task build` doesn't install it), init scaffold shipped Obsidian-incompatible wikilinks failing doctor on day zero, embed line didn't name the model, plus 4 deferred items (`_path:README.md` rank-2 hit, hook scripts not embedded, doctor mixed-state alert on pure-Go-MiniLM, doc density). Fixed 3 with: README requires explicit clone path; templates renamed to filename-stem-first form (`arcs/arc-example.md`, `principles/principle-example.md`); embed output line + JSON envelope name the model; regression test `TestInit_WikilinksAreObsidianCompatible` pins the wikilink contract.
+
+**Workhorse port lane (vaultmind commits unchanged; workhorse repo working-tree-only).** Stripped 58 orphan `vm_updated` lines from workhorse-vault. Re-indexed and re-embedded with `--model bge-m3` — went from 96/126 BGE-M3 to 126/126 BGE-M3-uniform. Net improvement on workhorse's previous mixed-state. Per Peiman *"let workhorse commit his own stuff. we just inform him,"* did NOT commit in workhorse repo. Wrote `INCOMING_FROM_VAULTMIND_2026-05-05.md` as out-of-band notice at workhorse repo root explaining the strip + how to inspect/accept/revert. `reference-workhorse-vault` extended with a 2026-05-05 section recording what we did + what we didn't.
+
+**Runtime-aware model default (commit `d06fbe3` + `b3e814a`).** The workhorse port surfaced a real product gap: `vaultmind index --embed` defaulted to `--model minilm` regardless of build tag. The README + system framing said BGE-M3 was the recommended path; the CLI default disagreed. Bit me when porting workhorse forward (silently created mixed-state); would have bit Siavoush running the canonical embed command. Fix is structural: `internal/embedding/DefaultModel()` returns `bge-m3` when `BackendName() == "ort"`, `minilm` otherwise. Empty-string sentinel in the flag default; cmd resolves it to the right model. Explicit `--model X` still wins. TDD-pinned by `TestDefaultModel_MatchesBackend`. README's Key commands section updated to add `vaultmind init --print-instructions` and document the auto-default.
+
+**Memory + retrospection lane.** `project_next_session.md` rewritten (was 22 days stale, referenced SoM work long since concluded). Two new feedback memories saved: `feedback_truth_seeking_recurses` and `feedback_dogfood_after_load_bearing`. Both reference today's three-depth recursion (validator → vm_updated → onboarding) as the canonical worked example.
+
+**The new live edge** (in priority order, displacing yesterday's list):
+
+1. **Siavoush actual dogfood.** Still THE reality test that produces new data. Everything below is preparation. Onboarding flow is now triggerable (`vaultmind init --print-instructions`), day-zero clean (regression-tested), model-default-correct (auto-bge-m3 on ORT). What remains is for him to run it.
+
+2. **Workhorse's 3 deferred port items.** Cleanup-hygiene precondition done; remaining: (a) `load-persona.sh` → pointers-only, (b) install `vault-recall.sh` as UserPromptSubmit hook, (c) re-baseline retrieval Hit@5/MRR before-and-after the hook upgrade. Workhorse-territory; coordinate with Peiman or wait for workhorse to flag they want them.
+
+3. **4 deferred onboarding-dogfood findings.** `_path:README.md` rank-2 in retrieval (filter design); hook scripts not embedded (architectural — `vaultmind hooks install` verb); doctor mixed-state alert on pure-Go-MiniLM (logic refinement); doc density (taste). None blocking; reality (Siavoush) tells us which ones matter.
+
+4. **TopHitConfidence calibration for rerank distribution** (gate 2 of slice 5b'' default-on). Bigger work — needs new probe-query set. The 2026-05-04 sweep already showed α=0.9/β=0.1 hits parity on both vaults; gate 1 satisfied. Gate 2 is what's left.
+
+5. **Arc distillation tool** (plasticity step 2). Substrate richer than ever — today + yesterday produced ~10 episodes' worth of arc material across the retraction + onboarding + workhorse-port loops.
+
+**Five lessons worth pinning** (added to the four from yesterday):
+
+6. **The cheap predictor probe before the expensive measurement.** Before re-running the 12-minute rerank sweep, checked the access-count distribution via two SQL queries (30 seconds). Reality showed a 14× shift, validating the sweep. If distribution had been unchanged, would have saved 12 minutes. Probe-before-commit applies recursively — even to re-running existing probes.
+
+7. **A fix's reach checked at the consumer, not just the producer.** Today's --model auto-default fix isn't valuable because the CLI now does the right thing — it's valuable because Siavoush running the canonical embed command per the README gets the right model without thinking. The trust contract lives at the consumer surface, not the implementation.
+
+8. **Inform without committing for shared-system work.** Workhorse is a different agent's territory; touching his git history without explicit ack would have been overreach. The notice file pattern (`INCOMING_FROM_VAULTMIND_<date>.md` at his repo root) is the right shape: visible in `git status`, marked clearly external, self-explanatory action items, delete-when-done. New pattern worth holding.
+
+9. **Reviewer findings can be misreads too.** Today's reviewer flagged a "wrong date" (LOW finding) that was actually correctly dating the prior commit's context, not today's. Closed the comment-name LOW (real); rejected the date LOW with rationale (misread). Reviewer is structurally necessary, not infallible.
+
+10. **The lighter move recursed too.** Today's recommended scope was Medium ("`vaultmind onboard` as a new command"). Peiman's pushback ("but why doesnt init do that then?") collapsed it to Smaller (just a flag on init). Same lens that retired vm_updated yesterday: when the distinction you're drawing for new infrastructure folds into existing infrastructure, fold it.
+
+Final state at end of 2026-05-05: vaultmind ~28 commits ahead pushed since 2026-05-03 push. Both vaults BGE-M3-uniform, doctor-clean. Workhorse port minimal-done, awaiting his commit. Onboarding finalized + day-zero-clean + model-default-correct. The next reality test (Siavoush) is fully unblocked.
+
+This note now carries the full 2026-05-04 → 2026-05-05 narrative for whichever future session picks up. Read top-down; the live edge is in the "new live edge" list above.
