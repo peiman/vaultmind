@@ -48,3 +48,31 @@ Workhorse is now running an OLDER VaultMind feature set than this repo's identit
 4. Update this reference note's vault-size + hook-state fields after the port lands.
 
 The port is NOT on the plasticity-priority-order ladder because that ladder is about VaultMind's own platform progression. This is the *deployment* dimension: ensuring shipped features actually run for the second mind. A future session should treat them as parallel rather than sequenced.
+
+## Update 2026-05-05 — minimal port done; informed workhorse, did not commit
+
+Did the smallest item from the port checklist (cleanup hygiene), informed workhorse to handle the rest himself.
+
+**What we did to workhorse's working tree:**
+1. Stripped `vm_updated` from 58 files in `workhorse-vault/` — same hygiene that drove vaultmind's own 2026-05-04 vault cleanup. Each file lost a single `vm_updated:` line; nothing else changed.
+2. Re-indexed + re-embedded with `--model bge-m3`. Result: `dense 126/126 (bge-m3), sparse 126/126, colbert 126/126` — went from 96/126 to 126/126 BGE-M3-uniform. Net improvement on workhorse's previous mixed-state.
+
+**What we did NOT do (Peiman's call):**
+- Did NOT commit in workhorse's repo. Per Peiman 2026-05-05: *"let workhorse commit his own stuff. we just inform him."* The 58-file diff sits unstaged in workhorse's working tree for him to review / accept / revert.
+- Did NOT update workhorse's `load-persona.sh` to pointers-only (port checklist item #1).
+- Did NOT install vault-recall.sh as a UserPromptSubmit hook (port checklist item #2).
+- Did NOT re-baseline retrieval (port checklist item #3) — would require the hook upgrade first.
+
+**How workhorse was informed:**
+Wrote `/Users/peiman/dev/workhorse/INCOMING_FROM_VAULTMIND_2026-05-05.md` — out-of-band notice file at workhorse repo root, visible in `git status`, marked clearly as not-his-own-work. Names the three relevant 2026-05-04→05 changes (vm_updated retired platform-side, his vault stripped pending his review, model default now ORT-aware), tells him how to inspect / accept / revert, and says delete-when-done.
+
+**Platform changes that auto-affect workhorse via the shared `/tmp/vaultmind` binary:**
+- vm_updated retired from schema (his binary won't generate new ones)
+- Doctor uses content-hash drift (precise; no false positives from VCS operations)
+- `vaultmind index --embed` defaults to bge-m3 on his ORT build (was minilm; was a real trap that bit me porting his vault)
+- `vaultmind init --print-instructions` available (the embedded onboarding doc — relevant if workhorse onboards another mind from his vault)
+
+**Port checklist updated:**
+- ~~Cleanup-hygiene precondition (orphan vm_updated)~~ → done; workhorse to commit
+- Items 1, 2, 3 still pending — workhorse's territory.
+- This note's earlier "125 notes" framing is also stale: workhorse-vault is 126 notes today (60 domain + 66 unstructured). Item 4 done in this update.
