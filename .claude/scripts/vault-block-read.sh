@@ -67,12 +67,14 @@ if [ ! -d "$VAULT_ROOT/.vaultmind" ]; then
   exit 0
 fi
 
-VAULTMIND="/tmp/vaultmind"
-if [ ! -x "$VAULTMIND" ]; then
-  # Substrate not ready — silently no-op so missing-binary doesn't
-  # wedge the agent. The SessionStart hook surfaces build problems.
+# Use PATH-installed vaultmind. /tmp/vaultmind is dev-loop only
+# (load-persona.sh auto-rebuild target) — not a valid fallback for
+# general use; users install via `task install`. Silently skip if
+# not on PATH so missing-binary doesn't wedge the agent.
+if ! command -v vaultmind >/dev/null 2>&1; then
   exit 0
 fi
+VAULTMIND=$(command -v vaultmind)
 
 REL_PATH="${FILE_PATH#"$VAULT_ROOT"/}"
 

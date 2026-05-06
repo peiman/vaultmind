@@ -9,7 +9,6 @@ SESSION_ID=$(echo "$HOOK_INPUT" | python3 -c "import json,sys; print(json.load(s
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-VAULTMIND="/tmp/vaultmind"
 VAULTMIND_SRC="$PROJECT_DIR"
 VAULT_PATH="$PROJECT_DIR/vaultmind-identity"
 
@@ -19,26 +18,44 @@ mkdir -p "$LOG_DIR" 2>/dev/null
 TIMESTAMP=$(date +%Y%m%dT%H%M%S)
 HOOK_VERSION="v5-self-state"
 
-# Rebuild when binary is absent OR any .go source is newer than the binary.
-# Keeps the dogfood loop self-updating — any VaultMind commit propagates to
-# the next session without a manual rm.
-needs_build=0
-if [ ! -f "$VAULTMIND" ]; then
-  needs_build=1
-elif [ -d "$VAULTMIND_SRC" ] && [ -n "$(find "$VAULTMIND_SRC" -name '*.go' -newer "$VAULTMIND" -print -quit 2>/dev/null)" ]; then
-  needs_build=1
-fi
-
-if [ "$needs_build" = "1" ] && [ -d "$VAULTMIND_SRC" ]; then
-  # Delegate to the shared build script (SSOT for "rebuild vaultmind correctly").
-  # The script picks up -tags ORT when libtokenizers.a is present and falls
-  # back loudly otherwise. See vaultmind#29.
-  BUILD_OUTPUT=$(cd "$VAULTMIND_SRC" && bash .claude/scripts/build-vaultmind.sh "$VAULTMIND" 2>&1)
-  BUILD_STATUS=$?
-  if [ "$BUILD_STATUS" != "0" ]; then
-    # Surface build failures instead of silently loading no persona.
-    echo "VaultMind build failed — persona not loaded" >&2
-    echo "$BUILD_OUTPUT" >&2
+# Resolve the vaultmind binary:
+#
+# - Dev loop (vaultmind source dir present): build /tmp/vaultmind from
+#   the local Go source when it's missing or stale. Keeps the dogfood
+#   loop self-updating — any commit propagates to the next session
+#   without a manual rm. /tmp/vaultmind is INTENTIONAL HERE; this is
+#   the only place /tmp gets used, because it IS dev work.
+#
+# - Otherwise: use PATH-installed vaultmind (`task install` or
+#   `go install`). Fail loudly if not on PATH so the agent doesn't
+#   load silently-empty persona.
+if [ -d "$VAULTMIND_SRC/internal" ] && [ -d "$VAULTMIND_SRC/cmd" ]; then
+  # Dev loop.
+  VAULTMIND="/tmp/vaultmind"
+  needs_build=0
+  if [ ! -f "$VAULTMIND" ]; then
+    needs_build=1
+  elif [ -n "$(find "$VAULTMIND_SRC" -name '*.go' -newer "$VAULTMIND" -print -quit 2>/dev/null)" ]; then
+    needs_build=1
+  fi
+  if [ "$needs_build" = "1" ]; then
+    # Delegate to the shared build script (SSOT for "rebuild vaultmind correctly").
+    # Picks up -tags ORT when libtokenizers.a is present; falls back loudly
+    # otherwise. See vaultmind#29.
+    BUILD_OUTPUT=$(cd "$VAULTMIND_SRC" && bash .claude/scripts/build-vaultmind.sh "$VAULTMIND" 2>&1)
+    BUILD_STATUS=$?
+    if [ "$BUILD_STATUS" != "0" ]; then
+      echo "VaultMind build failed — persona not loaded" >&2
+      echo "$BUILD_OUTPUT" >&2
+    fi
+  fi
+else
+  # Not in dev loop — resolve PATH-installed binary.
+  if command -v vaultmind >/dev/null 2>&1; then
+    VAULTMIND=$(command -v vaultmind)
+  else
+    echo "VaultMind binary not on PATH. Install with 'task install' from the vaultmind repo." >&2
+    VAULTMIND=""  # query block below skips silently when binary is missing
   fi
 fi
 

@@ -23,13 +23,16 @@ project_dir="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 transcripts_subdir=$(printf '%s' "$project_dir" | sed 's|/|-|g')
 transcripts_dir="$HOME/.claude/projects/$transcripts_subdir"
 output_dir="$project_dir/vaultmind-identity/episodes"
-binary="$project_dir/bin/vaultmind"
 
-# Prefer the project-local binary; fall back to /tmp/vaultmind (dev
-# convenience), then to `go run .` as a last resort.
+# Resolve vaultmind binary: prefer a project-local build (e.g.
+# `<project>/bin/vaultmind` from goreleaser), then PATH-installed
+# (`task install`). /tmp/vaultmind is dev-loop only (load-persona.sh
+# auto-rebuild target) — NOT a fallback here. Empty `binary` falls
+# back to `go run .` from the project dir as a last resort.
+binary="$project_dir/bin/vaultmind"
 if [[ ! -x "$binary" ]]; then
-    if [[ -x /tmp/vaultmind ]]; then
-        binary="/tmp/vaultmind"
+    if command -v vaultmind >/dev/null 2>&1; then
+        binary=$(command -v vaultmind)
     else
         binary=""
     fi

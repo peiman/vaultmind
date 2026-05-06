@@ -22,6 +22,11 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# Dev-loop binary: rebuilt from local Go source on every SessionStart
+# when stale. Distinct from PATH-installed `vaultmind` (which lives at
+# $GOPATH/bin/vaultmind via `task install`). /tmp is intentional here
+# because this script IS dev work; non-dev callers should use the
+# PATH-installed binary instead. Step 1.5 below verifies that's set up.
 VAULTMIND="/tmp/vaultmind"
 
 PASS="  ✓"
@@ -32,9 +37,9 @@ FAILED=0
 echo "VaultMind bootstrap for $PROJECT_DIR"
 echo ""
 
-# --- Step 1: binary ---------------------------------------------------------
+# --- Step 1: dev-loop binary -----------------------------------------------
 
-echo "1. VaultMind binary"
+echo "1. VaultMind dev-loop binary (/tmp/vaultmind)"
 needs_build=0
 if [ ! -f "$VAULTMIND" ]; then
   needs_build=1
@@ -53,6 +58,51 @@ if [ "$needs_build" = "1" ]; then
   fi
 else
   echo "$PASS binary is current: $VAULTMIND"
+fi
+
+# --- Step 1.5: PATH installation -------------------------------------------
+#
+# The dev-loop binary at /tmp/vaultmind only matters when actively
+# building from source. For every other context — running `vaultmind`
+# directly from the shell, hooks in OTHER projects (workhorse, focalc,
+# Siavoush's vault), the embedded onboarding doc — the PATH-installed
+# `vaultmind` is what's actually used. This step verifies the install
+# happened and the version matches the dev-loop build (so refactors
+# propagate). Reports as a warning, not a hard fail, because the dev
+# loop itself doesn't need PATH-installed.
+
+echo ""
+echo "1.5 PATH installation"
+if command -v vaultmind >/dev/null 2>&1; then
+  PATH_VAULTMIND=$(command -v vaultmind)
+  echo "$PASS vaultmind on PATH: $PATH_VAULTMIND"
+  if [ -x "$VAULTMIND" ] && [ -x "$PATH_VAULTMIND" ]; then
+    PATH_VERSION=$("$PATH_VAULTMIND" --version 2>/dev/null | head -1 || echo "unknown")
+    DEV_VERSION=$("$VAULTMIND" --version 2>/dev/null | head -1 || echo "unknown")
+    if [ "$PATH_VERSION" != "$DEV_VERSION" ]; then
+      echo "$WARN PATH version differs from dev-loop binary"
+      echo "      PATH:    $PATH_VERSION"
+      echo "      dev-loop: $DEV_VERSION"
+      echo "      run 'task install' to refresh the PATH binary"
+    fi
+  fi
+else
+  if [ "$CHECK_ONLY" = "1" ]; then
+    echo "$WARN vaultmind not on PATH — run 'task install' to install"
+    FAILED=1
+  else
+    echo "   installing via 'task install'..."
+    (cd "$PROJECT_DIR" && task install >/dev/null 2>&1) || {
+      echo "$FAIL task install failed; install manually with 'go install ./...' from $PROJECT_DIR"
+      FAILED=1
+    }
+    if command -v vaultmind >/dev/null 2>&1; then
+      echo "$PASS vaultmind installed at $(command -v vaultmind)"
+    else
+      echo "$WARN install ran but vaultmind still not on PATH (PATH may not include \$GOPATH/bin)"
+      FAILED=1
+    fi
+  fi
 fi
 
 # --- Step 2: vaults ---------------------------------------------------------

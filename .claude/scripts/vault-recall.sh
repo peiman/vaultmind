@@ -31,12 +31,18 @@ if [ -z "$PROMPT" ] || [ "${#PROMPT}" -lt 12 ]; then
   exit 0
 fi
 
-VAULTMIND="/tmp/vaultmind"
+# Use PATH-installed vaultmind. /tmp/vaultmind is the dev-loop binary
+# (auto-rebuilt by load-persona.sh on Go-source change) and not a
+# valid fallback for general use — users install via `task install`.
+# Silently skip if not on PATH; load-persona.sh is the loud surface.
+if ! command -v vaultmind >/dev/null 2>&1; then
+  exit 0
+fi
+VAULTMIND=$(command -v vaultmind)
 VAULT_PATH="$CLAUDE_PROJECT_DIR/vaultmind-identity"
 
-# Substrate not ready — silently no-op. The SessionStart hook surfaces
-# build/wiring problems; this hook stays out of that conversation.
-if [ ! -f "$VAULTMIND" ] || [ ! -d "$VAULT_PATH" ]; then
+# Substrate not ready — silently no-op.
+if [ ! -d "$VAULT_PATH" ]; then
   exit 0
 fi
 

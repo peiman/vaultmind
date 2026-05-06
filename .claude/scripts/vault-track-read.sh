@@ -59,10 +59,14 @@ if [ ! -d "$VAULT_ROOT/.vaultmind" ]; then
   exit 0
 fi
 
-VAULTMIND="/tmp/vaultmind"
-if [ ! -x "$VAULTMIND" ]; then
+# Use PATH-installed vaultmind. /tmp/vaultmind is dev-loop only
+# (load-persona.sh auto-rebuild target) — not a valid fallback for
+# general use; users install via `task install`. Silently skip if
+# not on PATH (PreToolUse hook must never block a Read).
+if ! command -v vaultmind >/dev/null 2>&1; then
   exit 0
 fi
+VAULTMIND=$(command -v vaultmind)
 
 REL_PATH="${FILE_PATH#"$VAULT_ROOT"/}"
 
