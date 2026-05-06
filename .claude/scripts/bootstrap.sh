@@ -4,7 +4,7 @@
 # Usage: bash .claude/scripts/bootstrap.sh [--check]
 #
 # Idempotent — safe to run multiple times. Steps:
-#   1. Build /tmp/vaultmind from source
+#   1. Verify `vaultmind` is installed on PATH (run `task install` if not)
 #   2. Embed every vault directory in this project (vaultmind-identity,
 #      vaultmind-vault, any other vault-*)
 #   3. Verify the SessionStart persona hook is wired in settings.json
@@ -12,6 +12,11 @@
 #
 # With --check, steps that WOULD modify state are skipped; only verification
 # runs. Non-zero exit means the setup needs work.
+#
+# Note on /tmp/vaultmind: the dev-loop binary that load-persona.sh
+# auto-rebuilds in-session lives at /tmp/vaultmind. This script does NOT
+# pre-build it; that's load-persona.sh's responsibility. Bootstrap is the
+# install-and-verify gate, not the dev-loop builder.
 
 set -e
 
@@ -22,12 +27,6 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-# Dev-loop binary: rebuilt from local Go source on every SessionStart
-# when stale. Distinct from PATH-installed `vaultmind` (which lives at
-# $GOPATH/bin/vaultmind via `task install`). /tmp is intentional here
-# because this script IS dev work; non-dev callers should use the
-# PATH-installed binary instead. Step 1.5 below verifies that's set up.
-VAULTMIND="/tmp/vaultmind"
 
 PASS="  ✓"
 WARN="  ⚠"
@@ -37,73 +36,62 @@ FAILED=0
 echo "VaultMind bootstrap for $PROJECT_DIR"
 echo ""
 
-# --- Step 1: dev-loop binary -----------------------------------------------
-
-echo "1. VaultMind dev-loop binary (/tmp/vaultmind)"
-needs_build=0
-if [ ! -f "$VAULTMIND" ]; then
-  needs_build=1
-elif [ -n "$(find "$PROJECT_DIR" -name '*.go' -newer "$VAULTMIND" -print -quit 2>/dev/null)" ]; then
-  needs_build=1
-fi
-
-if [ "$needs_build" = "1" ]; then
-  if [ "$CHECK_ONLY" = "1" ]; then
-    echo "$WARN binary is stale; run without --check to rebuild"
-    FAILED=1
-  else
-    echo "   building..."
-    (cd "$PROJECT_DIR" && go build -o "$VAULTMIND" .)
-    echo "$PASS built $VAULTMIND"
-  fi
-else
-  echo "$PASS binary is current: $VAULTMIND"
-fi
-
-# --- Step 1.5: PATH installation -------------------------------------------
+# --- Step 1: PATH installation ---------------------------------------------
 #
-# The dev-loop binary at /tmp/vaultmind only matters when actively
-# building from source. For every other context — running `vaultmind`
-# directly from the shell, hooks in OTHER projects (workhorse, focalc,
-# Siavoush's vault), the embedded onboarding doc — the PATH-installed
-# `vaultmind` is what's actually used. This step verifies the install
-# happened and the version matches the dev-loop build (so refactors
-# propagate). Reports as a warning, not a hard fail, because the dev
-# loop itself doesn't need PATH-installed.
+# `task install` produces a properly ldflags-stamped binary at
+# $GOPATH/bin/vaultmind. That's the canonical binary for every context
+# except the in-session dev loop (load-persona.sh's auto-rebuild to
+# /tmp/vaultmind). Bootstrap exists to verify this install is current
+# and matches the source the user just checked out — if you cloned
+# vaultmind for the first time, this is the step that produces a
+# working binary.
 
-echo ""
-echo "1.5 PATH installation"
-if command -v vaultmind >/dev/null 2>&1; then
-  PATH_VAULTMIND=$(command -v vaultmind)
-  echo "$PASS vaultmind on PATH: $PATH_VAULTMIND"
-  if [ -x "$VAULTMIND" ] && [ -x "$PATH_VAULTMIND" ]; then
-    PATH_VERSION=$("$PATH_VAULTMIND" --version 2>/dev/null | head -1 || echo "unknown")
-    DEV_VERSION=$("$VAULTMIND" --version 2>/dev/null | head -1 || echo "unknown")
-    if [ "$PATH_VERSION" != "$DEV_VERSION" ]; then
-      echo "$WARN PATH version differs from dev-loop binary"
-      echo "      PATH:    $PATH_VERSION"
-      echo "      dev-loop: $DEV_VERSION"
-      echo "      run 'task install' to refresh the PATH binary"
-    fi
-  fi
-else
+echo "1. VaultMind installation (PATH)"
+needs_install=0
+if ! command -v vaultmind >/dev/null 2>&1; then
+  needs_install=1
+fi
+
+if [ "$needs_install" = "1" ]; then
   if [ "$CHECK_ONLY" = "1" ]; then
     echo "$WARN vaultmind not on PATH — run 'task install' to install"
     FAILED=1
   else
     echo "   installing via 'task install'..."
     (cd "$PROJECT_DIR" && task install >/dev/null 2>&1) || {
-      echo "$FAIL task install failed; install manually with 'go install ./...' from $PROJECT_DIR"
+      echo "$FAIL task install failed; check 'task install' output manually"
       FAILED=1
     }
     if command -v vaultmind >/dev/null 2>&1; then
       echo "$PASS vaultmind installed at $(command -v vaultmind)"
     else
-      echo "$WARN install ran but vaultmind still not on PATH (PATH may not include \$GOPATH/bin)"
+      echo "$WARN install ran but vaultmind still not on PATH"
+      echo "      check that \$GOPATH/bin (or \$GOBIN) is in your PATH"
       FAILED=1
     fi
   fi
+else
+  PATH_VAULTMIND=$(command -v vaultmind)
+  echo "$PASS vaultmind on PATH: $PATH_VAULTMIND"
+  # Compare PATH binary version vs current source HEAD. If the user
+  # has new commits since the last `task install`, the PATH binary
+  # is behind. Soft warn, not a fail — they may have legitimate
+  # reasons (testing rollback, comparing versions).
+  if [ -x "$PATH_VAULTMIND" ]; then
+    HEAD_COMMIT=$(cd "$PROJECT_DIR" && git rev-parse HEAD 2>/dev/null || echo "")
+    PATH_COMMIT=$("$PATH_VAULTMIND" --version 2>/dev/null | grep -o "commit [a-f0-9]*" | awk '{print $2}' || echo "")
+    if [ -n "$HEAD_COMMIT" ] && [ -n "$PATH_COMMIT" ] && [ "${HEAD_COMMIT:0:7}" != "${PATH_COMMIT:0:7}" ]; then
+      echo "$WARN PATH binary is behind source HEAD"
+      echo "      PATH:   ${PATH_COMMIT:0:7}"
+      echo "      source: ${HEAD_COMMIT:0:7}"
+      echo "      run 'task install' to refresh"
+    fi
+  fi
 fi
+
+# Resolve the binary used by subsequent steps. Use PATH-installed —
+# /tmp/vaultmind is dev-loop only, owned by load-persona.sh.
+VAULTMIND=$(command -v vaultmind 2>/dev/null || true)
 
 # --- Step 2: vaults ---------------------------------------------------------
 
@@ -115,8 +103,8 @@ for vault in "$PROJECT_DIR"/vaultmind-identity "$PROJECT_DIR"/vaultmind-vault; d
   any_vault=1
   name=$(basename "$vault")
 
-  if [ ! -f "$VAULTMIND" ]; then
-    echo "$WARN $name: cannot check — binary missing"
+  if [ -z "$VAULTMIND" ] || [ ! -x "$VAULTMIND" ]; then
+    echo "$WARN $name: cannot check — vaultmind not on PATH"
     FAILED=1
     continue
   fi
