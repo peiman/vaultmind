@@ -30,7 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/vault-track-read.sh"
+            "command": "bash \"$CLAUDE_PROJECT_DIR\"/internal/hookscripts/vault-track-read.sh"
           }
         ]
       }
@@ -40,7 +40,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/vault-recall.sh"
+            "command": "bash \"$CLAUDE_PROJECT_DIR\"/internal/hookscripts/vault-recall.sh"
           }
         ]
       }
@@ -50,7 +50,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR\"/.ckeletin/scripts/capture-episode.sh"
+            "command": "bash \"$CLAUDE_PROJECT_DIR\"/internal/hookscripts/capture-episode.sh"
           }
         ]
       }

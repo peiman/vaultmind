@@ -108,6 +108,8 @@ components:
       - internal/telemetry/**
       # VaultMind onboarding instructions (embedded doc, agent-led setup script):
       - internal/onboard/**
+      # VaultMind hook scripts (SSOT — embedded into binary; written out to other projects via `vaultmind hooks install`):
+      - internal/hookscripts/**
 
   # -------------------------------------------------------------------------
   # PROJECT-MANAGED: Business Logic Layer

@@ -155,16 +155,17 @@ echo ""
 echo "3. SessionStart hook wiring"
 settings="$PROJECT_DIR/.claude/settings.json"
 settings_local="$PROJECT_DIR/.claude/settings.local.json"
+hook_script="$PROJECT_DIR/internal/hookscripts/load-persona.sh"
 if [ ! -f "$settings" ]; then
   echo "$FAIL $settings missing"
   FAILED=1
-elif grep -q "load-persona.sh" "$settings" 2>/dev/null; then
+elif grep -q "hookscripts/load-persona.sh\|scripts/load-persona.sh" "$settings" 2>/dev/null; then
   echo "$PASS load-persona.sh is wired in settings.json"
-elif [ -f "$settings_local" ] && grep -q "load-persona.sh" "$settings_local" 2>/dev/null; then
+elif [ -f "$settings_local" ] && grep -q "hookscripts/load-persona.sh\|scripts/load-persona.sh" "$settings_local" 2>/dev/null; then
   echo "$PASS load-persona.sh is wired in settings.local.json"
 else
   echo "$FAIL load-persona.sh script exists but is NOT wired in either settings.json or settings.local.json"
-  echo "     add a SessionStart hook entry pointing at .claude/scripts/load-persona.sh"
+  echo "     add a SessionStart hook entry pointing at internal/hookscripts/load-persona.sh"
   FAILED=1
 fi
 
@@ -174,11 +175,11 @@ echo ""
 echo "4. Hook smoke test"
 if [ "$CHECK_ONLY" = "1" ]; then
   echo "   skipped (--check)"
-elif [ ! -f "$PROJECT_DIR/.claude/scripts/load-persona.sh" ]; then
-  echo "$FAIL load-persona.sh not found"
+elif [ ! -f "$hook_script" ]; then
+  echo "$FAIL load-persona.sh not found at $hook_script"
   FAILED=1
 else
-  output=$(echo '{"session_id":"bootstrap-smoke-test"}' | bash "$PROJECT_DIR/.claude/scripts/load-persona.sh" 2>&1 || true)
+  output=$(echo '{"session_id":"bootstrap-smoke-test"}' | bash "$hook_script" 2>&1 || true)
   if echo "$output" | grep -q "IDENTITY CONTEXT"; then
     echo "$PASS hook runs and produces persona output"
   else
