@@ -57,7 +57,7 @@ skips ORT and produces a pure-Go binary in seconds.
 
 `vaultmind init` produces a complete vault: type registry, vault README, starter notes for identity and current-context, and template arcs/principles to fill in. Edit `identity/who-am-i.md` and `references/current-context.md` from your agent's voice — those two files are the foundation everything else builds on.
 
-To wire your vault into Claude Code (or any agent that supports SessionStart hooks), see `.claude/scripts/load-persona.sh` in this repo as a reference implementation.
+To wire your vault into Claude Code (or any agent that supports SessionStart hooks), run `vaultmind hooks install <project-dir>` — the canonical hook scripts are embedded in the binary and get written into `<project-dir>/.claude/scripts/` (idempotent; refuses to clobber drift unless `--force`). The same scripts live at `.claude/scripts/` in this repo as a reference implementation.
 
 **Or — let the agent set it up for you.** After `task build`, paste this sentence to Claude Code (substitute your actual clone path for `<vaultmind-clone>`):
 

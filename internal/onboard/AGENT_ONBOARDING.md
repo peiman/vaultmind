@@ -412,36 +412,36 @@ For each file, show a diff before writing.
 +      {"type":"command","command":"bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/vault-track-read.sh"}
 +    ]}],
 +    "SessionEnd": [{"hooks":[
-+      {"type":"command","command":"bash \"$CLAUDE_PROJECT_DIR\"/.ckeletin/scripts/capture-episode.sh"}
++      {"type":"command","command":"bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/capture-episode.sh"}
 +    ]}]
    }
  }
 ```
 
-**Hook scripts to copy and path-template:**
+**Hook scripts — install via `vaultmind hooks install`:**
 
-The four scripts live in the vaultmind repo at `.claude/scripts/load-persona.sh`, `.claude/scripts/vault-recall.sh`, `.claude/scripts/vault-track-read.sh`, `.ckeletin/scripts/capture-episode.sh`. Three of them have hardcoded references to Peiman's vault directories that MUST be edited for the user. `vault-track-read.sh` walks up to find `.vaultmind/` dynamically and needs no edits.
+The canonical hook scripts are embedded inside the `vaultmind` binary (SSOT — they cannot drift from the source). To write them into the user's project:
 
-**Concrete path-template work** — for each file, copy verbatim then edit these specific lines:
-
-| Source script | Line(s) to edit | Original | Replace with |
-|---|---|---|---|
-| `load-persona.sh` | 14 | `VAULT_PATH="$PROJECT_DIR/vaultmind-identity"` | `VAULT_PATH="<user's vault path>"` |
-| `load-persona.sh` | 76 | `RESEARCH_VAULT="$PROJECT_DIR/vaultmind-vault"` | Either `<user's project-vault path>` if hybrid, OR delete the line + the `if [ -d ... ]` block (lines 76–81) if persona-only |
-| `vault-recall.sh` | 35 | `VAULT_PATH="$CLAUDE_PROJECT_DIR/vaultmind-identity"` | `VAULT_PATH="<user's vault path>"` |
-| `capture-episode.sh` | 25 | `output_dir="$project_dir/vaultmind-identity/episodes"` | `output_dir="<user's vault path>/episodes"` |
-| `vault-track-read.sh` | — | (no edits — walks up to find `.vaultmind/`) | — |
-
-If the user's vault is OUTSIDE the project (e.g. `~/.vaultmind/persona/`), prefer the absolute path. If inside (e.g. `<project>/vaultmind-identity/`), `$CLAUDE_PROJECT_DIR/<dir>` keeps it portable across machines.
-
-After copying:
 ```bash
-chmod +x <project>/.claude/scripts/{load-persona,vault-recall,vault-track-read}.sh
-chmod +x <project>/.ckeletin/scripts/capture-episode.sh
+vaultmind hooks install <project-dir>     # writes .claude/scripts/*.sh
+vaultmind hooks install <project-dir> --json   # JSON envelope output
+vaultmind hooks install <project-dir> --force  # overwrite drifted copies
 ```
-(Or wherever the project keeps its hook scripts; `.ckeletin/scripts/` is conventional in ckeletin-go projects but not required.)
 
-If you can't reach the vaultmind repo to read the templates, refuse: *"I need the vaultmind repo at `<known-path>` to read hook templates. Either point me at a clone or skip Claude Code wiring."*
+The command writes 5 scripts to `<project-dir>/.claude/scripts/`: `load-persona.sh`, `vault-recall.sh`, `vault-track-read.sh`, `vault-block-read.sh`, `capture-episode.sh`. It refuses to overwrite drifted user-edited copies unless `--force` is passed (the safe default — see §6a Coexisting / Conflict modes). Byte-identical re-runs are idempotent.
+
+**Path-template work** — the embedded scripts are project-portable: they use `$CLAUDE_PROJECT_DIR` and `vaultmind-identity/` / `vaultmind-vault/` as relative defaults. If the user's vault lives at a non-default path (e.g. `~/.vaultmind/persona/`), edit the generated copies after install:
+
+| Generated script | Lines that may need editing | What to change |
+|---|---|---|
+| `load-persona.sh` | `VAULT_PATH=` | Point at the user's persona vault if not `vaultmind-identity/` |
+| `load-persona.sh` | `RESEARCH_VAULT=` block | Point at project-vault if hybrid; delete the block if persona-only |
+| `vault-recall.sh` | `VAULT_PATH=` | Same as above |
+| `capture-episode.sh` | `output_dir=` | Episodes destination; defaults to `<vault>/episodes/` |
+| `vault-track-read.sh` | — | No edits — walks up to find `.vaultmind/` |
+| `vault-block-read.sh` | — | No edits — read-blocking enforcement |
+
+If `vaultmind` isn't on PATH yet, abort and ask the user to install it (`go install github.com/peiman/vaultmind@latest` or via their package manager). The agent should never hand-copy hook scripts; that path-rotted in earlier rev because copies drifted.
 
 ### 6c. Confirm before write
 

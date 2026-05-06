@@ -134,6 +134,8 @@ components:
       - internal/cmdutil/**
       # VaultMind frontmatter fix (vaultmind frontmatter fix --backfill):
       - internal/fix/**
+      # VaultMind hooks install + drift-detect (consumer of internal/hookscripts/):
+      - internal/hooks/**
 
   # pkg/ was cleaned by task init (checkmate is now an external dependency).
   # Re-add this section if you create new public packages in pkg/.
