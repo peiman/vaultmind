@@ -82,6 +82,41 @@ func TestDoctor_HumanOutputSurfacesObsidianIncompatibleLinks(t *testing.T) {
 		"the specific incompatible target must be named so the user can fix it")
 }
 
+// doctor surfaces hook-drift when CWD has installed scripts whose
+// bytes differ from the embedded canonical. This is the "the
+// foundation has rotted" detector — copies were edited or the binary
+// was upgraded with old copies left in place. Resolution path is
+// printed alongside (`vaultmind hooks install --force .`).
+func TestDoctor_SurfacesHookDriftFromCWD(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+
+	// Stage a fake project root with a drifted hook copy. Chdir to
+	// it for the doctor run; doctor reads CWD to find .claude/scripts/.
+	projectDir := t.TempDir()
+	scriptsDir := filepath.Join(projectDir, ".claude", "scripts")
+	require.NoError(t, os.MkdirAll(scriptsDir, 0o750))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(scriptsDir, "load-persona.sh"),
+		[]byte("# DRIFTED COPY — not the canonical\n"),
+		0o600,
+	))
+
+	origCWD, err := os.Getwd()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = os.Chdir(origCWD) })
+	require.NoError(t, os.Chdir(projectDir))
+
+	out, _, err := runRootCmd(t, "doctor", "--vault", vault)
+	require.NoError(t, err)
+	text := out.String()
+	assert.Contains(t, text, "Hook drift",
+		"doctor must surface a 'Hook drift' line when canonical bytes differ from installed copy")
+	assert.Contains(t, text, "load-persona.sh",
+		"the specific drifted hook must be named so the user can locate the bad copy")
+	assert.Contains(t, text, "vaultmind hooks install --force",
+		"doctor must print the exact remedy command")
+}
+
 // --summary on a clean vault (no incompatible links, no dead refs)
 // should print just the headline counts — no extra noise, no empty
 // "but you can see details with..." dangling line.

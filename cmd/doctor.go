@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/config/commands"
 	"github.com/peiman/vaultmind/internal/envelope"
+	"github.com/peiman/vaultmind/internal/hooks"
 	"github.com/peiman/vaultmind/internal/query"
 	"github.com/spf13/cobra"
 )
@@ -86,6 +88,20 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("running doctor: %w", err)
 	}
 
+	// Hook-drift detection — embedded canonical vs installed copies in
+	// CWD's .claude/scripts/. Skipped silently if CWD is unavailable
+	// (e.g. a deleted dir from under us); doctor is a health summary,
+	// not a filesystem-error reporter. Populated here in cmd/ because
+	// internal/query and internal/hooks are both business-layer per
+	// ADR-009 and cannot depend on each other.
+	if cwd, cwdErr := os.Getwd(); cwdErr == nil {
+		drifted, driftErr := hooks.CompareInstalled(cwd)
+		if driftErr == nil && len(drifted) > 0 {
+			result.Issues.HookDrift = len(drifted)
+			result.Issues.HookDriftDetails = drifted
+		}
+	}
+
 	if getConfigValueWithFlags[bool](cmd, "json", config.KeyAppDoctorJson) {
 		env := envelope.OK("doctor", result)
 		env.Meta.VaultPath = vaultPath
@@ -137,6 +153,9 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 			}
 		}
 	}
+	if err = writeHookDrift(w, &result.Issues, summaryOnly); err != nil {
+		return err
+	}
 	if result.Issues.StaleIndex > 0 {
 		if _, err = fmt.Fprintf(w,
 			"⚠ Stale index: %d note(s) changed since last index pass\n"+
@@ -151,6 +170,30 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 					return err
 				}
 			}
+		}
+	}
+	return nil
+}
+
+// writeHookDrift prints the hook-drift section to w. Extracted from
+// runDoctor to keep its cyclomatic complexity under the 30 ceiling
+// (gocyclo) — same shape as writeEmbeddingStatus.
+func writeHookDrift(w io.Writer, issues *query.DoctorIssues, summaryOnly bool) error {
+	if issues.HookDrift == 0 {
+		return nil
+	}
+	if _, err := fmt.Fprintf(w,
+		"⚠ Hook drift: %d hook script(s) differ from the embedded canonical\n"+
+			"  run: vaultmind hooks install --force .\n",
+		issues.HookDrift); err != nil {
+		return err
+	}
+	if summaryOnly {
+		return nil
+	}
+	for _, name := range issues.HookDriftDetails {
+		if _, err := fmt.Fprintf(w, "  drifted: .claude/scripts/%s\n", name); err != nil {
+			return err
 		}
 	}
 	return nil

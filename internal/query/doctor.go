@@ -82,6 +82,17 @@ type DoctorIssues struct {
 	// precise: only actual content edits trigger drift.
 	StaleIndex        int            `json:"stale_index"`
 	StaleIndexDetails []ContentDrift `json:"stale_index_details,omitempty"`
+
+	// HookDrift counts Claude Code hook scripts in the project's
+	// `.claude/scripts/` whose bytes differ from the embedded canonical
+	// in `internal/hookscripts/`. Surfaces "the foundation has rotted"
+	// — copies were edited, or the binary was upgraded but old copies
+	// linger. Resolution: `vaultmind hooks install --force <project>`.
+	// Populated by cmd/doctor.go (project dir comes from there); query
+	// layer keeps the type but doesn't import internal/hooks (business
+	// layer isolation per ADR-009).
+	HookDrift        int      `json:"hook_drift"`
+	HookDriftDetails []string `json:"hook_drift_details,omitempty"`
 }
 
 // ContentDrift describes one note whose current file content hash
