@@ -48,6 +48,23 @@ func TestBuildRetriever_HybridNoEmbeddings(t *testing.T) {
 }
 
 func TestBuildRetriever_SemanticWithEmbeddings(t *testing.T) {
+	// Skip under -race: BuildRetriever's embedder-init path calls
+	// into hugot, which calls into github.com/gomlx/go-huggingface.
+	// That library has a known data race in (*Repo).DownloadFilesCtx
+	// — two goroutines spawned in func3 read+write the same slot in
+	// hub/files.go:250. The race fires whenever the model isn't
+	// already cached (the CI default). The test ITSELF doesn't care
+	// about the embedder succeeding — it explicitly tolerates the
+	// download failure (assert.NotContains "no embeddings found"),
+	// testing only that BuildRetriever clears the empty-embeddings
+	// check first. Skipping under race avoids CI-failing on third-
+	// party noise; the non-race build still exercises the code path.
+	// Re-enable when hugot updates past the racy go-huggingface or a
+	// CI step pre-caches the model.
+	if raceEnabled {
+		t.Skip("skipping under -race: upstream go-huggingface@v0.3.5 has a known race in DownloadFilesCtx; not vaultmind code")
+	}
+
 	db := buildRetrieverTestDB(t)
 	// Store a dummy embedding so HasEmbeddings returns true
 	row, err := db.QueryNoteByPath("concepts/spreading-activation.md")

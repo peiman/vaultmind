@@ -324,20 +324,42 @@ tasks:
     cmds: [task: ckeletin:test:unit]
 
   test:race:
-    desc: Run tests with race detection
-    cmds: [task: ckeletin:test:race]
+    desc: Run tests with race detection (XDG_DATA_HOME isolated — issue #17)
+    cmds:
+      # Match `test`'s isolation pattern: the ckeletin subtask doesn't
+      # inherit env from a parent task: directive, so XDG_DATA_HOME has
+      # to be set at the shell-command level. Without this,
+      # TestXDGDataHomeIsolated fires (correctly — it's the sentinel
+      # for "you ran tests outside the isolation envelope"). CI uses
+      # this task on Ubuntu/macOS, so it MUST set the env.
+      - cmd: |
+          export XDG_DATA_HOME=$(mktemp -d -t vm-test-race.XXXXXX)
+          trap 'rm -rf "$XDG_DATA_HOME"' EXIT
+          task ckeletin:test:race
 
   test:dev:
-    desc: Run tests with dev commands
-    cmds: [task: ckeletin:test:dev]
+    desc: Run tests with dev commands (XDG_DATA_HOME isolated — issue #17)
+    cmds:
+      - cmd: |
+          export XDG_DATA_HOME=$(mktemp -d -t vm-test-dev.XXXXXX)
+          trap 'rm -rf "$XDG_DATA_HOME"' EXIT
+          task ckeletin:test:dev
 
   test:prod:
-    desc: Run tests without dev commands
-    cmds: [task: ckeletin:test:prod]
+    desc: Run tests without dev commands (XDG_DATA_HOME isolated — issue #17)
+    cmds:
+      - cmd: |
+          export XDG_DATA_HOME=$(mktemp -d -t vm-test-prod.XXXXXX)
+          trap 'rm -rf "$XDG_DATA_HOME"' EXIT
+          task ckeletin:test:prod
 
   test:integration:
-    desc: Run integration tests
-    cmds: [task: ckeletin:test:integration]
+    desc: Run integration tests (XDG_DATA_HOME isolated — issue #17)
+    cmds:
+      - cmd: |
+          export XDG_DATA_HOME=$(mktemp -d -t vm-test-integration.XXXXXX)
+          trap 'rm -rf "$XDG_DATA_HOME"' EXIT
+          task ckeletin:test:integration
 
   test:golden:
     desc: Test CLI output against golden files
