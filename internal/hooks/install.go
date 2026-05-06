@@ -13,7 +13,7 @@
 package hooks
 
 import (
-	"crypto/sha256"
+	"bytes"
 	"fmt"
 	"io/fs"
 	"os"
@@ -154,18 +154,12 @@ func CompareInstalled(projectDir string) ([]string, error) {
 	return drifted, nil
 }
 
-// hashEq returns true when two byte slices have the same SHA-256
-// digest. Equivalent to bytes.Equal here; using sha256 keeps the
-// drift-comparison shape consistent with content-hash drift in
-// doctor/query.
-func hashEq(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	ha := sha256.Sum256(a)
-	hb := sha256.Sum256(b)
-	return ha == hb
-}
+// hashEq returns true when two byte slices have identical content.
+// Both sides are already in memory, so bytes.Equal is the right
+// primitive — sha256 would burn cycles for no correctness gain.
+// (doctor/query's content drift uses sha256 because one side comes
+// from a precomputed DB hash; that asymmetry doesn't apply here.)
+func hashEq(a, b []byte) bool { return bytes.Equal(a, b) }
 
 // _ assert that hookscripts.FS satisfies fs.FS at compile time —
 // guards against accidental signature changes that would break

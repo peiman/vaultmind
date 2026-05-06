@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
@@ -89,13 +90,17 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Hook-drift detection — embedded canonical vs installed copies in
-	// CWD's .claude/scripts/. Skipped silently if CWD is unavailable
-	// (e.g. a deleted dir from under us); doctor is a health summary,
-	// not a filesystem-error reporter. Populated here in cmd/ because
+	// the project's .claude/scripts/. Resolve the project root by
+	// walking up from CWD until a .claude/ dir is found (same heuristic
+	// Claude Code uses for CLAUDE_PROJECT_DIR). Without walk-up, the
+	// check would silently miss drift whenever the user runs `doctor`
+	// from a subdirectory. Skipped silently if no project root resolves
+	// or filesystem reads fail; doctor is a health summary, not a
+	// filesystem-error reporter. Populated here in cmd/ because
 	// internal/query and internal/hooks are both business-layer per
 	// ADR-009 and cannot depend on each other.
-	if cwd, cwdErr := os.Getwd(); cwdErr == nil {
-		drifted, driftErr := hooks.CompareInstalled(cwd)
+	if projectDir, ok := findProjectRoot(); ok {
+		drifted, driftErr := hooks.CompareInstalled(projectDir)
 		if driftErr == nil && len(drifted) > 0 {
 			result.Issues.HookDrift = len(drifted)
 			result.Issues.HookDriftDetails = drifted
@@ -173,6 +178,28 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		}
 	}
 	return nil
+}
+
+// findProjectRoot walks up from CWD looking for a directory that
+// contains a `.claude/` subdir — that's the project root from
+// Claude Code's perspective (matches CLAUDE_PROJECT_DIR resolution).
+// Returns ok=false if CWD is unavailable or no .claude/ ancestor
+// exists; doctor surfaces drift only when there's something to check.
+func findProjectRoot() (string, bool) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", false
+	}
+	for {
+		if info, statErr := os.Stat(filepath.Join(dir, ".claude")); statErr == nil && info.IsDir() {
+			return dir, true
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", false
+		}
+		dir = parent
+	}
 }
 
 // writeHookDrift prints the hook-drift section to w. Extracted from

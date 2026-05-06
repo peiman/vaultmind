@@ -101,6 +101,10 @@ func TestDoctor_SurfacesHookDriftFromCWD(t *testing.T) {
 		0o600,
 	))
 
+	// NOTE: os.Chdir is process-global; this test must NOT use
+	// t.Parallel(). doctor walks up from CWD to find the project root
+	// (the dir with .claude/), so chdir-ing into projectDir makes the
+	// walk-up resolve here.
 	origCWD, err := os.Getwd()
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = os.Chdir(origCWD) })
