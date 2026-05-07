@@ -162,3 +162,81 @@ func TestCompareInstalled_NoScriptsDir_ReturnsEmpty(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, drift)
 }
+
+// TestInstall_OnlyWritesNamedSubset — workhorse 2026-05-07 MEDIUM:
+// `vaultmind hooks install` was all-or-nothing (writes 8 scripts).
+// Consumers customizing non-auto-RAG hooks (workhorse customized
+// vault-track-read + load-persona) had to accept --force overwrite
+// of those customizations. The Only allowlist lets consumers pull
+// just the slice they want.
+func TestInstall_OnlyWritesNamedSubset(t *testing.T) {
+	dir := t.TempDir()
+	want := []string{"auto-rag-guard.sh", "shell-strip.sh"}
+	res, err := hooks.Install(hooks.InstallConfig{
+		ProjectDir: dir,
+		Only:       want,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, res)
+
+	// Only the named scripts written.
+	assert.Equal(t, want, res.Written,
+		"Only must restrict written set to the allowlist")
+
+	// And only those exist on disk.
+	scriptsDir := filepath.Join(dir, ".claude", "scripts")
+	entries, err := os.ReadDir(scriptsDir)
+	require.NoError(t, err)
+	got := []string{}
+	for _, e := range entries {
+		got = append(got, e.Name())
+	}
+	assert.ElementsMatch(t, want, got,
+		"only the named scripts should land on disk; everything else stays untouched")
+}
+
+// TestInstall_OnlyRejectsUnknownName — typo-protect: a name that
+// isn't in hookscripts.Names() must be rejected at lint-time so
+// the consumer fixes it before shipping a settings.json that
+// references a non-existent script.
+func TestInstall_OnlyRejectsUnknownName(t *testing.T) {
+	dir := t.TempDir()
+	_, err := hooks.Install(hooks.InstallConfig{
+		ProjectDir: dir,
+		Only:       []string{"auto-rag-guard.sh", "not-a-real-hook.sh"},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not-a-real-hook.sh",
+		"unknown name in Only must be surfaced explicitly so consumers fix typos before shipping")
+}
+
+// TestInstall_OnlyRejectsDuplicateName — reviewer-found edge in
+// MEDIUM follow-up: duplicate names in --only would silently
+// double-write the same script and pollute res.Written. Reject at
+// lint time so the consumer fixes the malformed list.
+func TestInstall_OnlyRejectsDuplicateName(t *testing.T) {
+	dir := t.TempDir()
+	_, err := hooks.Install(hooks.InstallConfig{
+		ProjectDir: dir,
+		Only:       []string{"auto-rag-guard.sh", "auto-rag-guard.sh"},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate",
+		"duplicate names in Only must be rejected explicitly so machine consumers parsing the JSON envelope don't see misleading res.Written counts")
+}
+
+// TestInstall_OnlyEmpty_InstallsAll — backward compatibility:
+// `Only: nil` and `Only: []` both fall through to "install all 8
+// canonical scripts". Existing callers without the flag keep
+// working unchanged.
+func TestInstall_OnlyEmpty_InstallsAll(t *testing.T) {
+	dir := t.TempDir()
+	res, err := hooks.Install(hooks.InstallConfig{
+		ProjectDir: dir,
+		Only:       []string{},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	assert.Equal(t, hookscripts.Names(), res.Written,
+		"empty Only must install all canonical scripts (backward compat with pre-MEDIUM-fix Install)")
+}

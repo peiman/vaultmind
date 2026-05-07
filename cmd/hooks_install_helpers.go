@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/peiman/vaultmind/internal/envelope"
 	"github.com/peiman/vaultmind/internal/hooks"
@@ -27,11 +28,22 @@ func resolveProjectDir(args []string) string {
 // runHooksInstallCore is the core of `vaultmind hooks install`.
 // Calls hooks.Install + emits JSON envelope or human-readable
 // summary. Conflict-without-force surfaces the per-script
-// remediation path explicitly.
-func runHooksInstallCore(cmd *cobra.Command, projectDir string, force, jsonOut bool) error {
+// remediation path explicitly. The `only` arg is a comma-separated
+// list of canonical script names; empty string falls through to
+// "install all" per workhorse 2026-05-07 MEDIUM.
+func runHooksInstallCore(cmd *cobra.Command, projectDir string, force, jsonOut bool, only string) error {
+	var onlyList []string
+	if strings.TrimSpace(only) != "" {
+		for _, name := range strings.Split(only, ",") {
+			if trimmed := strings.TrimSpace(name); trimmed != "" {
+				onlyList = append(onlyList, trimmed)
+			}
+		}
+	}
 	res, err := hooks.Install(hooks.InstallConfig{
 		ProjectDir: projectDir,
 		Force:      force,
+		Only:       onlyList,
 	})
 	// res is non-nil on conflict-without-force; emit it before
 	// returning the conflict error so the caller sees both written

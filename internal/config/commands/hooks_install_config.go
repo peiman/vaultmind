@@ -48,20 +48,28 @@ OVERWRITE PROTECTION
   refreshing after a vaultmind binary upgrade (the canonical
   source updates; existing copies become stale).
 
+  --only: comma-separated subset of canonical scripts to install
+  (e.g. --only auto-rag-guard.sh,shell-strip.sh,auto-rag-evaluate.sh).
+  Consumers who've customized some hooks but want a clean canonical
+  install of others — pass --only to scope the install. Unknown
+  names rejected at lint time so typos surface explicitly.
+
   Doctor's hook-drift check (vaultmind doctor) flags when installed
   copies differ from the embedded canonical, so refresh-need is
   surfaced explicitly rather than left to guessing.
 
 EXAMPLES
 
-  vaultmind hooks install                        # install into current dir
-  vaultmind hooks install ~/dev/myproject        # install into a specific project
-  vaultmind hooks install --force                # refresh after binary upgrade
-  vaultmind hooks install --json                 # machine-readable output`,
+  vaultmind hooks install                                              # install all 8 into current dir
+  vaultmind hooks install ~/dev/myproject                              # install all 8 into a specific project
+  vaultmind hooks install --force                                      # refresh after binary upgrade
+  vaultmind hooks install --json                                       # machine-readable output
+  vaultmind hooks install --only auto-rag-guard.sh,shell-strip.sh      # only the auto-RAG slice (workhorse pattern)`,
 	ConfigPrefix: "app.hooksinstall",
 	FlagOverrides: map[string]string{
 		"app.hooksinstall.force": "force",
 		"app.hooksinstall.json":  "json",
+		"app.hooksinstall.only":  "only",
 	},
 }
 
@@ -81,6 +89,12 @@ func HooksInstallOptions() []config.ConfigOption {
 			DefaultValue: false,
 			Description:  "Output in JSON format",
 			Type:         "bool",
+		},
+		{
+			Key:          "app.hooksinstall.only",
+			DefaultValue: "",
+			Description:  "Comma-separated subset of canonical scripts to install (default: all). Unknown names rejected at lint time.",
+			Type:         "string",
 		},
 	}
 }

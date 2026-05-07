@@ -110,6 +110,7 @@ const (
 	KeyAppGitstatusJson                 = "app.gitstatus.json"                  // Output in JSON format
 	KeyAppHooksinstallForce             = "app.hooksinstall.force"              // Overwrite existing hook scripts (default: refuse)
 	KeyAppHooksinstallJson              = "app.hooksinstall.json"               // Output in JSON format
+	KeyAppHooksinstallOnly              = "app.hooksinstall.only"               // Comma-separated subset of canonical scripts to install (default: all). Unknow...
 	KeyAppIndexVault                    = "app.index.vault"                     // Path to the vault root directory
 	KeyAppIndexJson                     = "app.index.json"                      // Output in JSON format
 	KeyAppIndexFull                     = "app.index.full"                      // Force full rebuild instead of incremental index

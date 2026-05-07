@@ -30,6 +30,15 @@ type InstallConfig struct {
 	ProjectDir string
 	// Force overwrites existing scripts. Default false (refuse).
 	Force bool
+	// Only restricts the install to a subset of canonical scripts
+	// (by basename, e.g. "auto-rag-guard.sh"). When nil or empty,
+	// all canonical scripts install. Each name must match an entry
+	// in hookscripts.Names() — typos are rejected at lint time
+	// per workhorse 2026-05-07 MEDIUM. Use case: consumers who've
+	// customized some hooks but want a clean canonical install of
+	// others (workhorse customized vault-track-read + load-persona;
+	// wants only the auto-RAG slice).
+	Only []string
 }
 
 // InstallResult is the JSON-serializable output of Install.
@@ -56,6 +65,14 @@ func Install(cfg InstallConfig) (*InstallResult, error) {
 	if cfg.ProjectDir == "" {
 		return nil, fmt.Errorf("project-dir is required (current dir works as default if caller resolves)")
 	}
+	// Resolve which canonical scripts to install. Empty Only ==
+	// install all (backward compat); non-empty Only == only those
+	// names, with each validated against hookscripts.Names() to
+	// catch typos at lint time (workhorse 2026-05-07 MEDIUM).
+	names, err := resolveInstallNames(cfg.Only)
+	if err != nil {
+		return nil, err
+	}
 	scriptsDir := filepath.Join(cfg.ProjectDir, ".claude", "scripts")
 	res := &InstallResult{
 		ProjectDir: cfg.ProjectDir,
@@ -69,7 +86,7 @@ func Install(cfg InstallConfig) (*InstallResult, error) {
 		return nil, fmt.Errorf("creating %s: %w", scriptsDir, err)
 	}
 
-	for _, name := range hookscripts.Names() {
+	for _, name := range names {
 		canonical, ok := hookscripts.Get(name)
 		if !ok {
 			continue
@@ -156,6 +173,34 @@ func CompareInstalled(projectDir string) ([]string, error) {
 		}
 	}
 	return drifted, nil
+}
+
+// resolveInstallNames returns the list of canonical script names to
+// install. Empty Only → all canonical scripts (in their sorted order).
+// Non-empty Only → those names in input order, with each validated
+// against the canonical set AND rejected on duplicates so typos and
+// double-entries both surface as install-time errors rather than
+// silent partial installs / double-writes (workhorse 2026-05-07
+// MEDIUM + reviewer-found dedup follow-up).
+func resolveInstallNames(only []string) ([]string, error) {
+	if len(only) == 0 {
+		return hookscripts.Names(), nil
+	}
+	known := make(map[string]struct{}, len(hookscripts.Names()))
+	for _, n := range hookscripts.Names() {
+		known[n] = struct{}{}
+	}
+	seen := make(map[string]struct{}, len(only))
+	for _, n := range only {
+		if _, dup := seen[n]; dup {
+			return nil, fmt.Errorf("duplicate hook script %q in --only list", n)
+		}
+		seen[n] = struct{}{}
+		if _, ok := known[n]; !ok {
+			return nil, fmt.Errorf("unknown hook script %q (allowed: %v)", n, hookscripts.Names())
+		}
+	}
+	return only, nil
 }
 
 // hashEq returns true when two byte slices have identical content.
