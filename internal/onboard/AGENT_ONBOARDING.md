@@ -490,6 +490,46 @@ bash <project>/.claude/scripts/auto-rag-evaluate.sh
 
 Vault path defaults: `AUTORAG_VAULT="$CLAUDE_PROJECT_DIR/vaultmind-identity"`. Override per project if your vault has a different name. `VAULTMIND_BIN` defaults to PATH-installed vaultmind, falling back to `/tmp/vaultmind` for dev-loop only.
 
+#### Customize for your project (env-var override pattern)
+
+If the user's vault isn't named `vaultmind-identity` (workhorse uses `workhorse-vault`; another project might use `vaultmind-knowledge`), or if they want a custom drift catalog, set the env vars **inline in the settings.json command string** — bash interprets the assignments before invoking the script. No wrapper file needed.
+
+```diff
+   "PreToolUse": [
+     {"matcher":"Read","hooks":[{"type":"command","command":"bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/vault-track-read.sh"}]},
+-    {"matcher":"Bash","hooks":[{"type":"command","command":"bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/auto-rag-guard.sh"}]},
+-    {"matcher":"Write|Edit","hooks":[{"type":"command","command":"bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/auto-rag-guard.sh"}]}
++    {"matcher":"Bash","hooks":[{"type":"command","command":"AUTORAG_VAULT=\"$CLAUDE_PROJECT_DIR\"/workhorse-vault bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/auto-rag-guard.sh"}]},
++    {"matcher":"Write|Edit","hooks":[{"type":"command","command":"AUTORAG_VAULT=\"$CLAUDE_PROJECT_DIR\"/workhorse-vault bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/auto-rag-guard.sh"}]}
+   ]
+```
+
+Pattern: prefix the `bash <script>` invocation with `VAR=value bash …`. Each assignment is scoped to that single hook firing. Safe for simple-value overrides — paths, single-token allowlists.
+
+**Use a wrapper script (not inline) for `DRIFT_CATALOG`.** JSON inside the settings.json `"command"` string requires nested quote escaping (single quotes inside JSON-double-quoted strings, plus shell-meta protection) that's silently fragile — the inline value compiles but matches nothing on misquoted JSON. Write a wrapper at `<project>/.claude/scripts/auto-rag-config.sh`:
+
+```bash
+#!/bin/bash
+export AUTORAG_VAULT="$CLAUDE_PROJECT_DIR/workhorse-vault"
+export DRIFT_CATALOG='[
+  {"name":"force-push-main","tool":"Bash","match":"git\\s+push\\s+--force","decision":"deny","query":"never force-push main"}
+]'
+exec bash "$CLAUDE_PROJECT_DIR/.claude/scripts/auto-rag-guard.sh"
+```
+
+…then point settings.json at `auto-rag-config.sh` instead of `auto-rag-guard.sh`. The wrapper file is consumer-owned (not overwritten by `vaultmind hooks install`); the canonical engine stays SSOT-clean.
+
+Validate `DRIFT_CATALOG` JSON against the schema in `internal/hooks/autorag/catalog.go` before shipping a wrapper — TAB or newline in `name`/`query`, unknown tool/decision values, or invalid regex would all be caught at `Validate()` time. (A `vaultmind hooks autorag validate <file>` CLI is a future slice; today, write a tiny Go test using `autorag.ParseCatalog` + `Validate`.)
+
+**Already-modified `auto-rag-guard.sh`?** A project running `vaultmind hooks install --force` will overwrite a hand-edited copy wholesale (workhorse hit this exact case post-absorption). Before `--force`:
+1. Back up the file: `cp .claude/scripts/auto-rag-guard.sh .claude/scripts/auto-rag-guard.sh.local-backup`
+2. Read the diff between the canonical (`vaultmind hooks install --json` to a tempdir, or read `internal/hookscripts/auto-rag-guard.sh` from a vaultmind clone) and your local copy.
+3. Migrate local customizations into env-var overrides (above) or the wrapper-script pattern. Anything that can't be expressed as env vars usually means the canonical engine needs a new env-var knob — file an issue rather than forking the script.
+4. Run `vaultmind hooks install --force`. Your wrapper / settings.json env vars stay; the canonical engine is freshly canonical.
+5. `vaultmind doctor` should report zero hook drift.
+
+This is also how `vaultmind hooks install --force` stays SSOT-clean: the canonical engine bytes don't change per-consumer; only the invocation context does.
+
 If the user is unsure whether auto-RAG fits their workflow, skip §6e for the first session. They can opt in later by adding the settings.json entry — `vaultmind hooks install` already wrote the scripts.
 
 ---
