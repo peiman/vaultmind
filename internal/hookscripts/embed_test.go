@@ -9,25 +9,35 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// The five canonical Claude Code hook scripts are the SSOT for
+// The canonical Claude Code hook scripts are the SSOT for
 // VaultMind's integration. Any agent (focalc, Siavoush, workhorse)
 // running `vaultmind hooks install` writes copies of these
 // embedded files. If any embed regresses (file deleted, package
 // renamed, embed pattern broken), every consumer's install
 // breaks silently. Tests pin the contract.
+//
+// Original 5 (persona / recall / read-tracking / read-blocking /
+// episode-capture). Auto-RAG additions 2026-05-07 (slice B of
+// workhorse-handoff absorption): auto-rag-guard.sh + shell-strip.sh
+// + auto-rag-evaluate.sh.
 
-// TestAll_EmbedsAllFiveCanonicalHookScripts — pin every canonical
+// TestAll_EmbedsAllCanonicalHookScripts — pin every canonical
 // hook script is embedded under its expected name. Adding a new
 // script to internal/hookscripts/ should also extend this list,
 // or the script becomes orphaned ceremony (no install path).
-func TestAll_EmbedsAllFiveCanonicalHookScripts(t *testing.T) {
+func TestAll_EmbedsAllCanonicalHookScripts(t *testing.T) {
 	scripts := hookscripts.All()
 	for _, name := range []string{
+		// Original persona / lifecycle hooks:
 		"load-persona.sh",
 		"vault-recall.sh",
 		"vault-track-read.sh",
 		"vault-block-read.sh",
 		"capture-episode.sh",
+		// Auto-RAG framework (2026-05-07 absorption from workhorse v0.3):
+		"auto-rag-guard.sh",
+		"auto-rag-evaluate.sh",
+		"shell-strip.sh",
 	} {
 		body, ok := scripts[name]
 		assert.True(t, ok, "embed must include %q", name)

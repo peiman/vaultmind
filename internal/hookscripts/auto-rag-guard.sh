@@ -1,0 +1,244 @@
+#!/bin/bash
+# auto-rag-guard.sh — PreToolUse hook for in-loop drift detection.
+#
+# Catches known auto-mode drift patterns, queries vaultmind for the
+# canonical guidance, and surfaces the result via additionalContext so
+# the next moment of the agent's reasoning has the relevant memory in
+# scope. Logs every firing for vaultmind feedback aggregation.
+#
+# Canonical engine — distributed via `vaultmind hooks install` (absorbed
+# from workhorse v0.3 stable, 2026-05-07). Consumers either use the
+# defaults below or override with env vars:
+#   AUTORAG_VAULT          Vault to query (default:
+#                          $CLAUDE_PROJECT_DIR/vaultmind-identity, the
+#                          VaultMind project convention; consumers
+#                          whose vault dir has a different name MUST
+#                          set this).
+#   AUTORAG_ALLOWED_ROOTS  Colon-separated allowlist for cross-project
+#                          Write/Edit (default:
+#                          $CLAUDE_PROJECT_DIR:$HOME/.claude:/tmp).
+#                          Limitation: paths must not contain literal
+#                          colons (same shape as PATH/MANPATH).
+#   VAULTMIND_BIN          Path to vaultmind (default: PATH-installed
+#                          `vaultmind`; falls back to /tmp/vaultmind).
+#
+# Decision policy:
+#   - Match a drift signature → query vault, inject additionalContext,
+#     allow the tool. (warn-and-allow.) Agent retains autonomy.
+#   - Cross-project Write/Edit → permissionDecision=deny. PreToolUse
+#     `ask` is silently dropped on Write/Edit in Claude Code 2.1.129;
+#     deny is the strongest gate that fires reliably.
+#   - No match → instant exit 0, zero overhead.
+#
+# Output contract (Claude Code PreToolUse JSON):
+#   {"hookSpecificOutput": {"hookEventName": "PreToolUse",
+#                            "additionalContext": "..."}}
+#
+# Logs:
+#   ~/.vaultmind/auto-rag/<timestamp>-<drift>.json
+#   One line of JSON per firing. The auto-rag-evaluate.sh script
+#   aggregates these into a markdown report for vaultmind feedback.
+
+set -uo pipefail
+
+HOOK_INPUT=$(cat)
+
+TOOL_NAME=$(echo "$HOOK_INPUT" | python3 -c "import json,sys;print(json.load(sys.stdin).get('tool_name',''))" 2>/dev/null || echo "")
+
+# Drift signature dispatch. Each branch sets DRIFT, QUERY, and optionally
+# DECISION ("inject" — default warn-and-allow, or "ask" — surface for
+# user confirmation via permissionDecision).
+# Keep patterns conservative — false positives erode trust faster than
+# false negatives miss catches.
+DRIFT=""
+QUERY=""
+DECISION="inject"
+TARGET=""
+
+case "$TOOL_NAME" in
+  Bash)
+    CMD=$(echo "$HOOK_INPUT" | python3 -c "import json,sys;print(json.load(sys.stdin).get('tool_input',{}).get('command',''))" 2>/dev/null || echo "")
+    if [ -z "$CMD" ]; then
+      exit 0
+    fi
+    TARGET="$CMD"
+
+    # v0.3 — shell-quoting-aware drift detection. Strip heredoc bodies
+    # and quoted regions before applying drift regexes; the OUTSIDE
+    # skeleton is what the regexes scan. Closes three structurally-
+    # identical false positive forms (heredoc body, single-quoted
+    # string, double-quoted string) where a literal `|` inside a
+    # quoted region was previously misread as a command separator.
+    # Falls back to the raw CMD if the preprocessor errors so a
+    # broken preprocessor cannot silence drift detection.
+    SHELL_STRIP_SCRIPT="$(dirname "$0")/shell-strip.sh"
+    if [ -x "$SHELL_STRIP_SCRIPT" ]; then
+      CMD_STRIPPED=$(printf '%s' "$CMD" | bash "$SHELL_STRIP_SCRIPT" 2>/dev/null)
+      if [ -z "$CMD_STRIPPED" ]; then
+        CMD_STRIPPED="$CMD"
+      fi
+    else
+      CMD_STRIPPED="$CMD"
+    fi
+
+    # All drift patterns are anchored to start-of-command-segment via
+    # `(^|[;&|])[[:space:]]*` — the drift verb must begin a real command.
+    # The shell-quoting preprocessor above ensures `|`, `;`, `&` characters
+    # *inside* quoted regions don't reach this regex as fake separators.
+    SEG_ANCHOR='(^|[;&|])[[:space:]]*'
+
+    # Signature: rebuild-vaultmind binary
+    # Triggers on: (a) cd-into-vaultmind-source && go build|install,
+    # or (b) go build|install with vaultmind token in args.
+    if echo "$CMD_STRIPPED" | grep -qE "${SEG_ANCHOR}cd[[:space:]]+[^&]*vaultmind[^&]*&&[[:space:]]*go[[:space:]]+(build|install)"; then
+      DRIFT="rebuild-vaultmind-binary"
+      QUERY="don't rebuild vaultmind"
+    elif echo "$CMD_STRIPPED" | grep -qE "${SEG_ANCHOR}go[[:space:]]+(build|install)[^|;&]*vaultmind"; then
+      DRIFT="rebuild-vaultmind-binary"
+      QUERY="don't rebuild vaultmind"
+    fi
+
+    # Signature: rebuild-vaultmind embeddings
+    # Triggers on: vaultmind index --embed (any vault, any path prefix).
+    # The known failure mode is starting an embed pass while the vaultmind
+    # agent is doing one.
+    if [ -z "$DRIFT" ] && echo "$CMD_STRIPPED" | grep -qE "${SEG_ANCHOR}([^[:space:]]+/)?vaultmind[[:space:]]+index[^|;]*--embed"; then
+      DRIFT="rebuild-vaultmind-embeddings"
+      QUERY="don't rebuild vaultmind"
+    fi
+    ;;
+
+  Write|Edit)
+    FILE_PATH=$(echo "$HOOK_INPUT" | python3 -c "import json,sys;print(json.load(sys.stdin).get('tool_input',{}).get('file_path',''))" 2>/dev/null || echo "")
+    if [ -z "$FILE_PATH" ]; then
+      exit 0
+    fi
+    TARGET="$FILE_PATH"
+
+    # Signature: cross-project Write/Edit.
+    # Allowed roots from AUTORAG_ALLOWED_ROOTS (colon-separated,
+    # trailing slash optional). Default: project root + ~/.claude +
+    # /tmp. Anything outside is cross-project drift.
+    ALLOWED="${AUTORAG_ALLOWED_ROOTS:-${CLAUDE_PROJECT_DIR:-.}:${HOME}/.claude:/tmp}"
+    in_allowed=0
+    IFS=':' read -ra ROOTS <<<"$ALLOWED"
+    for root in "${ROOTS[@]}"; do
+      [ -z "$root" ] && continue
+      # Strip trailing slash from root for prefix-match consistency.
+      root="${root%/}"
+      case "$FILE_PATH" in
+        "$root"/*) in_allowed=1; break ;;
+        "$root") in_allowed=1; break ;;
+      esac
+    done
+    if [ "$in_allowed" = "0" ]; then
+      DRIFT="cross-project-write"
+      QUERY="cross-project boundary"
+      # Was "ask" in v0.1; Claude Code 2.1.129 silently dropped the
+      # ask directive on Write|Edit (workhorse probe 3 dogfood finding,
+      # 2026-05-07). "deny" is the strongest user-side gate the
+      # PreToolUse contract supports.
+      DECISION="deny"
+    fi
+    ;;
+
+  *)
+    exit 0
+    ;;
+esac
+
+if [ -z "$DRIFT" ]; then
+  exit 0
+fi
+
+# Auto-RAG: query vault for canonical guidance. The query result enters
+# the agent's context via additionalContext below. Hook is on the slow
+# path here (~1s for vaultmind ask) — acceptable since the alternative
+# is the agent proceeding without the reminder.
+VAULT_ROOT="${AUTORAG_VAULT:-${CLAUDE_PROJECT_DIR:-.}/vaultmind-identity}"
+# Prefer PATH-installed vaultmind (canonical); /tmp is dev-loop only
+# (per memory feedback_use_vaultmind_ask). Override via VAULTMIND_BIN.
+VAULTMIND="${VAULTMIND_BIN:-$(command -v vaultmind 2>/dev/null || echo /tmp/vaultmind)}"
+
+GUIDANCE=""
+HIT_IDS=""
+if [ -x "$VAULTMIND" ] && [ -d "$VAULT_ROOT/.vaultmind" ]; then
+  RAW=$(VAULTMIND_CALLER=auto-rag-guard "$VAULTMIND" ask "$QUERY" --vault "$VAULT_ROOT" --max-items 2 --budget 1500 2>/dev/null || true)
+  # Extract hit ids from the "  0.NN  <id>  <title>" lines for logging.
+  HIT_IDS=$(echo "$RAW" | grep -E '^[[:space:]]+[0-9]+\.[0-9]+[[:space:]]+[a-z]' | awk '{print $2}' | head -3 | tr '\n' ',' | sed 's/,$//')
+  # The body for injection: strip the JSON debug lines that the binary
+  # writes to stdout regardless. Keep the human-readable section.
+  GUIDANCE=$(echo "$RAW" | sed -n '/^Search:/,$p' | head -80)
+fi
+
+# Compose the header. Lead with the drift signature so the agent
+# immediately sees what triggered. Follow with the canonical query so
+# muscle memory shifts toward direct vault access. Then the vault
+# excerpt itself.
+HEADER="[auto-rag] Drift signature matched: $DRIFT
+Canonical guidance query: vaultmind ask \"$QUERY\" --vault $VAULT_ROOT
+Vault excerpt below — read it and decide whether the action is still right. If you were running on autopilot, stop. If you have a real reason, proceed.
+
+---
+$GUIDANCE
+---
+end auto-rag injection."
+
+# Log the firing for evaluation. Sidecar JSONL line per event.
+# Skip the log write when AUTORAG_TEST_HARNESS=1 is set so test-harness
+# invocations don't pollute the evaluator's report. The test harness
+# exercises real drift-pattern strings (that's the point), but those
+# firings aren't real auto-mode events and shouldn't appear in
+# vaultmind feedback aggregation. The JSON envelope still emits so
+# the harness's output assertions pass; only the sidecar write is
+# suppressed.
+if [ "${AUTORAG_TEST_HARNESS:-}" != "1" ]; then
+  LOG_DIR="${HOME}/.vaultmind/auto-rag"
+  mkdir -p "$LOG_DIR" 2>/dev/null
+  TIMESTAMP=$(date +%Y%m%dT%H%M%S)
+  SESSION_ID=$(echo "$HOOK_INPUT" | python3 -c "import json,sys;print(json.load(sys.stdin).get('session_id',''))" 2>/dev/null || echo "")
+
+  python3 -c "
+import json, sys
+print(json.dumps({
+    'timestamp': sys.argv[1],
+    'session_id': sys.argv[2],
+    'tool_name': sys.argv[3],
+    'drift': sys.argv[4],
+    'target': sys.argv[5],
+    'query': sys.argv[6],
+    'hit_ids': sys.argv[7],
+    'decision': sys.argv[8],
+}))
+" "$TIMESTAMP" "$SESSION_ID" "$TOOL_NAME" "$DRIFT" "$TARGET" "$QUERY" "$HIT_IDS" "$DECISION" \
+    > "$LOG_DIR/${TIMESTAMP}-${DRIFT}.json" 2>/dev/null
+fi
+
+# Emit hookSpecificOutput. For DECISION=inject, warn-and-allow via
+# additionalContext. For DECISION=ask|deny|allow, route through
+# permissionDecision and pass the vault excerpt in the reason — Claude
+# Code shows the reason in the prompt (ask) or block notice (deny).
+if [ "$DECISION" = "inject" ]; then
+  python3 -c "
+import json, sys
+print(json.dumps({
+    'hookSpecificOutput': {
+        'hookEventName': 'PreToolUse',
+        'additionalContext': sys.argv[1],
+    }
+}))
+" "$HEADER"
+else
+  python3 -c "
+import json, sys
+print(json.dumps({
+    'hookSpecificOutput': {
+        'hookEventName': 'PreToolUse',
+        'permissionDecision': sys.argv[2],
+        'permissionDecisionReason': sys.argv[1],
+    }
+}))
+" "$HEADER" "$DECISION"
+fi
+
+exit 0
