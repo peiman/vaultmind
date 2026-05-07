@@ -132,8 +132,13 @@ case "$TOOL_NAME" in
     # quoted region was previously misread as a command separator.
     # Falls back to the raw CMD if the preprocessor errors so a
     # broken preprocessor cannot silence drift detection.
+    #
+    # Use `[ -f ]` (not `[ -x ]`) to tolerate file-system policies
+    # that strip the exec bit (defense-in-depth from workhorse
+    # 2026-05-07 CRITICAL). We invoke via `bash $SCRIPT` regardless,
+    # which doesn't require the exec bit.
     SHELL_STRIP_SCRIPT="$(dirname "$0")/shell-strip.sh"
-    if [ -x "$SHELL_STRIP_SCRIPT" ]; then
+    if [ -f "$SHELL_STRIP_SCRIPT" ]; then
       CMD_STRIPPED=$(printf '%s' "$CMD" | bash "$SHELL_STRIP_SCRIPT" 2>/dev/null)
       if [ -z "$CMD_STRIPPED" ]; then
         CMD_STRIPPED="$CMD"

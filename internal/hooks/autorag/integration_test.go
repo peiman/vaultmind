@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/hooks"
 	"github.com/peiman/vaultmind/internal/hookscripts"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -239,4 +240,49 @@ func TestGuard_DriftCatalog_NonListJSON(t *testing.T) {
 	out := runGuard(t, hookInput, `DRIFT_CATALOG={"not":"a list"}`)
 	assert.Contains(t, out, "rebuild-vaultmind-embeddings",
 		"non-list catalog JSON must fall back to hardcoded — isinstance(cat, list) guard is load-bearing")
+}
+
+// TestGuard_AfterRealInstall_V03ShellStripStillWorks — regression
+// guard for the workhorse-found CRITICAL: when scripts were
+// installed at 0600 (no exec bit), auto-rag-guard.sh's
+// `[ -x "$SHELL_STRIP_SCRIPT" ]` check failed, falling back to
+// raw CMD and silently disabling the v0.3 shell-quoting fix for
+// every consumer. The earlier `runGuard` helper writes at 0o700
+// which masked the bug — this test uses the real `hooks.Install()`
+// path so any regression in install permissions surfaces here.
+func TestGuard_AfterRealInstall_V03ShellStripStillWorks(t *testing.T) {
+	projectDir := t.TempDir()
+	res, err := hooks.Install(hooks.InstallConfig{ProjectDir: projectDir})
+	require.NoError(t, err)
+	require.NotEmpty(t, res.Written)
+
+	guardPath := filepath.Join(res.ScriptsDir, "auto-rag-guard.sh")
+	require.FileExists(t, guardPath)
+
+	// Pin the exec-bit explicitly: the workhorse CRITICAL was that
+	// shell-strip.sh installed without exec bit failed auto-rag-guard's
+	// `[ -x ]` gate (since fixed via defense-in-depth `[ -f ]` AND
+	// install perms 0o700). This assertion catches regression at install
+	// permissions even before the runtime smoke test below.
+	stripPath := filepath.Join(res.ScriptsDir, "shell-strip.sh")
+	stripInfo, statErr := os.Stat(stripPath)
+	require.NoError(t, statErr)
+	assert.NotZero(t, stripInfo.Mode().Perm()&0o100,
+		"shell-strip.sh must have owner-exec bit after install (0o700) — workhorse 2026-05-07 CRITICAL")
+
+	// v0.3 load-bearing case: drift verb inside heredoc body must
+	// NOT match. If shell-strip.sh isn't executable, the guard's
+	// `[ -x ]` check fails, falls back to raw CMD, and the drift
+	// regex matches the unstripped pipe + verb — false positive.
+	hookInput := `{"tool_name":"Bash","tool_input":{"command":"cat <<EOF\ntrue | vaultmind index --vault foo --embed\nEOF"}}`
+	cmd := exec.Command("bash", guardPath)
+	cmd.Stdin = strings.NewReader(hookInput)
+	cmd.Env = append(os.Environ(), "AUTORAG_TEST_HARNESS=1")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &bytes.Buffer{}
+	require.NoError(t, cmd.Run())
+
+	assert.Empty(t, strings.TrimSpace(out.String()),
+		"v0.3 false-positive guard must hold against ACTUALLY-INSTALLED scripts: drift inside heredoc body must skip. Workhorse 2026-05-07 dogfood found 0o600 install perms broke this silently.")
 }

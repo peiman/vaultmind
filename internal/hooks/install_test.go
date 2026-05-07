@@ -37,13 +37,14 @@ func TestInstall_FreshDir_WritesAllCanonicalScripts(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, canonical, body,
 			"%s: written bytes must match embedded canonical", name)
-		// Hooks are invoked via `bash <path>` per .claude/settings.json,
-		// so they don't need the exec bit. We assert 0o600 (gosec G306
-		// compliant; owner read+write only).
+		// 0o700: scripts have shebangs and ARE executed (some hook
+		// scripts internally invoke other hook scripts via `[ -x … ]`
+		// gates — the workhorse 2026-05-07 CRITICAL caught this).
+		// 0o700 keeps them owner-private while still runnable.
 		info, err := os.Stat(filepath.Join(res.ScriptsDir, name))
 		require.NoError(t, err)
-		assert.Equal(t, os.FileMode(0o600), info.Mode().Perm(),
-			"%s: scripts written 0o600 — bash invocation doesn't need exec bit", name)
+		assert.Equal(t, os.FileMode(0o700), info.Mode().Perm(),
+			"%s: scripts must be installed 0o700 — internal `[ -x ]` gates require the exec bit", name)
 	}
 }
 

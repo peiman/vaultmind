@@ -97,9 +97,13 @@ func Install(cfg InstallConfig) (*InstallResult, error) {
 				continue
 			}
 		}
-		// 0o600: hooks are invoked via `bash <path>` in
-		// .claude/settings.json, so they don't need the exec bit.
-		if err := os.WriteFile(dst, canonical, 0o600); err != nil {
+		// 0o700: hook scripts have shebangs and ARE executed —
+		// auto-rag-guard.sh internally invokes shell-strip.sh via
+		// `[ -x "$SHELL_STRIP_SCRIPT" ]`, which silently fails on
+		// 0o600 perms (workhorse 2026-05-07 dogfood CRITICAL).
+		// gosec G306 is about data-file permissions; scripts are a
+		// separate category. The exec bit is intentional + load-bearing.
+		if err := os.WriteFile(dst, canonical, 0o700); err != nil { //nolint:gosec // G306: scripts with shebangs need exec bit; load-bearing per workhorse 2026-05-07 CRITICAL
 			return res, fmt.Errorf("writing %s: %w", dst, err)
 		}
 		res.Written = append(res.Written, name)
