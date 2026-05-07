@@ -10,7 +10,14 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 VAULTMIND_SRC="$PROJECT_DIR"
-VAULT_PATH="$PROJECT_DIR/vaultmind-identity"
+# Persona vault path — override per project for consumers whose
+# identity vault has a different name. Default matches the vaultmind
+# project convention. Workhorse uses `workhorse-vault`; another
+# project might use `vaultmind-knowledge`. Set inline in settings.json:
+# `LOAD_PERSONA_VAULT="$CLAUDE_PROJECT_DIR/workhorse-vault" bash <script>`.
+# Workhorse 2026-05-07 HIGH-2 — silent empty-persona for non-default
+# vault names was the dogfood-found regression.
+VAULT_PATH="${LOAD_PERSONA_VAULT:-$PROJECT_DIR/vaultmind-identity}"
 
 # Sidecar log — captures what was injected without changing agent-visible output.
 LOG_DIR="${HOME}/.vaultmind/persona-eval"
@@ -90,7 +97,12 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
   # carries the broader knowledge graph where most reinforcement signal
   # accumulates. Best-effort — if either fails, the persona above still
   # loads. See feat(self) commit and feedback_use_vaultmind_ask.
-  RESEARCH_VAULT="$PROJECT_DIR/vaultmind-vault"
+  # Optional research-vault second-query path. Default matches
+  # vaultmind project convention; consumers with no separate research
+  # vault either leave default (the `[ -d ]` guard below skips
+  # silently if the dir doesn't exist) or set
+  # LOAD_PERSONA_RESEARCH_VAULT to their second vault.
+  RESEARCH_VAULT="${LOAD_PERSONA_RESEARCH_VAULT:-$PROJECT_DIR/vaultmind-vault}"
   SELF_IDENTITY=$(VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" self --vault "$VAULT_PATH" --limit 5 2>>"$ASK_ERR" || true)
   SELF_RESEARCH=""
   if [ -d "$RESEARCH_VAULT" ]; then

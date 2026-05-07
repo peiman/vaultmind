@@ -63,6 +63,33 @@ func TestNames_ReturnsSortedDeterministicOrder(t *testing.T) {
 	}
 }
 
+// TestLoadPersonaScript_HasVaultPathOverride — workhorse 2026-05-07
+// HIGH-2: load-persona.sh hardcoded `vaultmind-identity` as the
+// vault dir, silently producing empty persona for any consumer
+// (workhorse, focalc, etc.) whose vault has a different name.
+// Pin the env-var override contract.
+func TestLoadPersonaScript_HasVaultPathOverride(t *testing.T) {
+	body, ok := hookscripts.Get("load-persona.sh")
+	require.True(t, ok)
+	src := string(body)
+	assert.Contains(t, src, `${LOAD_PERSONA_VAULT:-`,
+		"load-persona.sh must support LOAD_PERSONA_VAULT env-var override per workhorse 2026-05-07 HIGH-2")
+	assert.Contains(t, src, `${LOAD_PERSONA_RESEARCH_VAULT:-`,
+		"load-persona.sh must support LOAD_PERSONA_RESEARCH_VAULT for the optional research-vault second-query path")
+}
+
+// TestVaultTrackReadScript_HasVaultPathPatternOverride — workhorse
+// 2026-05-07 HIGH-1: vault-track-read.sh's `*/vaultmind-*/*.md`
+// glob silently filtered out reads on `workhorse-vault/*.md`,
+// turning the read-tracking hook inert. Pin the env-var override.
+func TestVaultTrackReadScript_HasVaultPathPatternOverride(t *testing.T) {
+	body, ok := hookscripts.Get("vault-track-read.sh")
+	require.True(t, ok)
+	src := string(body)
+	assert.Contains(t, src, `${VAULT_PATH_PATTERN:-`,
+		"vault-track-read.sh must support VAULT_PATH_PATTERN env-var override per workhorse 2026-05-07 HIGH-1")
+}
+
 // TestGet_ExactMatchOnly — Get treats the input as a base
 // filename, not a path. No traversal, no globbing. Pins the
 // security-shaped contract: an attacker can't `Get("../../etc/passwd")`

@@ -490,6 +490,18 @@ bash <project>/.claude/scripts/auto-rag-evaluate.sh
 
 Vault path defaults: `AUTORAG_VAULT="$CLAUDE_PROJECT_DIR/vaultmind-identity"`. Override per project if your vault has a different name. `VAULTMIND_BIN` defaults to PATH-installed vaultmind, falling back to `/tmp/vaultmind` for dev-loop only.
 
+#### Other env vars worth knowing about
+
+The non-auto-RAG hooks installed by `vaultmind hooks install` also accept env-var overrides for projects with non-default vault names (workhorse 2026-05-07 dogfood — these were silent regressions before the override surface existed):
+
+| Hook | Env var | Default | When to override |
+|---|---|---|---|
+| `load-persona.sh` (SessionStart) | `LOAD_PERSONA_VAULT` | `$CLAUDE_PROJECT_DIR/vaultmind-identity` | Identity vault has different name. |
+| `load-persona.sh` (SessionStart) | `LOAD_PERSONA_RESEARCH_VAULT` | `$CLAUDE_PROJECT_DIR/vaultmind-vault` | Optional second vault for `vaultmind self` cross-vault activation surfacing. Unset / non-existent skips silently. |
+| `vault-track-read.sh` (PreToolUse[Read]) | `VAULT_PATH_PATTERN` | `*/vaultmind-*/*.md` | Vault dir doesn't match the default glob. Workhorse uses `*/workhorse-vault/*.md`. For multi-vault: `*/+(vault-a\|vault-b)/*.md` (extglob is enabled). |
+
+Set the same way as `AUTORAG_VAULT` — inline in the settings.json `command` string, prefixing the `bash <script>` invocation with `VAR="value" bash …`. Each assignment is scoped to that single hook firing.
+
 #### Customize for your project (env-var override pattern)
 
 If the user's vault isn't named `vaultmind-identity` (workhorse uses `workhorse-vault`; another project might use `vaultmind-knowledge`), set the env var **inline in the settings.json command string** — bash interprets the assignment before invoking the script. No wrapper file needed for simple-value overrides like vault path or `AUTORAG_ALLOWED_ROOTS`. (Custom `DRIFT_CATALOG` JSON requires a wrapper — see below.)

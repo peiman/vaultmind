@@ -43,8 +43,29 @@ if [ "$TOOL_NAME" != "Read" ] || [ -z "$FILE_PATH" ]; then
   exit 0
 fi
 
+# Path pattern gate — fast-skip Reads on files that obviously aren't
+# vault notes (the walk-up `.vaultmind/` check below is the real test
+# but is filesystem-stat-per-ancestor; this glob filters early).
+# Default `*/vaultmind-*/*.md` matches vaultmind-self conventions
+# (vaultmind-identity, vaultmind-vault). Consumers with non-default
+# vault dir names override per project — workhorse uses
+# `*/workhorse-vault/*.md`; another project might use
+# `*/vaultmind-knowledge/*.md`. Set inline in settings.json command,
+# e.g. `VAULT_PATH_PATTERN="*/workhorse-vault/*.md" bash <script>`.
+#
+# Multi-vault: enable shopt extglob below so consumers needing more
+# than one vault dir can use the `+(a|b)` extglob syntax — e.g.
+# `VAULT_PATH_PATTERN="*/+(workhorse-vault|another-vault)/*.md"`.
+# Brace expansion (`*/{a,b}/*.md`) does NOT work from env vars (bash
+# expands braces before parameter expansion); pipe alternation
+# without extglob also doesn't work. Extglob does.
+#
+# Workhorse 2026-05-07 HIGH-1 — silent-inert hook for non-default
+# vault names was the dogfood-found regression.
+shopt -s extglob
+PATTERN="${VAULT_PATH_PATTERN:-*/vaultmind-*/*.md}"
 case "$FILE_PATH" in
-  */vaultmind-*/*.md) ;;
+  $PATTERN) ;;
   *) exit 0 ;;
 esac
 
