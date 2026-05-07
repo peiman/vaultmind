@@ -492,7 +492,7 @@ Vault path defaults: `AUTORAG_VAULT="$CLAUDE_PROJECT_DIR/vaultmind-identity"`. O
 
 #### Customize for your project (env-var override pattern)
 
-If the user's vault isn't named `vaultmind-identity` (workhorse uses `workhorse-vault`; another project might use `vaultmind-knowledge`), or if they want a custom drift catalog, set the env vars **inline in the settings.json command string** — bash interprets the assignments before invoking the script. No wrapper file needed.
+If the user's vault isn't named `vaultmind-identity` (workhorse uses `workhorse-vault`; another project might use `vaultmind-knowledge`), set the env var **inline in the settings.json command string** — bash interprets the assignment before invoking the script. No wrapper file needed for simple-value overrides like vault path or `AUTORAG_ALLOWED_ROOTS`. (Custom `DRIFT_CATALOG` JSON requires a wrapper — see below.)
 
 ```diff
    "PreToolUse": [
