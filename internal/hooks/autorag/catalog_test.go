@@ -191,3 +191,34 @@ func TestValidate_RejectsWhitespaceOnlyQuery(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, strings.ToLower(err.Error()), "query")
 }
+
+// The bash engine reads catalog dispatch results back via
+// `IFS=$'\t' read -r DRIFT QUERY DECISION`. A TAB in name or query
+// would corrupt the field split. Reject at lint time so the bash
+// side never has to defend against this shape (HIGH severity per
+// 2026-05-07 code-review).
+func TestValidate_RejectsTabInName(t *testing.T) {
+	cat := &autorag.Catalog{Signatures: []autorag.Signature{
+		{Name: "with\ttab", Tool: "Bash", Match: "x", Decision: "inject", Query: "q"},
+	}}
+	err := cat.Validate()
+	require.Error(t, err)
+	assert.Contains(t, strings.ToLower(err.Error()), "tab")
+}
+
+func TestValidate_RejectsTabInQuery(t *testing.T) {
+	cat := &autorag.Catalog{Signatures: []autorag.Signature{
+		{Name: "x", Tool: "Bash", Match: "y", Decision: "inject", Query: "q\twith\ttabs"},
+	}}
+	err := cat.Validate()
+	require.Error(t, err)
+	assert.Contains(t, strings.ToLower(err.Error()), "tab")
+}
+
+func TestValidate_RejectsNewlineInName(t *testing.T) {
+	cat := &autorag.Catalog{Signatures: []autorag.Signature{
+		{Name: "x\nbreaking", Tool: "Bash", Match: "y", Decision: "inject", Query: "q"},
+	}}
+	err := cat.Validate()
+	require.Error(t, err)
+}

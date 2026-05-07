@@ -21,6 +21,19 @@
 #                          colons (same shape as PATH/MANPATH).
 #   VAULTMIND_BIN          Path to vaultmind (default: PATH-installed
 #                          `vaultmind`; falls back to /tmp/vaultmind).
+#   DRIFT_CATALOG          JSON array of consumer-supplied drift
+#                          signatures, matching the schema in
+#                          internal/hooks/autorag/catalog.go.
+#                          Catalog matches take precedence over the
+#                          hardcoded canonical signatures (rebuild-
+#                          vaultmind binary/embeddings, cross-project
+#                          Write/Edit). Validate with the Go schema
+#                          before exporting; invalid catalog falls
+#                          through to hardcoded. To suppress a
+#                          canonical signature, declare a catalog
+#                          entry with the same match regex and
+#                          decision="allow" — catalog-wins precedence
+#                          is the intentional escape hatch.
 #
 # Decision policy:
 #   - Match a drift signature → query vault, inject additionalContext,
@@ -44,6 +57,54 @@ set -uo pipefail
 HOOK_INPUT=$(cat)
 
 TOOL_NAME=$(echo "$HOOK_INPUT" | python3 -c "import json,sys;print(json.load(sys.stdin).get('tool_name',''))" 2>/dev/null || echo "")
+
+# match_catalog <target> <tool> — emits "name<TAB>query<TAB>decision"
+# on the first matching signature in DRIFT_CATALOG, empty on no match.
+# Defensively falls back to no-match on any error (invalid catalog
+# JSON, broken regex per-signature) so a malformed catalog never
+# breaks the hook — the agent's tool call proceeds. The Go schema
+# in internal/hooks/autorag pins the catalog format; consumers
+# typically `vaultmind hooks autorag validate <file>` before exporting.
+match_catalog() {
+  local target="$1"
+  local tool="$2"
+  if [ -z "${DRIFT_CATALOG:-}" ]; then
+    return 0
+  fi
+  # NOTE: Python source below is inside a bash double-quoted string;
+  # bash interprets \\, \", \$ literals before python sees them. Avoid
+  # introducing literal `\n` `\t` `\\` in the Python source. The
+  # consumer's regexes arrive via the env var (os.environ), not via
+  # this string, so consumer `\s` `\d` are not affected.
+  python3 -c "
+import json, os, re, sys
+try:
+    cat = json.loads(os.environ.get('DRIFT_CATALOG', ''))
+    if not isinstance(cat, list):
+        sys.exit(0)
+except Exception:
+    sys.exit(0)
+target = sys.argv[1]
+tool = sys.argv[2]
+for sig in cat:
+    if not isinstance(sig, dict):
+        continue
+    if sig.get('tool') != tool:
+        continue
+    pattern = sig.get('match', '')
+    if not pattern:
+        continue
+    try:
+        if re.search(pattern, target):
+            name = sig.get('name', '')
+            query = sig.get('query', '')
+            decision = sig.get('decision', 'inject')
+            sys.stdout.write(name + '\t' + query + '\t' + decision)
+            sys.exit(0)
+    except re.error:
+        continue
+" "$target" "$tool" 2>/dev/null || true
+}
 
 # Drift signature dispatch. Each branch sets DRIFT, QUERY, and optionally
 # DECISION ("inject" — default warn-and-allow, or "ask" — surface for
@@ -81,19 +142,28 @@ case "$TOOL_NAME" in
       CMD_STRIPPED="$CMD"
     fi
 
+    # Catalog dispatch — consumer-supplied signatures via DRIFT_CATALOG
+    # take precedence over the hardcoded canonical signatures below.
+    # Empty / unset / invalid catalog falls through silently.
+    CATALOG_RESULT=$(match_catalog "$CMD_STRIPPED" "Bash")
+    if [ -n "$CATALOG_RESULT" ]; then
+      IFS=$'\t' read -r DRIFT QUERY DECISION <<<"$CATALOG_RESULT"
+    fi
+
     # All drift patterns are anchored to start-of-command-segment via
     # `(^|[;&|])[[:space:]]*` — the drift verb must begin a real command.
     # The shell-quoting preprocessor above ensures `|`, `;`, `&` characters
     # *inside* quoted regions don't reach this regex as fake separators.
     SEG_ANCHOR='(^|[;&|])[[:space:]]*'
 
-    # Signature: rebuild-vaultmind binary
+    # Signature: rebuild-vaultmind binary (hardcoded canonical).
     # Triggers on: (a) cd-into-vaultmind-source && go build|install,
     # or (b) go build|install with vaultmind token in args.
-    if echo "$CMD_STRIPPED" | grep -qE "${SEG_ANCHOR}cd[[:space:]]+[^&]*vaultmind[^&]*&&[[:space:]]*go[[:space:]]+(build|install)"; then
+    # Skipped if a catalog signature already matched.
+    if [ -z "$DRIFT" ] && echo "$CMD_STRIPPED" | grep -qE "${SEG_ANCHOR}cd[[:space:]]+[^&]*vaultmind[^&]*&&[[:space:]]*go[[:space:]]+(build|install)"; then
       DRIFT="rebuild-vaultmind-binary"
       QUERY="don't rebuild vaultmind"
-    elif echo "$CMD_STRIPPED" | grep -qE "${SEG_ANCHOR}go[[:space:]]+(build|install)[^|;&]*vaultmind"; then
+    elif [ -z "$DRIFT" ] && echo "$CMD_STRIPPED" | grep -qE "${SEG_ANCHOR}go[[:space:]]+(build|install)[^|;&]*vaultmind"; then
       DRIFT="rebuild-vaultmind-binary"
       QUERY="don't rebuild vaultmind"
     fi
@@ -115,6 +185,15 @@ case "$TOOL_NAME" in
     fi
     TARGET="$FILE_PATH"
 
+    # Catalog dispatch — consumer signatures take precedence over the
+    # hardcoded cross-project check below. A catalog Write/Edit
+    # signature can fire even within allowed roots (it's the
+    # consumer's policy).
+    CATALOG_RESULT=$(match_catalog "$FILE_PATH" "$TOOL_NAME")
+    if [ -n "$CATALOG_RESULT" ]; then
+      IFS=$'\t' read -r DRIFT QUERY DECISION <<<"$CATALOG_RESULT"
+    fi
+
     # Signature: cross-project Write/Edit.
     # Allowed roots from AUTORAG_ALLOWED_ROOTS (colon-separated,
     # trailing slash optional). Default: project root + ~/.claude +
@@ -131,7 +210,7 @@ case "$TOOL_NAME" in
         "$root") in_allowed=1; break ;;
       esac
     done
-    if [ "$in_allowed" = "0" ]; then
+    if [ -z "$DRIFT" ] && [ "$in_allowed" = "0" ]; then
       DRIFT="cross-project-write"
       QUERY="cross-project boundary"
       # Was "ask" in v0.1; Claude Code 2.1.129 silently dropped the

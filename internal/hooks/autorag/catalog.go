@@ -115,6 +115,13 @@ func validateSignature(sig Signature) error {
 	if strings.TrimSpace(sig.Name) == "" {
 		return fmt.Errorf("name is required")
 	}
+	// Bash engine emits results as TAB-separated fields (name<TAB>query<TAB>decision)
+	// then `read -r DRIFT QUERY DECISION` parses them back. A TAB inside name
+	// or query would corrupt the parse. Reject at lint time so the bash side
+	// never has to defend against this shape.
+	if strings.ContainsAny(sig.Name, "\t\n") {
+		return fmt.Errorf("name must not contain TAB or newline (bash engine uses these as field/record separators)")
+	}
 	if sig.Tool == "" {
 		return fmt.Errorf("tool is required (one of: Bash, Write, Edit)")
 	}
@@ -138,6 +145,9 @@ func validateSignature(sig Signature) error {
 	}
 	if strings.TrimSpace(sig.Query) == "" {
 		return fmt.Errorf("query is required (the vaultmind ask query string)")
+	}
+	if strings.ContainsAny(sig.Query, "\t\n") {
+		return fmt.Errorf("query must not contain TAB or newline (bash engine uses these as field/record separators)")
 	}
 	return nil
 }
