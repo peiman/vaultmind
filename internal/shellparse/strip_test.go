@@ -105,6 +105,38 @@ func TestStripShellQuoting(t *testing.T) {
 			"echo ",
 		},
 
+		// ─── Heredoc edge cases (regression guards from review) ──
+		{
+			"heredoc marker prefix-match must NOT close (EOF vs EOFX)",
+			"cat <<EOF\nEOFX\nEOF",
+			"cat <<EOF\nEOF",
+		},
+		{
+			"heredoc digit-only marker (<<123 — alnum identifier per shell)",
+			"cat <<123\nbody\n123",
+			"cat <<123\n123",
+		},
+		{
+			"<<EOF inside double-quoted string is NOT a heredoc opener",
+			`echo "<<EOF body" outside`,
+			"echo  outside",
+		},
+		{
+			"<<EOF inside single-quoted string is NOT a heredoc opener",
+			"echo '<<EOF body' outside",
+			"echo  outside",
+		},
+		{
+			"heredoc with empty body (immediate close marker)",
+			"cat <<EOF\nEOF",
+			"cat <<EOF\nEOF",
+		},
+		{
+			"heredoc opener at end of input with no newline",
+			"cat <<EOF",
+			"cat <<EOF",
+		},
+
 		// ─── Edge cases — unclosed / malformed ───────────────────
 		{
 			"unclosed single quote drops rest of input",
@@ -130,5 +162,36 @@ func TestStripShellQuoting(t *testing.T) {
 				t.Errorf("StripShellQuoting(%q):\n  got  %q\n  want %q", tc.in, got, tc.want)
 			}
 		})
+	}
+}
+
+// TestIsIdentChar pins the heredoc-marker character class. Boundaries
+// matter because shell heredoc identifiers are alnum + underscore only;
+// any drift would silently change which `<<X` openers get parsed as
+// heredocs.
+func TestIsIdentChar(t *testing.T) {
+	cases := []struct {
+		ch   byte
+		want bool
+	}{
+		// Alnum boundaries (inclusive on both ends).
+		{'0', true}, {'9', true},
+		{'A', true}, {'Z', true},
+		{'a', true}, {'z', true},
+		{'_', true},
+		// Adjacent non-ident bytes.
+		{'/', false}, // ASCII before '0'
+		{':', false}, // ASCII after '9'
+		{'@', false}, // ASCII before 'A'
+		{'[', false}, // ASCII after 'Z'
+		{'`', false}, // ASCII before 'a'
+		{'{', false}, // ASCII after 'z'
+		// Non-ASCII / structural separators.
+		{' ', false}, {'\t', false}, {'-', false}, {'\n', false}, {0, false},
+	}
+	for _, tc := range cases {
+		if got := isIdentChar(tc.ch); got != tc.want {
+			t.Errorf("isIdentChar(%q) = %v; want %v", tc.ch, got, tc.want)
+		}
 	}
 }

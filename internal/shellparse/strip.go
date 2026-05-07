@@ -153,7 +153,13 @@ func StripShellQuoting(cmd string) string {
 				st = stateOutside
 			}
 			i++
+			continue
 		}
+
+		// Unreachable today — the four states above exhaust the enum.
+		// The explicit advance prevents an infinite loop if a 5th state
+		// is added without its own handler block.
+		i++
 	}
 
 	return out.String()
