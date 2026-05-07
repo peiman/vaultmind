@@ -110,6 +110,8 @@ components:
       - internal/onboard/**
       # VaultMind hook scripts (SSOT — embedded into binary; written out to other projects via `vaultmind hooks install`):
       - internal/hookscripts/**
+      # VaultMind shell-quoting-aware preprocessor (generic primitive used by hook drift detection — Go port of workhorse v0.3 shell-strip.sh):
+      - internal/shellparse/**
 
   # -------------------------------------------------------------------------
   # PROJECT-MANAGED: Business Logic Layer
