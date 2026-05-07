@@ -138,6 +138,8 @@ components:
       - internal/fix/**
       # VaultMind hooks install + drift-detect (consumer of internal/hookscripts/):
       - internal/hooks/**
+      # VaultMind auto-RAG drift catalog (Go schema for the JSON env var the bash engine consumes):
+      - internal/hooks/autorag/**
 
   # pkg/ was cleaned by task init (checkmate is now an external dependency).
   # Re-add this section if you create new public packages in pkg/.
