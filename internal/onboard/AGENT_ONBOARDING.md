@@ -456,6 +456,42 @@ ls -la ~/.vaultmind/   # sidecar log dirs should exist after first session
 
 Trigger a test retrieval to confirm hooks fire next session: write a short test arc, restart Claude Code, look for the `IDENTITY CONTEXT` system-reminder.
 
+### 6e. Optional: enable auto-RAG drift detection
+
+`vaultmind hooks install` ships three additional scripts beyond the five existing hook scripts: `auto-rag-guard.sh`, `shell-strip.sh`, `auto-rag-evaluate.sh`. Together they form the **auto-RAG framework** — a PreToolUse hook that pattern-matches the agent's tool calls against a drift catalog, queries the vault for canonical guidance on a match, and injects the result into the agent's context (warn-and-allow) or denies the action (hard gate).
+
+The framework is opt-in. Wire it only if the user has known auto-mode drift patterns the vault has canonical guidance for. Default install does NOT activate auto-rag-guard.sh in `.claude/settings.json` — adding the entry is a separate consent step.
+
+To enable, add **two** PreToolUse entries to `.claude/settings.json` (Claude Code 2.1.129 needs `Bash` separate from `Write|Edit`; the pipe-alternation works within Write/Edit but not across all three — proven by workhorse's live config):
+
+```diff
+   "PreToolUse": [
+     {"matcher":"Read","hooks":[{"type":"command","command":"bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/vault-track-read.sh"}]},
++    {"matcher":"Bash","hooks":[{"type":"command","command":"bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/auto-rag-guard.sh"}]},
++    {"matcher":"Write|Edit","hooks":[{"type":"command","command":"bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/auto-rag-guard.sh"}]}
+   ]
+```
+
+The canonical engine fires on hardcoded VaultMind-relevant drifts out of the box: `rebuild-vaultmind-binary`, `rebuild-vaultmind-embeddings`, and cross-project Write/Edit (against the `AUTORAG_ALLOWED_ROOTS` allowlist). Consumers extend with project-specific signatures via the `DRIFT_CATALOG` env var — JSON array matching the schema in `internal/hooks/autorag/catalog.go`. Example:
+
+```bash
+export DRIFT_CATALOG='[
+  {"name":"force-push-main","tool":"Bash","match":"git\\s+push\\s+--force","decision":"deny","query":"never force-push main"}
+]'
+```
+
+Catalog matches take precedence over hardcoded canonicals; declare an entry with the same regex and `"decision":"allow"` to suppress a canonical signature for this project.
+
+The `auto-rag-evaluate.sh` script aggregates firings into a markdown report at `/tmp/auto-rag-report-YYYY-MM-DD.md` — that report is the **Manifesto #10 feedback loop**, telling vaultmind which queries returned weak hits so the vault's canonical guidance can improve. Run periodically:
+
+```bash
+bash <project>/.claude/scripts/auto-rag-evaluate.sh
+```
+
+Vault path defaults: `AUTORAG_VAULT="$CLAUDE_PROJECT_DIR/vaultmind-identity"`. Override per project if your vault has a different name. `VAULTMIND_BIN` defaults to PATH-installed vaultmind, falling back to `/tmp/vaultmind` for dev-loop only.
+
+If the user is unsure whether auto-RAG fits their workflow, skip §6e for the first session. They can opt in later by adding the settings.json entry — `vaultmind hooks install` already wrote the scripts.
+
 ---
 
 ## 7. Diff-before-write protocol

@@ -177,6 +177,13 @@ VaultMind integrates with Claude Code via four hooks at different lifecycle poin
 
 The four hooks compose: identity primes at start; pointers surface mid-session; reads are tracked; episodes are captured at session end. Together they make a vault behave as the agent's working memory across sessions.
 
+**Optional — `auto-rag-guard.sh` (PreToolUse[Bash], PreToolUse[Write|Edit]).** `vaultmind hooks install` also writes the auto-RAG framework — drift detection at tool-call time.
+1. Pattern-matches the agent's tool calls against a catalog of known-bad shapes (rebuilding vaultmind during an embed pass; cross-project Write/Edit; consumer-defined signatures via `DRIFT_CATALOG`).
+2. Queries the vault for canonical guidance on a match.
+3. Either injects the result into the agent's context (`additionalContext`) or denies the action (`permissionDecision: deny`).
+
+The companion `auto-rag-evaluate.sh` aggregates firings into a markdown report — the **Manifesto #10** (close-the-feedback-loop) piece, telling the vault which queries returned weak hits so its canonical guidance can improve. Opt-in: install ships the scripts, but adding the `.claude/settings.json` entry is a separate consent step (see `internal/onboard/AGENT_ONBOARDING.md` §6e). Originally built and dogfooded by [workhorse](https://github.com/peiman/workhorse) as v0.3 stable, absorbed into vaultmind 2026-05-07 as the canonical home for hook infrastructure.
+
 ## Status
 
 Pre-v0.1.0. Actively dogfooded. No release binaries cut yet — the distribution pipeline (GoReleaser, GitHub Actions, optional Homebrew tap) is set up but waits on dogfood validation before tagging. Today, install means clone + `task build`.
