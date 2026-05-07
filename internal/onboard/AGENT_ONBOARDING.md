@@ -537,8 +537,8 @@ Validate `DRIFT_CATALOG` JSON against the schema in `internal/hooks/autorag/cata
 1. Back up the file: `cp .claude/scripts/auto-rag-guard.sh .claude/scripts/auto-rag-guard.sh.local-backup`
 2. Read the diff between the canonical (`vaultmind hooks install --json` to a tempdir, or read `internal/hookscripts/auto-rag-guard.sh` from a vaultmind clone) and your local copy.
 3. Migrate local customizations into env-var overrides (above) or the wrapper-script pattern. Anything that can't be expressed as env vars usually means the canonical engine needs a new env-var knob — file an issue rather than forking the script.
-4. Run `vaultmind hooks install --force`. Your wrapper / settings.json env vars stay; the canonical engine is freshly canonical.
-5. `vaultmind doctor` should report zero hook drift.
+4. Run `vaultmind hooks install --force`. Output groups results into "Written" (changed bytes), "Skipped — already byte-identical" (no-op; the install is idempotent on unchanged content), and "Conflicts" (existed with different content; only relevant when `--force` is omitted). Your wrapper / settings.json env vars stay; the canonical engine is freshly canonical.
+5. `vaultmind doctor` should report zero hook drift on the auto-RAG slice. **Caveat for projects with intentionally-customized non-auto-RAG hooks:** doctor will still flag drift on those (e.g. a project that customized `vault-track-read.sh` for a non-default vault path) with a `--force` remedy that would silently overwrite. Two valid responses: (a) migrate the customization to env-var overrides per the table above (`VAULT_PATH_PATTERN`, `LOAD_PERSONA_VAULT`, etc.) so drift collapses naturally; or (b) ignore those drift warnings — the customization is intentional. Future doctor work may add a `.vaultmind-allowed-drift` allowlist for case (b); for now, (a) is the cleaner path.
 
 This is also how `vaultmind hooks install --force` stays SSOT-clean: the canonical engine bytes don't change per-consumer; only the invocation context does.
 
