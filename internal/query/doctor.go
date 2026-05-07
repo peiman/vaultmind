@@ -93,6 +93,17 @@ type DoctorIssues struct {
 	// layer isolation per ADR-009).
 	HookDrift        int      `json:"hook_drift"`
 	HookDriftDetails []string `json:"hook_drift_details,omitempty"`
+
+	// LegacyHooksJSON is true when `.claude/hooks.json` exists at the
+	// project root. That standalone file is no longer recognized by
+	// Claude Code 2.1.129+ — projects with it have silently broken
+	// hooks. The fix is to migrate the contents into
+	// `.claude/settings.json` under a top-level `hooks` key.
+	// Live evidence from workhorse dogfood 2026-05-06/07.
+	// Populated by cmd/doctor.go (project dir comes from there); query
+	// layer keeps the type but doesn't import internal/hooks per
+	// ADR-009 business-business isolation.
+	LegacyHooksJSON bool `json:"legacy_hooks_json"`
 }
 
 // ContentDrift describes one note whose current file content hash

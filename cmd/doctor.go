@@ -105,6 +105,10 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 			result.Issues.HookDrift = len(drifted)
 			result.Issues.HookDriftDetails = drifted
 		}
+		// Legacy `.claude/hooks.json` detection — silent-breakage
+		// shape on Claude Code 2.1.129+. Populated alongside drift
+		// because they share the same project-root resolution.
+		result.Issues.LegacyHooksJSON = hooks.DetectLegacyHooksJSON(projectDir)
 	}
 
 	if getConfigValueWithFlags[bool](cmd, "json", config.KeyAppDoctorJson) {
@@ -159,6 +163,9 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		}
 	}
 	if err = writeHookDrift(w, &result.Issues, summaryOnly); err != nil {
+		return err
+	}
+	if err = writeLegacyHooksJSON(w, &result.Issues); err != nil {
 		return err
 	}
 	if result.Issues.StaleIndex > 0 {
@@ -224,6 +231,21 @@ func writeHookDrift(w io.Writer, issues *query.DoctorIssues, summaryOnly bool) e
 		}
 	}
 	return nil
+}
+
+// writeLegacyHooksJSON warns when `.claude/hooks.json` exists at the
+// project root. That standalone file is silently broken on Claude
+// Code 2.1.129+; the resolution is migration into settings.json.
+// No --summary suppression — the warning is one line, always relevant.
+func writeLegacyHooksJSON(w io.Writer, issues *query.DoctorIssues) error {
+	if !issues.LegacyHooksJSON {
+		return nil
+	}
+	_, err := fmt.Fprintf(w,
+		"⚠ Legacy hooks.json: .claude/hooks.json exists but is silently ignored on Claude Code 2.1.129+\n"+
+			"  fix: merge its contents into .claude/settings.json under a top-level `hooks` key, then delete hooks.json\n",
+	)
+	return err
 }
 
 // short truncates a sha256 hex string to its first 8 chars for

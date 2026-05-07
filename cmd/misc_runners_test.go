@@ -121,6 +121,39 @@ func TestDoctor_SurfacesHookDriftFromCWD(t *testing.T) {
 		"doctor must print the exact remedy command")
 }
 
+// doctor surfaces a warning when `.claude/hooks.json` exists at the
+// project root. That standalone file is silently broken on Claude
+// Code 2.1.129+ (live evidence: workhorse dogfood May 5→May 6 2026).
+// Without this check, the most user-visible failure shape we know of
+// is invisible to operators — they think hooks are firing when they
+// aren't.
+func TestDoctor_SurfacesLegacyHooksJSONFromCWD(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+
+	projectDir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(projectDir, ".claude"), 0o750))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(projectDir, ".claude", "hooks.json"),
+		[]byte(`{"hooks":{"SessionStart":[]}}`),
+		0o600,
+	))
+
+	// NOTE: os.Chdir is process-global; this test must NOT use
+	// t.Parallel(). doctor walks up from CWD to find the project root.
+	origCWD, err := os.Getwd()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = os.Chdir(origCWD) })
+	require.NoError(t, os.Chdir(projectDir))
+
+	out, _, err := runRootCmd(t, "doctor", "--vault", vault)
+	require.NoError(t, err)
+	text := out.String()
+	assert.Contains(t, text, "Legacy hooks.json",
+		"doctor must surface a 'Legacy hooks.json' warning when the silently-broken file exists")
+	assert.Contains(t, text, "settings.json",
+		"the resolution must name the migration target file")
+}
+
 // --summary on a clean vault (no incompatible links, no dead refs)
 // should print just the headline counts — no extra noise, no empty
 // "but you can see details with..." dangling line.
