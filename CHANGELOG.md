@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.8] — 2026-06-04
+
 ### Fixed
 - **`episodes/` is now excluded from indexing by default.** Captured session
   transcripts (the bootstrap target) are raw material for arc distillation, not
@@ -121,7 +123,8 @@ The initial public tag, retracted in favor of [0.1.3]. It shipped without the
 maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; do
 not install.
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/peiman/vaultmind/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/peiman/vaultmind/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/peiman/vaultmind/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/peiman/vaultmind/compare/v0.1.4...v0.1.5
