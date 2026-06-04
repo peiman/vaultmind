@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- README now surfaces the cold-start **bootstrap-from-transcripts** path and the
+  example vault's concept cards, and notes that the "Try it" commands assume a repo
+  checkout (clarifying it for `go install` / prebuilt-archive users).
+
 ## [0.1.6] — 2026-06-04
 
 ### Added

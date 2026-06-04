@@ -49,7 +49,9 @@ vaultmind ask "what did we decide about retries?" --vault ./my-vault
 
 ## Try it with the example vault
 
-VaultMind ships a small **fictional** example vault — *Ada*, an agent that pair-programs with a developer named Sam on a toy CLI — so you can see retrieval and persona reconstruction working before you build your own:
+VaultMind ships a small **fictional** example vault — *Ada*, an agent that pair-programs with a developer named Sam on a toy CLI — so you can see retrieval and persona reconstruction working before you build your own.
+
+> These commands assume a repo checkout — run `git clone https://github.com/peiman/vaultmind && cd vaultmind` first if you installed via `go install` or the prebuilt archive. The example vault also ships **concept cards** (`concepts/`) defining the vocabulary — arc, episode, principle, and how they link.
 
 ```bash
 vaultmind index --vault examples/ada-vault
@@ -76,6 +78,13 @@ vaultmind hooks install <project-dir>
 ```
 
 This installs hook scripts that load identity + current context at session start, surface relevant pointers per turn, and capture each session as an episode for later distillation. The scripts are embedded in the binary and written into `<project-dir>/.claude/scripts/` (idempotent). See **[docs/AGENT_USAGE.md](docs/AGENT_USAGE.md)** for the day-to-day agent workflow, and **[docs/building-an-identity-vault.md](docs/building-an-identity-vault.md)** for how to grow an agent's identity from scratch — the arc method, and why an identity vault is **personal** and usually shouldn't be committed to a shared repo.
+
+**Cold start — seed from your existing sessions.** A new identity vault is empty, but you've probably worked with an agent for months. Point `episode capture` at a *directory* of past Claude Code transcripts to batch-capture them into episodes (recursive; empty/non-transcript files skipped), then surface candidate arcs — so the vault starts warm, not blank:
+
+```bash
+vaultmind episode capture ~/.claude/projects/<project> --output-dir ~/.vaultmind/persona/episodes
+vaultmind arc candidates --vault ~/.vaultmind/persona
+```
 
 ## Opt-in usage telemetry
 
