@@ -7,9 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7] — 2026-06-04
+
+Re-release of 0.1.6 with prebuilt binaries. 0.1.6's release job failed the coverage
+gate before building artifacts, so 0.1.6 is `go install`-able but ships no prebuilt
+ORT archives; 0.1.7 supersedes it (0.1.6 is retracted in `go.mod`). Same features.
+
+### Fixed
+- Coverage floor: the `episode capture` command (single-file and directory paths)
+  had no cmd-level test, which dropped project coverage below the gate. Added one.
+
 ### Changed
 - README now surfaces the cold-start **bootstrap-from-transcripts** path and the
-  example vault's concept cards, and notes that the "Try it" commands assume a repo
+  example vault's concept cards, and notes the "Try it" commands assume a repo
   checkout (clarifying it for `go install` / prebuilt-archive users).
 
 ## [0.1.6] — 2026-06-04
@@ -103,7 +113,8 @@ The initial public tag, retracted in favor of [0.1.3]. It shipped without the
 maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; do
 not install.
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.1.7...HEAD
+[0.1.7]: https://github.com/peiman/vaultmind/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/peiman/vaultmind/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/peiman/vaultmind/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/peiman/vaultmind/compare/v0.1.3...v0.1.4
