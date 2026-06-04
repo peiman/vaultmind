@@ -95,6 +95,25 @@ func TestVaultTrackReadScript_HasVaultPathPatternOverride(t *testing.T) {
 		"vault-track-read.sh must keep the legacy default pattern as the final fallback")
 }
 
+// TestVaultTrackReadScript_GuardsOptionalVarsUnderSetU — the script runs under
+// `set -u`, where referencing an *unset* variable aborts with "unbound variable".
+// VAULT_PATH_PATTERN and VAULTMIND_VAULT are optional (the PreToolUse command
+// doesn't set them in the common case), so they MUST be `${VAR:-}`-guarded.
+// Regression: a bare `[ -n "$VAULT_PATH_PATTERN" ]` made the hook abort on every
+// vault Read with "VAULT_PATH_PATTERN: unbound variable" (field report 2026-06-04).
+func TestVaultTrackReadScript_GuardsOptionalVarsUnderSetU(t *testing.T) {
+	body, ok := hookscripts.Get("vault-track-read.sh")
+	require.True(t, ok)
+	src := string(body)
+	require.Contains(t, src, "set -u", "this guard only matters under set -u")
+	assert.Contains(t, src, `${VAULT_PATH_PATTERN:-}`,
+		"VAULT_PATH_PATTERN must be ${VAR:-}-guarded so set -u doesn't abort when it's unset")
+	assert.Contains(t, src, `${VAULTMIND_VAULT:-}`,
+		"VAULTMIND_VAULT must be ${VAR:-}-guarded under set -u")
+	assert.NotContains(t, src, `[ -n "$VAULT_PATH_PATTERN" ]`,
+		"the bare unguarded reference is the bug — it aborts under set -u when unset")
+}
+
 // TestScripts_HonorVaultmindVaultOverride — issue #41.6: vault-recall.sh
 // and capture-episode.sh hardcoded `vaultmind-identity` with no override,
 // so a consumer whose vault has a different name had to rewrite the

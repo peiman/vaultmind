@@ -69,9 +69,9 @@ shopt -s extglob
 # basename so read-tracking actually fires for a consumer vault — bash `case`
 # globs span `/`, so `*/<name>/*.md` matches notes in subdirectories too.
 # Falls back to the vaultmind-* convention when neither is set.
-if [ -n "$VAULT_PATH_PATTERN" ]; then
-  PATTERN="$VAULT_PATH_PATTERN"
-elif [ -n "$VAULTMIND_VAULT" ]; then
+if [ -n "${VAULT_PATH_PATTERN:-}" ]; then
+  PATTERN="${VAULT_PATH_PATTERN:-}"
+elif [ -n "${VAULTMIND_VAULT:-}" ]; then
   PATTERN="*/${VAULTMIND_VAULT##*/}/*.md"
 else
   PATTERN="*/vaultmind-*/*.md"

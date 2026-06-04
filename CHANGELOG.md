@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`vault-track-read.sh` aborted with "unbound variable" under `set -u`.** The
+  PreToolUse read-tracking hook referenced the *optional* `$VAULT_PATH_PATTERN` /
+  `$VAULTMIND_VAULT` env vars bare; under `set -u` (which the script sets) an unset
+  optional var aborts the hook on every vault Read (non-blocking, but noisy and the
+  tracking silently didn't run). Guarded both with `${VAR:-}` defaults; added a
+  regression test pinning it (field report 2026-06-04).
+
 ## [0.1.5] — 2026-06-04
 
 ### Added
