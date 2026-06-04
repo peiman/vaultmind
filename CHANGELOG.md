@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **New guide: [docs/building-an-identity-vault.md](docs/building-an-identity-vault.md).**
+  How to *grow* an agent's identity vault — the arc method (identity is carried by
+  transformation moments, not rules; you don't author it up front, it accretes from
+  real sessions) — and a prominent boundary: **an identity vault is personal and
+  should not be committed to a shared project repo** unless you deliberately want one
+  shared identity across all developers. Linked from the README, the agent-onboarding
+  guide (§4a), and the example vault; the onboarding now tells the agent to surface
+  the personal-vs-shared choice during setup.
+
 ### Changed
 - **`index --embed` now names the MiniLM lane gap at embed time.** A pure-Go
   (`go install`) build silently lands on MiniLM (dense-only, 2 lanes). The embed

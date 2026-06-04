@@ -64,3 +64,10 @@ If you're new to this model, the recommended starting points are:
    principle structure. Don't pre-author these. Let the work produce them.
 
 The vault grows with the collaboration. Don't try to seed it all at once.
+
+**An identity vault is personal.** This Ada vault is committed only because she's a
+fictional demo. Your real agent's identity is *yours* — grown from your sessions —
+so keep it out of a shared project repo (gitignore it, or put it at
+`~/.vaultmind/persona/`) **unless** you deliberately want one shared identity across
+all the project's developers. Full guide:
+**[../../docs/building-an-identity-vault.md](../../docs/building-an-identity-vault.md)**.

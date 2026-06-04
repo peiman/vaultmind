@@ -126,6 +126,14 @@ Ask the user:
 
 Default to (1) unless the user explicitly chooses otherwise.
 
+**Tell the user — an identity vault is personal.** It's *their* agent's self, grown
+from *their* sessions, so it's normally **not committed** to a shared project repo.
+If they pick option 2 (in-project), advise gitignoring the vault (or keeping the
+project private) — **unless** they deliberately want one shared identity across all
+the project's developers (a team persona). Option 1 (`~/.vaultmind/persona/`)
+sidesteps this. The full why/how (the arc method + the personal-vs-shared boundary)
+is in **[docs/building-an-identity-vault.md](../../docs/building-an-identity-vault.md)**.
+
 ### 4b. Run init
 
 ```bash

@@ -75,7 +75,7 @@ VaultMind can wire into Claude Code — or any agent that supports SessionStart 
 vaultmind hooks install <project-dir>
 ```
 
-This installs hook scripts that load identity + current context at session start, surface relevant pointers per turn, and capture each session as an episode for later distillation. The scripts are embedded in the binary and written into `<project-dir>/.claude/scripts/` (idempotent). See **[docs/AGENT_USAGE.md](docs/AGENT_USAGE.md)** for the day-to-day agent workflow.
+This installs hook scripts that load identity + current context at session start, surface relevant pointers per turn, and capture each session as an episode for later distillation. The scripts are embedded in the binary and written into `<project-dir>/.claude/scripts/` (idempotent). See **[docs/AGENT_USAGE.md](docs/AGENT_USAGE.md)** for the day-to-day agent workflow, and **[docs/building-an-identity-vault.md](docs/building-an-identity-vault.md)** for how to grow an agent's identity from scratch — the arc method, and why an identity vault is **personal** and usually shouldn't be committed to a shared repo.
 
 ## Opt-in usage telemetry
 
