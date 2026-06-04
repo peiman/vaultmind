@@ -7,6 +7,11 @@ vault:
     # README.md is vault meta (this file's instructions), not a knowledge note.
     # Excluding it keeps the vault's own README out of every query's results.
     - "README.md"
+    # Episodes (captured session transcripts) are raw material for arc distillation,
+    # NOT retrieval targets. They're large — a transcript can be ~30x the size of an
+    # arc — and their signal is captured in the arcs distilled from them. Embedding
+    # them would dominate index cost and surface verbose transcripts over concise arcs.
+    - "episodes"
 
 # schema.aliases — per-vault frontmatter field aliases. When you migrate
 # notes that already use a field name (e.g. `last_updated`), you don't have

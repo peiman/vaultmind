@@ -62,7 +62,10 @@ type MemoryConfig struct {
 // defaultExcludes applies when a vault has no config (or an empty exclude list).
 // "README.md" is excluded as a file basename — a vault's own README is meta, not
 // a knowledge note; indexing it pollutes every query with a blank-titled hit.
-var defaultExcludes = []string{".git", ".obsidian", ".trash", "node_modules", "README.md"}
+// "episodes" is excluded because captured session transcripts are raw material for
+// arc distillation, not retrieval targets — large, and their signal lives in the
+// arcs distilled from them; embedding them would dominate index cost and noise.
+var defaultExcludes = []string{".git", ".obsidian", ".trash", "node_modules", "README.md", "episodes"}
 
 // LoadConfig reads .vaultmind/config.yaml from the vault root.
 // Returns defaults if the config file doesn't exist.

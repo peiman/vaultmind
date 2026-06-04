@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`episodes/` is now excluded from indexing by default.** Captured session
+  transcripts (the bootstrap target) are raw material for arc distillation, not
+  retrieval targets — large (a transcript is ~30× the size of an arc) and redundant
+  with the arcs distilled from them. The `init` template and `defaultExcludes` now
+  exclude `episodes`, so a bootstrapped vault doesn't embed megabytes of transcripts.
+  (Existing vaults: add `- "episodes"` to your `.vaultmind/config.yaml` exclude list.)
+
 ## [0.1.7] — 2026-06-04
 
 Re-release of 0.1.6 with prebuilt binaries. 0.1.6's release job failed the coverage

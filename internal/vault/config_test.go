@@ -54,8 +54,9 @@ func TestLoadConfig_DefaultExcludes(t *testing.T) {
 	cfg, err := vault.LoadConfig(t.TempDir())
 	require.NoError(t, err)
 
-	defaults := []string{".git", ".obsidian", ".trash"}
+	defaults := []string{".git", ".obsidian", ".trash", "README.md", "episodes"}
 	for _, d := range defaults {
-		assert.Contains(t, cfg.Vault.Exclude, d)
+		assert.Contains(t, cfg.Vault.Exclude, d,
+			"%q must be a default exclude (README/episodes are vault-meta and raw material, not retrieval targets)", d)
 	}
 }
