@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime/debug"
 	"strings"
 
 	"github.com/mattn/go-isatty"
@@ -326,7 +327,9 @@ func Execute() error {
 	// Ensure logger cleanup on exit
 	defer logger.Cleanup()
 
-	RootCmd.Version = fmt.Sprintf("%s, commit %s, built at %s", Version, Commit, Date)
+	info, ok := debug.ReadBuildInfo()
+	v, c, d := buildVersionInfo(Version, Commit, Date, info, ok)
+	RootCmd.Version = fmt.Sprintf("%s, commit %s, built at %s", v, c, d)
 	return RootCmd.Execute()
 }
 

@@ -227,6 +227,21 @@ func TestRunSearch_HumanModeCarriesHits(t *testing.T) {
 	assert.Contains(t, out, "concept-alpha", "human search output must include the matching note ID")
 }
 
+// RunSearch human mode on a zero-hit query must print a clear "no results"
+// line, not blank output — blank reads as "broken" to a new adopter.
+func TestRunSearch_HumanModeZeroHitsPrintsMessage(t *testing.T) {
+	db, dir := smallIndexedVault(t)
+	retriever := &query.FTSRetriever{DB: db}
+	var buf bytes.Buffer
+	_, err := query.RunSearch(retriever, query.SearchConfig{
+		Query: "zzznonexistentterm", Limit: 5, VaultPath: dir,
+	}, &buf)
+	require.NoError(t, err)
+	out := buf.String()
+	assert.Contains(t, out, "No results for", "zero-hit text search must name the empty result")
+	assert.Contains(t, out, "vaultmind ask", "zero-hit hint should point at the semantic path")
+}
+
 // RunNoteGet with an ambiguous input (two notes with the same title) returns
 // an "ambiguous_resolution" envelope in JSON mode. This is the path
 // AX-sensitive callers use to prompt for disambiguation.

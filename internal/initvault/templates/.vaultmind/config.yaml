@@ -4,6 +4,9 @@ vault:
     - ".obsidian"
     - ".trash"
     - ".vaultmind"
+    # README.md is vault meta (this file's instructions), not a knowledge note.
+    # Excluding it keeps the vault's own README out of every query's results.
+    - "README.md"
 
 # schema.aliases — per-vault frontmatter field aliases. When you migrate
 # notes that already use a field name (e.g. `last_updated`), you don't have

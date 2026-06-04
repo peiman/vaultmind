@@ -16,6 +16,8 @@ func TestWriteKeywordOnlyHint_FiresOnKeywordModeWithZeroHits(t *testing.T) {
 	out := buf.String()
 	assert.Contains(t, out, "no embeddings", "hint should name the cause")
 	assert.Contains(t, out, "vaultmind index --embed", "hint should name the remedy")
+	assert.NotContains(t, out, "--model bge-m3",
+		"the no-embeddings remedy must run on any backend — bge-m3 is refused on the pure-Go binary")
 }
 
 func TestWriteKeywordOnlyHint_SilentOnHybridMode(t *testing.T) {

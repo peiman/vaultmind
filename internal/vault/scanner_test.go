@@ -110,6 +110,26 @@ func TestScan_ExcludeByName(t *testing.T) {
 	assert.NotContains(t, paths, filepath.Join("templates", "tmpl.md"))
 }
 
+// Excludes apply to files by basename, not just directories — so "README.md"
+// in the exclude list keeps a vault's own meta README out of the index instead
+// of letting it pollute every query as a blank-titled hit.
+func TestScan_ExcludesFileByName(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "concepts"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "README.md"), []byte("# Vault meta"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "concepts", "note.md"), []byte("c"), 0o644))
+
+	files, err := vault.Scan(dir, []string{"README.md"})
+	require.NoError(t, err)
+
+	paths := make([]string, len(files))
+	for i, f := range files {
+		paths[i] = f.RelPath
+	}
+	assert.Contains(t, paths, filepath.Join("concepts", "note.md"), "knowledge notes must still index")
+	assert.NotContains(t, paths, "README.md", "a file basename in the exclude list must be skipped, not just dirs")
+}
+
 func testExcludes() []string {
 	return []string{".git", ".obsidian", ".trash", ".vaultmind", "templates"}
 }

@@ -65,6 +65,14 @@ func Scan(vaultRoot string, excludes []string) ([]ScannedFile, error) {
 			return fmt.Errorf("computing relative path: %w", relErr)
 		}
 
+		// Exclude files too, not just directories: a basename match (e.g.
+		// "README.md" — vault meta, not a knowledge note) or an exact
+		// vault-relative path. Without this, a vault's own README indexed as a
+		// note and polluted every query's results.
+		if excludeSet[d.Name()] || excludeSet[relPath] {
+			return nil
+		}
+
 		info, infoErr := d.Info()
 		if infoErr != nil {
 			return fmt.Errorf("getting file info for %s: %w", relPath, infoErr)

@@ -63,6 +63,8 @@ func TestDoctor_HumanOutputNamesEmbedRemedy(t *testing.T) {
 		"doctor must name 'none' when no embeddings exist — that's the remedy trigger")
 	assert.Contains(t, text, "vaultmind index --embed",
 		"doctor must print the exact remedy command users should run")
+	assert.NotContains(t, text, "--model bge-m3",
+		"the 'no embeddings' remedy must run on any backend — bge-m3 is refused on the pure-Go binary go install yields")
 }
 
 // doctor human output surfaces the Obsidian-incompatible link section when
@@ -216,6 +218,8 @@ func TestWriteEmbeddingStatus_NotReadyPrintsRemedy(t *testing.T) {
 	out := buf.String()
 	assert.Contains(t, out, "Embeddings: none (12 notes)")
 	assert.Contains(t, out, "vaultmind index --embed")
+	assert.NotContains(t, out, "--model bge-m3",
+		"the 'none' remedy must run on any backend — bge-m3 is refused on the pure-Go binary")
 }
 
 // Mixed-model state surfaces the per-model breakdown so the operator

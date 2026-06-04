@@ -59,7 +59,10 @@ type MemoryConfig struct {
 	ContextPackDefaultBudget int     `yaml:"context_pack_default_budget"`
 }
 
-var defaultExcludes = []string{".git", ".obsidian", ".trash", "node_modules"}
+// defaultExcludes applies when a vault has no config (or an empty exclude list).
+// "README.md" is excluded as a file basename — a vault's own README is meta, not
+// a knowledge note; indexing it pollutes every query with a blank-titled hit.
+var defaultExcludes = []string{".git", ".obsidian", ".trash", "node_modules", "README.md"}
 
 // LoadConfig reads .vaultmind/config.yaml from the vault root.
 // Returns defaults if the config file doesn't exist.

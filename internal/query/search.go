@@ -60,6 +60,18 @@ func RunSearch(retriever retrieval.Retriever, cfg SearchConfig, w io.Writer) (*S
 		return out, nil
 	}
 
+	if len(results) == 0 {
+		// Without this, text-mode search printed nothing and exited 0 on a
+		// zero-hit query — indistinguishable from "broken" to a new adopter.
+		// Name the empty result and point at the semantic path (`ask`), which
+		// matches paraphrases that keyword search can't.
+		_, err := fmt.Fprintf(w,
+			"No results for %q.\n"+
+				"  Try fewer or broader terms, or `vaultmind ask %q` for semantic (paraphrase) matching.\n",
+			cfg.Query, cfg.Query)
+		return out, err
+	}
+
 	for _, r := range results {
 		if _, err := fmt.Fprintf(w, "%s  %s\n", r.ID, r.Title); err != nil {
 			return out, err

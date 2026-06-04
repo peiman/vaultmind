@@ -40,9 +40,14 @@ func writeEmbeddingStatus(w io.Writer, emb *query.DoctorEmbeddings) error {
 		return nil
 	}
 	if !emb.SemanticReady {
+		// Backend-agnostic remedy: `--embed` picks the binary's default model
+		// (bge-m3 on ORT, minilm on pure-Go). Naming bge-m3 here would be
+		// refused on the pure-Go binary `go install` yields. The bge-m3-specific
+		// remedy below (modality imbalance) is reachable only on an ORT binary —
+		// the minilm branch returns before it.
 		_, err := fmt.Fprintf(w,
 			"Embeddings: none (%d notes) — keyword-only retrieval\n"+
-				"  run: vaultmind index --embed --model bge-m3 --vault <vault>\n",
+				"  run: vaultmind index --embed --vault <vault>\n",
 			emb.TotalNotes)
 		return err
 	}

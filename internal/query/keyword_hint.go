@@ -23,6 +23,10 @@ func WriteKeywordOnlyHint(w io.Writer, retrievalMode string, hitCount int) bool 
 	_, _ = fmt.Fprintln(w, "'The Judgment Gap') won't match unless the query echoes a title word.")
 	_, _ = fmt.Fprintln(w, "")
 	_, _ = fmt.Fprintln(w, "To enable semantic retrieval:")
-	_, _ = fmt.Fprintln(w, "  vaultmind index --embed --model bge-m3 --vault <vault>")
+	// Backend-agnostic on purpose: `--embed` lets the binary pick its default
+	// model (bge-m3 on ORT builds, minilm on the pure-Go binary `go install`
+	// yields). Naming `--model bge-m3` here would be *refused* on a pure-Go
+	// binary — the most common adopter path — turning a remedy into an error.
+	_, _ = fmt.Fprintln(w, "  vaultmind index --embed --vault <vault>")
 	return true
 }
