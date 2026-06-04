@@ -106,3 +106,6 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
+
+// Versions before v0.1.3 predate the public release; use v0.1.3 or later.
+retract [v0.1.0, v0.1.2] // Predate the public release; superseded by v0.1.3.
