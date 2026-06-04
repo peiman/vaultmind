@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Bootstrap an identity vault from existing transcripts.** `vaultmind episode
+  capture` now accepts a **directory** — it recursively captures every `*.jsonl`
+  transcript under it into episodes (empty/non-transcript files skipped), so you can
+  seed a vault from months of existing Claude Code sessions in one command, then run
+  `vaultmind arc candidates`. The agent-onboarding guide gains a step that offers this
+  during setup; the identity guide gains a "cold start" section. (`capture` now also
+  gates on a real session id, so junk transcripts no longer produce degenerate episodes.)
 - **Concept cards in the example vault** (`examples/ada-vault/concepts/`) — atomic
   notes defining the core vocabulary an adopter needs: **arc**, **episode**,
   **principle**, and **the-memory-pipeline** (how they link: episode → arc candidate

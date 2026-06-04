@@ -11,6 +11,8 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/peiman/vaultmind/internal/episode"
 	"github.com/spf13/cobra"
@@ -37,8 +39,8 @@ SUBCOMMANDS
 }
 
 var episodeCaptureCmd = &cobra.Command{
-	Use:   "capture <transcript-path>",
-	Short: "Convert a Claude Code session transcript into a markdown episode file",
+	Use:   "capture <transcript-or-dir>",
+	Short: "Convert a Claude Code session transcript (or a directory of them) into episodes",
 	Long: `Parse a Claude Code JSONL transcript and write a structured markdown episode.
 
 Episode capture is the pipeline entry point from a live Claude Code session into
@@ -88,10 +90,18 @@ EXAMPLES
       # Write to a custom directory instead of the default
 
   vaultmind episode capture "$CLAUDE_SESSION_TRANSCRIPT"
-      # Typical hook invocation; CLAUDE_SESSION_TRANSCRIPT set by Claude Code`,
+      # Typical hook invocation; CLAUDE_SESSION_TRANSCRIPT set by Claude Code
+
+  vaultmind episode capture ~/.claude/projects/my-project --output-dir vaultmind-identity/episodes
+      # BOOTSTRAP: pass a DIRECTORY to capture every *.jsonl transcript under it
+      # (recursively). Seed an identity vault from sessions that already exist —
+      # then run 'vaultmind arc candidates'. Empty/non-transcript files are skipped.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		outputDir, _ := cmd.Flags().GetString("output-dir")
+		if info, err := os.Stat(args[0]); err == nil && info.IsDir() {
+			return runEpisodeCaptureDir(cmd, args[0], outputDir)
+		}
 		path, err := episode.Capture(args[0], outputDir)
 		if err != nil {
 			return err
@@ -99,6 +109,30 @@ EXAMPLES
 		_, err = fmt.Fprintln(cmd.OutOrStdout(), path)
 		return err
 	},
+}
+
+// runEpisodeCaptureDir batch-captures every *.jsonl transcript under dir and prints
+// a summary — so seeding an identity vault from an existing session history (e.g.
+// ~/.claude/projects/<slug>) is one command instead of a hand-rolled loop. Empty or
+// non-transcript files are reported, not fatal.
+func runEpisodeCaptureDir(cmd *cobra.Command, dir, outputDir string) error {
+	batch, err := episode.CaptureDir(dir, outputDir)
+	if err != nil {
+		return err
+	}
+	out := strings.Join(batch.Captured, "\n")
+	if len(batch.Captured) > 0 {
+		out += "\n"
+	}
+	out += fmt.Sprintf("Captured %d episode(s) from %s\n", len(batch.Captured), dir)
+	if len(batch.Skipped) > 0 {
+		out += fmt.Sprintf("Skipped %d file(s) (empty or not a Claude Code transcript).\n", len(batch.Skipped))
+	}
+	if len(batch.Captured) > 0 {
+		out += "\nNext: surface arc candidates with `vaultmind arc candidates`.\n"
+	}
+	_, err = fmt.Fprint(cmd.OutOrStdout(), out)
+	return err
 }
 
 func init() {

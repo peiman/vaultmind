@@ -169,6 +169,30 @@ Take their answers and **rewrite** `<vault>/identity/who-am-i.md` by hand. Match
 
 For `references/current-context.md`: same treatment. Ask "What's the most important thing in your work right now? What's the live edge?" Write a short note from their answers.
 
+### 4c-bis. Bootstrap from existing sessions (optional, recommended)
+
+A fresh vault has no arcs yet — but the user almost certainly has *months* of past
+Claude Code sessions to draw on. Offer to seed the vault from them so it starts warm
+instead of empty:
+
+> You already have past sessions saved in `~/.claude/projects/`. I can turn them into
+> episodes and surface candidate "growth moments" — real arcs from real work — so your
+> vault doesn't start from zero. Want me to, and from which project(s)?
+
+If yes, batch-capture a project's transcripts (a **directory** captures every `*.jsonl`
+under it recursively), then surface candidates:
+
+```bash
+vaultmind episode capture ~/.claude/projects/<project-slug> --output-dir "<vault>/episodes"
+vaultmind arc candidates --vault "<vault>"
+```
+
+Then walk the candidates **with** the user: each is a pointer, not an arc. For the ones
+that are genuine transformations, write them as arcs (trigger / push / deeper-sight /
+principle / source) per `how-to-write-arcs`. **Never auto-write — propose, the user
+confirms.** Don't capture *all* projects blindly; start with the one or two whose work
+best defines who this agent is.
+
 ### 4d. Index the vault
 
 ```bash

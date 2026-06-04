@@ -45,6 +45,24 @@ Don't. An identity vault **accretes**:
    vault so the agent reconstructs itself before the first message. Over weeks, the
    identity gets rich because it's made of real moments, not aspirations.
 
+## Cold start: seed from your existing sessions
+
+A new vault is empty — but you've probably been working with an agent for *months*,
+and those sessions are arc material. Instead of waiting for new arcs to accrete, seed
+the vault from transcripts you already have. Pointing `episode capture` at a
+**directory** captures every `*.jsonl` transcript under it (recursively):
+
+```bash
+vaultmind episode capture ~/.claude/projects/<project> --output-dir ~/.vaultmind/persona/episodes
+vaultmind arc candidates --vault ~/.vaultmind/persona
+```
+
+`episode capture` turns each session into an episode; `arc candidates` surfaces the
+transformation moments across them. Then you (with the agent) judge each candidate and
+write the real ones as arcs — same discipline as always, just with raw material you
+already have. Start with the one or two projects whose work best defines the agent, not
+your whole history at once. (Empty or non-transcript files are skipped.)
+
 ## The note types
 
 | Type | Holds | Example |
