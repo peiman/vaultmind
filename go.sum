@@ -118,8 +118,8 @@ github.com/kevinburke/ssh_config v1.2.0 h1:x584FjTGwHzMwvHx18PXxbBVzfnxogHaAReU4
 github.com/kevinburke/ssh_config v1.2.0/go.mod h1:CT57kijsi8u/K/BOFA39wgDQJ9CxiF4nAY/ojJ6r6mM=
 github.com/klauspost/cpuid/v2 v2.3.0 h1:S4CRMLnYUhGeDFDqkGriYKdfoFlDnMtqTiI/sFzhA9Y=
 github.com/klauspost/cpuid/v2 v2.3.0/go.mod h1:hqwkgyIinND0mEev00jJYCxPNVRVXFQeu1XKlok6oO0=
-github.com/knights-analytics/hugot v0.7.0 h1:ihjCnJXqn7agksuH1IfGBJUZkecXhXb1XkuMDG152jw=
-github.com/knights-analytics/hugot v0.7.0/go.mod h1:lMpY26MxcUk0ivJCZz73JNPCopeg5/kFUQtppGBM5J0=
+github.com/knights-analytics/hugot v0.7.4 h1:aRdRCuV/72Wy+OXdrNSixFCVVuWUlsi6ep/zGeyxbkA=
+github.com/knights-analytics/hugot v0.7.4/go.mod h1:oWluQ5YbJ9/av9T7D3SLZFthgQ44JG3syVN+YezOwII=
 github.com/knights-analytics/ortgenai v0.3.1 h1:0Awe43Zu+giDxzlpoNvx9ekbez/zxc8XMzKU++sOUB8=
 github.com/knights-analytics/ortgenai v0.3.1/go.mod h1:lSbQsRP5wY5NS+4W5CUGhdxjTzERQkR7WprAFxrBSt4=
 github.com/kr/pretty v0.1.0/go.mod h1:dAy3ld7l9f0ibDNOQOHHMYYIIbhfbHSm3C4ZsoJORNo=
