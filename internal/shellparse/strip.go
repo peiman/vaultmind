@@ -171,14 +171,38 @@ func StripShellQuoting(cmd string) string {
 // *allowTabs, and returns the new index past the opener line plus
 // true. On failure (no identifier marker found), returns 0, false
 // and leaves out/marker/allowTabs untouched so the caller can treat
-// `<<` as literal.
+// `<<` as literal. Parsing is delegated to parseHeredocOpener so the
+// line-oriented StripCommentsAndBlanks reuses the exact same opener
+// semantics (SSOT).
 func tryHeredocOpener(cmd string, i int, out *strings.Builder, marker *string, allowTabs *bool) (int, bool) {
+	m, tabs, endOfLine, nextI, ok := parseHeredocOpener(cmd, i)
+	if !ok {
+		return 0, false
+	}
+	// Emit the opener line up to its terminating newline (or end).
+	out.WriteString(cmd[i:endOfLine])
+	if endOfLine < len(cmd) {
+		out.WriteByte('\n')
+	}
+	*marker = m
+	*allowTabs = tabs
+	return nextI, true
+}
+
+// parseHeredocOpener parses a heredoc opener starting at i (where
+// cmd[i:i+2] == "<<") WITHOUT emitting anything. It returns the marker
+// identifier, whether the <<- (leading-tab-stripping) variant was
+// used, the index of the opener line's terminating newline (or
+// len(cmd) when the opener ends the input), the index of the first
+// body byte (past that newline), and ok. On a malformed opener (no
+// identifier marker) it returns ok=false. Pure — the caller decides
+// what, if anything, to emit.
+func parseHeredocOpener(cmd string, i int) (marker string, allowTabs bool, endOfLine, nextI int, ok bool) {
 	n := len(cmd)
 	j := i + 2 // past the leading `<<`
 
-	tabsVariant := false
 	if j < n && cmd[j] == '-' {
-		tabsVariant = true
+		allowTabs = true
 		j++
 	}
 	for j < n && (cmd[j] == ' ' || cmd[j] == '\t') {
@@ -197,17 +221,15 @@ func tryHeredocOpener(cmd string, i int, out *strings.Builder, marker *string, a
 	}
 	if j == mStart {
 		// No identifier captured — not a valid heredoc opener.
-		return 0, false
+		return "", false, 0, 0, false
 	}
-	newMarker := cmd[mStart:j]
+	marker = cmd[mStart:j]
 
 	if quote != 0 && j < n && cmd[j] == quote {
 		j++
 	}
 
-	// Emit the opener line up to its terminating newline (or end).
 	nl := strings.IndexByte(cmd[j:], '\n')
-	var endOfLine, nextI int
 	if nl == -1 {
 		endOfLine = n
 		nextI = n
@@ -215,14 +237,7 @@ func tryHeredocOpener(cmd string, i int, out *strings.Builder, marker *string, a
 		endOfLine = j + nl
 		nextI = endOfLine + 1
 	}
-	out.WriteString(cmd[i:endOfLine])
-	if nl != -1 {
-		out.WriteByte('\n')
-	}
-
-	*marker = newMarker
-	*allowTabs = tabsVariant
-	return nextI, true
+	return marker, allowTabs, endOfLine, nextI, true
 }
 
 // isIdentChar reports whether b is a valid heredoc-marker character
@@ -240,4 +255,131 @@ func isIdentChar(b byte) bool {
 	default:
 		return false
 	}
+}
+
+// StripCommentsAndBlanks returns the behavioral skeleton of a shell
+// SCRIPT: full-line comments and blank lines removed, while heredoc
+// bodies and multi-line quoted-string contents are preserved verbatim.
+// Two scripts with equal skeletons differ only in comments or blank
+// lines — i.e. they behave identically.
+//
+// Hook-drift detection uses this so a comment-only divergence (e.g. an
+// installed script that kept richer real-name annotations than the
+// sanitized canonical) is NOT reported as drift, while a real CODE
+// change still is. It is the script-level analogue of StripShellQuoting
+// (which is command-string-level and drops the opposite regions:
+// quoted/heredoc content, keeping comments).
+//
+// Scope (intentional): only FULL-LINE comments are stripped — a line
+// whose first non-blank byte is `#`, excluding a line-1 `#!` shebang
+// (which selects the interpreter and so is behavioral; a `#!` on any
+// later line is an ordinary comment and is dropped).
+// Trailing/inline comments (`cmd # note`) are KEPT: stripping them
+// needs word-boundary analysis and would risk false negatives, whereas
+// keeping them at worst reports a harmless trailing-comment-only drift.
+// A `#`-leading line inside a heredoc body or a multi-line quoted
+// string is literal content, not a comment, so it is preserved; quote
+// and heredoc state is tracked across lines with the same lexical model
+// as StripShellQuoting.
+func StripCommentsAndBlanks(script string) string {
+	var out strings.Builder
+	out.Grow(len(script))
+
+	st := stateOutside
+	var marker string
+	var allowTabs bool
+
+	chunks := strings.SplitAfter(script, "\n")
+	for idx, chunk := range chunks {
+		// SplitAfter yields a trailing "" after a final newline; skip it
+		// so a script ending in "\n" doesn't grow a phantom empty line.
+		if idx == len(chunks)-1 && chunk == "" {
+			break
+		}
+		body := strings.TrimSuffix(chunk, "\n")
+
+		switch st {
+		case stateInHeredoc:
+			// Heredoc body is literal content — keep verbatim. Close on a
+			// line equal to the marker (leading tabs tolerated for <<-).
+			out.WriteString(chunk)
+			check := body
+			if allowTabs {
+				check = strings.TrimLeft(check, "\t")
+			}
+			if check == marker {
+				st, marker, allowTabs = stateOutside, "", false
+			}
+			continue
+		case stateInSingle, stateInDouble:
+			// Continuation of a multi-line quoted string — keep verbatim,
+			// advancing state in case the quote closes on this line.
+			out.WriteString(chunk)
+			st, marker, allowTabs = advanceWithinLine(body, st, marker, allowTabs)
+			continue
+		}
+
+		// stateOutside, at the start of a fresh line. Trim `\r` too so a
+		// CRLF blank line is dropped like its LF twin.
+		trimmed := strings.Trim(body, " \t\r")
+		switch {
+		case trimmed == "":
+			// blank line — drop
+		case trimmed[0] == '#' && (idx != 0 || !strings.HasPrefix(trimmed, "#!")):
+			// full-line comment — drop. A `#!` on line 1 is the shebang
+			// (kept); `#!` anywhere else is an ordinary comment.
+		default:
+			out.WriteString(chunk)
+			st, marker, allowTabs = advanceWithinLine(body, stateOutside, "", false)
+		}
+	}
+
+	return out.String()
+}
+
+// advanceWithinLine scans one line starting in state st (stateOutside,
+// stateInSingle, or stateInDouble) and returns the lexical state at the
+// line's end. It is line-oriented: a heredoc opener flips the state to
+// stateInHeredoc (the body begins on the following line, which the
+// caller handles), so any text after the opener on the same line does
+// not affect the returned state. Heredoc-opener semantics are shared
+// with StripShellQuoting via parseHeredocOpener.
+func advanceWithinLine(line string, st state, marker string, allowTabs bool) (state, string, bool) {
+	n := len(line)
+	for i := 0; i < n; {
+		switch st {
+		case stateOutside:
+			if i+1 < n && line[i] == '<' && line[i+1] == '<' {
+				if m, tabs, _, _, ok := parseHeredocOpener(line, i); ok {
+					return stateInHeredoc, m, tabs
+				}
+			}
+			switch line[i] {
+			case '\'':
+				st = stateInSingle
+			case '"':
+				st = stateInDouble
+			}
+			i++
+		case stateInSingle:
+			// No escapes in single-quoted strings (shell semantics).
+			if line[i] == '\'' {
+				st = stateOutside
+			}
+			i++
+		case stateInDouble:
+			// \X is an escape — \" does not close.
+			if line[i] == '\\' && i+1 < n {
+				i += 2
+				continue
+			}
+			if line[i] == '"' {
+				st = stateOutside
+			}
+			i++
+		default:
+			i++
+		}
+	}
+	return st, marker, allowTabs
 }

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Hook-drift detection no longer false-positives on comment-only differences.**
+  `doctor`'s hook-drift check compared each installed hook script to the embedded
+  canonical byte-for-byte, so a script that kept richer annotations than the shipped
+  (sanitized) canonical was reported as "drifted" even when its code was identical —
+  training you to ignore a diagnostic that was crying wolf. It now compares the
+  behavioral skeleton (full-line comments and blank lines stripped; heredoc bodies and
+  quoted-string contents preserved), so only a real **code** change counts as drift.
+  This matches the "only real edits are drift" doctrine already used for vault-note
+  drift. Backed by a new heredoc- and quoting-aware `shellparse.StripCommentsAndBlanks`.
+
 ## [0.1.8] — 2026-06-04
 
 ### Fixed

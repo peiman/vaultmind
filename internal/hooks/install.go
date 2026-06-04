@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 
 	"github.com/peiman/vaultmind/internal/hookscripts"
+	"github.com/peiman/vaultmind/internal/shellparse"
 )
 
 // InstallConfig controls a hooks-install run.
@@ -156,14 +157,18 @@ func Install(cfg InstallConfig) (*InstallResult, error) {
 }
 
 // CompareInstalled returns the set of installed-script names whose
-// bytes differ from the embedded canonical. Useful for doctor's
-// hook-drift check; same shape as DetectContentDrift for vault
-// notes but for hook scripts.
+// BEHAVIOR differs from the embedded canonical. The comparison is on
+// the code skeleton (shellparse.StripCommentsAndBlanks): full-line
+// comments and blank lines are ignored, so an installed script that
+// kept richer real-name annotations than the sanitized canonical is
+// NOT flagged, while a real code change is. Useful for doctor's
+// hook-drift check; same shape as DetectContentDrift for vault notes
+// but for hook scripts, and same "only real edits are drift" doctrine.
 //
 // Names not present in the user's scripts dir are NOT counted as
 // drift — they're "not installed" (a separate signal). Names
-// present but matching are not counted (clean state). Only
-// differs-from-canonical counts.
+// present but behaviorally matching are not counted (clean state).
+// Only behavioral divergence from canonical counts.
 func CompareInstalled(projectDir string) ([]string, error) {
 	scriptsDir := filepath.Join(projectDir, ".claude", "scripts")
 	if _, err := os.Stat(scriptsDir); os.IsNotExist(err) {
@@ -188,7 +193,10 @@ func CompareInstalled(projectDir string) ([]string, error) {
 			}
 			return nil, fmt.Errorf("reading %s: %w", dst, err)
 		}
-		if !hashEq(existing, canonical) {
+		// Behavioral compare: comment-only and blank-line differences are
+		// not drift (a hook's behavior is its code, not its annotations);
+		// a real code change still is.
+		if shellparse.StripCommentsAndBlanks(string(existing)) != shellparse.StripCommentsAndBlanks(string(canonical)) {
 			drifted = append(drifted, name)
 		}
 	}

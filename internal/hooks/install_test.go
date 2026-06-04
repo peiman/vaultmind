@@ -163,6 +163,40 @@ func TestCompareInstalled_NoScriptsDir_ReturnsEmpty(t *testing.T) {
 	assert.Empty(t, drift)
 }
 
+// TestCompareInstalled_IgnoresCommentOnlyDrift — the load-bearing
+// behavior of the comment-aware drift check: an installed script that
+// differs from canonical ONLY in a full-line comment is NOT drift,
+// while a real code change still is. Guards the false-positive a
+// byte-exact compare produced for consumers who kept richer annotations
+// than the sanitized canonical.
+func TestCompareInstalled_IgnoresCommentOnlyDrift(t *testing.T) {
+	dir := t.TempDir()
+	scriptsDir := filepath.Join(dir, ".claude", "scripts")
+	require.NoError(t, os.MkdirAll(scriptsDir, 0o755))
+	_, err := hooks.Install(hooks.InstallConfig{ProjectDir: dir})
+	require.NoError(t, err)
+
+	name := "vault-recall.sh"
+	p := filepath.Join(scriptsDir, name)
+	canonical, err := os.ReadFile(p)
+	require.NoError(t, err)
+
+	// Comment-only divergence: a trailing full-line comment (the line-1
+	// shebang is untouched). Must NOT be reported as drift.
+	commented := append(append([]byte{}, canonical...), []byte("\n# an extra local annotation\n")...)
+	require.NoError(t, os.WriteFile(p, commented, 0o700))
+	drift, err := hooks.CompareInstalled(dir)
+	require.NoError(t, err)
+	assert.Empty(t, drift, "comment-only divergence is not behavioral drift")
+
+	// A real code change on the same script MUST surface.
+	changed := append(append([]byte{}, canonical...), []byte("\necho injected\n")...)
+	require.NoError(t, os.WriteFile(p, changed, 0o700))
+	drift, err = hooks.CompareInstalled(dir)
+	require.NoError(t, err)
+	assert.Equal(t, []string{name}, drift, "a real code change is drift")
+}
+
 // TestInstall_OnlyWritesNamedSubset — companion project 2026-05-07 MEDIUM:
 // `vaultmind hooks install` was all-or-nothing (writes 8 scripts).
 // Consumers customizing non-auto-RAG hooks (the companion project customized

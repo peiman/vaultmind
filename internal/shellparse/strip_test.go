@@ -195,3 +195,99 @@ func TestIsIdentChar(t *testing.T) {
 		}
 	}
 }
+
+// TestStripCommentsAndBlanks pins the script-level behavioral skeleton
+// used by hook-drift detection: full-line comments and blank lines are
+// dropped, but heredoc bodies and multi-line quoted-string contents
+// (which are emitted output, i.e. behavior) are preserved verbatim —
+// including `#`-leading lines that LOOK like comments but are literal
+// content.
+func TestStripCommentsAndBlanks(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"empty", "", ""},
+		{"shebang preserved", "#!/usr/bin/env bash\n", "#!/usr/bin/env bash\n"},
+		{"full-line comment dropped", "#!/bin/bash\nx=1\n# a comment\ny=2\n", "#!/bin/bash\nx=1\ny=2\n"},
+		{"indented comment dropped", "x=1\n    # indented\ny=2\n", "x=1\ny=2\n"},
+		{"blank lines dropped", "x=1\n\n\t\ny=2\n", "x=1\ny=2\n"},
+		{"trailing comment kept (full-line-only scope)", "x=1 # note\n", "x=1 # note\n"},
+		{"no trailing newline", "x=1\n# c", "x=1\n"},
+		{"hash inside single quote is not a comment", "echo 'a # b'\n", "echo 'a # b'\n"},
+		// Heredoc bodies are literal content — `#` lines preserved.
+		{
+			"heredoc # body preserved",
+			"cat <<'EOF'\n# not a comment\nEOF\n",
+			"cat <<'EOF'\n# not a comment\nEOF\n",
+		},
+		{
+			"heredoc <<- tab-stripped close, # body preserved",
+			"\tcat <<-EOF\n\t# body line\n\tEOF\n",
+			"\tcat <<-EOF\n\t# body line\n\tEOF\n",
+		},
+		{
+			"blank line inside heredoc preserved",
+			"cat <<EOF\n\nEOF\n",
+			"cat <<EOF\n\nEOF\n",
+		},
+		// Multi-line quoted strings — `#`-leading continuation lines preserved.
+		{
+			"multi-line double-quote # line preserved",
+			"x=\"a\n# still string\nb\"\n",
+			"x=\"a\n# still string\nb\"\n",
+		},
+		{
+			"multi-line single-quote # line preserved",
+			"x='a\n# still string\nb'\n",
+			"x='a\n# still string\nb'\n",
+		},
+		{
+			// Exercises the \" escape branch: the escaped quote must NOT
+			// close the string, so the next `#` line stays string content.
+			"multi-line double-quote with escaped quote, # line preserved",
+			"x=\"a\\\"b\n# still string\nc\"\n",
+			"x=\"a\\\"b\n# still string\nc\"\n",
+		},
+		{
+			// CRLF blank line drops like an LF blank; CRLF code lines kept.
+			"CRLF blank line dropped",
+			"x=1\r\n\r\ny=2\r\n",
+			"x=1\r\ny=2\r\n",
+		},
+		{
+			// `#!` is a shebang only on line 1; elsewhere it's a comment.
+			"mid-script #! is a comment, not a shebang",
+			"#!/bin/bash\nx=1\n#!not a shebang\ny=2\n",
+			"#!/bin/bash\nx=1\ny=2\n",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := StripCommentsAndBlanks(tc.in); got != tc.want {
+				t.Errorf("StripCommentsAndBlanks(%q):\n  got  %q\n  want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestStripCommentsAndBlanks_DriftEquivalence is the load-bearing
+// property for hook-drift: two scripts that differ ONLY in a full-line
+// comment (the sanitized-vs-original annotation case that produced
+// false-positive drift) must yield equal skeletons, while a real code
+// change must not.
+func TestStripCommentsAndBlanks_DriftEquivalence(t *testing.T) {
+	original := "#!/usr/bin/env bash\n# from the companion project's dogfood\nset -u\nx=1\n"
+	sanitized := "#!/usr/bin/env bash\n# from a partner team's dogfood\nset -u\nx=1\n"
+	if StripCommentsAndBlanks(original) != StripCommentsAndBlanks(sanitized) {
+		t.Errorf("comment-only divergence must NOT be drift:\n  %q\n  %q",
+			StripCommentsAndBlanks(original), StripCommentsAndBlanks(sanitized))
+	}
+
+	codeChange := "#!/usr/bin/env bash\n# from the companion project's dogfood\nset -u\nx=2\n"
+	if StripCommentsAndBlanks(original) == StripCommentsAndBlanks(codeChange) {
+		t.Errorf("a real code change MUST be drift, but skeletons matched: %q",
+			StripCommentsAndBlanks(original))
+	}
+}
