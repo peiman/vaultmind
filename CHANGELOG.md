@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Concept cards in the example vault** (`examples/ada-vault/concepts/`) — atomic
+  notes defining the core vocabulary an adopter needs: **arc**, **episode**,
+  **principle**, and **the-memory-pipeline** (how they link: episode → arc candidate
+  → arc → principle; arcs anchor identity). The example vault now teaches the model it
+  demonstrates. Complements [docs/building-an-identity-vault.md](docs/building-an-identity-vault.md).
+
 ### Fixed
 - **`vault-track-read.sh` aborted with "unbound variable" under `set -u`.** The
   PreToolUse read-tracking hook referenced the *optional* `$VAULT_PATH_PATTERN` /
