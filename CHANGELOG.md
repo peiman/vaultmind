@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **`index --embed` now names the MiniLM lane gap at embed time.** A pure-Go
+  (`go install`) build silently lands on MiniLM (dense-only, 2 lanes). The embed
+  output now adds a one-line note — dense-only + the **no-compile** upgrade to the
+  full BGE-M3 hybrid via the prebuilt ORT archive — so an adopter learns it at the
+  moment of indexing, not only from a later `doctor` run (focalc/Patrik field report).
+- **README install section clarifies the MiniLM vs BGE-M3 choice.** A "Which one?"
+  callout: MiniLM is genuinely fine for small vaults / slow machines; BGE-M3 (the
+  prebuilt ORT archive, no compiler) is for large/varied vaults wanting best recall;
+  and `go install` is the only path that can't produce BGE-M3 — so a `go install`-based
+  setup is on MiniLM by design.
+
 ## [0.1.4] — 2026-06-04
 
 ### Fixed

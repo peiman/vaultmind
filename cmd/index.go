@@ -200,6 +200,20 @@ func formatIndexResult(r index.IndexAndEmbedResult, model string, w io.Writer) e
 			r.Embed.Embedded, r.Embed.Skipped, r.Embed.Errors, model); err != nil {
 			return err
 		}
+		if model == "minilm" {
+			// `go install` (and onboarding scripts that wrap it) silently land on
+			// the pure-Go MiniLM build — dense-only, no sparse/ColBERT. An adopter
+			// who never runs `doctor` never learns the full hybrid exists, or that
+			// it needs no compile. Name the lane gap and the no-compile upgrade at
+			// the moment of embedding (focalc/Patrik field report, 2026-06-04).
+			if _, err := fmt.Fprint(w,
+				"  ↳ MiniLM is dense-only (2 lanes: full-text + dense). For BGE-M3's full "+
+					"4-way hybrid (+ sparse + ColBERT), download the prebuilt ORT archive — no "+
+					"compile — from https://github.com/peiman/vaultmind/releases (see "+
+					"docs/embedding-backends.md).\n"); err != nil {
+				return err
+			}
+		}
 		// Surface empty-output count loudly when non-zero — these notes have
 		// dense BGE-M3 but missing sparse/ColBERT and stay pending for the
 		// next embed pass. Without this line the operator only learns about

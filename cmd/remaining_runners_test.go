@@ -361,6 +361,10 @@ func TestFormatIndexResult_IncrementalMessageBreakdown(t *testing.T) {
 	assert.Contains(t, out, "Embedded 3 notes")
 	assert.Contains(t, out, "[model: minilm]",
 		"embed line names the model so onboarding agents can tell users which embedding path is active")
+	assert.Contains(t, out, "dense-only",
+		"a MiniLM embed must name the lane gap (dense-only) at index time, not only via a later doctor run")
+	assert.Contains(t, out, "ORT archive",
+		"a MiniLM embed must name the no-compile upgrade path to the full BGE-M3 hybrid (focalc/Patrik field report)")
 	// EmptyOutput == 0 — no warning line should appear, otherwise every
 	// successful run pollutes the operator's signal-to-noise.
 	assert.NotContains(t, out, "empty Sparse/ColBERT")
@@ -383,6 +387,8 @@ func TestFormatIndexResult_EmptyOutputSurfacedWhenNonZero(t *testing.T) {
 	assert.Contains(t, out, "Embedded 3 notes", "embedded count reflects only fully-embedded notes")
 	assert.Contains(t, out, "2 note(s) produced empty Sparse/ColBERT", "empty-output count must be loud")
 	assert.Contains(t, out, "remain pending", "operator must know the notes are still pending")
+	assert.NotContains(t, out, "dense-only",
+		"the MiniLM upgrade note must not appear on a BGE-M3 embed")
 }
 
 // memory related human output includes edge_type and confidence with each
