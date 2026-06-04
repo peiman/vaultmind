@@ -1,0 +1,1032 @@
+package index
+
+import (
+	"context"
+	"crypto/sha256"
+	"fmt"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/peiman/vaultmind/internal/embedding"
+	"github.com/peiman/vaultmind/internal/parser"
+	"github.com/peiman/vaultmind/internal/vault"
+	"github.com/rs/zerolog/log"
+)
+
+// IndexResult holds the outcome of an index rebuild.
+type IndexResult struct {
+	DBPath            string             `json:"db_path"`
+	Indexed           int                `json:"indexed"`
+	DomainNotes       int                `json:"domain_notes"`
+	UnstructuredNotes int                `json:"unstructured_notes"`
+	Errors            int                `json:"errors"`
+	Skipped           int                `json:"skipped"`
+	DuplicateIDs      int                `json:"duplicate_ids"`
+	Added             int                `json:"added"`
+	Updated           int                `json:"updated"`
+	Deleted           int                `json:"deleted"`
+	FullRebuild       bool               `json:"full_rebuild"`
+	DurationMs        int64              `json:"duration_ms"`
+	CompletedAt       string             `json:"completed_at"`
+	ErrorDetails      []IndexError       `json:"error_details,omitempty"`
+	PostIndexWarnings []PostIndexWarning `json:"post_index_warnings,omitempty"`
+}
+
+// IndexError names a specific per-file failure during Rebuild or
+// Incremental. The counter in IndexResult.Errors tells you *how many*
+// files failed; ErrorDetails tells you WHICH files and WHY — without it,
+// a partial-index failure is an unactionable number (manifesto #3).
+type IndexError struct {
+	Path  string `json:"path"`
+	Kind  string `json:"kind"` // "read" | "parse" | "store" | "delete"
+	Error string `json:"error"`
+}
+
+// PostIndexWarning reports failure of a post-store pass (link resolution,
+// alias detection, tag overlap). These run after the note-store transaction
+// commits; their failure leaves a partially-connected graph the operator
+// can't distinguish from a successful run without this surface.
+//
+// Conventional Step values: "orphan_sweep", "link_resolution", "alias_mention", "tag_overlap".
+type PostIndexWarning struct {
+	Step  string `json:"step"`
+	Error string `json:"error"`
+}
+
+// EmbedResult holds the outcome of an embedding pass.
+//
+// EmptyOutput counts notes whose embedder returned without error but with
+// empty Sparse and/or ColBERT outputs — the heads produced no usable tokens.
+// These notes are NOT counted as Embedded (their sparse_embedding /
+// colbert_embedding columns would be NULL); they remain pending for the next
+// run. See vaultmind#22 for the silent-failure pattern this surfaces.
+type EmbedResult struct {
+	Embedded    int    `json:"embedded"`
+	Skipped     int    `json:"skipped"`
+	Errors      int    `json:"errors"`
+	EmptyOutput int    `json:"empty_output,omitempty"`
+	Model       string `json:"model,omitempty"`
+}
+
+// IndexAndEmbedResult combines index and optional embed results for command output.
+type IndexAndEmbedResult struct {
+	Index *IndexResult `json:"index"`
+	Embed *EmbedResult `json:"embed,omitempty"`
+}
+
+// RunEmbed runs an embedding pass against the index DB. The embedder is
+// constructed lazily — only when there's pending work to do.
+//
+// Why lazy: the BGE-M3 model is ~2.2GB on disk and CGO+ORT session
+// creation pegs a CPU core for ~1s every time it's invoked. Running
+// `vaultmind index --embed --model bge-m3` against a fully-embedded
+// vault (which happens whenever the user re-runs after editing zero
+// notes — hooks, scripts, retries, doctor checks) used to pay that
+// load cost unconditionally. Heat without work. Counting pending notes
+// first lets us skip the model load entirely when there's nothing to do.
+func (idx *Indexer) RunEmbed(ctx context.Context, dbPath, model string) (*EmbedResult, error) {
+	// Count pending notes first, without instantiating the embedder.
+	// The pending-row condition matches what EmbedNotes would later use:
+	// for BGE-M3 (FullEmbedder) all three columns must be present; for
+	// MiniLM only the dense column.
+	//
+	//nolint:contextcheck // countPendingForModel calls Open which does not accept a context; the heavy work in EmbedNotes uses ctx properly
+	pending, skipped, err := countPendingForModel(dbPath, model)
+	if err != nil {
+		return nil, err
+	}
+	if pending == 0 {
+		return &EmbedResult{Skipped: skipped, Model: model}, nil
+	}
+
+	// There IS work to do — pay the model-load cost now.
+	//
+	// BGE-M3 has an experimental sidecar path: when VAULTMIND_USE_SIDECAR
+	// is set (and we're indexing with bge-m3), inference happens in a
+	// Python subprocess running PyTorch+MPS on Apple Silicon. Empirically
+	// 4x faster than in-process ORT+CPU, with a ~4s one-time startup cost
+	// that amortizes across the indexing pass. See vaultmind#34 for the
+	// design context. Falls back to in-process on any sidecar-startup
+	// failure so the embed pass still completes — graceful degradation
+	// rather than blocking on a fragile new path.
+	var embedder embedding.Embedder
+	if model == "bge-m3" && os.Getenv("VAULTMIND_USE_SIDECAR") != "" {
+		side, sideErr := embedding.NewSidecarBGEM3(embedding.SidecarBGEM3Config{
+			Python:     os.Getenv("VAULTMIND_SIDECAR_PYTHON"),
+			ScriptPath: os.Getenv("VAULTMIND_SIDECAR_SCRIPT"),
+		})
+		if sideErr == nil {
+			embedder = side
+			log.Info().Str("device", side.Device()).Msg("BGE-M3 sidecar active for indexing")
+		} else {
+			log.Warn().Err(sideErr).Msg("sidecar startup failed; falling back to in-process embedder")
+		}
+	}
+	modelUsed := model
+	if embedder == nil {
+		var used string
+		embedder, used, err = loadEmbedder(model,
+			func() (embedding.Embedder, error) { return embedding.NewBGEM3Embedder(embedding.BGEM3Config()) },
+			func() (embedding.Embedder, error) { return embedding.NewHugotEmbedder(embedding.DefaultHugotConfig()) },
+		)
+		if err != nil {
+			return nil, fmt.Errorf("creating embedder: %w", err)
+		}
+		modelUsed = used
+	}
+	defer func() { _ = embedder.Close() }()
+
+	// Write-path guardrail: a bge-m3 to minilm fallback on a vault that ALREADY
+	// holds bge-m3 embeddings would write 384-dim minilm dense vectors into a
+	// 1024-dim bge-m3 index — a mixed, dimension-mismatched state surfaced only
+	// at query time. Refuse rather than corrupt: the fresh-vault (onboarding)
+	// case has no bge-m3 rows and proceeds; a partial bge-m3 vault is told to
+	// fix ORT or rebuild as minilm.
+	if model == "bge-m3" && modelUsed == "minilm" {
+		hasBGE, herr := hasBGEM3Embeddings(dbPath)
+		if herr != nil {
+			return nil, fmt.Errorf("checking existing embeddings before minilm fallback: %w", herr)
+		}
+		if hasBGE {
+			return nil, fmt.Errorf("bge-m3 is unavailable and this vault already contains bge-m3 embeddings; " +
+				"refusing to mix models — fix ORT (task setup:ort) and retry, or rebuild as minilm with " +
+				"'vaultmind index --embed --model minilm --full'")
+		}
+	}
+
+	res, err := idx.EmbedNotes(ctx, dbPath, embedder)
+	if res != nil {
+		// Report the model ACTUALLY used (loadEmbedder may have fallen back from
+		// bge-m3 to minilm), so the caller stamps it, calibrates the noise floor
+		// for it, and the mixed-model guard sees the truth.
+		res.Model = modelUsed
+	}
+	return res, err
+}
+
+// hasBGEM3Embeddings reports whether the vault already holds any bge-m3
+// embeddings (sparse or colbert columns populated). Used to refuse a
+// bge-m3 to minilm fallback that would otherwise create a mixed-model index.
+//
+//nolint:contextcheck // Open does not accept a context; this is a fast count query, not the heavy embed pass
+func hasBGEM3Embeddings(dbPath string) (bool, error) {
+	db, err := Open(dbPath)
+	if err != nil {
+		return false, fmt.Errorf("opening index database for bge-m3 check: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+	var n int
+	if err := db.QueryRow("SELECT COUNT(*) FROM notes WHERE sparse_embedding IS NOT NULL OR colbert_embedding IS NOT NULL").Scan(&n); err != nil {
+		return false, fmt.Errorf("counting bge-m3 embeddings: %w", err)
+	}
+	return n > 0, nil
+}
+
+// embedderCtor constructs an Embedder; abstracted so loadEmbedder's fallback
+// logic is unit-testable with injected success/failure.
+type embedderCtor func() (embedding.Embedder, error)
+
+// loadEmbedder builds the embedder for the requested model with a runtime
+// fallback: when bge-m3 is requested but its backend cannot be loaded (e.g. the
+// ORT runtime or the BGE-M3 model files are unavailable), it falls back to
+// minilm with a loud warning, so an embed pass degrades to a working dense-only
+// state instead of hard-failing. This is the runtime half of "bge-m3 first,
+// minilm as fallback" (the build-tag DefaultModel picks bge-m3 on ORT builds;
+// this catches the case where that choice can't actually run). Returns the
+// embedder and the model ACTUALLY used so the caller stamps/calibrates reality.
+func loadEmbedder(model string, newBGE, newMini embedderCtor) (embedding.Embedder, string, error) {
+	if model != "bge-m3" {
+		e, err := newMini()
+		if err != nil {
+			return nil, "", err
+		}
+		return e, model, nil
+	}
+	bge, err := newBGE()
+	if err == nil {
+		return bge, "bge-m3", nil
+	}
+	log.Warn().Err(err).Msg("bge-m3 embedder unavailable at runtime; falling back to minilm (run 'task setup:ort' to enable bge-m3)")
+	fallback, ferr := newMini()
+	if ferr != nil {
+		return nil, "", fmt.Errorf("bge-m3 unavailable (%w) and minilm fallback also failed: %w", err, ferr)
+	}
+	return fallback, "minilm", nil
+}
+
+// countPendingForModel reports how many notes need embedding under the
+// given model and how many already have full coverage. Mirrors the
+// pending/skip queries inside EmbedNotes so the lazy-load decision
+// agrees with what the actual embedding pass would do.
+func countPendingForModel(dbPath, model string) (pending int, skipped int, err error) {
+	db, err := Open(dbPath) //nolint:contextcheck // Open does not accept a context; this helper is called from RunEmbed which passes ctx through to EmbedNotes when work exists
+	if err != nil {
+		return 0, 0, fmt.Errorf("opening index database for pending count: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+	var pendingQuery, skipQuery string
+	if model == "bge-m3" {
+		pendingQuery = "SELECT COUNT(*) FROM notes WHERE embedding IS NULL OR sparse_embedding IS NULL OR colbert_embedding IS NULL"
+		skipQuery = "SELECT COUNT(*) FROM notes WHERE embedding IS NOT NULL AND sparse_embedding IS NOT NULL AND colbert_embedding IS NOT NULL"
+	} else {
+		pendingQuery = "SELECT COUNT(*) FROM notes WHERE embedding IS NULL"
+		skipQuery = "SELECT COUNT(*) FROM notes WHERE embedding IS NOT NULL"
+	}
+	if err := db.QueryRow(pendingQuery).Scan(&pending); err != nil {
+		return 0, 0, fmt.Errorf("counting pending notes: %w", err)
+	}
+	if err := db.QueryRow(skipQuery).Scan(&skipped); err != nil {
+		return 0, 0, fmt.Errorf("counting skipped notes: %w", err)
+	}
+	return pending, skipped, nil
+}
+
+// Indexer orchestrates vault scanning, parsing, and SQLite storage.
+type Indexer struct {
+	vaultRoot string
+	dbPath    string
+	cfg       *vault.Config
+}
+
+// NewIndexer creates an Indexer for the given vault.
+func NewIndexer(vaultRoot, dbPath string, cfg *vault.Config) *Indexer {
+	return &Indexer{
+		vaultRoot: vaultRoot,
+		dbPath:    dbPath,
+		cfg:       cfg,
+	}
+}
+
+// Rebuild performs a full rebuild: scan all .md files, parse, and store.
+func (idx *Indexer) Rebuild() (*IndexResult, error) {
+	start := time.Now()
+
+	db, err := Open(idx.dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("opening index database: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	files, err := vault.Scan(idx.vaultRoot, idx.cfg.Vault.Exclude)
+	if err != nil {
+		return nil, fmt.Errorf("scanning vault: %w", err)
+	}
+
+	result := &IndexResult{DBPath: idx.dbPath}
+	seenIDs := make(map[string]string) // id → first path
+
+	// Parse all files first, then store in a single batch transaction
+	type parsedFile struct {
+		rec  NoteRecord
+		path string
+	}
+	var records []parsedFile
+
+	for _, file := range files {
+		content, readErr := os.ReadFile(file.AbsPath)
+		if readErr != nil {
+			log.Warn().Err(readErr).Str("path", file.RelPath).Msg("skipping unreadable file")
+			result.Errors++
+			result.ErrorDetails = append(result.ErrorDetails, IndexError{
+				Path: file.RelPath, Kind: "read", Error: readErr.Error(),
+			})
+			continue
+		}
+
+		parsed, parseErr := parser.Parse(content)
+		if parseErr != nil {
+			log.Warn().Err(parseErr).Str("path", file.RelPath).Msg("skipping unparseable file")
+			result.Errors++
+			result.ErrorDetails = append(result.ErrorDetails, IndexError{
+				Path: file.RelPath, Kind: "parse", Error: parseErr.Error(),
+			})
+			continue
+		}
+
+		rec := buildNoteRecord(file, content, parsed)
+
+		// Check for duplicate IDs
+		if rec.IsDomain {
+			if firstPath, seen := seenIDs[rec.ID]; seen {
+				log.Warn().
+					Str("id", rec.ID).
+					Str("path", file.RelPath).
+					Str("first_path", firstPath).
+					Msg("duplicate ID detected — second file skipped")
+				result.DuplicateIDs++
+				continue // skip the duplicate — first file wins
+			}
+			seenIDs[rec.ID] = file.RelPath
+		}
+
+		records = append(records, parsedFile{rec: rec, path: file.RelPath})
+	}
+
+	// Batch store in a single transaction for performance
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("beginning batch transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	for _, pf := range records {
+		if storeErr := StoreNoteInTx(tx, pf.rec); storeErr != nil {
+			log.Warn().Err(storeErr).Str("path", pf.path).Msg("skipping file with store error")
+			result.Errors++
+			result.ErrorDetails = append(result.ErrorDetails, IndexError{
+				Path: pf.path, Kind: "store", Error: storeErr.Error(),
+			})
+			continue
+		}
+
+		result.Indexed++
+		if pf.rec.IsDomain {
+			result.DomainNotes++
+		} else {
+			result.UnstructuredNotes++
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("committing batch transaction: %w", err)
+	}
+
+	// Orphan sweep: a full rebuild must reflect ONLY the current include set.
+	// Any note still in the index whose source file is no longer in the scan —
+	// deleted from disk, or newly matched by vault.exclude (vault.Scan already
+	// filters excludes) — is removed. Without this, Rebuild() was upsert-only
+	// and stale notes lingered, polluting retrieval (issue #40).
+	//
+	// The protection set is built from the SCAN (files on disk), NOT from the
+	// parsed records — exactly mirroring Incremental()'s diskPaths. A file that
+	// exists but suffered a transient read/parse error this pass is absent from
+	// `records` but present in `files`; diffing against `files` keeps its
+	// prior (stale-but-better-than-nothing) row instead of silently evicting a
+	// good note on a momentary hiccup. A duplicate-ID loser is on disk too, so
+	// it is protected; its winner already owns the note row.
+	//
+	// Runs after the batch commit and before the graph passes so links/aliases/
+	// tags are rebuilt over survivors only. We enumerate via NoteHashes() —
+	// fully drained — to avoid holding a read cursor open across the per-delete
+	// writes. Surviving notes keep their rows (and their embeddings) untouched.
+	scannedPaths := make(map[string]bool, len(files))
+	for _, f := range files {
+		scannedPaths[f.RelPath] = true
+	}
+	indexed, hashErr := db.NoteHashes()
+	if hashErr != nil {
+		log.Warn().Err(hashErr).Msg("orphan sweep skipped — could not enumerate indexed notes")
+		result.PostIndexWarnings = append(result.PostIndexWarnings, PostIndexWarning{
+			Step: "orphan_sweep", Error: hashErr.Error(),
+		})
+	} else {
+		for storedPath := range indexed {
+			if scannedPaths[storedPath] {
+				continue
+			}
+			if delErr := DeleteNoteByPath(db, storedPath); delErr != nil {
+				log.Warn().Err(delErr).Str("path", storedPath).Msg("failed to delete orphaned note during full rebuild")
+				result.Errors++
+				result.ErrorDetails = append(result.ErrorDetails, IndexError{
+					Path: storedPath, Kind: "delete", Error: delErr.Error(),
+				})
+				continue
+			}
+			result.Deleted++
+		}
+	}
+
+	// Post-index: resolve body wikilinks against the notes table
+	resolved, resolveErr := ResolveLinks(db)
+	if resolveErr != nil {
+		log.Warn().Err(resolveErr).Msg("link resolution pass failed — graph will be partially connected")
+		result.PostIndexWarnings = append(result.PostIndexWarnings, PostIndexWarning{
+			Step: "link_resolution", Error: resolveErr.Error(),
+		})
+	} else {
+		log.Debug().Int("resolved", resolved).Msg("link resolution complete")
+	}
+
+	// Compute inferred edges
+	aliasCount, aliasErr := ComputeAliasMentions(db, idx.cfg.Memory.AliasMinLength)
+	if aliasErr != nil {
+		log.Warn().Err(aliasErr).Msg("alias mention detection failed — alias edges missing")
+		result.PostIndexWarnings = append(result.PostIndexWarnings, PostIndexWarning{
+			Step: "alias_mention", Error: aliasErr.Error(),
+		})
+	} else {
+		log.Debug().Int("edges", aliasCount).Msg("alias mention detection complete")
+	}
+
+	tagCount, tagErr := ComputeTagOverlap(db, idx.cfg.Memory.TagOverlapThreshold)
+	if tagErr != nil {
+		log.Warn().Err(tagErr).Msg("tag overlap detection failed — tag-based edges missing")
+		result.PostIndexWarnings = append(result.PostIndexWarnings, PostIndexWarning{
+			Step: "tag_overlap", Error: tagErr.Error(),
+		})
+	} else {
+		log.Debug().Int("edges", tagCount).Msg("tag overlap detection complete")
+	}
+
+	result.DurationMs = time.Since(start).Milliseconds()
+	result.CompletedAt = time.Now().UTC().Format(time.RFC3339)
+
+	return result, nil
+}
+
+// IndexFile re-indexes a single file by its vault-relative path.
+func (idx *Indexer) IndexFile(relPath string) error {
+	absPath := filepath.Join(idx.vaultRoot, relPath)
+
+	content, err := os.ReadFile(absPath) //nolint:gosec // absPath is built from vaultRoot (trusted) + relPath (vault-relative)
+	if err != nil {
+		return fmt.Errorf("reading file %q: %w", relPath, err)
+	}
+
+	parsed, err := parser.Parse(content)
+	if err != nil {
+		return fmt.Errorf("parsing file %q: %w", relPath, err)
+	}
+
+	info, err := os.Stat(absPath)
+	if err != nil {
+		return fmt.Errorf("stat file %q: %w", relPath, err)
+	}
+
+	file := vault.ScannedFile{
+		RelPath: relPath,
+		AbsPath: absPath,
+		ModTime: info.ModTime(),
+	}
+
+	rec := buildNoteRecord(file, content, parsed)
+
+	db, err := Open(idx.dbPath)
+	if err != nil {
+		return fmt.Errorf("opening index: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	return StoreNote(db, rec)
+}
+
+// Incremental scans the vault and only indexes files that are new or changed
+// (detected via content hash). Deleted files are removed from the index.
+func (idx *Indexer) Incremental() (*IndexResult, error) {
+	start := time.Now()
+
+	db, err := Open(idx.dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("opening index database: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	stored, err := db.NoteHashes()
+	if err != nil {
+		return nil, fmt.Errorf("loading stored hashes: %w", err)
+	}
+
+	files, err := vault.Scan(idx.vaultRoot, idx.cfg.Vault.Exclude)
+	if err != nil {
+		return nil, fmt.Errorf("scanning vault: %w", err)
+	}
+
+	result := &IndexResult{DBPath: idx.dbPath}
+	diskPaths := make(map[string]bool, len(files))
+
+	for _, file := range files {
+		diskPaths[file.RelPath] = true
+
+		info, ok := stored[file.RelPath]
+
+		// Mtime fast path: skip file read entirely if mtime unchanged
+		if ok && file.ModTime.Unix() == info.MTime {
+			result.Skipped++
+			continue
+		}
+
+		// Mtime changed or new file — must read and hash
+		content, readErr := os.ReadFile(file.AbsPath) //nolint:gosec // vault path is trusted
+		if readErr != nil {
+			log.Warn().Err(readErr).Str("path", file.RelPath).Msg("skipping unreadable file")
+			result.Errors++
+			result.ErrorDetails = append(result.ErrorDetails, IndexError{
+				Path: file.RelPath, Kind: "read", Error: readErr.Error(),
+			})
+			continue
+		}
+
+		h := sha256.Sum256(content)
+		hash := fmt.Sprintf("%x", h[:])
+
+		// Hash unchanged — just update mtime, skip parse
+		if ok && hash == info.Hash {
+			if mtErr := db.UpdateMTime(file.RelPath, file.ModTime.Unix()); mtErr != nil {
+				// mtime update is a performance optimization only — the file will
+				// just get re-hashed next run. Keep at Debug: not a lost memory.
+				log.Debug().Err(mtErr).Str("path", file.RelPath).Msg("failed to update mtime")
+			}
+			result.Skipped++
+			continue
+		}
+
+		parsed, parseErr := parser.Parse(content)
+		if parseErr != nil {
+			log.Warn().Err(parseErr).Str("path", file.RelPath).Msg("skipping unparseable file")
+			result.Errors++
+			result.ErrorDetails = append(result.ErrorDetails, IndexError{
+				Path: file.RelPath, Kind: "parse", Error: parseErr.Error(),
+			})
+			continue
+		}
+
+		rec := buildNoteRecord(file, content, parsed)
+		if storeErr := StoreNote(db, rec); storeErr != nil {
+			log.Warn().Err(storeErr).Str("path", file.RelPath).Msg("skipping file with store error")
+			result.Errors++
+			result.ErrorDetails = append(result.ErrorDetails, IndexError{
+				Path: file.RelPath, Kind: "store", Error: storeErr.Error(),
+			})
+			continue
+		}
+
+		if ok {
+			result.Updated++
+		} else {
+			result.Added++
+		}
+		result.Indexed++
+	}
+
+	for storedPath := range stored {
+		if !diskPaths[storedPath] {
+			if delErr := DeleteNoteByPath(db, storedPath); delErr != nil {
+				log.Warn().Err(delErr).Str("path", storedPath).Msg("failed to delete orphaned note")
+				result.Errors++
+				result.ErrorDetails = append(result.ErrorDetails, IndexError{
+					Path: storedPath, Kind: "delete", Error: delErr.Error(),
+				})
+				continue
+			}
+			result.Deleted++
+		}
+	}
+
+	resolved, resolveErr := ResolveLinks(db)
+	if resolveErr != nil {
+		log.Warn().Err(resolveErr).Msg("link resolution pass failed — graph will be partially connected")
+		result.PostIndexWarnings = append(result.PostIndexWarnings, PostIndexWarning{
+			Step: "link_resolution", Error: resolveErr.Error(),
+		})
+	} else {
+		log.Debug().Int("resolved", resolved).Msg("link resolution complete")
+	}
+
+	// Compute inferred edges
+	aliasCount, aliasErr := ComputeAliasMentions(db, idx.cfg.Memory.AliasMinLength)
+	if aliasErr != nil {
+		log.Warn().Err(aliasErr).Msg("alias mention detection failed — alias edges missing")
+		result.PostIndexWarnings = append(result.PostIndexWarnings, PostIndexWarning{
+			Step: "alias_mention", Error: aliasErr.Error(),
+		})
+	} else {
+		log.Debug().Int("edges", aliasCount).Msg("alias mention detection complete")
+	}
+
+	tagCount, tagErr := ComputeTagOverlap(db, idx.cfg.Memory.TagOverlapThreshold)
+	if tagErr != nil {
+		log.Warn().Err(tagErr).Msg("tag overlap detection failed — tag-based edges missing")
+		result.PostIndexWarnings = append(result.PostIndexWarnings, PostIndexWarning{
+			Step: "tag_overlap", Error: tagErr.Error(),
+		})
+	} else {
+		log.Debug().Int("edges", tagCount).Msg("tag overlap detection complete")
+	}
+
+	result.DurationMs = time.Since(start).Milliseconds()
+	result.CompletedAt = time.Now().UTC().Format(time.RFC3339)
+
+	return result, nil
+}
+
+// EmbedNotes computes and stores embeddings for all notes that don't have one yet.
+// It opens its own DB connection (like Rebuild/Incremental) so it can be called
+// after the indexer has closed its connection.
+func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embedding.Embedder) (*EmbedResult, error) {
+	db, err := Open(dbPath) //nolint:contextcheck // Open does not accept a context; ctx is for the embedder calls
+	if err != nil {
+		return nil, fmt.Errorf("opening index database for embedding: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	result := &EmbedResult{}
+
+	// Determine skip/pending query based on embedder type.
+	// For FullEmbedder (BGE-M3): a note needs embedding if ANY of the three columns is NULL.
+	// For dense-only (MiniLM): a note needs embedding if the dense column is NULL.
+	fullEmbedder, isFull := embedder.(embedding.FullEmbedder)
+
+	var skipQuery, pendingQuery string
+	if isFull {
+		// BGE-M3: need notes where any of the 3 embeddings are missing
+		pendingQuery = "SELECT id, body_text FROM notes WHERE embedding IS NULL OR sparse_embedding IS NULL OR colbert_embedding IS NULL"
+		skipQuery = "SELECT COUNT(*) FROM notes WHERE embedding IS NOT NULL AND sparse_embedding IS NOT NULL AND colbert_embedding IS NOT NULL"
+	} else {
+		pendingQuery = "SELECT id, body_text FROM notes WHERE embedding IS NULL"
+		skipQuery = "SELECT COUNT(*) FROM notes WHERE embedding IS NOT NULL"
+	}
+
+	var skippedCount int
+	err = db.QueryRow(skipQuery).Scan(&skippedCount)
+	if err != nil {
+		return nil, fmt.Errorf("counting existing embeddings: %w", err)
+	}
+	result.Skipped = skippedCount
+
+	rows, err := db.Query(pendingQuery)
+	if err != nil {
+		return nil, fmt.Errorf("querying unembedded notes: %w", err)
+	}
+
+	type noteText struct {
+		id   string
+		body string
+	}
+	var pending []noteText
+	for rows.Next() {
+		var nt noteText
+		if err := rows.Scan(&nt.id, &nt.body); err != nil {
+			_ = rows.Close()
+			return nil, fmt.Errorf("scanning unembedded note: %w", err)
+		}
+		pending = append(pending, nt)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("closing unembedded rows: %w", err)
+	}
+
+	if len(pending) == 0 {
+		return result, nil
+	}
+
+	// Process in batches. BGE-M3 inference holds peak memory roughly equal to
+	// batch_size * max_seq_len * hidden_dim — at 32 * 8192 * 1024 * 4 bytes
+	// per intermediate tensor it pushes a memory-tight machine over the
+	// OOM-killer threshold. The smaller batch caps peak per-call memory and
+	// also commits more often, so a SIGKILL mid-run loses fewer notes of
+	// progress. MiniLM is much smaller; 32 is fine there. See vaultmind#22.
+	batchSize := 32
+	if isFull {
+		batchSize = 8
+	}
+	for i := 0; i < len(pending); i += batchSize {
+		end := i + batchSize
+		if end > len(pending) {
+			end = len(pending)
+		}
+		batch := pending[i:end]
+
+		texts := make([]string, len(batch))
+		for j, nt := range batch {
+			texts[j] = nt.body
+		}
+		if isFull {
+			// BGE-M3 path: store dense + sparse + ColBERT
+			fullOutputs, embedErr := fullEmbedder.EmbedFullBatch(ctx, texts)
+			if embedErr != nil {
+				// Whole batch failed — those N notes will have no embeddings
+				// and will miss semantic retrieval until the next --embed
+				// run. Surface at Warn so the operator knows recall quality
+				// is degraded on this batch's notes.
+				log.Warn().Err(embedErr).Int("batch_start", i).Int("batch_size", len(batch)).Msg("embedding batch failed — notes in batch will lack embeddings")
+				result.Errors += len(batch)
+				continue
+			}
+
+			tx, txErr := db.Begin()
+			if txErr != nil {
+				return nil, fmt.Errorf("beginning embedding transaction: %w", txErr)
+			}
+
+			storeErr := false
+			emptyInBatch := 0
+			for j, out := range fullOutputs {
+				noteID := batch[j].id
+				// Empty Sparse/ColBERT output means the heads produced no
+				// usable tokens for this note (e.g. body tokenizes to only
+				// special tokens, or the truncated text yields no per-token
+				// signal). Skip the UPDATE — without it the modality_parity
+				// trigger (migration 006) would refuse the row anyway, but
+				// more importantly we must NOT count this note as Embedded
+				// or it disappears from the next-pass pending list while its
+				// sparse/colbert columns remain NULL forever. vaultmind#22.
+				if len(out.Sparse) == 0 || len(out.ColBERT) == 0 {
+					log.Warn().
+						Str("id", noteID).
+						Int("body_len", len(batch[j].body)).
+						Int("sparse_terms", len(out.Sparse)).
+						Int("colbert_tokens", len(out.ColBERT)).
+						Msg("BGE-M3 produced empty Sparse or ColBERT — note remains pending for next embed pass")
+					emptyInBatch++
+					continue
+				}
+				// Atomic single-statement write across all three modalities.
+				// The bgem3_modality_parity trigger (migration 006) enforces
+				// that BGE-M3 dense cannot exist without sparse + colbert;
+				// separate UPDATEs would violate mid-flight. The atomic form
+				// is also simpler — one statement, one outcome.
+				if _, err := tx.Exec(
+					`UPDATE notes SET embedding = ?, sparse_embedding = ?, colbert_embedding = ? WHERE id = ?`,
+					EncodeEmbedding(out.Dense),
+					EncodeSparseEmbedding(out.Sparse),
+					EncodeColBERTEmbedding(out.ColBERT),
+					noteID,
+				); err != nil {
+					log.Debug().Err(err).Str("id", noteID).Msg("storing BGE-M3 embeddings failed")
+					storeErr = true
+					break
+				}
+			}
+
+			if storeErr {
+				_ = tx.Rollback()
+				result.Errors += len(batch)
+				continue
+			}
+			if err := tx.Commit(); err != nil {
+				_ = tx.Rollback()
+				result.Errors += len(batch)
+				continue
+			}
+			result.Embedded += len(batch) - emptyInBatch
+			result.EmptyOutput += emptyInBatch
+		} else {
+			// MiniLM path: dense only
+			vectors, embedErr := embedder.EmbedBatch(ctx, texts)
+			if embedErr != nil {
+				// See FullEmbedder branch above for the rationale.
+				log.Warn().Err(embedErr).Int("batch_start", i).Int("batch_size", len(batch)).Msg("embedding batch failed — notes in batch will lack embeddings")
+				result.Errors += len(batch)
+				continue
+			}
+
+			tx, txErr := db.Begin()
+			if txErr != nil {
+				return nil, fmt.Errorf("beginning embedding transaction: %w", txErr)
+			}
+
+			storeErr := false
+			for j, vec := range vectors {
+				encoded := EncodeEmbedding(vec)
+				if _, err := tx.Exec("UPDATE notes SET embedding = ? WHERE id = ?", encoded, batch[j].id); err != nil {
+					log.Debug().Err(err).Str("id", batch[j].id).Msg("failed to store embedding")
+					storeErr = true
+					break
+				}
+			}
+
+			if storeErr {
+				_ = tx.Rollback()
+				result.Errors += len(batch)
+				continue
+			}
+			if err := tx.Commit(); err != nil {
+				_ = tx.Rollback()
+				log.Debug().Err(err).Int("batch_start", i).Msg("committing embedding batch failed")
+				result.Errors += len(batch)
+				continue
+			}
+			result.Embedded += len(batch)
+		}
+	}
+
+	return result, nil
+}
+
+// ResolveLinks updates unresolved links by matching dst_raw against note IDs,
+// titles, and aliases. Sets dst_note_id and resolved=TRUE for matches.
+func ResolveLinks(db *DB) (int, error) {
+	// Resolve by exact ID match
+	res1, err := db.Exec(`
+		UPDATE OR IGNORE links SET dst_note_id = dst_raw, resolved = TRUE
+		WHERE resolved = FALSE AND dst_note_id IS NULL
+		AND dst_raw IN (SELECT id FROM notes)`)
+	if err != nil {
+		return 0, fmt.Errorf("resolving by ID: %w", err)
+	}
+	count1, _ := res1.RowsAffected()
+
+	// Resolve by exact title match
+	res2, err := db.Exec(`
+		UPDATE OR IGNORE links SET dst_note_id = (
+			SELECT id FROM notes WHERE title = links.dst_raw LIMIT 1
+		), resolved = TRUE
+		WHERE resolved = FALSE AND dst_note_id IS NULL
+		AND dst_raw IN (SELECT title FROM notes)`)
+	if err != nil {
+		return int(count1), fmt.Errorf("resolving by title: %w", err)
+	}
+	count2, _ := res2.RowsAffected()
+
+	// Resolve by alias match
+	res3, err := db.Exec(`
+		UPDATE OR IGNORE links SET dst_note_id = (
+			SELECT note_id FROM aliases WHERE alias = links.dst_raw LIMIT 1
+		), resolved = TRUE
+		WHERE resolved = FALSE AND dst_note_id IS NULL
+		AND dst_raw IN (SELECT alias FROM aliases)`)
+	if err != nil {
+		return int(count1 + count2), fmt.Errorf("resolving by alias: %w", err)
+	}
+	count3, _ := res3.RowsAffected()
+
+	// Resolve by filename stem (Obsidian convention).
+	// Obsidian wikilinks like [[context-pack|Context Pack]] store dst_raw as
+	// the filename stem ("context-pack"). Match against path with directory
+	// stripped and .md removed.
+	res4, err := db.Exec(`
+		UPDATE OR IGNORE links SET dst_note_id = (
+			SELECT id FROM notes
+			WHERE REPLACE(path, '.md', '') LIKE '%/' || links.dst_raw
+			   OR REPLACE(path, '.md', '') = links.dst_raw
+			LIMIT 1
+		), resolved = TRUE
+		WHERE resolved = FALSE AND dst_note_id IS NULL`)
+	if err != nil {
+		return int(count1 + count2 + count3), fmt.Errorf("resolving by filename: %w", err)
+	}
+	count4, _ := res4.RowsAffected()
+
+	return int(count1 + count2 + count3 + count4), nil
+}
+
+// parserLinkTypeToEdgeType maps parser link types to SRS-05 edge type names.
+func parserLinkTypeToEdgeType(lt parser.LinkType) string {
+	switch lt {
+	case parser.LinkTypeWikilink, parser.LinkTypeMarkdown:
+		return "explicit_link"
+	case parser.LinkTypeEmbed:
+		return "explicit_embed"
+	default:
+		return string(lt)
+	}
+}
+
+// buildNoteRecord transforms parser output + file info into a NoteRecord.
+func buildNoteRecord(file vault.ScannedFile, content []byte, parsed *parser.ParsedNote) NoteRecord {
+	h := sha256.Sum256(content)
+
+	rec := NoteRecord{
+		Path:     file.RelPath,
+		Hash:     fmt.Sprintf("%x", h[:]),
+		MTime:    file.ModTime.Unix(),
+		IsDomain: parsed.IsDomain,
+		BodyText: parsed.FTSBody,
+	}
+
+	if parsed.IsDomain {
+		rec.ID = parsed.ID
+	} else {
+		rec.ID = "_path:" + file.RelPath
+	}
+
+	// Extract typed fields from frontmatter map
+	if parsed.Frontmatter != nil {
+		rec.Title = fmString(parsed.Frontmatter, "title")
+		rec.Type = fmString(parsed.Frontmatter, "type")
+		rec.Status = fmString(parsed.Frontmatter, "status")
+		rec.Created = fmString(parsed.Frontmatter, "created")
+		rec.Updated = fmString(parsed.Frontmatter, "updated")
+		rec.Aliases = fmStringList(parsed.Frontmatter, "aliases")
+		rec.Tags = fmStringList(parsed.Frontmatter, "tags")
+
+		// Collect extra KV (fields not in dedicated columns).
+		// vm_updated was retired in the 2026-05-04 chain; it is
+		// intentionally NOT excluded here, so any legacy notes that
+		// still carry the field flow through to ExtraKV (visible as
+		// extra metadata) instead of being silently dropped.
+		knownKeys := map[string]bool{
+			"id": true, "type": true, "title": true, "status": true,
+			"created": true, "updated": true,
+			"aliases": true, "tags": true, "parent_id": true,
+			"related_ids": true, "source_ids": true,
+		}
+		extra := make(map[string]interface{})
+		for k, v := range parsed.Frontmatter {
+			if !knownKeys[k] {
+				extra[k] = v
+			}
+		}
+		if len(extra) > 0 {
+			rec.ExtraKV = extra
+		}
+	}
+
+	// Convert parser links to LinkRecords using SRS edge type names
+	for _, link := range parsed.Links {
+		rec.Links = append(rec.Links, LinkRecord{
+			DstRaw:     link.Target,
+			EdgeType:   parserLinkTypeToEdgeType(link.LinkType),
+			TargetKind: string(link.TargetKind),
+			Heading:    link.Heading,
+			BlockID:    link.BlockID,
+			Confidence: "high",
+			Origin:     fmt.Sprintf("body:line:%d", link.Line),
+		})
+	}
+
+	// Also extract frontmatter relation fields as explicit_relation edges
+	if parsed.Frontmatter != nil {
+		rec.Links = append(rec.Links, fmRelationLinks(parsed.Frontmatter, "parent_id", rec.ID)...)
+		rec.Links = append(rec.Links, fmRelationLinks(parsed.Frontmatter, "related_ids", rec.ID)...)
+		rec.Links = append(rec.Links, fmRelationLinks(parsed.Frontmatter, "source_ids", rec.ID)...)
+	}
+
+	// Convert parser headings/blocks
+	for _, h := range parsed.Headings {
+		rec.Headings = append(rec.Headings, HeadingRecord{
+			Slug: h.Slug, Level: h.Level, Title: h.Title,
+		})
+	}
+	for _, b := range parsed.Blocks {
+		rec.Blocks = append(rec.Blocks, BlockRecord{
+			BlockID: b.BlockID, Heading: b.Heading, StartLine: b.Line,
+		})
+	}
+
+	return rec
+}
+
+// fmRelationLinks extracts stable-ID references from frontmatter fields
+// (parent_id, related_ids, source_ids) as explicit_relation edges.
+func fmRelationLinks(fm map[string]interface{}, key, srcID string) []LinkRecord {
+	raw, ok := fm[key]
+	if !ok {
+		return nil
+	}
+
+	var ids []string
+	switch v := raw.(type) {
+	case string:
+		if v != "" {
+			ids = []string{v}
+		}
+	case []interface{}:
+		for _, item := range v {
+			if s, ok := item.(string); ok && s != "" {
+				ids = append(ids, s)
+			}
+		}
+	}
+
+	var links []LinkRecord
+	for _, id := range ids {
+		links = append(links, LinkRecord{
+			DstRaw:     id,
+			EdgeType:   "explicit_relation",
+			Confidence: "high",
+			Origin:     "frontmatter." + key,
+		})
+	}
+	return links
+}
+
+func fmString(fm map[string]interface{}, key string) string {
+	v, ok := fm[key]
+	if !ok {
+		return ""
+	}
+	switch val := v.(type) {
+	case string:
+		return val
+	case time.Time:
+		if val.Hour() == 0 && val.Minute() == 0 && val.Second() == 0 {
+			return val.Format("2006-01-02")
+		}
+		return val.Format(time.RFC3339)
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+}
+
+func fmStringList(fm map[string]interface{}, key string) []string {
+	v, ok := fm[key]
+	if !ok {
+		return nil
+	}
+	switch val := v.(type) {
+	case []interface{}:
+		result := make([]string, 0, len(val))
+		for _, item := range val {
+			if s, ok := item.(string); ok {
+				result = append(result, s)
+			}
+		}
+		return result
+	case string:
+		return []string{val}
+	default:
+		return nil
+	}
+}

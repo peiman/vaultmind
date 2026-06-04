@@ -1,0 +1,206 @@
+package episode_test
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/peiman/vaultmind/internal/episode"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+const fixturePath = "testdata/mini-session.jsonl"
+
+func TestParseTranscript_ExtractsSessionMetadata(t *testing.T) {
+	ep, err := episode.ParseTranscript(fixturePath)
+	require.NoError(t, err)
+
+	assert.Equal(t, "test-session-abc12345", ep.SessionID)
+	assert.Equal(t, "2026-04-24T10:00:00.000Z", ep.StartedAt)
+	assert.Equal(t, "2026-04-24T10:00:45.000Z", ep.EndedAt)
+	assert.Equal(t, "/home/test", ep.CWD)
+	assert.Equal(t, "main", ep.GitBranch)
+}
+
+func TestParseTranscript_FiltersRealUserMessagesFromNoise(t *testing.T) {
+	ep, err := episode.ParseTranscript(fixturePath)
+	require.NoError(t, err)
+
+	// Two real user-style messages; system-reminder and tool_result lists must be filtered.
+	require.Len(t, ep.UserMessages, 2)
+	assert.Equal(t, "hi there", ep.UserMessages[0].Text)
+	assert.Equal(t, "run the tests please", ep.UserMessages[1].Text)
+}
+
+func TestParseTranscript_CapturesAssistantTextBlocksOnly(t *testing.T) {
+	ep, err := episode.ParseTranscript(fixturePath)
+	require.NoError(t, err)
+
+	// Thinking blocks and tool_use blocks must be excluded; only text blocks kept.
+	require.Len(t, ep.AssistantMessages, 2)
+	assert.Equal(t, "Hello. Ready to work.", ep.AssistantMessages[0].Text)
+	assert.Equal(t, "Done. PR opened.", ep.AssistantMessages[1].Text)
+}
+
+func TestParseTranscript_CountsToolUsesByName(t *testing.T) {
+	ep, err := episode.ParseTranscript(fixturePath)
+	require.NoError(t, err)
+
+	assert.Equal(t, 2, ep.ToolCounts["Bash"])
+	assert.Equal(t, 1, ep.ToolCounts["Edit"])
+}
+
+func TestParseTranscript_ExtractsCommitSubjectNotFullHeredoc(t *testing.T) {
+	ep, err := episode.ParseTranscript(fixturePath)
+	require.NoError(t, err)
+
+	// Inline `-m` form: subject extracted cleanly.
+	require.Len(t, ep.Commits, 1)
+	assert.Equal(t, "fix: the bug", ep.Commits[0])
+}
+
+func TestExtractCommitSubject_HandlesKnownQuoteShapes(t *testing.T) {
+	// Pin the canonical shapes the heuristic must handle. If a future refactor
+	// breaks one, this table names exactly which form regressed.
+	cases := map[string]string{
+		`git commit -m "feat: add frobnicator"`:                                    "feat: add frobnicator",
+		`git commit -m 'fix: off-by-one'`:                                          "fix: off-by-one",
+		"git commit -m \"$(cat <<'EOF'\nfeat: multiline subject\n\nBody\nEOF\n)\"": "feat: multiline subject",
+	}
+	for shellCmd, want := range cases {
+		ep := parseOneBashCall(t, shellCmd)
+		require.Len(t, ep.Commits, 1, "for cmd %q", shellCmd)
+		assert.Equal(t, want, ep.Commits[0], "for cmd %q", shellCmd)
+	}
+}
+
+// parseOneBashCall builds a minimal one-record JSONL containing a single Bash
+// tool_use and runs it through ParseTranscript.
+func parseOneBashCall(t *testing.T, shellCmd string) *episode.Episode {
+	t.Helper()
+	inputJSON, err := json.Marshal(map[string]string{"command": shellCmd, "description": "x"})
+	require.NoError(t, err)
+	rec := map[string]any{
+		"type":      "assistant",
+		"sessionId": "test-cases",
+		"timestamp": "2026-04-24T00:00:00.000Z",
+		"message": map[string]any{
+			"role":    "assistant",
+			"content": []any{map[string]any{"type": "tool_use", "id": "t", "name": "Bash", "input": json.RawMessage(inputJSON)}},
+		},
+	}
+	recJSON, err := json.Marshal(rec)
+	require.NoError(t, err)
+	path := filepath.Join(t.TempDir(), "one.jsonl")
+	require.NoError(t, os.WriteFile(path, recJSON, 0o600))
+	ep, err := episode.ParseTranscript(path)
+	require.NoError(t, err)
+	return ep
+}
+
+func TestParseTranscript_DedupesRepeatedPRLinks(t *testing.T) {
+	ep, err := episode.ParseTranscript(fixturePath)
+	require.NoError(t, err)
+
+	// Claude Code emits the same pr-link multiple times; we collapse to one.
+	require.Len(t, ep.PRs, 1)
+	assert.Equal(t, 42, ep.PRs[0].Number)
+	assert.Equal(t, "https://github.com/test/repo/pull/42", ep.PRs[0].URL)
+}
+
+func TestParseTranscript_ExtractsFilesTouched(t *testing.T) {
+	ep, err := episode.ParseTranscript(fixturePath)
+	require.NoError(t, err)
+
+	assert.Contains(t, ep.FilesTouched, "/home/test/foo.go")
+}
+
+func TestRenderMarkdown_EmitsExpectedSections(t *testing.T) {
+	ep, err := episode.ParseTranscript(fixturePath)
+	require.NoError(t, err)
+
+	md := episode.RenderMarkdown(ep)
+
+	// Frontmatter
+	assert.True(t, strings.HasPrefix(md, "---\n"))
+	assert.Contains(t, md, "type: episode")
+	assert.Contains(t, md, "session_id: test-session-abc12345")
+	assert.Contains(t, md, "started_at:")
+
+	// Section headers
+	assert.Contains(t, md, "## Metadata")
+	assert.Contains(t, md, "## Commits made")
+	assert.Contains(t, md, "## PRs opened")
+	assert.Contains(t, md, "## User messages (verbatim)")
+	assert.Contains(t, md, "## Assistant responses (verbatim)")
+
+	// Content preserved verbatim
+	assert.Contains(t, md, "run the tests please")
+	assert.Contains(t, md, "Done. PR opened.")
+	assert.Contains(t, md, "#42")
+}
+
+// TestRenderMarkdown_StampsCreatedFromStartedAt — every emitted
+// episode carries `created` derived from started_at (when the
+// session happened — the episode's semantic birthday), NOT today.
+// Captures the post-2026-05-04-retraction contract: `created` is a
+// tolerated optional field that capture stamps as a human-friendly
+// convenience; vm_updated was retired (no read-side consumer
+// survived the dogfood pass).
+func TestRenderMarkdown_StampsCreatedFromStartedAt(t *testing.T) {
+	ep, err := episode.ParseTranscript(fixturePath)
+	require.NoError(t, err)
+
+	md := episode.RenderMarkdown(ep)
+
+	assert.Contains(t, md, "created: 2026-04-24",
+		"created MUST be the started_at date (YYYY-MM-DD), not today")
+	assert.NotContains(t, md, "vm_updated",
+		"vm_updated was retired in the 2026-05-04 chain; episodes must not emit it")
+}
+
+// TestRenderMarkdown_CreatedFallsBackToTodayOnDegenerateStartedAt —
+// when started_at is empty or unparseable, `created` defaults to
+// today's UTC date so the schema-ownership contract holds even on
+// torn or malformed transcripts. Without this fallback, a degenerate
+// transcript could produce a note with empty `created`, which the
+// fix command would then re-flag as missing.
+//
+// Two distinct fallback paths are pinned: (1) empty/short string
+// (fails the length check); (2) long-but-unparseable string (passes
+// length, fails time.Parse). Without (2) the time.Parse branch was
+// untested — a future refactor swapping the helper for a regex match
+// could regress without lint or test failure.
+func TestRenderMarkdown_CreatedFallsBackToTodayOnDegenerateStartedAt(t *testing.T) {
+	cases := []struct {
+		name      string
+		startedAt string
+	}{
+		{"empty string fails length check", ""},
+		{"long-but-unparseable fails time.Parse", "not-a-real-date-value-but-long"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ep := &episode.Episode{
+				ID:        "episode-degenerate",
+				SessionID: "test",
+				StartedAt: tc.startedAt,
+				EndedAt:   "",
+			}
+			md := episode.RenderMarkdown(ep)
+			assert.Regexp(t, `created: 20\d{2}-\d{2}-\d{2}`, md,
+				"degenerate started_at must fall back to today (never empty created)")
+		})
+	}
+}
+
+func TestEpisodeID_DerivedFromSessionDateAndIDPrefix(t *testing.T) {
+	ep, err := episode.ParseTranscript(fixturePath)
+	require.NoError(t, err)
+
+	// Deterministic: date from StartedAt + 8-char session prefix.
+	assert.Equal(t, "episode-2026-04-24-test-ses", ep.ID)
+}

@@ -1,0 +1,207 @@
+package initvault_test
+
+import (
+	"io/fs"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"testing"
+
+	"github.com/peiman/vaultmind/internal/initvault"
+	"github.com/peiman/vaultmind/internal/vault"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// Init scaffolds a fresh vault — the directory it creates must contain
+// the .vaultmind/config.yaml + the persona-shaped starter notes. The
+// caller-facing contract is "after init you have a working vault that
+// vaultmind index can read."
+func TestInit_CreatesExpectedFiles(t *testing.T) {
+	dst := filepath.Join(t.TempDir(), "my-vault")
+
+	res, err := initvault.Init(dst)
+	require.NoError(t, err)
+	require.NotNil(t, res)
+	assert.Equal(t, dst, res.VaultPath)
+	assert.Greater(t, res.FilesAdded, 4, "expect at least config + README + 2 starter notes")
+
+	// The skeleton must be there.
+	for _, want := range []string{
+		".vaultmind/config.yaml",
+		"README.md",
+		"identity/who-am-i.md",
+		"references/current-context.md",
+	} {
+		_, err := os.Stat(filepath.Join(dst, want))
+		assert.NoError(t, err, "expected file %q to exist after init", want)
+	}
+}
+
+// vault.LoadConfig must accept the scaffolded config — if it doesn't,
+// the user runs vaultmind index and gets a parse error on a vault we
+// just gave them. That's the most embarrassing possible failure mode.
+func TestInit_ConfigIsValid(t *testing.T) {
+	dst := filepath.Join(t.TempDir(), "my-vault")
+	_, err := initvault.Init(dst)
+	require.NoError(t, err)
+
+	cfg, err := vault.LoadConfig(dst)
+	require.NoError(t, err, "scaffolded config must parse cleanly")
+	require.NotNil(t, cfg)
+	assert.NotEmpty(t, cfg.Types, "scaffolded config must declare types")
+	assert.Contains(t, cfg.Types, "identity", "identity type must be in default scaffold")
+	assert.Contains(t, cfg.Types, "arc", "arc type must be in default scaffold (arcs are vaultmind's atomic unit of persona)")
+}
+
+// Each starter note must carry valid frontmatter with today's date
+// injected — so the user's fresh vault doesn't have notes pinned to
+// whatever date the templates were authored. The injected date drives
+// the index's created/updated tracking.
+func TestInit_FrontmatterDatesAreToday(t *testing.T) {
+	dst := filepath.Join(t.TempDir(), "my-vault")
+	_, err := initvault.Init(dst)
+	require.NoError(t, err)
+
+	body, err := os.ReadFile(filepath.Join(dst, "identity", "who-am-i.md"))
+	require.NoError(t, err)
+
+	// Frontmatter must exist and contain a created: line — the date
+	// itself is checked loosely (don't pin to UTC clock skew in CI),
+	// just that something looks like an ISO date.
+	s := string(body)
+	require.True(t, strings.HasPrefix(s, "---\n"), "starter note must start with frontmatter")
+	assert.Contains(t, s, "\ncreated: 20", "frontmatter must include a created: 20YY-MM-DD line")
+	assert.NotContains(t, s, "vm_updated",
+		"vm_updated was retired in the 2026-05-04 chain — init must not emit it")
+}
+
+// Init refuses to overwrite an existing path. Vaults are stateful —
+// silently rewriting someone's existing notes/embeddings/git history
+// would be catastrophically destructive.
+func TestInit_RefusesExistingPath(t *testing.T) {
+	dst := filepath.Join(t.TempDir(), "my-vault")
+	require.NoError(t, os.MkdirAll(dst, 0o755))
+
+	res, err := initvault.Init(dst)
+	require.Error(t, err)
+	assert.Nil(t, res)
+	assert.Contains(t, err.Error(), "refuse to overwrite")
+}
+
+// TestInit_FoundationalPrinciplesShip — the 2026-05-05 companion project
+// arc-shape exchange surfaced that consumer vaults didn't have the
+// canonical "how to write an arc" instructions inside them. The companion project
+// had to ask the vaultmind agent because its vault couldn't tell it.
+// Closes that gap by shipping the two foundational principles
+// (arcs-not-notes, how-to-write-arcs) in every freshly-init'd vault.
+//
+// Pin the contract: a fresh init MUST produce both principles. Future
+// edits that drop or rename them break first-touch trust for any new
+// user (an agent loading a brand-new vault wouldn't be able to find
+// the canonical guidance for writing the very thing the vault is
+// designed around).
+func TestInit_FoundationalPrinciplesShip(t *testing.T) {
+	dst := filepath.Join(t.TempDir(), "my-vault")
+	_, err := initvault.Init(dst)
+	require.NoError(t, err)
+
+	for _, want := range []string{
+		"principles/arcs-not-notes.md",
+		"principles/how-to-write-arcs.md",
+	} {
+		path := filepath.Join(dst, want)
+		body, readErr := os.ReadFile(path)
+		require.NoError(t, readErr, "expected foundational principle %q to ship in init scaffold", want)
+		s := string(body)
+		assert.True(t, strings.HasPrefix(s, "---\n"),
+			"%s must have frontmatter — agents querying vault on first session need it indexed",
+			want)
+		assert.Contains(t, s, "type: principle",
+			"%s must declare type: principle", want)
+		assert.Contains(t, s, "id: principle-",
+			"%s must have an id with principle- prefix", want)
+	}
+}
+
+// TestInit_WikilinksAreObsidianCompatible — the 2026-05-04 onboarding
+// dogfood surfaced that scaffold templates shipped with Obsidian-
+// incompatible wikilinks: `[[Title|id]]` form instead of the
+// filename-stem-first `[[stem|Display]]` form Obsidian's resolver
+// expects. Doctor flagged it on day zero of every fresh vault.
+//
+// This test pins the contract: every `[[X|Y]]` wikilink in the
+// scaffold MUST have X matching the stem of an actual file in the
+// scaffold. If a future template edit reintroduces a title-first
+// link, this test catches it BEFORE reality (doctor) does.
+func TestInit_WikilinksAreObsidianCompatible(t *testing.T) {
+	dst := filepath.Join(t.TempDir(), "my-vault")
+	_, err := initvault.Init(dst)
+	require.NoError(t, err)
+
+	// Collect all .md filename stems in the scaffold (e.g. "current-
+	// context", "arc-example"). Wikilinks with these as left-of-pipe
+	// resolve in Obsidian.
+	stems := map[string]bool{}
+	require.NoError(t, filepath.WalkDir(dst, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(d.Name(), ".md") {
+			return err
+		}
+		stems[strings.TrimSuffix(d.Name(), ".md")] = true
+		return nil
+	}))
+
+	wikilinkRe := regexp.MustCompile(`\[\[([^\]|]+)(?:\|([^\]]*))?\]\]`)
+	require.NoError(t, filepath.WalkDir(dst, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(d.Name(), ".md") {
+			return err
+		}
+		body, readErr := os.ReadFile(path)
+		require.NoError(t, readErr)
+		for _, m := range wikilinkRe.FindAllStringSubmatch(string(body), -1) {
+			// Strip Obsidian header (#section) and block (^block-id)
+			// suffixes. `[[note#section|Display]]` and `[[note^block|Display]]`
+			// are valid Obsidian; only the prefix-before-the-marker is
+			// the filename stem we need to verify.
+			target := m[1]
+			if idx := strings.IndexAny(target, "#^"); idx != -1 {
+				target = target[:idx]
+			}
+			assert.True(t, stems[target],
+				"%s contains wikilink [[%s|...]] — left-of-pipe must be a "+
+					"filename stem (Obsidian-compatible). Stems available: %v",
+				path, target, keysOf(stems))
+		}
+		return nil
+	}))
+}
+
+func keysOf(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}
+
+// README and config files (no leading frontmatter) pass through the
+// template renderer unchanged — they don't get a created: injection,
+// since they aren't notes.
+func TestInit_NonNoteFilesAreNotMutated(t *testing.T) {
+	dst := filepath.Join(t.TempDir(), "my-vault")
+	_, err := initvault.Init(dst)
+	require.NoError(t, err)
+
+	readme, err := os.ReadFile(filepath.Join(dst, "README.md"))
+	require.NoError(t, err)
+	assert.NotContains(t, string(readme), "created:",
+		"README must not get note-style frontmatter injection")
+
+	cfg, err := os.ReadFile(filepath.Join(dst, ".vaultmind", "config.yaml"))
+	require.NoError(t, err)
+	// config.yaml is YAML; it may legitimately contain `created` as a
+	// schema field name. Just ensure no leading `---` injection happened.
+	assert.False(t, strings.HasPrefix(string(cfg), "---\ncreated:"),
+		"config.yaml must not get note-style created: injection at the top")
+}

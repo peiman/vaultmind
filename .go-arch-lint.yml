@@ -1,0 +1,202 @@
+version: 3
+workdir: .
+
+# Architectural components (ADR-009: Layered Architecture Pattern)
+#
+# This configuration enforces the 4-layer architecture:
+#   Entry → Command → Business Logic → Infrastructure → External Systems
+#
+# Key Rules:
+# - Outer layers depend on inner layers, never reverse
+# - Only cmd/ can import Cobra
+# - internal/ packages cannot import cmd/
+# - Business logic packages are isolated from each other
+#
+# ============================================================================
+# OWNERSHIP MODEL (Framework Separation)
+# ============================================================================
+#
+# This file has MIXED OWNERSHIP - some sections are framework-managed,
+# others are project-managed. See markers below.
+#
+# When running `task ckeletin:update`:
+# - This file is NOT automatically updated (it's in project root, not .ckeletin/)
+# - Check framework CHANGELOG for any infrastructure changes
+# - Manually incorporate framework improvements if needed
+#
+# ADDING NEW BUSINESS LOGIC:
+#   When you add a new command package (e.g., internal/baseline/):
+#   1. Add it to the 'business.in' list below
+#   2. Run `task ckeletin:validate:layering` to verify
+#
+# ============================================================================
+
+# Global allow settings
+allow:
+  depOnAnyVendor: true  # Allow vendor imports (external libraries)
+  deepScan: false       # Disable deep AST scanning for performance
+  ignoreNotFoundComponents: false  # Fail if unmatched files found
+
+# Exclude test files, scripts, and generated files from validation
+excludeFiles:
+  - .*_test\.go$
+  - /scripts/.*
+  - /test/.*
+  - /main\.go$
+  - /main_test\.go$
+
+components:
+  # -------------------------------------------------------------------------
+  # FRAMEWORK-MANAGED: Command Layer
+  # -------------------------------------------------------------------------
+  # Layer 2: Command Layer (cmd/)
+  # - Ultra-thin command wrappers (ADR-001)
+  # - Only layer that can import Cobra
+  commands:
+    in: cmd
+
+  # -------------------------------------------------------------------------
+  # FRAMEWORK-MANAGED: Infrastructure Layer
+  # -------------------------------------------------------------------------
+  # Layer 4: Infrastructure Layer (shared services)
+  # - Configuration management (ADR-002, ADR-005) - includes subpackages
+  # - Logging infrastructure (ADR-006)
+  # - UI components (ADR-007)
+  # - Progress reporting (with Bubble Tea support)
+  # - Test utilities (testutil package)
+  # - Cross-cutting concerns available to all layers
+  #
+  # Framework packages: .ckeletin/pkg/*
+  # Project config: internal/config/commands/** (rarely changes)
+  # Project UI: internal/ui/** (rarely changes)
+  infrastructure:
+    in:
+      - .ckeletin/pkg/config/**
+      - .ckeletin/pkg/logger/**
+      - .ckeletin/pkg/output/**
+      - .ckeletin/pkg/testutil/**
+      - internal/config/commands/**
+      - internal/ui/**
+      - internal/xdg/**
+      # VaultMind infrastructure (shared services used by business logic):
+      - internal/vault/**
+      - internal/parser/**
+      - internal/schema/**
+      - internal/envelope/**
+      - internal/index/**
+      - internal/retrieval/**
+      - internal/embedding/**
+      - internal/graph/**
+      - internal/git/**
+      - internal/mutation/**
+      - internal/marker/**
+      - internal/plan/**
+      - internal/template/**
+      # VaultMind data assembly (used by business layer and cmd layer):
+      - internal/memory/**
+      # VaultMind experiment framework (session tracking, activation scoring):
+      - internal/experiment/**
+      # VaultMind baseline harness (golden-query retrieval-quality gate, test-only):
+      - internal/baseline/**
+      # VaultMind shared test vault fixture (per-process vault rebuild, test-only):
+      - internal/testvault/**
+      # VaultMind episodic substrate (session transcript → episode markdown, v0):
+      - internal/episode/**
+      # VaultMind arc distillation (rendered episode markdown → candidate moments, propose-only):
+      - internal/distill/**
+      # VaultMind vault scaffold (vaultmind init — embedded persona-shaped templates):
+      - internal/initvault/**
+      # VaultMind telemetry primitives (vault fingerprint, content-free aggregate features):
+      - internal/telemetry/**
+      # VaultMind onboarding instructions (embedded doc, agent-led setup script):
+      - internal/onboard/**
+      # VaultMind hook scripts (SSOT — embedded into binary; written out to other projects via `vaultmind hooks install`):
+      - internal/hookscripts/**
+      # VaultMind shell-quoting-aware preprocessor (generic primitive used by hook drift detection — Go port of the companion project's v0.3 shell-strip.sh):
+      - internal/shellparse/**
+      # VaultMind noise-floor relevance primitive (pure: top-hit cosine vs the embedder's noise floor → honest confidence; no business deps):
+      - internal/noisefloor/**
+
+  # -------------------------------------------------------------------------
+  # PROJECT-MANAGED: Business Logic Layer
+  # -------------------------------------------------------------------------
+  # Layer 3: Business Logic Layer
+  # - Feature-specific implementations
+  # - No CLI framework dependencies
+  # - Packages isolated from each other
+  #
+  # ⚠️  ADD YOUR BUSINESS LOGIC PACKAGES HERE
+  # When adding new commands, add their internal/ packages to this list.
+  # Example: Adding 'internal/baseline/**' for a new baseline command
+  business:
+    in:
+      - internal/ping/**
+      - internal/docs/**
+      - internal/dev/**
+      - internal/progress/**
+      - internal/check/**
+      # VaultMind business logic:
+      - internal/query/**
+      - internal/cmdutil/**
+      # VaultMind frontmatter fix (vaultmind frontmatter fix --backfill):
+      - internal/fix/**
+      # VaultMind hooks install + drift-detect (consumer of internal/hookscripts/):
+      - internal/hooks/**
+      # VaultMind auto-RAG drift catalog (Go schema for the JSON env var the bash engine consumes):
+      - internal/hooks/autorag/**
+
+  # pkg/ was cleaned by task init (checkmate is now an external dependency).
+  # Re-add this section if you create new public packages in pkg/.
+
+# External dependencies (vendors from go.mod)
+vendors:
+  # Cobra CLI framework
+  cobra:
+    in: github.com/spf13/cobra
+
+  # Viper configuration library
+  viper:
+    in: github.com/spf13/viper
+
+# Common components available to all layers
+commonComponents:
+  - infrastructure
+
+# -------------------------------------------------------------------------
+# FRAMEWORK-MANAGED: Dependency Rules
+# -------------------------------------------------------------------------
+# Dependency Rules (ADR-009)
+#
+# Enforces layered architecture dependency flow using allowlist approach
+# - Components can ONLY depend on what's listed in mayDependOn
+# - Unlisted dependencies will cause validation failures
+#
+# These rules rarely need modification. If you find yourself changing them,
+# you may be violating the layered architecture.
+deps:
+  # Command layer delegates to business logic and uses infrastructure
+  # Can also use Cobra and Viper (CLI framework)
+  commands:
+    mayDependOn:
+      - business
+      - infrastructure
+    canUse:
+      - cobra
+      - viper
+
+  # Business logic uses infrastructure only
+  # Cannot import commands or other business logic
+  # Cannot use Cobra (framework independence)
+  business:
+    mayDependOn:
+      - infrastructure
+    # canUse is intentionally omitted - uses only standard library + infrastructure
+
+  # Infrastructure is the foundation
+  # Cannot depend on upper layers (commands, business)
+  # Can use Viper for configuration
+  infrastructure:
+    mayDependOn: []  # Empty - depends on nothing
+    canUse:
+      - viper
+

@@ -1,0 +1,53 @@
+package experiment
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestDetectCaller_ExplicitEnvVarWins(t *testing.T) {
+	t.Setenv("VAULTMIND_CALLER", "companion-persona-hook")
+	t.Setenv("CLAUDE_PROJECT_DIR", "/should/be/ignored/when/explicit")
+
+	caller, _ := DetectCaller()
+	assert.Equal(t, "companion-persona-hook", caller)
+}
+
+func TestDetectCaller_FallsBackToClaudeCodeWhenProjectDirSet(t *testing.T) {
+	t.Setenv("VAULTMIND_CALLER", "")
+	t.Setenv("CLAUDE_PROJECT_DIR", "/Users/me/dev/vaultmind")
+
+	caller, meta := DetectCaller()
+	assert.Equal(t, "claude-code", caller)
+	assert.Equal(t, "/Users/me/dev/vaultmind", meta["claude_project_dir"])
+}
+
+func TestDetectCaller_DefaultsToCLI(t *testing.T) {
+	t.Setenv("VAULTMIND_CALLER", "")
+	t.Setenv("CLAUDE_PROJECT_DIR", "")
+
+	caller, _ := DetectCaller()
+	assert.Equal(t, "cli", caller)
+}
+
+func TestDetectCaller_MetaCapturesUserAndHost(t *testing.T) {
+	t.Setenv("VAULTMIND_CALLER", "cli")
+	t.Setenv("USER", "someuser")
+
+	_, meta := DetectCaller()
+	assert.Equal(t, "someuser", meta["user"])
+	// hostname is os-provided; just check it's populated.
+	require.Contains(t, meta, "host")
+	assert.NotEmpty(t, meta["host"])
+}
+
+func TestDetectCaller_MetaOmitsMissingFields(t *testing.T) {
+	t.Setenv("VAULTMIND_CALLER", "cli")
+	t.Setenv("CLAUDE_PROJECT_DIR", "")
+
+	_, meta := DetectCaller()
+	_, hasPD := meta["claude_project_dir"]
+	assert.False(t, hasPD, "empty CLAUDE_PROJECT_DIR should not appear in meta")
+}

@@ -1,0 +1,85 @@
+{
+  "k": 5,
+  "queries": [
+    {
+      "name": "spreading",
+      "text": "spreading activation",
+      "expected": [
+        "c-spreading",
+        "g-semantic"
+      ],
+      "result_ids": [
+        "c-spreading",
+        "g-semantic"
+      ],
+      "hit_at_k": 1,
+      "reciprocal_rank": 1
+    },
+    {
+      "name": "memory-decay",
+      "text": "memory decay",
+      "expected": [
+        "c-decay"
+      ],
+      "result_ids": [
+        "c-decay"
+      ],
+      "hit_at_k": 1,
+      "reciprocal_rank": 1
+    },
+    {
+      "name": "rrf",
+      "text": "reciprocal rank fusion",
+      "expected": [
+        "r-rrf"
+      ],
+      "result_ids": [
+        "r-rrf",
+        "r-hybrid"
+      ],
+      "hit_at_k": 1,
+      "reciprocal_rank": 1
+    },
+    {
+      "name": "hybrid",
+      "text": "hybrid retrieval",
+      "expected": [
+        "r-hybrid"
+      ],
+      "result_ids": [
+        "r-hybrid",
+        "g-kg",
+        "r-rrf"
+      ],
+      "hit_at_k": 1,
+      "reciprocal_rank": 1
+    },
+    {
+      "name": "knowledge-graph",
+      "text": "knowledge graph embeddings",
+      "expected": [
+        "g-embed",
+        "g-kg"
+      ],
+      "result_ids": [
+        "g-embed"
+      ],
+      "hit_at_k": 1,
+      "reciprocal_rank": 1
+    },
+    {
+      "name": "pagerank",
+      "text": "pagerank",
+      "expected": [
+        "g-pagerank"
+      ],
+      "result_ids": [
+        "g-pagerank"
+      ],
+      "hit_at_k": 1,
+      "reciprocal_rank": 1
+    }
+  ],
+  "hit_at_k": 1,
+  "mrr": 1
+}

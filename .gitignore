@@ -1,0 +1,117 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+# Replace the following line with the Binary name from BINARY_NAME in Taskfile.yml
+vaultmind
+
+# Task artifacts
+.task
+
+# ORT build dependency (downloaded via `task setup:ort`)
+lib/libtokenizers.a
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Dependency directories (remove the comment below to include it)
+vendor/
+
+# Go workspace file
+go.work
+
+# IDEs and editors
+.idea/
+.vscode/
+.cursor/
+.cursorrules
+*.swp
+*.swo
+*~
+
+# Claude Code (keep settings.json, rules/, scripts/, ignore local state)
+.claude/*
+!.claude/settings.json
+!.claude/rules/
+!.claude/scripts/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Log files
+*.log
+
+# Config files
+# Replace the following line with the Config file name from BINARY_NAME in Taskfile.yml
+vaultmind.yaml
+
+# Build output directory
+/build/
+
+# GoReleaser dist directory
+/dist/
+
+# Test coverage
+coverage.txt
+test-output.json
+coverage.html
+
+# Benchmark results
+bench-results.txt
+bench-old.txt
+bench-new.txt
+
+# Git worktrees
+.worktrees/
+
+# Aider
+.aider*
+
+# Environment variables
+.env
+
+# Research and planning files
+research/
+docs/research/
+docs/superpowers/
+
+# License compliance outputs (generated artifacts)
+reports/licenses.csv
+reports/license-errors.log
+reports/licenses-binary.json
+third_party/licenses/
+NOTICE
+
+# SBOM generated files (all formats)
+reports/sbom/
+
+# Lichen cache (if applicable)
+.lichen-cache/
+
+# VaultMind index (derived, rebuildable) and SQLite WAL/SHM transients
+**/.vaultmind/index.db
+vaultmind-vault/.vaultmind/index.db
+vaultmind-vault/.vaultmind/index.db-shm
+vaultmind-vault/.vaultmind/index.db-wal
+vaultmind-identity/.vaultmind/index.db
+vaultmind-identity/.vaultmind/index.db-shm
+vaultmind-identity/.vaultmind/index.db-wal
+coverage.raw.txt
+test/fixtures/baseline/vault/.vaultmind/index.db
+
+# Obsidian per-user UI state (tracked config: app.json, appearance.json, core-plugins.json)
+vaultmind-vault/.obsidian/workspace.json
+vaultmind-vault/.obsidian/graph.json
+vaultmind-identity/.obsidian/workspace.json
+vaultmind-identity/.obsidian/graph.json

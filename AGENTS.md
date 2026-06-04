@@ -1,0 +1,435 @@
+# VaultMind — Project Guide for AI Agents (contributors)
+
+> **Two audiences, two docs.**
+>
+> - **Working ON the VaultMind codebase?** (changing code, adding features, fixing bugs) — **this file.** Architecture rules, test standards, commit conventions.
+> - **Using VaultMind as memory?** (querying a vault, saving new notes, persona hooks) — read **[docs/AGENT_USAGE.md](docs/AGENT_USAGE.md)**.
+>
+> The scaffold pattern below is a reference implementation — it works in any codebase. See the README for how the pieces fit together.
+
+## About This Project
+
+**VaultMind** is built on the **ckeletin-go** scaffold — a production-ready Go CLI scaffold powered by an updatable framework layer, built for humans and AI agents alike. This guide describes the scaffold conventions VaultMind inherits.
+
+The `.ckeletin/` directory contains the **framework** — config registry, logging, validation scripts, task definitions, and ADRs (000-099). Your code lives in `cmd/` and `internal/`. Framework updates via `task ckeletin:update` without touching your code.
+
+Every architectural rule in this project is machine-checkable. `task check` is the single gateway — run it before every commit. If it passes, the code is correct regardless of who wrote it.
+
+Key characteristics:
+- Ultra-thin command pattern (commands ≤30 lines, logic in `internal/`)
+- Centralized configuration registry with auto-generated constants
+- Structured logging with Zerolog (dual console + file output)
+- Bubble Tea for interactive UIs
+- Test-driven development (TDD) — tests first, always
+- Dependency injection over mocking
+- 85% minimum test coverage, enforced by CI
+- Beautiful CLI output via the external `github.com/peiman/ckeletin-go/pkg/checkmate` package (a go.mod dependency, not a local directory)
+
+**Platform:** macOS and Linux (primary). Windows is supported for core functionality; interactive features (TUI, colored output) may have limitations.
+
+## Commands
+
+Use `task` commands for all standard workflows. The `task` runner wraps Go tooling with correct flags, coverage settings, and checks.
+
+| Scenario | Command |
+|----------|---------|
+| Build | `task build` |
+| Run all tests | `task test` |
+| Format code | `task format` |
+| Lint code | `task lint` |
+| Before commits | `task check` |
+| Trivial changes only | `task check:fast` |
+| Debug one test | `go test -v -run TestName ./path/...` |
+| Quick compile check | `go build ./...` |
+| Run benchmarks | `task bench` |
+| Integration tests | `task test:integration` |
+| Vulnerability check | `task check:vuln` |
+| Regenerate config constants | `task generate:config:key-constants` |
+
+**Daily workflow:** `task format` → `task test` → `task lint` → `task check`
+
+**`task check:fast`** skips race detection and integration tests. Use only for docs, comments, or typo fixes. Use full `task check` for any code logic changes.
+
+**What `task check` runs (in order):**
+```
+Code Quality        → format, lint
+Architecture        → validate:defaults, commands, constants, task-naming,
+                      architecture, layering, package-organization,
+                      config-consumption, output, security, dev-build-tags
+Security Scanning   → check:secrets, check:sast
+Dependencies        → check:deps, check:license, check:sbom:vulns
+Tests               → test:full (unit + integration + race detection)
+Coverage floor      → ≥85% project coverage + per-package ratchets
+Retrieval baseline  → golden-query Hit@K/MRR vs committed snapshot
+```
+
+**Coverage gate enforced:** `task check` fails if project coverage drops below
+85%. The script excludes integration-only or demo code (`_tui.go`,
+`internal/embedding/`, `cmd/dev_progress.go`, `cmd/check.go`) — all documented
+in `.ckeletin/scripts/check-coverage-project.sh`. Future work: push embedding
+coverage up and narrow the exclusion list.
+
+**Per-package ratchets** (enforced alongside the project floor): certain
+packages carry invariants the whole system depends on — dropping their coverage
+below the ratchet fails the gate with a specific package callout:
+
+| Package | Floor | Why |
+|---------|-------|-----|
+| `internal/envelope` | 100% | JSON output contract — every CLI caller parses it |
+| `internal/parser` | 100% | Frontmatter extractor — wrong parse = wrong note |
+| `internal/schema` | 100% | Type registry — the enforcement layer |
+| `internal/config/commands` | 100% | Command metadata registry (SSOT) |
+| `internal/vault` | 90% | Config loader + scanner — vault boundary |
+
+Ratchet discipline: floors **only move up, never down**. Raising one requires
+the package to hit the new floor first. Adding a package to the tier requires
+the same.
+
+**Retrieval baseline (golden-query regression gate):**
+`task test:baseline` runs a curated query fixture (`test/fixtures/baseline/`)
+against the keyword retriever and compares Hit@K / MRR against a committed
+snapshot (`baseline.json`). Any aggregate or per-query drop beyond the
+tolerance (0.02) fails the gate with a specific regression message.
+
+- **Intended retrieval change (snapshot refresh):** `task test:baseline:update`
+  regenerates `baseline.json`. The diff MUST be reviewed in the commit —
+  silent snapshot refreshes defeat the gate's purpose.
+- **Extending the fixture:** add queries to `queries.yaml` (and notes to
+  `vault/` if needed). Run `task test:baseline:update`, review the snapshot
+  diff, commit together.
+- **Why it's there:** before this gate, a change that silently re-ranked
+  retrieval results would be invisible until a human noticed "hmm, that's
+  wrong." Matches manifesto principle #4 (reality is the spec).
+
+**Scoring-constant SSOT:**
+Every tunable in the scoring/activation/retrieval path lives in one file,
+with a regression test locking its current value. Accidental drift has
+historically produced hard-to-trace retrieval bugs (the "Numbers Were
+Wrong" arc). Each of these is the single source for its constant:
+
+| Constant | Location | Meaning |
+|----------|----------|---------|
+| `experiment.DefaultActivationParams(gamma)` | `internal/experiment/activation_scorer.go` | No-similarity baseline (Delta=0) |
+| `experiment.DefaultActivationParamsWithSimilarity(gamma)` | `internal/experiment/activation_scorer.go` | Similarity-available case (uses `DefaultSpreadingActivationDelta`) |
+| `experiment.DefaultSpreadingActivationDelta = 0.2` | `internal/experiment/activation_scorer.go` | Spreading-activation weight |
+| `experiment.MinElapsedHours = 1/3600` | `internal/experiment/activation.go` | Soft floor on log(elapsed) for recent accesses |
+| `query.DefaultRRFK = 60` | `internal/query/hybrid_retriever.go` | Reciprocal Rank Fusion smoothing |
+| `memory.PriorityExplicitRelation/Link/MediumConfidence/LowConfidence` | `internal/memory/contextpack.go` | Edge-priority tiers (0/1/2/3; feed distance-weighted ranking) |
+
+**Changing a scoring value:**
+1. Update the named constant.
+2. The regression test in the `*_ssot_test.go` file now fails — good.
+   The failing diff shows the deliberate change.
+3. Update the test's expected value.
+4. Run `task test:baseline` to check retrieval-quality impact. A value
+   change usually shifts Hit@K/MRR — decide whether the shift is intended.
+5. Commit the constant change, test change, and (if baseline moved) the
+   snapshot refresh in separate commits so the review is readable.
+
+**Deliberately out of SSOT (comments explain why):**
+- `variantGammas` map values (the float IS the variant identity).
+- `D=0.5, Alpha=0.6, Beta=0.4` in `DefaultActivationParams` (factory defaults).
+- `minFusionCandidates = 100` (function-local; behavior it guards is internal).
+
+## Public CLI JSON Contract
+
+Every `vaultmind` command that accepts `--json` emits an envelope with a
+**stable** public shape. Downstream consumers (a companion project's persona hook,
+chat app, custom tooling) can decode this envelope against their own
+struct definitions and trust that additive changes within a version
+won't break them.
+
+**Schema versioning:**
+- `schema_version: "v1"` — current major version. Present on every
+  envelope, every command, both `ok` and `error` statuses.
+- **Additive changes within v1 are non-breaking.** Adding a new top-level
+  or nested field, adding a new optional flag, adding a new status value
+  that the consumer already ignores — all safe.
+- **Renaming or removing a field is breaking** and requires a v1 → v2
+  bump. Consumers branch on `schema_version` at decode time.
+
+**Covered commands (contract tests in `cmd/contract_*_test.go`):**
+- `vaultmind ask --json`: `result.query`, `result.retrieval_mode`,
+  `result.top_hits[].{id,type,title,path,score}`, `result.context.target_id`
+- `vaultmind memory context-pack --json`: `result.target_id`,
+  `result.target.id`, `result.used_tokens`, `result.budget_tokens`,
+  `result.truncated`, `result.context[].{id,edge_type,body_included}`
+- `vaultmind search --json`: `result.hits[].{id,title,score}`, `result.total`
+- `vaultmind note get --json`: `result.{id,type,title}`
+
+**Text-mode contract (`vaultmind ask` without `--json`):**
+A companion project's persona hook consumes `vaultmind ask`'s **stdout as raw
+text**. The contract is: exit code 0, non-empty stdout, `"Search:"`
+header line present, at-least-one hit ID in stdout when content matches,
+and stderr never bleeds into stdout. See `cmd/contract_ask_test.go`.
+
+**Changing the contract:**
+1. Rename or remove a field → bump `schema_version` (see
+   `internal/envelope/envelope.go`).
+2. Update every contract-test struct in `cmd/contract_types_test.go`.
+3. Document the migration in this section (old field → new field).
+4. Coordinate with downstream consumers BEFORE merging — a companion persona-vault project lives
+   outside this repo, and a breaking change strands it.
+
+**Current external consumers:**
+- Any agent that consumes `vaultmind ask` text output via a SessionStart persona hook
+  — see `.claude/scripts/load-persona.sh` and the README integration section for the reference implementation.
+- VaultMind's own identity hook: `.claude/scripts/load-persona.sh` —
+  same text-output pattern.
+
+**If `task check` fails:** Fix the issue, don't work around it.
+- Format issues → `task format`
+- Lint issues → Read output and fix code
+- Test failures → Debug and fix tests
+- Coverage drops → Add more tests (85% project floor + tier ratchets)
+
+## Code Organization
+
+```
+vaultmind/                 # (built on the ckeletin-go scaffold)
+├── .ckeletin/             # Framework layer (upstream template)
+│   ├── docs/adr/          # Framework ADRs (000-014)
+│   ├── pkg/config/        # Config registry, constants, validation
+│   │   ├── registry.go    # Config option definitions
+│   │   └── keys_generated.go  # Auto-generated constants
+│   ├── pkg/logger/        # Logging infrastructure (Zerolog)
+│   ├── scripts/           # Build, validation, and utility scripts
+│   └── Taskfile.yml       # Framework task definitions
+├── cmd/                   # Commands (ultra-thin, ≤30 lines each)
+│   ├── root.go            # Root command setup
+│   └── *.go               # Feature commands
+├── internal/              # Private application code
+│   ├── check/             # Check command (executor, timing, checks)
+│   ├── dev/               # Dev command logic
+│   ├── ping/              # Ping command logic
+│   └── */                 # Other internal packages
+├── test/integration/      # Integration tests
+├── docs/adr/              # Project-specific ADRs
+├── Taskfile.yml           # Project tasks (includes .ckeletin/Taskfile.yml)
+├── AGENTS.md              # This file (universal project guide)
+└── CLAUDE.md              # Claude Code-specific behavioral rules
+```
+
+**Key principles:**
+1. **Ultra-thin commands**: `cmd/*.go` files are wiring only (≤30 lines) — read config, create structs, call `internal/`. Loops, conditionals, or string manipulation → move to `internal/`.
+2. **Business logic in `internal/`**: Private implementation packages.
+3. **Framework code in `.ckeletin/`**: Config registry, logger, scripts, validators.
+4. **Shared CLI output** comes from the external `github.com/peiman/ckeletin-go/pkg/checkmate` package (a go.mod dependency), not a local `pkg/` directory.
+
+**30-line guidance:** Target ≤30. 31-35 acceptable if refactoring reduces clarity. Beyond 35 requires refactoring. Example:
+```go
+// cmd/ping.go — wiring only, no business logic
+func runPing(cmd *cobra.Command, args []string) error {
+    cfg := ping.Config{
+        Message: getConfigValueWithFlags[string](cmd, "message", config.KeyAppPingOutputMessage),
+        Color:   getConfigValueWithFlags[string](cmd, "color", config.KeyAppPingOutputColor),
+    }
+    return ping.NewExecutor(cfg, cmd.OutOrStdout()).Execute()
+}
+```
+
+## Architecture Decision Records (ADRs)
+
+Read `.ckeletin/docs/adr/*.md` before making architectural changes.
+
+| ADR | Topic | Key Principle |
+|-----|-------|---------------|
+| ADR-000 | Task-Based Workflow | Single source of truth for dev commands |
+| ADR-001 | Command Pattern | Commands are ultra-thin (≤30 lines) |
+| ADR-002 | Config Registry | Centralized config with type safety |
+| ADR-003 | Testing Strategy | Dependency injection over mocking |
+| ADR-004 | Security | Input validation and safe defaults |
+| ADR-005 | Config Constants | Auto-generated from registry |
+| ADR-006 | Logging | Structured logging with Zerolog |
+| ADR-007 | UI Framework | Bubble Tea for interactive UIs |
+| ADR-008 | Release Automation | Multi-platform releases with GoReleaser |
+| ADR-009 | Layered Architecture | 4-layer dependency rules |
+| ADR-010 | Package Organization | pkg/ for public, internal/ for private |
+| ADR-011 | License Compliance | Dual-tool license checking |
+| ADR-012 | Dev Commands | Build tags for dev-only commands |
+| ADR-013 | Structured Output | Shadow logging and checkmate patterns |
+| ADR-014 | Enforcement Policy | Every ADR must have automated enforcement |
+
+**Quick lookup — "I'm working on..."**
+
+| Task | Read |
+|------|------|
+| Adding a command | ADR-001, ADR-009 |
+| Adding config option | ADR-002, ADR-005 |
+| Writing tests | ADR-003 |
+| Adding logging | ADR-006 |
+| Adding dependency | ADR-011 |
+| Creating UI | ADR-007 |
+| Adding/modifying an ADR | ADR-014 |
+
+Every ADR must have an `## Enforcement` section ([ADR-014](.ckeletin/docs/adr/014-adr-enforcement-policy.md)).
+
+## Conventions
+
+### Configuration Management
+
+1. **Define** in `.ckeletin/pkg/config/registry.go`
+2. **Generate** constants: `task generate:config:key-constants` → creates `keys_generated.go`
+3. **Use** type-safe retrieval: `viper.GetBool(config.KeyAppFeatureEnabled)`
+
+Rules:
+- Never hardcode config keys as strings — use `config.Key*` constants
+- Always run `task generate:config:key-constants` after registry changes
+- Add validation functions for complex config values
+
+### Logging
+
+Zerolog structured logging with dual output:
+- **Console**: INFO+ level, colored, human-friendly
+- **File**: DEBUG+ level, JSON format
+
+Log level rules:
+- Can return this error? → `log.Debug()` + `return err`
+- User input error? → Formatted output only (no log)
+- Important normal flow event? → `log.Info()`
+- Recoverable issue? → `log.Warn()`
+- Unrecoverable system failure? → `log.Error()`
+
+Use `log.Error()` only for unrecoverable failures where no error can be returned. Semgrep rule `ckeletin-log-error-and-return` enforces this. See [ADR-006](.ckeletin/docs/adr/006-structured-logging-with-zerolog.md).
+
+### Testing
+
+- **TDD is mandatory** — Write failing tests FIRST, then implement to make them pass. Test + implementation are committed together as one atomic unit. Never commit tests without the code that makes them pass, or code without its tests
+- All tests must use `testify/assert` or `testify/require`
+- Use table-driven tests for multiple scenarios
+- Unit tests: `*_test.go` in same package
+- Integration tests: `test/integration/`
+- Dependency injection over mocking ([ADR-003](.ckeletin/docs/adr/003-dependency-injection-over-mocking.md))
+
+### Golden File Testing
+
+Golden files are reference snapshots of CLI output. Never blindly update them.
+
+```bash
+task test:golden         # Run golden tests
+task test:golden:update  # Update (then review with git diff!)
+```
+
+After updating: `git diff test/integration/testdata/` — review every change. See [docs/testing.md](docs/testing.md).
+
+### Checkmate Library (external `github.com/peiman/ckeletin-go/pkg/checkmate`)
+
+Beautiful terminal output for CLI check results, consumed from the external `github.com/peiman/ckeletin-go/pkg/checkmate` package (a go.mod dependency, not a local directory). Thread-safe, auto-detects TTY (colors in terminal, plain in CI), customizable themes.
+
+```go
+p := checkmate.New()
+p.CategoryHeader("Code Quality")
+p.CheckSuccess("lint passed")
+p.CheckFailure("format", "2 files need formatting", "Run: task format")
+```
+
+## Git Workflow
+
+[Conventional Commits](https://www.conventionalcommits.org/) format:
+```
+<type>: <concise summary>
+
+- <bullet point details>
+```
+
+**Types:** `feat`, `fix`, `docs`, `test`, `refactor`, `style`, `perf`, `build`, `ci`, `chore`
+
+**Branch naming:** `feat/`, `fix/`, `refactor/`, `docs/` prefixes (e.g., `feat/add-user-auth`)
+
+**Atomic commits:** Tests and the implementation they cover go in the same commit. Every commit should be a complete, passing unit. Never split tests from their implementation across separate commits.
+
+**Normal merge, never squash.** This project uses normal merge (merge commits) — not squash merge. Every atomic commit is preserved on main. This is why atomic commits matter: they survive the merge and keep `git bisect`, `git log`, and the TDD narrative intact. Do not squash when merging branches or PRs.
+
+`task check` must pass before every commit.
+
+## Code Quality
+
+### Test Coverage Requirements
+
+| Package Type | Minimum | Target |
+|-------------|---------|--------|
+| Overall | 85% | 90%+ |
+| `cmd/*` | 80% | 90%+ |
+| `.ckeletin/pkg/config` | 80% | 90%+ |
+| `.ckeletin/pkg/logger` | 80% | 90%+ |
+| Other packages | 70% | 80%+ |
+
+Both per-package and overall thresholds must pass. CI runs `.ckeletin/scripts/check-coverage-project.sh`.
+
+**Exclusions:** TUI code (`*_tui.go`, `internal/check/executor.go`, `internal/check/summary.go`) and `/demo/` directories.
+
+During refactoring, temporary drops up to 2% acceptable if restored before PR merges.
+
+### New Command Checklist
+
+```
+[ ] Create cmd/<name>.go (≤30 lines, wiring only)
+[ ] Create internal/<name>/ package for business logic
+[ ] Add config options to .ckeletin/pkg/config/registry.go
+[ ] Run: task generate:config:key-constants
+[ ] Write failing tests FIRST in internal/<name>/*_test.go (TDD)
+[ ] Implement code to make tests pass
+[ ] Add integration test in test/integration/ (if needed)
+[ ] Update CHANGELOG.md
+[ ] Run: task check (must pass)
+```
+
+## License Compliance
+
+Run `task check:license:source` before committing new dependencies.
+
+| Allowed | Denied |
+|---------|--------|
+| MIT, Apache-2.0, BSD-2/3-Clause, ISC, 0BSD, Unlicense | GPL, AGPL, SSPL, LGPL, MPL |
+
+| Task | When | Speed |
+|------|------|-------|
+| `task check:license:source` | Before committing deps | ~2-5s |
+| `task check:license:binary` | Before release | ~10-15s |
+
+Transitive dependencies matter — if a MIT package depends on GPL code, your project is contaminated. Always run checks after `go mod tidy`.
+
+To remove a violating dependency: `go get pkg@none && go mod tidy`
+
+Details: [docs/licenses.md](docs/licenses.md) and [ADR-011](.ckeletin/docs/adr/011-license-compliance.md)
+
+## Documentation
+
+- **CHANGELOG.md**: Every user-facing change, [Keep a Changelog](https://keepachangelog.com/) format, under `[Unreleased]`
+- **README.md**: Update for new features and major changes
+- **ADRs**: New ADR for significant architectural changes, numbered sequentially
+
+## Troubleshooting
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `task: command not found` | Task not installed | `bash .ckeletin/scripts/install_tools.sh` |
+| `go-licenses: package does not have module info` | Tools built with old Go | `task setup` |
+| Coverage below 85% | Missing tests | `go tool cover -html=coverage.out` to find gaps |
+| License check fails | Copyleft dep added | `go get pkg@none && go mod tidy`, find MIT alternative |
+| `golangci-lint` timeout | Slow machine | `task lint` (has proper timeout) |
+| Validate commands fails | cmd file too long | Move logic to `internal/`, keep ≤30 lines |
+
+**Local passes but CI fails:**
+1. Go version mismatch — check `.go-version`
+2. Stale tools — `task setup`
+3. Missing deps — `go mod tidy`
+4. Race conditions — `task test:race` locally
+
+**Cascading failures — fix in this order:**
+1. License violation → remove/replace dep, `go mod tidy && task check:license:source`
+2. Build failure → fix compilation, `go build ./...`
+3. Lint/format → `task format`, fix remaining manually
+4. Test failures → `task test`, fix tests or code
+5. Coverage drop → `go tool cover -html=coverage.out`, add tests
+
+Each step depends on the previous. Don't fix coverage for code that fails lint.
+
+## Key Resources
+
+- **.ckeletin/docs/adr/ARCHITECTURE.md** — System structure
+- **.ckeletin/docs/adr/*.md** — Architectural decisions
+- **.semgrep.yml** — Custom SAST rules
+- **Taskfile.yml** — All commands and implementations
+- **CHANGELOG.md** — History of changes
+- **README.md** — Project overview and usage

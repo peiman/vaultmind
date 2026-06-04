@@ -1,0 +1,717 @@
+// cmd/root.go
+//
+// Thread-Safety Notes:
+//
+// Viper configuration in this application follows a safe initialization pattern:
+//  1. All configuration is initialized during startup in PersistentPreRunE (single-threaded)
+//  2. Configuration is read-only after initialization completes
+//  3. No concurrent writes occur during command execution
+//  4. Commands execute sequentially (Cobra's execution model)
+//
+// This pattern ensures thread-safety without requiring locks or synchronization.
+// Viper itself is not thread-safe for writes, but our usage pattern avoids concurrent access.
+
+package cmd
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+
+	"github.com/mattn/go-isatty"
+	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
+	"github.com/peiman/vaultmind/.ckeletin/pkg/logger"
+	"github.com/peiman/vaultmind/.ckeletin/pkg/output"
+	"github.com/peiman/vaultmind/internal/experiment"
+	"github.com/peiman/vaultmind/internal/xdg"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
+)
+
+var (
+	cfgFile           string
+	configPathMode    = ConfigPathModeXDG
+	configPathFlag    *pflag.Flag
+	Version           = "dev"
+	Commit            = ""
+	Date              = ""
+	binaryName        = "" // MUST be injected via ldflags (see Taskfile.yml LDFLAGS)
+	configFileStatus  string
+	configFileUsed    string
+	experimentSession *experiment.Session
+
+	// Compiled regex patterns for EnvPrefix()
+	// Compiled once at package initialization for better performance
+	nonAlphanumericRegex = regexp.MustCompile(`[^A-Z0-9]`)
+	onlyUnderscoresRegex = regexp.MustCompile(`^_+$`)
+)
+
+const (
+	// ConfigPathModeXDG searches XDG-style config directory (default).
+	// On macOS, this means ~/.config/<app> unless XDG_CONFIG_HOME is set.
+	ConfigPathModeXDG = "xdg"
+	// ConfigPathModeNative searches the OS-native config directory.
+	// On macOS, this means ~/Library/Application Support/<app>.
+	ConfigPathModeNative = "native"
+	// ConfigPathModeBoth searches both XDG and native directories.
+	ConfigPathModeBoth = "both"
+)
+
+// EnvPrefix returns a sanitized environment variable prefix based on the binary name
+func EnvPrefix() string {
+	// Convert to uppercase and replace non-alphanumeric characters with underscore
+	prefix := strings.ToUpper(binaryName)
+	prefix = nonAlphanumericRegex.ReplaceAllString(prefix, "_")
+
+	// Ensure it doesn't start with a number (invalid for env vars)
+	if prefix != "" && prefix[0] >= '0' && prefix[0] <= '9' {
+		prefix = "_" + prefix
+	}
+
+	// Handle case where all characters were special and got replaced
+	if onlyUnderscoresRegex.MatchString(prefix) {
+		prefix = "_"
+	}
+
+	return prefix
+}
+
+// ConfigPaths returns configuration paths for the application.
+//
+// Config file search order (handled by viper):
+//  1. --config flag (explicit override)
+//  2. ./config.{yaml,yml,json,toml} (project-local config)
+//  3. User config directory based on path mode:
+//     - xdg (default): $XDG_CONFIG_HOME/<binaryName> or ~/.config/<binaryName>
+//     - native: OS-native config path (macOS: ~/Library/Application Support/<binaryName>)
+//     - both: xdg first, then native
+//
+// Viper automatically detects the file format based on extension.
+type ConfigPathInfo struct {
+	// ConfigName is the base config name without extension (e.g. "config")
+	// Viper will search for config.yaml, config.yml, config.json, config.toml
+	ConfigName string
+	// XDGDir is the XDG-style config directory (e.g. "$XDG_CONFIG_HOME/myapp" or "~/.config/myapp")
+	XDGDir string
+	// NativeDir is the OS-native config directory (e.g. macOS "~/Library/Application Support/myapp").
+	NativeDir string
+	// Mode controls which user config directory is searched: xdg, native, or both.
+	Mode string
+	// SearchPaths lists all viper search paths in priority order.
+	SearchPaths []string
+}
+
+func ConfigPaths() ConfigPathInfo {
+	xdgDir := resolveXDGConfigDir()
+	nativeDir, _ := xdg.ConfigDir()
+
+	mode := resolveConfigPathMode()
+	paths := ConfigPathInfo{
+		ConfigName: "config",
+		XDGDir:     xdgDir,
+		NativeDir:  nativeDir,
+		Mode:       mode,
+	}
+	paths.SearchPaths = buildConfigSearchPaths(paths)
+	return paths
+}
+
+func resolveXDGConfigDir() string {
+	name := binaryName
+	if name == "" {
+		name = xdg.GetAppName()
+	}
+
+	xdgConfigHome := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME"))
+	if xdgConfigHome != "" {
+		return filepath.Join(xdgConfigHome, name)
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		fallback, _ := xdg.ConfigDir()
+		return fallback
+	}
+
+	return filepath.Join(home, ".config", name)
+}
+
+func resolveConfigPathMode() string {
+	mode := strings.ToLower(strings.TrimSpace(configPathMode))
+	if mode == "" {
+		mode = ConfigPathModeXDG
+	}
+
+	flagChanged := configPathFlag != nil && configPathFlag.Changed
+	if !flagChanged {
+		envKey := EnvPrefix() + "_CONFIG_PATH_MODE"
+		if envMode := strings.ToLower(strings.TrimSpace(os.Getenv(envKey))); envMode != "" {
+			mode = envMode
+		}
+	}
+
+	switch mode {
+	case ConfigPathModeXDG, ConfigPathModeNative, ConfigPathModeBoth:
+		return mode
+	default:
+		log.Warn().
+			Str("config_path_mode", mode).
+			Str("fallback_mode", ConfigPathModeXDG).
+			Msg("Invalid config path mode, falling back to default")
+		return ConfigPathModeXDG
+	}
+}
+
+func buildConfigSearchPaths(paths ConfigPathInfo) []string {
+	searchPaths := []string{"."}
+
+	addUnique := func(path string) {
+		if path == "" {
+			return
+		}
+		for _, existing := range searchPaths {
+			if existing == path {
+				return
+			}
+		}
+		searchPaths = append(searchPaths, path)
+	}
+
+	switch paths.Mode {
+	case ConfigPathModeXDG:
+		addUnique(paths.XDGDir)
+	case ConfigPathModeNative:
+		addUnique(paths.NativeDir)
+	case ConfigPathModeBoth:
+		addUnique(paths.XDGDir)
+		addUnique(paths.NativeDir)
+	default: // xdg
+		addUnique(paths.XDGDir)
+	}
+
+	return searchPaths
+}
+
+func defaultUserConfigDir(paths ConfigPathInfo) string {
+	for _, path := range paths.SearchPaths {
+		if path != "." {
+			return path
+		}
+	}
+	return ""
+}
+
+// Export RootCmd so that tests in other packages can manipulate it without getters/setters.
+var RootCmd = &cobra.Command{
+	Use:           "",
+	Short:         "A production-ready Go CLI application",
+	Long:          "",
+	SilenceErrors: true, // Errors are handled by main.go, don't print twice
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// Bind flags to viper first (must happen before initConfig)
+		if err := bindFlags(cmd); err != nil {
+			return fmt.Errorf("failed to bind flags: %w", err)
+		}
+
+		// Early output mode detection from explicit flag (before config load)
+		if f := cmd.Root().PersistentFlags().Lookup("output-format"); f != nil && f.Changed {
+			output.SetOutputMode(f.Value.String())
+		}
+		output.SetCommandName(cmd.Name())
+
+		// Quiet by default: raise the global level to Info BEFORE config
+		// validation runs (inside initConfig). Otherwise the config-security
+		// validators log at Debug while zerolog is still at its package
+		// default, leaking raw-JSON "Config file ... validated" lines to
+		// stderr on every invocation. logger.Init below re-applies the
+		// configured level (default Info), so app.log.level still controls
+		// verbosity for everything after config load.
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+
+		// Initialize configuration
+		if err := initConfig(); err != nil {
+			return err
+		}
+
+		// Initialize logger with configuration values
+		if err := logger.Init(nil); err != nil {
+			return fmt.Errorf("failed to initialize logger: %w", err)
+		}
+
+		// Activate JSON output mode (from config or flag) and suppress logs
+		output.SetOutputMode(viper.GetString(config.KeyAppOutputFormat))
+		if output.IsJSONMode() {
+			zerolog.SetGlobalLevel(zerolog.Disabled)
+		}
+
+		// Log config status after logger is initialized. Debug, not Info:
+		// "Using config file …" is diagnostic, not something every command
+		// run should print to stderr (quiet by default).
+		if configFileStatus != "" {
+			if configFileUsed != "" {
+				log.Debug().Str("config_file", logger.SanitizePath(configFileUsed)).Msg(configFileStatus)
+			} else {
+				log.Debug().Msg(configFileStatus)
+			}
+		}
+
+		// Initialize experiment session (non-blocking)
+		telemetry := viper.GetString(config.KeyExperimentsTelemetry)
+		if telemetry == experiment.TelemetryOff {
+			log.Debug().Msg("Experiments disabled (telemetry: off)")
+		} else if expDB, expErr := openExperimentDB(); expErr != nil {
+			log.Debug().Err(expErr).Msg("Experiment DB unavailable")
+		} else {
+			// Prompt for telemetry on first run (interactive TTY only)
+			if telemetry == "" {
+				if firstRun, _ := expDB.IsFirstRun(); firstRun {
+					if isatty.IsTerminal(os.Stdin.Fd()) {
+						telemetry = experiment.PromptTelemetry(os.Stdin, cmd.ErrOrStderr())
+						viper.Set(config.KeyExperimentsTelemetry, telemetry)
+						if cf := viper.ConfigFileUsed(); cf != "" {
+							if err := persistTelemetryChoice(telemetry, cf); err != nil {
+								log.Debug().Err(err).Msg("Failed to persist telemetry choice to config file")
+							}
+						}
+						if telemetry == experiment.TelemetryOff {
+							log.Debug().Msg("User chose telemetry: off")
+							_ = expDB.Close()
+							return nil
+						}
+					} else {
+						log.Debug().Msg("Non-interactive session, defaulting to anonymous telemetry")
+					}
+				}
+			}
+
+			if recovered, recErr := expDB.RecoverOrphans(); recErr != nil {
+				log.Debug().Err(recErr).Msg("Failed to recover orphan sessions")
+			} else if recovered > 0 {
+				log.Debug().Int("recovered", recovered).Msg("Recovered orphan experiment sessions")
+			}
+			caller, callerMeta := experiment.DetectCaller()
+			sid, startErr := expDB.StartSessionWithCaller("", caller, callerMeta)
+			if startErr != nil {
+				log.Debug().Err(startErr).Msg("Failed to start experiment session")
+				_ = expDB.Close()
+			} else {
+				outcomeWindow := viper.GetInt(config.KeyExperimentsOutcomeWindowSessions)
+				if outcomeWindow <= 0 {
+					outcomeWindow = 2
+				}
+				experimentSession = &experiment.Session{DB: expDB, ID: sid, OutcomeWindow: outcomeWindow}
+				cmd.SetContext(experiment.WithSession(cmd.Context(), experimentSession))
+			}
+		}
+
+		return nil
+	},
+	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
+		if experimentSession != nil {
+			_ = experimentSession.DB.EndSession(experimentSession.ID)
+			_ = experimentSession.DB.Close()
+			experimentSession = nil
+		}
+		return nil
+	},
+}
+
+func Execute() error {
+	// Ensure logger cleanup on exit
+	defer logger.Cleanup()
+
+	RootCmd.Version = fmt.Sprintf("%s, commit %s, built at %s", Version, Commit, Date)
+	return RootCmd.Execute()
+}
+
+func init() {
+	// Fallback for development/testing when ldflags aren't injected
+	// Production builds MUST inject binaryName via ldflags (see Taskfile.yml LDFLAGS)
+	if binaryName == "" {
+		binaryName = "vaultmind"
+	}
+
+	// Initialize XDG paths with app name (single source of truth)
+	xdg.SetAppName(binaryName)
+
+	// Update RootCmd with the resolved binaryName.
+	// Package-level var declarations capture binaryName="" before init() runs,
+	// so we need to set these after the fallback is applied.
+	RootCmd.Use = binaryName
+	RootCmd.Short = fmt.Sprintf("%s — your associative memory across sessions", binaryName)
+	// Long is intentionally empty — the custom help func renders the
+	// intent-organised cheat-sheet for root only. Subcommands keep
+	// Cobra's default help layout (reference-shaped — flags, usage,
+	// inherited flags) which is the right shape for "give me the syntax
+	// for THIS command." Co-designed via inter-agent review:
+	// docs/reviews/help-redesign-review-*.md.
+	RootCmd.Long = ""
+	installAgentRootHelp(RootCmd, binaryName)
+
+	configPaths := ConfigPaths()
+
+	// Define all persistent flags (flag definitions only - bindings happen in bindFlags())
+	searchTargets := make([]string, 0, len(configPaths.SearchPaths))
+	for _, path := range configPaths.SearchPaths {
+		if path == "." {
+			searchTargets = append(searchTargets, "./config.yaml")
+			continue
+		}
+		searchTargets = append(searchTargets, filepath.Join(path, "config.yaml"))
+	}
+
+	configHelp := "Config file (searches: " + strings.Join(searchTargets, ", ")
+	if configHelp == "Config file (searches: " {
+		configHelp += "./config.yaml"
+	}
+	configHelp += ")"
+	RootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", configHelp)
+	RootCmd.PersistentFlags().StringVar(&configPathMode, "config-path-mode", ConfigPathModeXDG,
+		"Config path mode when --config is not set (xdg, native, both)")
+	configPathFlag = RootCmd.PersistentFlags().Lookup("config-path-mode")
+
+	// Legacy log level flag (for backward compatibility)
+	RootCmd.PersistentFlags().String("log-level", "warn", "Set the log level (trace, debug, info, warn, error, fatal, panic)")
+
+	// Dual logging configuration flags
+	RootCmd.PersistentFlags().String("log-console-level", "", "Console log level (trace, debug, info, warn, error, fatal, panic). If empty, uses --log-level.")
+	RootCmd.PersistentFlags().Bool("log-file-enabled", false, "Enable file logging to capture detailed logs")
+	RootCmd.PersistentFlags().String("log-file-path", "./logs/vaultmind.log", "Path to the log file")
+	RootCmd.PersistentFlags().String("log-file-level", "debug", "File log level (trace, debug, info, warn, error, fatal, panic)")
+	RootCmd.PersistentFlags().String("log-color", "auto", "Enable colored console output (auto, true, false)")
+
+	// Log rotation configuration flags
+	RootCmd.PersistentFlags().Int("log-file-max-size", 100, "Maximum size in megabytes before log file is rotated")
+	RootCmd.PersistentFlags().Int("log-file-max-backups", 3, "Maximum number of old log files to retain")
+	RootCmd.PersistentFlags().Int("log-file-max-age", 28, "Maximum number of days to retain old log files")
+	RootCmd.PersistentFlags().Bool("log-file-compress", false, "Compress rotated log files with gzip")
+
+	// Log sampling configuration flags
+	RootCmd.PersistentFlags().Bool("log-sampling-enabled", false, "Enable log sampling for high-volume scenarios")
+	RootCmd.PersistentFlags().Int("log-sampling-initial", 100, "Number of messages to log per second before sampling")
+
+	RootCmd.PersistentFlags().Int("log-sampling-thereafter", 100, "Number of messages to log thereafter per second")
+
+	// Output format flag
+	RootCmd.PersistentFlags().String("output-format", "text", "Output format: text or json")
+
+	// Hide logging flags from --help to reduce noise. They still work when explicitly passed.
+	RootCmd.PersistentFlags().VisitAll(func(f *pflag.Flag) {
+		if strings.HasPrefix(f.Name, "log-") {
+			f.Hidden = true
+		}
+	})
+}
+
+// bindFlags binds all persistent flags to viper configuration keys.
+// This function is called from PersistentPreRunE to allow proper error handling.
+// Unlike the previous init() pattern with log.Fatal(), this returns errors that can be
+// handled gracefully and makes the code testable.
+func bindFlags(cmd *cobra.Command) error {
+	var errs []error
+
+	// Helper function to collect binding errors
+	// Use cmd.Root() to get flags from RootCmd even when called from subcommands
+	bindFlag := func(key string, flagName string) {
+		if err := viper.BindPFlag(key, cmd.Root().PersistentFlags().Lookup(flagName)); err != nil {
+			errs = append(errs, fmt.Errorf("bind flag %q to key %q: %w", flagName, key, err))
+		}
+	}
+
+	// Bind all flags to their viper keys
+	bindFlag("config", "config")
+	bindFlag(config.KeyAppLogLevel, "log-level")
+	bindFlag(config.KeyAppLogConsoleLevel, "log-console-level")
+	bindFlag(config.KeyAppLogFileEnabled, "log-file-enabled")
+	bindFlag(config.KeyAppLogFilePath, "log-file-path")
+	bindFlag(config.KeyAppLogFileLevel, "log-file-level")
+	bindFlag(config.KeyAppLogColorEnabled, "log-color")
+	bindFlag(config.KeyAppLogFileMaxSize, "log-file-max-size")
+	bindFlag(config.KeyAppLogFileMaxBackups, "log-file-max-backups")
+	bindFlag(config.KeyAppLogFileMaxAge, "log-file-max-age")
+	bindFlag(config.KeyAppLogFileCompress, "log-file-compress")
+	bindFlag(config.KeyAppLogSamplingEnabled, "log-sampling-enabled")
+	bindFlag(config.KeyAppLogSamplingInitial, "log-sampling-initial")
+	bindFlag(config.KeyAppLogSamplingThereafter, "log-sampling-thereafter")
+	bindFlag(config.KeyAppOutputFormat, "output-format")
+
+	// Return combined error if any bindings failed
+	if len(errs) > 0 {
+		return fmt.Errorf("failed to bind %d flag(s): %v", len(errs), errs)
+	}
+
+	return nil
+}
+
+func initConfig() error {
+	configPaths := ConfigPaths()
+
+	if cfgFile != "" {
+		// Explicit --config flag takes highest priority
+		viper.SetConfigFile(cfgFile)
+	} else {
+		// Let viper search for config files in priority order
+		// Viper will look for config.yaml, config.yml, config.json, config.toml, etc.
+		viper.SetConfigName(configPaths.ConfigName)
+
+		// Search paths based on configured path mode.
+		for _, searchPath := range configPaths.SearchPaths {
+			viper.AddConfigPath(searchPath)
+		}
+	}
+
+	// Set up environment variable handling with proper prefix
+	envPrefix := EnvPrefix()
+	viper.SetEnvPrefix(envPrefix)
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	viper.AutomaticEnv()
+
+	// Set default values from registry
+	// IMPORTANT: Never set defaults directly with viper.SetDefault() here.
+	// All defaults MUST be defined in internal/config/registry.go
+	//
+	// Thread-safety: This is called during startup before any concurrent access.
+	// No synchronization needed as all config writes happen here in PersistentPreRunE.
+	config.SetDefaults()
+
+	// Validate default values to ensure they don't exceed limits
+	// This catches programming errors in default value definitions
+	if errs := config.ValidateAllConfigValues(viper.AllSettings()); len(errs) > 0 {
+		log.Debug().Int("error_count", len(errs)).Msg("Invalid default configuration values detected")
+		for i, err := range errs {
+			log.Debug().Int("error_num", i+1).Err(err).Msg("Default validation error")
+		}
+		return fmt.Errorf("configuration has %d invalid default value(s) - this is a programming error", len(errs))
+	}
+
+	if err := viper.ReadInConfig(); err != nil {
+		var configNotFoundErr viper.ConfigFileNotFoundError
+		if errors.As(err, &configNotFoundErr) {
+			configFileStatus = "No config file found, using defaults and environment variables"
+		} else {
+			// This error needs to be reported immediately
+			log.Debug().Err(err).Msg("Failed to read config file")
+			return fmt.Errorf("failed to read config file: %w", err)
+		}
+	} else {
+		configFileStatus = "Using config file"
+		configFileUsed = viper.ConfigFileUsed()
+
+		// Security validation after viper finds and reads the config
+		if err := config.ValidateConfigFileSecurity(configFileUsed, config.MaxConfigFileSize); err != nil {
+			log.Debug().Err(err).Str("path", configFileUsed).Msg("Config file security validation failed")
+			return fmt.Errorf("config file security validation failed: %w", err)
+		}
+	}
+
+	// Validate registered config options (colors, log levels, etc.)
+	if errs := config.ValidateRegisteredOptions(); len(errs) > 0 {
+		for _, err := range errs {
+			log.Debug().Err(err).Msg("Config validation error")
+		}
+		return fmt.Errorf("configuration validation failed: %w", errs[0])
+	}
+
+	return nil
+}
+
+// setupCommandConfig creates a PreRunE function that integrates with the root PersistentPreRunE
+// to provide consistent configuration initialization with command-specific behavior.
+// This pattern ensures that:
+// 1. Root configuration is initialized first
+// 2. Command-specific configuration is applied
+// 3. Parent command's PreRunE is always called to maintain inheritance
+func setupCommandConfig(cmd *cobra.Command) {
+	// Store original PreRunE if it exists
+	originalPreRunE := cmd.PreRunE
+
+	// Create new PreRunE that applies command-specific configuration
+	cmd.PreRunE = func(c *cobra.Command, args []string) error {
+		// Call original PreRunE if it exists
+		if originalPreRunE != nil {
+			if err := originalPreRunE(c, args); err != nil {
+				return err
+			}
+		}
+
+		// Debug log that we're configuring this command
+		log.Debug().Str("command", c.Name()).Msg("Applying command-specific configuration")
+
+		// The common viper environment setup is already done in root's PersistentPreRunE
+		// via the initConfig() function, so we don't need to repeat it here
+
+		// IMPORTANT: Never set defaults directly with viper.SetDefault() here or in command files.
+		// All defaults MUST be defined in internal/config/registry.go
+
+		return nil
+	}
+}
+
+// getConfigValueWithFlags retrieves a configuration value with the following precedence:
+//  1. Command line flag (if explicitly set via --flagName)
+//  2. Configuration from viper (environment variable or config file)
+//  3. Zero value of type T (if neither flag nor config is set)
+//
+// The function uses type parameters to provide type-safe configuration retrieval.
+// It handles type assertions safely, logging warnings if type conversion fails.
+//
+// Supported types: string, bool, int, float64, []string
+//
+// Example usage:
+//
+//	message := getConfigValueWithFlags[string](cmd, "message", "app.ping.output_message")
+//	enabled := getConfigValueWithFlags[bool](cmd, "ui", "app.ping.ui")
+//
+// Parameters:
+//   - cmd: The cobra.Command instance containing flags
+//   - flagName: The name of the command-line flag (e.g., "message")
+//   - viperKey: The viper configuration key (e.g., "app.ping.output_message")
+//
+// Returns:
+//   - The configuration value of type T, or zero value if not found
+func getConfigValueWithFlags[T any](cmd *cobra.Command, flagName string, viperKey string) T {
+	var value T
+
+	// Get the value from viper first (this will be from config file or env var)
+	if v := viper.Get(viperKey); v != nil {
+		if typedValue, ok := v.(T); ok {
+			value = typedValue
+		}
+	}
+
+	// If the flag was explicitly set, override the viper value
+	if cmd.Flags().Changed(flagName) {
+		// Handle different types appropriately
+		switch any(value).(type) {
+		case string:
+			if v, err := cmd.Flags().GetString(flagName); err == nil {
+				// Use safe type assertion with two-value form
+				if convertedVal, ok := any(v).(T); ok {
+					value = convertedVal
+				} else {
+					log.Warn().
+						Str("flag", flagName).
+						Str("expected_type", fmt.Sprintf("%T", value)).
+						Str("actual_type", fmt.Sprintf("%T", v)).
+						Msg("Type assertion failed for string flag, using current value")
+				}
+			}
+		case bool:
+			if v, err := cmd.Flags().GetBool(flagName); err == nil {
+				if convertedVal, ok := any(v).(T); ok {
+					value = convertedVal
+				} else {
+					log.Warn().
+						Str("flag", flagName).
+						Str("expected_type", fmt.Sprintf("%T", value)).
+						Str("actual_type", fmt.Sprintf("%T", v)).
+						Msg("Type assertion failed for bool flag, using current value")
+				}
+			}
+		case int:
+			if v, err := cmd.Flags().GetInt(flagName); err == nil {
+				if convertedVal, ok := any(v).(T); ok {
+					value = convertedVal
+				} else {
+					log.Warn().
+						Str("flag", flagName).
+						Str("expected_type", fmt.Sprintf("%T", value)).
+						Str("actual_type", fmt.Sprintf("%T", v)).
+						Msg("Type assertion failed for int flag, using current value")
+				}
+			}
+		case float64:
+			if v, err := cmd.Flags().GetFloat64(flagName); err == nil {
+				if convertedVal, ok := any(v).(T); ok {
+					value = convertedVal
+				} else {
+					log.Warn().
+						Str("flag", flagName).
+						Str("expected_type", fmt.Sprintf("%T", value)).
+						Str("actual_type", fmt.Sprintf("%T", v)).
+						Msg("Type assertion failed for float64 flag, using current value")
+				}
+			}
+		case []string:
+			if v, err := cmd.Flags().GetStringSlice(flagName); err == nil {
+				if convertedVal, ok := any(v).(T); ok {
+					value = convertedVal
+				} else {
+					log.Warn().
+						Str("flag", flagName).
+						Str("expected_type", fmt.Sprintf("%T", value)).
+						Str("actual_type", fmt.Sprintf("%T", v)).
+						Msg("Type assertion failed for string slice flag, using current value")
+				}
+			}
+		}
+	}
+
+	// Vault auto-discovery: when a command reads its "vault" path and neither
+	// the --vault flag nor config supplied an explicit one (still the "." / ""
+	// default), resolve it from $VAULTMIND_VAULT or by walking up to the nearest
+	// .vaultmind/ — so commands and hooks work without --vault on every call.
+	if flagName == "vault" && !cmd.Flags().Changed("vault") {
+		if s, ok := any(value).(string); ok && (s == "" || s == ".") {
+			if rv, ok := any(resolveDiscoveredVault(s)).(T); ok {
+				return rv
+			}
+		}
+	}
+
+	return value
+}
+
+// openExperimentDB resolves the XDG data path for the experiment database and
+// opens (or creates) the SQLite file. It returns an error only if the path
+// cannot be resolved or the database cannot be opened.
+func openExperimentDB() (*experiment.DB, error) {
+	dbPath, err := xdg.DataFile("experiments.db")
+	if err != nil {
+		return nil, fmt.Errorf("resolving experiment db path: %w", err)
+	}
+	return experiment.Open(dbPath)
+}
+
+// getKeyValue retrieves a configuration value from Viper by key only.
+//
+// This function is used when flags are already bound to Viper and you want to
+// retrieve the merged value (environment variables, config file, or defaults).
+// It does NOT check command-line flags directly - use getConfigValueWithFlags for that.
+//
+// The function returns the zero value of type T if the key is not found or
+// if type conversion fails.
+//
+// Supported types: any type T that can be stored in Viper
+//
+// Example usage:
+//
+//	format := getKeyValue[string]("app.docs.output_format")
+//	count := getKeyValue[int]("app.max_items")
+//
+// Parameters:
+//   - viperKey: The full viper configuration key (e.g., "app.docs.output_format")
+//
+// Returns:
+//   - The configuration value of type T, or zero value if not found/conversion fails
+
+// loadExperimentDefs reads the experiments map from config and returns parsed definitions.
+func loadExperimentDefs() map[string]experiment.ExperimentDef {
+	return experiment.ParseExperiments(viper.GetStringMap(config.KeyExperiments))
+}
+
+func getKeyValue[T any](viperKey string) T {
+	var zero T
+	if v := viper.Get(viperKey); v != nil {
+		if typedValue, ok := v.(T); ok {
+			return typedValue
+		}
+	}
+	return zero
+}

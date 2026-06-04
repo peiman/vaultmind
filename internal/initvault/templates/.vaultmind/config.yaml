@@ -1,0 +1,73 @@
+vault:
+  exclude:
+    - ".git"
+    - ".obsidian"
+    - ".trash"
+    - ".vaultmind"
+
+# schema.aliases — per-vault frontmatter field aliases. When you migrate
+# notes that already use a field name (e.g. `last_updated`), you don't have
+# to rename them. Map vaultmind's canonical name to your existing one(s):
+#
+# schema:
+#   aliases:
+#     updated: [last_updated]
+#     created: [created_at, date_created]
+#
+# Aliases are non-destructive — vaultmind never rewrites your frontmatter.
+# A required field is satisfied if the canonical name OR any registered
+# alias is present with a non-empty value.
+
+# Types are the schema of your vault. Each type defines required and optional
+# frontmatter fields. The types here are the persona-shaped defaults — they
+# match what VaultMind optimizes for: an AI agent reconstructing itself from
+# a vault that humans and the agent collaboratively curate.
+#
+# Add or remove types freely. The agent reads the registry to know what
+# `--type` values vaultmind note create accepts and what frontmatter is
+# required.
+types:
+  identity:
+    required: [title]
+    optional: [aliases, tags, related_ids, source_ids]
+    statuses: []
+  principle:
+    required: [title]
+    optional: [aliases, tags, related_ids, source_ids]
+    statuses: []
+  arc:
+    required: [title]
+    optional: [aliases, tags, related_ids, source_ids, trigger]
+    statuses: []
+  reference:
+    required: [title]
+    optional: [aliases, tags, related_ids, source_ids]
+    statuses: []
+  concept:
+    required: [title]
+    optional: [aliases, tags, related_ids, source_ids, parent_id]
+    statuses: []
+  source:
+    required: [title, url]
+    optional: [aliases, tags, related_ids]
+    statuses: []
+  decision:
+    required: [title, status]
+    optional: [related_ids, source_ids, tags]
+    statuses: [proposed, accepted, rejected, superseded]
+
+git:
+  policy:
+    dirty_unrelated: warn
+    dirty_target: refuse
+    detached_head: warn
+    merge_in_progress: refuse
+    no_repo: warn
+
+index:
+  db_path: .vaultmind/index.db
+
+memory:
+  alias_min_length: 3
+  tag_overlap_threshold: 2.0
+  context_pack_default_budget: 4096

@@ -1,0 +1,35 @@
+# Golden queries for retrieval baseline.
+#
+# Each query has:
+#   name:     short label for per-query reporting
+#   text:     the search string passed to the retriever
+#   expected: curated note IDs a well-behaved retriever should surface
+#             in the top-K. Order here is NOT significant — the metric
+#             uses the best-ranking match.
+#
+# Adding or removing queries requires regenerating the snapshot. Editing
+# a query's text with the same name + expected is fine; the snapshot
+# will only fail if the metric drops beyond tolerance.
+- name: spreading
+  text: spreading activation
+  expected: [c-spreading, g-semantic]
+
+- name: memory-decay
+  text: memory decay
+  expected: [c-decay]
+
+- name: rrf
+  text: reciprocal rank fusion
+  expected: [r-rrf]
+
+- name: hybrid
+  text: hybrid retrieval
+  expected: [r-hybrid]
+
+- name: knowledge-graph
+  text: knowledge graph embeddings
+  expected: [g-embed, g-kg]
+
+- name: pagerank
+  text: pagerank
+  expected: [g-pagerank]

@@ -1,0 +1,59 @@
+# .lefthook.yml
+#
+# ============================================================================
+# OWNERSHIP MODEL (Framework Separation)
+# ============================================================================
+#
+# This file EXTENDS the framework's base hooks configuration.
+# Framework hooks are in: .ckeletin/configs/lefthook.base.yml
+#
+# FRAMEWORK-MANAGED (via extends):
+#   - Standard quality checks (format, lint, test, secrets, vuln)
+#   - Pre-commit and pre-push hook structure
+#
+# PROJECT CUSTOMIZATION:
+#   - Add project-specific hooks below the extends
+#   - Override framework hooks by redefining them here
+#   - Add new hook types (e.g., commit-msg)
+#
+# When running `task ckeletin:update`:
+# - Framework hooks (.ckeletin/configs/lefthook.base.yml) are automatically updated
+# - This file is NOT updated (project customizations preserved)
+#
+# Use `lefthook dump` to see the merged configuration.
+#
+# ============================================================================
+
+# Extend framework base hooks
+extends:
+  - .ckeletin/configs/lefthook.base.yml
+
+# Project-specific hooks (add below)
+
+# Override: the framework's base injects a `scaffold` pre-push hook that runs
+# `task test:scaffold`. That task wraps a FULL `task check` inside a copied
+# project (minutes per run) — a sensible gate for ckeletin-go itself, but the
+# wrong cost for an end-product consumer's pre-push, which must stay fast.
+# It also references the bare `task test:scaffold`, which only exists namespaced
+# here (`ckeletin:test:scaffold`), so the inherited hook fails outright. We skip
+# it on pre-push; the scaffold suite remains runnable on demand via
+# `task ckeletin:test:scaffold` and in CI. (Framework drift: lefthook.base.yml
+# references a task that is not a project forwarding — reported upstream.)
+pre-push:
+  commands:
+    scaffold:
+      skip: true
+
+commit-msg:
+  commands:
+    conventional-commit:
+      run: |
+        MSG=$(head -1 {1})
+        if ! echo "$MSG" | grep -qE '^(feat|fix|docs|test|refactor|style|perf|build|ci|chore)(\(.+\))?: .+'; then
+          echo "❌ Commit message must follow Conventional Commits format:"
+          echo "   <type>[optional scope]: <description>"
+          echo ""
+          echo "   Types: feat, fix, docs, test, refactor, style, perf, build, ci, chore"
+          echo "   Your message: $MSG"
+          exit 1
+        fi
