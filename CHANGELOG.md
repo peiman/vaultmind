@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.10] — 2026-06-05
+
 ### Added
 - **Concise quick-start for agent onboarding.** `vaultmind init --print-instructions` now prints a
   short, skimmable quick-start (install → `init` → `hooks install --vault` → the env-var routing
@@ -155,7 +157,8 @@ The initial public tag, retracted in favor of [0.1.3]. It shipped without the
 maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; do
 not install.
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.1.9...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.1.10...HEAD
+[0.1.10]: https://github.com/peiman/vaultmind/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/peiman/vaultmind/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/peiman/vaultmind/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/peiman/vaultmind/compare/v0.1.6...v0.1.7
