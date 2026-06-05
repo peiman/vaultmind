@@ -39,10 +39,13 @@ if ! command -v vaultmind >/dev/null 2>&1; then
   exit 0
 fi
 VAULTMIND=$(command -v vaultmind)
-# VAULTMIND_VAULT lets a consumer point recall at their own vault (set by
-# `vaultmind hooks install --vault`). Falls back to the vaultmind-identity
-# convention when unset, so existing installs are unaffected (issue #41.6).
-VAULT_PATH="${VAULTMIND_VAULT:-$CLAUDE_PROJECT_DIR/vaultmind-identity}"
+# Per-concern env routing: VAULTMIND_RECALL_VAULT points *per-turn recall*
+# at its own vault, independent of persona-load and episode-write. It falls
+# back to the overloaded VAULTMIND_VAULT (set by `vaultmind hooks install
+# --vault`, and the simple single-var default), then to the vaultmind-identity
+# convention. A dual-vault adopter can route recall, episodes, and persona
+# independently; a single-var setup is unchanged (issue #41.6).
+VAULT_PATH="${VAULTMIND_RECALL_VAULT:-${VAULTMIND_VAULT:-$CLAUDE_PROJECT_DIR/vaultmind-identity}}"
 
 # Substrate not ready — silently no-op.
 if [ ! -d "$VAULT_PATH" ]; then

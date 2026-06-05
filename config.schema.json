@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "description": "Configuration schema for ckeletin-go CLI applications. Generated from the config registry.",
+  "description": "Configuration schema for vaultmind CLI applications. Generated from the config registry.",
   "properties": {
     "app": {
       "properties": {
@@ -34,12 +34,37 @@
           },
           "type": "object"
         },
+        "arc": {
+          "properties": {
+            "candidates": {
+              "properties": {
+                "json": {
+                  "default": false,
+                  "description": "Output in JSON format",
+                  "type": "boolean"
+                },
+                "vault": {
+                  "default": ".",
+                  "description": "Path to vault root",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "type": "object"
+        },
         "ask": {
           "properties": {
             "budget": {
               "default": 4000,
               "description": "Token budget for context-pack",
               "type": "integer"
+            },
+            "explain": {
+              "default": false,
+              "description": "Show per-lane RRF contributions for each hit",
+              "type": "boolean"
             },
             "json": {
               "default": false,
@@ -50,6 +75,26 @@
               "default": 8,
               "description": "Max context items",
               "type": "integer"
+            },
+            "pointers_only": {
+              "default": false,
+              "description": "Skip context-pack bodies; render only id+title+type pointers (forces ask-to-read loop instead of letting the preload satisfy curiosity)",
+              "type": "boolean"
+            },
+            "preview": {
+              "default": false,
+              "description": "Render a one-line body snippet under each ranked hit; bridges --pointers-only (titles only) and the full context-pack output",
+              "type": "boolean"
+            },
+            "quiet_on_nomatch": {
+              "default": false,
+              "description": "Print nothing when the top hit is at/below the noise floor (no_match). For ambient recall: inject silence instead of irrelevant pointers when the prompt is off-domain. Also skips the context-pack and access fan-out so off-domain prompts don't reinforce irrelevant notes.",
+              "type": "boolean"
+            },
+            "read": {
+              "default": "",
+              "description": "Read the body of the named hit inline after the menu — accepts a 1-indexed rank (e.g. --read 2) or an exact id (e.g. --read concept-foo). Single-command shortcut for probe→read when you already know which hit from the titles",
+              "type": "string"
             },
             "search_limit": {
               "default": 5,
@@ -192,9 +237,54 @@
               "description": "Output in JSON format",
               "type": "boolean"
             },
+            "summary": {
+              "default": false,
+              "description": "Print summary counts only (suppress per-link details)",
+              "type": "boolean"
+            },
             "vault": {
               "default": ".",
               "description": "Path to vault root",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "experimentcompare": {
+          "properties": {
+            "caller": {
+              "default": "",
+              "description": "Restrict to a single caller label",
+              "type": "string"
+            },
+            "event_type": {
+              "default": "",
+              "description": "Restrict to one event type (ask|search|context_pack); empty = all three",
+              "type": "string"
+            },
+            "json": {
+              "default": false,
+              "description": "Output in JSON format",
+              "type": "boolean"
+            },
+            "k": {
+              "default": 10,
+              "description": "K value for Jaccard@K (and the cap on list length used for Kendall's tau)",
+              "type": "integer"
+            },
+            "per_event": {
+              "default": false,
+              "description": "Emit one row per event in addition to aggregates",
+              "type": "boolean"
+            },
+            "session": {
+              "default": "",
+              "description": "Restrict to a single session ID",
+              "type": "string"
+            },
+            "since": {
+              "default": "",
+              "description": "Only events at or after this RFC3339 timestamp",
               "type": "string"
             }
           },
@@ -220,8 +310,98 @@
           },
           "type": "object"
         },
+        "experimentsummary": {
+          "properties": {
+            "json": {
+              "default": false,
+              "description": "Output in JSON format",
+              "type": "boolean"
+            },
+            "top": {
+              "default": 10,
+              "description": "Number of top-recalled notes to show",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        },
+        "experimenttrace": {
+          "properties": {
+            "json": {
+              "default": false,
+              "description": "Output in JSON format",
+              "type": "boolean"
+            },
+            "note": {
+              "default": "",
+              "description": "Note ID to trace across sessions",
+              "type": "string"
+            },
+            "session": {
+              "default": "",
+              "description": "Session ID to trace",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "export": {
+          "properties": {
+            "output": {
+              "default": "",
+              "description": "Output file path (empty = stdout)",
+              "type": "string"
+            },
+            "preview": {
+              "default": false,
+              "description": "Print a human-readable summary instead of writing the JSON payload (useful for auditing before sharing)",
+              "type": "boolean"
+            },
+            "rollup": {
+              "default": false,
+              "description": "Emit a federated-aggregator-shaped rollup (vault fingerprint + features + variant stats) instead of raw events",
+              "type": "boolean"
+            },
+            "tier": {
+              "default": "",
+              "description": "Override telemetry tier (off|anonymous|full); empty = use experiments.telemetry from config",
+              "type": "string"
+            },
+            "vault": {
+              "default": ".",
+              "description": "Vault path (required when --rollup is set; reads index DB and fingerprint)",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
         "frontmatter": {
           "properties": {
+            "json": {
+              "default": false,
+              "description": "Output in JSON format",
+              "type": "boolean"
+            },
+            "live": {
+              "default": false,
+              "description": "Validate raw .md files on disk instead of the indexed database",
+              "type": "boolean"
+            },
+            "vault": {
+              "default": ".",
+              "description": "Path to vault root",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "frontmatterfix": {
+          "properties": {
+            "apply": {
+              "default": false,
+              "description": "Apply changes (default: dry-run)",
+              "type": "boolean"
+            },
             "json": {
               "default": false,
               "description": "Output in JSON format",
@@ -390,8 +570,76 @@
           },
           "type": "object"
         },
+        "hooksinstall": {
+          "properties": {
+            "dryrun": {
+              "default": false,
+              "description": "With --merge, print the merged result without writing it (preview/diff).",
+              "type": "boolean"
+            },
+            "force": {
+              "default": false,
+              "description": "Overwrite existing hook scripts (default: refuse)",
+              "type": "boolean"
+            },
+            "json": {
+              "default": false,
+              "description": "Output in JSON format",
+              "type": "boolean"
+            },
+            "local": {
+              "default": false,
+              "description": "With --merge, target .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared).",
+              "type": "boolean"
+            },
+            "merge": {
+              "default": false,
+              "description": "Additively merge the hook stanza into the project's settings file (never clobbers existing hooks) instead of only printing it.",
+              "type": "boolean"
+            },
+            "only": {
+              "default": "",
+              "description": "Comma-separated subset of canonical scripts to install (default: all). Unknown names rejected at lint time.",
+              "type": "string"
+            },
+            "vault": {
+              "default": "",
+              "description": "Vault path to bake into the printed settings.json stanza via VAULTMIND_VAULT (default: the built-in vaultmind-identity convention).",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "hooksuninstall": {
+          "properties": {
+            "json": {
+              "default": false,
+              "description": "Output in JSON format",
+              "type": "boolean"
+            },
+            "local": {
+              "default": false,
+              "description": "Target .claude/settings.local.json instead of .claude/settings.json.",
+              "type": "boolean"
+            },
+            "removescripts": {
+              "default": false,
+              "description": "Also delete the installed hook scripts under .claude/scripts/ (default: leave them).",
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
         "index": {
           "properties": {
+            "allow_slow_backend": {
+              "default": false,
+              "description": "Allow BGE-M3 indexing on the pure-Go backend (hours for medium vaults)",
+              "examples": [
+                "true"
+              ],
+              "type": "boolean"
+            },
             "embed": {
               "default": false,
               "description": "Compute and store embeddings for note bodies",
@@ -417,8 +665,8 @@
               "type": "boolean"
             },
             "model": {
-              "default": "minilm",
-              "description": "Embedding model: minilm (384d, fast) or bge-m3 (1024d, 3-in-1)",
+              "default": "",
+              "description": "Embedding model: minilm (384d, fast) or bge-m3 (1024d, 3-in-1). Empty (default) auto-selects: bge-m3 on ORT-tagged builds, minilm on pure-Go.",
               "examples": [
                 "bge-m3"
               ],
@@ -431,6 +679,41 @@
                 "./my-vault"
               ],
               "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "init": {
+          "properties": {
+            "dry_run": {
+              "default": false,
+              "description": "With --wire-hooks, print the would-be settings merge without writing it (preview).",
+              "type": "boolean"
+            },
+            "full": {
+              "default": false,
+              "description": "With --print-instructions, print the full agent-onboarding guide instead of the concise quick-start",
+              "type": "boolean"
+            },
+            "local": {
+              "default": false,
+              "description": "With --wire-hooks, merge into .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared).",
+              "type": "boolean"
+            },
+            "print_instructions": {
+              "default": false,
+              "description": "Print the concise agent-onboarding quick-start and exit (no vault created); add --full for the whole guide",
+              "type": "boolean"
+            },
+            "project_dir": {
+              "default": "",
+              "description": "With --wire-hooks, the project to wire hooks into (where .claude/ lives). Defaults to the current directory; set it when the vault and the project root differ.",
+              "type": "string"
+            },
+            "wire_hooks": {
+              "default": false,
+              "description": "After scaffolding, install the Claude Code hook scripts into the current project and merge the wiring into .claude/settings.json (baked to the new vault). Never clobbers existing hooks.",
+              "type": "boolean"
             }
           },
           "type": "object"
@@ -607,7 +890,7 @@
           "type": "object"
         },
         "log_level": {
-          "default": "info",
+          "default": "warn",
           "description": "Logging level for the application (trace, debug, info, warn, error, fatal, panic). Used as console level if app.log.console_level is not set.",
           "examples": [
             "debug"
@@ -886,6 +1169,21 @@
           },
           "type": "object"
         },
+        "self": {
+          "properties": {
+            "limit": {
+              "default": 10,
+              "description": "Max rows per section (recent/hot/stale)",
+              "type": "integer"
+            },
+            "vault": {
+              "default": ".",
+              "description": "Path to vault root",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
         "vaultstatus": {
           "properties": {
             "json": {
@@ -908,6 +1206,16 @@
       "default": {},
       "description": "Top-level experiment definitions map",
       "properties": {
+        "activation": {
+          "properties": {
+            "delta": {
+              "default": 0.2,
+              "description": "Spreading activation weight (0.0 disables similarity component)",
+              "type": "number"
+            }
+          },
+          "type": "object"
+        },
         "outcome_window_sessions": {
           "default": 2,
           "description": "Sessions to look back for outcome linkage",
@@ -922,6 +1230,6 @@
       "type": "string"
     }
   },
-  "title": "ckeletin-go configuration",
+  "title": "vaultmind configuration",
   "type": "object"
 }

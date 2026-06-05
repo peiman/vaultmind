@@ -147,6 +147,59 @@ func TestScripts_HonorVaultmindVaultOverride(t *testing.T) {
 		"vault-track-read.sh must honor VAULTMIND_VAULT so --vault repoints read-tracking too (issue #41.6)")
 }
 
+// TestVaultRecallScript_HonorsPerConcernRecallVault — per-concern env routing
+// (slice #1): a dual-vault adopter must be able to point per-turn recall at a
+// vault distinct from the persona/episode vault. vault-recall.sh prefers
+// VAULTMIND_RECALL_VAULT, falling back to the overloaded VAULTMIND_VAULT (so
+// existing single-var setups are unchanged), then the vaultmind-identity
+// convention. Pin the fallback chain so neither override regresses.
+func TestVaultRecallScript_HonorsPerConcernRecallVault(t *testing.T) {
+	body, ok := hookscripts.Get("vault-recall.sh")
+	require.True(t, ok)
+	src := string(body)
+	assert.Contains(t, src, `${VAULTMIND_RECALL_VAULT:-${VAULTMIND_VAULT:-`,
+		"vault-recall.sh must prefer VAULTMIND_RECALL_VAULT, falling back to VAULTMIND_VAULT (per-concern env routing)")
+}
+
+// TestLoadPersonaScript_FallsBackToVaultmindVault pins the documented
+// fallback rung at chain granularity: LOAD_PERSONA_VAULT resolves to
+// VAULTMIND_VAULT when unset. The onboarding docs advertise this; a
+// future edit dropping the middle rung would silently break the
+// contract without a red test (the existing override test only checks
+// the bare var name, not the precedence chain).
+func TestLoadPersonaScript_FallsBackToVaultmindVault(t *testing.T) {
+	body, ok := hookscripts.Get("load-persona.sh")
+	require.True(t, ok)
+	assert.Contains(t, string(body), `${LOAD_PERSONA_VAULT:-${VAULTMIND_VAULT:-`,
+		"load-persona.sh must fall back LOAD_PERSONA_VAULT → VAULTMIND_VAULT (documented per-concern routing)")
+}
+
+// TestCaptureEpisodeScript_HonorsPerConcernEpisodeVault — per-concern env
+// routing (slice #1): episode writes must be routable independently of the
+// recall/persona vault. capture-episode.sh prefers VAULTMIND_EPISODE_VAULT,
+// falling back to VAULTMIND_VAULT, then the vaultmind-identity convention.
+func TestCaptureEpisodeScript_HonorsPerConcernEpisodeVault(t *testing.T) {
+	body, ok := hookscripts.Get("capture-episode.sh")
+	require.True(t, ok)
+	src := string(body)
+	assert.Contains(t, src, `${VAULTMIND_EPISODE_VAULT:-${VAULTMIND_VAULT:-`,
+		"capture-episode.sh must prefer VAULTMIND_EPISODE_VAULT, falling back to VAULTMIND_VAULT (per-concern env routing)")
+}
+
+// TestVaultTrackReadScript_DerivesPatternFromRecallVault — per-concern env
+// routing (slice #1): read-tracking pattern derivation belongs to the recall
+// concern, so vault-track-read.sh prefers VAULTMIND_RECALL_VAULT before
+// VAULTMIND_VAULT when deriving its match glob. Explicit VAULT_PATH_PATTERN
+// still wins (asserted elsewhere); this pins the recall-vault preference and
+// keeps the set -u guard (the chain stays ${VAR:-…}-guarded).
+func TestVaultTrackReadScript_DerivesPatternFromRecallVault(t *testing.T) {
+	body, ok := hookscripts.Get("vault-track-read.sh")
+	require.True(t, ok)
+	src := string(body)
+	assert.Contains(t, src, `${VAULTMIND_RECALL_VAULT:-${VAULTMIND_VAULT:-}}`,
+		"vault-track-read.sh must derive its pattern from VAULTMIND_RECALL_VAULT, falling back to VAULTMIND_VAULT, ${VAR:-}-guarded under set -u")
+}
+
 // TestVaultRecallScript_UsesRelevanceFloor — the per-prompt recall hook must
 // pass --quiet-on-no-match so off-domain prompts inject silence instead of
 // irrelevant pointers (the noise an agent feels every turn otherwise).

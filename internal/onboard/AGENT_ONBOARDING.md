@@ -200,6 +200,8 @@ vaultmind index --vault "<path>"
 vaultmind index --embed --vault "<path>"
 ```
 
+**Embed cadence:** `index --embed` is content-hash incremental — only new/changed notes are re-embedded, the rest are skipped — so per-note live re-embed is fine for a few notes; batch one `index --embed` after a burst of edits to amortize the one-time BGE-M3 model load.
+
 If `--embed` produces "ORT not available" or "MiniLM fallback" messages, that's expected on a pure-Go build. Tell the user: *"Your build is using MiniLM (pure-Go fallback). Retrieval works but BGE-M3 quality is not active. To upgrade: on darwin-arm64/linux-amd64 download the prebuilt ORT archive (`vaultmind_<version>_<os>_<arch>_ort.tar.gz`) from the GitHub release and run it — no build, libonnxruntime bundled; on other platforms run `task setup:ort` in the vaultmind repo and re-build. Then re-run `vaultmind index --embed`."*
 
 ### 4e. Sample retrieval
@@ -562,11 +564,14 @@ The non-auto-RAG hooks installed by `vaultmind hooks install` also accept env-va
 
 | Hook | Env var | Default | When to override |
 |---|---|---|---|
-| `load-persona.sh` (SessionStart) | `LOAD_PERSONA_VAULT` | `$CLAUDE_PROJECT_DIR/vaultmind-identity` | Identity vault has different name. |
-| `load-persona.sh` (SessionStart) | `LOAD_PERSONA_RESEARCH_VAULT` | `$CLAUDE_PROJECT_DIR/vaultmind-vault` | Optional second vault for `vaultmind self` cross-vault activation surfacing. Unset / non-existent skips silently. |
-| `vault-track-read.sh` (PreToolUse[Read]) | `VAULT_PATH_PATTERN` | `*/vaultmind-*/*.md` | Vault dir doesn't match the default glob. A project might use `*/companion-vault/*.md`. For multi-vault: `*/+(vault-a\|vault-b)/*.md` (extglob is enabled). |
+| all hooks | `VAULTMIND_VAULT` | `$CLAUDE_PROJECT_DIR/vaultmind-identity` | The simple default: one var drives persona-load, per-turn recall, and episode-write at once (baked by `hooks install --vault`). The per-concern vars below each fall back to it, so single-var setups are unchanged. |
+| `vault-recall.sh` (UserPromptSubmit) + `vault-track-read.sh` (PreToolUse[Read]) | `VAULTMIND_RECALL_VAULT` | `VAULTMIND_VAULT` | Route *per-turn recall* (and the read-tracking pattern) to a vault distinct from persona/episodes. A dual-vault adopter who recalls from a research vault but loads persona from an identity vault sets this. |
+| `capture-episode.sh` (SessionEnd) | `VAULTMIND_EPISODE_VAULT` | `VAULTMIND_VAULT` | Route *episode writes* to a vault distinct from recall/persona. |
+| `load-persona.sh` (SessionStart) | `LOAD_PERSONA_VAULT` | `VAULTMIND_VAULT` → `$CLAUDE_PROJECT_DIR/vaultmind-identity` | Identity vault has different name. Highest-precedence persona override; falls back to `VAULTMIND_VAULT`. |
+| `load-persona.sh` (SessionStart) | `LOAD_PERSONA_RESEARCH_VAULT` | `$CLAUDE_PROJECT_DIR/vaultmind-vault` | Optional second vault. **This block runs only `vaultmind self`** — a memory/activation-state surface (hot/recent note titles), NOT a content `ask`. It surfaces what's been reinforced in the research vault, not note bodies. Unset / non-existent skips silently. |
+| `vault-track-read.sh` (PreToolUse[Read]) | `VAULT_PATH_PATTERN` | `*/vaultmind-*/*.md` | Vault dir doesn't match the default glob. A project might use `*/companion-vault/*.md`. For multi-vault: `*/+(vault-a\|vault-b)/*.md` (extglob is enabled). Explicit pattern wins over the `VAULTMIND_RECALL_VAULT`/`VAULTMIND_VAULT`-derived glob. |
 
-Set the same way as `AUTORAG_VAULT` — inline in the settings.json `command` string, prefixing the `bash <script>` invocation with `VAR="value" bash …`. Each assignment is scoped to that single hook firing.
+Set the same way as `AUTORAG_VAULT` — inline in the settings.json `command` string, prefixing the `bash <script>` invocation with `VAR="value" bash …`. Each assignment is scoped to that single hook firing. The per-concern routing vars (`VAULTMIND_RECALL_VAULT`, `VAULTMIND_EPISODE_VAULT`) are fully backward-compatible: each falls back to `VAULTMIND_VAULT`, so an existing single-var install routes every concern to the same vault exactly as before.
 
 #### Customize for your project (env-var override pattern)
 

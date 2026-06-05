@@ -21,6 +21,9 @@ import (
 //go:embed AGENT_ONBOARDING.md
 var instructions []byte
 
+//go:embed QUICKSTART.md
+var quickstart []byte
+
 // Instructions returns the embedded agent-onboarding doc as raw
 // bytes. Returns the backing slice directly — callers must not mutate
 // the returned bytes. A defensive copy would be wasteful for a 25KB
@@ -31,12 +34,31 @@ func Instructions() []byte {
 }
 
 // PrintInstructions writes the embedded onboarding doc verbatim to
-// the supplied writer. Used by `vaultmind init --print-instructions`
+// the supplied writer. Used by `vaultmind init --print-instructions --full`
 // to route output to stdout (or a test buffer). Returns the writer's
 // error if any; the embed itself cannot fail at runtime.
 func PrintInstructions(w io.Writer) error {
 	if _, err := w.Write(instructions); err != nil {
 		return fmt.Errorf("writing onboarding instructions: %w", err)
+	}
+	return nil
+}
+
+// QuickStart returns the embedded concise quick-start as raw bytes.
+// Same no-mutate contract as Instructions: the quick-start is the
+// skimmable 20% that gets an agent wired; the full guide is behind
+// `--full`. Production callers should prefer PrintQuickStart.
+func QuickStart() []byte {
+	return quickstart
+}
+
+// PrintQuickStart writes the embedded quick-start verbatim to the
+// supplied writer. Used by `vaultmind init --print-instructions` (the
+// default — quick-start over the full guide). Returns the writer's
+// error if any; the embed itself cannot fail at runtime.
+func PrintQuickStart(w io.Writer) error {
+	if _, err := w.Write(quickstart); err != nil {
+		return fmt.Errorf("writing onboarding quick-start: %w", err)
 	}
 	return nil
 }

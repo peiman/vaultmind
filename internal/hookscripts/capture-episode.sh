@@ -22,10 +22,13 @@ project_dir="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 # the hook works for any contributor's checkout path, not just the author's.
 transcripts_subdir=$(printf '%s' "$project_dir" | sed 's|/|-|g')
 transcripts_dir="$HOME/.claude/projects/$transcripts_subdir"
-# VAULTMIND_VAULT lets a consumer capture episodes into their own vault (set
-# by `vaultmind hooks install --vault`). Falls back to the vaultmind-identity
-# convention when unset, so existing installs are unaffected (issue #41.6).
-vault_root="${VAULTMIND_VAULT:-$project_dir/vaultmind-identity}"
+# Per-concern env routing: VAULTMIND_EPISODE_VAULT routes *episode writes* to
+# their own vault, independent of per-turn recall and persona-load. It falls
+# back to the overloaded VAULTMIND_VAULT (set by `vaultmind hooks install
+# --vault`, and the simple single-var default), then to the vaultmind-identity
+# convention. A dual-vault adopter can write episodes to a vault distinct from
+# the recall/persona vault; a single-var setup is unchanged (issue #41.6).
+vault_root="${VAULTMIND_EPISODE_VAULT:-${VAULTMIND_VAULT:-$project_dir/vaultmind-identity}}"
 output_dir="$vault_root/episodes"
 
 # Resolve vaultmind binary: prefer a project-local build (e.g.

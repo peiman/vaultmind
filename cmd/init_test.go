@@ -54,3 +54,30 @@ func TestRunInit_RefusesExistingPath(t *testing.T) {
 	assert.Contains(t, err.Error(), "refuse to overwrite")
 	assert.Empty(t, buf.String(), "no next-steps message should print on failure")
 }
+
+// TestInitPrintInstructions_DefaultsToQuickStart — `--print-instructions`
+// without --full emits the concise quick-start (slice #4). Assert a
+// quick-start-only marker is present and a full-guide-only marker is absent,
+// so the default routes to the right doc.
+func TestInitPrintInstructions_DefaultsToQuickStart(t *testing.T) {
+	out, _, err := runRootCmd(t, "init", "--print-instructions")
+	require.NoError(t, err)
+	text := out.String()
+	assert.Contains(t, text, "# VaultMind — Quick Start",
+		"--print-instructions must emit the concise quick-start by default")
+	assert.NotContains(t, text, "## 5. Migration path",
+		"the default quick-start must NOT contain full-guide-only sections")
+}
+
+// TestInitPrintInstructions_FullEmitsWholeGuide — `--print-instructions --full`
+// emits the full agent-onboarding guide. Assert a full-guide-only marker is
+// present and the quick-start H1 is absent.
+func TestInitPrintInstructions_FullEmitsWholeGuide(t *testing.T) {
+	out, _, err := runRootCmd(t, "init", "--print-instructions", "--full")
+	require.NoError(t, err)
+	text := out.String()
+	assert.Contains(t, text, "## 5. Migration path",
+		"--print-instructions --full must emit the full guide")
+	assert.NotContains(t, text, "# VaultMind — Quick Start",
+		"the full guide must NOT be the quick-start")
+}

@@ -22,7 +22,7 @@ func init() {
 
 func runInit(cmd *cobra.Command, args []string) error {
 	if getConfigValueWithFlags[bool](cmd, "print-instructions", config.KeyAppInitPrintInstructions) {
-		return onboard.PrintInstructions(cmd.OutOrStdout())
+		return printOnboarding(cmd)
 	}
 	if len(args) != 1 {
 		return fmt.Errorf("vaultmind init requires a vault path (or use --print-instructions)")
@@ -33,4 +33,14 @@ func runInit(cmd *cobra.Command, args []string) error {
 		dryRun:     getConfigValueWithFlags[bool](cmd, "dry-run", config.KeyAppInitDryRun),
 		projectDir: getConfigValueWithFlags[string](cmd, "project-dir", config.KeyAppInitProjectDir),
 	})
+}
+
+// printOnboarding emits the concise quick-start by default, or the full
+// agent-onboarding guide when --full is set. Both write to the command's
+// output writer so tests can route to a buffer.
+func printOnboarding(cmd *cobra.Command) error {
+	if getConfigValueWithFlags[bool](cmd, "full", config.KeyAppInitFull) {
+		return onboard.PrintInstructions(cmd.OutOrStdout())
+	}
+	return onboard.PrintQuickStart(cmd.OutOrStdout())
 }

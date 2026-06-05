@@ -45,12 +45,16 @@ EXAMPLES
       Scaffold AND wire Claude Code in one step (see ONE-COMMAND SETUP).
 
   vaultmind init --print-instructions
-      Print the embedded agent-onboarding script and exit. No vault
-      created. Use this when an AI agent is helping a new user wire
-      vaultmind into their environment — paste the output to the
-      agent and it walks the user through preflight, project read,
-      greenfield + migration paths, and Claude Code wiring with
-      diff-preview.
+      Print the concise agent-onboarding quick-start and exit. No vault
+      created. The quick-start is the skimmable 20% — install, init,
+      hooks, env-var routing, index/embed, first ask. Add --full to
+      print the whole guide (preflight, project read, greenfield +
+      migration paths, Claude Code wiring with diff-preview) instead.
+      Use this when an AI agent is helping a new user wire vaultmind
+      into their environment — paste the output to the agent.
+
+  vaultmind init --print-instructions --full
+      Print the full agent-onboarding guide instead of the quick-start.
 
 ONE-COMMAND SETUP (--wire-hooks)
 
@@ -91,6 +95,7 @@ collaboration produce the rest.`,
 	ConfigPrefix: "app.init",
 	FlagOverrides: map[string]string{
 		"app.init.print_instructions": "print-instructions",
+		"app.init.full":               "full",
 		"app.init.wire_hooks":         "wire-hooks",
 		"app.init.local":              "local",
 		"app.init.dry_run":            "dry-run",
@@ -109,7 +114,13 @@ func InitOptions() []config.ConfigOption {
 		{
 			Key:          "app.init.print_instructions",
 			DefaultValue: false,
-			Description:  "Print the embedded agent-onboarding script and exit (no vault created)",
+			Description:  "Print the concise agent-onboarding quick-start and exit (no vault created); add --full for the whole guide",
+			Type:         "bool",
+		},
+		{
+			Key:          "app.init.full",
+			DefaultValue: false,
+			Description:  "With --print-instructions, print the full agent-onboarding guide instead of the concise quick-start",
 			Type:         "bool",
 		},
 		{

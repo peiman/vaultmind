@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Concise quick-start for agent onboarding.** `vaultmind init --print-instructions` now prints a
+  short, skimmable quick-start (install → `init` → `hooks install --vault` → the env-var routing
+  table → `index --embed` → first `ask`) instead of the full 700-line guide an agent had to read in
+  chunks. The complete guide is still one flag away: `vaultmind init --print-instructions --full`.
+- **Per-concern vault routing for the hooks.** A single overloaded `VAULTMIND_VAULT` used to drive
+  persona-load, per-turn recall, AND episode-writes — so a two-vault adopter (a personal identity
+  vault + a shared knowledge vault) couldn't route them independently. New `VAULTMIND_RECALL_VAULT`
+  (per-turn recall + read-tracking) and `VAULTMIND_EPISODE_VAULT` (episode writes) each **fall back to
+  `VAULTMIND_VAULT`**, so existing single-var setups are unchanged.
+
+### Changed
+- **`vaultmind init --print-instructions` now defaults to the quick-start, not the full guide.** Use
+  `--full` for the previous whole-guide output. (Behavior change for anyone scripting around the old
+  full dump.)
+- Onboarding docs clarified: the `LOAD_PERSONA_RESEARCH_VAULT` block runs only `vaultmind self` (a
+  memory/activation-state surface — hot/recent note titles), not a content `ask`; and `index --embed`
+  is content-hash incremental (only new/changed notes embed), so per-note live indexing is cheap.
+
 ## [0.1.9] — 2026-06-04
 
 ### Fixed

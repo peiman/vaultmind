@@ -62,3 +62,30 @@ func TestPrintInstructions_WritesToWriter(t *testing.T) {
 	assert.Equal(t, len(onboard.Instructions()), len(buf.Bytes()),
 		"PrintInstructions should write the full embedded doc verbatim")
 }
+
+// TestQuickStart_NotEmptyAndConcise — the quick-start embed produced bytes
+// AND is substantially smaller than the full guide. The whole point of the
+// quick-start (slice #4) is the skimmable 20%; if it grows to monolith size
+// it has failed its purpose, so assert it stays under half the full doc.
+func TestQuickStart_NotEmptyAndConcise(t *testing.T) {
+	qs := onboard.QuickStart()
+	require.NotEmpty(t, qs)
+	require.Greater(t, len(qs), 200,
+		"quick-start should be substantive — under 200 bytes suggests the wrong file embedded")
+	full := onboard.Instructions()
+	assert.Less(t, len(qs), len(full)/2,
+		"quick-start must be substantially smaller than the full guide (the concise 20%)")
+}
+
+// TestPrintQuickStart_WritesToWriter — `--print-instructions` (default)
+// composes via PrintQuickStart(w). Pin that it writes the quick-start bytes
+// verbatim to the supplied writer so the cmd layer can route to a buffer.
+func TestPrintQuickStart_WritesToWriter(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, onboard.PrintQuickStart(&buf))
+	out := buf.String()
+	assert.True(t, strings.HasPrefix(out, "# VaultMind"),
+		"output should start with the quick-start's H1 — got: %q", out[:min(80, len(out))])
+	assert.Equal(t, len(onboard.QuickStart()), len(buf.Bytes()),
+		"PrintQuickStart should write the full embedded quick-start verbatim")
+}

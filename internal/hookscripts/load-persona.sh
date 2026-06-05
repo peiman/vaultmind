@@ -106,6 +106,12 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
   # vault either leave default (the `[ -d ]` guard below skips
   # silently if the dir doesn't exist) or set
   # LOAD_PERSONA_RESEARCH_VAULT to their second vault.
+  #
+  # NOTE: the research/second vault runs ONLY `vaultmind self` (the
+  # memory/activation-state surface — hot/recent note titles), NOT a
+  # content `ask`. It surfaces what's been reinforced in that vault,
+  # not note bodies. So this block is cheap and ambient even on a large
+  # research vault; it never preloads bodies the agent didn't query.
   RESEARCH_VAULT="${LOAD_PERSONA_RESEARCH_VAULT:-$PROJECT_DIR/vaultmind-vault}"
   SELF_IDENTITY=$(VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" self --vault "$VAULT_PATH" --limit 5 2>>"$ASK_ERR" || true)
   SELF_RESEARCH=""
