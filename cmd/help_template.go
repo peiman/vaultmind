@@ -121,7 +121,7 @@ PAIRS WELL TOGETHER
 INFRASTRUCTURE COMMANDS (you usually won't reach for these directly)
 ──────────────────────────────────────────────────────────────────────────────
 
-  Indexing & maintenance:  index, apply, frontmatter, lint, schema
+  Indexing & maintenance:  index, apply, frontmatter, schema
   Internals:               memory (low-level primitives behind ask), resolve,
                            dataview, episode, experiment
   Setup:                   config, completion, docs, version

@@ -55,6 +55,12 @@ const (
 	KeyAppDoctorVault                   = "app.doctor.vault"                    // Path to vault root
 	KeyAppDoctorJson                    = "app.doctor.json"                     // Output in JSON format
 	KeyAppDoctorSummary                 = "app.doctor.summary"                  // Print summary counts only (suppress per-link details)
+	KeyAppDoctorhealVault               = "app.doctorheal.vault"                // Path to vault root
+	KeyAppDoctorhealJson                = "app.doctorheal.json"                 // Output in JSON format
+	KeyAppDoctorhealDryRun              = "app.doctorheal.dry_run"              // Preview repairs without writing (default applies)
+	KeyAppDoctorhealwikilinksVault      = "app.doctorhealwikilinks.vault"       // Path to vault root
+	KeyAppDoctorhealwikilinksJson       = "app.doctorhealwikilinks.json"        // Output in JSON format
+	KeyAppDoctorhealwikilinksDryRun     = "app.doctorhealwikilinks.dry_run"     // Preview repairs without writing (default applies)
 	KeyAppExperimentreportExperiment    = "app.experimentreport.experiment"     // Experiment name to report on
 	KeyAppExperimentreportJson          = "app.experimentreport.json"           // Output in JSON format
 	KeyAppExperimentreportK             = "app.experimentreport.k"              // K value for Hit@K metric
