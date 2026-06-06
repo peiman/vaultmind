@@ -39,4 +39,4 @@ Doctor reports `Obsidian-incompatible links` with suggested fixes showing the co
 
 ## Enforcement
 
-Use `vaultmind lint --fix-links` to bulk-fix all incompatible wikilinks across the vault.
+Use `vaultmind doctor heal wikilinks` to bulk-fix all incompatible wikilinks across the vault.
