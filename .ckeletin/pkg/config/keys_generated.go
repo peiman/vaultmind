@@ -163,6 +163,23 @@ const (
 	KeyAppMemorysummarizeIds            = "app.memorysummarize.ids"             // Comma-separated note IDs (alternative to positional args)
 	KeyAppMemorysummarizeIncludeBody    = "app.memorysummarize.include_body"    // Include body text excerpts
 	KeyAppMemorysummarizeMaxBodyLen     = "app.memorysummarize.max_body_len"    // Max body chars per note (0 = full)
+	KeyAppMemorylinksVault              = "app.memorylinks.vault"               // Path to vault root
+	KeyAppMemorylinksJson               = "app.memorylinks.json"                // Output in JSON format
+	KeyAppMemorylinksEdgeType           = "app.memorylinks.edge_type"           // Filter by edge type
+	KeyAppMemorylinksOut                = "app.memorylinks.out"                 // Show only outbound edges
+	KeyAppMemorylinksIn                 = "app.memorylinks.in"                  // Show only inbound edges (backlinks)
+	KeyAppMemorylinksBoth               = "app.memorylinks.both"                // Show both inbound and outbound edges (default)
+	KeyAppMemoryneighborsVault          = "app.memoryneighbors.vault"           // Path to vault root
+	KeyAppMemoryneighborsJson           = "app.memoryneighbors.json"            // Output in JSON format
+	KeyAppMemoryneighborsDepth          = "app.memoryneighbors.depth"           // Maximum traversal depth
+	KeyAppMemoryneighborsMinConfidence  = "app.memoryneighbors.min_confidence"  // Minimum edge confidence (low, medium, high)
+	KeyAppMemoryneighborsMaxNodes       = "app.memoryneighbors.max_nodes"       // Maximum nodes to return
+	KeyAppMemorypackVault               = "app.memorypack.vault"                // Path to vault root
+	KeyAppMemorypackJson                = "app.memorypack.json"                 // Output in JSON format
+	KeyAppMemorypackBudget              = "app.memorypack.budget"               // Token budget
+	KeyAppMemorypackDepth               = "app.memorypack.depth"                // BFS traversal depth (1 = direct neighbors only)
+	KeyAppMemorypackMaxItems            = "app.memorypack.max_items"            // Max context items (0 = unlimited)
+	KeyAppMemorypackSlim                = "app.memorypack.slim"                 // Slim frontmatter (type, title, status only)
 	KeyAppNoteVault                     = "app.note.vault"                      // Path to vault root
 	KeyAppNoteJson                      = "app.note.json"                       // Output in JSON format
 	KeyAppNoteFrontmatterOnly           = "app.note.frontmatter_only"           // Omit body, headings, blocks

@@ -1,41 +1,19 @@
 package cmd
 
 import (
-	"errors"
-	"fmt"
-
-	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
-	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/config/commands"
-	"github.com/peiman/vaultmind/internal/query"
 	"github.com/spf13/cobra"
 )
 
-var linksOutCmd = MustNewCommand(commands.LinksOutMetadata, runLinksOut)
+// links out is DEPRECATED: use `memory links --out`. This hidden alias prints
+// a one-line notice and delegates to runLinksDirection with direction "out".
+var linksOutCmd = newDeprecatedAlias(commands.LinksOutMetadata,
+	"vaultmind: 'links out' is deprecated; use 'memory links --out' instead",
+	func(cmd *cobra.Command, args []string) error {
+		return runLinksDirection(cmd, args, "out")
+	})
 
 func init() {
 	linksCmd.AddCommand(linksOutCmd)
 	setupCommandConfig(linksOutCmd)
-}
-
-func runLinksOut(cmd *cobra.Command, args []string) error {
-	if len(args) < 1 {
-		return fmt.Errorf("usage: vaultmind links out <id-or-path>")
-	}
-	vaultPath := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppLinksVault)
-	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, "links out")
-	if err != nil {
-		if errors.Is(err, cmdutil.ErrAlreadyWritten) {
-			return nil
-		}
-		return err
-	}
-	defer vdb.Close()
-
-	return query.RunLinks(vdb.DB, query.LinksConfig{
-		Input: args[0], Direction: "out", VaultPath: vaultPath,
-		EdgeType:   getConfigValueWithFlags[string](cmd, "edge-type", config.KeyAppLinksEdgeType),
-		JSONOutput: getConfigValueWithFlags[bool](cmd, "json", config.KeyAppLinksJson),
-		IndexHash:  vdb.GetIndexHash(),
-	}, cmd.OutOrStdout())
 }

@@ -53,20 +53,20 @@ Use when you want a hit list without the context-pack overhead. Supports `--mode
 vaultmind search "judgment gap" --vault examples/ada-vault --limit 10 --json
 ```
 
-### `vaultmind memory context-pack <target-id>` — expand around a specific note
+### `vaultmind memory pack <target-id>` — expand around a specific note
 
 Use when you already know the target note and want its token-budgeted neighborhood.
 
 ```bash
-vaultmind memory context-pack arc-ask-before-assuming --vault examples/ada-vault --budget 4000 --max-items 8
+vaultmind memory pack arc-ask-before-assuming --vault examples/ada-vault --budget 4000 --max-items 8
 ```
 
-### `vaultmind memory recall <note-id>` — just the note's body
+### `vaultmind memory neighbors <note-id>` — the note's graph neighborhood with full frontmatter
 
-Use when you want one specific note's content with no expansion.
+Use when you want the enriched neighborhood (BFS to a depth) around a known note.
 
 ```bash
-vaultmind memory recall identity-who-am-i --vault examples/ada-vault
+vaultmind memory neighbors identity-who-am-i --vault examples/ada-vault
 ```
 
 ### `vaultmind note get <id>` — full note with frontmatter
@@ -81,8 +81,9 @@ vaultmind note get arc-ask-before-assuming --vault examples/ada-vault --json
 
 - **Conversational "what do I know about X?"** → `vaultmind ask` (gives you top hits + context)
 - **"Find all notes mentioning Y"** → `vaultmind search`
-- **"Read this specific note"** → `vaultmind memory recall` or `vaultmind note get`
-- **"Expand around this known target"** → `vaultmind memory context-pack`
+- **"Read this specific note"** → `vaultmind note get`
+- **"Explore the graph around a note"** → `vaultmind memory neighbors`
+- **"Expand around this known target"** → `vaultmind memory pack`
 
 ## 3. Saving
 
