@@ -1,50 +1,29 @@
 package cmd
 
 import (
-	"encoding/json"
-	"errors"
-	"fmt"
-
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
-	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/config/commands"
-	"github.com/peiman/vaultmind/internal/envelope"
-	"github.com/peiman/vaultmind/internal/query"
 	"github.com/spf13/cobra"
 )
 
-var vaultStatusCmd = MustNewCommand(commands.VaultStatusMetadata, runVaultStatus)
+// vault status is DEPRECATED: doctor is now the single vault-health hub, and
+// the cold-start view it produced is `doctor --summary`. This hidden alias
+// prints a one-line stderr notice and delegates to the doctor summary path
+// (forcing summaryOnly=true). It keeps its own app.vaultstatus.* flags so the
+// existing --vault/--json invocations resolve unchanged. Kept for ~2 releases.
+var vaultStatusCmd = newDeprecatedAlias(commands.VaultStatusMetadata,
+	"vaultmind: 'vault status' is deprecated; use 'doctor --summary' instead",
+	runVaultStatus)
 
 func init() {
 	vaultCmd.AddCommand(vaultStatusCmd)
 	setupCommandConfig(vaultStatusCmd)
 }
 
+// runVaultStatus resolves the alias's own vault/json flags and delegates to
+// the shared doctor health-hub engine with the summary view forced on.
 func runVaultStatus(cmd *cobra.Command, _ []string) error {
 	vaultPath := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppVaultstatusVault)
-	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, "vault status")
-	if err != nil {
-		if errors.Is(err, cmdutil.ErrAlreadyWritten) {
-			return nil
-		}
-		return err
-	}
-	defer vdb.Close()
-
-	result, err := query.VaultStatus(vdb.DB, vaultPath, vdb.Config, vdb.Reg)
-	if err != nil {
-		return fmt.Errorf("vault status: %w", err)
-	}
-
-	if getConfigValueWithFlags[bool](cmd, "json", config.KeyAppVaultstatusJson) {
-		env := envelope.OK("vault status", result)
-		env.Meta.VaultPath = vaultPath
-		env.Meta.IndexHash = vdb.GetIndexHash()
-		return json.NewEncoder(cmd.OutOrStdout()).Encode(env)
-	}
-	_, err = fmt.Fprintf(cmd.OutOrStdout(),
-		"Vault: %s\nNotes: %d (%d domain, %d unstructured)\nTypes: %d\nIssues: %d errors, %d warnings\n",
-		result.VaultPath, result.TotalFiles, result.DomainNotes, result.UnstructuredNotes,
-		len(result.Types), result.IssuesSummary.Errors, result.IssuesSummary.Warnings)
-	return err
+	jsonOut := getConfigValueWithFlags[bool](cmd, "json", config.KeyAppVaultstatusJson)
+	return runDoctorCore(cmd, vaultPath, jsonOut, true)
 }

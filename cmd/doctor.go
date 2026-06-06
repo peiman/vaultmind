@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
@@ -99,6 +100,18 @@ func writeEmbeddingStatus(w io.Writer, emb *query.DoctorEmbeddings) error {
 
 func runDoctor(cmd *cobra.Command, _ []string) error {
 	vaultPath := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppDoctorVault)
+	jsonOut := getConfigValueWithFlags[bool](cmd, "json", config.KeyAppDoctorJson)
+	summaryOnly := getConfigValueWithFlags[bool](cmd, "summary", config.KeyAppDoctorSummary)
+	return runDoctorCore(cmd, vaultPath, jsonOut, summaryOnly)
+}
+
+// runDoctorCore is the doctor health-hub engine, shared by `doctor`,
+// `doctor --summary`, and the deprecated `vault status` alias (which forces
+// summaryOnly=true). It opens the vault, runs the read-only diagnosis, folds
+// in the per-type breakdown + errors/warnings rollup (the merged-in
+// `vault status` view, computed via the shared status.go helpers for SSOT),
+// then renders JSON or the human report.
+func runDoctorCore(cmd *cobra.Command, vaultPath string, jsonOut, summaryOnly bool) error {
 	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, "doctor")
 	if err != nil {
 		if errors.Is(err, cmdutil.ErrAlreadyWritten) {
@@ -111,6 +124,17 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 	result, err := query.Doctor(vdb.DB, vaultPath, vdb.Reg)
 	if err != nil {
 		return fmt.Errorf("running doctor: %w", err)
+	}
+
+	// Fold in the per-type breakdown + errors/warnings rollup that `vault
+	// status` used to produce. Populated here in cmd/ because the vault config
+	// and schema registry live on vdb — the same reason HookDrift is populated
+	// in this layer. Both come from internal/query/status.go (SSOT).
+	if result.Types, err = query.CollectTypeBreakdown(vdb.DB, vdb.Config); err != nil {
+		return fmt.Errorf("collecting type breakdown: %w", err)
+	}
+	if result.IssuesSummary, err = query.SummarizeValidationIssues(vdb.DB, vdb.Reg); err != nil {
+		return fmt.Errorf("summarizing validation issues: %w", err)
 	}
 
 	// Hook-drift detection — embedded canonical vs installed copies in
@@ -135,7 +159,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		result.Issues.LegacyHooksJSON = hooks.DetectLegacyHooksJSON(projectDir)
 	}
 
-	if getConfigValueWithFlags[bool](cmd, "json", config.KeyAppDoctorJson) {
+	if jsonOut {
 		env := envelope.OK("doctor", result)
 		env.Meta.VaultPath = vaultPath
 		env.Meta.IndexHash = vdb.GetIndexHash()
@@ -148,43 +172,14 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		result.UnstructuredNotes, result.Issues.UnresolvedLinks); err != nil {
 		return err
 	}
+	if err = writeTypeBreakdown(w, result.Types); err != nil {
+		return err
+	}
 	if err = writeEmbeddingStatus(w, result.Embeddings); err != nil {
 		return err
 	}
-	summaryOnly := getConfigValueWithFlags[bool](cmd, "summary", config.KeyAppDoctorSummary)
-	if result.Issues.ObsidianIncompatibleLinks > 0 {
-		if _, err = fmt.Fprintf(w, "Obsidian-incompatible links: %d\n", result.Issues.ObsidianIncompatibleLinks); err != nil {
-			return err
-		}
-		if summaryOnly {
-			if _, err = fmt.Fprintln(w, "  (run without --summary to see per-link details, or pipe through scripts/fix_wikilinks.py)"); err != nil {
-				return err
-			}
-		} else {
-			for _, il := range result.Issues.IncompatibleLinkDetails {
-				if _, err = fmt.Fprintf(w, "  %s: [[%s]] → [[%s|%s]]\n",
-					il.SourcePath, il.TargetRaw, il.SuggestedFix, il.TargetRaw); err != nil {
-					return err
-				}
-			}
-		}
-	}
-	if result.Issues.PathPseudoIDLinks > 0 {
-		if _, err = fmt.Fprintf(w, "Dead link references: %d\n", result.Issues.PathPseudoIDLinks); err != nil {
-			return err
-		}
-		if summaryOnly {
-			if _, err = fmt.Fprintln(w, "  (run without --summary to see per-link details)"); err != nil {
-				return err
-			}
-		} else {
-			for _, pl := range result.Issues.PathPseudoIDDetails {
-				if _, err = fmt.Fprintf(w, "  %s: [[%s]] → target file does not exist\n",
-					pl.SourcePath, pl.TargetRaw); err != nil {
-					return err
-				}
-			}
-		}
+	if err = writeLinkIssues(w, &result.Issues, summaryOnly); err != nil {
+		return err
 	}
 	if err = writeHookDrift(w, &result.Issues, summaryOnly); err != nil {
 		return err
@@ -192,20 +187,112 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 	if err = writeLegacyHooksJSON(w, &result.Issues); err != nil {
 		return err
 	}
-	if result.Issues.StaleIndex > 0 {
-		if _, err = fmt.Fprintf(w,
-			"⚠ Stale index: %d note(s) changed since last index pass\n"+
-				"  run: vaultmind index --vault <vault>\n",
-			result.Issues.StaleIndex); err != nil {
+	if err = writeStaleIndex(w, &result.Issues, summaryOnly); err != nil {
+		return err
+	}
+	// Errors/warnings rollup — the cold-start signal `vault status` used to
+	// emit. Always printed so the operator gets the validation bottom line
+	// from a single `doctor` run.
+	if _, err = fmt.Fprintf(w, "Issues: %d errors, %d warnings\n",
+		result.IssuesSummary.Errors, result.IssuesSummary.Warnings); err != nil {
+		return err
+	}
+	return nil
+}
+
+// writeLinkIssues prints the Obsidian-incompatible and dead-link sections.
+// Extracted from runDoctorCore to keep its cyclomatic complexity under the 30
+// ceiling (gocyclo) — same shape as writeHookDrift. Under --summary the
+// per-link detail lines are suppressed and replaced with a one-line pointer.
+func writeLinkIssues(w io.Writer, issues *query.DoctorIssues, summaryOnly bool) error {
+	if issues.ObsidianIncompatibleLinks > 0 {
+		if _, err := fmt.Fprintf(w, "Obsidian-incompatible links: %d\n", issues.ObsidianIncompatibleLinks); err != nil {
 			return err
 		}
-		if !summaryOnly {
-			for _, sv := range result.Issues.StaleIndexDetails {
-				if _, err = fmt.Fprintf(w, "  %s: current_hash=%s stored_hash=%s\n",
-					sv.Path, short(sv.CurrentHash), short(sv.StoredHash)); err != nil {
+		if summaryOnly {
+			if _, err := fmt.Fprintln(w, "  (run without --summary to see per-link details; fix with: vaultmind doctor heal wikilinks)"); err != nil {
+				return err
+			}
+		} else {
+			for _, il := range issues.IncompatibleLinkDetails {
+				if _, err := fmt.Fprintf(w, "  %s: [[%s]] → [[%s|%s]]\n",
+					il.SourcePath, il.TargetRaw, il.SuggestedFix, il.TargetRaw); err != nil {
 					return err
 				}
 			}
+		}
+	}
+	if issues.PathPseudoIDLinks == 0 {
+		return nil
+	}
+	if _, err := fmt.Fprintf(w, "Dead link references: %d\n", issues.PathPseudoIDLinks); err != nil {
+		return err
+	}
+	if summaryOnly {
+		_, err := fmt.Fprintln(w, "  (run without --summary to see per-link details)")
+		return err
+	}
+	for _, pl := range issues.PathPseudoIDDetails {
+		if _, err := fmt.Fprintf(w, "  %s: [[%s]] → target file does not exist\n",
+			pl.SourcePath, pl.TargetRaw); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// writeStaleIndex prints the stale-index drift section. Extracted from
+// runDoctorCore for the same gocyclo reason. Per-note hash details are
+// suppressed under --summary.
+func writeStaleIndex(w io.Writer, issues *query.DoctorIssues, summaryOnly bool) error {
+	if issues.StaleIndex == 0 {
+		return nil
+	}
+	if _, err := fmt.Fprintf(w,
+		"⚠ Stale index: %d note(s) changed since last index pass\n"+
+			"  run: vaultmind index --vault <vault>\n",
+		issues.StaleIndex); err != nil {
+		return err
+	}
+	if summaryOnly {
+		return nil
+	}
+	for _, sv := range issues.StaleIndexDetails {
+		if _, err := fmt.Fprintf(w, "  %s: current_hash=%s stored_hash=%s\n",
+			sv.Path, short(sv.CurrentHash), short(sv.StoredHash)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// writeTypeBreakdown prints the per-type note counts (with each type's valid
+// statuses when defined) that `vault status` used to produce — now folded
+// into the doctor health hub. Types are printed in sorted order so the output
+// is deterministic. Nothing is printed when the vault has no registered types.
+func writeTypeBreakdown(w io.Writer, types map[string]query.StatusTypeInfo) error {
+	if len(types) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(types))
+	for name := range types {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	if _, err := fmt.Fprintf(w, "Types: %d\n", len(types)); err != nil {
+		return err
+	}
+	for _, name := range names {
+		ti := types[name]
+		if len(ti.Statuses) > 0 {
+			if _, err := fmt.Fprintf(w, "  %s: %d note(s) [statuses: %s]\n",
+				name, ti.Count, strings.Join(ti.Statuses, ", ")); err != nil {
+				return err
+			}
+			continue
+		}
+		if _, err := fmt.Fprintf(w, "  %s: %d note(s)\n", name, ti.Count); err != nil {
+			return err
 		}
 	}
 	return nil

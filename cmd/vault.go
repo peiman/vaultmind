@@ -2,24 +2,15 @@ package cmd
 
 import "github.com/spf13/cobra"
 
+// vaultCmd is the DEPRECATED `vault` parent. It only ever hosted `status`,
+// whose role is now the doctor health hub (`doctor --summary`). The parent is
+// hidden from the root listing; its single subcommand survives as a hidden
+// deprecated alias that delegates to the doctor summary path. Kept for ~2
+// releases.
 var vaultCmd = &cobra.Command{
-	Use:   "vault",
-	Short: "Vault operations",
-	Long: `Inspect and diagnose the vault itself — note counts, index freshness, and validation issues.
-
-Reach for vault subcommands when you need a top-level view of vault health rather
-than retrieving specific notes. Use ask, search, or note for content retrieval.
-
-SUBCOMMANDS
-
-  status   Print a cold-start summary: total notes, domain vs unstructured split,
-           type-registry size, and issue counts (errors, warnings). Accepts --json
-           for machine-readable output.
-
-EXAMPLES
-
-  vaultmind vault status --vault ./my-vault          # human-readable health summary
-  vaultmind vault status --vault ./my-vault --json   # machine-readable envelope`,
+	Use:    "vault",
+	Short:  "Deprecated: use 'doctor' / 'doctor --summary'",
+	Hidden: true,
 }
 
 func init() {

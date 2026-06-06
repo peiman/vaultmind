@@ -13,14 +13,25 @@ import (
 )
 
 // DoctorResult is the JSON-serializable output of the doctor command.
+//
+// Types and IssuesSummary carry the per-type breakdown and errors/warnings
+// rollup that `vault status` used to produce. doctor is now the single health
+// hub, so the cold-start view (`doctor --summary`) and the read-only diagnosis
+// (`doctor`) both surface them. They are populated by the cmd layer (which
+// holds the vault config + schema registry) via the shared status.go helpers —
+// the same place HookDrift is populated — so query.Doctor's signature stays
+// stable. Both are omitempty so existing JSON consumers and the query-layer
+// tests that call Doctor without a config see no extra noise.
 type DoctorResult struct {
-	VaultPath         string            `json:"vault_path"`
-	TotalFiles        int               `json:"total_files"`
-	DomainNotes       int               `json:"domain_notes"`
-	UnstructuredNotes int               `json:"unstructured_notes"`
-	IndexStatus       string            `json:"index_status"`
-	Embeddings        *DoctorEmbeddings `json:"embeddings,omitempty"`
-	Issues            DoctorIssues      `json:"issues"`
+	VaultPath         string                    `json:"vault_path"`
+	TotalFiles        int                       `json:"total_files"`
+	DomainNotes       int                       `json:"domain_notes"`
+	UnstructuredNotes int                       `json:"unstructured_notes"`
+	IndexStatus       string                    `json:"index_status"`
+	Embeddings        *DoctorEmbeddings         `json:"embeddings,omitempty"`
+	Types             map[string]StatusTypeInfo `json:"types,omitempty"`
+	IssuesSummary     StatusIssuesSummary       `json:"issues_summary"`
+	Issues            DoctorIssues              `json:"issues"`
 }
 
 // DoctorEmbeddings reports the vault's semantic-retrieval readiness. Surfaces
