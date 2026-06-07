@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.11] — 2026-06-07
+
 ### Added
 - **`doctor heal` — repair lives under the health hub.** `vaultmind doctor heal` applies every
   auto-fixable repair `doctor` found (today: Obsidian-incompatible wikilinks); `doctor heal wikilinks`
@@ -15,6 +17,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   All `doctor heal *` paths share one mutation engine (`internal/mutation`).
 - **`doctor --summary` — the cold-start view.** Counts, the per-type breakdown that `vault status`
   produced, and an errors/warnings rollup, in one read-only command.
+- **`doctor --all` — health for every vault at once.** Walks `--root` (default `.`, bounded depth)
+  for directories containing a `.vaultmind/` and runs the diagnosis on each, printing a combined
+  rollup plus per-vault sections; `--json` emits one combined envelope; vaults that fail to open are
+  surfaced (named with their error), not silently skipped. Explicit opt-in — bare `doctor` and
+  `doctor --vault` are unchanged.
+- **`vaultmind help` now lists every command, grouped by intent, each with a when-to-use line.** The
+  catalog is generated from a single source (the cobra command tree) and also backs the new
+  `vaultmind docs commands` (→ `COMMANDS.md`) and the agent onboarding (`init --print-instructions
+  --full`). An enforcement test keeps every command catalogued; a drift test keeps the embedded
+  `COMMANDS.md` in sync.
 
 ### Changed
 - **Graph traversal is unified under `memory`.** `memory links <id> [--out|--in|--both]` (default
@@ -192,7 +204,8 @@ The initial public tag, retracted in favor of [0.1.3]. It shipped without the
 maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; do
 not install.
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.1.10...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.1.11...HEAD
+[0.1.11]: https://github.com/peiman/vaultmind/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/peiman/vaultmind/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/peiman/vaultmind/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/peiman/vaultmind/compare/v0.1.7...v0.1.8
