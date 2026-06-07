@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/peiman/vaultmind/internal/commandcatalog"
 	"github.com/spf13/cobra"
 )
 
@@ -285,6 +286,11 @@ var commandCatalog = map[string]catalogEntry{
 		when:  "you want a generated reference of every configuration option.",
 		short: "Generate the configuration-options reference",
 	},
+	"vaultmind docs commands": {
+		group: groupSetup,
+		when:  "you want a generated grouped reference of every command, each with its when-to-use.",
+		short: "Generate the grouped command reference (COMMANDS.md)",
+	},
 	"vaultmind completion": {
 		group: groupSetup,
 		when:  "you want to install shell tab-completion for the vaultmind command.",
@@ -372,13 +378,47 @@ func decorateCommandCatalog(root *cobra.Command) {
 	walk(root)
 }
 
+// catalogGroupOrder is the ONE ordered list of the four catalog groups (id +
+// title), in the order they render in `help`, `docs commands`, and the embedded
+// onboarding doc. root.go registers the groups on RootCmd from this slice and
+// catalogOptions feeds it to the commandcatalog renderers — one definition,
+// every consumer (SSOT). catalogGroupTitle below is derived from it.
+var catalogGroupOrder = []commandcatalog.Group{
+	{ID: groupRetrieval, Title: groupRetrievalTitle},
+	{ID: groupMaintenance, Title: groupMaintenanceTitle},
+	{ID: groupLifecycle, Title: groupLifecycleTitle},
+	{ID: groupSetup, Title: groupSetupTitle},
+}
+
 // catalogGroupTitle maps a group ID to its display title (SSOT for the title
-// lookup used when registering a group on a parent).
-var catalogGroupTitle = map[string]string{
-	groupRetrieval:   groupRetrievalTitle,
-	groupMaintenance: groupMaintenanceTitle,
-	groupLifecycle:   groupLifecycleTitle,
-	groupSetup:       groupSetupTitle,
+// lookup used when registering a group on a parent), derived from the ordered
+// list so a group is defined exactly once.
+var catalogGroupTitle = func() map[string]string {
+	m := make(map[string]string, len(catalogGroupOrder))
+	for _, g := range catalogGroupOrder {
+		m[g.ID] = g.Title
+	}
+	return m
+}()
+
+// catalogOptions is the SSOT bridge from cmd's catalog constants to the pure
+// commandcatalog renderers: the ordered groups plus the when-annotation key.
+func catalogOptions() commandcatalog.Options {
+	return commandcatalog.Options{Groups: catalogGroupOrder, WhenKey: annotationWhen}
+}
+
+// buildCommandCatalog walks RootCmd into a structured Catalog using the cmd
+// package's catalog SSOT. Both the terminal cheat-sheet (help) and the markdown
+// reference (docs commands / onboarding embed) are rendered from this.
+func buildCommandCatalog() commandcatalog.Catalog {
+	return commandcatalog.Build(RootCmd, catalogOptions())
+}
+
+// commandsMarkdown renders the full grouped command reference as markdown — the
+// body of COMMANDS.md, shared by `docs commands`, the onboarding embed
+// generator, and the drift test (so the three can never diverge).
+func commandsMarkdown() string {
+	return commandcatalog.RenderMarkdown(buildCommandCatalog())
 }
 
 // ensureCatalogGroup registers groupID on cmd if not already present, so cmd's

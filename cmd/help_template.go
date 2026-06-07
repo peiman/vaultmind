@@ -13,6 +13,7 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/peiman/vaultmind/internal/commandcatalog"
 	"github.com/spf13/cobra"
 )
 
@@ -52,7 +53,16 @@ func installAgentRootHelp(root *cobra.Command, binary string) {
 		// tell them anything). Discard explicitly so the linter sees we
 		// considered the error. Following Cobra's own help template
 		// convention (it discards too).
-		_, _ = fmt.Fprint(w, agentRootHelpText(binary))
+		//
+		// Three parts: the curated lead (intent menu + anti-patterns +
+		// pairs), the generated grouped catalog of EVERY command (rendered
+		// from the assembled tree — see commandcatalog), then the footer.
+		// The catalog replaces the old hand-maintained name-only
+		// "INFRASTRUCTURE COMMANDS" block: now every command shows up,
+		// grouped, with its when-to-use, and nothing drifts on add.
+		_, _ = fmt.Fprint(w, agentRootHelpLead(binary))
+		_, _ = fmt.Fprint(w, agentRootHelpCatalog())
+		_, _ = fmt.Fprint(w, agentRootHelpFooter(binary))
 		// Render the global-flags block in the same section-divider
 		// style as the rest of the cheat-sheet so it reads as part of
 		// the page rather than a Cobra-default tail. Round-2 evaluator
@@ -68,7 +78,10 @@ func installAgentRootHelp(root *cobra.Command, binary string) {
 	})
 }
 
-func agentRootHelpText(binary string) string {
+// agentRootHelpLead is the curated top of root help: the intent menu, the
+// anti-patterns, and the one strong pairing. It ends just before the grouped
+// command catalog (which agentRootHelpCatalog renders from the live tree).
+func agentRootHelpLead(binary string) string {
 	return fmt.Sprintf(`%[1]s — your associative memory across sessions
 
 ──────────────────────────────────────────────────────────────────────────────
@@ -117,18 +130,25 @@ PAIRS WELL TOGETHER
   ask --pointers-only "<topic>"  →  note get <id-from-results>
       Probe → read. Two clean access events on exactly the notes you wanted.
 
-──────────────────────────────────────────────────────────────────────────────
-INFRASTRUCTURE COMMANDS (you usually won't reach for these directly)
-──────────────────────────────────────────────────────────────────────────────
+`, binary)
+}
 
-  Indexing & maintenance:  index, apply, frontmatter, schema
-  Internals:               memory (low-level primitives behind ask), resolve,
-                           dataview, episode, experiment
-  Setup:                   config, completion, docs, version
+// agentRootHelpCatalog renders the grouped catalog of EVERY user-facing command
+// (RenderTerminal over the assembled tree) under a single section header. This
+// replaced the old hand-maintained name-only "INFRASTRUCTURE COMMANDS" block —
+// now adding a command surfaces it here automatically, with its when-to-use,
+// and the catalog can never drift from the tree.
+func agentRootHelpCatalog() string {
+	return "──────────────────────────────────────────────────────────────────────────────\n" +
+		"ALL COMMANDS (grouped by intent)\n" +
+		"──────────────────────────────────────────────────────────────────────────────\n\n" +
+		commandcatalog.RenderTerminal(buildCommandCatalog())
+}
 
-  Run `+"`"+`%[1]s <command> --help`+"`"+` for any of these. Default to ask / note get
-  / self for retrieval; reach here only when you genuinely need lower-level access.
-
+// agentRootHelpFooter is the curated tail: where to go for per-command syntax
+// and the manifesto.
+func agentRootHelpFooter(binary string) string {
+	return fmt.Sprintf(`
 ──────────────────────────────────────────────────────────────────────────────
 
 For more on any command:  %[1]s <command> --help

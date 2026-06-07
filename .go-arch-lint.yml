@@ -56,6 +56,18 @@ components:
     in: cmd
 
   # -------------------------------------------------------------------------
+  # PROJECT-MANAGED: Command-catalog renderer
+  # -------------------------------------------------------------------------
+  # Pure transform from an assembled cobra command tree to a structured,
+  # group-ordered catalog + terminal/markdown renderers (one generator, many
+  # consumers: help, `docs commands`, the embedded onboarding reference). It is
+  # the ONE business/infra-adjacent package that reads the cobra tree, so it
+  # carries a cobra dependency that the broad infrastructure layer must not —
+  # hence its own component with a narrow canUse: cobra rule below.
+  commandcatalog:
+    in: internal/commandcatalog/**
+
+  # -------------------------------------------------------------------------
   # FRAMEWORK-MANAGED: Infrastructure Layer
   # -------------------------------------------------------------------------
   # Layer 4: Infrastructure Layer (shared services)
@@ -182,9 +194,18 @@ deps:
     mayDependOn:
       - business
       - infrastructure
+      - commandcatalog
     canUse:
       - cobra
       - viper
+
+  # Command-catalog renderer: a pure transform over the cobra command tree.
+  # Reads cobra (the assembled tree) but depends on no business/infra package —
+  # it is a leaf consumed by the command layer.
+  commandcatalog:
+    mayDependOn: []
+    canUse:
+      - cobra
 
   # Business logic uses infrastructure only
   # Cannot import commands or other business logic

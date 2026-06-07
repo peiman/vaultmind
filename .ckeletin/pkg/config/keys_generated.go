@@ -52,6 +52,7 @@ const (
 	KeyAppDataviewrenderSectionKey      = "app.dataviewrender.section_key"      // Section key to render
 	KeyAppDataviewlintVault             = "app.dataviewlint.vault"              // Path to vault root
 	KeyAppDataviewlintJson              = "app.dataviewlint.json"               // Output in JSON format
+	KeyAppDocsCommandsOutput            = "app.docs_commands.output"            // Output file for the command reference (defaults to stdout)
 	KeyAppDoctorVault                   = "app.doctor.vault"                    // Path to vault root
 	KeyAppDoctorJson                    = "app.doctor.json"                     // Output in JSON format
 	KeyAppDoctorSummary                 = "app.doctor.summary"                  // Print summary counts only (suppress per-link details)

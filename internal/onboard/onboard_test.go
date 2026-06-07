@@ -63,6 +63,81 @@ func TestPrintInstructions_WritesToWriter(t *testing.T) {
 		"PrintInstructions should write the full embedded doc verbatim")
 }
 
+// TestCommands_NotEmptyAndIsGroupedReference — the COMMANDS.md embed produced
+// bytes and carries the generated reference's structural anchors. Catches a
+// silently-failing embed or the wrong file.
+func TestCommands_NotEmptyAndIsGroupedReference(t *testing.T) {
+	ref := onboard.Commands()
+	require.NotEmpty(t, ref)
+	require.Greater(t, len(ref), 500,
+		"command reference should be substantive — under 500 bytes suggests the wrong file embedded")
+	doc := string(ref)
+	assert.True(t, strings.HasPrefix(doc, "# VaultMind Commands"),
+		"embedded reference should start with the generated H1")
+	assert.Contains(t, doc, "| Command | What | When to use |",
+		"embedded reference should be the grouped markdown table")
+}
+
+// TestPrintFull_AppendsCommandReference — `--full` composes via PrintFull(w),
+// which writes the full onboarding guide AND the command reference. Pin both
+// halves are present and ordered (guide first, reference second).
+func TestPrintFull_AppendsCommandReference(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, onboard.PrintFull(&buf))
+	out := buf.String()
+	assert.True(t, strings.HasPrefix(out, "# VaultMind"),
+		"output should start with the onboarding guide's H1")
+	assert.Contains(t, out, "# VaultMind Commands",
+		"PrintFull must append the command reference")
+	// Guide precedes the appended reference.
+	assert.Less(t, strings.Index(out, "## 1. Preflight"),
+		strings.Index(out, "# VaultMind Commands"),
+		"the command reference must come after the onboarding guide")
+	// Both embedded bodies are present verbatim.
+	assert.Contains(t, out, string(onboard.Instructions()))
+	assert.Contains(t, out, string(onboard.Commands()))
+}
+
+// failAfterWriter writes successfully `ok` times, then returns an error on the
+// next Write — lets a test target each of PrintFull's three Write calls (guide,
+// separator, command reference) and assert the wrapped error surfaces.
+type failAfterWriter struct {
+	ok  int
+	err error
+}
+
+func (f *failAfterWriter) Write(p []byte) (int, error) {
+	if f.ok <= 0 {
+		return 0, f.err
+	}
+	f.ok--
+	return len(p), nil
+}
+
+// TestPrintFull_PropagatesWriteErrors — each of the three writes in PrintFull
+// (instructions, separator, command reference) wraps and returns its writer
+// error, so a broken stdout/pipe is reported rather than swallowed.
+func TestPrintFull_PropagatesWriteErrors(t *testing.T) {
+	sentinel := assert.AnError
+	cases := []struct {
+		name    string
+		okFirst int
+		wantMsg string
+	}{
+		{"instructions write fails", 0, "writing onboarding instructions"},
+		{"separator write fails", 1, "writing onboarding separator"},
+		{"command reference write fails", 2, "writing command reference"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := onboard.PrintFull(&failAfterWriter{ok: tc.okFirst, err: sentinel})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.wantMsg)
+			assert.ErrorIs(t, err, sentinel)
+		})
+	}
+}
+
 // TestQuickStart_NotEmptyAndConcise — the quick-start embed produced bytes
 // AND is substantially smaller than the full guide. The whole point of the
 // quick-start (slice #4) is the skimmable 20%; if it grows to monolith size

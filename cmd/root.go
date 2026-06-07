@@ -357,17 +357,15 @@ func init() {
 	RootCmd.Long = ""
 	installAgentRootHelp(RootCmd, binaryName)
 
-	// Register the four command-catalog groups. Group registration carries no
-	// dependency on subcommands existing yet, so it is safe in root's init().
-	// The per-command GroupID / when-to-use annotations are applied in
-	// zz_catalog.go's init() (which runs after every command-registration
-	// init() thanks to filename ordering). See cmd/zz_catalog.go.
-	RootCmd.AddGroup(
-		&cobra.Group{ID: groupRetrieval, Title: groupRetrievalTitle},
-		&cobra.Group{ID: groupMaintenance, Title: groupMaintenanceTitle},
-		&cobra.Group{ID: groupLifecycle, Title: groupLifecycleTitle},
-		&cobra.Group{ID: groupSetup, Title: groupSetupTitle},
-	)
+	// Register the four command-catalog groups, in catalog order. Group
+	// registration carries no dependency on subcommands existing yet, so it is
+	// safe in root's init(). The ordered group list (catalogGroupOrder) is the
+	// SSOT shared with the catalog renderers; the per-command GroupID /
+	// when-to-use annotations are applied in zz_catalog.go's init() (which runs
+	// after every command-registration init() thanks to filename ordering).
+	for _, g := range catalogGroupOrder {
+		RootCmd.AddGroup(&cobra.Group{ID: g.ID, Title: g.Title})
+	}
 
 	configPaths := ConfigPaths()
 
