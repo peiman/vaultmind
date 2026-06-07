@@ -36,11 +36,12 @@ func runInit(cmd *cobra.Command, args []string) error {
 }
 
 // printOnboarding emits the concise quick-start by default, or the full
-// agent-onboarding guide when --full is set. Both write to the command's
-// output writer so tests can route to a buffer.
+// agent-onboarding guide plus the generated grouped command reference when
+// --full is set. Both write to the command's output writer so tests can route
+// to a buffer.
 func printOnboarding(cmd *cobra.Command) error {
 	if getConfigValueWithFlags[bool](cmd, "full", config.KeyAppInitFull) {
-		return onboard.PrintInstructions(cmd.OutOrStdout())
+		return onboard.PrintFull(cmd.OutOrStdout())
 	}
 	return onboard.PrintQuickStart(cmd.OutOrStdout())
 }

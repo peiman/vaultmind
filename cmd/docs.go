@@ -7,6 +7,7 @@ import (
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config/commands"
+	projcommands "github.com/peiman/vaultmind/internal/config/commands"
 	"github.com/peiman/vaultmind/internal/docs"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -21,10 +22,22 @@ var docsCmd = &cobra.Command{
 
 var docsConfigCmd = MustNewCommand(commands.DocsConfigMetadata, runDocsConfig)
 
+var docsCommandsCmd = MustNewCommand(projcommands.DocsCommandsMetadata, runDocsCommands)
+
 func init() {
 	docsCmd.AddCommand(docsConfigCmd)
 	setupCommandConfig(docsConfigCmd)
+	docsCmd.AddCommand(docsCommandsCmd)
+	setupCommandConfig(docsCommandsCmd)
 	MustAddToRoot(docsCmd)
+}
+
+// runDocsCommands emits the grouped command reference (COMMANDS.md) — the same
+// catalog markdown embedded into onboarding and rendered into help. Writes to
+// --output when set, otherwise stdout.
+func runDocsCommands(cmd *cobra.Command, _ []string) error {
+	out := getConfigValueWithFlags[string](cmd, "output", config.KeyAppDocsCommandsOutput)
+	return writeCommandsMarkdown(cmd, commandsMarkdown(), out)
 }
 
 func runDocsConfig(cmd *cobra.Command, args []string) error {

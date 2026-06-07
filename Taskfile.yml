@@ -623,10 +623,19 @@ tasks:
       - echo "YAML template saved to docs/config-template.yaml"
     deps: [build]
 
+  generate:docs:commands:
+    desc: Regenerate the embedded command reference (internal/onboard/COMMANDS.md) — run after adding/renaming/regrouping a command
+    cmds:
+      - echo "Generating command reference..."
+      - ./{{.BINARY_NAME}} docs commands --output=internal/onboard/COMMANDS.md
+      - echo "Command reference saved to internal/onboard/COMMANDS.md"
+    deps: [build]
+
   generate:docs:
     desc: Generate all documentation
     cmds:
       - task: generate:docs:config
       - task: generate:config:template
+      - task: generate:docs:commands
     silent: true
 

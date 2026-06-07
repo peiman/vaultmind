@@ -70,14 +70,17 @@ func TestInitPrintInstructions_DefaultsToQuickStart(t *testing.T) {
 }
 
 // TestInitPrintInstructions_FullEmitsWholeGuide — `--print-instructions --full`
-// emits the full agent-onboarding guide. Assert a full-guide-only marker is
-// present and the quick-start H1 is absent.
+// emits the full agent-onboarding guide AND the generated grouped command
+// reference (the catalog). Assert a full-guide-only marker, the command
+// reference H1, and the absence of the quick-start H1.
 func TestInitPrintInstructions_FullEmitsWholeGuide(t *testing.T) {
 	out, _, err := runRootCmd(t, "init", "--print-instructions", "--full")
 	require.NoError(t, err)
 	text := out.String()
 	assert.Contains(t, text, "## 5. Migration path",
 		"--print-instructions --full must emit the full guide")
+	assert.Contains(t, text, "# VaultMind Commands",
+		"--print-instructions --full must append the generated command reference")
 	assert.NotContains(t, text, "# VaultMind — Quick Start",
 		"the full guide must NOT be the quick-start")
 }
