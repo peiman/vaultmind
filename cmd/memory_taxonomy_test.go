@@ -34,7 +34,7 @@ type linksBothEnvelope struct {
 			Links    []struct {
 				SourceID string `json:"source_id"`
 				EdgeType string `json:"edge_type"`
-			} `json:"in_links"`
+			} `json:"links"`
 		} `json:"in"`
 	} `json:"result"`
 }
@@ -323,15 +323,11 @@ func TestTopLevelLinks_HiddenFromRootListing(t *testing.T) {
 // newDeprecatedAlias-built commands must be Hidden so they don't clutter help
 // while still resolving. Concretely: the `recall` and `context-pack`
 // subcommands under the VISIBLE `memory` parent must have Hidden==true (L3).
+//
+// Uses the package-global memoryCmd directly (not via RootCmd) so the test is
+// independent of docs_test.go / root_test.go reassigning RootCmd under adverse
+// test ordering.
 func TestDeprecatedAliases_AreHidden(t *testing.T) {
-	var memoryCmd *cobra.Command
-	for _, c := range RootCmd.Commands() {
-		if c.Name() == "memory" {
-			memoryCmd = c
-			break
-		}
-	}
-	require.NotNil(t, memoryCmd, "the visible 'memory' parent must exist")
 	require.False(t, memoryCmd.Hidden, "the 'memory' parent itself must stay visible")
 
 	for _, name := range []string{"recall", "context-pack"} {

@@ -89,8 +89,9 @@ func runWikilinkFix(cmd *cobra.Command, vaultPath string, jsonOut, apply bool, m
 		return fmt.Errorf("%s: %w", cmdName, err)
 	}
 
-	// The apply rewrote files only when both apply was requested AND files
-	// actually changed — that's exactly when the index is now stale.
+	// apply was requested AND at least one file had fixable links
+	// (FilesChanged>0) — under apply those files were rewritten, so the index
+	// is now stale.
 	indexStale := apply && result.FilesChanged > 0
 
 	if jsonOut {

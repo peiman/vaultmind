@@ -37,8 +37,9 @@ type InResult struct {
 // BothResult is the combined payload for a `--both` query: it carries the
 // outbound and inbound directions in ONE structure so the cmd layer can wrap
 // it in a single envelope (out before in) instead of emitting two concatenated
-// envelopes (invalid JSON). The `in_links` tag keeps the inbound links array
-// distinguishable from the outbound one when both are decoded together.
+// envelopes (invalid JSON). Inbound links use the same "links" key as the
+// standalone --in payload; the object nesting (result.in vs result.out)
+// already disambiguates direction.
 type BothResult struct {
 	Out struct {
 		SourceID string          `json:"source_id"`
@@ -46,7 +47,7 @@ type BothResult struct {
 	} `json:"out"`
 	In struct {
 		TargetID string         `json:"target_id"`
-		Links    []graph.InLink `json:"in_links"`
+		Links    []graph.InLink `json:"links"`
 	} `json:"in"`
 }
 

@@ -411,8 +411,8 @@ func TestDoctor_EmbeddingsStatusReflectsAbsence(t *testing.T) {
 }
 
 // RunLinks in human mode (non-JSON) prints rows with source/edge/confidence
-// columns — scripts awk these. Covers the human-output branch of runLinksIn
-// and runLinksOut.
+// columns — scripts awk these. Covers the human-output branch of RunLinks /
+// renderIn / renderOut.
 func TestRunLinks_InHumanOutputHasSourceAndEdgeColumns(t *testing.T) {
 	db, dir := smallIndexedVault(t)
 	var buf bytes.Buffer
