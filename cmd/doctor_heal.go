@@ -49,6 +49,19 @@ func healModeLabel(apply bool) string {
 	return "dry-run"
 }
 
+// healResult is the JSON payload for a wikilink-repair run: the shared
+// FixWikilinks result plus the stale-index fields. When an apply rewrote files
+// the on-disk content no longer matches the index, so StaleIndexAfterHeal is
+// true and StaleIndexRemedy names the re-index command (SSOT: staleIndexRemedy
+// in doctor.go, the same line doctor's drift warning prints). Embedding the
+// mutation result preserves every existing JSON field (files_scanned, etc.) so
+// the envelope shape is a superset, not a breaking change.
+type healResult struct {
+	*mutation.FixWikilinksResult
+	StaleIndexAfterHeal bool   `json:"stale_index_after_heal"`
+	StaleIndexRemedy    string `json:"stale_index_remedy,omitempty"`
+}
+
 // runWikilinkFix is the single cmd-layer engine behind every wikilink repair:
 // `doctor heal`, `doctor heal wikilinks`, and the deprecated `lint fix-links`
 // alias. It opens the vault, calls the shared internal/mutation fixer
@@ -56,6 +69,11 @@ func healModeLabel(apply bool) string {
 // either the JSON envelope or the human report. `apply` decides whether the
 // fixer writes; `modeLabel` is the human-output verb (apply / fix / dry-run);
 // `cmdName` names the operation in error and envelope text.
+//
+// When an apply actually rewrites files, the index goes stale (the indexer's
+// stored hashes no longer match disk), so both outputs surface an actionable
+// re-index warning. A dry-run or a zero-change apply leaves the index intact
+// and emits no warning.
 func runWikilinkFix(cmd *cobra.Command, vaultPath string, jsonOut, apply bool, modeLabel, cmdName string) error {
 	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, cmdName)
 	if err != nil {
@@ -71,8 +89,16 @@ func runWikilinkFix(cmd *cobra.Command, vaultPath string, jsonOut, apply bool, m
 		return fmt.Errorf("%s: %w", cmdName, err)
 	}
 
+	// The apply rewrote files only when both apply was requested AND files
+	// actually changed — that's exactly when the index is now stale.
+	indexStale := apply && result.FilesChanged > 0
+
 	if jsonOut {
-		env := envelope.OK(cmdName, result)
+		payload := healResult{FixWikilinksResult: result, StaleIndexAfterHeal: indexStale}
+		if indexStale {
+			payload.StaleIndexRemedy = staleIndexRemedy
+		}
+		env := envelope.OK(cmdName, payload)
 		env.Meta.VaultPath = vaultPath
 		env.Meta.IndexHash = vdb.GetIndexHash()
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(env)
@@ -85,6 +111,13 @@ func runWikilinkFix(cmd *cobra.Command, vaultPath string, jsonOut, apply bool, m
 	}
 	for _, d := range result.Details {
 		if _, err = fmt.Fprintf(w, "  %s: %s → %s\n", d.Path, d.OldLink, d.NewLink); err != nil {
+			return err
+		}
+	}
+	if indexStale {
+		if _, err = fmt.Fprintf(w,
+			"⚠ Index is now stale (%d file(s) rewritten) — run: %s\n",
+			result.FilesChanged, staleIndexRemedy); err != nil {
 			return err
 		}
 	}

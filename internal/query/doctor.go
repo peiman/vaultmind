@@ -20,8 +20,14 @@ import (
 // (`doctor`) both surface them. They are populated by the cmd layer (which
 // holds the vault config + schema registry) via the shared status.go helpers —
 // the same place HookDrift is populated — so query.Doctor's signature stays
-// stable. Both are omitempty so existing JSON consumers and the query-layer
-// tests that call Doctor without a config see no extra noise.
+// stable.
+//
+// IssuesSummary is a POINTER with omitempty so the unmeasured state (a raw
+// query.Doctor call with no schema registry — e.g. the query-layer tests) omits
+// the field entirely. The earlier non-pointer struct always serialized a
+// false-zero {errors:0,warnings:0}, indistinguishable from a measured-healthy
+// vault. nil now means "validation not run"; a non-nil &{0,0} means "ran, found
+// nothing". Types likewise stays omitempty (empty map => omitted).
 type DoctorResult struct {
 	VaultPath         string                    `json:"vault_path"`
 	TotalFiles        int                       `json:"total_files"`
@@ -30,7 +36,7 @@ type DoctorResult struct {
 	IndexStatus       string                    `json:"index_status"`
 	Embeddings        *DoctorEmbeddings         `json:"embeddings,omitempty"`
 	Types             map[string]StatusTypeInfo `json:"types,omitempty"`
-	IssuesSummary     StatusIssuesSummary       `json:"issues_summary"`
+	IssuesSummary     *StatusIssuesSummary      `json:"issues_summary,omitempty"`
 	Issues            DoctorIssues              `json:"issues"`
 }
 

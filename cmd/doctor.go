@@ -24,6 +24,12 @@ import (
 // future caller never drift on where the upgrade path is documented.
 const embeddingBackendsDocURL = "https://github.com/peiman/vaultmind/blob/main/docs/embedding-backends.md"
 
+// staleIndexRemedy is the SSOT re-index remedy line. doctor's stale-index
+// drift warning (writeStaleIndex) and heal's "index now stale after apply"
+// warning (runWikilinkFix) must name the same command so the operator sees one
+// consistent instruction.
+const staleIndexRemedy = "vaultmind index --vault <vault>"
+
 var doctorCmd = MustNewCommand(commands.DoctorMetadata, runDoctor)
 
 func init() {
@@ -133,9 +139,16 @@ func runDoctorCore(cmd *cobra.Command, vaultPath string, jsonOut, summaryOnly bo
 	if result.Types, err = query.CollectTypeBreakdown(vdb.DB, vdb.Config); err != nil {
 		return fmt.Errorf("collecting type breakdown: %w", err)
 	}
-	if result.IssuesSummary, err = query.SummarizeValidationIssues(vdb.DB, vdb.Reg); err != nil {
+	// Set IssuesSummary to a non-nil pointer in the cmd path so the JSON
+	// envelope distinguishes "validation ran" (&{...}) from "validation not
+	// run" (nil, the raw query.Doctor shape). DoctorResult.IssuesSummary is a
+	// pointer with omitempty precisely so a raw Doctor result omits the field
+	// instead of emitting a false-zero {errors:0,warnings:0}.
+	summary, err := query.SummarizeValidationIssues(vdb.DB, vdb.Reg)
+	if err != nil {
 		return fmt.Errorf("summarizing validation issues: %w", err)
 	}
+	result.IssuesSummary = &summary
 
 	// Hook-drift detection — embedded canonical vs installed copies in
 	// the project's .claude/scripts/. Resolve the project root by
@@ -192,9 +205,14 @@ func runDoctorCore(cmd *cobra.Command, vaultPath string, jsonOut, summaryOnly bo
 	}
 	// Errors/warnings rollup — the cold-start signal `vault status` used to
 	// emit. Always printed so the operator gets the validation bottom line
-	// from a single `doctor` run.
-	if _, err = fmt.Fprintf(w, "Issues: %d errors, %d warnings\n",
-		result.IssuesSummary.Errors, result.IssuesSummary.Warnings); err != nil {
+	// from a single `doctor` run. runDoctorCore always sets IssuesSummary, but
+	// read nil-safely (0/0) so a future raw-result caller can't panic here.
+	var errCount, warnCount int
+	if result.IssuesSummary != nil {
+		errCount = result.IssuesSummary.Errors
+		warnCount = result.IssuesSummary.Warnings
+	}
+	if _, err = fmt.Fprintf(w, "Issues: %d errors, %d warnings\n", errCount, warnCount); err != nil {
 		return err
 	}
 	return nil
@@ -250,8 +268,8 @@ func writeStaleIndex(w io.Writer, issues *query.DoctorIssues, summaryOnly bool) 
 	}
 	if _, err := fmt.Fprintf(w,
 		"⚠ Stale index: %d note(s) changed since last index pass\n"+
-			"  run: vaultmind index --vault <vault>\n",
-		issues.StaleIndex); err != nil {
+			"  run: %s\n",
+		issues.StaleIndex, staleIndexRemedy); err != nil {
 		return err
 	}
 	if summaryOnly {

@@ -135,6 +135,74 @@ func TestDoctorHeal_DryRunModeLabel(t *testing.T) {
 	assert.Contains(t, out.String(), "Mode: dry-run")
 }
 
+// After a successful apply that rewrote files, heal must warn that the index
+// is now stale so the operator knows to re-index (M2). Human output names the
+// remedy; this asserts the human path.
+func TestDoctorHeal_WarnsIndexStaleAfterApply(t *testing.T) {
+	vault, _ := buildHealableVault(t)
+	out, _, err := runRootCmd(t, "doctor", "heal", "--vault", vault)
+	require.NoError(t, err)
+	text := out.String()
+	assert.Contains(t, text, "Index is now stale",
+		"applying a heal that rewrote files must warn the index is stale")
+	assert.Contains(t, text, "vaultmind index --vault",
+		"the stale-index warning must name the re-index remedy")
+}
+
+// The stale-index warning also appears in the JSON envelope after an apply that
+// changed files, via a dedicated field with a remedy string (M2).
+func TestDoctorHeal_JSONReportsStaleIndexAfterApply(t *testing.T) {
+	vault, _ := buildHealableVault(t)
+	out, _, err := runRootCmd(t, "doctor", "heal", "--vault", vault, "--json")
+	require.NoError(t, err)
+
+	var env struct {
+		Result struct {
+			FilesChanged        int    `json:"files_changed"`
+			StaleIndexAfterHeal bool   `json:"stale_index_after_heal"`
+			StaleIndexRemedy    string `json:"stale_index_remedy"`
+		} `json:"result"`
+	}
+	require.NoError(t, json.Unmarshal(out.Bytes(), &env))
+	require.Greater(t, env.Result.FilesChanged, 0, "precondition: the apply rewrote files")
+	assert.True(t, env.Result.StaleIndexAfterHeal,
+		"JSON must flag the stale index after an apply that changed files")
+	assert.Contains(t, env.Result.StaleIndexRemedy, "vaultmind index --vault",
+		"JSON remedy must name the re-index command")
+}
+
+// --dry-run must NOT warn about a stale index: nothing was written, so the
+// index is not stale (M2).
+func TestDoctorHeal_DryRunDoesNotWarnStaleIndex(t *testing.T) {
+	vault, _ := buildHealableVault(t)
+	out, _, err := runRootCmd(t, "doctor", "heal", "--vault", vault, "--dry-run")
+	require.NoError(t, err)
+	assert.NotContains(t, out.String(), "Index is now stale",
+		"--dry-run changed nothing on disk, so it must not warn about a stale index")
+}
+
+// A heal that changed zero files (already-clean vault) must NOT warn about a
+// stale index (M2).
+func TestDoctorHeal_NoWarnWhenZeroChanges(t *testing.T) {
+	// buildIndexedTestVault's links are already filename/alias form, so heal
+	// finds nothing to fix → zero files changed.
+	vault := buildIndexedTestVault(t)
+	out, _, err := runRootCmd(t, "doctor", "heal", "--vault", vault, "--json")
+	require.NoError(t, err)
+
+	var env struct {
+		Result struct {
+			FilesChanged        int  `json:"files_changed"`
+			StaleIndexAfterHeal bool `json:"stale_index_after_heal"`
+		} `json:"result"`
+	}
+	require.NoError(t, json.Unmarshal(out.Bytes(), &env))
+	require.Equal(t, 0, env.Result.FilesChanged, "precondition: nothing to fix")
+	assert.False(t, env.Result.StaleIndexAfterHeal,
+		"zero files changed must not flag a stale index")
+	assert.NotContains(t, out.String(), "Index is now stale")
+}
+
 // doctor heal wikilinks is the surgical wikilink repair (the moved
 // `lint fix-links` logic). It applies by default and shares the same fixer
 // engine, so it also rewrites the title-form link on disk.

@@ -33,7 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `links in` → `memory links --in`
   - `links neighbors` → `memory neighbors`
   - `lint` (top-level, removed) and `lint fix-links` → `doctor heal wikilinks`
-  - `vault status` → `doctor --summary` (the `vault` parent is deprecated; it only hosted `status`)
+  - `vault status` → `doctor --summary` (the `vault` parent is deprecated; it only hosted `status`).
+    Note: `vault status --json` now returns the **doctor envelope shape** (the `doctor` result —
+    different from the old `StatusResult`), since the alias delegates to doctor's JSON path. Consumers
+    that decoded the old `vault status --json` payload must update to the doctor result shape.
   - `memory recall` → `memory neighbors`
   - `memory context-pack` → `memory pack`
 - The canonical repair verb is `heal`; `fix` is a permanent cobra alias (help shows "heal (fix)").

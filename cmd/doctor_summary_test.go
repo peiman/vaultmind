@@ -57,14 +57,21 @@ func TestDoctor_JSONIncludesIssuesSummary(t *testing.T) {
 }
 
 // doctor human output (no --summary) prints the per-type breakdown so the
-// terminal user sees the type registry, not just the totals.
+// terminal user sees the type registry, not just the totals. Assert the
+// breakdown's DISTINCTIVE "name: N note(s)" format (what writeTypeBreakdown
+// emits) — a bare Contains("concept") also matches the incompatible-link
+// detail lines, so it wouldn't actually prove the breakdown rendered.
 func TestDoctor_HumanOutputShowsPerTypeBreakdown(t *testing.T) {
 	vault := buildIndexedTestVault(t)
 	out, _, err := runRootCmd(t, "doctor", "--vault", vault)
 	require.NoError(t, err)
 	text := out.String()
-	assert.Contains(t, text, "concept", "per-type breakdown must name the concept type")
-	assert.Contains(t, text, "project", "per-type breakdown must name the project type")
+	// project carries statuses; concept does not — match the real rendered
+	// lines (the fixture has 2 concepts, 1 project).
+	assert.Contains(t, text, "concept: 2 note(s)",
+		"per-type breakdown must render the concept count in its distinctive format")
+	assert.Contains(t, text, "project: 1 note(s)",
+		"per-type breakdown must render the project count in its distinctive format")
 }
 
 // doctor --summary is the cold-start view: totals + per-type breakdown +

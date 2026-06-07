@@ -16,7 +16,10 @@ and an errors/warnings rollup.
 By default doctor also prints per-link details, which can run to hundreds of
 lines on a noisy vault. Use --summary for the cold-start view: counts, per-type
 breakdown, and the errors/warnings rollup, with the verbose per-link detail
-lines suppressed. (--summary replaces the former 'vault status'.)`,
+lines suppressed. (--summary replaces the former 'vault status'.)
+
+To repair what doctor finds, run 'doctor heal' (all auto-fixable) or
+'doctor heal wikilinks'.`,
 	ConfigPrefix: "app.doctor",
 	FlagOverrides: map[string]string{
 		"app.doctor.vault":   "vault",

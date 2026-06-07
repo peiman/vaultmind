@@ -118,8 +118,8 @@ WHEN TO USE
 
   Use related for a flat list of directly linked notes when you already know
   the target. For a depth-traversal that follows edges transitively, use
-  "memory recall". For a token-budgeted agent payload, use
-  "memory context-pack".`,
+  "memory neighbors". For a token-budgeted agent payload, use
+  "memory pack".`,
 	ConfigPrefix: "app.memoryrelated",
 	FlagOverrides: map[string]string{
 		"app.memoryrelated.vault": "vault",

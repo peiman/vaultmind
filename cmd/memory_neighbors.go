@@ -22,7 +22,36 @@ func init() {
 	setupCommandConfig(memoryNeighborsCmd)
 }
 
+// neighborsKeys names the viper keys a neighbors invocation reads its
+// depth/min-confidence/max-nodes defaults from. The canonical `memory
+// neighbors` path uses the memoryneighbors.* keys (high/50); the deprecated
+// `links neighbors` alias uses the linksneighbors.* keys (low/200) so its
+// historical defaults are preserved across the merge (M1).
+type neighborsKeys struct {
+	depthKey         string
+	minConfidenceKey string
+	maxNodesKey      string
+}
+
+// memoryNeighborsKeys is the canonical key set for `memory neighbors`.
+var memoryNeighborsKeys = neighborsKeys{
+	depthKey:         config.KeyAppMemoryneighborsDepth,
+	minConfidenceKey: config.KeyAppMemoryneighborsMinConfidence,
+	maxNodesKey:      config.KeyAppMemoryneighborsMaxNodes,
+}
+
 func runMemoryNeighbors(cmd *cobra.Command, args []string) error {
+	return runNeighborsWithKeys(cmd, args, memoryNeighborsKeys)
+}
+
+// runNeighborsWithKeys is the shared neighbors engine. It reads the
+// depth/min-confidence/max-nodes defaults from the supplied key set (so the
+// deprecated links-neighbors alias keeps its low/200 defaults) and the
+// vault/json flags from the memoryneighbors.* keys (shared by both paths since
+// the flags carry the same registered values). When a flag was explicitly set
+// on the command line, getConfigValueWithFlags returns the flag value
+// regardless of which default key was consulted.
+func runNeighborsWithKeys(cmd *cobra.Command, args []string, keys neighborsKeys) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: vaultmind memory neighbors <id-or-path>")
 	}
@@ -40,9 +69,9 @@ func runMemoryNeighbors(cmd *cobra.Command, args []string) error {
 	resolver := graph.NewResolver(vdb.DB)
 	result, err := memory.Recall(resolver, vdb.DB, memory.RecallConfig{
 		Input:         args[0],
-		Depth:         getConfigValueWithFlags[int](cmd, "depth", config.KeyAppMemoryneighborsDepth),
-		MinConfidence: getConfigValueWithFlags[string](cmd, "min-confidence", config.KeyAppMemoryneighborsMinConfidence),
-		MaxNodes:      getConfigValueWithFlags[int](cmd, "max-nodes", config.KeyAppMemoryneighborsMaxNodes),
+		Depth:         getConfigValueWithFlags[int](cmd, "depth", keys.depthKey),
+		MinConfidence: getConfigValueWithFlags[string](cmd, "min-confidence", keys.minConfidenceKey),
+		MaxNodes:      getConfigValueWithFlags[int](cmd, "max-nodes", keys.maxNodesKey),
 	})
 	if err != nil {
 		if jsonOut {
