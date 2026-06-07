@@ -195,33 +195,94 @@ func TestDoctorAll_RollupListsVaultsWithIssues(t *testing.T) {
 	assert.NotContains(t, env.Result.Rollup.VaultsWithIssues, clean)
 }
 
+// makeBogusVault creates a directory with a .vaultmind/ marker but a malformed
+// config.yaml, so OpenVaultDB fails to load it. Returns the vault path. Such a
+// vault must be SURFACED (named, with its reason), never silently dropped.
+func makeBogusVault(t *testing.T, dir string) string {
+	t.Helper()
+	cfgDir := filepath.Join(dir, ".vaultmind")
+	require.NoError(t, os.MkdirAll(cfgDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(cfgDir, "config.yaml"),
+		[]byte("types: [this is not: valid: yaml"), 0o644))
+	return dir
+}
+
 // A path that contains a .vaultmind/ marker but no valid config/index must be
-// skipped (not abort the run) — the other discovered vaults still report.
-func TestDoctorAll_SkipsUnopenableVault(t *testing.T) {
+// SURFACED, not silently swallowed: the operator must see the broken vault named
+// (with its reason) in both human and JSON output, and the discovered count must
+// include it. This guards the silent-failure regression vs single-vault doctor.
+func TestDoctorAll_SurfacesUnopenableVault(t *testing.T) {
 	root := t.TempDir()
 	good := buildIndexedVaultAt(t, filepath.Join(root, "good-vault"))
-	// A bogus "vault": has the marker dir but a malformed config.yaml, so
-	// OpenVaultDB fails to load its config. It must be skipped, not crash the run.
-	bogusCfg := filepath.Join(root, "zbogus-vault", ".vaultmind")
-	require.NoError(t, os.MkdirAll(bogusCfg, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(bogusCfg, "config.yaml"),
-		[]byte("types: [this is not: valid: yaml"), 0o644))
+	bogus := makeBogusVault(t, filepath.Join(root, "zbogus-vault"))
 
-	out, _, err := runRootCmd(t, "doctor", "--all", "--root", root, "--json")
+	// --- JSON: the broken vault appears under result.failed[], the good one
+	//     under result.vaults[], and the rollup counts stay honest. ---
+	out, errOut, err := runRootCmd(t, "doctor", "--all", "--root", root, "--json")
 	require.NoError(t, err)
 	var env struct {
 		Result struct {
 			Rollup struct {
 				VaultCount int `json:"vault_count"`
+				Discovered int `json:"discovered"`
+				Diagnosed  int `json:"diagnosed"`
+				Failed     int `json:"failed"`
 			} `json:"rollup"`
 			Vaults []struct {
 				VaultPath string `json:"vault_path"`
 			} `json:"vaults"`
+			Failed []struct {
+				VaultPath string `json:"vault_path"`
+				Error     string `json:"error"`
+			} `json:"failed"`
 		} `json:"result"`
 	}
 	require.NoError(t, json.Unmarshal(out.Bytes(), &env))
-	require.Len(t, env.Result.Vaults, 1, "only the openable vault is diagnosed")
+
+	require.Len(t, env.Result.Vaults, 1, "the openable vault is diagnosed")
 	assert.Equal(t, good, env.Result.Vaults[0].VaultPath)
+
+	require.Len(t, env.Result.Failed, 1, "the unopenable vault is surfaced, not dropped")
+	assert.Equal(t, bogus, env.Result.Failed[0].VaultPath, "the broken vault is named")
+	assert.NotEmpty(t, env.Result.Failed[0].Error, "the failure reason is carried")
+
+	// Counts stay honest: discovered > diagnosed when one fails.
+	assert.Equal(t, 2, env.Result.Rollup.Discovered, "discovered counts the broken vault too")
+	assert.Equal(t, 1, env.Result.Rollup.Diagnosed)
+	assert.Equal(t, 1, env.Result.Rollup.Failed)
+	assert.Greater(t, env.Result.Rollup.Discovered, env.Result.Rollup.Diagnosed,
+		"discovered exceeds diagnosed precisely because a vault failed")
+
+	// A warning line about the broken vault must reach stderr — never invisible.
+	assert.Contains(t, errOut.String(), bogus, "every failed vault warns on stderr")
+
+	// --- Human: the broken vault is named under a clearly-visible failure
+	//     section, and the header reports the honest breakdown. ---
+	human, herrOut, err := runRootCmd(t, "doctor", "--all", "--root", root)
+	require.NoError(t, err)
+	text := human.String()
+	assert.Contains(t, text, "Discovered 2 vault(s)", "header counts the broken vault")
+	assert.Contains(t, text, "Vaults that failed to open: 1", "a visible failure section heads the list")
+	assert.Contains(t, text, bogus, "the broken vault is named in the human failure section")
+	assert.Contains(t, herrOut.String(), bogus, "every failed vault warns on stderr (human mode too)")
+}
+
+// The single combined JSON envelope contract still holds when a vault fails:
+// exactly one envelope on stdout, even though a failed vault is reported.
+func TestDoctorAll_FailedVaultKeepsSingleEnvelope(t *testing.T) {
+	root := t.TempDir()
+	buildIndexedVaultAt(t, filepath.Join(root, "good-vault"))
+	makeBogusVault(t, filepath.Join(root, "zbogus-vault"))
+
+	out, _, err := runRootCmd(t, "doctor", "--all", "--root", root, "--json")
+	require.NoError(t, err)
+
+	dec := json.NewDecoder(strings.NewReader(strings.TrimSpace(out.String())))
+	var env json.RawMessage
+	require.NoError(t, dec.Decode(&env), "stdout must be a single decodable envelope")
+	var extra json.RawMessage
+	assert.ErrorIs(t, dec.Decode(&extra), io.EOF,
+		"exactly one envelope on stdout even with a failed vault (no per-vault error envelope)")
 }
 
 func TestDoctorAll_ZeroVaultsHumanMessage(t *testing.T) {
