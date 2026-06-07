@@ -39,7 +39,7 @@ type AskEnvelope struct {
 	} `json:"meta"`
 }
 
-// ContextPackEnvelope is the contract shape for `vaultmind memory context-pack --json`.
+// ContextPackEnvelope is the contract shape for `vaultmind memory pack --json`.
 type ContextPackEnvelope struct {
 	SchemaVersion string `json:"schema_version"`
 	Status        string `json:"status"`

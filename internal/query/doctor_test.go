@@ -1,6 +1,7 @@
 package query_test
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"testing"
 
@@ -32,6 +33,25 @@ func TestDoctor_ReturnsVaultSummary(t *testing.T) {
 	assert.Greater(t, result.DomainNotes, 0)
 	assert.GreaterOrEqual(t, result.UnstructuredNotes, 0)
 	assert.Equal(t, result.TotalFiles, result.DomainNotes+result.UnstructuredNotes)
+}
+
+// A raw query.Doctor result (no cmd layer, so IssuesSummary stays nil) must
+// OMIT issues_summary from its JSON — not emit a false-zero
+// {errors:0,warnings:0} that's indistinguishable from a measured-healthy
+// vault. The cmd path (doctor --summary) populates it; the omission here is the
+// invariant H3 locks down.
+func TestDoctor_RawResultOmitsIssuesSummary(t *testing.T) {
+	db := buildIndexedDB(t)
+
+	result, err := query.Doctor(db, testVaultPath, nil)
+	require.NoError(t, err)
+	assert.Nil(t, result.IssuesSummary,
+		"raw query.Doctor must leave IssuesSummary unmeasured (nil)")
+
+	raw, err := json.Marshal(result)
+	require.NoError(t, err)
+	assert.NotContains(t, string(raw), "issues_summary",
+		"unmeasured issues_summary must be omitted from the JSON, not false-zeroed")
 }
 
 func TestDoctor_ReportsUnresolvedLinks(t *testing.T) {

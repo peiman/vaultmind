@@ -38,7 +38,6 @@ func VaultStatus(db *index.DB, vaultPath string, cfg *vault.Config, reg *schema.
 	result := &StatusResult{
 		VaultPath:   vaultPath,
 		IndexStatus: "current",
-		Types:       make(map[string]StatusTypeInfo),
 	}
 
 	// Note counts
@@ -50,7 +49,33 @@ func VaultStatus(db *index.DB, vaultPath string, cfg *vault.Config, reg *schema.
 	}
 	result.UnstructuredNotes = result.TotalFiles - result.DomainNotes
 
-	// Type info with counts
+	// Per-type breakdown and issues rollup come from the shared helpers so the
+	// cold-start view here and the doctor health hub stay in lockstep (SSOT).
+	types, err := CollectTypeBreakdown(db, cfg)
+	if err != nil {
+		return nil, err
+	}
+	result.Types = types
+
+	summary, err := SummarizeValidationIssues(db, reg)
+	if err != nil {
+		return nil, err
+	}
+	result.IssuesSummary = summary
+
+	return result, nil
+}
+
+// CollectTypeBreakdown returns the per-type note counts together with each
+// type's required fields and valid statuses, drawn from the vault config's
+// type registry. It is the single source of truth for the per-type breakdown
+// surfaced by both `vault status` (cold-start) and `doctor` (health hub).
+// A nil cfg yields an empty (non-nil) map so callers can range safely.
+func CollectTypeBreakdown(db *index.DB, cfg *vault.Config) (map[string]StatusTypeInfo, error) {
+	types := make(map[string]StatusTypeInfo)
+	if cfg == nil {
+		return types, nil
+	}
 	for name, td := range cfg.Types {
 		var count int
 		if err := db.QueryRow("SELECT COUNT(*) FROM notes WHERE type = ?", name).Scan(&count); err != nil {
@@ -60,25 +85,33 @@ func VaultStatus(db *index.DB, vaultPath string, cfg *vault.Config, reg *schema.
 		if statuses == nil {
 			statuses = []string{}
 		}
-		result.Types[name] = StatusTypeInfo{
+		types[name] = StatusTypeInfo{
 			Count:    count,
 			Required: td.Required,
 			Statuses: statuses,
 		}
 	}
+	return types, nil
+}
 
-	// Issues summary from validation
+// SummarizeValidationIssues runs the schema validator and rolls its issues up
+// into error/warning counts. Shared by `vault status` and `doctor` so both
+// report the same rollup (SSOT). A nil reg yields a zero-value summary.
+func SummarizeValidationIssues(db *index.DB, reg *schema.Registry) (StatusIssuesSummary, error) {
+	var summary StatusIssuesSummary
+	if reg == nil {
+		return summary, nil
+	}
 	valResult, err := Validate(db, reg)
 	if err != nil {
-		return nil, fmt.Errorf("running validation: %w", err)
+		return summary, fmt.Errorf("running validation: %w", err)
 	}
 	for _, issue := range valResult.Issues {
 		if issue.Severity == "error" {
-			result.IssuesSummary.Errors++
+			summary.Errors++
 		} else {
-			result.IssuesSummary.Warnings++
+			summary.Warnings++
 		}
 	}
-
-	return result, nil
+	return summary, nil
 }

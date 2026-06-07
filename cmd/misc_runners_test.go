@@ -197,6 +197,12 @@ func TestDoctor_SummaryFlagSuppressesLinkDetails(t *testing.T) {
 	// And the hint on how to see them is present.
 	assert.Contains(t, summary.String(), "without --summary",
 		"summary must point the user at the full output flag")
+	// Seam-3: the remedy must point at the shipped `doctor heal wikilinks`
+	// command, NOT the unshipped scripts/fix_wikilinks.py helper.
+	assert.Contains(t, summary.String(), "vaultmind doctor heal wikilinks",
+		"summary must point the user at the shipped heal command")
+	assert.NotContains(t, summary.String(), "fix_wikilinks.py",
+		"summary must NOT reference the unshipped scripts/fix_wikilinks.py")
 	// Sanity: the full output DID have the arrows.
 	assert.Contains(t, full.String(), "→ [[",
 		"full output must show per-link arrows so the test catches a regression in either direction")

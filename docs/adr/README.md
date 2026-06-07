@@ -66,6 +66,7 @@ docs/adr/
 ## Project ADR Index
 
 - [ADR-100](100-plugin-architecture.md) - Plugin/Extension Architecture (Deferred)
+- [ADR-101](101-command-taxonomy.md) - Command Taxonomy: graph under `memory`, doctor as health + heal hub (Accepted)
 
 <!-- Add new project ADRs above this line -->
 

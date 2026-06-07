@@ -13,14 +13,31 @@ import (
 )
 
 // DoctorResult is the JSON-serializable output of the doctor command.
+//
+// Types and IssuesSummary carry the per-type breakdown and errors/warnings
+// rollup that `vault status` used to produce. doctor is now the single health
+// hub, so the cold-start view (`doctor --summary`) and the read-only diagnosis
+// (`doctor`) both surface them. They are populated by the cmd layer (which
+// holds the vault config + schema registry) via the shared status.go helpers —
+// the same place HookDrift is populated — so query.Doctor's signature stays
+// stable.
+//
+// IssuesSummary is a POINTER with omitempty so the unmeasured state (a raw
+// query.Doctor call with no schema registry — e.g. the query-layer tests) omits
+// the field entirely. The earlier non-pointer struct always serialized a
+// false-zero {errors:0,warnings:0}, indistinguishable from a measured-healthy
+// vault. nil now means "validation not run"; a non-nil &{0,0} means "ran, found
+// nothing". Types likewise stays omitempty (empty map => omitted).
 type DoctorResult struct {
-	VaultPath         string            `json:"vault_path"`
-	TotalFiles        int               `json:"total_files"`
-	DomainNotes       int               `json:"domain_notes"`
-	UnstructuredNotes int               `json:"unstructured_notes"`
-	IndexStatus       string            `json:"index_status"`
-	Embeddings        *DoctorEmbeddings `json:"embeddings,omitempty"`
-	Issues            DoctorIssues      `json:"issues"`
+	VaultPath         string                    `json:"vault_path"`
+	TotalFiles        int                       `json:"total_files"`
+	DomainNotes       int                       `json:"domain_notes"`
+	UnstructuredNotes int                       `json:"unstructured_notes"`
+	IndexStatus       string                    `json:"index_status"`
+	Embeddings        *DoctorEmbeddings         `json:"embeddings,omitempty"`
+	Types             map[string]StatusTypeInfo `json:"types,omitempty"`
+	IssuesSummary     *StatusIssuesSummary      `json:"issues_summary,omitempty"`
+	Issues            DoctorIssues              `json:"issues"`
 }
 
 // DoctorEmbeddings reports the vault's semantic-retrieval readiness. Surfaces

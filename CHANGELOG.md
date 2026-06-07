@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`doctor heal` — repair lives under the health hub.** `vaultmind doctor heal` applies every
+  auto-fixable repair `doctor` found (today: Obsidian-incompatible wikilinks); `doctor heal wikilinks`
+  is the surgical form (the logic moved here from the removed `lint fix-links`). `heal` **applies by
+  default**; `--dry-run` previews. Cobra alias `fix` works on both (`doctor fix`, `doctor fix wikilinks`).
+  All `doctor heal *` paths share one mutation engine (`internal/mutation`).
+- **`doctor --summary` — the cold-start view.** Counts, the per-type breakdown that `vault status`
+  produced, and an errors/warnings rollup, in one read-only command.
+
+### Changed
+- **Graph traversal is unified under `memory`.** `memory links <id> [--out|--in|--both]` (default
+  `--both`; `--in` = backlinks) is a single direction-flagged command that absorbs the old
+  `links out` / `links in`. `memory neighbors <id> [--depth N]` is the BFS neighborhood with full
+  frontmatter (merging the old `links neighbors` and `memory recall`). `memory context-pack` is
+  renamed to `memory pack` (identical behavior). `memory related` / `memory summarize` unchanged.
+- **`doctor` is now the single vault-health hub.** Read-only `doctor` gained the per-type breakdown
+  that `vault status` carried, and repair lives under it via `doctor heal`. The diagnosis remedy for
+  broken links now points at `vaultmind doctor heal wikilinks` (previously an unshipped helper script).
+
+### Deprecated
+- The following invocations are now **hidden deprecated aliases** that print a one-line stderr notice
+  and delegate to the new path. They will be removed in ~2 releases:
+  - `links out` → `memory links --out`
+  - `links in` → `memory links --in`
+  - `links neighbors` → `memory neighbors`
+  - `lint` (top-level, removed) and `lint fix-links` → `doctor heal wikilinks`
+  - `vault status` → `doctor --summary` (the `vault` parent is deprecated; it only hosted `status`).
+    Note: `vault status --json` now returns the **doctor envelope shape** (the `doctor` result —
+    different from the old `StatusResult`), since the alias delegates to doctor's JSON path. Consumers
+    that decoded the old `vault status --json` payload must update to the doctor result shape.
+  - `memory recall` → `memory neighbors`
+  - `memory context-pack` → `memory pack`
+- The canonical repair verb is `heal`; `fix` is a permanent cobra alias (help shows "heal (fix)").
+  `dataview lint` is a separate domain checker and is **not** affected.
+
 ## [0.1.10] — 2026-06-05
 
 ### Added

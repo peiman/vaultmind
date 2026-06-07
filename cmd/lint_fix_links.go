@@ -1,64 +1,43 @@
 package cmd
 
 import (
-	"encoding/json"
-	"errors"
-	"fmt"
-
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
-	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/config/commands"
-	"github.com/peiman/vaultmind/internal/envelope"
-	"github.com/peiman/vaultmind/internal/mutation"
 	"github.com/spf13/cobra"
 )
 
-var lintFixLinksCmd = MustNewCommand(commands.LintFixLinksMetadata, runLintFixLinks)
+// lint fix-links is DEPRECATED: the wikilink repair moved to the doctor health
+// hub as `doctor heal wikilinks`. This hidden alias prints a one-line stderr
+// notice and delegates to the SAME shared fixer engine (runWikilinkFix →
+// internal/mutation.FixWikilinks). It preserves the OLD contract — dry-run by
+// default, --fix to apply, and the "Mode: fix"/"Mode: dry-run" labels — so
+// existing scripts keep working. Kept for ~2 releases.
+var lintFixLinksCmd = newDeprecatedAlias(commands.LintFixLinksMetadata,
+	"vaultmind: 'lint fix-links' is deprecated; use 'doctor heal wikilinks' instead",
+	runLintFixLinks)
 
 func init() {
 	lintCmd.AddCommand(lintFixLinksCmd)
 	setupCommandConfig(lintFixLinksCmd)
 }
 
+// runLintFixLinks resolves the alias's own app.lintfixlinks.* flags and
+// delegates to the shared wikilink-fix engine. --fix (default false) maps to
+// apply; without it the alias previews (dry-run) — the old contract, the
+// inverse of the new heal default.
 func runLintFixLinks(cmd *cobra.Command, _ []string) error {
 	vaultPath := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppLintfixlinksVault)
 	jsonOut := getConfigValueWithFlags[bool](cmd, "json", config.KeyAppLintfixlinksJson)
-	fix := getConfigValueWithFlags[bool](cmd, "fix", config.KeyAppLintfixlinksFix)
+	apply := getConfigValueWithFlags[bool](cmd, "fix", config.KeyAppLintfixlinksFix)
+	return runWikilinkFix(cmd, vaultPath, jsonOut, apply, fixLinksModeLabel(apply), "lint fix-links")
+}
 
-	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, "lint fix-links")
-	if err != nil {
-		if errors.Is(err, cmdutil.ErrAlreadyWritten) {
-			return nil
-		}
-		return err
+// fixLinksModeLabel preserves the legacy fix-links human-output labels:
+// "fix" when applying, "dry-run" when previewing. (heal uses "apply" instead;
+// both share the same engine, only the label differs.)
+func fixLinksModeLabel(apply bool) string {
+	if apply {
+		return "fix"
 	}
-	defer vdb.Close()
-
-	result, err := mutation.FixWikilinks(vdb.DB, vaultPath, fix)
-	if err != nil {
-		return fmt.Errorf("fix-links: %w", err)
-	}
-
-	if jsonOut {
-		env := envelope.OK("lint fix-links", result)
-		env.Meta.VaultPath = vaultPath
-		env.Meta.IndexHash = vdb.GetIndexHash()
-		return json.NewEncoder(cmd.OutOrStdout()).Encode(env)
-	}
-
-	w := cmd.OutOrStdout()
-	mode := "dry-run"
-	if fix {
-		mode = "fix"
-	}
-	if _, err = fmt.Fprintf(w, "Mode: %s\nFiles scanned: %d\nFiles changed: %d\nLinks fixed: %d\n",
-		mode, result.FilesScanned, result.FilesChanged, result.LinksFixed); err != nil {
-		return err
-	}
-	for _, d := range result.Details {
-		if _, err = fmt.Fprintf(w, "  %s: %s → %s\n", d.Path, d.OldLink, d.NewLink); err != nil {
-			return err
-		}
-	}
-	return nil
+	return "dry-run"
 }

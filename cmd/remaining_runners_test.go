@@ -11,7 +11,6 @@ import (
 	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/marker"
-	"github.com/peiman/vaultmind/internal/query"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -54,26 +53,6 @@ func TestLinksNeighbors_MissingArgErrors(t *testing.T) {
 	vault := buildIndexedTestVault(t)
 	_, _, err := runRootCmd(t, "links", "neighbors", "--vault", vault)
 	require.Error(t, err)
-}
-
-// formatNeighbors renders depth-0 target and depth>0 neighbors distinctly,
-// and appends "(max reached)" only when the traversal hit its cap. The
-// visual distinction is what makes the output scannable.
-func TestFormatNeighbors_DistinguishesTargetAndMaxReached(t *testing.T) {
-	r := &query.NeighborsResult{
-		Nodes: []query.NeighborNode{
-			{ID: "t-1", Distance: 0},
-			{ID: "t-2", Distance: 1, EdgeFrom: &query.NeighborEdge{EdgeType: "related", Confidence: "high"}},
-		},
-		MaxNodesReached: true,
-	}
-	var buf bytes.Buffer
-	require.NoError(t, formatNeighbors(r, &buf))
-	out := buf.String()
-	assert.Contains(t, out, "t-1 (depth 0)")
-	assert.Contains(t, out, "t-2")
-	assert.Contains(t, out, "related")
-	assert.Contains(t, out, "(max reached)")
 }
 
 // note create without --type must fail with a clear usage error — the alt

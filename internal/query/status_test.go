@@ -55,3 +55,45 @@ func TestVaultStatus_IncludesIssueSummary(t *testing.T) {
 	// Clean vault should have 0 errors
 	assert.Equal(t, 0, result.IssuesSummary.Errors)
 }
+
+// CollectTypeBreakdown is the SSOT helper now shared between vault status and
+// the doctor health hub: it must return per-type counts plus the required
+// fields and valid statuses straight from the registry, with the same shape
+// VaultStatus.Types carries.
+func TestCollectTypeBreakdown_SharedHelper(t *testing.T) {
+	db := buildIndexedDB(t)
+	cfg, err := vault.LoadConfig(testVaultPath)
+	require.NoError(t, err)
+
+	types, err := query.CollectTypeBreakdown(db, cfg)
+	require.NoError(t, err)
+	require.Contains(t, types, "concept")
+	require.Contains(t, types, "project")
+	assert.Greater(t, types["concept"].Count, 0)
+	assert.Contains(t, types["concept"].Required, "title")
+
+	// The doctor path and the status path must agree byte-for-byte: same DB,
+	// same cfg, identical breakdown. This is the SSOT contract.
+	reg := schema.NewRegistry(cfg.Types)
+	status, err := query.VaultStatus(db, testVaultPath, cfg, reg)
+	require.NoError(t, err)
+	assert.Equal(t, status.Types, types,
+		"the shared breakdown helper must produce exactly what VaultStatus reports")
+}
+
+// SummarizeValidationIssues is the SSOT helper for the errors/warnings rollup.
+// It must match the count VaultStatus reports for the same DB + registry.
+func TestSummarizeValidationIssues_SharedHelper(t *testing.T) {
+	db := buildIndexedDB(t)
+	cfg, err := vault.LoadConfig(testVaultPath)
+	require.NoError(t, err)
+	reg := schema.NewRegistry(cfg.Types)
+
+	summary, err := query.SummarizeValidationIssues(db, reg)
+	require.NoError(t, err)
+
+	status, err := query.VaultStatus(db, testVaultPath, cfg, reg)
+	require.NoError(t, err)
+	assert.Equal(t, status.IssuesSummary, summary,
+		"the shared rollup helper must produce exactly what VaultStatus reports")
+}

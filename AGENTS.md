@@ -151,7 +151,7 @@ won't break them.
 **Covered commands (contract tests in `cmd/contract_*_test.go`):**
 - `vaultmind ask --json`: `result.query`, `result.retrieval_mode`,
   `result.top_hits[].{id,type,title,path,score}`, `result.context.target_id`
-- `vaultmind memory context-pack --json`: `result.target_id`,
+- `vaultmind memory pack --json`: `result.target_id`,
   `result.target.id`, `result.used_tokens`, `result.budget_tokens`,
   `result.truncated`, `result.context[].{id,edge_type,body_included}`
 - `vaultmind search --json`: `result.hits[].{id,title,score}`, `result.total`

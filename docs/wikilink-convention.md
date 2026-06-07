@@ -23,9 +23,9 @@ Obsidian resolves `[[target]]` by matching `target` against filenames (without `
 
 CLI commands are NOT vault notes. Use backtick code format, not wikilinks:
 
-**Correct:** The `memory recall` command traverses the graph.
+**Correct:** The `memory neighbors` command traverses the graph.
 
-**Wrong:** The `[[memory-recall|memory recall]]` command traverses the graph.
+**Wrong:** The `[[memory-neighbors|memory neighbors]]` command traverses the graph.
 
 ## Detection
 
@@ -39,4 +39,4 @@ Doctor reports `Obsidian-incompatible links` with suggested fixes showing the co
 
 ## Enforcement
 
-Use `vaultmind lint --fix-links` to bulk-fix all incompatible wikilinks across the vault.
+Use `vaultmind doctor heal wikilinks` to bulk-fix all incompatible wikilinks across the vault.
