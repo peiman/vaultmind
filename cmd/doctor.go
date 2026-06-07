@@ -105,9 +105,13 @@ func writeEmbeddingStatus(w io.Writer, emb *query.DoctorEmbeddings) error {
 }
 
 func runDoctor(cmd *cobra.Command, _ []string) error {
-	vaultPath := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppDoctorVault)
 	jsonOut := getConfigValueWithFlags[bool](cmd, "json", config.KeyAppDoctorJson)
 	summaryOnly := getConfigValueWithFlags[bool](cmd, "summary", config.KeyAppDoctorSummary)
+	if getConfigValueWithFlags[bool](cmd, "all", config.KeyAppDoctorAll) {
+		root := getConfigValueWithFlags[string](cmd, "root", config.KeyAppDoctorRoot)
+		return runDoctorAll(cmd, root, jsonOut, summaryOnly)
+	}
+	vaultPath := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppDoctorVault)
 	return runDoctorCore(cmd, vaultPath, jsonOut, summaryOnly)
 }
 
@@ -118,18 +122,53 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 // `vault status` view, computed via the shared status.go helpers for SSOT),
 // then renders JSON or the human report.
 func runDoctorCore(cmd *cobra.Command, vaultPath string, jsonOut, summaryOnly bool) error {
-	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, "doctor")
+	result, indexHash, err := diagnoseVault(cmd, vaultPath)
 	if err != nil {
 		if errors.Is(err, cmdutil.ErrAlreadyWritten) {
 			return nil
 		}
 		return err
 	}
+
+	if jsonOut {
+		env := envelope.OK("doctor", result)
+		env.Meta.VaultPath = vaultPath
+		env.Meta.IndexHash = indexHash
+		return json.NewEncoder(cmd.OutOrStdout()).Encode(env)
+	}
+	return writeDoctorHuman(cmd.OutOrStdout(), result, summaryOnly)
+}
+
+// diagnoseVault opens vaultPath via OpenVaultDBOrWriteErr (which, under --json,
+// writes a JSON error envelope and returns ErrAlreadyWritten on failure), runs
+// the read-only diagnosis, and returns the populated result plus the vault's
+// index hash. The single-vault path (runDoctorCore) uses this; the multi-vault
+// path opens vaults itself (so one bad vault can't emit a stray error envelope)
+// and shares populateDoctorResult below.
+func diagnoseVault(cmd *cobra.Command, vaultPath string) (*query.DoctorResult, string, error) {
+	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, "doctor")
+	if err != nil {
+		return nil, "", err
+	}
 	defer vdb.Close()
 
+	result, err := populateDoctorResult(vdb, vaultPath)
+	if err != nil {
+		return nil, "", err
+	}
+	return result, vdb.GetIndexHash(), nil
+}
+
+// populateDoctorResult runs the read-only diagnosis against an already-open
+// vault and folds in the per-type breakdown, errors/warnings rollup, and
+// hook-drift detection — the full DoctorResult the cmd layer is responsible for
+// populating. Shared by the single-vault path (diagnoseVault) and the
+// multi-vault path (runDoctorAll) so the diagnosis is computed identically
+// (SSOT).
+func populateDoctorResult(vdb *cmdutil.VaultDB, vaultPath string) (*query.DoctorResult, error) {
 	result, err := query.Doctor(vdb.DB, vaultPath, vdb.Reg)
 	if err != nil {
-		return fmt.Errorf("running doctor: %w", err)
+		return nil, fmt.Errorf("running doctor: %w", err)
 	}
 
 	// Fold in the per-type breakdown + errors/warnings rollup that `vault
@@ -137,7 +176,7 @@ func runDoctorCore(cmd *cobra.Command, vaultPath string, jsonOut, summaryOnly bo
 	// and schema registry live on vdb — the same reason HookDrift is populated
 	// in this layer. Both come from internal/query/status.go (SSOT).
 	if result.Types, err = query.CollectTypeBreakdown(vdb.DB, vdb.Config); err != nil {
-		return fmt.Errorf("collecting type breakdown: %w", err)
+		return nil, fmt.Errorf("collecting type breakdown: %w", err)
 	}
 	// Set IssuesSummary to a non-nil pointer in the cmd path so the JSON
 	// envelope distinguishes "validation ran" (&{...}) from "validation not
@@ -146,7 +185,7 @@ func runDoctorCore(cmd *cobra.Command, vaultPath string, jsonOut, summaryOnly bo
 	// instead of emitting a false-zero {errors:0,warnings:0}.
 	summary, err := query.SummarizeValidationIssues(vdb.DB, vdb.Reg)
 	if err != nil {
-		return fmt.Errorf("summarizing validation issues: %w", err)
+		return nil, fmt.Errorf("summarizing validation issues: %w", err)
 	}
 	result.IssuesSummary = &summary
 
@@ -172,35 +211,36 @@ func runDoctorCore(cmd *cobra.Command, vaultPath string, jsonOut, summaryOnly bo
 		result.Issues.LegacyHooksJSON = hooks.DetectLegacyHooksJSON(projectDir)
 	}
 
-	if jsonOut {
-		env := envelope.OK("doctor", result)
-		env.Meta.VaultPath = vaultPath
-		env.Meta.IndexHash = vdb.GetIndexHash()
-		return json.NewEncoder(cmd.OutOrStdout()).Encode(env)
-	}
-	w := cmd.OutOrStdout()
-	if _, err = fmt.Fprintf(w,
+	return result, nil
+}
+
+// writeDoctorHuman renders a single DoctorResult as the human-readable doctor
+// report. Extracted from runDoctorCore so the multi-vault path (runDoctorAll)
+// renders each vault with the exact same body (SSOT). summaryOnly suppresses
+// the verbose per-link / per-note detail lines.
+func writeDoctorHuman(w io.Writer, result *query.DoctorResult, summaryOnly bool) error {
+	if _, err := fmt.Fprintf(w,
 		"Vault: %s\nNotes: %d (%d domain, %d unstructured)\nUnresolved links: %d\n",
 		result.VaultPath, result.TotalFiles, result.DomainNotes,
 		result.UnstructuredNotes, result.Issues.UnresolvedLinks); err != nil {
 		return err
 	}
-	if err = writeTypeBreakdown(w, result.Types); err != nil {
+	if err := writeTypeBreakdown(w, result.Types); err != nil {
 		return err
 	}
-	if err = writeEmbeddingStatus(w, result.Embeddings); err != nil {
+	if err := writeEmbeddingStatus(w, result.Embeddings); err != nil {
 		return err
 	}
-	if err = writeLinkIssues(w, &result.Issues, summaryOnly); err != nil {
+	if err := writeLinkIssues(w, &result.Issues, summaryOnly); err != nil {
 		return err
 	}
-	if err = writeHookDrift(w, &result.Issues, summaryOnly); err != nil {
+	if err := writeHookDrift(w, &result.Issues, summaryOnly); err != nil {
 		return err
 	}
-	if err = writeLegacyHooksJSON(w, &result.Issues); err != nil {
+	if err := writeLegacyHooksJSON(w, &result.Issues); err != nil {
 		return err
 	}
-	if err = writeStaleIndex(w, &result.Issues, summaryOnly); err != nil {
+	if err := writeStaleIndex(w, &result.Issues, summaryOnly); err != nil {
 		return err
 	}
 	// Errors/warnings rollup — the cold-start signal `vault status` used to
@@ -212,7 +252,7 @@ func runDoctorCore(cmd *cobra.Command, vaultPath string, jsonOut, summaryOnly bo
 		errCount = result.IssuesSummary.Errors
 		warnCount = result.IssuesSummary.Warnings
 	}
-	if _, err = fmt.Fprintf(w, "Issues: %d errors, %d warnings\n", errCount, warnCount); err != nil {
+	if _, err := fmt.Fprintf(w, "Issues: %d errors, %d warnings\n", errCount, warnCount); err != nil {
 		return err
 	}
 	return nil

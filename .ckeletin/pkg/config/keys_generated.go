@@ -55,6 +55,8 @@ const (
 	KeyAppDoctorVault                   = "app.doctor.vault"                    // Path to vault root
 	KeyAppDoctorJson                    = "app.doctor.json"                     // Output in JSON format
 	KeyAppDoctorSummary                 = "app.doctor.summary"                  // Print summary counts only (suppress per-link details)
+	KeyAppDoctorAll                     = "app.doctor.all"                      // Diagnose every vault discovered under --root (multi-vault health)
+	KeyAppDoctorRoot                    = "app.doctor.root"                     // Root directory to discover vaults under when --all is set
 	KeyAppDoctorhealVault               = "app.doctorheal.vault"                // Path to vault root
 	KeyAppDoctorhealJson                = "app.doctorheal.json"                 // Output in JSON format
 	KeyAppDoctorhealDryRun              = "app.doctorheal.dry_run"              // Preview repairs without writing (default applies)

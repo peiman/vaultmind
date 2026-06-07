@@ -116,6 +116,8 @@ components:
       - internal/shellparse/**
       # VaultMind noise-floor relevance primitive (pure: top-hit cosine vs the embedder's noise floor → honest confidence; no business deps):
       - internal/noisefloor/**
+      # VaultMind vault discovery primitive (pure filesystem walk: find vault roots under a dir; no business deps — used by doctor --all):
+      - internal/discovery/**
 
   # -------------------------------------------------------------------------
   # PROJECT-MANAGED: Business Logic Layer
