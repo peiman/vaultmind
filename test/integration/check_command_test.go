@@ -113,6 +113,15 @@ func TestCheckCommand_DepsCategory(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Skipping deps category test on Windows (license tools not available)")
 	}
+	// The dependencies category invokes networked go-licenses checks
+	// (license-source / license-binary) that intermittently time out or throttle
+	// on local runs, flaking the pre-push gate non-deterministically. License
+	// compliance stays fully enforced in CI (GitHub Actions sets CI=true, so this
+	// still runs there) and locally via the deterministic `task check:license:source`
+	// / `task check:license:binary` tasks. This guard only de-flakes the local run.
+	if os.Getenv("CI") == "" {
+		t.Skip("deps category runs networked go-licenses (flaky locally); runs in CI, or use `task check:license:*`")
+	}
 
 	binary := buildDevBinary(t)
 	root := projectRoot(t)
