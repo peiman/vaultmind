@@ -130,6 +130,9 @@ const (
 	KeyAppHooksuninstallJson            = "app.hooksuninstall.json"             // Output in JSON format
 	KeyAppHooksuninstallLocal           = "app.hooksuninstall.local"            // Target .claude/settings.local.json instead of .claude/settings.json.
 	KeyAppHooksuninstallRemovescripts   = "app.hooksuninstall.removescripts"    // Also delete the installed hook scripts under .claude/scripts/ (default: leave...
+	KeyAppIdentityinitSignerKey         = "app.identityinit.signer_key"         // Sealed signer key path (default: XDG data dir)
+	KeyAppIdentitysignFile              = "app.identitysign.file"               // Read entry JSON from this file instead of stdin
+	KeyAppIdentitysignSignerSocket      = "app.identitysign.signer_socket"      // Signer socket path (default: XDG state dir)
 	KeyAppIndexVault                    = "app.index.vault"                     // Path to the vault root directory
 	KeyAppIndexJson                     = "app.index.json"                      // Output in JSON format
 	KeyAppIndexFull                     = "app.index.full"                      // Force full rebuild instead of incremental index
