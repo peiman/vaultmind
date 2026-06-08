@@ -5,12 +5,16 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/peiman/vaultmind/internal/identity"
+	"github.com/peiman/vaultmind/internal/identity/envelope"
+	"github.com/peiman/vaultmind/internal/identity/registry"
 	"github.com/peiman/vaultmind/internal/identity/signer"
 )
 
@@ -207,6 +211,114 @@ func TestInitRefusesOverwrite(t *testing.T) {
 	}
 	if err := Init(&out, keyPath); err == nil {
 		t.Fatal("second Init must refuse to overwrite existing key")
+	}
+}
+
+const testEnvelope = `{"alg_version":1,"body":"hello","from_agent":"mira","key_epoch":1,"nonce":"YWJjZGVmZ2hpamtsbW5vcA==","room":"dev","seq":7,"ts":2000000}`
+
+func mustTime(sec int64) time.Time { return time.Unix(sec, 0) }
+
+// TestSignEnvelopeProducesVerifyingResultKeylessly proves SignEnvelope signs the
+// canonical signed subset through the SignerClient seam (no key file) and emits a
+// {sig, from_pubkey, key_epoch} JSON whose sig verifies under the registry binding.
+func TestSignEnvelopeProducesVerifyingResultKeylessly(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	fake := &fakeSignerClient{priv: priv}
+
+	var out bytes.Buffer
+	if err := SignEnvelope(&out, fake, []byte(testEnvelope), base64.StdEncoding.EncodeToString(pub)); err != nil {
+		t.Fatalf("SignEnvelope: %v", err)
+	}
+
+	var res map[string]any
+	if err := json.Unmarshal(out.Bytes(), &res); err != nil {
+		t.Fatalf("output is not JSON: %v (%q)", err, out.String())
+	}
+	if res[envelope.FieldFromPubKey] != base64.StdEncoding.EncodeToString(pub) {
+		t.Fatalf("from_pubkey hint mismatch: %v", res[envelope.FieldFromPubKey])
+	}
+	sig, err := base64.StdEncoding.DecodeString(res[envelope.FieldSig].(string))
+	if err != nil {
+		t.Fatalf("decode sig: %v", err)
+	}
+
+	// Verify via the registry-backed VerifyEnvelope under a binding for mira@1.
+	pk, err := registry.NewPublicKey(pub)
+	if err != nil {
+		t.Fatalf("NewPublicKey: %v", err)
+	}
+	reg := registry.Registry{
+		Epoch: 1, ValidFrom: 0, ValidUntil: 1 << 40,
+		Agents: []registry.AgentBinding{{
+			Slug: "mira", DisplayName: "Mira", PubKey: pk, KeyEpoch: 1,
+			ValidFrom: 0, ValidUntil: 1 << 40,
+		}},
+	}
+	room := "dev"
+	ok, verr := envelope.VerifyEnvelope(reg, envelope.Fields{
+		AlgVersion: 1, Body: "hello", FromAgent: "mira", KeyEpoch: 1,
+		Nonce: "YWJjZGVmZ2hpamtsbW5vcA==", Room: &room, Seq: 7, TS: 2000000,
+	}, sig, mustTime(2000000))
+	if verr != nil || !ok {
+		t.Fatalf("emitted sig did not verify: ok=%v err=%v", ok, verr)
+	}
+}
+
+// TestSignEnvelopeRejectsGateViolation: a downgraded alg_version is rejected and
+// the signer is never called; nothing is printed.
+func TestSignEnvelopeRejectsGateViolation(t *testing.T) {
+	fake := &fakeSignerClient{}
+	var out bytes.Buffer
+	bad := `{"alg_version":2,"body":"hi","from_agent":"mira","key_epoch":1,"nonce":"abc","room":"dev","seq":1,"ts":1}`
+	if err := SignEnvelope(&out, fake, []byte(bad), ""); err == nil {
+		t.Fatal("expected gate rejection, got nil")
+	}
+	if fake.gotCanonical != nil {
+		t.Fatal("signer was called for a gate-violating envelope")
+	}
+	if out.Len() != 0 {
+		t.Fatalf("gate reject must print nothing, got %q", out.String())
+	}
+}
+
+// TestSignEnvelopeRejectsUnknownField: a smuggled extra key fails closed.
+func TestSignEnvelopeRejectsUnknownField(t *testing.T) {
+	fake := &fakeSignerClient{}
+	var out bytes.Buffer
+	bad := `{"alg_version":1,"body":"hi","from_agent":"mira","key_epoch":1,"nonce":"abc","room":"dev","seq":1,"ts":1,"evil":true}`
+	if err := SignEnvelope(&out, fake, []byte(bad), ""); err == nil {
+		t.Fatal("expected unknown-field rejection, got nil")
+	}
+	if out.Len() != 0 {
+		t.Fatalf("parse reject must print nothing, got %q", out.String())
+	}
+}
+
+// TestSignEnvelopeFailsClosedOnSignerError: a signer error surfaces, no output.
+func TestSignEnvelopeFailsClosedOnSignerError(t *testing.T) {
+	fake := &fakeSignerClient{failErr: sentinelErr("signer unreachable")}
+	var out bytes.Buffer
+	if err := SignEnvelope(&out, fake, []byte(testEnvelope), ""); err == nil {
+		t.Fatal("expected fail-closed error, got nil")
+	}
+	if out.Len() != 0 {
+		t.Fatalf("fail-closed must print nothing, got %q", out.String())
+	}
+}
+
+// TestSignEnvelopeRejectsBadFromPubKey: a malformed from_pubkey hint is rejected
+// before signing.
+func TestSignEnvelopeRejectsBadFromPubKey(t *testing.T) {
+	fake := &fakeSignerClient{}
+	var out bytes.Buffer
+	if err := SignEnvelope(&out, fake, []byte(testEnvelope), "not-base64!!!"); err == nil {
+		t.Fatal("expected bad-from_pubkey rejection, got nil")
+	}
+	if fake.gotCanonical != nil {
+		t.Fatal("signer was called despite a bad from_pubkey")
 	}
 }
 
