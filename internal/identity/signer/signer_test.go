@@ -1,9 +1,13 @@
 package signer
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/binary"
 	"errors"
+	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -245,6 +249,183 @@ func TestWriteFrameRejectsOversizePayload(t *testing.T) {
 	// A nil conn is fine: the size check fires before any write.
 	if err := writeFrame(nil, make([]byte, maxRequestBytes+1)); err == nil {
 		t.Fatal("expected error for oversize frame")
+	}
+}
+
+// startRawServer stands up a raw Unix-domain listener whose single accepted
+// connection is driven by handler. It returns the socket path. It exists so the
+// client can be tested against DELIBERATELY MALFORMED server responses that a
+// well-behaved signer would never produce.
+func startRawServer(t *testing.T, handler func(net.Conn)) string {
+	t.Helper()
+	sockPath := shortSocketPath(t)
+	ln, err := net.Listen(network, sockPath)
+	if err != nil {
+		t.Fatalf("raw listen: %v", err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer func() { _ = conn.Close() }()
+		handler(conn)
+	}()
+	return sockPath
+}
+
+// assertSignFailsClosed asserts client.Sign returns a non-nil error AND never a
+// nil-error-with-a-signature — the load-bearing fail-closed contract.
+func assertSignFailsClosed(t *testing.T, sockPath string) {
+	t.Helper()
+	client := &Client{SocketPath: sockPath}
+	sig, err := client.Sign([]byte(`{"agent":"mira","epoch":1}`))
+	if err == nil {
+		t.Fatalf("expected fail-closed error, got nil (sig=%x)", sig)
+	}
+	if sig != nil {
+		t.Fatalf("fail-closed path returned a non-nil signature: %x", sig)
+	}
+}
+
+// TestClientFailsClosedOnEmptySocketPath asserts a Client with no SocketPath
+// fails closed (non-nil error, nil signature) rather than dialing an empty
+// address — a misconfiguration must never silently produce no signature.
+func TestClientFailsClosedOnEmptySocketPath(t *testing.T) {
+	client := &Client{}
+	sig, err := client.Sign([]byte(`{"agent":"mira","epoch":1}`))
+	if err == nil {
+		t.Fatalf("expected error for empty SocketPath, got nil (sig=%x)", sig)
+	}
+	if sig != nil {
+		t.Fatalf("empty-SocketPath path returned a signature: %x", sig)
+	}
+}
+
+// TestClientFailsClosedOnMalformedServer drives client.Sign against servers that
+// violate the wire protocol. In every case Sign must FAIL CLOSED — these cover
+// the read-status / readFrame / response-parse error branches in client.Sign.
+func TestClientFailsClosedOnMalformedServer(t *testing.T) {
+	tests := []struct {
+		name    string
+		handler func(net.Conn)
+	}{
+		{
+			// Closes immediately after reading nothing: the client's read of the
+			// 1-byte response status hits EOF.
+			name:    "closes before any response",
+			handler: func(conn net.Conn) { _ = conn.Close() },
+		},
+		{
+			// Sends the status byte, then announces an oversize response frame
+			// (> maxRequestBytes): readFrame must reject before allocating.
+			name: "oversize response length prefix",
+			handler: func(conn net.Conn) {
+				_, _ = conn.Write([]byte{respOK})
+				var hdr [frameHeaderLen]byte
+				binary.BigEndian.PutUint32(hdr[:], maxRequestBytes+1)
+				_, _ = conn.Write(hdr[:])
+			},
+		},
+		{
+			// Sends status + a header claiming N bytes, then closes early: the
+			// client's readFrame payload read hits EOF (truncated frame).
+			name: "announces bytes then closes early",
+			handler: func(conn net.Conn) {
+				_, _ = conn.Write([]byte{respOK})
+				var hdr [frameHeaderLen]byte
+				binary.BigEndian.PutUint32(hdr[:], 64)
+				_, _ = conn.Write(hdr[:])
+				_, _ = conn.Write([]byte("short"))
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			sockPath := startRawServer(t, tc.handler)
+			assertSignFailsClosed(t, sockPath)
+		})
+	}
+}
+
+// TestSignerRejectsOversizeRequestOnLiveConn connects raw to a STARTED signer
+// and writes a request header announcing 0xFFFFFFFF bytes. The signer's
+// read-side readFrame must reject it (n > maxRequestBytes) and reply with a
+// respErr frame — no OOM, no hang, no signature.
+func TestSignerRejectsOversizeRequestOnLiveConn(t *testing.T) {
+	keyPath, _ := newKeyFile(t)
+	_, sockPath := startSigner(t, keyPath, []uint32{uint32(os.Getuid())})
+
+	conn, err := net.Dial(network, sockPath)
+	if err != nil {
+		t.Fatalf("dial signer: %v", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	var hdr [frameHeaderLen]byte
+	binary.BigEndian.PutUint32(hdr[:], 0xFFFFFFFF)
+	if _, err := conn.Write(hdr[:]); err != nil {
+		t.Fatalf("write oversize header: %v", err)
+	}
+
+	// Read the response: a respErr status byte, then a framed error message.
+	status := make([]byte, 1)
+	if _, err := io.ReadFull(conn, status); err != nil {
+		t.Fatalf("read response status: %v", err)
+	}
+	if status[0] != respErr {
+		t.Fatalf("status = %#x, want respErr (%#x)", status[0], respErr)
+	}
+	payload, err := readFrame(conn)
+	if err != nil {
+		t.Fatalf("read error frame: %v", err)
+	}
+	if !bytes.Contains(payload, []byte(errFrameTooLarge)) {
+		t.Fatalf("error frame %q does not mention oversize rejection", string(payload))
+	}
+}
+
+// TestPolicyHookReceivesCanonicalBytesAndPermissiveSigns asserts two contracts:
+//  1. the bytes handed to the Policy hook are EXACTLY the canonical request
+//     bytes (so a real policy inspects what is actually signed), and
+//  2. a permissive policy (returns nil) still produces a verifying signature.
+func TestPolicyHookReceivesCanonicalBytesAndPermissiveSigns(t *testing.T) {
+	keyPath, pub := newKeyFile(t)
+	cb := canonicalBytes(t)
+
+	var seen []byte
+	sockPath := shortSocketPath(t)
+	s, err := New(Config{
+		KeyPath:     keyPath,
+		SocketPath:  sockPath,
+		AllowedUIDs: []uint32{uint32(os.Getuid())},
+		Policy: func(b []byte) error {
+			seen = append([]byte(nil), b...)
+			return nil // permissive: must still sign
+		},
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := s.Listen(); err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	go func() { _ = s.Serve() }()
+	t.Cleanup(func() { _ = s.Close() })
+
+	client := &Client{SocketPath: sockPath}
+	sig, err := client.Sign(cb.Bytes())
+	if err != nil {
+		t.Fatalf("client.Sign with permissive policy: %v", err)
+	}
+
+	if !bytes.Equal(seen, cb.Bytes()) {
+		t.Fatalf("policy saw %q, want canonical request bytes %q", seen, cb.Bytes())
+	}
+	ok, err := identity.VerifyCanonical(pub, cb, sig)
+	if err != nil || !ok {
+		t.Fatalf("permissive-policy signature did not verify: ok=%v err=%v", ok, err)
 	}
 }
 
