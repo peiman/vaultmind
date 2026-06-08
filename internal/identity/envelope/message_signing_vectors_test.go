@@ -45,13 +45,13 @@ type msgFixture struct {
 // and the convenience from_pubkey hint. room/to_agent are omitempty pointers so
 // the absent one is OMITTED (never null) — mirroring the canonical contract.
 type wireFields struct {
-	AlgVersion int     `json:"alg_version"`
+	AlgVersion int64   `json:"alg_version"`
 	Body       string  `json:"body"`
 	FromAgent  string  `json:"from_agent"`
-	KeyEpoch   int     `json:"key_epoch"`
+	KeyEpoch   int64   `json:"key_epoch"`
 	Nonce      string  `json:"nonce"`
 	Room       *string `json:"room,omitempty"`
-	Seq        int     `json:"seq"`
+	Seq        int64   `json:"seq"`
 	ToAgent    *string `json:"to_agent,omitempty"`
 	TS         int64   `json:"ts"`
 	// Sig is base64-std of the ed25519 signature over the canonical signed subset.
@@ -196,12 +196,12 @@ func buildMsgFixture(t *testing.T) msgFixture {
 
 	// 4. epoch_above_2pow53: key_epoch above the JCS-safe ceiling.
 	eak := base
-	eak.KeyEpoch = int(MaxSafeInt) + 1
+	eak.KeyEpoch = MaxSafeInt + 1
 	add("key_epoch_above_2pow53", "key_epoch above 2^53 (JCS-unsafe; typed reject)", rawWire(eak, agentPub))
 
 	// 4b. seq above 2^53 (the other integer-range branch).
 	eas := base
-	eas.Seq = int(MaxSafeInt) + 1
+	eas.Seq = MaxSafeInt + 1
 	add("seq_above_2pow53", "seq above 2^53 (JCS-unsafe; typed reject)", rawWire(eas, agentPub))
 
 	// 5. non_nfc_body: a non-NFC body is rejected (no silent normalization).

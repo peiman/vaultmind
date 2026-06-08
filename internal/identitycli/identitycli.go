@@ -98,13 +98,17 @@ const (
 // from_pubkey, …) are NOT read here — they are not part of the signed subset and
 // are stamped by the caller after signing.
 type wireEnvelope struct {
-	AlgVersion int     `json:"alg_version"`
+	// alg_version/key_epoch/seq/ts decode as int64 so the envelope's [0, 2^53] gate
+	// is the single authority for range (and behaves identically on 32/64-bit). A
+	// plain int would JSON-parse-error a >2^31 value on a 32-bit build before the
+	// gate ever ran — the parity trap the signed contract forbids.
+	AlgVersion int64   `json:"alg_version"`
 	Body       string  `json:"body"`
 	FromAgent  string  `json:"from_agent"`
-	KeyEpoch   int     `json:"key_epoch"`
+	KeyEpoch   int64   `json:"key_epoch"`
 	Nonce      string  `json:"nonce"`
 	Room       *string `json:"room"`
-	Seq        int     `json:"seq"`
+	Seq        int64   `json:"seq"`
 	ToAgent    *string `json:"to_agent"`
 	TS         int64   `json:"ts"`
 }

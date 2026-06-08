@@ -86,16 +86,22 @@ const (
 // fields (id, sig, from_pubkey, receive_ts, ioguard_verdict, origin_daemon) are
 // deliberately NOT modeled here — they are excluded from the signed subset.
 type Fields struct {
-	AlgVersion int
+	// AlgVersion, KeyEpoch, Seq, TS are int64 (NOT int) ON PURPOSE: the signed
+	// numerics are JCS/IEEE-754 bounded to [0, 2^53], and that gate must be the
+	// single, platform-independent authority. With a plain int these would parse
+	// differently on a 32-bit build (a valid >2^31 value would hit a JSON parse
+	// error instead of the typed range gate), breaking Go<->Rust parity — the same
+	// class of bug as the slice-3 epoch precision hole.
+	AlgVersion int64
 	Body       string
 	FromAgent  string
-	KeyEpoch   int
+	KeyEpoch   int64
 	Nonce      string
 	// Room and ToAgent: exactly one non-nil. The signed subset emits whichever is
 	// present and OMITS the other.
 	Room    *string
 	ToAgent *string
-	Seq     int
+	Seq     int64
 	TS      int64
 }
 
@@ -108,7 +114,7 @@ type SignResult struct {
 	// FromPubKey is base64-std of the signer's ed25519 public key (hint only).
 	FromPubKey string
 	// KeyEpoch echoes the signed key_epoch the caller stamps alongside sig.
-	KeyEpoch int
+	KeyEpoch int64
 }
 
 // SignerClient is the minimal KEYLESS seam SignEnvelope needs: hand it canonical
@@ -158,10 +164,10 @@ func checkGates(f Fields) error {
 		return fmt.Errorf("%s", ErrAlgVersion)
 	}
 	// Integer ranges. alg_version, seq, ts in [0, 2^53]; key_epoch in [1, 2^53].
-	if !intInRange(int64(f.AlgVersion), 0) || !intInRange(int64(f.Seq), 0) || !intInRange(f.TS, 0) {
+	if !intInRange(f.AlgVersion, 0) || !intInRange(f.Seq, 0) || !intInRange(f.TS, 0) {
 		return fmt.Errorf("%s", ErrIntRange)
 	}
-	if !intInRange(int64(f.KeyEpoch), MinKeyEpoch) {
+	if !intInRange(f.KeyEpoch, MinKeyEpoch) {
 		return fmt.Errorf("%s", ErrKeyEpochRange)
 	}
 	return checkBodyNonceRouting(f)
@@ -250,5 +256,8 @@ func VerifyEnvelope(reg registry.Registry, fields Fields, sig []byte, now time.T
 	if len(sig) != ed25519.SignatureSize {
 		return false, fmt.Errorf("%s", errSigBadLen)
 	}
-	return registry.VerifyMessage(reg, fields.FromAgent, fields.KeyEpoch, canonical, sig, now)
+	// key_epoch is already gate-bounded to [1, 2^53] above, so the int64->int
+	// narrowing at the registry boundary is lossless on this project's 64-bit
+	// targets. (The registry layer's own int width is tracked separately.)
+	return registry.VerifyMessage(reg, fields.FromAgent, int(fields.KeyEpoch), canonical, sig, now)
 }

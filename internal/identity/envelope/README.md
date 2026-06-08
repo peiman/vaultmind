@@ -32,6 +32,13 @@ is never trusted as the verification key.
 **Excluded from the signed bytes** (transport / receiver-stamped metadata):
 `id`, `sig`, `from_pubkey`, `receive_ts`, `ioguard_verdict`, `origin_daemon`.
 
+### Encodings (pinned for cross-language parity)
+
+`sig`, `from_pubkey`, and the registry's `pubkey` / `root_sig` are **base64
+standard alphabet with padding** (RFC 4648 §4 — `+`/`/`, `=` padding; *not*
+URL-safe, *not* unpadded). The Rust side MUST decode with the standard,
+padded alphabet or signatures and keys fail to round-trip.
+
 ## Gates (enforced pre-sign, re-surfaced at verify)
 
 All are typed rejects — values are never silently coerced or normalized:

@@ -81,7 +81,7 @@ func TestSignThenVerify_RoundTrips(t *testing.T) {
 
 	res, err := SignEnvelope(fake, f, pub)
 	require.NoError(t, err)
-	assert.Equal(t, 1, res.KeyEpoch)
+	assert.Equal(t, int64(1), res.KeyEpoch)
 	assert.NotEmpty(t, res.Sig)
 	assert.NotEmpty(t, res.FromPubKey)
 
@@ -162,9 +162,9 @@ func TestGates_Reject(t *testing.T) {
 		{"alg_version_zero", func(f *Fields) { f.AlgVersion = 0 }, ErrAlgVersion},
 		{"key_epoch_zero", func(f *Fields) { f.KeyEpoch = 0 }, ErrKeyEpochRange},
 		{"key_epoch_negative", func(f *Fields) { f.KeyEpoch = -1 }, ErrKeyEpochRange},
-		{"key_epoch_above_2pow53", func(f *Fields) { f.KeyEpoch = int(MaxSafeInt) + 1 }, ErrKeyEpochRange},
+		{"key_epoch_above_2pow53", func(f *Fields) { f.KeyEpoch = MaxSafeInt + 1 }, ErrKeyEpochRange},
 		{"seq_negative", func(f *Fields) { f.Seq = -1 }, ErrIntRange},
-		{"seq_above_2pow53", func(f *Fields) { f.Seq = int(MaxSafeInt) + 1 }, ErrIntRange},
+		{"seq_above_2pow53", func(f *Fields) { f.Seq = MaxSafeInt + 1 }, ErrIntRange},
 		{"ts_negative", func(f *Fields) { f.TS = -1 }, ErrIntRange},
 		{"ts_above_2pow53", func(f *Fields) { f.TS = MaxSafeInt + 1 }, ErrIntRange},
 		{"non_nfc_body", func(f *Fields) { f.Body = "é" }, ErrBodyNotNFC},
