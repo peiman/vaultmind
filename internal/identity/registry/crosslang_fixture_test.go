@@ -216,7 +216,7 @@ func buildFixture(t *testing.T) crossLangFixture {
 	// SignRegistry/NewPublicKey reject small-order keys; mutate the canonical
 	// bytes, re-sign with the root, then the agent-key validation (fromWire)
 	// rejects at load.
-	rejects = append(rejects, genSmallOrderAgent(t, rootPriv, rootPub, baseReg, smallPub))
+	rejects = append(rejects, genSmallOrderAgent(t, rootPriv, baseReg, smallPub))
 
 	// 3. Future valid_from at REGISTRY level.
 	futureReg := baseReg
@@ -336,7 +336,7 @@ func hexNibble(c byte) (byte, error) {
 // genSmallOrderAgent crafts an envelope whose binding carries a small-order
 // agent pubkey, re-signed by the legitimate root so root_sig verifies but the
 // agent-key validation (fromWire) rejects at load.
-func genSmallOrderAgent(t *testing.T, rootPriv ed25519.PrivateKey, rootPub ed25519.PublicKey, base Registry, smallPub ed25519.PublicKey) rejectCase {
+func genSmallOrderAgent(t *testing.T, rootPriv ed25519.PrivateKey, base Registry, smallPub ed25519.PublicKey) rejectCase {
 	t.Helper()
 	// Build the wire registry directly, inject the small-order pubkey, canonicalize,
 	// and sign with the real root key.
@@ -351,7 +351,6 @@ func genSmallOrderAgent(t *testing.T, rootPriv ed25519.PrivateKey, rootPub ed255
 	env := SignedRegistry{Registry: canonical.Bytes(), RootSig: sig, RootKeyEpoch: 0}
 	out, err := MarshalDistribution(env)
 	require.NoError(t, err)
-	_ = rootPub
 	return rejectCase{
 		Name: "small_order_agent_pubkey", Reason: "binding agent pubkey is small-order; load rejects the binding",
 		Expect: "reject", Envelope: out,
@@ -385,6 +384,28 @@ func TestGenerate_CrossLanguageFixture(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Dir(fixturePath), 0o755))
 	require.NoError(t, os.WriteFile(fixturePath, out, 0o644))
 	t.Logf("wrote %s (%d bytes, %d reject cases)", fixturePath, len(out), len(fx.Reject))
+}
+
+// TestCrossLanguageFixture_MatchesGenerator is a CI-guard that fails if the
+// committed testdata/cross_language_vectors.json diverges byte-for-byte from
+// what buildFixture() + json.MarshalIndent currently generates. If this test
+// fails, regenerate with: go test ./internal/identity/registry/ -run
+// TestGenerate_CrossLanguageFixture -update
+func TestCrossLanguageFixture_MatchesGenerator(t *testing.T) {
+	if *updateFixture {
+		t.Skip("skipping match check during -update regeneration")
+	}
+	committed, err := os.ReadFile(fixturePath)
+	require.NoError(t, err, "committed fixture must exist; run with -update to generate it")
+
+	fx := buildFixture(t)
+	generated, err := json.MarshalIndent(fx, "", "  ")
+	require.NoError(t, err)
+	generated = append(generated, '\n')
+
+	assert.Equal(t, string(committed), string(generated),
+		"committed fixture diverges from generator output — regenerate with: "+
+			"go test ./internal/identity/registry/ -run TestGenerate_CrossLanguageFixture -update")
 }
 
 // TestCrossLanguageFixture_ValidLoadsAndVerifies proves, against the COMMITTED

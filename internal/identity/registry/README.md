@@ -16,8 +16,8 @@ A distributed `SignedRegistry` is a single JSON object:
 ```json
 {
   "registry": "<base64-std of the JCS-canonical registry bytes>",
-  "root_sig": "<base64-std of the 64-byte ed25519 root signature>",
-  "root_key_epoch": 0
+  "root_key_epoch": 0,
+  "root_sig": "<base64-std of the 64-byte ed25519 root signature>"
 }
 ```
 
@@ -41,9 +41,11 @@ partial value that could be mistaken for valid) on any malformed input:
 
 - non-JSON / malformed JSON,
 - an unknown/extra field (strict decoding — no silent drop of a smuggled key),
+- trailing bytes after the envelope object (concatenated-object or garbage defense),
 - a missing or empty `registry` or `root_sig`,
 - a `registry` or `root_sig` that is not valid base64-std,
-- a `root_sig` that does not decode to 64 bytes.
+- a `root_sig` that does not decode to 64 bytes,
+- a negative `root_key_epoch` (key epochs are non-negative; a negative value is structurally invalid).
 
 It never panics. It does **not** verify the root signature, freshness, or
 anti-rollback — those are `VerifyAndLoad`'s job.

@@ -238,6 +238,40 @@ func TestParseDistribution_ThenVerifyAndLoad(t *testing.T) {
 	assert.Equal(t, 5, newHighest)
 }
 
+// TestParseDistribution_FailsClosed_NegativeRootKeyEpoch: a negative
+// root_key_epoch is structurally invalid and must be rejected fail-closed.
+func TestParseDistribution_FailsClosed_NegativeRootKeyEpoch(t *testing.T) {
+	goodReg := base64.StdEncoding.EncodeToString([]byte(`{}`))
+	goodSig := base64.StdEncoding.EncodeToString(make([]byte, ed25519.SignatureSize))
+	body := `{"registry":"` + goodReg + `","root_sig":"` + goodSig + `","root_key_epoch":-1}`
+	got, err := ParseDistribution([]byte(body))
+	require.Error(t, err, "negative root_key_epoch must fail closed")
+	assert.ErrorContains(t, err, ErrDistBadRootKeyEpoch)
+	assert.Equal(t, SignedRegistry{}, got)
+}
+
+// TestParseDistribution_FailsClosed_TrailingData: bytes after the envelope
+// object must be rejected fail-closed (concatenated JSON objects and garbage
+// alike are structural smuggling vectors).
+func TestParseDistribution_FailsClosed_TrailingData(t *testing.T) {
+	goodReg := base64.StdEncoding.EncodeToString([]byte(`{}`))
+	goodSig := base64.StdEncoding.EncodeToString(make([]byte, ed25519.SignatureSize))
+	base := `{"registry":"` + goodReg + `","root_sig":"` + goodSig + `","root_key_epoch":0}`
+
+	cases := map[string]string{
+		"concatenated object":   base + `{"x":1}`,
+		"trailing garbage":      base + `<junk>`,
+		"trailing newline+junk": base + "\nextra",
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			got, err := ParseDistribution([]byte(body))
+			require.Error(t, err, "trailing data after envelope must fail closed")
+			assert.Equal(t, SignedRegistry{}, got)
+		})
+	}
+}
+
 // TestParseDistribution_NotDoubleEncoded ensures MarshalDistribution does not
 // accidentally JSON-quote the canonical registry inside the base64 (the bytes
 // must be the EXACT root-signed bytes, not re-marshaled).

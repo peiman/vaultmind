@@ -41,6 +41,12 @@ const (
 	// ed25519.SignatureSize bytes (fail closed before the verify path ever sees a
 	// malformed signature).
 	ErrDistBadSigLen = "registry: distribution root_sig must be ed25519.SignatureSize bytes"
+	// ErrDistBadRootKeyEpoch is returned when root_key_epoch is negative (key
+	// epochs are non-negative; a negative value is structurally invalid).
+	ErrDistBadRootKeyEpoch = "registry: distribution root_key_epoch must be non-negative"
+	// ErrDistTrailingData is returned when bytes remain in the input after the
+	// envelope object (a trailing-data smuggling defense).
+	ErrDistTrailingData = "registry: distribution envelope has trailing data after the JSON object"
 )
 
 // MarshalDistribution serializes a SignedRegistry to the distribution-envelope
@@ -78,6 +84,10 @@ func ParseDistribution(data []byte) (SignedRegistry, error) {
 	if err := dec.Decode(&raw); err != nil {
 		return SignedRegistry{}, fmt.Errorf("%s: %w", ErrDistUnmarshal, err)
 	}
+	// Reject trailing data: bytes after the envelope object are a smuggling vector.
+	if dec.More() {
+		return SignedRegistry{}, fmt.Errorf("%s", ErrDistTrailingData)
+	}
 	// Reject any unknown field: a smuggled extra key must not be silently dropped.
 	for k := range raw {
 		if k != fieldDistRegistry && k != fieldDistRootSig && k != fieldDistRootKeyEpoch {
@@ -97,6 +107,9 @@ func ParseDistribution(data []byte) (SignedRegistry, error) {
 	if rkeRaw, ok := raw[fieldDistRootKeyEpoch]; ok {
 		if err := json.Unmarshal(rkeRaw, &rootKeyEpoch); err != nil {
 			return SignedRegistry{}, fmt.Errorf("%s: %s: %w", ErrDistUnmarshal, fieldDistRootKeyEpoch, err)
+		}
+		if rootKeyEpoch < 0 {
+			return SignedRegistry{}, fmt.Errorf("%s", ErrDistBadRootKeyEpoch)
 		}
 	}
 

@@ -5,8 +5,8 @@
   "valid": {
     "envelope": {
       "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSDirZAiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6IlZSVlBRZ1plcGFHK29GUmpnbXZpYUU2NUxma3NFQUFucXJxdVY4cFZRZ2M9Iiwic2x1ZyI6Im1pcmEiLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJlcG9jaCI6MTAsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
-      "root_sig": "7mp/FjRH2QivUFgEFrJQx0PylKRhXBIkC4vawJq97Z/5C4BIpgvPM+WJJm9c9wAC9zdnAd0JpvPwC8EKj1QaAQ==",
-      "root_key_epoch": 0
+      "root_key_epoch": 0,
+      "root_sig": "7mp/FjRH2QivUFgEFrJQx0PylKRhXBIkC4vawJq97Z/5C4BIpgvPM+WJJm9c9wAC9zdnAd0JpvPwC8EKj1QaAQ=="
     },
     "persisted_highest_epoch": 9,
     "expect_slug": "mira",
@@ -26,8 +26,8 @@
       "expect": "reject",
       "envelope": {
         "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSDirZAiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6IlZSVlBRZ1plcGFHK29GUmpnbXZpYUU2NUxma3NFQUFucXJxdVY4cFZRZ2M9Iiwic2x1ZyI6Im1pcmEiLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJlcG9jaCI6MTAsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
-        "root_sig": "7mp/FjRH2QivUFgEFrJQx0PylKRhXBIkC4vawJq97Z/5C4BIpgvPM+WJJm9c9wAC9zdnAd0JpvPwC8EKj1QaAQ==",
-        "root_key_epoch": 0
+        "root_key_epoch": 0,
+        "root_sig": "7mp/FjRH2QivUFgEFrJQx0PylKRhXBIkC4vawJq97Z/5C4BIpgvPM+WJJm9c9wAC9zdnAd0JpvPwC8EKj1QaAQ=="
       },
       "root_pubkey": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
     },
@@ -37,8 +37,8 @@
       "expect": "reject",
       "envelope": {
         "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSDirZAiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6IkFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE9Iiwic2x1ZyI6Im1pcmEiLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJlcG9jaCI6MTAsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
-        "root_sig": "A+qP/1UDlO8oOfscebaBcRJKf7vuII2si9GrBeV31Xg3st1bQjBkudVQUiOlBL0cKZWrFjE9FB7dCcXdOovXAg==",
-        "root_key_epoch": 0
+        "root_key_epoch": 0,
+        "root_sig": "A+qP/1UDlO8oOfscebaBcRJKf7vuII2si9GrBeV31Xg3st1bQjBkudVQUiOlBL0cKZWrFjE9FB7dCcXdOovXAg=="
       }
     },
     {
@@ -47,8 +47,8 @@
       "expect": "reject",
       "envelope": {
         "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSDirZAiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6IlZSVlBRZ1plcGFHK29GUmpnbXZpYUU2NUxma3NFQUFucXJxdVY4cFZRZ2M9Iiwic2x1ZyI6Im1pcmEiLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJlcG9jaCI6MTAsInZhbGlkX2Zyb20iOjIxMDAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
-        "root_sig": "fbIyMQ0oxB/uuB2q3tvJ+IRdHGqEUfanLtfcdNy3Kmj8Z0Pr8RDeKAEPo4g/bj2+pV9HeLoZVfFqOjUREEb2Dw==",
-        "root_key_epoch": 0
+        "root_key_epoch": 0,
+        "root_sig": "fbIyMQ0oxB/uuB2q3tvJ+IRdHGqEUfanLtfcdNy3Kmj8Z0Pr8RDeKAEPo4g/bj2+pV9HeLoZVfFqOjUREEb2Dw=="
       }
     },
     {
@@ -57,8 +57,8 @@
       "expect": "reject",
       "envelope": {
         "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSDirZAiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6IlZSVlBRZ1plcGFHK29GUmpnbXZpYUU2NUxma3NFQUFucXJxdVY4cFZRZ2M9Iiwic2x1ZyI6Im1pcmEiLCJ2YWxpZF9mcm9tIjoyMTAwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJlcG9jaCI6MTAsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
-        "root_sig": "BkOROB2xKQqZE91vle/mDHXHQeQQ9LfQ3ff0r6jnJ4Iv223qDYPCqDA+74Cyk+q8vlVpP8K61yv0RnihjKFaBA==",
-        "root_key_epoch": 0
+        "root_key_epoch": 0,
+        "root_sig": "BkOROB2xKQqZE91vle/mDHXHQeQQ9LfQ3ff0r6jnJ4Iv223qDYPCqDA+74Cyk+q8vlVpP8K61yv0RnihjKFaBA=="
       },
       "message": {
         "slug": "mira",
@@ -73,8 +73,8 @@
       "expect": "reject",
       "envelope": {
         "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSDirZAiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6IlZSVlBRZ1plcGFHK29GUmpnbXZpYUU2NUxma3NFQUFucXJxdVY4cFZRZ2M9Iiwic2x1ZyI6Im1pcmEiLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJlcG9jaCI6MTAsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
-        "root_sig": "7mp/FjRH2QivUFgEFrJQx0PylKRhXBIkC4vawJq97Z/5C4BIpgvPM+WJJm9c9wAC9zdnAd0JpvPwC8EKj1QaAQ==",
-        "root_key_epoch": 0
+        "root_key_epoch": 0,
+        "root_sig": "7mp/FjRH2QivUFgEFrJQx0PylKRhXBIkC4vawJq97Z/5C4BIpgvPM+WJJm9c9wAC9zdnAd0JpvPwC8EKj1QaAQ=="
       },
       "persisted_highest_epoch": 10
     },
@@ -84,8 +84,8 @@
       "expect": "reject",
       "envelope": {
         "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSDirZAiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6IlZSVlBRZ1plcGFHK29GUmpnbXZpYUU2NUxma3NFQUFucXJxdVY4cFZRZ2M9Iiwic2x1ZyI6Im1pcmEiLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJlcG9jaCI6MTAsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
-        "root_sig": "7mp/FjRH2QivUFgEFrJQx0PylKRhXBIkC4vawJq97Z/5C4BIpgvPM+WJJm9c9wAC9zdnAd0JpvPwC8EKj1QaAQ==",
-        "root_key_epoch": 0
+        "root_key_epoch": 0,
+        "root_sig": "7mp/FjRH2QivUFgEFrJQx0PylKRhXBIkC4vawJq97Z/5C4BIpgvPM+WJJm9c9wAC9zdnAd0JpvPwC8EKj1QaAQ=="
       },
       "now": 3000001
     },
@@ -95,8 +95,8 @@
       "expect": "reject",
       "envelope": {
         "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSDirZAiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6IlZSVlBRZ1plcGFHK29GUmpnbXZpYUU2NUxma3NFQUFucXJxdVY4cFZRZ2M9Iiwic2x1ZyI6Im1pcmEiLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJlcG9jaCI6MTAsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
-        "root_sig": "7mp/FjRH2QivUFgEFrJQx0PylKRhXBIkC4vawJq97Z/5C4BIpgvPM+WJJm9c9wAC9zdnAd0JpvPwC8EKj1QaAQ==",
-        "root_key_epoch": 0
+        "root_key_epoch": 0,
+        "root_sig": "7mp/FjRH2QivUFgEFrJQx0PylKRhXBIkC4vawJq97Z/5C4BIpgvPM+WJJm9c9wAC9zdnAd0JpvPwC8EKj1QaAQ=="
       },
       "now": 2076401
     },
@@ -106,8 +106,8 @@
       "expect": "reject",
       "envelope": {
         "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSDirZAiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6IlZSVlBRZ1plcGFHK29GUmpnbXZpYUU2NUxma3NFQUFucXJxdVY4cFZRZ2M9IiwicmV2b2tlZF9hdCI6MTk5MTAwMCwic2x1ZyI6Im1pcmEiLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJlcG9jaCI6MTAsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
-        "root_sig": "t0r+3vJYbVwRXpzmqJ9hlHgzlQUU/avA8iV/ukA1lm0dDaN01OS//C2TWgCx8fdbqrDPjYREKky0cjDYTnwKDQ==",
-        "root_key_epoch": 0
+        "root_key_epoch": 0,
+        "root_sig": "t0r+3vJYbVwRXpzmqJ9hlHgzlQUU/avA8iV/ukA1lm0dDaN01OS//C2TWgCx8fdbqrDPjYREKky0cjDYTnwKDQ=="
       },
       "message": {
         "slug": "mira",
@@ -122,8 +122,8 @@
       "expect": "reject",
       "envelope": {
         "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSDirZAiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6IlZSVlBRZ1plcGFHK29GUmpnbXZpYUU2NUxma3O6QUFucXJxdVY4cFZRZ2M9Iiwic2x1ZyI6Im1pcmEiLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJlcG9jaCI6MTAsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
-        "root_sig": "7mp/FjRH2QivUFgEFrJQx0PylKRhXBIkC4vawJq97Z/5C4BIpgvPM+WJJm9c9wAC9zdnAd0JpvPwC8EKj1QaAQ==",
-        "root_key_epoch": 0
+        "root_key_epoch": 0,
+        "root_sig": "7mp/FjRH2QivUFgEFrJQx0PylKRhXBIkC4vawJq97Z/5C4BIpgvPM+WJJm9c9wAC9zdnAd0JpvPwC8EKj1QaAQ=="
       }
     },
     {
@@ -132,8 +132,8 @@
       "expect": "reject",
       "envelope": {
         "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSDirZAiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6IlZSVlBRZ1plcGFHK29GUmpnbXZpYUU2NUxma3NFQUFucXJxdVY4cFZRZ2M9Iiwic2x1ZyI6Im1pcmEiLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJlcG9jaCI6MTAsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
-        "root_sig": "7mp/FjRH2QivUFgEFrJQx0PylKRhXBIkC4vawJq97Z/5C4BIpgvPM+WJJm9c9wAC9zdnAd0JpvPwC8EKj1QaAQ==",
-        "root_key_epoch": 0
+        "root_key_epoch": 0,
+        "root_sig": "7mp/FjRH2QivUFgEFrJQx0PylKRhXBIkC4vawJq97Z/5C4BIpgvPM+WJJm9c9wAC9zdnAd0JpvPwC8EKj1QaAQ=="
       },
       "message": {
         "slug": "mira",
