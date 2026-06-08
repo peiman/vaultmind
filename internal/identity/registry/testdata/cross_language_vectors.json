@@ -1,0 +1,146 @@
+{
+  "root_pubkey": "vHy8tWNjdfodgkNNRmck2SN39TuYBpXdSdJtDOEiBaU=",
+  "now": 2000000,
+  "max_staleness_secs": 86400,
+  "valid": {
+    "envelope": {
+      "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSDirZAiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6IlZSVlBRZ1plcGFHK29GUmpnbXZpYUU2NUxma3NFQUFucXJxdVY4cFZRZ2M9Iiwic2x1ZyI6Im1pcmEiLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJlcG9jaCI6MTAsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
+      "root_sig": "7mp/FjRH2QivUFgEFrJQx0PylKRhXBIkC4vawJq97Z/5C4BIpgvPM+WJJm9c9wAC9zdnAd0JpvPwC8EKj1QaAQ==",
+      "root_key_epoch": 0
+    },
+    "persisted_highest_epoch": 9,
+    "expect_slug": "mira",
+    "expect_key_epoch": 1,
+    "expect_pubkey": "VRVPQgZepaG+oFRjgmviaE65LfksEAAnqrquV8pVQgc=",
+    "message": {
+      "slug": "mira",
+      "key_epoch": 1,
+      "canonical_message_bytes": "eyJib2R5IjoiaGVsbG8iLCJmcm9tIjoibWlyYSJ9",
+      "signature": "K2ZbXlLsJJyybfKphh+/+DT37+6LqS2y8G1JNgkfob1miDzPGpCR/3nebiZtA8HgcfkxrFSwMqwjNcdvLfYrBg=="
+    }
+  },
+  "reject": [
+    {
+      "name": "small_order_root_pubkey",
+      "reason": "pinned root pubkey is small-order (universal-forgery vector)",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSDirZAiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6IlZSVlBRZ1plcGFHK29GUmpnbXZpYUU2NUxma3NFQUFucXJxdVY4cFZRZ2M9Iiwic2x1ZyI6Im1pcmEiLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJlcG9jaCI6MTAsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
+        "root_sig": "7mp/FjRH2QivUFgEFrJQx0PylKRhXBIkC4vawJq97Z/5C4BIpgvPM+WJJm9c9wAC9zdnAd0JpvPwC8EKj1QaAQ==",
+        "root_key_epoch": 0
+      },
+      "root_pubkey": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    },
+    {
+      "name": "small_order_agent_pubkey",
+      "reason": "binding agent pubkey is small-order; load rejects the binding",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSDirZAiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6IkFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE9Iiwic2x1ZyI6Im1pcmEiLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJlcG9jaCI6MTAsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
+        "root_sig": "A+qP/1UDlO8oOfscebaBcRJKf7vuII2si9GrBeV31Xg3st1bQjBkudVQUiOlBL0cKZWrFjE9FB7dCcXdOovXAg==",
+        "root_key_epoch": 0
+      }
+    },
+    {
+      "name": "future_valid_from_registry",
+      "reason": "registry valid_from is in the future (not yet fresh)",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSDirZAiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6IlZSVlBRZ1plcGFHK29GUmpnbXZpYUU2NUxma3NFQUFucXJxdVY4cFZRZ2M9Iiwic2x1ZyI6Im1pcmEiLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJlcG9jaCI6MTAsInZhbGlkX2Zyb20iOjIxMDAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
+        "root_sig": "fbIyMQ0oxB/uuB2q3tvJ+IRdHGqEUfanLtfcdNy3Kmj8Z0Pr8RDeKAEPo4g/bj2+pV9HeLoZVfFqOjUREEb2Dw==",
+        "root_key_epoch": 0
+      }
+    },
+    {
+      "name": "future_valid_from_binding",
+      "reason": "binding valid_from is in the future (resolve/verify must reject)",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSDirZAiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6IlZSVlBRZ1plcGFHK29GUmpnbXZpYUU2NUxma3NFQUFucXJxdVY4cFZRZ2M9Iiwic2x1ZyI6Im1pcmEiLCJ2YWxpZF9mcm9tIjoyMTAwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJlcG9jaCI6MTAsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
+        "root_sig": "BkOROB2xKQqZE91vle/mDHXHQeQQ9LfQ3ff0r6jnJ4Iv223qDYPCqDA+74Cyk+q8vlVpP8K61yv0RnihjKFaBA==",
+        "root_key_epoch": 0
+      },
+      "message": {
+        "slug": "mira",
+        "key_epoch": 1,
+        "canonical_message_bytes": "eyJib2R5IjoiaGVsbG8iLCJmcm9tIjoibWlyYSJ9",
+        "signature": "K2ZbXlLsJJyybfKphh+/+DT37+6LqS2y8G1JNgkfob1miDzPGpCR/3nebiZtA8HgcfkxrFSwMqwjNcdvLfYrBg=="
+      }
+    },
+    {
+      "name": "rollback_epoch_at_or_below_persisted",
+      "reason": "registry epoch \u003c= persisted highest seen (anti-rollback)",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSDirZAiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6IlZSVlBRZ1plcGFHK29GUmpnbXZpYUU2NUxma3NFQUFucXJxdVY4cFZRZ2M9Iiwic2x1ZyI6Im1pcmEiLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJlcG9jaCI6MTAsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
+        "root_sig": "7mp/FjRH2QivUFgEFrJQx0PylKRhXBIkC4vawJq97Z/5C4BIpgvPM+WJJm9c9wAC9zdnAd0JpvPwC8EKj1QaAQ==",
+        "root_key_epoch": 0
+      },
+      "persisted_highest_epoch": 10
+    },
+    {
+      "name": "stale_past_valid_until",
+      "reason": "now is past registry valid_until (fail closed)",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSDirZAiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6IlZSVlBRZ1plcGFHK29GUmpnbXZpYUU2NUxma3NFQUFucXJxdVY4cFZRZ2M9Iiwic2x1ZyI6Im1pcmEiLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJlcG9jaCI6MTAsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
+        "root_sig": "7mp/FjRH2QivUFgEFrJQx0PylKRhXBIkC4vawJq97Z/5C4BIpgvPM+WJJm9c9wAC9zdnAd0JpvPwC8EKj1QaAQ==",
+        "root_key_epoch": 0
+      },
+      "now": 3000001
+    },
+    {
+      "name": "stale_beyond_max_staleness",
+      "reason": "now - valid_from exceeds max_staleness_secs (fail closed)",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSDirZAiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6IlZSVlBRZ1plcGFHK29GUmpnbXZpYUU2NUxma3NFQUFucXJxdVY4cFZRZ2M9Iiwic2x1ZyI6Im1pcmEiLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJlcG9jaCI6MTAsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
+        "root_sig": "7mp/FjRH2QivUFgEFrJQx0PylKRhXBIkC4vawJq97Z/5C4BIpgvPM+WJJm9c9wAC9zdnAd0JpvPwC8EKj1QaAQ==",
+        "root_key_epoch": 0
+      },
+      "now": 2076401
+    },
+    {
+      "name": "revoked_binding",
+      "reason": "binding is revoked (resolve/verify must reject)",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSDirZAiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6IlZSVlBRZ1plcGFHK29GUmpnbXZpYUU2NUxma3NFQUFucXJxdVY4cFZRZ2M9IiwicmV2b2tlZF9hdCI6MTk5MTAwMCwic2x1ZyI6Im1pcmEiLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJlcG9jaCI6MTAsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
+        "root_sig": "t0r+3vJYbVwRXpzmqJ9hlHgzlQUU/avA8iV/ukA1lm0dDaN01OS//C2TWgCx8fdbqrDPjYREKky0cjDYTnwKDQ==",
+        "root_key_epoch": 0
+      },
+      "message": {
+        "slug": "mira",
+        "key_epoch": 1,
+        "canonical_message_bytes": "eyJib2R5IjoiaGVsbG8iLCJmcm9tIjoibWlyYSJ9",
+        "signature": "K2ZbXlLsJJyybfKphh+/+DT37+6LqS2y8G1JNgkfob1miDzPGpCR/3nebiZtA8HgcfkxrFSwMqwjNcdvLfYrBg=="
+      }
+    },
+    {
+      "name": "tampered_registry_body",
+      "reason": "registry bytes mutated; root_sig no longer matches",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSDirZAiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6IlZSVlBRZ1plcGFHK29GUmpnbXZpYUU2NUxma3O6QUFucXJxdVY4cFZRZ2M9Iiwic2x1ZyI6Im1pcmEiLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJlcG9jaCI6MTAsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
+        "root_sig": "7mp/FjRH2QivUFgEFrJQx0PylKRhXBIkC4vawJq97Z/5C4BIpgvPM+WJJm9c9wAC9zdnAd0JpvPwC8EKj1QaAQ==",
+        "root_key_epoch": 0
+      }
+    },
+    {
+      "name": "non_canonical_s_message_sig",
+      "reason": "message signature has non-canonical S (S \u003e= L); verify_strict rejects",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSDirZAiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6IlZSVlBRZ1plcGFHK29GUmpnbXZpYUU2NUxma3NFQUFucXJxdVY4cFZRZ2M9Iiwic2x1ZyI6Im1pcmEiLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJlcG9jaCI6MTAsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
+        "root_sig": "7mp/FjRH2QivUFgEFrJQx0PylKRhXBIkC4vawJq97Z/5C4BIpgvPM+WJJm9c9wAC9zdnAd0JpvPwC8EKj1QaAQ==",
+        "root_key_epoch": 0
+      },
+      "message": {
+        "slug": "mira",
+        "key_epoch": 1,
+        "canonical_message_bytes": "eyJib2R5IjoiaGVsbG8iLCJmcm9tIjoibWlyYSJ9",
+        "signature": "K2ZbXlLsJJyybfKphh+/+DT37+6LqS2y8G1JNgkfob1TXDIsNfOjV1B7ZslL/Z/1cfkxrFSwMqwjNcdvLfYrFg=="
+      }
+    }
+  ]
+}
