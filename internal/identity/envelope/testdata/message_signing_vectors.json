@@ -1,0 +1,198 @@
+{
+  "root_pubkey": "vHy8tWNjdfodgkNNRmck2SN39TuYBpXdSdJtDOEiBaU=",
+  "now": 2000000,
+  "max_staleness_secs": 86400,
+  "registry": {
+    "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSDirZAiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6IlZSVlBRZ1plcGFHK29GUmpnbXZpYUU2NUxma3NFQUFucXJxdVY4cFZRZ2M9Iiwic2x1ZyI6Im1pcmEiLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJlcG9jaCI6MTAsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
+    "root_key_epoch": 0,
+    "root_sig": "7mp/FjRH2QivUFgEFrJQx0PylKRhXBIkC4vawJq97Z/5C4BIpgvPM+WJJm9c9wAC9zdnAd0JpvPwC8EKj1QaAQ=="
+  },
+  "persisted_highest_epoch": 9,
+  "valid": {
+    "envelope": {
+      "alg_version": 1,
+      "body": "hello ⭐",
+      "from_agent": "mira",
+      "key_epoch": 1,
+      "nonce": "YWJjZGVmZ2hpamtsbW5vcA==",
+      "room": "dev",
+      "seq": 7,
+      "ts": 2000000,
+      "sig": "oNi44g3u1tT/xHIwBjHuRd9VWLxIk/VQN6B1GiOdMUtbVMcf3VWoTukC9nxlHFL1drD7hcS887Aj53p7BP3nCA==",
+      "from_pubkey": "VRVPQgZepaG+oFRjgmviaE65LfksEAAnqrquV8pVQgc="
+    },
+    "canonical_signed_bytes": "eyJhbGdfdmVyc2lvbiI6MSwiYm9keSI6ImhlbGxvIOKtkCIsImZyb21fYWdlbnQiOiJtaXJhIiwia2V5X2Vwb2NoIjoxLCJub25jZSI6IllXSmpaR1ZtWjJocGFtdHNiVzV2Y0E9PSIsInJvb20iOiJkZXYiLCJzZXEiOjcsInRzIjoyMDAwMDAwfQ=="
+  },
+  "reject": [
+    {
+      "name": "tampered_body",
+      "reason": "body mutated after signing; signature no longer matches",
+      "expect": "reject",
+      "envelope": {
+        "alg_version": 1,
+        "body": "goodbye",
+        "from_agent": "mira",
+        "key_epoch": 1,
+        "nonce": "YWJjZGVmZ2hpamtsbW5vcA==",
+        "room": "dev",
+        "seq": 7,
+        "ts": 2000000,
+        "sig": "oNi44g3u1tT/xHIwBjHuRd9VWLxIk/VQN6B1GiOdMUtbVMcf3VWoTukC9nxlHFL1drD7hcS887Aj53p7BP3nCA==",
+        "from_pubkey": "VRVPQgZepaG+oFRjgmviaE65LfksEAAnqrquV8pVQgc="
+      }
+    },
+    {
+      "name": "wrong_key_epoch",
+      "reason": "key_epoch presented as 2 but signed/bound at 1 (registry epoch mismatch)",
+      "expect": "reject",
+      "envelope": {
+        "alg_version": 1,
+        "body": "hello ⭐",
+        "from_agent": "mira",
+        "key_epoch": 2,
+        "nonce": "YWJjZGVmZ2hpamtsbW5vcA==",
+        "room": "dev",
+        "seq": 7,
+        "ts": 2000000,
+        "sig": "oNi44g3u1tT/xHIwBjHuRd9VWLxIk/VQN6B1GiOdMUtbVMcf3VWoTukC9nxlHFL1drD7hcS887Aj53p7BP3nCA==",
+        "from_pubkey": "VRVPQgZepaG+oFRjgmviaE65LfksEAAnqrquV8pVQgc="
+      }
+    },
+    {
+      "name": "downgraded_alg_version",
+      "reason": "alg_version downgraded to 2 (gate rejects at verify)",
+      "expect": "reject",
+      "envelope": {
+        "alg_version": 2,
+        "body": "hello ⭐",
+        "from_agent": "mira",
+        "key_epoch": 1,
+        "nonce": "YWJjZGVmZ2hpamtsbW5vcA==",
+        "room": "dev",
+        "seq": 7,
+        "ts": 2000000,
+        "sig": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+        "from_pubkey": "VRVPQgZepaG+oFRjgmviaE65LfksEAAnqrquV8pVQgc="
+      }
+    },
+    {
+      "name": "key_epoch_above_2pow53",
+      "reason": "key_epoch above 2^53 (JCS-unsafe; typed reject)",
+      "expect": "reject",
+      "envelope": {
+        "alg_version": 1,
+        "body": "hello ⭐",
+        "from_agent": "mira",
+        "key_epoch": 9007199254740993,
+        "nonce": "YWJjZGVmZ2hpamtsbW5vcA==",
+        "room": "dev",
+        "seq": 7,
+        "ts": 2000000,
+        "sig": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+        "from_pubkey": "VRVPQgZepaG+oFRjgmviaE65LfksEAAnqrquV8pVQgc="
+      }
+    },
+    {
+      "name": "seq_above_2pow53",
+      "reason": "seq above 2^53 (JCS-unsafe; typed reject)",
+      "expect": "reject",
+      "envelope": {
+        "alg_version": 1,
+        "body": "hello ⭐",
+        "from_agent": "mira",
+        "key_epoch": 1,
+        "nonce": "YWJjZGVmZ2hpamtsbW5vcA==",
+        "room": "dev",
+        "seq": 9007199254740993,
+        "ts": 2000000,
+        "sig": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+        "from_pubkey": "VRVPQgZepaG+oFRjgmviaE65LfksEAAnqrquV8pVQgc="
+      }
+    },
+    {
+      "name": "non_nfc_body",
+      "reason": "body is NFD (not NFC); rejected, never silently normalized",
+      "expect": "reject",
+      "envelope": {
+        "alg_version": 1,
+        "body": "é",
+        "from_agent": "mira",
+        "key_epoch": 1,
+        "nonce": "YWJjZGVmZ2hpamtsbW5vcA==",
+        "room": "dev",
+        "seq": 7,
+        "ts": 2000000,
+        "sig": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+        "from_pubkey": "VRVPQgZepaG+oFRjgmviaE65LfksEAAnqrquV8pVQgc="
+      }
+    },
+    {
+      "name": "both_room_and_to_agent",
+      "reason": "both room and to_agent present (exactly-one rule)",
+      "expect": "reject",
+      "envelope": {
+        "alg_version": 1,
+        "body": "hello ⭐",
+        "from_agent": "mira",
+        "key_epoch": 1,
+        "nonce": "YWJjZGVmZ2hpamtsbW5vcA==",
+        "room": "dev",
+        "seq": 7,
+        "to_agent": "workhorse",
+        "ts": 2000000,
+        "sig": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+        "from_pubkey": "VRVPQgZepaG+oFRjgmviaE65LfksEAAnqrquV8pVQgc="
+      }
+    },
+    {
+      "name": "neither_room_nor_to_agent",
+      "reason": "neither room nor to_agent present (exactly-one rule)",
+      "expect": "reject",
+      "envelope": {
+        "alg_version": 1,
+        "body": "hello ⭐",
+        "from_agent": "mira",
+        "key_epoch": 1,
+        "nonce": "YWJjZGVmZ2hpamtsbW5vcA==",
+        "seq": 7,
+        "ts": 2000000,
+        "sig": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+        "from_pubkey": "VRVPQgZepaG+oFRjgmviaE65LfksEAAnqrquV8pVQgc="
+      }
+    },
+    {
+      "name": "tampered_sig",
+      "reason": "one signature byte flipped; does not verify",
+      "expect": "reject",
+      "envelope": {
+        "alg_version": 1,
+        "body": "hello ⭐",
+        "from_agent": "mira",
+        "key_epoch": 1,
+        "nonce": "YWJjZGVmZ2hpamtsbW5vcA==",
+        "room": "dev",
+        "seq": 7,
+        "ts": 2000000,
+        "sig": "X9i44g3u1tT/xHIwBjHuRd9VWLxIk/VQN6B1GiOdMUtbVMcf3VWoTukC9nxlHFL1drD7hcS887Aj53p7BP3nCA==",
+        "from_pubkey": "VRVPQgZepaG+oFRjgmviaE65LfksEAAnqrquV8pVQgc="
+      }
+    },
+    {
+      "name": "wrong_signer_key",
+      "reason": "signed by a key not bound to from_agent in the registry",
+      "expect": "reject",
+      "envelope": {
+        "alg_version": 1,
+        "body": "hello ⭐",
+        "from_agent": "mira",
+        "key_epoch": 1,
+        "nonce": "YWJjZGVmZ2hpamtsbW5vcA==",
+        "room": "dev",
+        "seq": 7,
+        "ts": 2000000,
+        "sig": "zH9xPYWRsVsCBjaAKNLjPCwHtJOQkIPg0PbZ9ua85IZ+0bVfnNqodhg52jxyWlQCixG6XAbfsqFauNAgZvF3AA==",
+        "from_pubkey": "gUci3nHFsU50jf8yKuf3xBXO5Vh2ZJUpLNbEwKap3yg="
+      }
+    }
+  ]
+}

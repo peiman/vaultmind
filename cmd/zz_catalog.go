@@ -264,6 +264,11 @@ var commandCatalog = map[string]catalogEntry{
 		when:  "you have a Contract-B entry to sign and want it validated, canonicalized, and signed by the keyless signer.",
 		short: "Validate, canonicalize, and sign an entry via the keyless signer",
 	},
+	"vaultmind identity sign-envelope": {
+		group: groupLifecycle,
+		when:  "you have a chat MESSAGE envelope to sign so a receiving daemon can verify the signature and the signer's registry binding.",
+		short: "Sign a chat message envelope via the keyless signer (Contract-B slice 5)",
+	},
 	"vaultmind hooks": {
 		group: groupLifecycle,
 		when:  "you need to install, remove, or check VaultMind's Claude Code hook scripts.",

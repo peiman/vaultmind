@@ -230,16 +230,79 @@
           },
           "type": "object"
         },
+        "docs_commands": {
+          "properties": {
+            "output": {
+              "default": "",
+              "description": "Output file for the command reference (defaults to stdout)",
+              "examples": [
+                "internal/onboard/COMMANDS.md"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
         "doctor": {
           "properties": {
+            "all": {
+              "default": false,
+              "description": "Diagnose every vault discovered under --root (multi-vault health)",
+              "type": "boolean"
+            },
             "json": {
               "default": false,
               "description": "Output in JSON format",
               "type": "boolean"
             },
+            "root": {
+              "default": ".",
+              "description": "Root directory to discover vaults under when --all is set",
+              "type": "string"
+            },
             "summary": {
               "default": false,
               "description": "Print summary counts only (suppress per-link details)",
+              "type": "boolean"
+            },
+            "vault": {
+              "default": ".",
+              "description": "Path to vault root",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "doctorheal": {
+          "properties": {
+            "dry_run": {
+              "default": false,
+              "description": "Preview repairs without writing (default applies)",
+              "type": "boolean"
+            },
+            "json": {
+              "default": false,
+              "description": "Output in JSON format",
+              "type": "boolean"
+            },
+            "vault": {
+              "default": ".",
+              "description": "Path to vault root",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "doctorhealwikilinks": {
+          "properties": {
+            "dry_run": {
+              "default": false,
+              "description": "Preview repairs without writing (default applies)",
+              "type": "boolean"
+            },
+            "json": {
+              "default": false,
+              "description": "Output in JSON format",
               "type": "boolean"
             },
             "vault": {
@@ -630,6 +693,51 @@
           },
           "type": "object"
         },
+        "identityinit": {
+          "properties": {
+            "signer_key": {
+              "default": "",
+              "description": "Sealed signer key path (default: XDG data dir)",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "identitysign": {
+          "properties": {
+            "file": {
+              "default": "",
+              "description": "Read entry JSON from this file instead of stdin",
+              "type": "string"
+            },
+            "signer_socket": {
+              "default": "",
+              "description": "Signer socket path (default: XDG state dir)",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "identitysignenvelope": {
+          "properties": {
+            "file": {
+              "default": "",
+              "description": "Read envelope JSON from this file instead of stdin",
+              "type": "string"
+            },
+            "from_pubkey": {
+              "default": "",
+              "description": "Signer public key (base64) stamped as the from_pubkey hint; not signed",
+              "type": "string"
+            },
+            "signer_socket": {
+              "default": "",
+              "description": "Signer socket path (default: XDG state dir)",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
         "index": {
           "properties": {
             "allow_slow_backend": {
@@ -898,6 +1006,106 @@
           "type": "string"
         },
         "memorycontextpack": {
+          "properties": {
+            "budget": {
+              "default": 4096,
+              "description": "Token budget",
+              "type": "integer"
+            },
+            "depth": {
+              "default": 1,
+              "description": "BFS traversal depth (1 = direct neighbors only)",
+              "type": "integer"
+            },
+            "json": {
+              "default": false,
+              "description": "Output in JSON format",
+              "type": "boolean"
+            },
+            "max_items": {
+              "default": 0,
+              "description": "Max context items (0 = unlimited)",
+              "type": "integer"
+            },
+            "slim": {
+              "default": false,
+              "description": "Slim frontmatter (type, title, status only)",
+              "type": "boolean"
+            },
+            "vault": {
+              "default": ".",
+              "description": "Path to vault root",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "memorylinks": {
+          "properties": {
+            "both": {
+              "default": false,
+              "description": "Show both inbound and outbound edges (default)",
+              "type": "boolean"
+            },
+            "edge_type": {
+              "default": "",
+              "description": "Filter by edge type",
+              "type": "string"
+            },
+            "in": {
+              "default": false,
+              "description": "Show only inbound edges (backlinks)",
+              "type": "boolean"
+            },
+            "json": {
+              "default": false,
+              "description": "Output in JSON format",
+              "type": "boolean"
+            },
+            "out": {
+              "default": false,
+              "description": "Show only outbound edges",
+              "type": "boolean"
+            },
+            "vault": {
+              "default": ".",
+              "description": "Path to vault root",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "memoryneighbors": {
+          "properties": {
+            "depth": {
+              "default": 1,
+              "description": "Maximum traversal depth",
+              "type": "integer"
+            },
+            "json": {
+              "default": false,
+              "description": "Output in JSON format",
+              "type": "boolean"
+            },
+            "max_nodes": {
+              "default": 50,
+              "description": "Maximum nodes to return",
+              "type": "integer"
+            },
+            "min_confidence": {
+              "default": "high",
+              "description": "Minimum edge confidence (low, medium, high)",
+              "type": "string"
+            },
+            "vault": {
+              "default": ".",
+              "description": "Path to vault root",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "memorypack": {
           "properties": {
             "budget": {
               "default": 4096,
