@@ -3,9 +3,12 @@ module github.com/peiman/vaultmind
 go 1.26.4
 
 require (
+	filippo.io/edwards25519 v1.2.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/go-git/go-git/v5 v5.19.1
+	github.com/gowebpki/jcs v1.0.1
+	github.com/hdevalence/ed25519consensus v0.2.0
 	github.com/knights-analytics/hugot v0.7.0
 	github.com/mattn/go-isatty v0.0.22
 	github.com/nlpodyssey/gopickle v0.3.0
@@ -19,6 +22,7 @@ require (
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/sync v0.20.0
+	golang.org/x/text v0.37.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.51.0
@@ -98,7 +102,6 @@ require (
 	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/term v0.43.0 // indirect
-	golang.org/x/text v0.37.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
@@ -109,4 +112,5 @@ require (
 
 // Versions before v0.1.3 predate the public release; use v0.1.3 or later.
 retract [v0.1.0, v0.1.2] // Predate the public release; superseded by v0.1.3.
+
 retract v0.1.6 // Prebuilt release artifacts failed to build (coverage gate); go-installable but incomplete — use v0.1.7.
