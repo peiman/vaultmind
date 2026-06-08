@@ -46,6 +46,11 @@ func readIdentityEntryJSON(cmd *cobra.Command) ([]byte, error) {
 		}
 		return b, nil
 	}
+	// TODO(contract-b hardening): io.ReadAll here is unbounded — a caller
+	// piping a huge stream would consume unbounded memory before the signer
+	// even sees the bytes. In the hardening slice, replace with
+	// io.LimitReader(cmd.InOrStdin(), maxEntryBytes) where maxEntryBytes
+	// matches (or is tighter than) the signer's maxRequestBytes constant.
 	b, err := io.ReadAll(cmd.InOrStdin())
 	if err != nil {
 		return nil, fmt.Errorf("reading entry from stdin: %w", err)

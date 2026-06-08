@@ -78,6 +78,16 @@ type Config struct {
 	// signature. A caller whose peer UID is not in this set is denied.
 	AllowedUIDs []uint32
 	// Policy is the refusal hook. Nil means permissive (sign everything).
+	//
+	// TODO(contract-b hardening): the nil/permissive default lets any
+	// allowlisted caller get arbitrary bytes signed. This is an INTENTIONAL
+	// same-uid dev-interim residual, NOT permanent — before the signer moves
+	// behind a dedicated service UID, it MUST enforce identity.ValidateSchema
+	// (+ optionally re-canonicalize) server-side, because at that point the
+	// CLI/caller is across a trust boundary and can no longer be trusted to
+	// have validated. Shipping without this under a dedicated-uid deployment
+	// would make the signer an arbitrary-bytes signing oracle behind the new
+	// privilege boundary.
 	Policy PolicyFunc
 }
 
@@ -144,6 +154,14 @@ func (s *Signer) Listen() error {
 
 // Serve accepts connections until the listener is closed. Each connection is a
 // single sign request/response. Serve blocks; run it in a goroutine.
+//
+// TODO(contract-b hardening): connections are handled sequentially with no
+// per-connection read/write deadline — a slow or stalled client blocks the
+// entire signer until the connection closes. This is an availability issue
+// only (single same-uid caller in the dev-interim model). In the hardening
+// slice, set a per-connection deadline via conn.SetDeadline immediately after
+// AcceptUnix, and consider handling connections in goroutines if concurrent
+// callers become possible.
 func (s *Signer) Serve() error {
 	s.mu.Lock()
 	ln := s.ln
@@ -185,6 +203,11 @@ func (s *Signer) Close() error {
 // handle services one connection: authenticate the peer UID, read the request,
 // run policy, sign, and write the response. Errors are reported to the caller
 // as a respErr frame, never as a leaked key or a silent success.
+//
+// TODO(contract-b hardening): handle has no panic recovery — a panicking
+// Policy hook would crash the signer process. Add a recover() at the top of
+// this function in the hardening slice so a misbehaving hook is converted to
+// an error response rather than a process crash.
 func (s *Signer) handle(conn *net.UnixConn) {
 	defer func() { _ = conn.Close() }()
 
@@ -211,8 +234,16 @@ func (s *Signer) handle(conn *net.UnixConn) {
 		}
 	}
 
-	// Sign over the received bytes, which the CLI guarantees are JCS-canonical
-	// (validated + canonicalized before sending). The key never leaves here.
+	// TODO(contract-b hardening): client-side-only validation is trusted ONLY
+	// because the caller and signer run as the same UID today (same-uid
+	// dev-interim residual — see the Policy TODO above). Once the signer moves
+	// behind a dedicated service UID, "the CLI guarantees JCS-canonical bytes"
+	// is no longer a valid trust claim: the CLI is across a privilege boundary
+	// and must be treated as untrusted input. At that point, the signer MUST
+	// re-validate via identity.ValidateSchema (and optionally re-canonicalize)
+	// server-side before signing, or the Policy hook must enforce it.
+	//
+	// Sign over the received bytes. The key never leaves here.
 	sig, err := identity.SignCanonical(s.priv, identity.CanonicalBytesFromTrusted(req))
 	if err != nil {
 		writeErr(conn, fmt.Sprintf("signer: sign: %v", err))
@@ -243,6 +274,11 @@ func loadPrivateKey(path string) (ed25519.PrivateKey, error) {
 //
 // TODO(contract-b hardening): wrap the key with the Secure Enclave (SEP) so it
 // is non-exfiltratable at rest; today it is a raw 0600 file on disk.
+//
+// TODO(contract-b hardening): a mid-write error (e.g. disk full after partial
+// write) leaves a partial key file at path. In the hardening slice, write to a
+// temp file in the same directory, then os.Rename into place atomically so a
+// failed write never produces a truncated key file.
 func SealPrivateKey(path string, priv ed25519.PrivateKey) error {
 	if len(priv) != ed25519.PrivateKeySize {
 		return errors.New(errSealKeyLen)
