@@ -8,12 +8,19 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 // maxSafeInteger is 2^53, the largest integer exactly representable as an
 // IEEE-754 float64. Contract B forbids integers strictly greater than this
 // so entries survive a round-trip through any JSON parser that uses doubles.
 const maxSafeInteger = int64(1) << 53
+
+// maxDepth bounds object/array nesting so a deeply nested document cannot
+// exhaust the goroutine stack via the recursive walk. 32 levels is far beyond
+// any legitimate Contract-B entry.
+const maxDepth = 32
 
 // Validation error messages (SSOT — referenced from the walk, not inlined).
 const (
@@ -24,6 +31,8 @@ const (
 	errSchemaInvalidUTF8   = "identity: schema: string value is not valid UTF-8"
 	errSchemaDuplicateKey  = "identity: schema: duplicate object key"
 	errSchemaTrailingInput = "identity: schema: trailing data after JSON value"
+	errSchemaNotNFC        = "identity: schema: string must be Unicode NFC-normalized"
+	errSchemaTooDeep       = "identity: schema: nesting exceeds maximum depth"
 )
 
 // ValidateSchema is the Contract-B validation gate. It walks the entire JSON
@@ -33,8 +42,10 @@ const (
 //   - non-integer numbers (floats such as 1.0 or 1e3),
 //   - integers strictly greater than 2^53,
 //   - non-ASCII object keys,
-//   - string values that are not valid UTF-8,
-//   - duplicate object keys (ambiguous after canonicalization).
+//   - string values (and keys) that are not valid UTF-8,
+//   - string values (and keys) that are not Unicode NFC-normalized,
+//   - duplicate object keys (ambiguous after canonicalization),
+//   - nesting deeper than maxDepth (DoS guard).
 //
 // It returns nil for a conformant document.
 func ValidateSchema(jsonBytes []byte) error {
@@ -49,7 +60,7 @@ func ValidateSchema(jsonBytes []byte) error {
 	dec := json.NewDecoder(bytes.NewReader(jsonBytes))
 	dec.UseNumber()
 
-	if err := walkValue(dec); err != nil {
+	if err := walkValue(dec, 0); err != nil {
 		return err
 	}
 
@@ -61,9 +72,11 @@ func ValidateSchema(jsonBytes []byte) error {
 }
 
 // walkValue consumes exactly one JSON value from the decoder, recursing into
-// objects and arrays. The decoder's token stream guarantees that, for an
-// object, keys and values alternate until the closing brace.
-func walkValue(dec *json.Decoder) error {
+// objects and arrays. depth is the current nesting level; it is checked before
+// descending so a deeply nested document is rejected rather than overflowing
+// the stack. The decoder's token stream guarantees that, for an object, keys
+// and values alternate until the closing brace.
+func walkValue(dec *json.Decoder, depth int) error {
 	tok, err := dec.Token()
 	if err != nil {
 		return fmt.Errorf("%s: %w", errSchemaInvalidJSON, err)
@@ -71,11 +84,14 @@ func walkValue(dec *json.Decoder) error {
 
 	switch t := tok.(type) {
 	case json.Delim:
+		if depth >= maxDepth {
+			return fmt.Errorf("%s", errSchemaTooDeep)
+		}
 		switch t {
 		case '{':
-			return walkObject(dec)
+			return walkObject(dec, depth+1)
 		case '[':
-			return walkArray(dec)
+			return walkArray(dec, depth+1)
 		default:
 			// A stray '}' or ']' here means malformed JSON.
 			return fmt.Errorf("%s: unexpected %q", errSchemaInvalidJSON, t)
@@ -84,8 +100,12 @@ func walkValue(dec *json.Decoder) error {
 		return validateNumber(t)
 	case string:
 		// String values may be non-ASCII; the document-level utf8.Valid check
-		// in ValidateSchema already guarantees they are valid UTF-8, so there
-		// is nothing more to assert here.
+		// in ValidateSchema already guarantees they are valid UTF-8. They must,
+		// however, be Unicode NFC-normalized so the signed bytes are stable
+		// across producers that normalize differently.
+		if !isNFC(t) {
+			return fmt.Errorf("%s: %q", errSchemaNotNFC, t)
+		}
 		return nil
 	case bool, nil:
 		return nil
@@ -95,8 +115,8 @@ func walkValue(dec *json.Decoder) error {
 }
 
 // walkObject validates an object's keys and recurses into its values. The
-// opening '{' has already been consumed.
-func walkObject(dec *json.Decoder) error {
+// opening '{' has already been consumed; depth is the level of this object.
+func walkObject(dec *json.Decoder, depth int) error {
 	seen := make(map[string]struct{})
 	for dec.More() {
 		keyTok, err := dec.Token()
@@ -110,12 +130,15 @@ func walkObject(dec *json.Decoder) error {
 		if !isASCII(key) {
 			return fmt.Errorf("%s: %q", errSchemaNonASCIIKey, key)
 		}
+		if !isNFC(key) {
+			return fmt.Errorf("%s: %q", errSchemaNotNFC, key)
+		}
 		if _, dup := seen[key]; dup {
 			return fmt.Errorf("%s: %q", errSchemaDuplicateKey, key)
 		}
 		seen[key] = struct{}{}
 
-		if err := walkValue(dec); err != nil {
+		if err := walkValue(dec, depth); err != nil {
 			return err
 		}
 	}
@@ -127,10 +150,10 @@ func walkObject(dec *json.Decoder) error {
 }
 
 // walkArray recurses into each element of an array. The opening '[' has
-// already been consumed.
-func walkArray(dec *json.Decoder) error {
+// already been consumed; depth is the level of this array.
+func walkArray(dec *json.Decoder, depth int) error {
 	for dec.More() {
-		if err := walkValue(dec); err != nil {
+		if err := walkValue(dec, depth); err != nil {
 			return err
 		}
 	}
@@ -168,6 +191,13 @@ func isASCII(s string) bool {
 		}
 	}
 	return true
+}
+
+// isNFC reports whether s is already in Unicode Normalization Form C. Contract
+// B requires NFC so the canonical, signed bytes are stable across producers
+// that would otherwise emit a different normalization of the same text.
+func isNFC(s string) bool {
+	return norm.NFC.IsNormalString(s)
 }
 
 // absInt64 returns the absolute value of v, guarding against the math.MinInt64

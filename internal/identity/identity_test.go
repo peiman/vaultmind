@@ -81,7 +81,7 @@ func TestSign_ReproducesFrozenSignature(t *testing.T) {
 	priv := ed25519.NewKeyFromSeed(seed)
 
 	canonical := mustDecodeHex(t, frozenCanonicalBytesHex)
-	sig := identity.Sign(priv, canonical)
+	sig := identity.SignCanonical(priv, canonical)
 
 	assert.Equal(t, frozenSignatureHex, hex.EncodeToString(sig),
 		"signature over canonical bytes must match frozen vector")
@@ -92,7 +92,7 @@ func TestVerify_FrozenVector(t *testing.T) {
 	canonical := mustDecodeHex(t, frozenCanonicalBytesHex)
 	sig := mustDecodeHex(t, frozenSignatureHex)
 
-	assert.True(t, identity.Verify(pub, canonical, sig))
+	assert.True(t, identity.VerifyCanonical(pub, canonical, sig))
 }
 
 func TestVerify_DerivedPubkeyMatchesFrozen(t *testing.T) {
@@ -167,6 +167,6 @@ func TestVerifyEntry_InvalidJSONErrors(t *testing.T) {
 func TestVerify_WrongLengthSignature(t *testing.T) {
 	pub := ed25519.PublicKey(mustDecodeHex(t, frozenPubkeyHex))
 	canonical := mustDecodeHex(t, frozenCanonicalBytesHex)
-	assert.False(t, identity.Verify(pub, canonical, []byte{0x00}),
+	assert.False(t, identity.VerifyCanonical(pub, canonical, []byte{0x00}),
 		"a malformed (wrong-length) signature must return false, not panic")
 }
