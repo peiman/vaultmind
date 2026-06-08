@@ -349,6 +349,85 @@ func TestNewPublicKey_Bytes(t *testing.T) {
 	}
 }
 
+func TestNewPublicKey_BytesReturnsDefensiveCopy(t *testing.T) {
+	pub, _ := genKey(t)
+	pk, err := NewPublicKey(pub)
+	if err != nil {
+		t.Fatalf("NewPublicKey: %v", err)
+	}
+	// Mutating the returned slice must NOT corrupt the PublicKey's validated
+	// internal storage (Bytes returns a copy, not an alias).
+	got := pk.Bytes()
+	got[0] ^= 0xFF
+	if string(pk.Bytes()) != string(pub) {
+		t.Fatal("Bytes() returned an alias to internal storage — a caller mutated the validated key")
+	}
+}
+
+func TestVerifyAndLoad_RejectsDuplicateSlugEpoch(t *testing.T) {
+	rootPub, rootPriv := genKey(t)
+	pub1, _ := genKey(t)
+	pub2, _ := genKey(t)
+	// Two bindings with the SAME {slug,key_epoch} tuple must be rejected.
+	b1 := liveBinding(t, "mira", pub1, 1)
+	b2 := liveBinding(t, "mira", pub2, 1)
+	reg := freshRegistry(5, b1, b2)
+	env, err := SignRegistry(rootPriv, reg)
+	if err != nil {
+		t.Fatalf("SignRegistry: %v", err)
+	}
+	if _, _, err := VerifyAndLoad(rootPub, env, 4, fixedNow, time.Hour*24*365); err == nil {
+		t.Fatal("expected reject for duplicate {slug,key_epoch} tuple")
+	}
+}
+
+func TestVerifyAndLoad_RejectsMultipleLiveBindingsPerSlug(t *testing.T) {
+	rootPub, rootPriv := genKey(t)
+	pub1, _ := genKey(t)
+	pub2, _ := genKey(t)
+	// Two DISTINCT-epoch but both-LIVE bindings for one slug must be rejected
+	// (rotation requires the old tuple be revoked, so only one is ever live).
+	b1 := liveBinding(t, "mira", pub1, 1)
+	b2 := liveBinding(t, "mira", pub2, 2)
+	reg := freshRegistry(5, b1, b2)
+	env, err := SignRegistry(rootPriv, reg)
+	if err != nil {
+		t.Fatalf("SignRegistry: %v", err)
+	}
+	if _, _, err := VerifyAndLoad(rootPub, env, 4, fixedNow, time.Hour*24*365); err == nil {
+		t.Fatal("expected reject for more than one live binding per slug")
+	}
+}
+
+func TestVerifyAndLoad_AllowsRotationOneLivePlusRevoked(t *testing.T) {
+	rootPub, rootPriv := genKey(t)
+	oldPub, _ := genKey(t)
+	newPub, _ := genKey(t)
+	revokedAt := int(1_770_000_100)
+	oldPk, _ := NewPublicKey(oldPub)
+	newPk, _ := NewPublicKey(newPub)
+	// A legitimate rotation (old tuple revoked, new tuple live) MUST still load —
+	// the uniqueness invariant does not over-reject valid rotations.
+	old := AgentBinding{
+		Slug: "mira", DisplayName: "M", PubKey: oldPk, KeyEpoch: 1,
+		ValidFrom: 1_770_000_000, ValidUntil: 1_780_000_000,
+		AuthorizedOriginDaemons: []string{"d"}, RevokedAt: &revokedAt,
+	}
+	fresh := AgentBinding{
+		Slug: "mira", DisplayName: "M", PubKey: newPk, KeyEpoch: 2,
+		ValidFrom: 1_770_000_000, ValidUntil: 1_780_000_000,
+		AuthorizedOriginDaemons: []string{"d"}, RevokedAt: nil,
+	}
+	reg := freshRegistry(6, old, fresh)
+	env, err := SignRegistry(rootPriv, reg)
+	if err != nil {
+		t.Fatalf("SignRegistry: %v", err)
+	}
+	if _, _, err := VerifyAndLoad(rootPub, env, 4, fixedNow, time.Hour*24*365); err != nil {
+		t.Fatalf("legitimate rotation must still load: %v", err)
+	}
+}
+
 func TestNetworkID_DerivedFromPubkey(t *testing.T) {
 	pub, _ := genKey(t)
 	other, _ := genKey(t)
@@ -407,6 +486,28 @@ func TestSignedEntry_RejectsBadSignature(t *testing.T) {
 	sig, _ := identity.SignEntry(otherPriv, raw)
 	if _, err := NewSignedEntry(pk, raw, sig); err == nil {
 		t.Fatal("expected NewSignedEntry reject for non-matching signature")
+	}
+}
+
+func TestSignRegistry_RejectsOutOfRangeKeyEpoch(t *testing.T) {
+	rootPub, rootPriv := genKey(t)
+	agentPub, _ := genKey(t)
+	// A binding key_epoch above MaxSafeEpoch is JCS-unsafe and must be refused.
+	b := liveBinding(t, "mira", agentPub, MaxSafeEpoch+1)
+	reg := freshRegistry(5, b)
+	if _, err := SignRegistry(rootPriv, reg); err == nil {
+		t.Fatal("expected SignRegistry reject for out-of-range binding key_epoch")
+	}
+	_ = rootPub
+}
+
+func TestResolve_HonorsValidFromBoundaryInclusive(t *testing.T) {
+	// Over-rejection guard: a binding is active AT exactly now == valid_from.
+	agentPub, _ := genKey(t)
+	b := liveBinding(t, "mira", agentPub, 1)
+	atStart := time.Unix(b.ValidFrom, 0)
+	if _, err := Resolve(freshRegistry(5, b), "mira", atStart); err != nil {
+		t.Fatalf("valid_from is inclusive: binding must resolve AT exactly valid_from, got: %v", err)
 	}
 }
 

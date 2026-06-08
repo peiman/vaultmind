@@ -59,9 +59,15 @@ func NewPublicKey(b []byte) (PublicKey, error) {
 	return PublicKey{key: pk}, nil
 }
 
-// Bytes returns the raw 32-byte public key. The slice aliases internal storage;
-// callers must not mutate it.
-func (p PublicKey) Bytes() ed25519.PublicKey { return p.key }
+// Bytes returns a defensive COPY of the raw 32-byte public key. A copy (not an
+// alias to internal storage) preserves the validated-key invariant: a caller
+// that mutates the returned slice cannot corrupt the PublicKey held in a
+// binding.
+func (p PublicKey) Bytes() ed25519.PublicKey {
+	out := make(ed25519.PublicKey, len(p.key))
+	copy(out, p.key)
+	return out
+}
 
 // SignedEntry is PROOF that a raw entry passed the Contract-B schema gate, was
 // canonicalized, and verified under a validated PublicKey. The ONLY constructor

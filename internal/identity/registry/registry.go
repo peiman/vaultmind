@@ -60,11 +60,37 @@ const (
 	ErrKeyEpochMismatch = "registry: key_epoch does not match the live binding"
 	// ErrBadRootKey is returned by SignRegistry for a nil/wrong-length root key.
 	ErrBadRootKey = "registry: root private key must be ed25519.PrivateKeySize bytes"
+	// ErrEpochRange is returned by SignRegistry/VerifyAndLoad when an epoch
+	// (registry epoch or a binding key_epoch) is outside [1, MaxSafeEpoch]. JCS
+	// (RFC 8785) renders numbers as IEEE-754 doubles, so an epoch above 2^53
+	// silently rounds (cross-language parity break + epoch confusion) and an
+	// epoch near MaxInt64 fails JSON unmarshal (DoS); a zero/negative epoch also
+	// breaks the monotonic anti-rollback floor.
+	ErrEpochRange = "registry: epoch out of range [1, 2^53]"
+	// ErrNotYetValid is returned by Resolve/VerifyMessage when now is before a
+	// binding's valid_from (a not-yet-active binding must not resolve or verify).
+	ErrNotYetValid = "registry: binding is not yet valid"
+	// ErrDuplicateBinding is returned by VerifyAndLoad when the registry contains
+	// duplicate {slug,key_epoch} tuples, or more than one live (non-revoked)
+	// binding for the same slug (shadowing / ambiguous-resolution defense).
+	ErrDuplicateBinding = "registry: duplicate binding (slug/key_epoch or multiple live bindings per slug)"
 	// errMarshalRegistry wraps a registry JSON-marshal failure.
 	errMarshalRegistry = "registry: marshal registry"
 	// errUnmarshalRegistry wraps a canonical-registry JSON-unmarshal failure.
 	errUnmarshalRegistry = "registry: unmarshal registry"
+
+	// MaxSafeEpoch is the inclusive upper bound for any epoch (registry epoch and
+	// binding key_epoch). It is 2^53 — the largest integer JCS (which formats
+	// numbers as IEEE-754 doubles) can render without precision loss, so epochs in
+	// [1, MaxSafeEpoch] round-trip identically across languages and never DoS the
+	// JSON unmarshal path. The floor of 1 gives the monotonic counter a positive
+	// base (negative/zero rejected).
+	MaxSafeEpoch = 1 << 53
 )
+
+// epochInRange reports whether e is within the JCS-safe, anti-rollback-floored
+// range [1, MaxSafeEpoch].
+func epochInRange(e int) bool { return e >= 1 && e <= MaxSafeEpoch }
 
 // AgentBinding binds a slug to a validated ed25519 public key for one key epoch,
 // with a freshness window and an optional revocation timestamp. The ed25519
@@ -209,6 +235,17 @@ func SignRegistry(rootPriv ed25519.PrivateKey, reg Registry) (SignedRegistry, er
 	if len(rootPriv) != ed25519.PrivateKeySize {
 		return SignedRegistry{}, fmt.Errorf("%s", ErrBadRootKey)
 	}
+	// Refuse to sign an out-of-range epoch (registry or any binding key_epoch):
+	// these are JCS-unsafe / break the anti-rollback floor, so they must never be
+	// minted in the first place.
+	if !epochInRange(reg.Epoch) {
+		return SignedRegistry{}, fmt.Errorf("%s", ErrEpochRange)
+	}
+	for _, a := range reg.Agents {
+		if !epochInRange(a.KeyEpoch) {
+			return SignedRegistry{}, fmt.Errorf("%s", ErrEpochRange)
+		}
+	}
 	canonical, err := canonicalBytes(reg)
 	if err != nil {
 		return SignedRegistry{}, err
@@ -230,9 +267,18 @@ func SignRegistry(rootPriv ed25519.PrivateKey, reg Registry) (SignedRegistry, er
 //  1. ROOT SIG: verify root_sig over the canonical registry bytes via
 //     identity.VerifyCanonical (which rejects a small-order/non-canonical root
 //     key and a non-canonical signature). A bad sig is rejected.
-//  2. ANTI-ROLLBACK: reject if reg.epoch <= persistedHighestEpoch.
-//  3. FRESHNESS: reject (fail closed) if now is past reg.valid_until OR
-//     (now - reg.valid_from) > maxStaleness.
+//  2. EPOCH RANGE: reject if reg.epoch or any binding key_epoch is outside
+//     [1, MaxSafeEpoch] (JCS-safe + anti-rollback floor).
+//  3. UNIQUENESS: reject duplicate {slug,key_epoch} tuples or more than one live
+//     binding per slug.
+//  4. ANTI-ROLLBACK: reject if reg.epoch <= persistedHighestEpoch.
+//  5. FRESHNESS: reject (fail closed) if now is before reg.valid_from, past
+//     reg.valid_until, OR (now - reg.valid_from) > maxStaleness.
+//
+// Boundary convention: valid_until and maxStaleness are INCLUSIVE — a registry
+// is honored AT exactly now == valid_until and AT exactly staleness ==
+// maxStaleness, and rejected one tick past either. valid_from is inclusive too
+// (honored AT now == valid_from, rejected before it).
 //
 // On success it returns the verified Registry and newHighestEpoch =
 // max(persistedHighestEpoch, reg.epoch) for the caller to persist.
@@ -267,12 +313,38 @@ func VerifyAndLoad(
 		return Registry{}, persistedHighestEpoch, err
 	}
 
-	// 2. Anti-rollback.
+	// 2. Epoch range — reject a JCS-unsafe / non-positive epoch (registry epoch
+	// and every binding key_epoch). An out-of-range epoch in the authenticated
+	// body means epoch confusion or a broken monotonic floor; fail closed.
+	if !epochInRange(reg.Epoch) {
+		return Registry{}, persistedHighestEpoch, fmt.Errorf("%s", ErrEpochRange)
+	}
+	for _, b := range reg.Agents {
+		if !epochInRange(b.KeyEpoch) {
+			return Registry{}, persistedHighestEpoch, fmt.Errorf("%s", ErrEpochRange)
+		}
+	}
+
+	// 3. Uniqueness — reject duplicate {slug,key_epoch} tuples and more than one
+	// live (non-revoked) binding per slug, so a shadow binding cannot mask the
+	// intended one.
+	if err := checkBindingUniqueness(reg.Agents); err != nil {
+		return Registry{}, persistedHighestEpoch, err
+	}
+
+	// 4. Anti-rollback.
 	if reg.Epoch <= persistedHighestEpoch {
 		return Registry{}, persistedHighestEpoch, fmt.Errorf("%s", ErrRollback)
 	}
 
-	// 3. Freshness — fail closed. A stale registry may hide a revocation.
+	// 5. Freshness — fail closed. A stale registry may hide a revocation. A
+	// registry whose valid_from is in the FUTURE is NOT fresh, it is suspicious:
+	// without this guard a future valid_from yields a negative staleness that
+	// always satisfies maxStaleness (perpetual freshness; defeats
+	// revocation-withholding limits).
+	if now.Unix() < reg.ValidFrom {
+		return Registry{}, persistedHighestEpoch, fmt.Errorf("%s", ErrStale)
+	}
 	if now.Unix() > reg.ValidUntil {
 		return Registry{}, persistedHighestEpoch, fmt.Errorf("%s", ErrStale)
 	}
@@ -288,15 +360,23 @@ func VerifyAndLoad(
 }
 
 // Resolve returns the LIVE binding for slug at now. It default-denies: a binding
-// with revoked_at set, or one whose valid_until has passed, is rejected; an
-// unknown slug is rejected. When multiple bindings share a slug (rotation), the
-// first live, unexpired one is returned.
+// with revoked_at set, one whose valid_until has passed, or one whose valid_from
+// is still in the future (not yet active), is skipped. When the slug exists only
+// in a revoked form, ErrRevoked is returned so the reason is distinguishable
+// from ErrUnknownSlug; otherwise an unknown/no-live-binding slug is rejected.
+// When multiple bindings share a slug (rotation), the first live, in-window one
+// is returned.
 func Resolve(reg Registry, slug string, now time.Time) (AgentBinding, error) {
+	sawRevoked := false
 	for _, b := range reg.Agents {
 		if b.Slug != slug {
 			continue
 		}
 		if b.RevokedAt != nil {
+			sawRevoked = true
+			continue
+		}
+		if now.Unix() < b.ValidFrom {
 			continue
 		}
 		if now.Unix() > b.ValidUntil {
@@ -304,7 +384,39 @@ func Resolve(reg Registry, slug string, now time.Time) (AgentBinding, error) {
 		}
 		return b, nil
 	}
+	// Distinguish "the slug exists but every binding for it is revoked" from
+	// "no such slug" so callers can alert specifically on revocation probing.
+	if sawRevoked {
+		return AgentBinding{}, fmt.Errorf("%s: %q", ErrRevoked, slug)
+	}
 	return AgentBinding{}, fmt.Errorf("%s: %q", ErrUnknownSlug, slug)
+}
+
+// checkBindingUniqueness rejects a binding set that contains duplicate
+// {slug,key_epoch} tuples or more than one live (non-revoked) binding for the
+// same slug. Either condition lets a shadow binding mask the intended one, so a
+// conforming registry must not ship them.
+func checkBindingUniqueness(agents []AgentBinding) error {
+	type tuple struct {
+		slug  string
+		epoch int
+	}
+	seenTuple := make(map[tuple]struct{}, len(agents))
+	liveSlug := make(map[string]struct{}, len(agents))
+	for _, b := range agents {
+		tk := tuple{slug: b.Slug, epoch: b.KeyEpoch}
+		if _, dup := seenTuple[tk]; dup {
+			return fmt.Errorf("%s", ErrDuplicateBinding)
+		}
+		seenTuple[tk] = struct{}{}
+		if b.RevokedAt == nil {
+			if _, dup := liveSlug[b.Slug]; dup {
+				return fmt.Errorf("%s", ErrDuplicateBinding)
+			}
+			liveSlug[b.Slug] = struct{}{}
+		}
+	}
+	return nil
 }
 
 // VerifyMessage resolves the live binding for slug, requires keyEpoch to match
@@ -338,6 +450,9 @@ func resolveTuple(reg Registry, slug string, keyEpoch int, now time.Time) (Agent
 		}
 		if b.RevokedAt != nil {
 			return AgentBinding{}, fmt.Errorf("%s: %q", ErrRevoked, slug)
+		}
+		if now.Unix() < b.ValidFrom {
+			return AgentBinding{}, fmt.Errorf("%s: %q", ErrNotYetValid, slug)
 		}
 		if now.Unix() > b.ValidUntil {
 			return AgentBinding{}, fmt.Errorf("%s: %q", ErrExpiredBinding, slug)
