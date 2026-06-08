@@ -43,11 +43,11 @@ func TestCanonicalize_FrozenVector(t *testing.T) {
 	require.NoError(t, err)
 
 	wantBytes := mustDecodeHex(t, frozenCanonicalBytesHex)
-	assert.True(t, bytes.Equal(wantBytes, got),
-		"canonical bytes mismatch:\n got hex=%s\nwant hex=%s", hex.EncodeToString(got), frozenCanonicalBytesHex)
+	assert.True(t, bytes.Equal(wantBytes, got.Bytes()),
+		"canonical bytes mismatch:\n got hex=%s\nwant hex=%s", hex.EncodeToString(got.Bytes()), frozenCanonicalBytesHex)
 
 	// The canonical UTF-8 string form must match exactly.
-	assert.Equal(t, frozenCanonicalUTF8, string(got))
+	assert.Equal(t, frozenCanonicalUTF8, string(got.Bytes()))
 }
 
 func TestCanonicalize_StarSurvivesAsRawUTF8(t *testing.T) {
@@ -55,19 +55,19 @@ func TestCanonicalize_StarSurvivesAsRawUTF8(t *testing.T) {
 	require.NoError(t, err)
 
 	starBytes := mustDecodeHex(t, frozenStarUTF8Hex)
-	assert.True(t, bytes.Contains(got, starBytes),
+	assert.True(t, bytes.Contains(got.Bytes(), starBytes),
 		"raw UTF-8 star (e2ad90) must appear in canonical output")
 	// The star must survive as raw UTF-8: the literal rune is present and the
 	// output contains no \u-escape sequence for it. We build the escape
 	// strings from runes to avoid editor/source rendering the escape as a
 	// literal star.
-	assert.Contains(t, string(got), "⭐",
+	assert.Contains(t, string(got.Bytes()), "⭐",
 		"star must remain raw UTF-8")
 	lowerEscape := string([]rune{'\\', 'u', '2', 'b', '5', '0'})
 	upperEscape := string([]rune{'\\', 'u', '2', 'B', '5', '0'})
-	assert.NotContains(t, string(got), lowerEscape,
+	assert.NotContains(t, string(got.Bytes()), lowerEscape,
 		"star must NOT be \\u-escaped (lowercase)")
-	assert.NotContains(t, string(got), upperEscape,
+	assert.NotContains(t, string(got.Bytes()), upperEscape,
 		"star must NOT be \\u-escaped (uppercase)")
 }
 
@@ -76,12 +76,80 @@ func TestCanonicalize_RejectsInvalidJSON(t *testing.T) {
 	assert.Error(t, err)
 }
 
+// TestCanonicalize_SortsNestedKeys is parity-critical: JCS must sort object keys
+// RECURSIVELY, at every nesting level. The flat frozen vector only exercises
+// top-level sorting, so this guards the exact Go<->Rust parity risk a flat
+// vector would miss — a nested object's keys must come out byte-for-byte sorted.
+func TestCanonicalize_SortsNestedKeys(t *testing.T) {
+	got, err := identity.Canonicalize([]byte(`{"z":1,"meta":{"b":2,"a":1}}`))
+	require.NoError(t, err)
+	assert.Equal(t, `{"meta":{"a":1,"b":2},"z":1}`, string(got.Bytes()),
+		"nested object keys must be sorted recursively, byte-for-byte")
+}
+
+// TestCanonicalize_EmptyObjectAndArray: empty containers must canonicalize to
+// themselves, and an empty object/array nested in an object must pass the gate.
+func TestCanonicalize_EmptyObjectAndArray(t *testing.T) {
+	emptyObj, err := identity.Canonicalize([]byte(`{}`))
+	require.NoError(t, err)
+	assert.Equal(t, `{}`, string(emptyObj.Bytes()), "empty object must canonicalize to itself")
+
+	emptyArr, err := identity.Canonicalize([]byte(`[]`))
+	require.NoError(t, err)
+	assert.Equal(t, `[]`, string(emptyArr.Bytes()), "empty array must canonicalize to itself")
+
+	// Empty containers nested inside an object must pass the schema gate.
+	require.NoError(t, identity.ValidateSchema([]byte(`{"o":{},"a":[]}`)),
+		"an object containing an empty object and empty array must pass the gate")
+}
+
+// TestSignCanonical_BypassesSchemaGate documents (and proves) the low-level
+// primitive's contract: SignCanonical signs whatever CanonicalBytes it is given,
+// even bytes that the VALIDATED entry point SignEntry would reject. This is the
+// intentional registry/replay bypass — and exactly why the CanonicalBytes type
+// guards it: a caller must DELIBERATELY mint CanonicalBytes to use it.
+func TestSignCanonical_BypassesSchemaGate(t *testing.T) {
+	seed := mustDecodeHex(t, frozenSeedHex)
+	priv := ed25519.NewKeyFromSeed(seed)
+
+	// A float — a Contract-B schema violation. SignEntry must refuse it.
+	rawSchemaViolating := []byte(`{"val":1.0}`)
+	_, entryErr := identity.SignEntry(priv, rawSchemaViolating)
+	require.Error(t, entryErr, "SignEntry must reject a schema-violating entry (float)")
+
+	// But the low-level primitive signs the exact bytes it is handed, bypassing
+	// the gate, when the caller DELIBERATELY mints CanonicalBytes via the
+	// trusted constructor. (A raw []byte would not even compile here — that is
+	// the type guard. The bypass is only reachable through an explicit,
+	// greppable call, never an implicit conversion.)
+	sig, err := identity.SignCanonical(priv, identity.CanonicalBytesFromTrusted(rawSchemaViolating))
+	require.NoError(t, err, "SignCanonical must sign the bytes it is given (bypasses the schema gate)")
+	assert.Len(t, sig, ed25519.SignatureSize, "the bypass path still produces a real signature")
+}
+
+func TestSignEntry_EmptyAndWhitespaceInputError(t *testing.T) {
+	seed := mustDecodeHex(t, frozenSeedHex)
+	priv := ed25519.NewKeyFromSeed(seed)
+	for _, in := range []string{``, `   `, "\n\t "} {
+		_, err := identity.SignEntry(priv, []byte(in))
+		require.Error(t, err, "SignEntry(%q) must return an error, not panic", in)
+	}
+}
+
+func TestValidateSchema_EmptyAndWhitespaceInputError(t *testing.T) {
+	for _, in := range []string{``, `   `, "\n\t "} {
+		err := identity.ValidateSchema([]byte(in))
+		require.Error(t, err, "ValidateSchema(%q) must return an error, not panic", in)
+	}
+}
+
 func TestSign_ReproducesFrozenSignature(t *testing.T) {
 	seed := mustDecodeHex(t, frozenSeedHex)
 	priv := ed25519.NewKeyFromSeed(seed)
 
-	canonical := mustDecodeHex(t, frozenCanonicalBytesHex)
-	sig := identity.SignCanonical(priv, canonical)
+	canonical := identity.CanonicalBytesFromTrusted(mustDecodeHex(t, frozenCanonicalBytesHex))
+	sig, err := identity.SignCanonical(priv, canonical)
+	require.NoError(t, err)
 
 	assert.Equal(t, frozenSignatureHex, hex.EncodeToString(sig),
 		"signature over canonical bytes must match frozen vector")
@@ -89,10 +157,12 @@ func TestSign_ReproducesFrozenSignature(t *testing.T) {
 
 func TestVerify_FrozenVector(t *testing.T) {
 	pub := ed25519.PublicKey(mustDecodeHex(t, frozenPubkeyHex))
-	canonical := mustDecodeHex(t, frozenCanonicalBytesHex)
+	canonical := identity.CanonicalBytesFromTrusted(mustDecodeHex(t, frozenCanonicalBytesHex))
 	sig := mustDecodeHex(t, frozenSignatureHex)
 
-	assert.True(t, identity.VerifyCanonical(pub, canonical, sig))
+	ok, err := identity.VerifyCanonical(pub, canonical, sig)
+	require.NoError(t, err)
+	assert.True(t, ok)
 }
 
 func TestVerify_DerivedPubkeyMatchesFrozen(t *testing.T) {
@@ -166,7 +236,9 @@ func TestVerifyEntry_InvalidJSONErrors(t *testing.T) {
 
 func TestVerify_WrongLengthSignature(t *testing.T) {
 	pub := ed25519.PublicKey(mustDecodeHex(t, frozenPubkeyHex))
-	canonical := mustDecodeHex(t, frozenCanonicalBytesHex)
-	assert.False(t, identity.VerifyCanonical(pub, canonical, []byte{0x00}),
-		"a malformed (wrong-length) signature must return false, not panic")
+	canonical := identity.CanonicalBytesFromTrusted(mustDecodeHex(t, frozenCanonicalBytesHex))
+	ok, err := identity.VerifyCanonical(pub, canonical, []byte{0x00})
+	assert.False(t, ok, "a malformed (wrong-length) signature must not verify")
+	require.ErrorContains(t, err, identity.ErrVerifyBadSigLen,
+		"a wrong-length signature is a STRUCTURAL reject — must return a non-nil error, not (false, nil)")
 }

@@ -15,24 +15,28 @@ func TestValidateSchema_AcceptsValidEntry(t *testing.T) {
 
 func TestValidateSchema_RejectsFloatDecimal(t *testing.T) {
 	err := identity.ValidateSchema([]byte(`{"key_epoch":1.0}`))
-	assert.Error(t, err, "a decimal float (1.0) must be rejected")
+	require.ErrorContains(t, err, identity.ErrSchemaFloatNumber,
+		"a decimal float (1.0) must be rejected by the float rule")
 }
 
 func TestValidateSchema_RejectsFloatExponent(t *testing.T) {
 	err := identity.ValidateSchema([]byte(`{"key_epoch":1e3}`))
-	assert.Error(t, err, "an exponent float (1e3) must be rejected")
+	require.ErrorContains(t, err, identity.ErrSchemaFloatNumber,
+		"an exponent float (1e3) must be rejected by the float rule")
 }
 
 func TestValidateSchema_RejectsNegativeFloat(t *testing.T) {
 	err := identity.ValidateSchema([]byte(`{"valid_from":-1.5}`))
-	assert.Error(t, err, "a negative float must be rejected")
+	require.ErrorContains(t, err, identity.ErrSchemaFloatNumber,
+		"a negative float must be rejected by the float rule")
 }
 
 func TestValidateSchema_RejectsIntAbove2Pow53(t *testing.T) {
 	// 2^53 + 1 = 9007199254740993, the first integer not exactly
 	// representable as a float64 — Contract B forbids it.
 	err := identity.ValidateSchema([]byte(`{"valid_until":9007199254740993}`))
-	assert.Error(t, err, "an integer above 2^53 must be rejected")
+	require.ErrorContains(t, err, identity.ErrSchemaIntTooLarge,
+		"an integer above 2^53 must be rejected by the int-range rule")
 }
 
 func TestValidateSchema_AcceptsIntAt2Pow53(t *testing.T) {
@@ -43,7 +47,8 @@ func TestValidateSchema_AcceptsIntAt2Pow53(t *testing.T) {
 
 func TestValidateSchema_RejectsNonASCIIObjectKey(t *testing.T) {
 	err := identity.ValidateSchema([]byte(`{"naïve":1}`))
-	assert.Error(t, err, "a non-ASCII object key must be rejected")
+	require.ErrorContains(t, err, identity.ErrSchemaNonASCIIKey,
+		"a non-ASCII object key must be rejected by the ASCII-key rule")
 }
 
 func TestValidateSchema_AcceptsNonASCIIStringValue(t *testing.T) {
@@ -62,7 +67,8 @@ func TestValidateSchema_RejectsInvalidUTF8StringValue(t *testing.T) {
 
 func TestValidateSchema_RejectsDuplicateKeys(t *testing.T) {
 	err := identity.ValidateSchema([]byte(`{"slug":"a","slug":"b"}`))
-	assert.Error(t, err, "duplicate object keys must be rejected (ambiguous, JCS-unsafe)")
+	require.ErrorContains(t, err, identity.ErrSchemaDuplicateKey,
+		"duplicate object keys must be rejected by the duplicate-key rule (ambiguous, JCS-unsafe)")
 }
 
 func TestValidateSchema_WalksNestedObjects(t *testing.T) {
@@ -91,7 +97,8 @@ func TestValidateSchema_AcceptsNestedASCIIAndUTF8(t *testing.T) {
 func TestValidateSchema_RejectsIntegerBeyondInt64(t *testing.T) {
 	// Far beyond int64 max — ParseInt fails, must still be rejected as too large.
 	err := identity.ValidateSchema([]byte(`{"n":99999999999999999999}`))
-	assert.Error(t, err, "an integer beyond int64 range must be rejected as too large")
+	require.ErrorContains(t, err, identity.ErrSchemaIntTooLarge,
+		"an integer beyond int64 range must be rejected by the int-range rule")
 }
 
 func TestValidateSchema_RejectsNegativeIntBelowBound(t *testing.T) {
@@ -119,13 +126,24 @@ func TestValidateSchema_AcceptsBoolAndNull(t *testing.T) {
 
 func TestValidateSchema_RejectsTrailingData(t *testing.T) {
 	err := identity.ValidateSchema([]byte(`{"a":1}{"b":2}`))
-	assert.Error(t, err, "trailing data after the first JSON value must be rejected")
+	require.ErrorContains(t, err, identity.ErrSchemaTrailingInput,
+		"trailing data after the first JSON value must be rejected by the trailing-data rule")
 }
 
-func TestValidateSchema_RejectsTopLevelScalar_OK(t *testing.T) {
-	// A bare top-level number is still a valid JSON value and must walk cleanly.
-	require.NoError(t, identity.ValidateSchema([]byte(`42`)),
-		"a bare in-range integer is a valid top-level value")
+func TestValidateSchema_RejectsBareScalarRoot(t *testing.T) {
+	// Contract-B entries are JSON OBJECTS. A bare top-level scalar (or array)
+	// is a valid JSON value but not a conformant Contract-B entry, so it must
+	// be rejected by the top-level-kind check before the walk.
+	for _, doc := range []string{`null`, `true`, `false`, `42`, `"slug"`, `[1,2]`} {
+		err := identity.ValidateSchema([]byte(doc))
+		require.ErrorContains(t, err, identity.ErrSchemaNotObject,
+			"a bare top-level non-object (%s) must be rejected", doc)
+	}
+}
+
+func TestValidateSchema_AcceptsTopLevelObject(t *testing.T) {
+	require.NoError(t, identity.ValidateSchema([]byte(`{"slug":"mira"}`)),
+		"a top-level object must be accepted")
 }
 
 func TestValidateSchema_RejectsUnbalancedArray(t *testing.T) {
