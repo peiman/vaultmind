@@ -249,6 +249,21 @@ var commandCatalog = map[string]catalogEntry{
 		when:  "you finished a session and want candidate transformation moments to review for arcs.",
 		short: "Surface candidate transformation moments for arc distillation",
 	},
+	"vaultmind identity": {
+		group: groupLifecycle,
+		when:  "you need Contract-B agent identity: mint a keypair or sign an entry via the keyless signer.",
+		short: "Contract-B agent identity: keypair custody and signing",
+	},
+	"vaultmind identity init": {
+		group: groupLifecycle,
+		when:  "you are setting up an agent and need to mint its ed25519 keypair and seal the private key to the signer.",
+		short: "Mint an agent keypair and seal the private key to the signer",
+	},
+	"vaultmind identity sign": {
+		group: groupLifecycle,
+		when:  "you have a Contract-B entry to sign and want it validated, canonicalized, and signed by the keyless signer.",
+		short: "Validate, canonicalize, and sign an entry via the keyless signer",
+	},
 	"vaultmind hooks": {
 		group: groupLifecycle,
 		when:  "you need to install, remove, or check VaultMind's Claude Code hook scripts.",
