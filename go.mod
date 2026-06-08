@@ -6,6 +6,7 @@ require (
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/go-git/go-git/v5 v5.19.1
+	github.com/gowebpki/jcs v1.0.1
 	github.com/knights-analytics/hugot v0.7.0
 	github.com/mattn/go-isatty v0.0.22
 	github.com/nlpodyssey/gopickle v0.3.0
@@ -109,4 +110,5 @@ require (
 
 // Versions before v0.1.3 predate the public release; use v0.1.3 or later.
 retract [v0.1.0, v0.1.2] // Predate the public release; superseded by v0.1.3.
+
 retract v0.1.6 // Prebuilt release artifacts failed to build (coverage gate); go-installable but incomplete — use v0.1.7.

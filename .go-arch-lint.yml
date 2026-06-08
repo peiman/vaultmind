@@ -130,6 +130,8 @@ components:
       - internal/noisefloor/**
       # VaultMind vault discovery primitive (pure filesystem walk: find vault roots under a dir; no business deps — used by doctor --all):
       - internal/discovery/**
+      # VaultMind Contract-B trust-root signing core (pure: RFC 8785 JCS canonicalization, ed25519 sign/verify over canonical bytes, schema-validation gate; stdlib + jcs vendor only, no business deps):
+      - internal/identity/**
 
   # -------------------------------------------------------------------------
   # PROJECT-MANAGED: Business Logic Layer
