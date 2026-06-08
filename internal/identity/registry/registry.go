@@ -85,6 +85,15 @@ const (
 	// [1, MaxSafeEpoch] round-trip identically across languages and never DoS the
 	// JSON unmarshal path. The floor of 1 gives the monotonic counter a positive
 	// base (negative/zero rejected).
+	//
+	// TODO(contract-b hardening): defense-in-depth — consider MaxSafeEpoch = (1<<53)-1.
+	// A compromised root could hand-craft a body with epoch 2^53+1, which JCS rounds
+	// to 2^53 (in-range at this ceiling). Unreachable via the legitimate SignRegistry
+	// mint gate (it rejects >2^53 pre-canonicalization), so this is belt-and-suspenders
+	// against an already-compromised root, not a real attacker capability. With the
+	// ceiling at 2^53-1, a 2^53+1 body rounds to 2^53 which is then above-ceiling and
+	// rejected at load too. Alternative: a round-trip re-canonicalization equality
+	// check in VerifyAndLoad (closes the whole JCS-normalized-field-smuggling class).
 	MaxSafeEpoch = 1 << 53
 )
 
