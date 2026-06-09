@@ -32,9 +32,15 @@ const enrollFixturePath = "testdata/enrollment_request_vectors.json"
 // Rust side cross-checks its canonicalization), and an array of named REJECT
 // cases. Every byte is deterministic (fixed seeds).
 type enrollFixture struct {
-	SigningPubKey string             `json:"signing_pubkey"`
-	Valid         enrollValidCase    `json:"valid"`
-	Reject        []enrollRejectCase `json:"reject"`
+	SigningPubKey string          `json:"signing_pubkey"`
+	Valid         enrollValidCase `json:"valid"`
+	// ValidWithTransportEndpoint pins the OPTIONAL-FIELD-PRESENT canonical bytes:
+	// transport_endpoint sorts between "slug" and "transport_pubkey" in JCS, so its
+	// presence shifts the key order + adds bytes — the most parity-fragile branch of
+	// the contract. Committing it as a vector forces the Rust verifier to emit/omit
+	// identically.
+	ValidWithTransportEndpoint enrollValidCase    `json:"valid_with_transport_endpoint"`
+	Reject                     []enrollRejectCase `json:"reject"`
 }
 
 // wireRequest is the JSON shape of the enrollment request's SIGNED-SUBSET fields
@@ -83,9 +89,15 @@ type enrollValidCase struct {
 // enrollRejectCase is a negative case that MUST fail VerifyEnrollment (or, for
 // the gate-only cases, CanonicalizeEnrollment).
 type enrollRejectCase struct {
-	Name    string      `json:"name"`
-	Reason  string      `json:"reason"`
-	Expect  string      `json:"expect"` // always "reject"
+	Name   string `json:"name"`
+	Reason string `json:"reason"`
+	Expect string `json:"expect"` // always "reject"
+	// Stage is where the rejection MUST occur: "gate" (CanonicalizeEnrollment, a
+	// pre-sign field gate) or "verify" (a valid-shape request whose signature does
+	// not match — proof-of-possession / tamper). The Rust verifier should reject at
+	// the same stage; asserting it here catches a gate→sig degradation that a bare
+	// "is it rejected?" check would miss.
+	Stage   string      `json:"stage"`
 	Request wireRequest `json:"request"`
 }
 
@@ -127,9 +139,18 @@ func buildEnrollFixture(t *testing.T) enrollFixture {
 
 	base := validFields(agentPub)
 
-	// VALID self-signed request.
+	// VALID self-signed request (transport_endpoint ABSENT — the omitted branch).
 	validWire := signWire(t, agentPriv, base)
 	canonical, err := CanonicalizeEnrollment(base)
+	require.NoError(t, err)
+
+	// VALID self-signed request WITH transport_endpoint PRESENT — pins the
+	// optional-field-present canonical bytes (transport_endpoint sorts between
+	// "slug" and "transport_pubkey" in JCS — the most parity-fragile branch).
+	withEP := base
+	withEP.TransportEndpoint = strptr("203.0.113.7:51820")
+	withEPWire := signWire(t, agentPriv, withEP)
+	withEPCanonical, err := CanonicalizeEnrollment(withEP)
 	require.NoError(t, err)
 
 	fx := enrollFixture{
@@ -137,6 +158,10 @@ func buildEnrollFixture(t *testing.T) enrollFixture {
 		Valid: enrollValidCase{
 			Request:        validWire,
 			CanonicalBytes: b64(canonical.Bytes()),
+		},
+		ValidWithTransportEndpoint: enrollValidCase{
+			Request:        withEPWire,
+			CanonicalBytes: b64(withEPCanonical.Bytes()),
 		},
 	}
 
@@ -198,6 +223,27 @@ func buildEnrollFixture(t *testing.T) enrollFixture {
 	nan := base
 	nan.Nonce = "nØnce"
 	add("non_ascii_nonce", "nonce contains non-ASCII (gate reject)", rawWire(nan))
+
+	// Stage labels: where each reject MUST fail — "gate" (CanonicalizeEnrollment, a
+	// pre-sign field gate) or "verify" (valid-shape request whose signature
+	// mismatches). Asserting the stage catches a gate→sig degradation a bare
+	// "is it rejected?" check would miss.
+	stages := map[string]string{
+		"tampered_display_name":    "verify",
+		"wrong_key_self_sig":       "verify",
+		"tampered_network_id":      "verify",
+		"downgraded_alg_version":   "gate",
+		"key_epoch_above_2pow53":   "gate",
+		"created_above_2pow53":     "gate",
+		"non_nfc_display_name":     "gate",
+		"missing_transport_pubkey": "gate",
+		"bad_transport_pubkey_len": "gate",
+		"empty_nonce":              "gate",
+		"non_ascii_nonce":          "gate",
+	}
+	for i := range fx.Reject {
+		fx.Reject[i].Stage = stages[fx.Reject[i].Name]
+	}
 
 	return fx
 }
@@ -287,6 +333,67 @@ func TestEnrollmentRequestFixture_AllRejectsAreRejected(t *testing.T) {
 			require.NoError(t, err)
 			ok, verr := VerifyEnrollment(f, sig)
 			assert.False(t, ok && verr == nil, "case %q (%s) MUST be rejected by VerifyEnrollment", rc.Name, rc.Reason)
+
+			// Stage assertion: a "gate" case MUST be rejected by CanonicalizeEnrollment
+			// (the pre-sign field gate), not merely caught later by the signature
+			// check — catches a gate→sig degradation a bare "is it rejected?" misses.
+			switch rc.Stage {
+			case "gate":
+				_, cerr := CanonicalizeEnrollment(f)
+				assert.Error(t, cerr, "gate-stage case %q must reject at CanonicalizeEnrollment", rc.Name)
+			case "verify":
+				// A verify-stage case is well-formed (passes the gate) but its sig
+				// must not match.
+				_, cerr := CanonicalizeEnrollment(f)
+				assert.NoError(t, cerr, "verify-stage case %q should pass the gate (it fails at the sig)", rc.Name)
+			default:
+				t.Fatalf("case %q has no stage label", rc.Name)
+			}
 		})
 	}
+}
+
+// TestEnrollmentRequestFixture_ValidWithTransportEndpointVerifies pins the
+// optional-field-PRESENT branch: the request verifies, its recorded canonical
+// bytes match this implementation, and transport_endpoint is emitted INLINE (not
+// null/omitted). This is the most parity-fragile branch for the Rust verifier.
+func TestEnrollmentRequestFixture_ValidWithTransportEndpointVerifies(t *testing.T) {
+	fx := loadEnrollFixture(t)
+	vc := fx.ValidWithTransportEndpoint
+	f := vc.Request.toFields()
+	require.NotNil(t, f.TransportEndpoint, "this vector must carry transport_endpoint present")
+
+	canonical, err := CanonicalizeEnrollment(f)
+	require.NoError(t, err)
+	assert.Equal(t, vc.CanonicalBytes, b64(canonical.Bytes()),
+		"recorded present-endpoint canonical bytes must match this implementation")
+	assert.Contains(t, string(canonical.Bytes()), `"transport_endpoint":"`+*f.TransportEndpoint+`"`,
+		"present endpoint must be emitted inline, never null/omitted")
+
+	sig, err := base64.StdEncoding.DecodeString(vc.Request.Sig)
+	require.NoError(t, err)
+	ok, err := VerifyEnrollment(f, sig)
+	require.NoError(t, err)
+	assert.True(t, ok, "the present-endpoint valid request must verify")
+}
+
+// TestCanonicalize_NullTransportEndpoint_EqualsAbsent proves a JSON `null`
+// transport_endpoint decodes to a nil pointer (ABSENT), so its canonical bytes are
+// IDENTICAL to the omitted case — the absent≠null contract the Rust side must
+// replicate (null MUST NOT appear in the signed bytes).
+func TestCanonicalize_NullTransportEndpoint_EqualsAbsent(t *testing.T) {
+	pub, _ := fixedEd25519(t, 0xB2)
+	base := validFields(pub) // TransportEndpoint nil
+	absent, err := CanonicalizeEnrollment(base)
+	require.NoError(t, err)
+
+	var ep *string
+	require.NoError(t, json.Unmarshal([]byte(`null`), &ep))
+	require.Nil(t, ep, "JSON null must decode to a nil *string (absent)")
+	withNull := base
+	withNull.TransportEndpoint = ep
+	got, err := CanonicalizeEnrollment(withNull)
+	require.NoError(t, err)
+	assert.Equal(t, string(absent.Bytes()), string(got.Bytes()),
+		"transport_endpoint:null must canonicalize identically to absent (never emitted as null)")
 }

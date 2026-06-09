@@ -15,11 +15,28 @@
     },
     "canonical_signed_bytes": "eyJhbGdfdmVyc2lvbiI6MSwiY3JlYXRlZCI6MjAwMDAwMCwiZGlzcGxheV9uYW1lIjoiTWlyYSDirZAiLCJrZXlfZXBvY2giOjEsIm5ldHdvcmtfaWQiOiJ2bW5ldDE6MDAxMTIyMzM0NDU1NjY3Nzg4OTkwMGFhYmJjY2RkZWUiLCJub25jZSI6IllXSmpaR1ZtWjJocGFtdHNiVzV2Y0E9PSIsInB1YmtleSI6IlZSVlBRZ1plcGFHK29GUmpnbXZpYUU2NUxma3NFQUFucXJxdVY4cFZRZ2M9Iiwic2x1ZyI6Im1pcmEiLCJ0cmFuc3BvcnRfcHVia2V5IjoiRVJFUkVSRVJFUkVSRVJFUkVSRVJFUkVSRVJFUkVSRVJFUkVSRVJFUkVSRT0ifQ=="
   },
+  "valid_with_transport_endpoint": {
+    "request": {
+      "alg_version": 1,
+      "created": 2000000,
+      "display_name": "Mira ⭐",
+      "key_epoch": 1,
+      "network_id": "vmnet1:0011223344556677889900aabbccddee",
+      "nonce": "YWJjZGVmZ2hpamtsbW5vcA==",
+      "pubkey": "VRVPQgZepaG+oFRjgmviaE65LfksEAAnqrquV8pVQgc=",
+      "slug": "mira",
+      "transport_endpoint": "203.0.113.7:51820",
+      "transport_pubkey": "ERERERERERERERERERERERERERERERERERERERERERE=",
+      "sig": "BeH+xSCbpPNuFC0/Aqc7JIczZNBSUD+1GcaJ/Huj5MO/2zX0GzW/ZuQMPMIuwsqx2bUM3Lty54iZoIrraTHeAw=="
+    },
+    "canonical_signed_bytes": "eyJhbGdfdmVyc2lvbiI6MSwiY3JlYXRlZCI6MjAwMDAwMCwiZGlzcGxheV9uYW1lIjoiTWlyYSDirZAiLCJrZXlfZXBvY2giOjEsIm5ldHdvcmtfaWQiOiJ2bW5ldDE6MDAxMTIyMzM0NDU1NjY3Nzg4OTkwMGFhYmJjY2RkZWUiLCJub25jZSI6IllXSmpaR1ZtWjJocGFtdHNiVzV2Y0E9PSIsInB1YmtleSI6IlZSVlBRZ1plcGFHK29GUmpnbXZpYUU2NUxma3NFQUFucXJxdVY4cFZRZ2M9Iiwic2x1ZyI6Im1pcmEiLCJ0cmFuc3BvcnRfZW5kcG9pbnQiOiIyMDMuMC4xMTMuNzo1MTgyMCIsInRyYW5zcG9ydF9wdWJrZXkiOiJFUkVSRVJFUkVSRVJFUkVSRVJFUkVSRVJFUkVSRVJFUkVSRVJFUkVSRVJFPSJ9"
+  },
   "reject": [
     {
       "name": "tampered_display_name",
       "reason": "display_name mutated after signing; signature no longer matches",
       "expect": "reject",
+      "stage": "verify",
       "request": {
         "alg_version": 1,
         "created": 2000000,
@@ -37,6 +54,7 @@
       "name": "wrong_key_self_sig",
       "reason": "signed by a key other than the pubkey field (proof-of-possession fails)",
       "expect": "reject",
+      "stage": "verify",
       "request": {
         "alg_version": 1,
         "created": 2000000,
@@ -54,6 +72,7 @@
       "name": "downgraded_alg_version",
       "reason": "alg_version downgraded to 2 (gate rejects at verify)",
       "expect": "reject",
+      "stage": "gate",
       "request": {
         "alg_version": 2,
         "created": 2000000,
@@ -71,6 +90,7 @@
       "name": "key_epoch_above_2pow53",
       "reason": "key_epoch above 2^53 (JCS-unsafe; typed reject)",
       "expect": "reject",
+      "stage": "gate",
       "request": {
         "alg_version": 1,
         "created": 2000000,
@@ -88,6 +108,7 @@
       "name": "created_above_2pow53",
       "reason": "created above 2^53 (JCS-unsafe; typed reject)",
       "expect": "reject",
+      "stage": "gate",
       "request": {
         "alg_version": 1,
         "created": 9007199254740993,
@@ -105,6 +126,7 @@
       "name": "non_nfc_display_name",
       "reason": "display_name is NFD (not NFC); rejected, never silently normalized",
       "expect": "reject",
+      "stage": "gate",
       "request": {
         "alg_version": 1,
         "created": 2000000,
@@ -122,6 +144,7 @@
       "name": "missing_transport_pubkey",
       "reason": "transport_pubkey absent/empty (required, signed) — reject",
       "expect": "reject",
+      "stage": "gate",
       "request": {
         "alg_version": 1,
         "created": 2000000,
@@ -139,6 +162,7 @@
       "name": "bad_transport_pubkey_len",
       "reason": "transport_pubkey is 16 bytes, not a 32-byte Curve25519 key",
       "expect": "reject",
+      "stage": "gate",
       "request": {
         "alg_version": 1,
         "created": 2000000,
@@ -156,6 +180,7 @@
       "name": "tampered_network_id",
       "reason": "network_id mutated (cross-network replay); signature no longer matches",
       "expect": "reject",
+      "stage": "verify",
       "request": {
         "alg_version": 1,
         "created": 2000000,
@@ -173,6 +198,7 @@
       "name": "empty_nonce",
       "reason": "nonce empty (gate reject)",
       "expect": "reject",
+      "stage": "gate",
       "request": {
         "alg_version": 1,
         "created": 2000000,
@@ -190,6 +216,7 @@
       "name": "non_ascii_nonce",
       "reason": "nonce contains non-ASCII (gate reject)",
       "expect": "reject",
+      "stage": "gate",
       "request": {
         "alg_version": 1,
         "created": 2000000,
