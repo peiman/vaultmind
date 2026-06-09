@@ -27,6 +27,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/peiman/vaultmind/internal/identity"
 )
@@ -65,6 +66,22 @@ const (
 	// which is a fail-open-looking deny-all misconfiguration: the signer would
 	// run and bind but sign nothing. Fail closed at construction instead.
 	errEmptyAllowlist = "signer: AllowedUIDs must list at least one uid (refusing deny-all)"
+	// errSignerAlreadyRunning is returned by Listen when a LIVE signer is already
+	// answering on the socket path — refusing to start prevents silently
+	// hijacking a running signer's socket (which would leave the first daemon
+	// alive-but-blind and clients reaching an unexpected key).
+	errSignerAlreadyRunning = "signer: already running at socket (refusing to start)"
+	// errSocketPathNotSocket is returned by Listen when the socket path exists but
+	// is NOT a socket — we never blind-delete an arbitrary file at a typo'd path.
+	errSocketPathNotSocket = "signer: path exists and is not a socket (refusing to remove)"
+	// errKeyFilePermissive is returned by loadPrivateKey when the key file is
+	// group/world-accessible — a custody key whose whole point is confinement must
+	// be 0600 (sshd-style strict modes); fail closed so a leaked-perm key is noticed.
+	errKeyFilePermissive = "signer: key file is group/world-accessible (refusing to load)"
+
+	// socketDialProbeTimeout bounds the liveness dial-probe in Listen so a
+	// misbehaving socket can't wedge startup.
+	socketDialProbeTimeout = 1500 * time.Millisecond
 )
 
 // PolicyFunc inspects the canonical bytes a caller asked to sign and returns a
@@ -131,13 +148,44 @@ func New(cfg Config) (*Signer, error) {
 	return &Signer{priv: priv, cfg: cfg, allowed: allowed}, nil
 }
 
-// Listen binds the 0600 Unix-domain socket. Any stale socket file at the path
-// is removed first. The socket is chmod'd to 0600 so only the owning uid can
-// connect (the same-uid dev-interim boundary; see package doc).
-func (s *Signer) Listen() error {
-	// Remove a stale socket left by a prior crashed run.
-	if err := os.Remove(s.cfg.SocketPath); err != nil && !os.IsNotExist(err) {
+// reapStaleSocket makes SocketPath safe to bind. It FAILS CLOSED rather than
+// blindly unlinking: if a LIVE signer is already answering there (dial-probe
+// succeeds) it refuses to start (no silent socket hijack / alive-but-blind
+// first daemon); if the path is a non-socket file it refuses (never deletes an
+// arbitrary file at a typo'd --signer-socket); it removes ONLY a genuinely-dead
+// socket left by a prior crash.
+func reapStaleSocket(path string) error {
+	info, err := os.Lstat(path)
+	if os.IsNotExist(err) {
+		return nil // nothing there — free to bind
+	}
+	if err != nil {
+		return fmt.Errorf("signer: stat socket path: %w", err)
+	}
+	if info.Mode()&os.ModeSocket == 0 {
+		return fmt.Errorf("%s: %q", errSocketPathNotSocket, path)
+	}
+	// It IS a socket — is a live signer answering? A successful dial means yes.
+	if conn, derr := net.DialTimeout(network, path, socketDialProbeTimeout); derr == nil {
+		_ = conn.Close()
+		return fmt.Errorf("%s: %q", errSignerAlreadyRunning, path)
+	}
+	// Dead socket (no listener / connection refused) — safe to reap.
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("signer: remove stale socket: %w", err)
+	}
+	return nil
+}
+
+// Listen binds the 0600 Unix-domain socket after reaping only a genuinely-dead
+// stale socket (see reapStaleSocket — a live signer at the path makes Listen
+// fail closed). The socket is chmod'd to 0600 so only the owning uid can connect
+// (the same-uid dev-interim boundary; see package doc).
+func (s *Signer) Listen() error {
+	// Reap only a genuinely-dead socket; refuse if a LIVE signer is already
+	// listening, and never delete a non-socket file at a typo'd path.
+	if err := reapStaleSocket(s.cfg.SocketPath); err != nil {
+		return err
 	}
 	addr, err := net.ResolveUnixAddr(network, s.cfg.SocketPath)
 	if err != nil {
@@ -199,13 +247,13 @@ func (s *Signer) Close() error {
 	ln := s.ln
 	s.ln = nil
 	s.mu.Unlock()
-	if ln != nil {
-		_ = ln.Close()
+	if ln == nil {
+		return nil
 	}
-	if err := os.Remove(s.cfg.SocketPath); err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	return nil
+	// Go's net.UnixListener (created via ListenUnix) unlinks the socket file IT
+	// created on Close. We rely on that and DO NOT blind-remove by path, which
+	// could unlink a successor's live socket (and would mask this Close's error).
+	return ln.Close()
 }
 
 // handle services one connection: authenticate the peer UID, read the request,
@@ -263,6 +311,16 @@ func (s *Signer) handle(conn *net.UnixConn) {
 // loadPrivateKey reads the sealed key file and returns the ed25519 private key.
 // It enforces the exact key length so a truncated/corrupt file fails closed.
 func loadPrivateKey(path string) (ed25519.PrivateKey, error) {
+	// Strict modes (sshd-style): refuse a group/world-accessible key file. The
+	// custody key's whole point is confinement; loading a 0644 key silently would
+	// contradict that. The message names the path + mode only, never contents.
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("signer: stat key file: %w", err)
+	}
+	if info.Mode().Perm()&0o077 != 0 {
+		return nil, fmt.Errorf("%s: %q has mode %#o", errKeyFilePermissive, path, info.Mode().Perm())
+	}
 	b, err := os.ReadFile(path) // #nosec G304 -- operator-configured sealed signer key path (signer Config), not runtime user input
 	if err != nil {
 		return nil, fmt.Errorf("signer: read key file: %w", err)

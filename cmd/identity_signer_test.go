@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
@@ -63,8 +64,10 @@ func TestRunIdentitySignerRoundTripAndGracefulShutdown(t *testing.T) {
 	sockPath := filepath.Join(sockDir, "s.sock")
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel() // no goroutine leak if an assertion below fails before the explicit cancel
 	done := make(chan error, 1)
-	go func() { done <- runIdentitySigner(ctx, io.Discard, keyPath, sockPath) }()
+	var out bytes.Buffer
+	go func() { done <- runIdentitySigner(ctx, &out, keyPath, sockPath) }()
 
 	waitForSocket(t, sockPath)
 
@@ -89,6 +92,21 @@ func TestRunIdentitySignerRoundTripAndGracefulShutdown(t *testing.T) {
 	}
 	if _, err := os.Stat(sockPath); !os.IsNotExist(err) {
 		t.Fatalf("socket not removed on shutdown: stat err = %v", err)
+	}
+
+	// 'Prints only non-secret lines': the socket path appears; the raw key bytes
+	// never do. Safe to read out after <-done (the goroutine's writes happen-before
+	// the send on done).
+	logged := out.String()
+	if !strings.Contains(logged, sockPath) {
+		t.Fatalf("startup line should name the socket path; got %q", logged)
+	}
+	keyBytes, rerr := os.ReadFile(keyPath)
+	if rerr != nil {
+		t.Fatalf("read key file: %v", rerr)
+	}
+	if bytes.Contains(out.Bytes(), keyBytes) {
+		t.Fatal("daemon output leaked raw key bytes")
 	}
 }
 

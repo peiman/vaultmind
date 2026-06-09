@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -92,8 +93,7 @@ func serveIdentitySigner(ctx context.Context, out io.Writer, cfg signer.Config) 
 		return fmt.Errorf("signer: listen: %w", err)
 	}
 	if _, err := fmt.Fprintf(out, signerListeningMsg, cfg.SocketPath); err != nil {
-		_ = s.Close()
-		return fmt.Errorf("signer: write startup line: %w", err)
+		return errors.Join(fmt.Errorf("signer: write startup line: %w", err), s.Close())
 	}
 
 	serveErr := make(chan error, 1)
@@ -101,10 +101,19 @@ func serveIdentitySigner(ctx context.Context, out io.Writer, cfg signer.Config) 
 
 	select {
 	case <-ctx.Done():
+		// Cleanup precedes cosmetics: Close (load-bearing socket removal) FIRST,
+		// so a SIGPIPE on a closed stdout can't kill us before cleanup; then
+		// best-effort print. Drain any Serve error that raced the signal so a real
+		// failure isn't silently dropped on the exit-0 path.
+		err := s.Close()
+		select {
+		case se := <-serveErr:
+			err = errors.Join(err, se)
+		default:
+		}
 		_, _ = fmt.Fprintf(out, signerShutdownMsg, cfg.SocketPath)
-		return s.Close()
-	case err := <-serveErr:
-		_ = s.Close()
 		return err
+	case err := <-serveErr:
+		return errors.Join(err, s.Close())
 	}
 }
