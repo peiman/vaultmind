@@ -236,6 +236,30 @@ func TestEnrollInviteDecodeErrorPropagates(t *testing.T) {
 			assert.Empty(t, out.String(), "no request must be emitted on a bad invite")
 		})
 	}
+
+	// network-mismatch: a hand-built token carrying a VALID root key but a
+	// network_id that does NOT derive from it. invite.Encode cannot produce this
+	// (its validate() rejects the mismatch), so assemble the wire JSON directly.
+	// This exercises the security-spine binding invite.Decode enforces and proves
+	// Enroll propagates it (rejecting for the RIGHT reason, not incidentally).
+	t.Run("network-mismatch", func(t *testing.T) {
+		rootPub, _ := fixedKey(t, 0xA1)
+		otherPub, _ := fixedKey(t, 0xC3)
+		body, err := json.Marshal(map[string]string{
+			invite.FieldNetworkID:  registry.NetworkID(otherPub),
+			invite.FieldRelay:      "https://relay.example",
+			invite.FieldRootPubKey: base64.StdEncoding.EncodeToString(rootPub),
+		})
+		require.NoError(t, err)
+		token := "vmenroll1:" + base64.RawURLEncoding.EncodeToString(body)
+
+		h := newEnrollHarness(t)
+		h.cfg.InviteTokenOrURL = token
+		out, _, err := runEnroll(h.cfg, nil)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, invite.ErrNetworkIDMismatch)
+		assert.Empty(t, out.String(), "no request must be emitted on a network-mismatch invite")
+	})
 }
 
 // TestEnrollWellKnownFetchFailures covers non-200, malformed, and bad-scheme
