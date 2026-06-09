@@ -227,9 +227,13 @@ func TestParseFieldSlice(t *testing.T) {
 	assert.Equal(t, map[string]string{"k": "v=w"}, parseFieldSlice([]string{"k=v=w"}))
 }
 
-// lint fix-links on a clean vault reports zero changes. Regression: a false
-// positive here would make every "lint" run claim it fixed something.
-func TestLintFixLinks_CleanVaultReportsNoChanges(t *testing.T) {
+// lint fix-links reconciles with doctor: every link doctor flags as
+// Obsidian-incompatible must be fixable by the healer. The shared fixture
+// vault carries two id-form links doctor flags — concepts/alpha.md's
+// [[proj-beta|Beta]] and projects/beta.md's [[concept-alpha]] — so a dry-run
+// must report exactly those (FilesScanned>0 to prove the scan ran). Before the
+// id-form fix this reported 0, the doctor/heal contradiction in the bug report.
+func TestLintFixLinks_FlaggedIDLinksAreFixable(t *testing.T) {
 	vault := buildIndexedTestVault(t)
 	out, _, err := runRootCmd(t, "lint", "fix-links", "--vault", vault, "--json")
 	require.NoError(t, err)
@@ -243,8 +247,8 @@ func TestLintFixLinks_CleanVaultReportsNoChanges(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(out.Bytes(), &env))
 	assert.Greater(t, env.Result.FilesScanned, 0)
-	assert.Equal(t, 0, env.Result.FilesChanged)
-	assert.Equal(t, 0, env.Result.LinksFixed)
+	assert.Equal(t, 2, env.Result.FilesChanged)
+	assert.Equal(t, 2, env.Result.LinksFixed)
 }
 
 // lint fix-links human output (non-JSON mode) surfaces the mode tag and the

@@ -280,7 +280,7 @@ func TestFormatContextPack_WithTarget(t *testing.T) {
 // nothing was written. This pins the "zero changes" branch of runWikilinkFix
 // human output.
 func TestDoctorHeal_ZeroChangesHumanOutputNoStaleWarning(t *testing.T) {
-	vault := buildIndexedTestVault(t)
+	vault := buildCleanIndexedTestVault(t)
 	out, _, err := runRootCmd(t, "doctor", "heal", "--vault", vault)
 	require.NoError(t, err)
 
