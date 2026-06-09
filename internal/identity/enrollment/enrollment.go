@@ -87,6 +87,9 @@ const (
 
 	// errMarshalSigned wraps a marshal failure of the signed-subset object.
 	errMarshalSigned = "enrollment: marshal signed subset"
+	// errMarshalWire wraps a marshal failure of the exported wire request (should
+	// never happen for the fixed-shape struct).
+	errMarshalWire = "enrollment: marshal wire request"
 	// errSigBadLen is returned by VerifyEnrollment when the decoded signature is
 	// not ed25519.SignatureSize bytes.
 	errSigBadLen = "enrollment: signature must be ed25519.SignatureSize bytes"
@@ -167,6 +170,57 @@ func CanonicalizeEnrollment(fields Fields) (identity.CanonicalBytes, error) {
 		return identity.CanonicalBytes{}, fmt.Errorf("%s: %w", errMarshalSigned, err)
 	}
 	return identity.Canonicalize(raw)
+}
+
+// wireEnrollmentRequest is the wire shape MarshalWire emits for a signed
+// enrollment request: the signed-subset fields PLUS the transport sig. It
+// mirrors the frozen contract's snake_case JSON tags (the same names
+// CanonicalizeEnrollment sorts over), with transport_endpoint omitempty so an
+// absent endpoint is OMITTED (absent != null). The handoff to the admin carries
+// this form out of band.
+type wireEnrollmentRequest struct {
+	AlgVersion        int64   `json:"alg_version"`
+	Created           int64   `json:"created"`
+	DisplayName       string  `json:"display_name"`
+	KeyEpoch          int64   `json:"key_epoch"`
+	NetworkID         string  `json:"network_id"`
+	Nonce             string  `json:"nonce"`
+	PubKey            string  `json:"pubkey"`
+	Slug              string  `json:"slug"`
+	TransportEndpoint *string `json:"transport_endpoint,omitempty"`
+	TransportPubKey   string  `json:"transport_pubkey"`
+	Sig               string  `json:"sig"`
+}
+
+// MarshalWire produces the wire JSON of a signed enrollment request: every
+// signed-subset field plus the base64-std transport sig. It re-runs the pre-sign
+// gates first (via CanonicalizeEnrollment) so an ungateable request can NEVER be
+// emitted, then marshals the wire struct (transport_endpoint omitted when nil).
+//
+// It deliberately does NOT touch CanonicalizeEnrollment: stripping the sig and
+// re-canonicalizing this JSON reproduces the exact canonical bytes the signature
+// covers (the admin's re-derivation matches). It FAILS CLOSED on any gate error.
+func MarshalWire(fields Fields, sigB64 string) ([]byte, error) {
+	if _, err := CanonicalizeEnrollment(fields); err != nil {
+		return nil, err
+	}
+	raw, err := json.Marshal(wireEnrollmentRequest{
+		AlgVersion:        fields.AlgVersion,
+		Created:           fields.Created,
+		DisplayName:       fields.DisplayName,
+		KeyEpoch:          fields.KeyEpoch,
+		NetworkID:         fields.NetworkID,
+		Nonce:             fields.Nonce,
+		PubKey:            fields.PubKey,
+		Slug:              fields.Slug,
+		TransportEndpoint: fields.TransportEndpoint,
+		TransportPubKey:   fields.TransportPubKey,
+		Sig:               sigB64,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", errMarshalWire, err)
+	}
+	return raw, nil
 }
 
 // checkGates enforces the frozen pre-sign contract. Each rule is a TYPED reject.

@@ -56,6 +56,7 @@ Generated from the command tree — do not edit by hand (run `task generate:docs
 | `vaultmind hooks install` | Install Claude Code hook scripts into a project | you want to wire VaultMind into a project by writing its hook scripts. |
 | `vaultmind hooks uninstall` | Remove VaultMind's Claude Code hook entries from a project | you want to remove VaultMind's Claude Code hook entries from a project. |
 | `vaultmind identity` | Contract-B agent identity: keypair custody and signing | you need Contract-B agent identity: mint a keypair or sign an entry via the keyless signer. |
+| `vaultmind identity enroll` | Enroll into a Contract-B network from an invite, then self-sign the request | you are a member with an invite and want to enroll: cross-check the relay's root against the invite, confirm the fingerprint, and self-sign an enrollment request for your admin. |
 | `vaultmind identity init` | Mint an agent keypair and seal the private key to the signer | you are setting up an agent and need to mint its ed25519 keypair and seal the private key to the signer. |
 | `vaultmind identity invite` | Emit an UNSIGNED network invite carrying the trust anchor (Contract-B) | you are an admin and want to emit a network invite (the trust anchor plus relay, with an out-of-band fingerprint) for a member to enroll against. |
 | `vaultmind identity sign` | Validate, canonicalize, and sign an entry via the keyless signer | you have a Contract-B entry to sign and want it validated, canonicalized, and signed by the keyless signer. |
