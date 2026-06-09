@@ -136,6 +136,8 @@ const (
 	KeyAppIdentitysignenvelopeFile         = "app.identitysignenvelope.file"          // Read envelope JSON from this file instead of stdin
 	KeyAppIdentitysignenvelopeSignerSocket = "app.identitysignenvelope.signer_socket" // Signer socket path (default: XDG state dir)
 	KeyAppIdentitysignenvelopeFromPubkey   = "app.identitysignenvelope.from_pubkey"   // Signer public key (base64) stamped as the from_pubkey hint; not signed
+	KeyAppIdentitysignregistryFile         = "app.identitysignregistry.file"          // Read registry JSON from this file instead of stdin
+	KeyAppIdentitysignregistrySignerSocket = "app.identitysignregistry.signer_socket" // Signer socket path (default: XDG state dir)
 	KeyAppIndexVault                       = "app.index.vault"                        // Path to the vault root directory
 	KeyAppIndexJson                        = "app.index.json"                         // Output in JSON format
 	KeyAppIndexFull                        = "app.index.full"                         // Force full rebuild instead of incremental index

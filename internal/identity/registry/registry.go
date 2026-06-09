@@ -236,6 +236,32 @@ func canonicalBytes(reg Registry) (identity.CanonicalBytes, error) {
 	return identity.Canonicalize(raw)
 }
 
+// RegistrySigner signs JCS-canonical registry bytes via the keyless custody
+// signer. The root private key stays in the signer process; the caller (the
+// CLI) never loads it. The real implementation is *signer.Client; tests inject a
+// fake to prove the sign path never opens the key file.
+type RegistrySigner interface {
+	Sign(canonicalBytes []byte) ([]byte, error)
+}
+
+// canonicalizeForSign runs the shared pre-sign gate for BOTH SignRegistry and
+// SignRegistryWithSigner: it refuses an out-of-range epoch (registry or any
+// binding key_epoch) — JCS-unsafe / anti-rollback-floor violations that must
+// never be minted — then JCS-canonicalizes reg to the EXACT bytes the root
+// signs. The signing seam (raw key vs custody signer) is the ONLY thing that
+// differs between the two callers, so the canonical bytes are byte-identical.
+func canonicalizeForSign(reg Registry) (identity.CanonicalBytes, error) {
+	if !epochInRange(reg.Epoch) {
+		return identity.CanonicalBytes{}, fmt.Errorf("%s", ErrEpochRange)
+	}
+	for _, a := range reg.Agents {
+		if !epochInRange(a.KeyEpoch) {
+			return identity.CanonicalBytes{}, fmt.Errorf("%s", ErrEpochRange)
+		}
+	}
+	return canonicalBytes(reg)
+}
+
 // SignRegistry is the OFFLINE-ROOT operation: it JCS-canonicalizes reg and
 // ed25519-signs the canonical bytes with the root private key, returning the
 // distribution envelope. It reuses the slice-1 SignCanonical primitive and
@@ -244,24 +270,35 @@ func SignRegistry(rootPriv ed25519.PrivateKey, reg Registry) (SignedRegistry, er
 	if len(rootPriv) != ed25519.PrivateKeySize {
 		return SignedRegistry{}, fmt.Errorf("%s", ErrBadRootKey)
 	}
-	// Refuse to sign an out-of-range epoch (registry or any binding key_epoch):
-	// these are JCS-unsafe / break the anti-rollback floor, so they must never be
-	// minted in the first place.
-	if !epochInRange(reg.Epoch) {
-		return SignedRegistry{}, fmt.Errorf("%s", ErrEpochRange)
-	}
-	for _, a := range reg.Agents {
-		if !epochInRange(a.KeyEpoch) {
-			return SignedRegistry{}, fmt.Errorf("%s", ErrEpochRange)
-		}
-	}
-	canonical, err := canonicalBytes(reg)
+	canonical, err := canonicalizeForSign(reg)
 	if err != nil {
 		return SignedRegistry{}, err
 	}
 	sig, err := identity.SignCanonical(rootPriv, canonical)
 	if err != nil {
 		return SignedRegistry{}, err
+	}
+	return SignedRegistry{
+		Registry:     canonical.Bytes(),
+		RootSig:      sig,
+		RootKeyEpoch: 0,
+	}, nil
+}
+
+// SignRegistryWithSigner is the KEYLESS parallel of SignRegistry: it runs the
+// SAME epoch gate + JCS-canonicalization, then signs the canonical bytes via the
+// custody signer (the root private key never enters this process) instead of a
+// raw key. The result is byte-identical to SignRegistry over the same registry —
+// only the signing seam differs. It FAILS CLOSED: any gate, canonicalize, or
+// signer error returns a non-nil error and a zero SignedRegistry.
+func SignRegistryWithSigner(client RegistrySigner, reg Registry) (SignedRegistry, error) {
+	canonical, err := canonicalizeForSign(reg)
+	if err != nil {
+		return SignedRegistry{}, err
+	}
+	sig, err := client.Sign(canonical.Bytes())
+	if err != nil {
+		return SignedRegistry{}, fmt.Errorf("registry: sign via signer: %w", err)
 	}
 	return SignedRegistry{
 		Registry:     canonical.Bytes(),

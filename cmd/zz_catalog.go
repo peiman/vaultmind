@@ -269,6 +269,11 @@ var commandCatalog = map[string]catalogEntry{
 		when:  "you have a chat MESSAGE envelope to sign so a receiving daemon can verify the signature and the signer's registry binding.",
 		short: "Sign a chat message envelope via the keyless signer (Contract-B slice 5)",
 	},
+	"vaultmind identity sign-registry": {
+		group: groupLifecycle,
+		when:  "you have a trust-root registry to sign so consumers can verify the root signature, anti-rollback epoch, and freshness at load.",
+		short: "Sign a trust-root registry via the keyless signer (Contract-B)",
+	},
 	"vaultmind hooks": {
 		group: groupLifecycle,
 		when:  "you need to install, remove, or check VaultMind's Claude Code hook scripts.",

@@ -59,6 +59,7 @@ Generated from the command tree — do not edit by hand (run `task generate:docs
 | `vaultmind identity init` | Mint an agent keypair and seal the private key to the signer | you are setting up an agent and need to mint its ed25519 keypair and seal the private key to the signer. |
 | `vaultmind identity sign` | Validate, canonicalize, and sign an entry via the keyless signer | you have a Contract-B entry to sign and want it validated, canonicalized, and signed by the keyless signer. |
 | `vaultmind identity sign-envelope` | Sign a chat message envelope via the keyless signer (Contract-B slice 5) | you have a chat MESSAGE envelope to sign so a receiving daemon can verify the signature and the signer's registry binding. |
+| `vaultmind identity sign-registry` | Sign a trust-root registry via the keyless signer (Contract-B) | you have a trust-root registry to sign so consumers can verify the root signature, anti-rollback epoch, and freshness at load. |
 | `vaultmind init` | Scaffold a fresh persona-shaped vault, ready for you and your agent | you are starting fresh and need to scaffold a new persona-shaped vault. |
 
 ## Setup & introspection:
