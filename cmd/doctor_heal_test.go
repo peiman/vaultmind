@@ -184,9 +184,10 @@ func TestDoctorHeal_DryRunDoesNotWarnStaleIndex(t *testing.T) {
 // A heal that changed zero files (already-clean vault) must NOT warn about a
 // stale index (M2).
 func TestDoctorHeal_NoWarnWhenZeroChanges(t *testing.T) {
-	// buildIndexedTestVault's links are already filename/alias form, so heal
-	// finds nothing to fix → zero files changed.
-	vault := buildIndexedTestVault(t)
+	// This vault's only link is already filename-stem form ([[beta]] → beta.md),
+	// so heal finds nothing to fix → zero files changed. (The shared
+	// buildIndexedTestVault deliberately carries id-form links heal now fixes.)
+	vault := buildCleanIndexedTestVault(t)
 	out, _, err := runRootCmd(t, "doctor", "heal", "--vault", vault, "--json")
 	require.NoError(t, err)
 

@@ -240,6 +240,47 @@ func TestFixWikilinks_PopulatesDetails(t *testing.T) {
 	assert.Equal(t, "[[eta|Eta Note]]", result.Details[0].NewLink)
 }
 
+// TestFixWikilinks_RewritesIDFormLinks reproduces the doctor/heal
+// contradiction: doctor flags [[reference-foo]] (id-form) links as
+// Obsidian-incompatible (the link target is the note's id but its filename
+// stem differs), yet heal rewrites 0 of them. The healer must rewrite BOTH the
+// bare id-link and the ALIASED id-link [[reference-foo|Pattern 2c]], and the
+// aliased one must KEEP its display text (per [[wikilink_convention]]:
+// [[filename|Display Text]]).
+func TestFixWikilinks_RewritesIDFormLinks(t *testing.T) {
+	db, dir := buildLintTestDB(t)
+
+	vaultDir := filepath.Join(dir, "vault")
+	require.NoError(t, os.MkdirAll(filepath.Join(vaultDir, "references"), 0o755))
+
+	// Target note: id "reference-foo" lives at references/foo.md → stem "foo"
+	// differs from the id, so [[reference-foo]] is Obsidian-incompatible.
+	_, err := db.Exec(
+		"INSERT INTO notes (id, path, title, hash, mtime, is_domain) VALUES (?, ?, ?, ?, ?, ?)",
+		"reference-foo", "references/foo.md", "Foo Reference", "idform1", 0, true,
+	)
+	require.NoError(t, err)
+
+	// Source note: (a) bare id-link, (b) aliased id-link with a display alias.
+	noteContent := "---\nid: concept-idsrc\ntype: concept\ntitle: IDSrc\n---\n\n" +
+		"Bare: [[reference-foo]] and aliased: [[reference-foo|Pattern 2c]].\n"
+	notePath := filepath.Join(vaultDir, "references", "idsrc.md")
+	require.NoError(t, os.WriteFile(notePath, []byte(noteContent), 0o644))
+
+	result, err := mutation.FixWikilinks(db, vaultDir, true)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, result.LinksFixed, 2, "both id-form links must be rewritten")
+
+	content, err := os.ReadFile(notePath)
+	require.NoError(t, err)
+	// Bare id-link: display falls back to the original target.
+	assert.Contains(t, string(content), "[[foo|reference-foo]]")
+	// Aliased id-link: display alias "Pattern 2c" MUST be preserved.
+	assert.Contains(t, string(content), "[[foo|Pattern 2c]]")
+	assert.NotContains(t, string(content), "[[reference-foo]]")
+	assert.NotContains(t, string(content), "[[reference-foo|Pattern 2c]]")
+}
+
 func TestFixWikilinks_EmptyVault(t *testing.T) {
 	db, dir := buildLintTestDB(t)
 

@@ -90,6 +90,52 @@ func writeTestNote(t *testing.T, vaultRoot, relPath, content string) {
 	require.NoError(t, os.WriteFile(full, []byte(content), 0o644))
 }
 
+// buildCleanIndexedTestVault creates an indexed vault whose only wikilink is
+// already Obsidian-compatible (the link target equals the target note's
+// filename stem), so the wikilink healer makes zero changes. Tests that pin
+// the "zero changes" heal branch need this — the shared buildIndexedTestVault
+// deliberately carries id-form links that doctor flags and heal now fixes.
+func buildCleanIndexedTestVault(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".vaultmind"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".vaultmind", "config.yaml"), []byte(`
+types:
+  concept:
+    required: [title]
+    optional: [tags, related_ids]
+`), 0o644))
+
+	// Target note: filename stem "beta" equals the link target below.
+	writeTestNote(t, dir, "concepts/beta.md", `---
+id: concept-beta
+type: concept
+title: Beta Concept
+---
+Beta body, no links.
+`)
+	// Source note links by filename stem [[beta]] — already compatible.
+	writeTestNote(t, dir, "concepts/alpha.md", `---
+id: concept-alpha
+type: concept
+title: Alpha Concept
+---
+Alpha body. See [[beta]] for context.
+`)
+
+	cfg, err := vault.LoadConfig(dir)
+	require.NoError(t, err)
+	dbPath := filepath.Join(dir, cfg.Index.DBPath)
+	require.NoError(t, os.MkdirAll(filepath.Dir(dbPath), 0o755))
+
+	idxr := index.NewIndexer(dir, dbPath, cfg)
+	_, err = idxr.Rebuild()
+	require.NoError(t, err, "indexer rebuild failed")
+
+	return dir
+}
+
 // copyBaselineVaultToTemp copies the committed baseline fixture vault into
 // a tempdir so tests can index it without mutating the source tree. The
 // committed fixture has no index.db (SQLite files aren't committed); tests
