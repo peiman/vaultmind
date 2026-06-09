@@ -243,15 +243,15 @@ func writeDoctorHuman(w io.Writer, result *query.DoctorResult, summaryOnly bool)
 	if err := writeStaleIndex(w, &result.Issues, summaryOnly); err != nil {
 		return err
 	}
-	// Errors/warnings rollup — the cold-start signal `vault status` used to
-	// emit. Always printed so the operator gets the validation bottom line
-	// from a single `doctor` run. runDoctorCore always sets IssuesSummary, but
-	// read nil-safely (0/0) so a future raw-result caller can't panic here.
-	var errCount, warnCount int
-	if result.IssuesSummary != nil {
-		errCount = result.IssuesSummary.Errors
-		warnCount = result.IssuesSummary.Warnings
-	}
+	// Errors/warnings rollup — the cold-start bottom line. Counts come from
+	// query.SurfacedIssueCounts (SSOT) over the SURFACED result.Issues set, so
+	// the text rollup always agrees with --json. It deliberately does NOT read
+	// result.IssuesSummary: that schema-validation AGGREGATE counts findings
+	// doctor never renders as text lines (and which the --json envelope's
+	// surfaced warnings/errors arrays do not count), which previously
+	// overstated warnings (e.g. "0 errors, 96 warnings") against a --json that
+	// surfaced none. result.issues_summary stays in --json untouched.
+	errCount, warnCount := query.SurfacedIssueCounts(result.Issues)
 	if _, err := fmt.Fprintf(w, "Issues: %d errors, %d warnings\n", errCount, warnCount); err != nil {
 		return err
 	}

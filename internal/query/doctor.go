@@ -123,6 +123,44 @@ type DoctorIssues struct {
 	LegacyHooksJSON bool `json:"legacy_hooks_json"`
 }
 
+// SurfacedIssueCounts returns the error and warning counts for the issues a
+// doctor run actually SURFACES — the items in DoctorIssues that the human
+// report renders as detail lines and that the --json envelope represents. It
+// is the single source of truth for the "Issues: E errors, W warnings" text
+// rollup so that count can never again disagree with --json.
+//
+// It deliberately does NOT fold in DoctorResult.IssuesSummary (the schema
+// VALIDATION aggregate from SummarizeValidationIssues). That aggregate counts
+// findings — unknown_type, invalid_status, broken_reference — that doctor
+// surfaces only in the nested result.issues_summary JSON field, never as a
+// per-item line in the text report. Counting it in the text rollup overstated
+// warnings (e.g. "0 errors, 96 warnings") against a --json envelope that
+// surfaced none. result.issues_summary stays in --json unchanged; this helper
+// only governs the surfaced-set rollup.
+//
+// Severity follows the doctor renderer's own framing: integrity violations
+// that mean data is wrong are errors; advisories that mean the vault is
+// degraded-but-usable are warnings.
+func SurfacedIssueCounts(issues DoctorIssues) (errors, warnings int) {
+	// Errors — hard integrity violations.
+	errors = issues.DuplicateIDs +
+		issues.MissingRequiredFields +
+		issues.MalformedMarkers +
+		issues.NotesMissingIDOrType +
+		issues.PathPseudoIDLinks // dead links: target file does not exist
+
+	// Warnings — surfaced advisories the vault still functions despite.
+	warnings = issues.UnresolvedLinks +
+		issues.BrokenReferences +
+		issues.ObsidianIncompatibleLinks +
+		issues.StaleIndex +
+		issues.HookDrift
+	if issues.LegacyHooksJSON {
+		warnings++
+	}
+	return errors, warnings
+}
+
 // ContentDrift describes one note whose current file content hash
 // differs from the indexer's stored hash.
 type ContentDrift struct {
