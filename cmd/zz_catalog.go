@@ -264,6 +264,11 @@ var commandCatalog = map[string]catalogEntry{
 		when:  "you have a Contract-B entry to sign and want it validated, canonicalized, and signed by the keyless signer.",
 		short: "Validate, canonicalize, and sign an entry via the keyless signer",
 	},
+	"vaultmind identity sign-enrollment": {
+		group: groupLifecycle,
+		when:  "you are enrolling an agent and need to self-sign its enrollment request (proof-of-possession) before an admin adds the binding to the trust-root registry.",
+		short: "Self-sign an agent enrollment request via the keyless signer (Contract-B)",
+	},
 	"vaultmind identity sign-envelope": {
 		group: groupLifecycle,
 		when:  "you have a chat MESSAGE envelope to sign so a receiving daemon can verify the signature and the signer's registry binding.",
