@@ -130,6 +130,14 @@ const (
 	KeyAppHooksuninstallJson                 = "app.hooksuninstall.json"                  // Output in JSON format
 	KeyAppHooksuninstallLocal                = "app.hooksuninstall.local"                 // Target .claude/settings.local.json instead of .claude/settings.json.
 	KeyAppHooksuninstallRemovescripts        = "app.hooksuninstall.removescripts"         // Also delete the installed hook scripts under .claude/scripts/ (default: leave...
+	KeyAppIdentityenrollInvite               = "app.identityenroll.invite"                // Network invite: a vmenroll1: token or enroll URL (required)
+	KeyAppIdentityenrollDisplayName          = "app.identityenroll.display_name"          // Your display name in the network (required; Unicode NFC)
+	KeyAppIdentityenrollSlug                 = "app.identityenroll.slug"                  // Your short ASCII handle/slug (required)
+	KeyAppIdentityenrollPubkey               = "app.identityenroll.pubkey"                // Your base64-std ed25519 identity pubkey from `identity init` (required)
+	KeyAppIdentityenrollTransportPubkey      = "app.identityenroll.transport_pubkey"      // Your base64-std 32-byte WireGuard pubkey from `wg pubkey` (required)
+	KeyAppIdentityenrollTransportEndpoint    = "app.identityenroll.transport_endpoint"    // Optional reachable host:port (IPv6 bracketed); omitted when empty
+	KeyAppIdentityenrollSignerSocket         = "app.identityenroll.signer_socket"         // Signer socket path (default: XDG state dir)
+	KeyAppIdentityenrollYes                  = "app.identityenroll.yes"                   // Skip the out-of-band fingerprint confirmation prompt
 	KeyAppIdentityinitSignerKey              = "app.identityinit.signer_key"              // Sealed signer key path (default: XDG data dir)
 	KeyAppIdentityinviteRootPubkey           = "app.identityinvite.root_pubkey"           // Network ROOT public key (base64-std of the 32-byte ed25519 key; required)
 	KeyAppIdentityinviteRelay                = "app.identityinvite.relay"                 // Relay base URL, e.g. https://chat.acme.com (required)

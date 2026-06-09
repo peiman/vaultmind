@@ -264,6 +264,11 @@ var commandCatalog = map[string]catalogEntry{
 		when:  "you are an admin and want to emit a network invite (the trust anchor plus relay, with an out-of-band fingerprint) for a member to enroll against.",
 		short: "Emit an UNSIGNED network invite carrying the trust anchor (Contract-B)",
 	},
+	"vaultmind identity enroll": {
+		group: groupLifecycle,
+		when:  "you are a member with an invite and want to enroll: cross-check the relay's root against the invite, confirm the fingerprint, and self-sign an enrollment request for your admin.",
+		short: "Enroll into a Contract-B network from an invite, then self-sign the request",
+	},
 	"vaultmind identity sign": {
 		group: groupLifecycle,
 		when:  "you have a Contract-B entry to sign and want it validated, canonicalized, and signed by the keyless signer.",

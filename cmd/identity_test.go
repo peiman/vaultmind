@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,9 +14,11 @@ import (
 	"time"
 
 	"github.com/peiman/vaultmind/internal/identity"
+	"github.com/peiman/vaultmind/internal/identity/enrollment"
 	"github.com/peiman/vaultmind/internal/identity/envelope"
 	"github.com/peiman/vaultmind/internal/identity/invite"
 	"github.com/peiman/vaultmind/internal/identity/registry"
+	"github.com/peiman/vaultmind/internal/identity/relayclient"
 	"github.com/peiman/vaultmind/internal/identity/signer"
 	"github.com/peiman/vaultmind/internal/identitycli"
 )
@@ -452,5 +456,124 @@ func TestIdentityInviteCommandHelp(t *testing.T) {
 		if !strings.Contains(help, want) {
 			t.Fatalf("help missing flag %q:\n%s", want, help)
 		}
+	}
+}
+
+// TestIdentityEnrollCommandHelp is a registration smoke test: `identity enroll
+// --help` resolves the command and prints all its flags.
+func TestIdentityEnrollCommandHelp(t *testing.T) {
+	out, _, err := runRootCmd(t, "identity", "enroll", "--help")
+	if err != nil {
+		t.Fatalf("identity enroll --help: %v", err)
+	}
+	help := out.String()
+	for _, want := range []string{
+		"--invite", "--display-name", "--slug", "--pubkey",
+		"--transport-pubkey", "--transport-endpoint", "--signer-socket", "--yes",
+	} {
+		if !strings.Contains(help, want) {
+			t.Fatalf("enroll help missing flag %q:\n%s", want, help)
+		}
+	}
+}
+
+// enrollRelayServer spins up an httptest relay serving the well-known root for
+// rootPub and returns the server plus the derived base64 root and network id.
+func enrollRelayServer(t *testing.T, rootPub ed25519.PublicKey) (srv *httptest.Server, rootB64, networkID string) {
+	t.Helper()
+	rootB64 = base64.StdEncoding.EncodeToString(rootPub)
+	networkID = registry.NetworkID(rootPub)
+	body, err := json.Marshal(relayclient.WellKnownRoot{RootPubKey: rootB64, NetworkID: networkID})
+	if err != nil {
+		t.Fatalf("marshal well-known: %v", err)
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc(relayclient.WellKnownRootPath, func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write(body)
+	})
+	srv = httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv, rootB64, networkID
+}
+
+// TestIdentityEnrollCommandHappyPath drives `identity enroll` through RootCmd
+// against a LIVE signer and an httptest relay. The signer holds the member key,
+// so the emitted wire self-verifies (proof-of-possession). This exercises the
+// production cmd wiring (no seam injection): real signer.Client + real HTTP.
+func TestIdentityEnrollCommandHappyPath(t *testing.T) {
+	sockPath, memberPub := startCmdSigner(t)
+	rootPub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey root: %v", err)
+	}
+	srv, rootB64, networkID := enrollRelayServer(t, rootPub)
+
+	token, _, err := invite.Encode(invite.Invite{NetworkID: networkID, Relay: srv.URL, RootPubKey: rootB64})
+	if err != nil {
+		t.Fatalf("invite.Encode: %v", err)
+	}
+
+	out, _, err := runRootCmd(t, "identity", "enroll",
+		"--invite", token,
+		"--display-name", "Mira",
+		"--slug", "mira",
+		"--pubkey", base64.StdEncoding.EncodeToString(memberPub),
+		"--transport-pubkey", base64.StdEncoding.EncodeToString(make([]byte, 32)),
+		"--signer-socket", sockPath,
+		"--yes",
+	)
+	if err != nil {
+		t.Fatalf("identity enroll: %v", err)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("emitted wire is not JSON: %v (%q)", err, out.String())
+	}
+	if got[enrollment.FieldSig] == nil {
+		t.Fatalf("emitted wire missing sig: %q", out.String())
+	}
+	if got[enrollment.FieldNetworkID] != networkID {
+		t.Fatalf("emitted network_id = %v, want %s", got[enrollment.FieldNetworkID], networkID)
+	}
+}
+
+// TestIdentityEnrollCommandFailsClosedWhenSignerUnreachable drives the command
+// with a valid invite + relay but a dead signer socket, and asserts it fails
+// closed with no request emitted.
+func TestIdentityEnrollCommandFailsClosedWhenSignerUnreachable(t *testing.T) {
+	rootPub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey root: %v", err)
+	}
+	srv, rootB64, networkID := enrollRelayServer(t, rootPub)
+	token, _, err := invite.Encode(invite.Invite{NetworkID: networkID, Relay: srv.URL, RootPubKey: rootB64})
+	if err != nil {
+		t.Fatalf("invite.Encode: %v", err)
+	}
+	memberPub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey member: %v", err)
+	}
+	dir, err := os.MkdirTemp("", "vmcmdenroll")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+
+	out, _, err := runRootCmd(t, "identity", "enroll",
+		"--invite", token,
+		"--display-name", "Mira",
+		"--slug", "mira",
+		"--pubkey", base64.StdEncoding.EncodeToString(memberPub),
+		"--transport-pubkey", base64.StdEncoding.EncodeToString(make([]byte, 32)),
+		"--signer-socket", filepath.Join(dir, "nope.sock"),
+		"--yes",
+	)
+	if err == nil {
+		t.Fatal("expected fail-closed error when signer unreachable, got nil")
+	}
+	if strings.Contains(out.String(), enrollment.FieldSig) {
+		t.Fatalf("fail-closed path must not emit a request, got %q", out.String())
 	}
 }
