@@ -260,6 +260,96 @@ func TestIdentitySignEnvelopeCommandFileNotFound(t *testing.T) {
 	}
 }
 
+// signRegistryCmdInput builds a valid unsigned-registry JSON for the cmd tests,
+// with the given agent pubkey (base64-std) bound under slug "mira".
+func signRegistryCmdInput(pubB64 string) string {
+	return `{"agents":[{"authorized_origin_daemons":["daemon-eu-1"],"display_name":"Mira",` +
+		`"key_epoch":1,"pubkey":"` + pubB64 + `","slug":"mira",` +
+		`"valid_from":1770000000,"valid_until":1780000000}],` +
+		`"epoch":5,"valid_from":1770000000,"valid_until":1780000000}`
+}
+
+// TestIdentitySignRegistryCommandViaStdin drives `identity sign-registry` reading
+// the registry from STDIN against a live signer, then proves the emitted
+// distribution envelope verifies under the root key via ParseDistribution +
+// VerifyAndLoad (the consumer's trust gate).
+func TestIdentitySignRegistryCommandViaStdin(t *testing.T) {
+	sockPath, rootPub := startCmdSigner(t)
+	agentPub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey agent: %v", err)
+	}
+	in := signRegistryCmdInput(base64.StdEncoding.EncodeToString(agentPub))
+
+	RootCmd.SetIn(strings.NewReader(in))
+	defer RootCmd.SetIn(os.Stdin)
+
+	out, _, err := runRootCmd(t, "identity", "sign-registry", "--signer-socket", sockPath)
+	if err != nil {
+		t.Fatalf("identity sign-registry via stdin: %v", err)
+	}
+
+	env, err := registry.ParseDistribution(out.Bytes())
+	if err != nil {
+		t.Fatalf("ParseDistribution(output): %v\noutput=%q", err, out.String())
+	}
+	loaded, _, err := registry.VerifyAndLoad(
+		rootPub, env, 4, time.Unix(1_770_000_500, 0), time.Hour*24*365)
+	if err != nil {
+		t.Fatalf("VerifyAndLoad: %v", err)
+	}
+	if len(loaded.Agents) != 1 || loaded.Agents[0].Slug != "mira" {
+		t.Fatalf("loaded registry mismatch: %+v", loaded.Agents)
+	}
+}
+
+// TestIdentitySignRegistryCommandFailsClosedWhenSignerUnreachable drives the
+// command at a non-existent socket and asserts it fails closed (no output).
+func TestIdentitySignRegistryCommandFailsClosedWhenSignerUnreachable(t *testing.T) {
+	dir, err := os.MkdirTemp("", "vmcmdsignreg")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	agentPub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey agent: %v", err)
+	}
+	regPath := filepath.Join(dir, "reg.json")
+	if err := os.WriteFile(regPath, []byte(signRegistryCmdInput(base64.StdEncoding.EncodeToString(agentPub))), 0o600); err != nil {
+		t.Fatalf("write registry: %v", err)
+	}
+	sockPath := filepath.Join(dir, "nope.sock")
+
+	out, _, err := runRootCmd(t, "identity", "sign-registry", "--file", regPath, "--signer-socket", sockPath)
+	if err == nil {
+		t.Fatal("expected fail-closed error when signer unreachable, got nil")
+	}
+	if strings.Contains(out.String(), "root_sig") {
+		t.Fatalf("fail-closed path must not print a result, got %q", out.String())
+	}
+}
+
+// TestIdentitySignRegistryCommandFileNotFound asserts the --file branch fails
+// closed (and exercises runIdentitySignRegistry's default-socket resolution,
+// since no --signer-socket is passed) when the registry file is missing.
+func TestIdentitySignRegistryCommandFileNotFound(t *testing.T) {
+	dir, err := os.MkdirTemp("", "vmcmdsignregnf")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	missing := filepath.Join(dir, "does-not-exist.json")
+
+	out, _, err := runRootCmd(t, "identity", "sign-registry", "--file", missing)
+	if err == nil {
+		t.Fatal("expected error for nonexistent --file, got nil")
+	}
+	if strings.Contains(out.String(), "root_sig") {
+		t.Fatalf("file-not-found path must not print a result, got %q", out.String())
+	}
+}
+
 // TestDefaultSignerPathsResolveUnderXDG asserts the XDG path helpers return
 // non-empty, distinct paths ending in the SSOT filenames. This covers the
 // happy path of defaultSignerKeyPath / defaultSignerSocketPath.
