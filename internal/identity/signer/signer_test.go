@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/identity"
@@ -233,15 +234,142 @@ func TestNewRejectsBadKeyFile(t *testing.T) {
 	if err := os.WriteFile(bad, []byte("not-a-key"), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	if _, err := New(Config{KeyPath: bad, SocketPath: filepath.Join(dir, "s.sock")}); err == nil {
+	// AllowedUIDs is non-empty so New reaches loadPrivateKey (the empty-allowlist
+	// guard runs FIRST and would otherwise mask the wrong-size-key check).
+	_, err := New(Config{KeyPath: bad, SocketPath: filepath.Join(dir, "s.sock"), AllowedUIDs: []uint32{1000}})
+	if err == nil {
 		t.Fatal("expected error for wrong-size key file")
+	}
+	if err.Error() != errLoadKeyLen {
+		t.Fatalf("expected errLoadKeyLen, got %v", err)
 	}
 }
 
 func TestNewRejectsMissingKeyFile(t *testing.T) {
 	dir := t.TempDir()
-	if _, err := New(Config{KeyPath: filepath.Join(dir, "nope.key"), SocketPath: filepath.Join(dir, "s.sock")}); err == nil {
+	// Non-empty allowlist so we exercise the missing-key path, not the allowlist guard.
+	_, err := New(Config{KeyPath: filepath.Join(dir, "nope.key"), SocketPath: filepath.Join(dir, "s.sock"), AllowedUIDs: []uint32{1000}})
+	if err == nil {
 		t.Fatal("expected error for missing key file")
+	}
+}
+
+func TestNewRejectsEmptyAllowlist(t *testing.T) {
+	keyPath, _ := newKeyFile(t)
+	// Valid key + socket, but no AllowedUIDs → the deny-all guard must fail closed
+	// at construction (covers the signer.New guard directly, not via the cmd guard).
+	_, err := New(Config{KeyPath: keyPath, SocketPath: filepath.Join(t.TempDir(), "s.sock")})
+	if err == nil {
+		t.Fatal("expected error for empty AllowedUIDs")
+	}
+	if err.Error() != errEmptyAllowlist {
+		t.Fatalf("expected errEmptyAllowlist, got %v", err)
+	}
+}
+
+func TestNewRejectsPermissiveKeyFile(t *testing.T) {
+	// A valid-length ed25519 key written group/world-readable (0644) must be
+	// refused — a custody key must be 0600 (sshd-style strict modes).
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	dir := t.TempDir()
+	loose := filepath.Join(dir, "loose.key")
+	if err := os.WriteFile(loose, priv, 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	_, err = New(Config{KeyPath: loose, SocketPath: filepath.Join(dir, "s.sock"), AllowedUIDs: []uint32{1000}})
+	if err == nil {
+		t.Fatal("expected refusal for group/world-readable key file")
+	}
+	if !strings.Contains(err.Error(), errKeyFilePermissive) {
+		t.Fatalf("expected errKeyFilePermissive, got %v", err)
+	}
+}
+
+func TestListenRefusesWhenLiveSignerPresent(t *testing.T) {
+	keyPath, pub := newKeyFile(t)
+	// First signer is LIVE (startSigner registers cleanup + returns a client).
+	client, sockPath := startSigner(t, keyPath, []uint32{uint32(os.Getuid())})
+
+	// A second signer on the same socket must REFUSE — no silent hijack of a
+	// running signer (which would leave the first alive-but-blind).
+	s2, err := New(Config{KeyPath: keyPath, SocketPath: sockPath, AllowedUIDs: []uint32{uint32(os.Getuid())}})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := s2.Listen(); err == nil {
+		_ = s2.Close()
+		t.Fatal("second Listen must refuse a live signer's socket")
+	} else if !strings.Contains(err.Error(), errSignerAlreadyRunning) {
+		t.Fatalf("expected errSignerAlreadyRunning, got %v", err)
+	}
+
+	// The first signer must still sign — it was not hijacked.
+	canonical, err := identity.Canonicalize([]byte(canonicalEntry))
+	if err != nil {
+		t.Fatalf("Canonicalize: %v", err)
+	}
+	sig, err := client.Sign(canonical.Bytes())
+	if err != nil {
+		t.Fatalf("first signer should still sign after the refused second start: %v", err)
+	}
+	if ok, verr := identity.VerifyCanonical(pub, canonical, sig); !ok || verr != nil {
+		t.Fatalf("first signer's signature did not verify: ok=%v err=%v", ok, verr)
+	}
+}
+
+func TestListenReapsDeadSocket(t *testing.T) {
+	keyPath, _ := newKeyFile(t)
+	sockPath := shortSocketPath(t)
+	// Leave a DEAD socket file (file exists, type socket, no listener) by binding
+	// then closing with unlink disabled — simulates a prior crashed run.
+	addr, err := net.ResolveUnixAddr(network, sockPath)
+	if err != nil {
+		t.Fatalf("ResolveUnixAddr: %v", err)
+	}
+	ln, err := net.ListenUnix(network, addr)
+	if err != nil {
+		t.Fatalf("ListenUnix: %v", err)
+	}
+	ln.SetUnlinkOnClose(false)
+	_ = ln.Close()
+	if _, err := os.Stat(sockPath); err != nil {
+		t.Fatalf("expected a leftover dead socket file: %v", err)
+	}
+
+	// Listen should dial-probe (dead → no listener), reap it, and bind cleanly.
+	s, err := New(Config{KeyPath: keyPath, SocketPath: sockPath, AllowedUIDs: []uint32{uint32(os.Getuid())}})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := s.Listen(); err != nil {
+		t.Fatalf("Listen should reap a dead socket and bind: %v", err)
+	}
+	_ = s.Close()
+}
+
+func TestListenRefusesNonSocketFile(t *testing.T) {
+	keyPath, _ := newKeyFile(t)
+	dir := t.TempDir()
+	notSock := filepath.Join(dir, "regular.file")
+	if err := os.WriteFile(notSock, []byte("important operator data"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	s, err := New(Config{KeyPath: keyPath, SocketPath: notSock, AllowedUIDs: []uint32{uint32(os.Getuid())}})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := s.Listen(); err == nil {
+		_ = s.Close()
+		t.Fatal("Listen must refuse a non-socket file path (never blind-delete it)")
+	} else if !strings.Contains(err.Error(), errSocketPathNotSocket) {
+		t.Fatalf("expected errSocketPathNotSocket, got %v", err)
+	}
+	// The operator's file must NOT have been deleted.
+	if _, statErr := os.Stat(notSock); statErr != nil {
+		t.Fatalf("non-socket file must be preserved, not deleted: %v", statErr)
 	}
 }
 
