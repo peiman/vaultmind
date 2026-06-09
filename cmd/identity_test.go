@@ -13,6 +13,7 @@ import (
 
 	"github.com/peiman/vaultmind/internal/identity"
 	"github.com/peiman/vaultmind/internal/identity/envelope"
+	"github.com/peiman/vaultmind/internal/identity/invite"
 	"github.com/peiman/vaultmind/internal/identity/registry"
 	"github.com/peiman/vaultmind/internal/identity/signer"
 	"github.com/peiman/vaultmind/internal/identitycli"
@@ -372,5 +373,84 @@ func TestDefaultSignerPathsResolveUnderXDG(t *testing.T) {
 
 	if keyPath == sockPath {
 		t.Fatal("key and socket default paths must differ")
+	}
+}
+
+// TestIdentityInviteCommandRoundTrips drives `identity invite` through RootCmd
+// and asserts it prints the token/url/fingerprint blocks and that the printed
+// token Decodes back to the same root key, relay, and network id.
+func TestIdentityInviteCommandRoundTrips(t *testing.T) {
+	rootPub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	rootB64 := base64.StdEncoding.EncodeToString(rootPub)
+	const relay = "https://chat.acme.com"
+
+	out, _, err := runRootCmd(t, "identity", "invite", "--root-pubkey", rootB64, "--relay", relay)
+	if err != nil {
+		t.Fatalf("identity invite: %v", err)
+	}
+	got := out.String()
+	for _, label := range []string{identitycli.InviteTokenLabel, identitycli.InviteURLLabel, identitycli.InviteFingerprintLabel} {
+		if !strings.Contains(got, label) {
+			t.Fatalf("output missing label %q:\n%s", label, got)
+		}
+	}
+
+	token := ""
+	for _, line := range strings.Split(got, "\n") {
+		if i := strings.Index(line, identitycli.InviteTokenLabel); i >= 0 {
+			token = strings.TrimSpace(line[i+len(identitycli.InviteTokenLabel):])
+		}
+	}
+	dec, err := invite.Decode(token)
+	if err != nil {
+		t.Fatalf("Decode(printed token): %v\noutput=%s", err, got)
+	}
+	if dec.RootPubKey != rootB64 || dec.Relay != relay || dec.NetworkID != registry.NetworkID(rootPub) {
+		t.Fatalf("decoded invite mismatch: %+v", dec)
+	}
+}
+
+// TestIdentityInviteCommandFailsClosed asserts the command rejects a missing or
+// invalid --root-pubkey and an empty --relay, printing no partial output.
+func TestIdentityInviteCommandFailsClosed(t *testing.T) {
+	rootPub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	validB64 := base64.StdEncoding.EncodeToString(rootPub)
+
+	cases := map[string][]string{
+		"missing root-pubkey": {"identity", "invite", "--relay", "https://r"},
+		"invalid root-pubkey": {"identity", "invite", "--root-pubkey", "!!!", "--relay", "https://r"},
+		"empty relay":         {"identity", "invite", "--root-pubkey", validB64, "--relay", ""},
+	}
+	for name, args := range cases {
+		t.Run(name, func(t *testing.T) {
+			out, _, err := runRootCmd(t, args...)
+			if err == nil {
+				t.Fatalf("%s: expected fail-closed error, got nil", name)
+			}
+			if strings.Contains(out.String(), identitycli.InviteTokenLabel) {
+				t.Fatalf("%s: fail-closed path must not print a token, got %q", name, out.String())
+			}
+		})
+	}
+}
+
+// TestIdentityInviteCommandHelp is a registration smoke test: `identity invite
+// --help` resolves the command and prints its required flags.
+func TestIdentityInviteCommandHelp(t *testing.T) {
+	out, _, err := runRootCmd(t, "identity", "invite", "--help")
+	if err != nil {
+		t.Fatalf("identity invite --help: %v", err)
+	}
+	help := out.String()
+	for _, want := range []string{"--root-pubkey", "--relay"} {
+		if !strings.Contains(help, want) {
+			t.Fatalf("help missing flag %q:\n%s", want, help)
+		}
 	}
 }

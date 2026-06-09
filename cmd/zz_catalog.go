@@ -259,6 +259,11 @@ var commandCatalog = map[string]catalogEntry{
 		when:  "you are setting up an agent and need to mint its ed25519 keypair and seal the private key to the signer.",
 		short: "Mint an agent keypair and seal the private key to the signer",
 	},
+	"vaultmind identity invite": {
+		group: groupLifecycle,
+		when:  "you are an admin and want to emit a network invite (the trust anchor plus relay, with an out-of-band fingerprint) for a member to enroll against.",
+		short: "Emit an UNSIGNED network invite carrying the trust anchor (Contract-B)",
+	},
 	"vaultmind identity sign": {
 		group: groupLifecycle,
 		when:  "you have a Contract-B entry to sign and want it validated, canonicalized, and signed by the keyless signer.",
