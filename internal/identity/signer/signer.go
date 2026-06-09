@@ -60,6 +60,11 @@ const (
 	errPolicyRefused = "signer: policy refused"
 	// errNotListening is returned when Serve is called before Listen.
 	errNotListening = "signer: not listening (call Listen first)"
+	// errEmptyAllowlist is returned when AllowedUIDs is empty. An empty allowlist
+	// would deny EVERY caller silently (every request answered errUIDNotAllowed),
+	// which is a fail-open-looking deny-all misconfiguration: the signer would
+	// run and bind but sign nothing. Fail closed at construction instead.
+	errEmptyAllowlist = "signer: AllowedUIDs must list at least one uid (refusing deny-all)"
 )
 
 // PolicyFunc inspects the canonical bytes a caller asked to sign and returns a
@@ -111,6 +116,9 @@ func New(cfg Config) (*Signer, error) {
 	}
 	if cfg.SocketPath == "" {
 		return nil, errors.New("signer: SocketPath is required")
+	}
+	if len(cfg.AllowedUIDs) == 0 {
+		return nil, errors.New(errEmptyAllowlist)
 	}
 	priv, err := loadPrivateKey(cfg.KeyPath)
 	if err != nil {

@@ -274,6 +274,11 @@ var commandCatalog = map[string]catalogEntry{
 		when:  "you have a trust-root registry to sign so consumers can verify the root signature, anti-rollback epoch, and freshness at load.",
 		short: "Sign a trust-root registry via the keyless signer (Contract-B)",
 	},
+	"vaultmind identity signer": {
+		group: groupLifecycle,
+		when:  "you need to RUN the keyless custody signer daemon so the sign-* commands have a process to connect to.",
+		short: "Run the keyless custody signer daemon (Contract-B)",
+	},
 	"vaultmind hooks": {
 		group: groupLifecycle,
 		when:  "you need to install, remove, or check VaultMind's Claude Code hook scripts.",
