@@ -74,13 +74,34 @@ func StoreNote(d *DB, rec NoteRecord) error {
 	return tx.Commit()
 }
 
+// pathIDDependentTables are the tables whose note_id column references
+// notes(id) and that StoreNoteInTx deletes-then-reinserts on every store.
+// migrateNoteID reuses this list to evict the OLD id's dependent rows during
+// an id migration so no orphans linger after the row is re-keyed. SSOT for
+// "what hangs off a note id" — keep aligned with StoreNoteInTx's delete loop.
+var pathIDDependentTables = []string{
+	"aliases", "tags", "frontmatter_kv", "blocks", "headings", "generated_sections",
+}
+
 // StoreNoteInTx stores a note within an existing transaction.
 // Used by Rebuild for batch transactions.
 func StoreNoteInTx(tx *sql.Tx, rec NoteRecord) error {
 	noteID := rec.ID
 
+	// A note first indexed WITHOUT a frontmatter id is stored under a
+	// path-derived `_path:<relpath>` id. When the file later GAINS a real id,
+	// this store carries a NEW id for the SAME path. A plain upsert would then
+	// INSERT a fresh row and hit `UNIQUE constraint failed: notes.path`, the
+	// note would be skipped, and search would keep serving the stale `_path:`
+	// row while content never updates (silent data loss). Treat this as an id
+	// MIGRATION: re-key the existing row and carry access history forward
+	// BEFORE the rest of the store proceeds under the new id.
+	if err := migrateNoteID(tx, rec.Path, noteID); err != nil {
+		return err
+	}
+
 	// Delete dependent rows first
-	for _, table := range []string{"aliases", "tags", "frontmatter_kv", "blocks", "headings", "generated_sections"} {
+	for _, table := range pathIDDependentTables {
 		if _, err := tx.Exec(fmt.Sprintf("DELETE FROM %s WHERE note_id = ?", table), noteID); err != nil {
 			return fmt.Errorf("deleting from %s: %w", table, err)
 		}
@@ -219,6 +240,76 @@ func upsertNote(tx *sql.Tx, rec NoteRecord) error {
 	)
 	if err != nil {
 		return fmt.Errorf("upserting note %q: %w", rec.ID, err)
+	}
+	return nil
+}
+
+// migrateNoteID re-keys an existing note row when the file at `path` now
+// declares a different id than the stored row (the `_path:` → real-id adoption
+// case). It is a no-op when there is no stored row for the path, or when the
+// stored id already equals newID.
+//
+// The migration is transactional and carries note_accesses (activation/recall
+// history) forward to the new id; the scalar access columns survive implicitly
+// because the notes row is updated in place rather than replaced. The OLD id's
+// dependent rows are evicted here so the row's id can be re-keyed without
+// orphaning them — StoreNoteInTx re-inserts them fresh under the new id.
+//
+// FK enforcement is deferred to commit (defer_foreign_keys) so the parent
+// notes row and the child note_accesses rows can be re-keyed in the same
+// transaction regardless of statement order; both reference the new id by the
+// time the transaction commits.
+func migrateNoteID(tx *sql.Tx, path, newID string) error {
+	oldID, err := storedIDForPath(tx, path)
+	if err != nil || oldID == "" || oldID == newID {
+		return err
+	}
+
+	if _, err := tx.Exec("PRAGMA defer_foreign_keys=ON"); err != nil {
+		return fmt.Errorf("deferring foreign keys for id migration: %w", err)
+	}
+	if err := evictOldIDDependents(tx, oldID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("UPDATE note_accesses SET note_id = ? WHERE note_id = ?", newID, oldID); err != nil {
+		return fmt.Errorf("carrying note_accesses forward to %q: %w", newID, err)
+	}
+	if _, err := tx.Exec("UPDATE notes SET id = ? WHERE id = ?", newID, oldID); err != nil {
+		return fmt.Errorf("re-keying note id %q -> %q: %w", oldID, newID, err)
+	}
+	return nil
+}
+
+// storedIDForPath returns the id currently stored for path, or "" when no row
+// exists for it. A missing row is not an error — it is the common new-file case.
+func storedIDForPath(tx *sql.Tx, path string) (string, error) {
+	var id string
+	err := tx.QueryRow("SELECT id FROM notes WHERE path = ?", path).Scan(&id)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("looking up stored id for path %q: %w", path, err)
+	}
+	return id, nil
+}
+
+// evictOldIDDependents removes every dependent row keyed to oldID so the note
+// row can be re-keyed without orphaning them. Outbound links and the FTS row
+// key on columns outside pathIDDependentTables, so they are deleted explicitly.
+// Inbound links (dst_note_id = oldID) belong to OTHER notes and are left for
+// ResolveLinks to re-point at the new id.
+func evictOldIDDependents(tx *sql.Tx, oldID string) error {
+	for _, table := range pathIDDependentTables {
+		if _, err := tx.Exec(fmt.Sprintf("DELETE FROM %s WHERE note_id = ?", table), oldID); err != nil {
+			return fmt.Errorf("evicting old id from %s: %w", table, err)
+		}
+	}
+	if _, err := tx.Exec("DELETE FROM links WHERE src_note_id = ?", oldID); err != nil {
+		return fmt.Errorf("evicting old id outbound links: %w", err)
+	}
+	if _, err := tx.Exec("DELETE FROM fts_notes WHERE note_id = ?", oldID); err != nil {
+		return fmt.Errorf("evicting old id fts row: %w", err)
 	}
 	return nil
 }
