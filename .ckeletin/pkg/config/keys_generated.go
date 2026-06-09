@@ -131,6 +131,8 @@ const (
 	KeyAppHooksuninstallLocal                = "app.hooksuninstall.local"                 // Target .claude/settings.local.json instead of .claude/settings.json.
 	KeyAppHooksuninstallRemovescripts        = "app.hooksuninstall.removescripts"         // Also delete the installed hook scripts under .claude/scripts/ (default: leave...
 	KeyAppIdentityinitSignerKey              = "app.identityinit.signer_key"              // Sealed signer key path (default: XDG data dir)
+	KeyAppIdentityinviteRootPubkey           = "app.identityinvite.root_pubkey"           // Network ROOT public key (base64-std of the 32-byte ed25519 key; required)
+	KeyAppIdentityinviteRelay                = "app.identityinvite.relay"                 // Relay base URL, e.g. https://chat.acme.com (required)
 	KeyAppIdentitysignFile                   = "app.identitysign.file"                    // Read entry JSON from this file instead of stdin
 	KeyAppIdentitysignSignerSocket           = "app.identitysign.signer_socket"           // Signer socket path (default: XDG state dir)
 	KeyAppIdentitysignenrollmentFile         = "app.identitysignenrollment.file"          // Read enrollment request JSON from this file instead of stdin
