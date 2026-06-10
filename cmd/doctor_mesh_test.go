@@ -31,7 +31,7 @@ agents:
 `), 0o644))
 
 	got := slugFromAgentsYAML(reg, dir)
-	require.Equal(t, "agent:mira", got)
+	require.Equal(t, "mira", got, "registry bindings key on the BARE slug, not the agent: wire principal")
 }
 
 func TestSlugFromAgentsYAML_AlreadyPrefixed(t *testing.T) {
@@ -43,7 +43,7 @@ agents:
     project_path: "`+dir+`"
 `), 0o644))
 
-	require.Equal(t, "agent:mira", slugFromAgentsYAML(reg, dir))
+	require.Equal(t, "mira", slugFromAgentsYAML(reg, dir), "an agent:-prefixed agents.yaml slug is stripped to the bare registry slug")
 }
 
 func TestSlugFromAgentsYAML_NoMatch(t *testing.T) {
@@ -314,7 +314,9 @@ func TestDoctor_MeshOfflineRegistryWithAnchorPin(t *testing.T) {
 	memberPub, _, err := ed25519.GenerateKey(seedReader("doctor-cmd-offline-member-seed-pad"))
 	require.NoError(t, err)
 
-	regBytes, nid := buildCmdSignedRegistry(t, rootPub, rootPriv, "agent:mira", memberPub, now)
+	// Registry binding keys on the BARE slug; the --mesh-slug "agent:mira" below
+	// is stripped to "mira" so the prefixed flag still resolves end-to-end.
+	regBytes, nid := buildCmdSignedRegistry(t, rootPub, rootPriv, "mira", memberPub, now)
 
 	// Persist the OOB anchor where doctor auto-discovers it.
 	anchorPath := filepath.Join(xdgData, "vaultmind", "network-roots.json")

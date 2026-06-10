@@ -82,16 +82,15 @@ const (
 // Warning strings (SSOT) — each drives both the human Warnings slice and an
 // envelope.AddWarning in the cmd layer.
 const (
-	WarnMeshKeyMode          = "identity key file is not 0600 (custody mode is wrong)"
-	WarnMeshKeySize          = "identity key file is not the expected ed25519 private-key size"
-	WarnMeshUnpinned         = "registry self-consistent (daemon-advertised root), NOT authenticated — enroll persists a pin, or pass --mesh-root-pubkey"
-	WarnMeshNotEnrolled      = "your slug is not in the network registry yet (enroll-add pending?)"
-	WarnMeshKeyMismatch      = "your binding exists but the running signer does not hold its key (wrong signer/key?)"
-	WarnMeshUnverifiable     = "the network registry did not verify against your pinned root (bad signature, stale, or rolled back)"
-	WarnMeshNoRegistry       = "no registry available to verify (daemon unreachable and no --mesh-registry given)"
-	WarnMeshEnforcementOff   = "message-signature enforcement is NOT YET active (advisory mode is a no-op today)"
-	WarnMeshHeartbeatStale   = "wake-watcher heartbeat is stale — the watcher may be present-but-dead"
-	WarnMeshHeartbeatMissing = "no wake-watcher heartbeat (wake-on-idle not confirmed)"
+	WarnMeshKeyMode        = "identity key file is not 0600 (custody mode is wrong)"
+	WarnMeshKeySize        = "identity key file is not the expected ed25519 private-key size"
+	WarnMeshUnpinned       = "registry self-consistent (daemon-advertised root), NOT authenticated — enroll persists a pin, or pass --mesh-root-pubkey"
+	WarnMeshNotEnrolled    = "your slug is not in the network registry yet (enroll-add pending?)"
+	WarnMeshKeyMismatch    = "your binding exists but the running signer does not hold its key (wrong signer/key?)"
+	WarnMeshUnverifiable   = "the network registry did not verify against your pinned root (bad signature, stale, or rolled back)"
+	WarnMeshNoRegistry     = "no registry available to verify (daemon unreachable and no --mesh-registry given)"
+	WarnMeshEnforcementOff = "message-signature enforcement is NOT YET active (advisory mode is a no-op today)"
+	WarnMeshHeartbeatStale = "wake-watcher heartbeat is stale — the watcher may be present-but-dead"
 )
 
 // MeshSigner is the keyless signing seam: doctor asks the SIGNER (over the UDS)
@@ -284,7 +283,11 @@ func checkHeartbeat(mi *DoctorMeshIdentity, heartbeatPath string, now time.Time)
 	}
 	info, err := os.Lstat(heartbeatPath)
 	if err != nil {
-		mi.addWarning(WarnMeshHeartbeatMissing)
+		// ABSENT is INFO, not a warning: most members have never run the watcher,
+		// so an absent heartbeat must not inflate the warning count or trip
+		// `jq '.status=="warning"'`. WatcherHeartbeatFresh=false + Age==0 is the
+		// signal; the human writer renders the "not found" note. Only STALE
+		// (present-but-dead) is a warning.
 		return
 	}
 	age := now.Sub(info.ModTime())

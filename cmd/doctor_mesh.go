@@ -53,6 +53,7 @@ const (
 	meshDaemonUnreachable = "unreachable"
 	meshHeartbeatLabel    = "  watcher heartbeat: "
 	meshHeartbeatFresh    = "fresh"
+	meshHeartbeatAbsent   = "not found (wake-on-idle not confirmed)"
 	meshWarnPrefix        = "  ⚠ "
 )
 
@@ -196,7 +197,9 @@ func applyOfflineRegistry(in *query.MeshDoctorInput, registryFlag string) (bool,
 // not an error — tier-2 then reports not-enrolled.
 func resolveSlug(slugFlag string) string {
 	if slugFlag != "" {
-		return slugFlag
+		// Contract-B registry bindings store the BARE slug; "agent:" is only the
+		// chat wire principal. Strip it so an explicit --mesh-slug resolves.
+		return strings.TrimPrefix(slugFlag, "agent:")
 	}
 	return slugFromAgentsYAML(os.Getenv(envAgentRegistry), projectPath())
 }
@@ -244,7 +247,10 @@ func slugFromAgentsYAML(registryPath, projectDir string) string {
 	want := filepath.Clean(projectDir)
 	for _, a := range ay.Agents {
 		if filepath.Clean(a.ProjectPath) == want {
-			return "agent:" + strings.TrimPrefix(a.Slug, "agent:")
+			// Return the BARE slug: Contract-B registry bindings key on the bare
+			// slug ("agent:" is only the chat wire principal). Prefixing it here
+			// made registry.Resolve miss an enrolled member (false not-enrolled).
+			return strings.TrimPrefix(a.Slug, "agent:")
 		}
 	}
 	return ""
@@ -353,8 +359,15 @@ func writeMeshDaemon(w io.Writer, mi *query.DoctorMeshIdentity) error {
 	if _, err := fmt.Fprintln(w, meshDaemonLabel+daemon); err != nil {
 		return err
 	}
-	if mi.WatcherHeartbeatFresh {
+	switch {
+	case mi.WatcherHeartbeatFresh:
 		_, err := fmt.Fprintln(w, meshHeartbeatLabel+meshHeartbeatFresh)
+		return err
+	case mi.WatcherHeartbeatAge == 0:
+		// ABSENT (never found): an INFO line, not a ⚠ warning — most members
+		// have never run the watcher. Stale (Age>0) is surfaced as a warning
+		// by writeMeshWarnings, so no info line is printed for it here.
+		_, err := fmt.Fprintln(w, meshHeartbeatLabel+meshHeartbeatAbsent)
 		return err
 	}
 	return nil

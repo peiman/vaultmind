@@ -491,6 +491,12 @@ func TestMeshDoctor_Tier3_HeartbeatAbsent(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.False(t, mi.WatcherHeartbeatFresh)
+	require.Zero(t, mi.WatcherHeartbeatAge, "an absent heartbeat has no age")
+	// ABSENT is INFO, not a warning — it must not inflate the warning count for
+	// the many members who have never run the watcher. Only STALE warns.
+	for _, w := range mi.Warnings {
+		require.NotContains(t, w, "heartbeat", "absent heartbeat must not add a warning")
+	}
 }
 
 // --- presence gating + anchor auto-discovery --------------------------------
