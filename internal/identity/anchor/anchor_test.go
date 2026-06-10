@@ -70,6 +70,7 @@ func TestUpsertCreatesParentDir(t *testing.T) {
 	info, err := os.Stat(dir)
 	require.NoError(t, err)
 	assert.True(t, info.IsDir())
+	assert.Equal(t, os.FileMode(0700), info.Mode().Perm(), "absent parent dir must be created 0700")
 }
 
 // TestUpsertWritesFileMode0600 proves the persisted file is chmod 0600.
