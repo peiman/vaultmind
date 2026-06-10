@@ -14,6 +14,10 @@ const (
 	signerKeyFilename = "identity-signer.key"
 	// signerSocketFilename is the 0600 Unix-domain socket the signer listens on.
 	signerSocketFilename = "identity-signer.sock"
+	// networkAnchorFilename is the 0600 file `identity enroll` pins the
+	// OOB-confirmed network trust anchor to (beside the signer key in the XDG data
+	// dir). A later `doctor` slice authenticates registry verification against it.
+	networkAnchorFilename = "network-roots.json"
 )
 
 var identityCmd = &cobra.Command{
@@ -41,4 +45,11 @@ func defaultSignerKeyPath() (string, error) {
 // defaultSignerSocketPath returns the signer socket path under the XDG state dir.
 func defaultSignerSocketPath() (string, error) {
 	return xdg.StateFile(signerSocketFilename)
+}
+
+// defaultNetworkAnchorPath returns the persisted-trust-anchor path under the XDG
+// data dir (beside the sealed signer key). `identity enroll` pins the
+// OOB-confirmed network root here; it is NOT a user flag.
+func defaultNetworkAnchorPath() (string, error) {
+	return xdg.DataFile(networkAnchorFilename)
 }

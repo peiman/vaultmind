@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -18,10 +19,17 @@ import (
 // from. SSOT so the fetch path and any docs reference one definition.
 const WellKnownRootPath = "/.well-known/vaultmind-root"
 
-// relayFetchTimeout bounds a well-known fetch when the caller passes a nil
-// client (the default client gets this timeout). When the caller supplies a
-// client, its own timeout/transport wins.
-const relayFetchTimeout = 15 * time.Second
+// maxRootBodyBytes caps the well-known root response body before decode. The
+// legit payload is ~150 B; 64 KiB is generous headroom while bounding a hostile
+// or runaway relay so a no-cap decode can never OOM the keyless CLI. A body that
+// hits the cap fails LOUD (a decode error), never silently truncated.
+const maxRootBodyBytes = 64 << 10
+
+// relayFetchTimeout bounds EVERY well-known fetch: FetchRoot wraps the request in
+// a context.WithTimeout(relayFetchTimeout) of its own, so even a caller-supplied
+// no-timeout *http.Client cannot hang the fetch. It is a var (not a const) ONLY so
+// a test can shorten it via SetFetchTimeoutForTest; production never reassigns it.
+var relayFetchTimeout = 15 * time.Second
 
 // Error strings (SSOT). Each failure mode is a distinct typed reject so the
 // enroll flow can tell a misconfigured base URL from a dead relay.
@@ -66,21 +74,31 @@ type WellKnownRoot struct {
 
 // FetchRoot GETs {relayBaseURL}/.well-known/vaultmind-root and decodes the
 // WellKnownRoot. It validates the base URL scheme (http/https only) BEFORE
-// dialing, uses a context-bound request, and FAILS CLOSED on a non-200 status
-// or a malformed body. It deliberately does NOT DisallowUnknownFields so the
+// dialing, wraps the request in its OWN context.WithTimeout(relayFetchTimeout) so
+// a caller-supplied no-timeout client can never hang it, CAPS the response body
+// at maxRootBodyBytes before decode, and FAILS CLOSED on a non-200 status or a
+// malformed/over-cap body. It deliberately does NOT DisallowUnknownFields so the
 // relay can add forward-compatible fields without breaking older members.
 //
-// client may be nil; a timeout-bounded default client is used in that case. The
-// returned WellKnownRoot is UNTRUSTED — the caller must cross-check it against
-// the invite before relying on it.
+// This client is intentionally remote-permissive (enroll fetches REMOTE relays):
+// it does NOT loopback-pin — that is a separate doctor-only client in a later
+// slice. client may be nil; a default client is used in that case. The returned
+// WellKnownRoot is UNTRUSTED — the caller must cross-check it against the invite
+// before relying on it.
 func FetchRoot(ctx context.Context, client *http.Client, relayBaseURL string) (WellKnownRoot, error) {
 	endpoint, err := wellKnownURL(relayBaseURL)
 	if err != nil {
 		return WellKnownRoot{}, err
 	}
 	if client == nil {
-		client = &http.Client{Timeout: relayFetchTimeout}
+		client = &http.Client{}
 	}
+
+	// Inescapable deadline: bound the request inside FetchRoot so a caller-supplied
+	// *http.Client with no Timeout (and a context with no deadline) still cannot
+	// hang the fetch.
+	ctx, cancel := context.WithTimeout(ctx, relayFetchTimeout)
+	defer cancel()
 
 	//nolint:gosec // relay base URL is operator-provided via the signed invite; scheme validated above
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
@@ -98,8 +116,11 @@ func FetchRoot(ctx context.Context, client *http.Client, relayBaseURL string) (W
 		return WellKnownRoot{}, fmt.Errorf("%s: %d", errStatus, resp.StatusCode)
 	}
 
+	// Cap the body before decode: a runaway/hostile relay cannot OOM the CLI. An
+	// over-cap body surfaces as a decode error (the JSON value is cut short), which
+	// fails loud rather than silently truncating.
 	var root WellKnownRoot
-	if err := json.NewDecoder(resp.Body).Decode(&root); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxRootBodyBytes)).Decode(&root); err != nil {
 		return WellKnownRoot{}, fmt.Errorf("%s: %w", errDecode, err)
 	}
 	return root, nil

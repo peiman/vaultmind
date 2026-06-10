@@ -1,6 +1,7 @@
 package relayclient_test
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"net/http/httptest"
@@ -124,6 +125,67 @@ func TestFetchRootNilClientUsesDefault(t *testing.T) {
 	got, err := relayclient.FetchRoot(context.Background(), nil, srv.URL)
 	require.NoError(t, err)
 	assert.Equal(t, lowEntropyRootB64, got.RootPubKey)
+}
+
+// TestFetchRootOversizedBodyFails proves a body exceeding the 64 KiB cap fails
+// LOUD (a decode/oversize error) instead of being silently truncated or OOMing
+// the CLI. The server streams far more than the cap; FetchRoot must error.
+func TestFetchRootOversizedBodyFails(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(relayclient.WellKnownRootPath, func(w http.ResponseWriter, _ *http.Request) {
+		// A syntactically-open object followed by a huge run of whitespace: the
+		// decoder must keep reading past the cap and hit the LimitReader's EOF,
+		// which surfaces as a decode error rather than a successful parse.
+		_, _ = w.Write([]byte(`{"root_pubkey":"`))
+		filler := bytes.Repeat([]byte("A"), 128<<10) // 128 KiB > 64 KiB cap
+		_, _ = w.Write(filler)
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	_, err := relayclient.FetchRoot(context.Background(), srv.Client(), srv.URL)
+	require.Error(t, err, "an over-cap body must fail loud, never silently truncate")
+}
+
+// TestFetchRootValidBodyUnderCapSucceeds is the boundary companion to the
+// oversized test: a legitimate small payload decodes fine under the cap.
+func TestFetchRootValidBodyUnderCapSucceeds(t *testing.T) {
+	srv := newRelay(t, http.StatusOK, wellKnownBody)
+	got, err := relayclient.FetchRoot(context.Background(), srv.Client(), srv.URL)
+	require.NoError(t, err)
+	assert.Equal(t, lowEntropyRootB64, got.RootPubKey)
+}
+
+// TestFetchRootInternalDeadlineBoundsNoTimeoutClient proves the deadline FetchRoot
+// applies INTERNALLY bounds a caller-supplied client that has NO timeout — a slow
+// server cannot hang the fetch. The internal timeout is overridden short for the
+// test so it doesn't take 15s.
+func TestFetchRootInternalDeadlineBoundsNoTimeoutClient(t *testing.T) {
+	restore := relayclient.SetFetchTimeoutForTest(20 * time.Millisecond)
+	t.Cleanup(restore)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc(relayclient.WellKnownRootPath, func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(2 * time.Second) // far longer than the overridden internal deadline
+		_, _ = w.Write([]byte(wellKnownBody))
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	// A client with NO timeout (and the parent context has none either): the ONLY
+	// bound is FetchRoot's internal context.WithTimeout.
+	noTimeoutClient := &http.Client{}
+	done := make(chan error, 1)
+	go func() {
+		_, err := relayclient.FetchRoot(context.Background(), noTimeoutClient, srv.URL)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		require.Error(t, err, "the internal deadline must bound a no-timeout client")
+	case <-time.After(1 * time.Second):
+		t.Fatal("FetchRoot hung past the internal deadline — no inescapable timeout")
+	}
 }
 
 // TestFetchRootDecodesTestdataFixture serves the committed testdata fixture and

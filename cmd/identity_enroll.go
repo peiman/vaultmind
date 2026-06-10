@@ -25,6 +25,10 @@ func runIdentityEnroll(cmd *cobra.Command, _ []string) error {
 		}
 		sockPath = p
 	}
+	anchorPath, err := defaultNetworkAnchorPath()
+	if err != nil {
+		return fmt.Errorf("resolving network anchor path: %w", err)
+	}
 	cfg := identitycli.EnrollConfig{
 		InviteTokenOrURL:   getConfigValueWithFlags[string](cmd, "invite", config.KeyAppIdentityenrollInvite),
 		DisplayName:        getConfigValueWithFlags[string](cmd, "display-name", config.KeyAppIdentityenrollDisplayName),
@@ -33,6 +37,7 @@ func runIdentityEnroll(cmd *cobra.Command, _ []string) error {
 		TransportPubKeyB64: getConfigValueWithFlags[string](cmd, "transport-pubkey", config.KeyAppIdentityenrollTransportPubkey),
 		TransportEndpoint:  getConfigValueWithFlags[string](cmd, "transport-endpoint", config.KeyAppIdentityenrollTransportEndpoint),
 		SignerSocket:       sockPath,
+		AnchorStorePath:    anchorPath,
 		AssumeYes:          getConfigValueWithFlags[bool](cmd, "yes", config.KeyAppIdentityenrollYes),
 	}
 	return identitycli.Enroll(cmd.OutOrStdout(), cmd.ErrOrStderr(), cmd.InOrStdin(), cfg)

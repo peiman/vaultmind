@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/peiman/vaultmind/internal/identity/anchor"
 	"github.com/peiman/vaultmind/internal/identity/enrollment"
 	"github.com/peiman/vaultmind/internal/identity/invite"
 	"github.com/peiman/vaultmind/internal/identity/registry"
@@ -50,6 +51,9 @@ const (
 	EnrollSignedNote = "✓ signed & self-verified"
 	// EnrollNextStepNote tells the member to hand the emitted request to the admin.
 	EnrollNextStepNote = "hand this to your admin out-of-band; they run `vaultmind identity enroll-add`."
+	// EnrollAnchorPinnedNote confirms the OOB-confirmed network root was persisted
+	// so a future `vaultmind doctor` authenticates registry verification against it.
+	EnrollAnchorPinnedNote = "✓ pinned this network's root (a future `vaultmind doctor` will authenticate against it)"
 )
 
 // Enroll error strings (SSOT). Each failure mode is a distinct typed reject so
@@ -65,6 +69,10 @@ const (
 	ErrEnrollEmptyPubKey = "identitycli: --pubkey is required (your base64-std ed25519 identity pubkey)"
 	// ErrEnrollEmptyTransportPubKey is returned when --transport-pubkey is empty.
 	ErrEnrollEmptyTransportPubKey = "identitycli: --transport-pubkey is required (your base64-std WireGuard pubkey)"
+	// ErrEnrollEmptyAnchorPath is returned when AnchorStorePath is empty. The cmd
+	// layer always resolves it (xdg.DataFile); an empty value is a PROGRAMMING
+	// error, surfaced fail-closed before any network/signer interaction.
+	ErrEnrollEmptyAnchorPath = "identitycli: AnchorStorePath is empty (programming error: the cmd layer must set it)"
 
 	// errEnrollDecodeInvite wraps an invite.Decode failure (bad prefix/base64/json
 	// or network-id mismatch).
@@ -100,6 +108,10 @@ const (
 	// ErrEnrollSelfVerify is returned when proof-of-possession self-verification
 	// fails: the running signer holds a DIFFERENT key than --pubkey.
 	ErrEnrollSelfVerify = "self-signature failed to verify: the running signer's identity key does not match --pubkey (run `identity signer` with the key whose public half you passed to --pubkey)"
+	// ErrEnrollPersistAnchor wraps a failure to persist the OOB-confirmed trust
+	// anchor. Enroll FAILS CLOSED on it: the request is NOT emitted, so there is
+	// never a half-state (a request handed to the admin without the pinned root).
+	ErrEnrollPersistAnchor = "identitycli: persist network trust anchor"
 )
 
 // EnrollConfig carries everything the member-enroll flow needs, with injectable
@@ -113,6 +125,11 @@ type EnrollConfig struct {
 	TransportPubKeyB64 string // --transport-pubkey (base64-std WireGuard pubkey)
 	TransportEndpoint  string // --transport-endpoint (optional host:port; "" => omitted)
 	SignerSocket       string // --signer-socket
+
+	// AnchorStorePath is the file the OOB-confirmed trust anchor is pinned to. It
+	// is NOT a user flag — the cmd layer resolves it via defaultNetworkAnchorPath()
+	// (xdg.DataFile, beside the signer key). Empty is a programming error.
+	AnchorStorePath string
 
 	AssumeYes bool // --yes (skip the OOB fingerprint confirmation prompt)
 
@@ -179,6 +196,15 @@ func Enroll(out, errOut io.Writer, in io.Reader, cfg EnrollConfig) error {
 		return err
 	}
 
+	// Persist the now-OOB-authenticated trust anchor BEFORE signing/emitting. By
+	// here crossCheckRoot has proven the served root == the invite root, so
+	// inv.RootPubKey is authenticated; persisting {network_id, root_pubkey} pins
+	// the root for a future `doctor`. FAIL CLOSED: if the anchor cannot be saved,
+	// emit NOTHING — never hand the admin a request without the matching pin.
+	if err := persistAnchor(cfg, inv); err != nil {
+		return err
+	}
+
 	fields, err := assembleFields(cfg, inv)
 	if err != nil {
 		return err
@@ -223,6 +249,8 @@ func validateEnrollConfig(cfg EnrollConfig) error {
 		return fmt.Errorf("%s", ErrEnrollEmptyPubKey)
 	case cfg.TransportPubKeyB64 == "":
 		return fmt.Errorf("%s", ErrEnrollEmptyTransportPubKey)
+	case cfg.AnchorStorePath == "":
+		return fmt.Errorf("%s", ErrEnrollEmptyAnchorPath)
 	}
 	return nil
 }
@@ -294,6 +322,23 @@ func readLine(in io.Reader) (string, error) {
 	}
 }
 
+// persistAnchor pins the OOB-confirmed network root to cfg.AnchorStorePath. It is
+// called only AFTER crossCheckRoot + the fingerprint confirm, so inv.RootPubKey is
+// authenticated. anchor.Upsert validates internal consistency and writes
+// atomically; any failure is wrapped fail-closed so Enroll emits no request.
+func persistAnchor(cfg EnrollConfig, inv invite.Invite) error {
+	a := anchor.NetworkAnchor{
+		NetworkID:   inv.NetworkID,
+		RootPubKey:  inv.RootPubKey,
+		ConfirmedAt: cfg.now().Unix(),
+		Relay:       inv.Relay,
+	}
+	if err := anchor.Upsert(cfg.AnchorStorePath, a); err != nil {
+		return fmt.Errorf("%s: %w", ErrEnrollPersistAnchor, err)
+	}
+	return nil
+}
+
 // assembleFields builds the enrollment.Fields from cfg + the decoded invite.
 // transport_endpoint is nil (OMITTED) when --transport-endpoint is empty
 // (absent != null).
@@ -343,10 +388,11 @@ func writeEnrollGuidance(errOut io.Writer, inv invite.Invite, fp string, assumeY
 	if assumeYes {
 		confirm = EnrollAutoConfirmedNote
 	}
-	_, err := fmt.Fprintf(errOut, "%s%s\n%s%s\n%s%s (%s)\n%s\n%s\n",
+	_, err := fmt.Fprintf(errOut, "%s%s\n%s%s\n%s%s (%s)\n%s\n%s\n%s\n",
 		EnrollNetworkLabel, inv.NetworkID,
 		EnrollRelayLabel, inv.Relay,
 		EnrollFingerprintLabel, fp, confirm,
+		EnrollAnchorPinnedNote,
 		EnrollSignedNote,
 		EnrollNextStepNote,
 	)

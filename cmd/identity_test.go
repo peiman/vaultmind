@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/peiman/vaultmind/internal/identity"
+	"github.com/peiman/vaultmind/internal/identity/anchor"
 	"github.com/peiman/vaultmind/internal/identity/enrollment"
 	"github.com/peiman/vaultmind/internal/identity/envelope"
 	"github.com/peiman/vaultmind/internal/identity/invite"
@@ -378,6 +379,17 @@ func TestDefaultSignerPathsResolveUnderXDG(t *testing.T) {
 	if keyPath == sockPath {
 		t.Fatal("key and socket default paths must differ")
 	}
+
+	anchorPath, err := defaultNetworkAnchorPath()
+	if err != nil {
+		t.Fatalf("defaultNetworkAnchorPath: %v", err)
+	}
+	if !strings.HasSuffix(anchorPath, networkAnchorFilename) {
+		t.Fatalf("anchor path %q does not end in %q", anchorPath, networkAnchorFilename)
+	}
+	if anchorPath == keyPath || anchorPath == sockPath {
+		t.Fatal("anchor default path must differ from key and socket paths")
+	}
 }
 
 // TestIdentityInviteCommandRoundTrips drives `identity invite` through RootCmd
@@ -501,6 +513,12 @@ func enrollRelayServer(t *testing.T, rootPub ed25519.PublicKey) (srv *httptest.S
 // so the emitted wire self-verifies (proof-of-possession). This exercises the
 // production cmd wiring (no seam injection): real signer.Client + real HTTP.
 func TestIdentityEnrollCommandHappyPath(t *testing.T) {
+	// Isolate the XDG data dir so the cmd-resolved anchor path lands in tmp (and
+	// the test can assert the anchor was persisted via the production wiring).
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+	t.Setenv("XDG_DATA_HOME", tmp)
+
 	sockPath, memberPub := startCmdSigner(t)
 	rootPub, _, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -536,12 +554,31 @@ func TestIdentityEnrollCommandHappyPath(t *testing.T) {
 	if got[enrollment.FieldNetworkID] != networkID {
 		t.Fatalf("emitted network_id = %v, want %s", got[enrollment.FieldNetworkID], networkID)
 	}
+
+	// The cmd-resolved anchor path must now hold the OOB-confirmed root, proving
+	// the production wiring persists it (not just the seam-injected unit test).
+	anchorPath, err := defaultNetworkAnchorPath()
+	if err != nil {
+		t.Fatalf("defaultNetworkAnchorPath: %v", err)
+	}
+	anchors, err := anchor.Load(anchorPath)
+	if err != nil {
+		t.Fatalf("anchor.Load: %v", err)
+	}
+	if len(anchors) != 1 || anchors[0].NetworkID != networkID || anchors[0].RootPubKey != rootB64 {
+		t.Fatalf("persisted anchor = %+v, want one anchor for %s / %s", anchors, networkID, rootB64)
+	}
 }
 
 // TestIdentityEnrollCommandFailsClosedWhenSignerUnreachable drives the command
 // with a valid invite + relay but a dead signer socket, and asserts it fails
 // closed with no request emitted.
 func TestIdentityEnrollCommandFailsClosedWhenSignerUnreachable(t *testing.T) {
+	// Isolate the XDG data dir so the cmd-resolved anchor path lands in tmp.
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+	t.Setenv("XDG_DATA_HOME", tmp)
+
 	rootPub, _, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("GenerateKey root: %v", err)
