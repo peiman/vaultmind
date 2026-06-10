@@ -38,6 +38,13 @@ type DoctorResult struct {
 	Types             map[string]StatusTypeInfo `json:"types,omitempty"`
 	IssuesSummary     *StatusIssuesSummary      `json:"issues_summary,omitempty"`
 	Issues            DoctorIssues              `json:"issues"`
+
+	// MeshIdentity is the Contract-B identity-health section. It is a POINTER
+	// with omitempty so it is ABSENT from --json unless a mesh signal exists
+	// (identity key file present, an anchor exists, a --mesh-* flag passed, or
+	// the daemon is reachable). Populated by the cmd layer (paths come from xdg +
+	// flags + env). nil ⇒ no mesh substrate, the section is omitted entirely.
+	MeshIdentity *DoctorMeshIdentity `json:"mesh_identity,omitempty"`
 }
 
 // DoctorEmbeddings reports the vault's semantic-retrieval readiness. Surfaces
@@ -159,6 +166,19 @@ func SurfacedIssueCounts(issues DoctorIssues) (errors, warnings int) {
 		warnings++
 	}
 	return errors, warnings
+}
+
+// ResultSurfacedIssueCounts is the result-level SSOT rollup: it folds the
+// vault-issue counts (SurfacedIssueCounts over result.Issues) together with the
+// mesh-identity section's contribution (MeshSurfacedCounts). Mesh issues are
+// WARNINGS only (doctor keeps exit-0-on-warning; no new exit code), so a
+// not-authenticated mesh state bumps the warning rollup without ever turning it
+// into an error. The cmd-layer rollup line uses this so the text "Issues: E
+// errors, W warnings" reflects the mesh section too.
+func ResultSurfacedIssueCounts(result *DoctorResult) (errs, warns int) {
+	errs, warns = SurfacedIssueCounts(result.Issues)
+	mErrs, mWarns := MeshSurfacedCounts(result.MeshIdentity)
+	return errs + mErrs, warns + mWarns
 }
 
 // ContentDrift describes one note whose current file content hash

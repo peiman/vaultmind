@@ -13,6 +13,26 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// isolateMeshEnv makes the Contract-B mesh-doctor section dormant for a test by
+// pointing every XDG base dir at fresh empty temp dirs (no identity key, no
+// network anchor) and the chat-daemon URL at a closed loopback port. With no key
+// file, no anchor, no --mesh-* flag and no reachable daemon, doctor surfaces NO
+// mesh section — so a test asserting purely on VAULT-issue rollups is not
+// perturbed by the developer's ambient identity. CI already runs `task check`
+// under a fresh XDG_DATA_HOME; this makes the same hermeticity hold locally too.
+func isolateMeshEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	// A closed loopback port → the daemon probe reports unreachable.
+	t.Setenv("AGENT_CHAT_DAEMON_URL", "http://127.0.0.1:1")
+	// No agents.yaml → no slug; belt-and-suspenders so an ambient env var can't
+	// resurface a slug-driven signal.
+	t.Setenv("AGENT_CHAT_REGISTRY", "")
+	t.Setenv("AGENT_CHAT_PROJECT_PATH", t.TempDir())
+}
+
 // buildIndexedTestVault creates a tempdir vault with a minimal config and
 // a handful of linked notes, then runs the indexer once. Returns the vault
 // root path. Tests that need query/search/links/status use this helper so
