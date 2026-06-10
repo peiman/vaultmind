@@ -9,11 +9,14 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/peiman/vaultmind/internal/identity"
+	"github.com/peiman/vaultmind/internal/identity/anchor"
 	"github.com/peiman/vaultmind/internal/identity/enrollment"
 	"github.com/peiman/vaultmind/internal/identity/invite"
 	"github.com/peiman/vaultmind/internal/identity/registry"
@@ -114,6 +117,7 @@ func newEnrollHarness(t *testing.T) enrollHarness {
 			PubKeyB64:          base64.StdEncoding.EncodeToString(memberPub),
 			TransportPubKeyB64: lowEntropyTransportB64(),
 			AssumeYes:          true,
+			AnchorStorePath:    filepath.Join(t.TempDir(), "network-roots.json"),
 			HTTPClient:         srv.Client(),
 			Signer:             &fakeSignerClient{priv: memberPriv},
 			Now:                func() time.Time { return time.Unix(2_000_000, 0) },
@@ -313,6 +317,7 @@ func enrollCfgFor(t *testing.T, relayURL string, client *http.Client, rootB64, n
 		PubKeyB64:          base64.StdEncoding.EncodeToString(memberPub),
 		TransportPubKeyB64: lowEntropyTransportB64(),
 		AssumeYes:          true,
+		AnchorStorePath:    filepath.Join(t.TempDir(), "network-roots.json"),
 		HTTPClient:         client,
 		Signer:             &fakeSignerClient{priv: memberPriv},
 		Now:                func() time.Time { return time.Unix(2_000_000, 0) },
@@ -555,10 +560,80 @@ func TestEnrollDefaultSeams(t *testing.T) {
 		TransportPubKeyB64: lowEntropyTransportB64(),
 		SignerSocket:       "/nonexistent/identity-signer.sock",
 		AssumeYes:          true,
+		AnchorStorePath:    filepath.Join(t.TempDir(), "network-roots.json"),
 		// HTTPClient, Signer, Now, RandReader all nil => default seams.
 	}
 	out, _, err := runEnroll(cfg, nil)
 	require.Error(t, err, "default signer at a dead socket must fail closed")
 	assert.Contains(t, err.Error(), "identity signer")
+	assert.Empty(t, out.String())
+}
+
+// TestEnrollPersistsAnchor proves the happy path writes the OOB-confirmed trust
+// anchor to AnchorStorePath: network_id, root_pubkey, relay, and confirmed_at all
+// come from the invite + the fixed clock, and the persisted anchor is internally
+// consistent (Load re-validates the shape).
+func TestEnrollPersistsAnchor(t *testing.T) {
+	h := newEnrollHarness(t)
+	out, errOut, err := runEnroll(h.cfg, nil)
+	require.NoError(t, err)
+	require.NotEmpty(t, out.String())
+
+	anchors, err := anchor.Load(h.cfg.AnchorStorePath)
+	require.NoError(t, err)
+	require.Len(t, anchors, 1)
+
+	a := anchors[0]
+	assert.Equal(t, h.networkID, a.NetworkID)
+	assert.Equal(t, mustInviteRoot(t, h.cfg.InviteTokenOrURL), a.RootPubKey)
+	assert.Equal(t, h.relayURL, a.Relay)
+	assert.Equal(t, int64(2_000_000), a.ConfirmedAt, "confirmed_at must come from the fixed clock")
+
+	// errOut notes the root was pinned so a future doctor authenticates against it.
+	assert.Contains(t, errOut.String(), identitycli.EnrollAnchorPinnedNote)
+}
+
+// TestEnrollReEnrollUpsertsAnchor proves re-enrolling the SAME network replaces
+// the anchor in place (no duplicate) and refreshes confirmed_at.
+func TestEnrollReEnrollUpsertsAnchor(t *testing.T) {
+	h := newEnrollHarness(t)
+	_, _, err := runEnroll(h.cfg, nil)
+	require.NoError(t, err)
+
+	// Second enroll against the same network at a LATER clock, same store path.
+	h.cfg.Now = func() time.Time { return time.Unix(3_000_000, 0) }
+	_, _, err = runEnroll(h.cfg, nil)
+	require.NoError(t, err)
+
+	anchors, err := anchor.Load(h.cfg.AnchorStorePath)
+	require.NoError(t, err)
+	require.Len(t, anchors, 1, "re-enrolling the same network must NOT duplicate the anchor")
+	assert.Equal(t, int64(3_000_000), anchors[0].ConfirmedAt, "re-enroll must refresh confirmed_at")
+}
+
+// TestEnrollPersistFailureEmitsNothing proves a persist failure (an unwritable
+// store path) FAILS CLOSED: enroll returns an error and emits NO request — never
+// a half-state where the request is emitted but the anchor was not saved.
+func TestEnrollPersistFailureEmitsNothing(t *testing.T) {
+	h := newEnrollHarness(t)
+	// Make the store path unwritable: create a FILE where the parent dir would be,
+	// so MkdirAll of the anchor's parent dir fails.
+	blocker := filepath.Join(t.TempDir(), "blocker")
+	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0600))
+	h.cfg.AnchorStorePath = filepath.Join(blocker, "network-roots.json")
+
+	out, _, err := runEnroll(h.cfg, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), identitycli.ErrEnrollPersistAnchor)
+	assert.Empty(t, out.String(), "a persist failure must emit no request")
+}
+
+// TestEnrollEmptyAnchorPathIsProgrammingError proves an empty AnchorStorePath is a
+// fail-closed programming error (the cmd layer always sets it); no request emitted.
+func TestEnrollEmptyAnchorPathIsProgrammingError(t *testing.T) {
+	h := newEnrollHarness(t)
+	h.cfg.AnchorStorePath = ""
+	out, _, err := runEnroll(h.cfg, nil)
+	require.Error(t, err)
 	assert.Empty(t, out.String())
 }
