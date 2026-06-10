@@ -577,3 +577,100 @@ func TestIdentityEnrollCommandFailsClosedWhenSignerUnreachable(t *testing.T) {
 		t.Fatalf("fail-closed path must not emit a request, got %q", out.String())
 	}
 }
+
+// TestIdentityEnrollAddCommandViaFile drives `identity enroll-add` through
+// RootCmd: a member's signed enrollment request file is added to a fresh
+// registry, and the emitted UNSIGNED registry carries the new binding at epoch 1.
+func TestIdentityEnrollAddCommandViaFile(t *testing.T) {
+	rootPub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey root: %v", err)
+	}
+	memberPub, memberPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey member: %v", err)
+	}
+	net := registry.NetworkID(rootPub)
+	f := enrollment.Fields{
+		AlgVersion: enrollment.AlgVersion, Created: 1_700_000_000, DisplayName: "Mira",
+		KeyEpoch: 1, NetworkID: net, Nonce: "YWJjZGVm",
+		PubKey:          base64.StdEncoding.EncodeToString(memberPub),
+		Slug:            "mira",
+		TransportPubKey: base64.StdEncoding.EncodeToString(make([]byte, 32)),
+	}
+	canon, err := enrollment.CanonicalizeEnrollment(f)
+	if err != nil {
+		t.Fatalf("CanonicalizeEnrollment: %v", err)
+	}
+	reqJSON, err := enrollment.MarshalWire(f, base64.StdEncoding.EncodeToString(ed25519.Sign(memberPriv, canon.Bytes())))
+	if err != nil {
+		t.Fatalf("MarshalWire: %v", err)
+	}
+	dir := t.TempDir()
+	reqPath := filepath.Join(dir, "request.json")
+	if err := os.WriteFile(reqPath, reqJSON, 0o600); err != nil {
+		t.Fatalf("write request: %v", err)
+	}
+
+	out, _, err := runRootCmd(t, "identity", "enroll-add",
+		"--request", reqPath,
+		"--root-pubkey", base64.StdEncoding.EncodeToString(rootPub),
+	)
+	if err != nil {
+		t.Fatalf("identity enroll-add: %v", err)
+	}
+	var emitted struct {
+		Agents []struct {
+			Slug string `json:"slug"`
+		} `json:"agents"`
+		Epoch int `json:"epoch"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &emitted); err != nil {
+		t.Fatalf("decode emitted registry: %v\nout=%q", err, out.String())
+	}
+	if emitted.Epoch != 1 {
+		t.Fatalf("emitted epoch = %d, want 1", emitted.Epoch)
+	}
+	if len(emitted.Agents) != 1 || emitted.Agents[0].Slug != "mira" {
+		t.Fatalf("emitted agents mismatch: %+v", emitted.Agents)
+	}
+}
+
+// TestIdentityEnrollAddCommandRejectsCrossNetwork drives the command with a
+// request whose network_id is not the admin network and asserts it fails closed
+// (no emitted registry).
+func TestIdentityEnrollAddCommandRejectsCrossNetwork(t *testing.T) {
+	rootPub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey root: %v", err)
+	}
+	memberPub, memberPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey member: %v", err)
+	}
+	f := enrollment.Fields{
+		AlgVersion: enrollment.AlgVersion, Created: 1_700_000_000, DisplayName: "Mira",
+		KeyEpoch: 1, NetworkID: "vmnet1:deadbeefdeadbeefdeadbeefdeadbeef", Nonce: "YWJj",
+		PubKey:          base64.StdEncoding.EncodeToString(memberPub),
+		Slug:            "mira",
+		TransportPubKey: base64.StdEncoding.EncodeToString(make([]byte, 32)),
+	}
+	canon, _ := enrollment.CanonicalizeEnrollment(f)
+	reqJSON, _ := enrollment.MarshalWire(f, base64.StdEncoding.EncodeToString(ed25519.Sign(memberPriv, canon.Bytes())))
+	dir := t.TempDir()
+	reqPath := filepath.Join(dir, "request.json")
+	if err := os.WriteFile(reqPath, reqJSON, 0o600); err != nil {
+		t.Fatalf("write request: %v", err)
+	}
+
+	out, _, err := runRootCmd(t, "identity", "enroll-add",
+		"--request", reqPath,
+		"--root-pubkey", base64.StdEncoding.EncodeToString(rootPub),
+	)
+	if err == nil {
+		t.Fatal("expected cross-network rejection, got nil")
+	}
+	if out.Len() != 0 {
+		t.Fatalf("reject must emit nothing, got %q", out.String())
+	}
+}

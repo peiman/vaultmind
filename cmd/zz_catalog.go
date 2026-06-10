@@ -269,6 +269,11 @@ var commandCatalog = map[string]catalogEntry{
 		when:  "you are a member with an invite and want to enroll: cross-check the relay's root against the invite, confirm the fingerprint, and self-sign an enrollment request for your admin.",
 		short: "Enroll into a Contract-B network from an invite, then self-sign the request",
 	},
+	"vaultmind identity enroll-add": {
+		group: groupLifecycle,
+		when:  "you are an admin and want to add a member's signed enrollment request to the trust-root registry, emitting the updated unsigned registry for the root signer.",
+		short: "Admin-add a member's enrollment request to the trust-root registry, emitting the unsigned registry",
+	},
 	"vaultmind identity sign": {
 		group: groupLifecycle,
 		when:  "you have a Contract-B entry to sign and want it validated, canonicalized, and signed by the keyless signer.",
