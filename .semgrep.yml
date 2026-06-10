@@ -74,6 +74,7 @@ rules:
         - cmd/identity_sign_envelope.go  # Reads the chat-message envelope from the operator-provided --file path (same trust tier as cmd/identity_sign.go)
         - cmd/identity_sign_registry.go  # Reads the unsigned trust-root registry from the operator-provided --file path (same trust tier as cmd/identity_sign_envelope.go)
         - cmd/identity_sign_enrollment.go  # Reads the agent-enrollment request from the operator-provided --file path (same trust tier as cmd/identity_sign_envelope.go)
+        - cmd/identity_enroll_add.go  # Reads the operator-provided --request enrollment and --registry paths (same trust tier as cmd/identity_sign_registry.go)
         - internal/identity/signer/signer.go  # Reads the operator-configured sealed signer key file (0600, path from signer Config, not runtime user input)
         - internal/mutation/lint.go  # Reads/writes vault .md files via WalkDir (user-provided vault path, paths from filesystem walk)
         - internal/baseline/fixture.go  # Reads project-internal baseline fixture + snapshot paths from test callers (filepath.Clean applied, not user input at runtime)
