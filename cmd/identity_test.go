@@ -762,11 +762,16 @@ func TestIdentityBareShowsHelp(t *testing.T) {
 	}
 }
 
-// identityVerbFlagToken matches a flag token attributed to a specific identity
-// verb in the mesh quick-start, e.g. "identity invite --root-pubkey ...". It
-// captures the verb and the flag name so the guard can resolve the command and
-// assert the flag exists on it.
-var identityVerbFlagToken = regexp.MustCompile(`identity ([a-z-]+)((?: --[a-z-]+)+)`)
+// identityVerbCmdLine matches a mesh quick-start COMMAND line: `identity <verb>`
+// immediately followed by a flag. The trailing ` --` anchor distinguishes a real
+// command example from prose like "your identity key". The guard then collects
+// EVERY flag on that whole line (see docFlagToken) — the prior regex captured
+// only the consecutive-flag blob and silently stopped at the first <placeholder>
+// value, verifying just 5 of 12 doc flags.
+var identityVerbCmdLine = regexp.MustCompile(`identity ([a-z-]+)\s+--`)
+
+// docFlagToken matches a single long-flag token anywhere on a line.
+var docFlagToken = regexp.MustCompile(`--[a-z-]+`)
 
 // TestMeshQuickStartFlagsExistOnCommands is the doc-accuracy guard: it greps the
 // embedded MESH_QUICKSTART.md for every `identity <verb> --flag` token and
@@ -775,19 +780,22 @@ var identityVerbFlagToken = regexp.MustCompile(`identity ([a-z-]+)((?: --[a-z-]+
 // shipping a wrong command to an operator.
 func TestMeshQuickStartFlagsExistOnCommands(t *testing.T) {
 	doc := string(onboard.MeshQuickStart())
-	matches := identityVerbFlagToken.FindAllStringSubmatch(doc, -1)
-	if len(matches) == 0 {
-		t.Fatal("guard found no `identity <verb> --flag` tokens to verify — regex or doc changed")
-	}
-	flagRE := regexp.MustCompile(`--[a-z-]+`)
 	checked := 0
-	for _, m := range matches {
-		verb, flagsBlob := m[1], m[2]
+	sawCmdLine := false
+	for _, line := range strings.Split(doc, "\n") {
+		m := identityVerbCmdLine.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		sawCmdLine = true
+		verb := m[1]
 		cmd, _, err := RootCmd.Find([]string{"identity", verb})
 		if err != nil || cmd == nil || cmd.Name() != verb {
 			t.Fatalf("doc references `identity %s` but that command does not resolve (err=%v)", verb, err)
 		}
-		for _, flag := range flagRE.FindAllString(flagsBlob, -1) {
+		// Collect EVERY flag on the whole command line — not just a leading
+		// consecutive blob — so flags after a <placeholder> value are verified too.
+		for _, flag := range docFlagToken.FindAllString(line, -1) {
 			name := strings.TrimPrefix(flag, "--")
 			if cmd.Flags().Lookup(name) == nil {
 				t.Fatalf("doc references `identity %s %s` but %q is not a flag on that command", verb, flag, flag)
@@ -795,7 +803,12 @@ func TestMeshQuickStartFlagsExistOnCommands(t *testing.T) {
 			checked++
 		}
 	}
-	if checked == 0 {
-		t.Fatal("guard verified zero flags — token capture is broken")
+	if !sawCmdLine {
+		t.Fatal("guard found no `identity <verb> --flag` command lines — regex or doc changed")
+	}
+	// The two journeys reference ~12 flag occurrences; a count near 5 means the
+	// line scan regressed to the old consecutive-blob blind spot. Floor catches it.
+	if checked < 10 {
+		t.Fatalf("guard verified only %d flags; the doc journeys reference ~12 — the per-line flag scan is broken", checked)
 	}
 }
