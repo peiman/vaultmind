@@ -1,6 +1,15 @@
+// ckeletin:allow-custom-command
+//
+// The `identity` parent is a custom group command, not a thin metadata-driven
+// leaf: it has no ConfigPrefix/options (its behavior is "show help") and carries
+// a single local bool flag (--print-instructions) that prints the embedded mesh
+// onboarding quick-start. The whitelist opts it out of the ADR-001 thin-command
+// checks (no metadata file, no NewCommand helper) — the same escape hatch
+// zz_catalog.go uses for catalog wiring.
 package cmd
 
 import (
+	"github.com/peiman/vaultmind/internal/onboard"
 	"github.com/peiman/vaultmind/internal/xdg"
 	"github.com/spf13/cobra"
 )
@@ -18,6 +27,13 @@ const (
 	// OOB-confirmed network trust anchor to (beside the signer key in the XDG data
 	// dir). A later `doctor` slice authenticates registry verification against it.
 	networkAnchorFilename = "network-roots.json"
+
+	// identityPrintInstructionsFlag prints the embedded mesh onboarding
+	// quick-start (the admin + member journeys for joining a Contract-B network)
+	// instead of the command's help. Symmetric with `init --print-instructions`.
+	identityPrintInstructionsFlag = "print-instructions"
+	// identityPrintInstructionsDesc is the --print-instructions flag's help text.
+	identityPrintInstructionsDesc = "Print the mesh onboarding quick-start (admin + member journeys) and exit"
 )
 
 var identityCmd = &cobra.Command{
@@ -31,10 +47,22 @@ The ed25519 private key is held by a SEPARATE signer process and reached over a
 DEV-INTERIM: the signer currently runs as the SAME uid as the CLI. This is the
 custody ARCHITECTURE, not real isolation — real isolation needs a dedicated
 service uid + launchd + sandbox + Secure-Enclave key wrap (deferred).`,
+	RunE: runIdentity,
 }
 
 func init() {
+	identityCmd.Flags().Bool(identityPrintInstructionsFlag, false, identityPrintInstructionsDesc)
 	RootCmd.AddCommand(identityCmd)
+}
+
+// runIdentity is the parent command's entrypoint: with --print-instructions it
+// prints the embedded mesh onboarding quick-start; otherwise it preserves the
+// group's default behavior of showing help (bare `vaultmind identity`).
+func runIdentity(cmd *cobra.Command, _ []string) error {
+	if printInstructions, _ := cmd.Flags().GetBool(identityPrintInstructionsFlag); printInstructions {
+		return onboard.PrintMeshQuickStart(cmd.OutOrStdout())
+	}
+	return cmd.Help()
 }
 
 // defaultSignerKeyPath returns the sealed key-file path under the XDG data dir.
