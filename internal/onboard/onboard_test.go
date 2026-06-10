@@ -164,3 +164,55 @@ func TestPrintQuickStart_WritesToWriter(t *testing.T) {
 	assert.Equal(t, len(onboard.QuickStart()), len(buf.Bytes()),
 		"PrintQuickStart should write the full embedded quick-start verbatim")
 }
+
+// meshQuickStartSizeCeiling caps the embedded mesh quick-start. The doc's whole
+// purpose is the concise "how the verbs fit together" narrative; if it grows
+// past ~4 KB it has drifted into a manual, so the gate forces a re-think.
+const meshQuickStartSizeCeiling = 4096
+
+// TestMeshQuickStart_NotEmpty — the mesh quick-start embed produced bytes.
+// Catches a silently-failing embed directive or the wrong/missing source file.
+func TestMeshQuickStart_NotEmpty(t *testing.T) {
+	qs := onboard.MeshQuickStart()
+	require.NotEmpty(t, qs)
+	require.Greater(t, len(qs), 500,
+		"mesh quick-start should be substantive — under 500 bytes suggests the wrong file embedded")
+}
+
+// TestMeshQuickStart_ContainsStructuralAnchors — pin the section headers the
+// admin + member journeys rely on. If a future edit renames a journey or drops
+// the liveness section, this surfaces it.
+func TestMeshQuickStart_ContainsStructuralAnchors(t *testing.T) {
+	doc := string(onboard.MeshQuickStart())
+	required := []string{
+		"# VaultMind — Mesh Onboarding (Contract-B)",
+		"## Admin",
+		"## Member",
+		"## Am I live?",
+	}
+	for _, anchor := range required {
+		assert.Contains(t, doc, anchor,
+			"mesh quick-start must keep structural anchor %q", anchor)
+	}
+}
+
+// TestMeshQuickStart_StaysConcise — the doc must stay under the size ceiling so
+// it remains the skimmable narrative, not a manual. Mirrors the QuickStart
+// size-gate intent.
+func TestMeshQuickStart_StaysConcise(t *testing.T) {
+	assert.Less(t, len(onboard.MeshQuickStart()), meshQuickStartSizeCeiling,
+		"mesh quick-start must stay under %d bytes (the concise narrative)", meshQuickStartSizeCeiling)
+}
+
+// TestPrintMeshQuickStart_WritesToWriter — `identity --print-instructions`
+// composes via PrintMeshQuickStart(w). Pin that it writes the mesh quick-start
+// bytes verbatim to the supplied writer so the cmd layer can route to a buffer.
+func TestPrintMeshQuickStart_WritesToWriter(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, onboard.PrintMeshQuickStart(&buf))
+	out := buf.String()
+	assert.True(t, strings.HasPrefix(out, "# VaultMind"),
+		"output should start with the mesh quick-start's H1 — got: %q", out[:min(80, len(out))])
+	assert.Equal(t, len(onboard.MeshQuickStart()), len(buf.Bytes()),
+		"PrintMeshQuickStart should write the full embedded mesh quick-start verbatim")
+}

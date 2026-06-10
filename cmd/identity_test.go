@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -22,6 +23,7 @@ import (
 	"github.com/peiman/vaultmind/internal/identity/relayclient"
 	"github.com/peiman/vaultmind/internal/identity/signer"
 	"github.com/peiman/vaultmind/internal/identitycli"
+	"github.com/peiman/vaultmind/internal/onboard"
 )
 
 // startCmdSigner boots a real signer on a short UDS allowlisting the test uid
@@ -709,5 +711,91 @@ func TestIdentityEnrollAddCommandRejectsCrossNetwork(t *testing.T) {
 	}
 	if out.Len() != 0 {
 		t.Fatalf("reject must emit nothing, got %q", out.String())
+	}
+}
+
+// TestIdentityPrintInstructionsPrintsMeshQuickStart drives the parent command
+// with --print-instructions and asserts it prints the embedded mesh onboarding
+// quick-start (the admin + member journeys), not the cobra help.
+func TestIdentityPrintInstructionsPrintsMeshQuickStart(t *testing.T) {
+	out, _, err := runRootCmd(t, "identity", "--print-instructions")
+	if err != nil {
+		t.Fatalf("identity --print-instructions: %v", err)
+	}
+	got := out.String()
+	for _, anchor := range []string{"# VaultMind — Mesh Onboarding (Contract-B)", "## Admin", "## Member", "## Am I live?"} {
+		if !strings.Contains(got, anchor) {
+			t.Fatalf("output missing mesh quick-start anchor %q:\n%s", anchor, got)
+		}
+	}
+	// It prints the embedded doc verbatim, not the help/usage block.
+	if strings.Contains(got, "Usage:") {
+		t.Fatalf("--print-instructions must print the doc, not help, got:\n%s", got)
+	}
+}
+
+// TestIdentityBareShowsHelp asserts that bare `vaultmind identity` (no flag)
+// still shows the group's help/usage — the pre-existing behavior the parent
+// RunE must preserve.
+func TestIdentityBareShowsHelp(t *testing.T) {
+	out, errOut, err := runRootCmd(t, "identity")
+	if err != nil {
+		t.Fatalf("identity: %v", err)
+	}
+	// cmd.Help() writes the usage/help block to the command's error writer; the
+	// combined output across both buffers must carry the group help.
+	got := out.String() + errOut.String()
+	// Bare identity shows help: the usage block and the long description, NOT the
+	// mesh quick-start. (Cobra's catalog-grouped help uses group titles rather
+	// than the default "Available Commands:" header.)
+	if !strings.Contains(got, "Usage:") {
+		t.Fatalf("bare identity should show help with the usage block, got:\n%s", got)
+	}
+	if strings.Contains(got, "# VaultMind — Mesh Onboarding") {
+		t.Fatalf("bare identity must show help, not the mesh quick-start, got:\n%s", got)
+	}
+	// The subcommands the group owns must be listed.
+	for _, sub := range []string{"init", "invite", "enroll", "signer"} {
+		if !strings.Contains(got, sub) {
+			t.Fatalf("bare identity help missing subcommand %q:\n%s", sub, got)
+		}
+	}
+}
+
+// identityVerbFlagToken matches a flag token attributed to a specific identity
+// verb in the mesh quick-start, e.g. "identity invite --root-pubkey ...". It
+// captures the verb and the flag name so the guard can resolve the command and
+// assert the flag exists on it.
+var identityVerbFlagToken = regexp.MustCompile(`identity ([a-z-]+)((?: --[a-z-]+)+)`)
+
+// TestMeshQuickStartFlagsExistOnCommands is the doc-accuracy guard: it greps the
+// embedded MESH_QUICKSTART.md for every `identity <verb> --flag` token and
+// asserts each flag actually exists on that cobra command. This catches doc
+// drift — an invented or renamed flag in the doc fails the build rather than
+// shipping a wrong command to an operator.
+func TestMeshQuickStartFlagsExistOnCommands(t *testing.T) {
+	doc := string(onboard.MeshQuickStart())
+	matches := identityVerbFlagToken.FindAllStringSubmatch(doc, -1)
+	if len(matches) == 0 {
+		t.Fatal("guard found no `identity <verb> --flag` tokens to verify — regex or doc changed")
+	}
+	flagRE := regexp.MustCompile(`--[a-z-]+`)
+	checked := 0
+	for _, m := range matches {
+		verb, flagsBlob := m[1], m[2]
+		cmd, _, err := RootCmd.Find([]string{"identity", verb})
+		if err != nil || cmd == nil || cmd.Name() != verb {
+			t.Fatalf("doc references `identity %s` but that command does not resolve (err=%v)", verb, err)
+		}
+		for _, flag := range flagRE.FindAllString(flagsBlob, -1) {
+			name := strings.TrimPrefix(flag, "--")
+			if cmd.Flags().Lookup(name) == nil {
+				t.Fatalf("doc references `identity %s %s` but %q is not a flag on that command", verb, flag, flag)
+			}
+			checked++
+		}
+	}
+	if checked == 0 {
+		t.Fatal("guard verified zero flags — token capture is broken")
 	}
 }
