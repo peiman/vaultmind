@@ -58,6 +58,10 @@ const (
 	KeyAppDoctorSummary                      = "app.doctor.summary"                       // Print summary counts only (suppress per-link details)
 	KeyAppDoctorAll                          = "app.doctor.all"                           // Diagnose every vault discovered under --root (multi-vault health)
 	KeyAppDoctorRoot                         = "app.doctor.root"                          // Root directory to discover vaults under when --all is set
+	KeyAppDoctorMeshRootPubkey               = "app.doctor.mesh_root_pubkey"              // Pin the Contract-B network root pubkey (base64) for authenticated mesh health...
+	KeyAppDoctorMeshRegistry                 = "app.doctor.mesh_registry"                 // Verify an offline Contract-B signed-registry file instead of fetching from th...
+	KeyAppDoctorMeshSlug                     = "app.doctor.mesh_slug"                     // Override the agent slug used to resolve your binding in the mesh registry (de...
+	KeyAppDoctorMeshHeartbeat                = "app.doctor.mesh_heartbeat"                // Override the wake-watcher heartbeat file path used for mesh watcher-liveness
 	KeyAppDoctorhealVault                    = "app.doctorheal.vault"                     // Path to vault root
 	KeyAppDoctorhealJson                     = "app.doctorheal.json"                      // Output in JSON format
 	KeyAppDoctorhealDryRun                   = "app.doctorheal.dry_run"                   // Preview repairs without writing (default applies)

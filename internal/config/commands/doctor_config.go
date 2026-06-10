@@ -24,14 +24,27 @@ To repair what doctor finds, run 'doctor heal' (all auto-fixable) or
 Use --all to diagnose EVERY vault discovered under a root (directories
 containing a .vaultmind/ subdir), with a combined rollup plus a per-vault
 report. --root sets where discovery starts (default: the current directory).
---all composes with --summary and --json (one combined envelope).`,
+--all composes with --summary and --json (one combined envelope).
+
+When a Contract-B mesh signal exists (an identity key, a pinned network anchor,
+a --mesh-* flag, or a reachable local daemon) doctor also reports a mesh-identity
+section: key custody, whether your binding authenticates against a PINNED root,
+and chat reachability. Green is reserved for a cryptographically authenticated
+binding; everything else is a warning (doctor stays exit-0). --mesh-root-pubkey
+pins the root explicitly (otherwise the enroll-persisted anchor is used),
+--mesh-registry verifies an offline registry file, --mesh-slug overrides the
+agents.yaml slug, and --mesh-heartbeat overrides the wake-watcher heartbeat path.`,
 	ConfigPrefix: "app.doctor",
 	FlagOverrides: map[string]string{
-		"app.doctor.vault":   "vault",
-		"app.doctor.json":    "json",
-		"app.doctor.summary": "summary",
-		"app.doctor.all":     "all",
-		"app.doctor.root":    "root",
+		"app.doctor.vault":            "vault",
+		"app.doctor.json":             "json",
+		"app.doctor.summary":          "summary",
+		"app.doctor.all":              "all",
+		"app.doctor.root":             "root",
+		"app.doctor.mesh_root_pubkey": "mesh-root-pubkey",
+		"app.doctor.mesh_registry":    "mesh-registry",
+		"app.doctor.mesh_slug":        "mesh-slug",
+		"app.doctor.mesh_heartbeat":   "mesh-heartbeat",
 	},
 }
 
@@ -43,6 +56,10 @@ func DoctorOptions() []config.ConfigOption {
 		{Key: "app.doctor.summary", DefaultValue: false, Description: "Print summary counts only (suppress per-link details)", Type: "bool"},
 		{Key: "app.doctor.all", DefaultValue: false, Description: "Diagnose every vault discovered under --root (multi-vault health)", Type: "bool"},
 		{Key: "app.doctor.root", DefaultValue: ".", Description: "Root directory to discover vaults under when --all is set", Type: "string"},
+		{Key: "app.doctor.mesh_root_pubkey", DefaultValue: "", Description: "Pin the Contract-B network root pubkey (base64) for authenticated mesh health; overrides the enroll-persisted anchor", Type: "string"},
+		{Key: "app.doctor.mesh_registry", DefaultValue: "", Description: "Verify an offline Contract-B signed-registry file instead of fetching from the local daemon", Type: "string"},
+		{Key: "app.doctor.mesh_slug", DefaultValue: "", Description: "Override the agent slug used to resolve your binding in the mesh registry (default: agents.yaml)", Type: "string"},
+		{Key: "app.doctor.mesh_heartbeat", DefaultValue: "", Description: "Override the wake-watcher heartbeat file path used for mesh watcher-liveness", Type: "string"},
 	}
 }
 

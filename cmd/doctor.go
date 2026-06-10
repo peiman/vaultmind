@@ -134,6 +134,11 @@ func runDoctorCore(cmd *cobra.Command, vaultPath string, jsonOut, summaryOnly bo
 		env := envelope.OK("doctor", result)
 		env.Meta.VaultPath = vaultPath
 		env.Meta.IndexHash = indexHash
+		// M4: surface every mesh warning as a structured envelope warning so
+		// scripted `jq '.status=="warning"'` / `.warnings[]` catches an
+		// unauthenticated (or misconfigured) mesh state. Status flips ok→warning;
+		// the exit code stays 0 (doctor's deliberate exit-0-on-warning contract).
+		addMeshWarningsToEnvelope(env, result.MeshIdentity)
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(env)
 	}
 	return writeDoctorHuman(cmd.OutOrStdout(), result, summaryOnly)
@@ -154,6 +159,12 @@ func diagnoseVault(cmd *cobra.Command, vaultPath string) (*query.DoctorResult, s
 
 	result, err := populateDoctorResult(vdb, vaultPath)
 	if err != nil {
+		return nil, "", err
+	}
+	// Contract-B mesh-identity section (single-vault path only — it is about the
+	// local agent's identity custody/binding/reachability, independent of the
+	// vault). Attached only when a mesh signal exists (nil ⇒ absent from --json).
+	if err := populateMeshIdentity(cmd, result); err != nil {
 		return nil, "", err
 	}
 	return result, vdb.GetIndexHash(), nil
@@ -243,19 +254,44 @@ func writeDoctorHuman(w io.Writer, result *query.DoctorResult, summaryOnly bool)
 	if err := writeStaleIndex(w, &result.Issues, summaryOnly); err != nil {
 		return err
 	}
+	// Contract-B mesh-identity section (conditionally present, like
+	// writeEmbeddingStatus — nil ⇒ nothing printed).
+	if err := writeMeshIdentity(w, result.MeshIdentity, summaryOnly); err != nil {
+		return err
+	}
 	// Errors/warnings rollup — the cold-start bottom line. Counts come from
-	// query.SurfacedIssueCounts (SSOT) over the SURFACED result.Issues set, so
-	// the text rollup always agrees with --json. It deliberately does NOT read
-	// result.IssuesSummary: that schema-validation AGGREGATE counts findings
-	// doctor never renders as text lines (and which the --json envelope's
-	// surfaced warnings/errors arrays do not count), which previously
-	// overstated warnings (e.g. "0 errors, 96 warnings") against a --json that
-	// surfaced none. result.issues_summary stays in --json untouched.
-	errCount, warnCount := query.SurfacedIssueCounts(result.Issues)
+	// query.ResultSurfacedIssueCounts (SSOT) over the SURFACED result.Issues set
+	// PLUS the mesh-identity section's warnings, so the text rollup always agrees
+	// with --json. It deliberately does NOT read result.IssuesSummary: that
+	// schema-validation AGGREGATE counts findings doctor never renders as text
+	// lines (and which the --json envelope's surfaced warnings/errors arrays do
+	// not count), which previously overstated warnings (e.g. "0 errors, 96
+	// warnings") against a --json that surfaced none. result.issues_summary stays
+	// in --json untouched.
+	errCount, warnCount := query.ResultSurfacedIssueCounts(result)
 	if _, err := fmt.Fprintf(w, "Issues: %d errors, %d warnings\n", errCount, warnCount); err != nil {
 		return err
 	}
 	return nil
+}
+
+// meshWarningCode is the structured-warning code for every mesh-identity warning
+// emitted into the --json envelope (M4). One code keeps the jq surface stable.
+const meshWarningCode = "mesh_identity"
+
+// addMeshWarningsToEnvelope folds each mesh-identity section warning into the
+// --json envelope as a structured warning (M4). It flips status ok→warning so
+// `jq '.status=="warning"'` catches an unauthenticated/misconfigured mesh state;
+// the exit code is unaffected (doctor stays exit-0-on-warning). The top-level
+// `result.mesh_identity.authenticated` boolean carries the machine-readable
+// authenticity verdict alongside.
+func addMeshWarningsToEnvelope(env *envelope.Envelope, mi *query.DoctorMeshIdentity) {
+	if mi == nil {
+		return
+	}
+	for _, warn := range mi.Warnings {
+		env.AddWarning(meshWarningCode, warn, "mesh_identity")
+	}
 }
 
 // writeLinkIssues prints the Obsidian-incompatible and dead-link sections.

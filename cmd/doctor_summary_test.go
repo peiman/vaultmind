@@ -108,6 +108,7 @@ func TestDeprecated_VaultStatus_WarnsAndDelegatesToDoctorSummary(t *testing.T) {
 // The deprecated `vault status --json` must still emit a machine-readable
 // envelope (delegating to doctor's JSON path) alongside the stderr notice.
 func TestDeprecated_VaultStatus_JSONDelegates(t *testing.T) {
+	isolateMeshEnv(t)
 	vault := buildIndexedTestVault(t)
 	out, errOut, err := runRootCmd(t, "vault", "status", "--vault", vault, "--json")
 	require.NoError(t, err)

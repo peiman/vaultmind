@@ -131,6 +131,7 @@ func readJSONSurfaced(t *testing.T, vault string) jsonSurfacedIssues {
 // the two counts came from different sets.
 func TestDoctor_TextRollupCounts_MatchJSONSurfacedSet(t *testing.T) {
 	chdirToTemp(t)
+	isolateMeshEnv(t)
 	vault := buildValidationWarningVault(t)
 
 	textErrors, textWarnings, _ := readTextIssueCounts(t, vault)
@@ -157,6 +158,7 @@ func TestDoctor_TextRollupCounts_MatchJSONSurfacedSet(t *testing.T) {
 // This guards against a fix that simply hard-codes 0/0.
 func TestDoctor_TextRollupCounts_ReflectSurfacedItems(t *testing.T) {
 	chdirToTemp(t)
+	isolateMeshEnv(t)
 	dir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".vaultmind"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, ".vaultmind", "config.yaml"), []byte(`
