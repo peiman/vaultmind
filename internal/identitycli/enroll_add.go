@@ -23,10 +23,17 @@ const (
 	// window when --validity-seconds is empty: one year.
 	defaultEnrollAddValiditySeconds = int64(31_536_000)
 
-	// enrollAddFirstEpoch is the epoch a FRESH (no --registry) registry emits on
+	// enrollAddFreshEpoch is the epoch a FRESH (no --registry) registry emits on
 	// its first binding: a fresh registry starts at epoch 0, and the first emit
 	// bumps it to 1.
 	enrollAddFreshEpoch = 0
+
+	// enrollAddValidateStaleness is a deliberately huge max-staleness used ONLY
+	// for the pre-emit signability gate (serializeSignable's VerifyAndLoad): the
+	// freshly-issued registry's valid_from == now, so staleness is ~0 and this
+	// bound never trips — it exists so the gate exercises uniqueness/epoch/sig
+	// without the consumer's real freshness window interfering.
+	enrollAddValidateStaleness = time.Duration(1) << 62
 
 	// EnrollAddAddedLabel prefixes the added binding's slug.
 	EnrollAddAddedLabel = "added: "
@@ -177,7 +184,7 @@ func EnrollAdd(out, errOut io.Writer, in io.Reader, cfg EnrollAddConfig) error {
 		return err
 	}
 
-	emitted, err := serializeSignable(updated)
+	emitted, err := serializeSignable(updated, cfg.now())
 	if err != nil {
 		return err
 	}
@@ -454,14 +461,14 @@ func appendAndBump(reg registry.Registry, binding registry.AgentBinding, validit
 // wireRegistry JSON and VALIDATES that the result round-trips
 // buildRegistry+canonicalizes — proving the emitted document is guaranteed
 // signable by `sign-registry` before it is written out.
-func serializeSignable(reg registry.Registry) ([]byte, error) {
+func serializeSignable(reg registry.Registry, now time.Time) ([]byte, error) {
 	wire := toWireRegistry(reg)
 	emitted, err := json.Marshal(wire)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", errEnrollAddNotSignable, err)
 	}
-	// Re-decode + re-build + canonicalize as the sign path would, so an
-	// un-signable result is caught HERE, not at the signer.
+	// Re-decode + re-build as the sign path would, so a structurally un-signable
+	// result is caught HERE, not at the signer.
 	w, err := decodeWireRegistry(emitted)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", errEnrollAddNotSignable, err)
@@ -470,11 +477,23 @@ func serializeSignable(reg registry.Registry) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", errEnrollAddNotSignable, err)
 	}
-	// Run the EXACT sign-path canonicalization (epoch gate + JCS) over an
-	// ephemeral throwaway root key: a real signer is not in scope here, but the
-	// canonicalization is byte-identical, so a canonicalize-time failure surfaces
-	// HERE rather than at the downstream signer. The signature is discarded.
-	if _, err := registry.SignRegistry(ephemeralSignKey(), built); err != nil {
+	// Exercise the FULL consumer trust gate over an ephemeral throwaway root key:
+	// sign the rebuilt registry, then VerifyAndLoad it. This runs the EXACT gates
+	// the real consumer applies — including checkBindingUniqueness, which
+	// buildRegistry/SignRegistry do NOT — so a pre-poisoned CURRENT registry (e.g.
+	// two live bindings for one slug already present, untouched by this add) is
+	// caught HERE rather than silently re-emitted and rejected wholesale by the
+	// consumer. The ephemeral signature never leaves this process.
+	priv := ephemeralSignKey()
+	env, err := registry.SignRegistry(priv, built)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", errEnrollAddNotSignable, err)
+	}
+	pub, ok := priv.Public().(ed25519.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("%s: ephemeral public key type assertion failed", errEnrollAddNotSignable)
+	}
+	if _, _, err := registry.VerifyAndLoad(pub, env, 0, now, enrollAddValidateStaleness); err != nil {
 		return nil, fmt.Errorf("%s: %w", errEnrollAddNotSignable, err)
 	}
 	return emitted, nil

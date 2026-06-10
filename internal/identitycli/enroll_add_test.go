@@ -796,3 +796,50 @@ func TestEnrollAddReadsRequestFromReader(t *testing.T) {
 		t.Fatal("expected emitted registry from reader input")
 	}
 }
+
+// TestEnrollAddRejectsPrePoisonedRegistry proves the pre-emit signability gate
+// runs the FULL consumer trust gate (VerifyAndLoad), not just canonicalization:
+// a CURRENT registry already internally inconsistent (two LIVE bindings for one
+// slug — which checkUniqueness cannot see, as it only checks the NEW binding
+// against existing ones) is refused, so enroll-add never emits a document the
+// consumer would reject wholesale. Without the VerifyAndLoad gate this passes
+// (buildRegistry/SignRegistry skip uniqueness) and silently emits a poisoned
+// registry — this test is the regression guard for that.
+func TestEnrollAddRejectsPrePoisonedRegistry(t *testing.T) {
+	rootPub, _ := fixedAgentKey(t, 0x01)
+	ghost1, _ := fixedAgentKey(t, 0x05)
+	ghost2, _ := fixedAgentKey(t, 0x06)
+	agentPub, agentPriv := fixedAgentKey(t, 0x09)
+	net := networkOf(rootPub)
+
+	// Pre-poisoned current registry: TWO LIVE bindings for slug "ghost" (epochs 1
+	// and 2) — a >1-live-per-slug violation already present, untouched by the new
+	// non-conflicting "newbie" add. checkUniqueness passes (newbie is unique), so
+	// only the full consumer gate in serializeSignable catches this.
+	poisoned := `{"agents":[` +
+		`{"authorized_origin_daemons":["d"],"display_name":"G1","key_epoch":1,` +
+		`"pubkey":"` + base64.StdEncoding.EncodeToString(ghost1) + `","slug":"ghost",` +
+		`"valid_from":1760000000,"valid_until":1780000000},` +
+		`{"authorized_origin_daemons":["d"],"display_name":"G2","key_epoch":2,` +
+		`"pubkey":"` + base64.StdEncoding.EncodeToString(ghost2) + `","slug":"ghost",` +
+		`"valid_from":1760000000,"valid_until":1780000000}],` +
+		`"epoch":7,"valid_from":1760000000,"valid_until":1780000000}`
+
+	req := signedRequestFor(t, agentPub, agentPriv, "newbie", net, 1_700_000_000)
+	var out, errOut bytes.Buffer
+	cfg := EnrollAddConfig{
+		RootPubKeyB64: base64.StdEncoding.EncodeToString(rootPub),
+		RegistryInput: []byte(poisoned),
+		Now:           fixedNow(1_770_000_500),
+	}
+	err := EnrollAdd(&out, &errOut, bytes.NewReader(req), cfg)
+	if err == nil {
+		t.Fatal("expected pre-poisoned-registry rejection via the full consumer gate, got nil")
+	}
+	if !strings.Contains(err.Error(), errEnrollAddNotSignable) {
+		t.Fatalf("expected errEnrollAddNotSignable, got: %v", err)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("reject must emit nothing, got %q", out.String())
+	}
+}
