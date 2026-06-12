@@ -30,6 +30,13 @@ const embeddingBackendsDocURL = "https://github.com/peiman/vaultmind/blob/main/d
 // consistent instruction.
 const staleIndexRemedy = "vaultmind index --vault <vault>"
 
+// brokenReferencesRemedy is the SSOT drill-down command for the broken-
+// references count. doctor folds broken_reference findings into the surfaced
+// warning rollup, so it must also name the command that lists the per-note
+// details (close the loop — hand the next command). frontmatter validate is
+// the subcommand that reports broken_reference per-note (FrontmatterValidateMetadata).
+const brokenReferencesRemedy = "vaultmind frontmatter validate --vault <path>"
+
 var doctorCmd = MustNewCommand(commands.DoctorMetadata, runDoctor)
 
 func init() {
@@ -257,6 +264,9 @@ func writeDoctorHuman(w io.Writer, result *query.DoctorResult, summaryOnly bool)
 	if err := writeStaleIndex(w, &result.Issues, summaryOnly); err != nil {
 		return err
 	}
+	if err := writeBrokenReferences(w, &result.Issues); err != nil {
+		return err
+	}
 	// Contract-B mesh-identity section (conditionally present, like
 	// writeEmbeddingStatus — nil ⇒ nothing printed).
 	if err := writeMeshIdentity(w, result.MeshIdentity, summaryOnly); err != nil {
@@ -282,12 +292,22 @@ func writeDoctorHuman(w io.Writer, result *query.DoctorResult, summaryOnly bool)
 	// where the terminal shows "0 warnings" while --json carries a non-zero
 	// aggregate under a different key.
 	if result.ValidationSummary != nil {
+		// The gap is the raw validation findings doctor does NOT surface as
+		// per-item lines (unknown_type / invalid_status). The validation
+		// findings that ARE surfaced are exactly MissingRequiredFields +
+		// BrokenReferences — so subtract those, NOT the full surfaced rollup
+		// (errCount+warnCount). The rollup folds in NON-validation surfaced
+		// items (ObsidianIncompatibleLinks, UnresolvedLinks, StaleIndex,
+		// HookDrift, mesh) that are absent from the validation-only aggregate;
+		// subtracting them under-reported the gap and wrongly suppressed this
+		// line when those items were numerous.
 		rawTotal := result.ValidationSummary.Errors + result.ValidationSummary.Warnings
-		surfacedTotal := errCount + warnCount
-		if rawTotal > surfacedTotal {
+		validationSurfaced := result.Issues.MissingRequiredFields + result.Issues.BrokenReferences
+		gap := rawTotal - validationSurfaced
+		if gap > 0 {
 			if _, err := fmt.Fprintf(w,
 				"+%d raw validation finding(s) (unknown_type/invalid_status) — see --json result.validation_summary\n",
-				rawTotal-surfacedTotal); err != nil {
+				gap); err != nil {
 				return err
 			}
 		}
@@ -378,6 +398,24 @@ func writeStaleIndex(w io.Writer, issues *query.DoctorIssues, summaryOnly bool) 
 		}
 	}
 	return nil
+}
+
+// writeBrokenReferences prints the broken-references section. doctor folds
+// broken_reference findings (explicit_relation edges pointing to non-existent
+// notes) into the surfaced WARNING rollup, but carries only the aggregate
+// count — not the per-note list. Without this line the rollup would show "N
+// warnings" with nothing to back N. The line hands the operator the command
+// that lists the per-note details (frontmatter validate). One line always —
+// there are no per-note details here to suppress under --summary, so it takes
+// no summaryOnly flag (same shape as writeLegacyHooksJSON).
+func writeBrokenReferences(w io.Writer, issues *query.DoctorIssues) error {
+	if issues.BrokenReferences == 0 {
+		return nil
+	}
+	_, err := fmt.Fprintf(w,
+		"Broken references: %d (run `%s` for the per-note details)\n",
+		issues.BrokenReferences, brokenReferencesRemedy)
+	return err
 }
 
 // writeTypeBreakdown prints the per-type note counts (with each type's valid
