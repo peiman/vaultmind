@@ -189,16 +189,19 @@ func populateDoctorResult(vdb *cmdutil.VaultDB, vaultPath string) (*query.Doctor
 	if result.Types, err = query.CollectTypeBreakdown(vdb.DB, vdb.Config); err != nil {
 		return nil, fmt.Errorf("collecting type breakdown: %w", err)
 	}
-	// Set IssuesSummary to a non-nil pointer in the cmd path so the JSON
+	// Set ValidationSummary to a non-nil pointer in the cmd path so the JSON
 	// envelope distinguishes "validation ran" (&{...}) from "validation not
-	// run" (nil, the raw query.Doctor shape). DoctorResult.IssuesSummary is a
-	// pointer with omitempty precisely so a raw Doctor result omits the field
+	// run" (nil, the raw query.Doctor shape). DoctorResult.ValidationSummary is
+	// a pointer with omitempty precisely so a raw Doctor result omits the field
 	// instead of emitting a false-zero {errors:0,warnings:0}.
+	// ValidationSummary is the RAW validation aggregate; the surfaced/actionable
+	// count lives in result.issues (SurfacedIssueCounts). These are distinct
+	// labeled axes so --json consumers never see two unlabeled "warnings" totals.
 	summary, err := query.SummarizeValidationIssues(vdb.DB, vdb.Reg)
 	if err != nil {
 		return nil, fmt.Errorf("summarizing validation issues: %w", err)
 	}
-	result.IssuesSummary = &summary
+	result.ValidationSummary = &summary
 
 	// Hook-drift detection — embedded canonical vs installed copies in
 	// the project's .claude/scripts/. Resolve the project root by
@@ -262,15 +265,32 @@ func writeDoctorHuman(w io.Writer, result *query.DoctorResult, summaryOnly bool)
 	// Errors/warnings rollup — the cold-start bottom line. Counts come from
 	// query.ResultSurfacedIssueCounts (SSOT) over the SURFACED result.Issues set
 	// PLUS the mesh-identity section's warnings, so the text rollup always agrees
-	// with --json. It deliberately does NOT read result.IssuesSummary: that
+	// with --json. It deliberately does NOT read result.ValidationSummary: that
 	// schema-validation AGGREGATE counts findings doctor never renders as text
-	// lines (and which the --json envelope's surfaced warnings/errors arrays do
-	// not count), which previously overstated warnings (e.g. "0 errors, 96
-	// warnings") against a --json that surfaced none. result.issues_summary stays
-	// in --json untouched.
+	// lines (unknown_type, invalid_status) which previously overstated warnings
+	// (e.g. "0 errors, 96 warnings") against a --json that surfaced none.
+	// result.validation_summary carries the raw aggregate in --json under its
+	// own explicitly-named key so the two axes are never confused.
 	errCount, warnCount := query.ResultSurfacedIssueCounts(result)
 	if _, err := fmt.Fprintf(w, "Issues: %d errors, %d warnings\n", errCount, warnCount); err != nil {
 		return err
+	}
+
+	// When the raw validation aggregate has findings the text report doesn't
+	// surface as lines, note the gap so the operator knows more detail exists in
+	// --json (result.validation_summary). This prevents the hidden-state shape
+	// where the terminal shows "0 warnings" while --json carries a non-zero
+	// aggregate under a different key.
+	if result.ValidationSummary != nil {
+		rawTotal := result.ValidationSummary.Errors + result.ValidationSummary.Warnings
+		surfacedTotal := errCount + warnCount
+		if rawTotal > surfacedTotal {
+			if _, err := fmt.Fprintf(w,
+				"+%d raw validation finding(s) (unknown_type/invalid_status) — see --json result.validation_summary\n",
+				rawTotal-surfacedTotal); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

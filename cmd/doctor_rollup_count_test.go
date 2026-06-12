@@ -36,9 +36,12 @@ type jsonSurfacedIssues struct {
 			HookDrift                 int  `json:"hook_drift"`
 			LegacyHooksJSON           bool `json:"legacy_hooks_json"`
 		} `json:"issues"`
-		IssuesSummary struct {
+		// ValidationSummary is the explicitly-labeled raw aggregate axis (renamed
+		// from the ambiguous "issues_summary" to prevent confusion with the surfaced
+		// result.issues set). Decoded here to assert it carries the raw count.
+		ValidationSummary struct {
 			Warnings int `json:"warnings"`
-		} `json:"issues_summary"`
+		} `json:"validation_summary"`
 	} `json:"result"`
 }
 
@@ -74,7 +77,7 @@ func chdirToTemp(t *testing.T) {
 // does NOT surface as per-item lines. This is the exact shape that produced the
 // reported divergence: TEXT "Issues: 0 errors, N warnings" while --json's
 // surfaced result.issues block is all zero (the validation warnings live only
-// in the nested result.issues_summary aggregate).
+// in the nested result.validation_summary aggregate).
 func buildValidationWarningVault(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -124,11 +127,12 @@ func readJSONSurfaced(t *testing.T, vault string) jsonSurfacedIssues {
 // block), for a vault whose only findings are schema-validation warnings the
 // TEXT renderer never surfaces as lines.
 //
-// Before the fix the TEXT rollup read result.issues_summary (the validation
-// AGGREGATE: 3 unknown_type warnings) while the surfaced result.issues block
-// was all zero, so the TEXT count OVERSTATED warnings no text line backed —
-// and the aggregate stayed visible in --json's result.issues_summary, proving
-// the two counts came from different sets.
+// Before the fix the TEXT rollup read result.validation_summary (then named
+// result.issues_summary — the validation AGGREGATE: 3 unknown_type warnings)
+// while the surfaced result.issues block was all zero, so the TEXT count
+// OVERSTATED warnings no text line backed — and the aggregate stayed visible
+// in --json's result.validation_summary, proving the two counts came from
+// different sets.
 func TestDoctor_TextRollupCounts_MatchJSONSurfacedSet(t *testing.T) {
 	chdirToTemp(t)
 	isolateMeshEnv(t)
@@ -143,10 +147,11 @@ func TestDoctor_TextRollupCounts_MatchJSONSurfacedSet(t *testing.T) {
 	require.Equal(t, jsonWarnings, textWarnings,
 		"TEXT warning count must equal --json surfaced result.issues warnings")
 
-	// Document the divergence the fix closes: the validation aggregate is
-	// non-zero in --json yet the surfaced counts (and now the text) are zero.
-	require.Equal(t, 3, j.Result.IssuesSummary.Warnings,
-		"validation aggregate still reports 3 warnings in --json")
+	// Document the divergence the fix closes: the raw validation aggregate is
+	// non-zero in --json under its explicitly-named key, yet the surfaced
+	// counts (and now the text) are zero.
+	require.Equal(t, 3, j.Result.ValidationSummary.Warnings,
+		"raw validation aggregate still reports 3 warnings in --json result.validation_summary")
 	require.Equal(t, 0, textWarnings,
 		"text must report the surfaced count (0), not the validation aggregate (3)")
 	require.Equal(t, 0, textErrors, "no surfaced errors")

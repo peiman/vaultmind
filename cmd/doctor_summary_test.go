@@ -37,23 +37,24 @@ func TestDoctor_JSONIncludesPerTypeBreakdown(t *testing.T) {
 		"valid statuses must carry through from the registry")
 }
 
-// doctor JSON also carries the errors/warnings rollup that the cold-start
-// view needs. The clean test vault has zero errors.
-func TestDoctor_JSONIncludesIssuesSummary(t *testing.T) {
+// doctor JSON carries the raw validation aggregate in result.validation_summary
+// (the explicitly-labeled axis for the raw aggregate, distinct from the surfaced
+// result.issues set). The clean test vault has zero errors.
+func TestDoctor_JSONIncludesValidationSummary(t *testing.T) {
 	vault := buildIndexedTestVault(t)
 	out, _, err := runRootCmd(t, "doctor", "--vault", vault, "--json")
 	require.NoError(t, err)
 
 	var env struct {
 		Result struct {
-			IssuesSummary struct {
+			ValidationSummary struct {
 				Errors   int `json:"errors"`
 				Warnings int `json:"warnings"`
-			} `json:"issues_summary"`
+			} `json:"validation_summary"`
 		} `json:"result"`
 	}
 	require.NoError(t, json.Unmarshal(out.Bytes(), &env))
-	assert.Equal(t, 0, env.Result.IssuesSummary.Errors, "clean vault has no errors")
+	assert.Equal(t, 0, env.Result.ValidationSummary.Errors, "clean vault has no errors in validation_summary")
 }
 
 // doctor human output (no --summary) prints the per-type breakdown so the
