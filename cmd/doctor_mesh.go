@@ -234,7 +234,9 @@ func slugFromAgentsYAML(registryPath, projectDir string) string {
 	}
 	// registryPath is an operator-controlled env var (AGENT_CHAT_REGISTRY), the
 	// same path the chat MCP itself reads — not attacker-controlled input.
-	// #nosec G304
+	// The newer gosec taint pass (G703) flags the same env-var→ReadFile flow;
+	// the operator-controlled justification above covers it equally.
+	// #nosec G304 G703
 	// nosemgrep: go-path-traversal
 	raw, err := os.ReadFile(registryPath)
 	if err != nil {
