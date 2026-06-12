@@ -8,6 +8,16 @@ import (
 	"github.com/peiman/vaultmind/internal/schema"
 )
 
+// Validate rule identifiers — the SSOT for rule strings used across the
+// query layer. validate.go is the canonical definition site; doctor.go and any
+// other caller must reference these constants instead of inlining the strings.
+const (
+	RuleBrokenReference = "broken_reference"
+	RuleMissingRequired = "missing_required_field"
+	RuleUnknownType     = "unknown_type"
+	RuleInvalidStatus   = "invalid_status"
+)
+
 // ValidateResult is the JSON-serializable output of frontmatter validate.
 type ValidateResult struct {
 	FilesChecked int             `json:"files_checked"`
@@ -68,7 +78,7 @@ func Validate(db *index.DB, reg *schema.Registry) (*ValidateResult, error) {
 		if n.noteType != "" && !reg.HasType(n.noteType) {
 			result.Issues = append(result.Issues, ValidateIssue{
 				Path: n.path, ID: n.id, Severity: "warning",
-				Rule: "unknown_type", Message: fmt.Sprintf("Type %q not in registry", n.noteType),
+				Rule: RuleUnknownType, Message: fmt.Sprintf("Type %q not in registry", n.noteType),
 				Value: n.noteType,
 			})
 			noteHasIssue = true
@@ -82,7 +92,7 @@ func Validate(db *index.DB, reg *schema.Registry) (*ValidateResult, error) {
 				if val == "" {
 					result.Issues = append(result.Issues, ValidateIssue{
 						Path: n.path, ID: n.id, Severity: "error",
-						Rule:    "missing_required_field",
+						Rule:    RuleMissingRequired,
 						Message: fmt.Sprintf("Type %q requires field %q", n.noteType, req),
 						Field:   req,
 					})
@@ -94,7 +104,7 @@ func Validate(db *index.DB, reg *schema.Registry) (*ValidateResult, error) {
 			if n.status != "" && len(td.Statuses) > 0 && !reg.ValidStatus(n.noteType, n.status) {
 				result.Issues = append(result.Issues, ValidateIssue{
 					Path: n.path, ID: n.id, Severity: "warning",
-					Rule:    "invalid_status",
+					Rule:    RuleInvalidStatus,
 					Message: fmt.Sprintf("Status %q not valid for type %q", n.status, n.noteType),
 					Field:   "status", Value: n.status,
 				})
@@ -107,7 +117,7 @@ func Validate(db *index.DB, reg *schema.Registry) (*ValidateResult, error) {
 		if refErr == nil && brokenRefs > 0 {
 			result.Issues = append(result.Issues, ValidateIssue{
 				Path: n.path, ID: n.id, Severity: "warning",
-				Rule:    "broken_reference",
+				Rule:    RuleBrokenReference,
 				Message: fmt.Sprintf("%d frontmatter references do not resolve to existing notes", brokenRefs),
 			})
 			noteHasIssue = true

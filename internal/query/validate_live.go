@@ -39,8 +39,10 @@ func ValidateLive(vaultPath string, reg *schema.Registry) (*ValidateResult, erro
 			return nil
 		}
 
-		// path is produced by filepath.WalkDir rooted at vaultPath, not user input.
-		content, readErr := os.ReadFile(path) // #nosec G304
+		// path is produced by filepath.WalkDir rooted at vaultPath, not user input;
+		// the symlink-TOCTOU that gosec G122 warns about is out of scope for a
+		// single-user CLI reading its own local vault.
+		content, readErr := os.ReadFile(path) // #nosec G304 G122
 		if readErr != nil {
 			return fmt.Errorf("reading %s: %w", path, readErr)
 		}
@@ -86,7 +88,7 @@ func validateDomainNote(
 	if !reg.HasType(noteType) {
 		result.Issues = append(result.Issues, ValidateIssue{
 			Path: path, ID: id, Severity: "warning",
-			Rule:    "unknown_type",
+			Rule:    RuleUnknownType,
 			Message: fmt.Sprintf("Type %q not in registry", noteType),
 			Value:   noteType,
 		})
@@ -99,7 +101,7 @@ func validateDomainNote(
 		if !reg.IsFieldPresent(fm, req) {
 			result.Issues = append(result.Issues, ValidateIssue{
 				Path: path, ID: id, Severity: "error",
-				Rule:    "missing_required_field",
+				Rule:    RuleMissingRequired,
 				Message: fmt.Sprintf("Type %q requires field %q", noteType, req),
 				Field:   req,
 			})
@@ -116,7 +118,7 @@ func validateDomainNote(
 		if len(td.Statuses) > 0 && !reg.ValidStatus(noteType, status) {
 			result.Issues = append(result.Issues, ValidateIssue{
 				Path: path, ID: id, Severity: "warning",
-				Rule:    "invalid_status",
+				Rule:    RuleInvalidStatus,
 				Message: fmt.Sprintf("Status %q not valid for type %q", status, noteType),
 				Field:   "status", Value: status,
 			})

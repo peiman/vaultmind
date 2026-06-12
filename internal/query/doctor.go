@@ -14,20 +14,27 @@ import (
 
 // DoctorResult is the JSON-serializable output of the doctor command.
 //
-// Types and IssuesSummary carry the per-type breakdown and errors/warnings
-// rollup that `vault status` used to produce. doctor is now the single health
-// hub, so the cold-start view (`doctor --summary`) and the read-only diagnosis
-// (`doctor`) both surface them. They are populated by the cmd layer (which
-// holds the vault config + schema registry) via the shared status.go helpers —
-// the same place HookDrift is populated — so query.Doctor's signature stays
-// stable.
+// Types and ValidationSummary carry the per-type breakdown and raw validation
+// aggregate that `vault status` used to produce. doctor is now the single
+// health hub, so the cold-start view (`doctor --summary`) and the read-only
+// diagnosis (`doctor`) both surface them. They are populated by the cmd layer
+// (which holds the vault config + schema registry) via the shared status.go
+// helpers — the same place HookDrift is populated — so query.Doctor's
+// signature stays stable.
 //
-// IssuesSummary is a POINTER with omitempty so the unmeasured state (a raw
-// query.Doctor call with no schema registry — e.g. the query-layer tests) omits
-// the field entirely. The earlier non-pointer struct always serialized a
+// ValidationSummary is a POINTER with omitempty so the unmeasured state (a
+// raw query.Doctor call with no schema registry — e.g. the query-layer tests)
+// omits the field entirely. The earlier non-pointer struct always serialized a
 // false-zero {errors:0,warnings:0}, indistinguishable from a measured-healthy
 // vault. nil now means "validation not run"; a non-nil &{0,0} means "ran, found
 // nothing". Types likewise stays omitempty (empty map => omitted).
+//
+// ValidationSummary (JSON: "validation_summary") holds the RAW schema-validation
+// aggregate — all ValidateResult.Issues bucketed by severity. It may be larger
+// than the surfaced result.issues set because it includes unknown_type /
+// invalid_status findings the text report never renders as per-item lines.
+// These are distinct labeled axes: validation_summary is the raw aggregate;
+// result.issues is the surfaced/actionable set.
 type DoctorResult struct {
 	VaultPath         string                    `json:"vault_path"`
 	TotalFiles        int                       `json:"total_files"`
@@ -36,7 +43,7 @@ type DoctorResult struct {
 	IndexStatus       string                    `json:"index_status"`
 	Embeddings        *DoctorEmbeddings         `json:"embeddings,omitempty"`
 	Types             map[string]StatusTypeInfo `json:"types,omitempty"`
-	IssuesSummary     *StatusIssuesSummary      `json:"issues_summary,omitempty"`
+	ValidationSummary *StatusIssuesSummary      `json:"validation_summary,omitempty"`
 	Issues            DoctorIssues              `json:"issues"`
 
 	// MeshIdentity is the Contract-B identity-health section. It is a POINTER
@@ -136,14 +143,16 @@ type DoctorIssues struct {
 // is the single source of truth for the "Issues: E errors, W warnings" text
 // rollup so that count can never again disagree with --json.
 //
-// It deliberately does NOT fold in DoctorResult.IssuesSummary (the schema
+// It deliberately does NOT fold in DoctorResult.ValidationSummary (the schema
 // VALIDATION aggregate from SummarizeValidationIssues). That aggregate counts
-// findings — unknown_type, invalid_status, broken_reference — that doctor
-// surfaces only in the nested result.issues_summary JSON field, never as a
-// per-item line in the text report. Counting it in the text rollup overstated
+// findings — unknown_type, invalid_status — that doctor surfaces only in the
+// nested result.validation_summary JSON field, never as a per-item line in the
+// text report. (missing_required_field and broken_reference ARE surfaced — via
+// result.issues and, for broken_reference, a dedicated text line.) Counting it
+// in the text rollup overstated
 // warnings (e.g. "0 errors, 96 warnings") against a --json envelope that
-// surfaced none. result.issues_summary stays in --json unchanged; this helper
-// only governs the surfaced-set rollup.
+// surfaced none. result.validation_summary stays in --json unchanged; this
+// helper only governs the surfaced-set rollup.
 //
 // Severity follows the doctor renderer's own framing: integrity violations
 // that mean data is wrong are errors; advisories that mean the vault is
@@ -230,17 +239,22 @@ func Doctor(db *index.DB, vaultPath string, reg *schema.Registry) (*DoctorResult
 	}
 	result.UnstructuredNotes = result.TotalFiles - result.DomainNotes
 
-	// missing_required_fields — call Validate and count. Single source
-	// of truth for what counts as "missing required field"; doctor
-	// surfaces the aggregate, validate surfaces per-note details.
+	// missing_required_fields and broken_references — call Validate and count.
+	// Single source of truth for what counts as "missing required field" or
+	// "broken reference"; doctor surfaces the aggregate, validate surfaces
+	// per-note details. Both branches use the SSOT rule constants from
+	// validate.go to avoid stringly-typed divergence.
 	if reg != nil {
 		validateRes, err := Validate(db, reg)
 		if err != nil {
 			return nil, fmt.Errorf("validating for missing-required-fields: %w", err)
 		}
 		for _, issue := range validateRes.Issues {
-			if issue.Rule == "missing_required_field" {
+			switch issue.Rule {
+			case RuleMissingRequired:
 				result.Issues.MissingRequiredFields++
+			case RuleBrokenReference:
+				result.Issues.BrokenReferences++
 			}
 		}
 	}

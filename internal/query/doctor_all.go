@@ -53,12 +53,12 @@ type DoctorRollup struct {
 }
 
 // BuildDoctorRollup aggregates per-vault DoctorResults into a workspace rollup.
-// A vault counts as "having issues" when its IssuesSummary reports any errors or
-// warnings; a nil IssuesSummary (a raw, un-validated result) contributes zero
-// and is treated as clean. The failed slice (vaults that could not be opened) is
-// folded into the honest count breakdown — Discovered = diagnosed + failed — so
-// the rollup never under-reports the number of vaults found. Pure aggregation:
-// no I/O, no mutation of inputs.
+// A vault counts as "having issues" when its ValidationSummary reports any
+// errors or warnings; a nil ValidationSummary (a raw, un-validated result)
+// contributes zero and is treated as clean. The failed slice (vaults that could
+// not be opened) is folded into the honest count breakdown —
+// Discovered = diagnosed + failed — so the rollup never under-reports the
+// number of vaults found. Pure aggregation: no I/O, no mutation of inputs.
 func BuildDoctorRollup(vaults []*DoctorResult, failed []FailedVault) DoctorRollup {
 	diagnosed := len(vaults)
 	discovered := diagnosed + len(failed)
@@ -75,9 +75,9 @@ func BuildDoctorRollup(vaults []*DoctorResult, failed []FailedVault) DoctorRollu
 		}
 		rollup.TotalNotes += v.TotalFiles
 		errs, warns := 0, 0
-		if v.IssuesSummary != nil {
-			errs = v.IssuesSummary.Errors
-			warns = v.IssuesSummary.Warnings
+		if v.ValidationSummary != nil {
+			errs = v.ValidationSummary.Errors
+			warns = v.ValidationSummary.Warnings
 		}
 		rollup.TotalErrors += errs
 		rollup.TotalWarnings += warns

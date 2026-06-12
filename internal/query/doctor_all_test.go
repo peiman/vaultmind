@@ -14,7 +14,7 @@ import (
 // vaults.
 func mkVaultResult(path string, total, errs, warns, unresolved int) *query.DoctorResult {
 	r := &query.DoctorResult{VaultPath: path, TotalFiles: total}
-	r.IssuesSummary = &query.StatusIssuesSummary{Errors: errs, Warnings: warns}
+	r.ValidationSummary = &query.StatusIssuesSummary{Errors: errs, Warnings: warns}
 	r.Issues.UnresolvedLinks = unresolved
 	return r
 }
@@ -74,9 +74,10 @@ func TestBuildDoctorRollup_CleanWorkspaceHasEmptyIssueList(t *testing.T) {
 	assert.Empty(t, rollup.VaultsWithIssues, "a clean workspace lists no problem vaults")
 }
 
-// A nil IssuesSummary (a raw, un-validated DoctorResult) must contribute zero
-// errors/warnings and never panic — defensive parity with the human renderer.
-func TestBuildDoctorRollup_NilIssuesSummaryCountsAsClean(t *testing.T) {
+// A nil ValidationSummary (a raw, un-validated DoctorResult) must contribute
+// zero errors/warnings and never panic — defensive parity with the human
+// renderer.
+func TestBuildDoctorRollup_NilValidationSummaryCountsAsClean(t *testing.T) {
 	clean := &query.DoctorResult{VaultPath: "/raw", TotalFiles: 9}
 	rollup := query.BuildDoctorRollup([]*query.DoctorResult{clean}, nil)
 	assert.Equal(t, 1, rollup.VaultCount)

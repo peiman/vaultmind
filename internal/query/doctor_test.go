@@ -35,23 +35,25 @@ func TestDoctor_ReturnsVaultSummary(t *testing.T) {
 	assert.Equal(t, result.TotalFiles, result.DomainNotes+result.UnstructuredNotes)
 }
 
-// A raw query.Doctor result (no cmd layer, so IssuesSummary stays nil) must
-// OMIT issues_summary from its JSON — not emit a false-zero
+// A raw query.Doctor result (no cmd layer, so ValidationSummary stays nil)
+// must OMIT validation_summary from its JSON — not emit a false-zero
 // {errors:0,warnings:0} that's indistinguishable from a measured-healthy
-// vault. The cmd path (doctor --summary) populates it; the omission here is the
-// invariant H3 locks down.
-func TestDoctor_RawResultOmitsIssuesSummary(t *testing.T) {
+// vault. The cmd path (doctor --summary) populates it; the omission here is
+// the invariant H3 locks down.
+func TestDoctor_RawResultOmitsValidationSummary(t *testing.T) {
 	db := buildIndexedDB(t)
 
 	result, err := query.Doctor(db, testVaultPath, nil)
 	require.NoError(t, err)
-	assert.Nil(t, result.IssuesSummary,
-		"raw query.Doctor must leave IssuesSummary unmeasured (nil)")
+	assert.Nil(t, result.ValidationSummary,
+		"raw query.Doctor must leave ValidationSummary unmeasured (nil)")
 
 	raw, err := json.Marshal(result)
 	require.NoError(t, err)
+	assert.NotContains(t, string(raw), "validation_summary",
+		"unmeasured validation_summary must be omitted from the JSON, not false-zeroed")
 	assert.NotContains(t, string(raw), "issues_summary",
-		"unmeasured issues_summary must be omitted from the JSON, not false-zeroed")
+		"the old issues_summary key must not appear in the JSON output")
 }
 
 func TestDoctor_ReportsUnresolvedLinks(t *testing.T) {
