@@ -134,6 +134,20 @@ func writeRollupHeader(w io.Writer, root string, r query.DoctorRollup) error {
 		root, r.Discovered, breakdown, r.TotalNotes, r.TotalErrors, r.TotalWarnings); err != nil {
 		return err
 	}
+	// The "Total issues" line is the SURFACED axis (sum of each per-vault
+	// report). When the RAW schema-validation aggregate carries findings the text
+	// report never surfaces (unknown_type/invalid_status), note the gap on one
+	// honest line pointing at --json, so the terminal never hides a non-zero
+	// aggregate that lives under a different key. Mirrors the single-vault gap
+	// line in writeDoctorHuman; RawValidationGap subtracts the surfaced
+	// validation findings, not the full headline, so it never under-reports.
+	if gap := r.RawValidationGap(); gap > 0 {
+		if _, err := fmt.Fprintf(w,
+			"+%d raw validation finding(s) across vaults (unknown_type/invalid_status) — see --json rollup.total_raw_validation_findings\n",
+			gap); err != nil {
+			return err
+		}
+	}
 	if len(r.VaultsWithIssues) == 0 {
 		return nil
 	}
