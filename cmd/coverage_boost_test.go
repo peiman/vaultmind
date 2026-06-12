@@ -341,6 +341,45 @@ func TestWriteRollupHeader_VaultsWithIssues_Listed(t *testing.T) {
 	assert.Contains(t, out, "/vault/broken")
 }
 
+// When the raw schema-validation aggregate exceeds the surfaced headline,
+// writeRollupHeader must note the gap on one honest line pointing at --json —
+// mirroring the single-vault gap line so the two axes never silently diverge.
+func TestWriteRollupHeader_RawValidationGap_ShowsHonestLine(t *testing.T) {
+	var buf bytes.Buffer
+	r := query.DoctorRollup{
+		Discovered:                 1,
+		Diagnosed:                  1,
+		TotalNotes:                 30,
+		TotalErrors:                0,
+		TotalWarnings:              1,  // surfaced headline
+		TotalRawValidationFindings: 58, // raw aggregate (e.g. 1 surfaced + 57 raw-only)
+	}
+	require.NoError(t, writeRollupHeader(&buf, "/root", r))
+	out := buf.String()
+	assert.Contains(t, out, "Total issues: 0 errors, 1 warnings", "headline is the surfaced axis")
+	assert.Contains(t, out, "raw validation finding(s)",
+		"the raw aggregate is surfaced on its own honest line when it exceeds the headline")
+	assert.Contains(t, out, "--json", "the line points the operator at --json for the raw aggregate")
+}
+
+// When there are no raw-only validation findings, writeRollupHeader must NOT
+// emit the gap line — keep it minimal. (RawValidationGap == 0 here because the
+// raw aggregate is zero; the surfaced-validation portion is unexported and
+// summed only inside BuildDoctorRollup.)
+func TestWriteRollupHeader_NoRawValidationGap_NoExtraLine(t *testing.T) {
+	var buf bytes.Buffer
+	r := query.DoctorRollup{
+		Discovered:                 1,
+		Diagnosed:                  1,
+		TotalNotes:                 10,
+		TotalWarnings:              2,
+		TotalRawValidationFindings: 0, // no raw findings → nothing hidden
+	}
+	require.NoError(t, writeRollupHeader(&buf, "/root", r))
+	assert.NotContains(t, buf.String(), "raw validation finding(s)",
+		"no gap line when there are no raw-only validation findings")
+}
+
 // ---------------------------------------------------------------------------
 // runFrontmatterFixCore — tested via the CLI path
 // ---------------------------------------------------------------------------

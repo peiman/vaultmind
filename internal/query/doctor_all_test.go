@@ -11,10 +11,16 @@ import (
 
 // mkVaultResult builds a minimal DoctorResult for rollup tests without touching
 // a database — BuildDoctorRollup is pure aggregation over already-diagnosed
-// vaults.
+// vaults. The errs/warns params drive the SURFACED axis (the rollup headline
+// now sums ResultSurfacedIssueCounts, matching each per-vault report), so errs
+// maps to a surfaced error bucket (DuplicateIDs) and warns to a surfaced
+// warning bucket (BrokenReferences). unresolved adds further surfaced warnings
+// via UnresolvedLinks. ValidationSummary (the RAW axis) is left nil here; tests
+// that exercise the raw-vs-surfaced distinction set it explicitly.
 func mkVaultResult(path string, total, errs, warns, unresolved int) *query.DoctorResult {
 	r := &query.DoctorResult{VaultPath: path, TotalFiles: total}
-	r.ValidationSummary = &query.StatusIssuesSummary{Errors: errs, Warnings: warns}
+	r.Issues.DuplicateIDs = errs
+	r.Issues.BrokenReferences = warns
 	r.Issues.UnresolvedLinks = unresolved
 	return r
 }
@@ -91,6 +97,97 @@ func TestBuildDoctorRollup_EmptyInput(t *testing.T) {
 	assert.Equal(t, 0, rollup.VaultCount)
 	assert.Equal(t, 0, rollup.TotalNotes)
 	assert.Empty(t, rollup.VaultsWithIssues)
+}
+
+// The headline TotalErrors/TotalWarnings must report the SURFACED set
+// (query.ResultSurfacedIssueCounts) — the same axis each per-vault report
+// prints — so `doctor --all` totals reconcile with summing the per-vault
+// reports. The RAW schema-validation aggregate (ValidationSummary) is a
+// DIFFERENT axis: it counts findings (unknown_type / invalid_status) the text
+// report never surfaces as per-item lines. Collapsing both under the same
+// label is the two-unlabeled-axes bug PR #31 fixed for the single-vault case;
+// this guards the remaining rollup instance.
+func TestBuildDoctorRollup_TotalsAreSurfacedNotRawValidation(t *testing.T) {
+	// Vault A: surfaced advisories only (Obsidian-incompatible + unresolved
+	// links), zero raw validation findings. Surfaced warnings = 2 + 1 = 3.
+	a := &query.DoctorResult{VaultPath: "/a", TotalFiles: 12}
+	a.Issues.ObsidianIncompatibleLinks = 2
+	a.Issues.UnresolvedLinks = 1
+
+	// Vault B: a surfaced broken reference (warning) PLUS several raw-only
+	// unknown_type findings that live in ValidationSummary but are NEVER
+	// surfaced as text lines. Surfaced warnings = 1 (BrokenReferences). The raw
+	// aggregate is far larger (1 surfaced broken_reference + 57 unknown_type).
+	b := &query.DoctorResult{VaultPath: "/b", TotalFiles: 30}
+	b.Issues.BrokenReferences = 1
+	b.ValidationSummary = &query.StatusIssuesSummary{Errors: 0, Warnings: 58}
+
+	vaults := []*query.DoctorResult{a, b}
+	rollup := query.BuildDoctorRollup(vaults, nil)
+
+	// Headline totals == sum of each vault's SURFACED counts (NOT the raw sum).
+	var wantErrs, wantWarns int
+	for _, v := range vaults {
+		e, w := query.ResultSurfacedIssueCounts(v)
+		wantErrs += e
+		wantWarns += w
+	}
+	assert.Equal(t, wantErrs, rollup.TotalErrors,
+		"TotalErrors sums the surfaced set, matching per-vault reports")
+	assert.Equal(t, wantWarns, rollup.TotalWarnings,
+		"TotalWarnings sums the surfaced set, matching per-vault reports")
+	// Concretely: surfaced warnings are 3 (vault A) + 1 (vault B) = 4, NOT the
+	// raw 3 + 58 = 61 the old ValidationSummary-based code reported.
+	assert.Equal(t, 4, rollup.TotalWarnings, "surfaced, not raw, warning total")
+	assert.Equal(t, 0, rollup.TotalErrors)
+
+	// The raw validation aggregate is preserved under its own distinctly-labeled
+	// field — sum of each ValidationSummary.Errors+Warnings (nil ⇒ 0).
+	assert.Equal(t, 58, rollup.TotalRawValidationFindings,
+		"raw schema-validation aggregate is kept, not discarded, under its own field")
+
+	// "Has issues" keys on the surfaced count too: both vaults surface warnings.
+	assert.Equal(t, []string{"/a", "/b"}, rollup.VaultsWithIssues)
+}
+
+// RawValidationGap reports the raw-only findings (those NOT surfaced as text
+// lines) across the workspace: TotalRawValidationFindings minus the surfaced
+// validation findings (MissingRequiredFields + BrokenReferences). It must NOT
+// subtract non-validation surfaced items, so it never under-reports the gap.
+func TestBuildDoctorRollup_RawValidationGap(t *testing.T) {
+	// Vault has: 1 surfaced broken_reference + 1 surfaced missing_required_field
+	// (both ARE validation findings) PLUS surfaced obsidian links (NON-validation)
+	// PLUS a raw aggregate of 60 (= 2 surfaced validation + 58 raw-only).
+	v := &query.DoctorResult{VaultPath: "/v", TotalFiles: 40}
+	v.Issues.BrokenReferences = 1
+	v.Issues.MissingRequiredFields = 1
+	v.Issues.ObsidianIncompatibleLinks = 5 // non-validation surfaced noise
+	v.ValidationSummary = &query.StatusIssuesSummary{Errors: 1, Warnings: 59}
+
+	rollup := query.BuildDoctorRollup([]*query.DoctorResult{v}, nil)
+
+	assert.Equal(t, 60, rollup.TotalRawValidationFindings)
+	// Gap subtracts ONLY the surfaced validation findings (1+1=2), not the
+	// obsidian links — so 60 - 2 = 58 raw-only findings.
+	assert.Equal(t, 58, rollup.RawValidationGap(),
+		"gap subtracts surfaced validation findings only, never the full headline")
+}
+
+// A vault whose ONLY findings are raw-only validation findings (unknown_type)
+// surfaces nothing actionable, so it must NOT count as "has issues" and must
+// NOT inflate the headline warnings — but its raw aggregate is still carried in
+// TotalRawValidationFindings so the information is not lost.
+func TestBuildDoctorRollup_RawOnlyVaultIsNotASurfacedIssue(t *testing.T) {
+	rawOnly := &query.DoctorResult{VaultPath: "/raw-only", TotalFiles: 8}
+	rawOnly.ValidationSummary = &query.StatusIssuesSummary{Errors: 0, Warnings: 57}
+
+	rollup := query.BuildDoctorRollup([]*query.DoctorResult{rawOnly}, nil)
+
+	assert.Equal(t, 0, rollup.TotalWarnings, "raw-only findings are not surfaced warnings")
+	assert.Equal(t, 0, rollup.TotalErrors)
+	assert.Equal(t, 57, rollup.TotalRawValidationFindings, "raw aggregate still carried")
+	assert.Empty(t, rollup.VaultsWithIssues,
+		"a vault with no surfaced issues is not listed even if it has raw findings")
 }
 
 // The combined envelope shape: result.rollup is an object and result.vaults is

@@ -165,6 +165,17 @@ Body without a title.
 // A vault with validation errors must appear in the rollup's "vaults with
 // issues" list — in both the human header and the JSON rollup.
 func TestDoctorAll_RollupListsVaultsWithIssues(t *testing.T) {
+	// The rollup headline now sums the SURFACED axis (ResultSurfacedIssueCounts),
+	// the same axis each per-vault report prints. That axis includes hook-drift
+	// (keyed on the project root's .claude/scripts) and mesh-identity signals, so
+	// isolate both — otherwise the dev-environment's drifted hooks + reachable
+	// daemon would surface warnings on the "clean" vault and the assertion that
+	// only the broken vault is listed would be environment-dependent. With both
+	// neutralized, the surfaced set is determined solely by vault content (the
+	// missing_required_field error in the broken vault).
+	isolateMeshEnv(t)
+	chdirToTemp(t)
+
 	root := t.TempDir()
 	clean := buildIndexedVaultAt(t, filepath.Join(root, "clean-vault"))
 	broken := buildVaultWithValidationError(t, filepath.Join(root, "zbroken-vault"))
