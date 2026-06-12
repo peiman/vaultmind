@@ -46,10 +46,11 @@ func TestDoctor_BrokenReferences_PopulatesIssuesField(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// A registry with the note's type so the validator processes it (notes
-	// with unknown types are skipped for broken_reference checking in Validate).
-	// Use a type that accepts the note without missing-required-field errors so
-	// the only finding is the broken reference.
+	// broken_reference checking runs for every domain note regardless of type;
+	// the fixture's type ("concept", with the note's title present) is chosen
+	// only so the note generates NO other finding (no unknown_type, no
+	// missing_required_field), leaving the broken reference as the sole issue
+	// the assertions below isolate.
 	reg := schema.NewRegistry(map[string]vault.TypeDef{
 		"concept": {Required: []string{"title"}},
 	})

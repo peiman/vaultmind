@@ -145,9 +145,11 @@ type DoctorIssues struct {
 //
 // It deliberately does NOT fold in DoctorResult.ValidationSummary (the schema
 // VALIDATION aggregate from SummarizeValidationIssues). That aggregate counts
-// findings — unknown_type, invalid_status, broken_reference — that doctor
-// surfaces only in the nested result.validation_summary JSON field, never as a
-// per-item line in the text report. Counting it in the text rollup overstated
+// findings — unknown_type, invalid_status — that doctor surfaces only in the
+// nested result.validation_summary JSON field, never as a per-item line in the
+// text report. (missing_required_field and broken_reference ARE surfaced — via
+// result.issues and, for broken_reference, a dedicated text line.) Counting it
+// in the text rollup overstated
 // warnings (e.g. "0 errors, 96 warnings") against a --json envelope that
 // surfaced none. result.validation_summary stays in --json unchanged; this
 // helper only governs the surfaced-set rollup.

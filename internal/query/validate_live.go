@@ -88,7 +88,7 @@ func validateDomainNote(
 	if !reg.HasType(noteType) {
 		result.Issues = append(result.Issues, ValidateIssue{
 			Path: path, ID: id, Severity: "warning",
-			Rule:    "unknown_type",
+			Rule:    RuleUnknownType,
 			Message: fmt.Sprintf("Type %q not in registry", noteType),
 			Value:   noteType,
 		})
@@ -101,7 +101,7 @@ func validateDomainNote(
 		if !reg.IsFieldPresent(fm, req) {
 			result.Issues = append(result.Issues, ValidateIssue{
 				Path: path, ID: id, Severity: "error",
-				Rule:    "missing_required_field",
+				Rule:    RuleMissingRequired,
 				Message: fmt.Sprintf("Type %q requires field %q", noteType, req),
 				Field:   req,
 			})
@@ -118,7 +118,7 @@ func validateDomainNote(
 		if len(td.Statuses) > 0 && !reg.ValidStatus(noteType, status) {
 			result.Issues = append(result.Issues, ValidateIssue{
 				Path: path, ID: id, Severity: "warning",
-				Rule:    "invalid_status",
+				Rule:    RuleInvalidStatus,
 				Message: fmt.Sprintf("Status %q not valid for type %q", status, noteType),
 				Field:   "status", Value: status,
 			})
