@@ -35,7 +35,7 @@ install_tool "task" "github.com/go-task/task/v3/cmd/task@latest"
 install_tool "goimports" "golang.org/x/tools/cmd/goimports@latest"
 install_tool "govulncheck" "golang.org/x/vuln/cmd/govulncheck@latest"
 install_tool "gotestsum" "gotest.tools/gotestsum@latest"
-install_tool "golangci-lint" "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.3.0"
+install_tool "golangci-lint" "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2"
 install_tool "go-mod-outdated" "github.com/psampaz/go-mod-outdated@latest"
 
 # Optional: lefthook (may fail due to network/version issues, not critical)
