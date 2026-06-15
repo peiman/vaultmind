@@ -9,10 +9,10 @@ require (
 	github.com/go-git/go-git/v5 v5.19.1
 	github.com/gowebpki/jcs v1.0.1
 	github.com/hdevalence/ed25519consensus v0.2.0
-	github.com/knights-analytics/hugot v0.7.0
+	github.com/knights-analytics/hugot v0.7.5
 	github.com/mattn/go-isatty v0.0.22
 	github.com/nlpodyssey/gopickle v0.3.0
-	github.com/peiman/ckeletin-go v0.10.0
+	github.com/peiman/ckeletin-go v0.11.0
 	github.com/pressly/goose/v3 v3.27.1
 	github.com/rs/zerolog v1.35.1
 	github.com/sebdah/goldie/v2 v2.8.0
@@ -21,11 +21,12 @@ require (
 	github.com/spf13/pflag v1.0.10
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
-	golang.org/x/sync v0.20.0
-	golang.org/x/text v0.37.0
+	golang.org/x/sync v0.21.0
+	golang.org/x/sys v0.45.0
+	golang.org/x/text v0.38.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
-	modernc.org/sqlite v1.51.0
+	modernc.org/sqlite v1.52.0
 )
 
 require (
@@ -93,14 +94,13 @@ require (
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
-	github.com/yalue/onnxruntime_go v1.30.1 // indirect
+	github.com/yalue/onnxruntime_go v1.31.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.52.0 // indirect
-	golang.org/x/exp v0.0.0-20260508232706-74f9aab9d74a // indirect
+	golang.org/x/exp v0.0.0-20260603202125-055de637280b // indirect
 	golang.org/x/image v0.41.0 // indirect
 	golang.org/x/net v0.55.0 // indirect
-	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/term v0.43.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
