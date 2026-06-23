@@ -280,6 +280,7 @@ func TestEmbedNotes_EmptyBodySkippedNotFatal(t *testing.T) {
 	require.NoError(t, err, "a NULL/empty body must not hard-error the embed pass (#41)")
 	assert.Equal(t, 2, r.Embedded, "the two real notes embed; the empty-body note is skipped")
 	assert.Equal(t, 0, r.Errors, "skipping an empty body is not an error")
+	assert.Equal(t, 1, r.Skipped, "the empty-body note is counted as skipped, not silently dropped")
 }
 
 // After EmbedNotes runs, HasEmbeddings must report true — this is the

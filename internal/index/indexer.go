@@ -666,7 +666,10 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 		// whole pass (vaultmind#41). One placeholder file must not block embedding
 		// the rest of the vault. (NULL is coalesced to "" by the query above.)
 		if strings.TrimSpace(nt.body) == "" {
+			// Count it (not just log) so the skip is auditable in the result —
+			// consistent with surfacing dropped notes (#40), never a silent omission.
 			log.Warn().Str("id", nt.id).Msg("skipping note with empty body — nothing to embed")
+			result.Skipped++
 			continue
 		}
 		pending = append(pending, nt)
