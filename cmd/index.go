@@ -188,6 +188,21 @@ func formatIndexResult(r index.IndexAndEmbedResult, model string, w io.Writer) e
 			return err
 		}
 	}
+	// Surface files that were skipped (read/parse errors) with their cause — a
+	// note dropped from the index must never vanish silently (vaultmind#40: an
+	// unquoted colon in a YAML title made the frontmatter unparseable and the
+	// note disappeared with no visible message; the non-full output didn't even
+	// show the error count). Name the count AND each file's reason here.
+	if r.Index.Errors > 0 {
+		if _, err := fmt.Fprintf(w, "⚠ %d file(s) skipped — not indexed:\n", r.Index.Errors); err != nil {
+			return err
+		}
+		for _, e := range r.Index.ErrorDetails {
+			if _, err := fmt.Fprintf(w, "  - %s (%s): %s\n", e.Path, e.Kind, e.Error); err != nil {
+				return err
+			}
+		}
+	}
 	if r.Embed != nil {
 		// Name the model in the human-readable output. Pure-Go fallback
 		// silently producing minilm-only embeddings was the surprise the
