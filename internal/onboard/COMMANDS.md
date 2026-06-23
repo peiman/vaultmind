@@ -50,6 +50,7 @@ Generated from the command tree — do not edit by hand (run `task generate:docs
 |---------|------|-------------|
 | `vaultmind arc` | Surface arc-distillation candidates from episodes (propose-only) | you want to surface arc-distillation candidate moments from episodes (propose-only). |
 | `vaultmind arc candidates` | Surface candidate transformation moments for arc distillation | you finished a session and want candidate transformation moments to review for arcs. |
+| `vaultmind arc guide` | Print the arc-writing discipline — how to find and write your own arcs | you want to learn how to find and write your own arcs — the shapes, the bar, and the self-check. |
 | `vaultmind episode` | Capture Claude Code sessions as episodic-memory artifacts | you want to capture Claude Code sessions as episodic-memory artifacts. |
 | `vaultmind episode capture` | Convert session transcripts into episode notes | you have a session transcript (or a directory of them) to convert into episode notes. |
 | `vaultmind hooks` | Manage VaultMind's Claude Code hook scripts | you need to install, remove, or check VaultMind's Claude Code hook scripts. |
