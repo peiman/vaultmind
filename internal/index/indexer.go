@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/peiman/vaultmind/internal/embedding"
@@ -630,10 +631,10 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 	var skipQuery, pendingQuery string
 	if isFull {
 		// BGE-M3: need notes where any of the 3 embeddings are missing
-		pendingQuery = "SELECT id, body_text FROM notes WHERE embedding IS NULL OR sparse_embedding IS NULL OR colbert_embedding IS NULL"
+		pendingQuery = "SELECT id, COALESCE(body_text, '') FROM notes WHERE embedding IS NULL OR sparse_embedding IS NULL OR colbert_embedding IS NULL"
 		skipQuery = "SELECT COUNT(*) FROM notes WHERE embedding IS NOT NULL AND sparse_embedding IS NOT NULL AND colbert_embedding IS NOT NULL"
 	} else {
-		pendingQuery = "SELECT id, body_text FROM notes WHERE embedding IS NULL"
+		pendingQuery = "SELECT id, COALESCE(body_text, '') FROM notes WHERE embedding IS NULL"
 		skipQuery = "SELECT COUNT(*) FROM notes WHERE embedding IS NOT NULL"
 	}
 
@@ -659,6 +660,14 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 		if err := rows.Scan(&nt.id, &nt.body); err != nil {
 			_ = rows.Close()
 			return nil, fmt.Errorf("scanning unembedded note: %w", err)
+		}
+		// An empty-body note has nothing to embed. Skip it with a warning rather
+		// than feed "" to the embedder — a NULL body_text used to hard-error the
+		// whole pass (vaultmind#41). One placeholder file must not block embedding
+		// the rest of the vault. (NULL is coalesced to "" by the query above.)
+		if strings.TrimSpace(nt.body) == "" {
+			log.Warn().Str("id", nt.id).Msg("skipping note with empty body — nothing to embed")
+			continue
 		}
 		pending = append(pending, nt)
 	}
