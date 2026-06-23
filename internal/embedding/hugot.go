@@ -3,6 +3,7 @@ package embedding
 import (
 	"context"
 	"fmt"
+	"unicode/utf8"
 
 	"github.com/knights-analytics/hugot"
 	"github.com/knights-analytics/hugot/pipelines"
@@ -44,16 +45,31 @@ func TruncateForEmbedding(text string, maxTokens int) string {
 	if maxTokens <= 0 {
 		return ""
 	}
-	maxChars := maxTokens * approxCharsPerToken
+	return truncateToChars(text, maxTokens*approxCharsPerToken)
+}
+
+// truncateToChars cuts text to at most maxChars bytes, breaking at a word
+// boundary when one is within ~40 bytes of the cut. Shared by the char-estimate
+// pre-truncation (TruncateForEmbedding) and the token-accurate shrink loop
+// (BGEM3Embedder.preprocessWithinTokenLimit, #39).
+func truncateToChars(text string, maxChars int) string {
+	if maxChars <= 0 {
+		return ""
+	}
 	if len(text) <= maxChars {
 		return text
 	}
 	cut := text[:maxChars]
-	// Find last space for clean word break
 	for i := len(cut) - 1; i > maxChars-40 && i > 0; i-- {
 		if cut[i] == ' ' {
 			return cut[:i]
 		}
+	}
+	// No nearby space: back off any partial trailing rune so we never emit
+	// invalid UTF-8. The #39 content class is dense / non-English (e.g. CJK),
+	// where a byte-boundary cut would split a multi-byte rune.
+	for len(cut) > 0 && !utf8.ValidString(cut) {
+		cut = cut[:len(cut)-1]
 	}
 	return cut
 }
