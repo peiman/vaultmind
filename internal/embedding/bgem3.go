@@ -27,6 +27,10 @@ type BGEM3Embedder struct {
 	colbertB  []float32   // [1024] bias
 	dims      int
 	maxTokens int
+	// preprocess tokenizes texts into a batch. In production it is
+	// pipeline.Preprocess; tests substitute a fake so the token-fitting path
+	// (#39) is exercisable without loading the 2.2GB model.
+	preprocess func(*backends.PipelineBatch, []string) error
 }
 
 // NewBGEM3Embedder creates a BGE-M3 embedder with all three heads.
@@ -72,14 +76,15 @@ func NewBGEM3Embedder(cfg HugotConfig) (*BGEM3Embedder, error) {
 	}
 
 	return &BGEM3Embedder{
-		session:   session,
-		pipeline:  pipeline,
-		sparseW:   sparseW[0], // [1][1024] -> [1024]
-		sparseB:   sBias,
-		colbertW:  colbertW,
-		colbertB:  colbertB,
-		dims:      cfg.Dims,
-		maxTokens: cfg.MaxTokens,
+		session:    session,
+		pipeline:   pipeline,
+		sparseW:    sparseW[0], // [1][1024] -> [1024]
+		sparseB:    sBias,
+		colbertW:   colbertW,
+		colbertB:   colbertB,
+		dims:       cfg.Dims,
+		maxTokens:  cfg.MaxTokens,
+		preprocess: pipeline.Preprocess,
 	}, nil
 }
 
@@ -131,23 +136,15 @@ func (e *BGEM3Embedder) EmbedFull(ctx context.Context, text string) (*BGEM3Outpu
 // EmbedFullBatch produces all three embedding types for multiple texts.
 // Bypasses hugot's Postprocess to access raw per-token hidden states.
 func (e *BGEM3Embedder) EmbedFullBatch(_ context.Context, texts []string) ([]*BGEM3Output, error) {
-	// Truncate texts to model's token limit
-	if e.maxTokens > 0 {
-		truncated := make([]string, len(texts))
-		for i, t := range texts {
-			truncated[i] = TruncateForEmbedding(t, e.maxTokens)
-		}
-		texts = truncated
+	// Tokenize into a batch, GUARANTEEING no input exceeds the model's token limit
+	// before the (hang-prone) ONNX forward pass — see preprocessWithinTokenLimit
+	// (#39). Skip Postprocess (mean-pool) so the heads see raw per-token states.
+	batch, err := e.preprocessWithinTokenLimit(texts)
+	if err != nil {
+		return nil, err
 	}
-
-	// Use hugot's Preprocess (tokenize) + Forward (ONNX inference)
-	// but skip Postprocess (which mean-pools the per-token output).
-	batch := backends.NewBatch(len(texts))
 	defer func() { _ = batch.Destroy() }()
 
-	if err := e.pipeline.Preprocess(batch, texts); err != nil {
-		return nil, fmt.Errorf("preprocessing: %w", err)
-	}
 	if err := e.pipeline.Forward(batch); err != nil {
 		return nil, fmt.Errorf("forward pass: %w", err)
 	}
@@ -173,6 +170,101 @@ func (e *BGEM3Embedder) EmbedFullBatch(_ context.Context, texts []string) ([]*BG
 	}
 
 	return outputs, nil
+}
+
+// preprocessWithinTokenLimit tokenizes texts into a batch, guaranteeing no input
+// exceeds maxTokens before the (hang-prone) ONNX forward pass. hugot's Rust
+// tokenizer does NOT truncate to the model limit (only the pure-Go one sets
+// MaxLen), so a note above max_position_embeddings would otherwise reach ORT as
+// an oversized tensor and hang — vaultmind#39. A character estimate
+// (TruncateForEmbedding) cannot guarantee the cap for dense content (code /
+// markdown / non-English tokenize below the assumed chars/token), so we measure
+// the ACTUAL token count from a cheap tokenization pass and shrink any over-limit
+// text by its observed chars/token ratio, looping until every input fits. A
+// halving fallback guarantees termination. The common case (already within limit)
+// is a single Preprocess — no added cost.
+func (e *BGEM3Embedder) preprocessWithinTokenLimit(texts []string) (*backends.PipelineBatch, error) {
+	fitted, err := fitTextsWithinTokenLimit(texts, e.maxTokens, e.tokenCounts)
+	if err != nil {
+		return nil, err
+	}
+	batch := backends.NewBatch(len(fitted))
+	if err := e.preprocess(batch, fitted); err != nil {
+		_ = batch.Destroy()
+		return nil, fmt.Errorf("preprocessing: %w", err)
+	}
+	return batch, nil
+}
+
+// tokenCounts tokenizes texts and returns each one's token count (via a throwaway
+// batch). This is the model-bound step fitTextsWithinTokenLimit calls; injecting
+// e.preprocess lets tests substitute a fake so the fit path needs no model.
+func (e *BGEM3Embedder) tokenCounts(texts []string) ([]int, error) {
+	batch := backends.NewBatch(len(texts))
+	defer func() { _ = batch.Destroy() }()
+	if err := e.preprocess(batch, texts); err != nil {
+		return nil, fmt.Errorf("preprocessing: %w", err)
+	}
+	counts := make([]int, len(texts))
+	for i := range texts {
+		counts[i] = len(batch.Input[i].TokenIDs)
+	}
+	return counts, nil
+}
+
+// fitTextsWithinTokenLimit shrinks each text until its tokenized length (per
+// countTokens) is <= maxTokens, looping with shrinkTowardTokenBudget's halving
+// fallback so it always terminates. countTokens is injected, so the loop is
+// model-free unit-testable. Returns the within-limit texts, or an error if it
+// cannot converge within hardCap (a pathological maxTokens below the tokenizer's
+// special-token floor).
+func fitTextsWithinTokenLimit(texts []string, maxTokens int, countTokens func([]string) ([]int, error)) ([]string, error) {
+	work := make([]string, len(texts))
+	for i, t := range texts {
+		work[i] = t
+		if maxTokens > 0 {
+			work[i] = TruncateForEmbedding(t, maxTokens) // cheap first cut by char estimate
+		}
+	}
+	if maxTokens <= 0 {
+		return work, nil
+	}
+	const hardCap = 16 // halving 16x reduces any input to ~0 — convergence guaranteed well before
+	for iter := 0; ; iter++ {
+		counts, err := countTokens(work)
+		if err != nil {
+			return nil, err
+		}
+		over := false
+		for i := range work {
+			if counts[i] <= maxTokens {
+				continue
+			}
+			over = true
+			work[i] = shrinkTowardTokenBudget(work[i], counts[i], maxTokens, iter)
+		}
+		if !over {
+			return work, nil
+		}
+		if iter >= hardCap {
+			return nil, fmt.Errorf("could not fit input within %d tokens after %d attempts", maxTokens, hardCap)
+		}
+	}
+}
+
+// shrinkTowardTokenBudget shortens text toward maxTokens. Early iterations shrink
+// proportionally using the MEASURED chars/token ratio (with a 10% margin) so it
+// converges in one or two passes for real content; as a guaranteed-converging
+// fallback it halves, so the loop always terminates even on pathological input.
+func shrinkTowardTokenBudget(text string, tokenCount, maxTokens, iter int) string {
+	if iter < 4 && tokenCount > 0 {
+		ratio := float64(len(text)) / float64(tokenCount) // measured chars per token
+		target := int(float64(maxTokens) * ratio * 0.9)   // 10% margin under the limit
+		if target > 0 && target < len(text) {
+			return truncateToChars(text, target)
+		}
+	}
+	return truncateToChars(text, len(text)/2) // monotone shrink → guaranteed convergence
 }
 
 // EmbedSparse produces only the sparse embedding (used by SparseRetriever).
