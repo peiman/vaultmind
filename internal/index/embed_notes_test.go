@@ -259,6 +259,30 @@ func TestRunEmbed_LazyLoad_SkipsModelWhenNoPendingWork(t *testing.T) {
 	assert.Equal(t, 3, r2.Skipped, "all 3 already-embedded notes counted as skipped")
 }
 
+// A NULL (or empty) body_text — the empty-placeholder-file case — must NOT
+// hard-error the whole embed pass (vaultmind#41). The note is skipped with a
+// warning; the rest of the vault still embeds.
+func TestEmbedNotes_EmptyBodySkippedNotFatal(t *testing.T) {
+	vaultRoot, dbPath := buildEmbedTestVault(t) // alpha, beta, gamma — all with bodies
+	cfg, err := vault.LoadConfig(vaultRoot)
+	require.NoError(t, err)
+	idxr := index.NewIndexer(vaultRoot, dbPath, cfg)
+
+	// Force one note to have a NULL body_text — historically this crashed the
+	// pass on the string scan ("converting NULL to string is unsupported").
+	db, err := index.Open(dbPath)
+	require.NoError(t, err)
+	_, err = db.Exec("UPDATE notes SET body_text = NULL WHERE id = 'concept-alpha'")
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	r, err := idxr.EmbedNotes(context.Background(), dbPath, fakeDenseEmbedder{dims: 8})
+	require.NoError(t, err, "a NULL/empty body must not hard-error the embed pass (#41)")
+	assert.Equal(t, 2, r.Embedded, "the two real notes embed; the empty-body note is skipped")
+	assert.Equal(t, 0, r.Errors, "skipping an empty body is not an error")
+	assert.Equal(t, 1, r.Skipped, "the empty-body note is counted as skipped, not silently dropped")
+}
+
 // After EmbedNotes runs, HasEmbeddings must report true — this is the
 // signal BuildAutoRetrieverFull reads to decide whether to wire the hybrid
 // retriever or fall back to keyword.

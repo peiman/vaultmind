@@ -310,6 +310,53 @@ func TestLintFixLinks_FixRewritesIncompatibleLinksOnDisk(t *testing.T) {
 	}
 }
 
+// vaultmind#40: a note dropped from the index (read/parse error) must be
+// surfaced in the human output — not vanish silently (an unquoted colon in a
+// YAML title made the note unparseable and it disappeared with no message).
+// Both the count and the per-file cause must appear.
+func TestFormatIndexResult_SurfacesSkippedFileErrors(t *testing.T) {
+	var buf bytes.Buffer
+	err := formatIndexResult(index.IndexAndEmbedResult{
+		Index: &index.IndexResult{
+			FullRebuild: false, Skipped: 5,
+			Errors: 1,
+			ErrorDetails: []index.IndexError{
+				{Path: "notes/patterns.md", Kind: "parse", Error: "yaml: mapping values are not allowed here"},
+			},
+		},
+	}, "", &buf)
+	require.NoError(t, err)
+	out := buf.String()
+	assert.Contains(t, out, "1 file(s) skipped")
+	assert.Contains(t, out, "notes/patterns.md")
+	assert.Contains(t, out, "parse")
+	assert.Contains(t, out, "mapping values are not allowed here")
+}
+
+// failAfterNWriter fails on the (ok+1)th Write — drives formatIndexResult's
+// write-error returns inside the #40 skipped-files block.
+type failAfterNWriter struct{ ok int }
+
+func (f *failAfterNWriter) Write(p []byte) (int, error) {
+	if f.ok <= 0 {
+		return 0, assert.AnError
+	}
+	f.ok--
+	return len(p), nil
+}
+
+func TestFormatIndexResult_SkippedErrorsPropagateWriteErrors(t *testing.T) {
+	res := index.IndexAndEmbedResult{
+		Index: &index.IndexResult{
+			Errors:       1,
+			ErrorDetails: []index.IndexError{{Path: "a.md", Kind: "parse", Error: "boom"}},
+		},
+	}
+	// 2nd write = the "⚠ N file(s) skipped" summary; 3rd = the per-file detail.
+	require.Error(t, formatIndexResult(res, "", &failAfterNWriter{ok: 1}))
+	require.Error(t, formatIndexResult(res, "", &failAfterNWriter{ok: 2}))
+}
+
 // formatIndexResult: full rebuild emits "Indexed N notes (...)"; incremental
 // emits the skipped/updated/added/deleted breakdown. Regression: swapping
 // the two paths would confuse the user about whether everything was rebuilt.
