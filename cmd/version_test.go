@@ -100,4 +100,8 @@ func TestVersionCommandOutput(t *testing.T) {
 	assert.Contains(t, out, "version v9.9.9")
 	assert.Contains(t, out, "commit abc1234")
 	assert.Contains(t, out, "built at 2026-01-01_00:00:00")
+	// The embedding backend must be named so an adopter can confirm which binary
+	// is on PATH without running an embed pass (Siavoush field report). Value is
+	// build-tag dependent (go-cpu / ort+cpu / ort+coreml) so assert the label.
+	assert.Contains(t, out, "backend: ")
 }

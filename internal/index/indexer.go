@@ -126,7 +126,7 @@ func (idx *Indexer) RunEmbed(ctx context.Context, dbPath, model string) (*EmbedR
 	modelUsed := model
 	if embedder == nil {
 		var used string
-		embedder, used, err = loadEmbedder(model,
+		embedder, used, err = loadEmbedder(model, embedding.BackendName(),
 			func() (embedding.Embedder, error) { return embedding.NewBGEM3Embedder(embedding.BGEM3Config()) },
 			func() (embedding.Embedder, error) { return embedding.NewHugotEmbedder(embedding.DefaultHugotConfig()) },
 		)
@@ -187,15 +187,26 @@ func hasBGEM3Embeddings(dbPath string) (bool, error) {
 // logic is unit-testable with injected success/failure.
 type embedderCtor func() (embedding.Embedder, error)
 
-// loadEmbedder builds the embedder for the requested model with a runtime
-// fallback: when bge-m3 is requested but its backend cannot be loaded (e.g. the
-// ORT runtime or the BGE-M3 model files are unavailable), it falls back to
-// minilm with a loud warning, so an embed pass degrades to a working dense-only
-// state instead of hard-failing. This is the runtime half of "bge-m3 first,
-// minilm as fallback" (the build-tag DefaultModel picks bge-m3 on ORT builds;
-// this catches the case where that choice can't actually run). Returns the
-// embedder and the model ACTUALLY used so the caller stamps/calibrates reality.
-func loadEmbedder(model string, newBGE, newMini embedderCtor) (embedding.Embedder, string, error) {
+// errORTBGEUnavailable formats the broken-install error for an ORT-built binary
+// whose bge-m3 embedder failed to load — naming the likely cause (libonnxruntime
+// not found next to the binary) and the remedy, so the failure is actionable
+// rather than a silent MiniLM degrade. See loadEmbedder.
+func errORTBGEUnavailable(cause error) error {
+	return fmt.Errorf("bge-m3 embedder unavailable on an ORT-built binary "+
+		"(broken install, not an expected fallback): %w; confirm libonnxruntime sits next to "+
+		"the vaultmind binary (or set ORT_LIB_DIR), then retry — or rebuild as minilm with "+
+		"'vaultmind index --embed --model minilm --full'", cause)
+}
+
+// loadEmbedder builds the embedder for the requested model, handling a bge-m3
+// load failure differently per backend. On a pure-Go binary it falls back to
+// minilm with a loud warning (minilm is the only option there), so an embed
+// pass degrades to a working dense-only state instead of hard-failing. On an
+// ORT-built binary a bge-m3 failure is a broken install rather than a capability
+// gap, so it returns a hard error naming the remedy — never a silent MiniLM
+// index. Returns the embedder and the model ACTUALLY used so the caller
+// stamps/calibrates reality.
+func loadEmbedder(model, backend string, newBGE, newMini embedderCtor) (embedding.Embedder, string, error) {
 	if model != "bge-m3" {
 		e, err := newMini()
 		if err != nil {
@@ -206,6 +217,16 @@ func loadEmbedder(model string, newBGE, newMini embedderCtor) (embedding.Embedde
 	bge, err := newBGE()
 	if err == nil {
 		return bge, "bge-m3", nil
+	}
+	// On an ORT-built binary, bge-m3 is the whole reason that build exists — a
+	// load failure means a broken install (e.g. libonnxruntime not found next to
+	// the binary, the symlink-on-PATH case), NOT an expected capability gap.
+	// Silently writing a MiniLM index there reports success while degrading
+	// retrieval invisibly. Fail loud with the remedy instead; the graceful
+	// minilm fallback below is for pure-Go binaries, where minilm is the only
+	// option (Siavoush field report, 2026-06-19).
+	if backend == embedding.BackendNameORT {
+		return nil, "", errORTBGEUnavailable(err)
 	}
 	log.Warn().Err(err).Msg("bge-m3 embedder unavailable at runtime; falling back to minilm (run 'task setup:ort' to enable bge-m3)")
 	fallback, ferr := newMini()

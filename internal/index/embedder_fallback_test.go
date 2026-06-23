@@ -34,34 +34,53 @@ func failCtor(msg string) embedderCtor {
 	return func() (embedding.Embedder, error) { return nil, errors.New(msg) }
 }
 
-// The headline behavior: bge-m3 requested but unavailable at runtime → use
-// minilm, and report minilm as the model actually used (so the caller stamps
-// and calibrates against reality, not the request).
-func TestLoadEmbedder_FallsBackToMinilmWhenBGEUnavailable(t *testing.T) {
-	e, used, err := loadEmbedder("bge-m3", failCtor("ort runtime unavailable"), okCtor(384))
+// The headline behavior on a PURE-GO binary: bge-m3 requested but unavailable
+// at runtime → use minilm (the only option there), and report minilm as the
+// model actually used (so the caller stamps and calibrates against reality, not
+// the request).
+func TestLoadEmbedder_PureGoFallsBackToMinilmWhenBGEUnavailable(t *testing.T) {
+	e, used, err := loadEmbedder("bge-m3", embedding.BackendNameGo, failCtor("ort runtime unavailable"), okCtor(384))
 	require.NoError(t, err)
 	require.NotNil(t, e)
 	assert.Equal(t, "minilm", used, "fallback must report the model actually used")
 }
 
+// On an ORT-built binary, a bge-m3 load failure is a BROKEN INSTALL (e.g.
+// libonnxruntime not found next to the binary), not an expected capability gap.
+// Silently writing a MiniLM index there masks the breakage. Fail loud instead —
+// and never construct the minilm fallback (Siavoush field report, 2026-06-19).
+func TestLoadEmbedder_ORTBinaryBGEFailure_HardErrors(t *testing.T) {
+	miniCalled := false
+	miniSpy := func() (embedding.Embedder, error) {
+		miniCalled = true
+		return &fakeEmbedder{dims: 384}, nil
+	}
+	e, used, err := loadEmbedder("bge-m3", embedding.BackendNameORT, failCtor("libonnxruntime not found"), miniSpy)
+	require.Error(t, err)
+	assert.Nil(t, e)
+	assert.Empty(t, used)
+	assert.False(t, miniCalled, "ORT binary must NOT silently fall back to minilm")
+	assert.Contains(t, err.Error(), "ORT", "error must name the broken-install cause")
+}
+
 func TestLoadEmbedder_UsesBGEWhenAvailable(t *testing.T) {
-	e, used, err := loadEmbedder("bge-m3", okCtor(1024), failCtor("minilm should not be called"))
+	e, used, err := loadEmbedder("bge-m3", embedding.BackendNameORT, okCtor(1024), failCtor("minilm should not be called"))
 	require.NoError(t, err)
 	require.NotNil(t, e)
 	assert.Equal(t, "bge-m3", used)
 }
 
 func TestLoadEmbedder_NonBGERequestUsesThatModelDirectly(t *testing.T) {
-	e, used, err := loadEmbedder("minilm", failCtor("bge should not be called"), okCtor(384))
+	e, used, err := loadEmbedder("minilm", embedding.BackendNameGo, failCtor("bge should not be called"), okCtor(384))
 	require.NoError(t, err)
 	require.NotNil(t, e)
 	assert.Equal(t, "minilm", used)
 }
 
-// If even the fallback fails, surface a clear combined error (no silent
-// success, no nil embedder).
-func TestLoadEmbedder_BothFail_ReturnsCombinedError(t *testing.T) {
-	e, used, err := loadEmbedder("bge-m3", failCtor("bge boom"), failCtor("minilm boom"))
+// If even the fallback fails on a pure-Go binary, surface a clear combined
+// error (no silent success, no nil embedder).
+func TestLoadEmbedder_PureGoBothFail_ReturnsCombinedError(t *testing.T) {
+	e, used, err := loadEmbedder("bge-m3", embedding.BackendNameGo, failCtor("bge boom"), failCtor("minilm boom"))
 	require.Error(t, err)
 	assert.Nil(t, e)
 	assert.Empty(t, used)
