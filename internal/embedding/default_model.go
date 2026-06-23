@@ -1,5 +1,14 @@
 package embedding
 
+// Backend names reported by BackendName(), which is defined per build tag in
+// session_ort.go (ORT) and session_go.go (pure-Go). Declared here in a
+// non-tagged file so callers in either build can compare against them without
+// duplicating the literals (SSOT).
+const (
+	BackendNameORT = "ort"
+	BackendNameGo  = "go"
+)
+
 // DefaultModel returns the embedding model to use when the operator
 // hasn't picked one explicitly. Adapts to the backend the binary was
 // built against:
@@ -23,7 +32,7 @@ package embedding
 // post-hoc warning. The runtime-aware default closes that gap by
 // matching the model to what the binary can actually run well.
 func DefaultModel() string {
-	if BackendName() == "ort" {
+	if BackendName() == BackendNameORT {
 		return "bge-m3"
 	}
 	return "minilm"

@@ -16,7 +16,7 @@ func newBGEM3Session() (*hugot.Session, error) {
 // Consumers (e.g. the index command) use this to warn when BGE-M3 indexing
 // is about to run on the slow pure-Go path so operators don't mistake
 // "hours-long indexing" for a hang or OOM. Reported by the build tag.
-func BackendName() string { return "go" }
+func BackendName() string { return BackendNameGo }
 
 // Acceleration mirrors the ORT-build's Acceleration() so callers don't
 // need to special-case build tags. Pure-Go has no GPU path; "go-cpu"
