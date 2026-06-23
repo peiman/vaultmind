@@ -5,9 +5,10 @@ package distill
 // told by hand — the manual hunt (the shapes the candidate detector can't catch),
 // the bar, the non-negotiables, the diff test, and the self-check.
 //
-// Intended as the SSOT for that discipline: today `vaultmind init` seeds a
-// SEPARATE embedded how-to-write-arcs template, so the two surfaces currently
-// drift. A later slice reconciles init's template to this const so they don't.
+// `vaultmind init` seeds the fuller how-to-write-arcs *principle* into a new
+// vault (the same discipline at length, retrievable by recall); this const is the
+// distilled, no-vault version the command prints. The two are kept consistent —
+// the principle's hunt taxonomy, bar, and diff test mirror this text.
 const ArcGuide = `VaultMind — How to Find and Write Your Own Arcs
 
 An arc is a durable record of how your thinking, values, or working style SHIFTED —
