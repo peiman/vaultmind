@@ -10,7 +10,8 @@
 //
 //   - slice 1 (internal/identity): identity.Canonicalize (RFC 8785 JCS) for the
 //     canonical signed bytes; identity.SignCanonical / VerifyCanonical for the
-//     low-level ed25519 (small-order-rejecting, ZIP-215) primitives.
+//     low-level ed25519 (small-order-rejecting, cofactorless strict verify)
+//     primitives.
 //   - slice 2 (internal/identity/signer): the KEYLESS UDS custody signer — the
 //     CLI signs via the signer process over its 0600 socket and NEVER opens the
 //     private-key file. SignEnrollment takes a SignerClient seam, not a key.
@@ -64,8 +65,8 @@
 //  1. CanonicalizeEnrollment(fields) — re-run EVERY pre-sign gate over the
 //     received fields and rebuild the canonical signed bytes. A gate failure is a
 //     typed reject.
-//  2. Decode the pubkey field to the ed25519 verification key, then ZIP-215
-//     strict-verify sig over the canonical bytes under THAT key.
+//  2. Decode the pubkey field to the ed25519 verification key, then
+//     cofactorless-strict-verify sig over the canonical bytes under THAT key.
 //
 // There is NO registry lookup — the request is self-contained.
 //

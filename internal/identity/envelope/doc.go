@@ -8,7 +8,8 @@
 //   - slice 1 (internal/identity): identity.Canonicalize (RFC 8785 JCS) for the
 //     canonical signed bytes; identity.ValidateSchema for the shared
 //     integer-range / UTF-8 / NFC gate; identity.SignCanonical / VerifyCanonical
-//     for the low-level ed25519 (small-order-rejecting, ZIP-215) primitives.
+//     for the low-level ed25519 (small-order-rejecting, cofactorless strict
+//     verify) primitives.
 //   - slice 2 (internal/identity/signer): the KEYLESS UDS custody signer — the
 //     CLI signs via the signer process over its 0600 socket and NEVER opens the
 //     private-key file. SignEnvelope takes a SignerClient seam, not a key.
@@ -58,8 +59,9 @@
 //     rebuild the canonical signed bytes. A gate failure is a typed reject.
 //  2. registry.VerifyMessage(reg, from_agent, key_epoch, canonical, sig, now) —
 //     resolve the live binding for (from_agent, key_epoch), default-deny a
-//     revoked/expired/not-yet-valid/epoch-mismatched binding, then ZIP-215 verify
-//     sig over the canonical bytes under the binding's validated pubkey.
+//     revoked/expired/not-yet-valid/epoch-mismatched binding, then
+//     cofactorless-strict-verify sig over the canonical bytes under the
+//     binding's validated pubkey.
 //
 // # Boundary: anti-replay is the DAEMON's job, NOT here
 //

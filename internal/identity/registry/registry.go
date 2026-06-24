@@ -3,7 +3,7 @@
 // plus the consumer resolve/verify surface.
 //
 // It builds STRICTLY on the slice-1 primitives (identity.Canonicalize for JCS,
-// identity.VerifyCanonical for the small-order-rejecting ZIP-215 verify, and
+// identity.VerifyCanonical for the small-order-rejecting cofactorless strict verify, and
 // identity.ValidateSchema via the SignedEntry gate) and does not reimplement
 // canonicalization or verification.
 //

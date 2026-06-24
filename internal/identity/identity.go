@@ -18,22 +18,27 @@
 // registry/replay path verifying a frozen vector). Do not use them on untrusted
 // raw JSON — prefer SignEntry/VerifyEntry there.
 //
-// Verification hardens the all-zero / small-subgroup pubkey-forgery hole that
-// stdlib crypto/ed25519.Verify leaves open, in two layers:
+// Verification is COFACTORLESS strict verification, matching the Rust verifier
+// on the other side of this trust root (ed25519-dalek verify_strict). The two
+// verifiers MUST reach the same verdict on identical trust-root bytes; any
+// divergence is a forgeable seam. ZIP-215 (cofactored) deliberately ACCEPTS
+// small-order / mixed-order R components for blockchain-consensus determinism,
+// whereas verify_strict REJECTS them — so verify_strict is the ruleset that
+// keeps Go and Rust in lockstep. The strict check rejects, as STRUCTURAL
+// failures:
 //
-//  1. An explicit small-order public-key reject. The forgery {A=0, R=0, S=0}
-//     satisfies [S]B = R + [k]A for EVERY message, so any small-order pubkey
-//     is a universal-forgery vector. We decode the pubkey and reject it when
-//     [8]A is the identity (i.e. A is in the 8-torsion). NOTE: ZIP-215 by
-//     itself does NOT reject small-order points — it standardizes their
-//     acceptance for consensus determinism — so this explicit guard, not the
-//     verify ruleset, is what actually closes the hole.
-//  2. ZIP-215 strict verification (ed25519consensus) for the signature check,
-//     which deterministically rejects non-canonical SIGNATURE point/scalar
-//     encodings.
+//  1. A small-order (or undecodable) public key A. The forgery {A=0, R=0, S=0}
+//     satisfies [S]B = R + [k]A for EVERY message, so any small-order pubkey is
+//     a universal-forgery vector. A point is small-order iff [8]A is the
+//     identity (8 is the edwards25519 cofactor).
+//  2. A small-order (or undecodable) signature R component. ZIP-215 would
+//     accept these; verify_strict (and so this code) rejects them.
+//  3. A non-canonical S scalar (S >= L, the group order).
 //
-// Signing stays on stdlib crypto/ed25519 (ZIP-215 is a verify-only ruleset and
-// accepts all honest RFC-8032 signatures, so the frozen vector still verifies).
+// The signature is then confirmed cofactorlessly via [S]B - [k]A == R.
+//
+// Signing stays on stdlib crypto/ed25519 (it emits canonical RFC-8032
+// signatures, so the frozen vector still verifies under strict verification).
 //
 // TODO(contract-b registry slice): introduce a SignedEntry domain type bundling
 // {entry, pubkey, sig} and a validating PublicKey constructor; both are deferred
@@ -42,11 +47,12 @@ package identity
 
 import (
 	"crypto/ed25519"
+	"crypto/sha512"
+	"crypto/subtle"
 	"fmt"
 
 	"filippo.io/edwards25519"
 	"github.com/gowebpki/jcs"
-	"github.com/hdevalence/ed25519consensus"
 )
 
 // CanonicalBytes is the RFC 8785 (JCS) canonical encoding of a JSON document —
@@ -87,6 +93,12 @@ const errCanonicalize = "identity: canonicalize"
 // instead of letting crypto/ed25519.Sign panic.
 const errBadPrivKeyLen = "identity: sign: private key must be ed25519.PrivateKeySize bytes"
 
+// errVerifyHRAM wraps the (provably unreachable) failure to reduce the 64-byte
+// SHA-512 challenge digest to a scalar. SetUniformBytes only errors on a
+// wrong-length input, which cannot occur for a fixed 64-byte digest; we fail
+// closed with this error rather than silently treating it as a non-match.
+const errVerifyHRAM = "identity: verify: reduce challenge scalar"
+
 // Structural verification-reject messages (SSOT). VerifyCanonical returns these
 // as a non-nil error so an operator can distinguish a malformed-input /
 // forgery-key rejection from an honest signature non-match (which is (false,
@@ -101,6 +113,19 @@ const (
 	// ErrVerifySmallOrderPubKey is returned for a small-order (universal-forgery)
 	// or otherwise undecodable public key.
 	ErrVerifySmallOrderPubKey = "identity: verify: public key is small-order or undecodable"
+	// ErrVerifySmallOrderR is returned for a signature whose R component is
+	// small-order or undecodable. ZIP-215 would accept these; cofactorless
+	// strict verification (matching dalek verify_strict) rejects them.
+	ErrVerifySmallOrderR = "identity: verify: signature R is small-order or undecodable"
+	// ErrVerifyNonCanonicalR is returned for a signature whose R component is a
+	// non-canonical point encoding (y >= p). filippo SetBytes silently reduces it
+	// mod p, but dalek verify_strict compares the COMPRESSED bytes of the
+	// recomputed R against sig[:32] — so a non-canonical R it rejects must be
+	// rejected here too, or Go would accept what Rust rejects (a forgeable seam).
+	ErrVerifyNonCanonicalR = "identity: verify: signature R is a non-canonical encoding (y >= p)"
+	// ErrVerifyNonCanonicalS is returned for a signature whose S scalar is
+	// non-canonical (S >= L, the group order).
+	ErrVerifyNonCanonicalS = "identity: verify: signature S is non-canonical (>= L)"
 )
 
 // Canonicalize returns the RFC 8785 (JCS) canonical form of the supplied
@@ -132,14 +157,18 @@ func SignCanonical(priv ed25519.PrivateKey, canonical CanonicalBytes) ([]byte, e
 }
 
 // VerifyCanonical reports whether sig is a valid ed25519 signature by pub over
-// the already-canonical bytes, using ZIP-215 strict verification. It BYPASSES
-// the Contract-B schema gate (registry/replay use only) — prefer VerifyEntry
-// for raw JSON.
+// the already-canonical bytes, using COFACTORLESS strict verification that
+// matches the Rust trust-root verifier (ed25519-dalek verify_strict). It
+// BYPASSES the Contract-B schema gate (registry/replay use only) — prefer
+// VerifyEntry for raw JSON.
 //
 // It distinguishes two kinds of failure:
 //   - STRUCTURAL rejects return (false, non-nil error): a wrong-length public
-//     key or signature, or a small-order / undecodable public key (a
-//     universal-forgery vector). These mean the input/key is malformed or
+//     key or signature; a small-order / undecodable public key A (a
+//     universal-forgery vector); a small-order / undecodable signature R (which
+//     ZIP-215 would accept but verify_strict rejects); a non-canonical R point
+//     encoding (y >= p, which dalek byte-compares and rejects); or a
+//     non-canonical S scalar (S >= L). These mean the input/key is malformed or
 //     hostile, not that an honest signature simply did not match.
 //   - An honest signature non-match returns (false, nil).
 //
@@ -151,30 +180,57 @@ func VerifyCanonical(pub ed25519.PublicKey, canonical CanonicalBytes, sig []byte
 	if len(sig) != ed25519.SignatureSize {
 		return false, fmt.Errorf("%s", ErrVerifyBadSigLen)
 	}
-	// Reject small-order (and undecodable) public keys first: a small-order key
-	// is a universal-forgery vector that ed25519consensus would otherwise
-	// accept. ZIP-215 standardizes small-order acceptance, so this explicit
-	// guard is what closes the hole.
-	if isSmallOrderPubkey(pub) {
+	// Decode and reject a small-order (or undecodable) public key A: a
+	// small-order key is a universal-forgery vector. ZIP-215 standardizes
+	// small-order acceptance, so this explicit guard is what closes the hole.
+	a, err := new(edwards25519.Point).SetBytes(pub)
+	if err != nil || isSmallOrderPoint(a) {
 		return false, fmt.Errorf("%s", ErrVerifySmallOrderPubKey)
 	}
-	// ZIP-215 (ed25519consensus) gives deterministic signature verification,
-	// rejecting non-canonical SIGNATURE point/scalar encodings. An honest
-	// non-match is reported as (false, nil).
-	return ed25519consensus.Verify(pub, canonical.b, sig), nil
+	// Decode and reject a small-order (or undecodable) R. verify_strict rejects
+	// these; ZIP-215 would accept them — this is the Go<->Rust divergence guard.
+	r, err := new(edwards25519.Point).SetBytes(sig[:32])
+	if err != nil || isSmallOrderPoint(r) {
+		return false, fmt.Errorf("%s", ErrVerifySmallOrderR)
+	}
+	// Reject a non-canonical R encoding (y >= p). SetBytes silently reduced it
+	// mod p above; dalek verify_strict instead byte-compares the recomputed R
+	// against sig[:32] and rejects, so we must reject too — else Go accepts an R
+	// encoding Rust rejects (a Go<->Rust verdict divergence on the trust root).
+	if subtle.ConstantTimeCompare(r.Bytes(), sig[:32]) != 1 {
+		return false, fmt.Errorf("%s", ErrVerifyNonCanonicalR)
+	}
+	// Decode S as a CANONICAL scalar: SetCanonicalBytes errors if S >= L.
+	s, err := edwards25519.NewScalar().SetCanonicalBytes(sig[32:])
+	if err != nil {
+		return false, fmt.Errorf("%s", ErrVerifyNonCanonicalS)
+	}
+	// Cofactorless check: R == [S]B - [k]A, with k = SHA512(R || A || M) mod L.
+	hramInput := make([]byte, 0, 32+ed25519.PublicKeySize+len(canonical.b))
+	hramInput = append(hramInput, sig[:32]...)
+	hramInput = append(hramInput, pub...)
+	hramInput = append(hramInput, canonical.b...)
+	hram := sha512.Sum512(hramInput)
+	k, err := edwards25519.NewScalar().SetUniformBytes(hram[:])
+	if err != nil {
+		// SetUniformBytes only errors on a wrong-length input, which cannot
+		// happen for a fixed 64-byte SHA-512 digest. Fail CLOSED with a non-nil
+		// error rather than (false, nil): an internal invariant breach is not an
+		// honest signature non-match.
+		return false, fmt.Errorf("%s: %w", errVerifyHRAM, err)
+	}
+	negK := edwards25519.NewScalar().Negate(k)
+	rCheck := new(edwards25519.Point).VarTimeDoubleScalarBaseMult(negK, a, s)
+	return rCheck.Equal(r) == 1, nil
 }
 
-// isSmallOrderPubkey reports whether pub decodes to a small-order point (a
-// member of the curve's 8-torsion subgroup), or fails to decode at all. Such
-// keys must never verify: with the matching all-zero signature they forge
-// acceptance for every message. A point A is small-order iff [8]A is the
-// identity (8 is the edwards25519 cofactor).
-func isSmallOrderPubkey(pub []byte) bool {
-	p, err := new(edwards25519.Point).SetBytes(pub)
-	if err != nil {
-		// An undecodable encoding is not a usable key — fail closed.
-		return true
-	}
+// isSmallOrderPoint reports whether p is a small-order point (a member of the
+// curve's 8-torsion subgroup). Such points must never appear as a verifying A or
+// R: with the matching all-zero signature they forge acceptance for every
+// message, and a small-order R is exactly what ZIP-215 accepts but verify_strict
+// rejects. A point P is small-order iff [8]P is the identity (8 is the
+// edwards25519 cofactor).
+func isSmallOrderPoint(p *edwards25519.Point) bool {
 	cofactorMultiple := new(edwards25519.Point).MultByCofactor(p)
 	return cofactorMultiple.Equal(edwards25519.NewIdentityPoint()) == 1
 }
@@ -198,7 +254,8 @@ func SignEntry(priv ed25519.PrivateKey, jsonBytes []byte) ([]byte, error) {
 
 // VerifyEntry is a VALIDATED entry point: it runs the Contract-B schema gate,
 // canonicalizes the raw JSON entry, then verifies sig against the canonical
-// bytes using ZIP-215 strict verification. It returns an error when the entry
+// bytes using cofactorless strict verification (matching dalek verify_strict).
+// It returns an error when the entry
 // violates the schema, cannot be canonicalized, or is structurally rejected by
 // VerifyCanonical (malformed key/sig, small-order pubkey); a well-formed,
 // conformant entry whose signature simply does not match returns (false, nil).
