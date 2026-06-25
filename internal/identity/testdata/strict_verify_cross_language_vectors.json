@@ -1,0 +1,45 @@
+{
+  "_comment": "Contract-B strict-verify cross-language acceptance vectors. The Go verifier (vaultmind-oss internal/identity.VerifyCanonical) and the Rust verifier (agent-chat chat-core contractb, ed25519-dalek verify_strict) MUST produce the listed verdict for each vector. 'accept' = (true,nil). 'reject' = structural reject (Go: false + non-nil error). Generated from a fixed seed; the small_order_R vector is the one ZIP-215 wrongly accepts.",
+  "vectors": [
+    {
+      "name": "valid",
+      "note": "honest RFC-8032 signature; both verifiers ACCEPT",
+      "msg_hex": "636f6e74726163742d62207365616d20646976657267656e636520766563746f72",
+      "pubkey_hex": "79b5562e8fe654f94078b112e8a98ba7901f853ae695bed7e0e3910bad049664",
+      "sig_hex": "1424a78824221a72e228026122e3e472c140a31d97a663af0f66f31af4b4bbbd8bf8249ec9f8dd8c5f1f666ca9a45e01e0ba9115e4d1ea821a404196b851f300",
+      "expect": "accept"
+    },
+    {
+      "name": "small_order_A_allzero",
+      "note": "all-zero pubkey + all-zero sig (universal-forgery vector); reject as small-order A",
+      "msg_hex": "636f6e74726163742d62207365616d20646976657267656e636520766563746f72",
+      "pubkey_hex": "0000000000000000000000000000000000000000000000000000000000000000",
+      "sig_hex": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "expect": "reject"
+    },
+    {
+      "name": "small_order_R_identity",
+      "note": "R=identity, S=a*k: satisfies the COFACTORED eq (ZIP-215 accepts) but reject as small-order R",
+      "msg_hex": "636f6e74726163742d62207365616d20646976657267656e636520766563746f72",
+      "pubkey_hex": "79b5562e8fe654f94078b112e8a98ba7901f853ae695bed7e0e3910bad049664",
+      "sig_hex": "0100000000000000000000000000000000000000000000000000000000000000c81af1cb3748399a7d1b91dd6f95037fde75f776feb80345804aa5b5ed99b80e",
+      "expect": "reject"
+    },
+    {
+      "name": "non_canonical_R",
+      "note": "R encoded as y=p+3 (non-canonical); reject (byte-compare, not point-compare)",
+      "msg_hex": "636f6e74726163742d62207365616d20646976657267656e636520766563746f72",
+      "pubkey_hex": "79b5562e8fe654f94078b112e8a98ba7901f853ae695bed7e0e3910bad049664",
+      "sig_hex": "f0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f8bf8249ec9f8dd8c5f1f666ca9a45e01e0ba9115e4d1ea821a404196b851f300",
+      "expect": "reject"
+    },
+    {
+      "name": "non_canonical_S",
+      "note": "S=L (\u003e= L, non-canonical scalar); reject",
+      "msg_hex": "636f6e74726163742d62207365616d20646976657267656e636520766563746f72",
+      "pubkey_hex": "79b5562e8fe654f94078b112e8a98ba7901f853ae695bed7e0e3910bad049664",
+      "sig_hex": "1424a78824221a72e228026122e3e472c140a31d97a663af0f66f31af4b4bbbdedd3f55c1a631258d69cf7a2def9de1400000000000000000000000000000010",
+      "expect": "reject"
+    }
+  ]
+}

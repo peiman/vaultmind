@@ -239,7 +239,7 @@ func SignEnvelope(client SignerClient, fields Fields, fromPubKey ed25519.PublicK
 // VerifyEnvelope re-runs every pre-sign gate over the received fields, rebuilds
 // the canonical signed bytes, then delegates the binding+signature check to
 // registry.VerifyMessage (resolve the live binding for (from_agent, key_epoch) ->
-// validated pubkey -> ZIP-215 verify). It authenticates the SIGNATURE + the
+// validated pubkey -> cofactorless strict verify). It authenticates the SIGNATURE + the
 // registry BINDING only — anti-replay (seq high-water + nonce-unseen) is the
 // daemon's stateful job and is NOT performed here.
 //

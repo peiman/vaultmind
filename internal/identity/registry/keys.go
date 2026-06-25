@@ -82,7 +82,7 @@ type SignedEntry struct {
 
 // NewSignedEntry runs the gate: it verifies sig over the SCHEMA-VALIDATED,
 // canonicalized form of rawJSON under pub (via identity.VerifyEntry, which runs
-// ValidateSchema + Canonicalize + ZIP-215 strict verify). It returns an error
+// ValidateSchema + Canonicalize + cofactorless strict verify). It returns an error
 // when the entry violates the schema, cannot be canonicalized, is structurally
 // rejected, or simply does not verify. On success the returned SignedEntry is
 // proof the entry is conformant and authentic.

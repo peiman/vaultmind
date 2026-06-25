@@ -337,8 +337,8 @@ func SignEnrollment(client SignerClient, fields Fields) (SignResult, error) {
 
 // VerifyEnrollment self-verifies the request = PROOF-OF-POSSESSION. It re-runs
 // every pre-sign gate (CanonicalizeEnrollment), decodes the pubkey FIELD to the
-// ed25519 verification key, then ZIP-215 strict-verifies sig over the canonical
-// bytes under THAT key. There is NO registry lookup — the request is
+// ed25519 verification key, then cofactorless-strict-verifies sig over the
+// canonical bytes under THAT key. There is NO registry lookup — the request is
 // self-contained.
 //
 // IMPORTANT: a (true, nil) result proves the requester HOLDS the private key for

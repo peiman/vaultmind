@@ -12,7 +12,7 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-// --- Fix 1: low-order / small-subgroup pubkey forgery (ZIP-215 strict verify) ---
+// --- Fix 1: low-order / small-subgroup pubkey forgery (cofactorless strict verify) ---
 
 // smallOrderPubkeys are the canonical encodings of the edwards25519 8-torsion
 // points (the complete small-order subgroup). Paired with an all-zero
@@ -33,8 +33,9 @@ var smallOrderPubkeys = []string{
 // TestVerify_RejectsLowOrderForgery is the slice-1 red-team CRITICAL: a
 // small-order public key paired with an all-zero signature forges acceptance
 // for every message under stdlib crypto/ed25519 (and even under bare ZIP-215,
-// which standardizes small-order acceptance). VerifyCanonical must reject every
-// small-order pubkey — including for the realistic registry entry.
+// which standardizes small-order acceptance). Cofactorless strict
+// VerifyCanonical must reject every small-order pubkey — including for the
+// realistic registry entry.
 func TestVerify_RejectsLowOrderForgery(t *testing.T) {
 	zeroSig := make([]byte, ed25519.SignatureSize) // 64 zero bytes
 
@@ -74,7 +75,7 @@ func TestVerify_RejectsLowOrderForgery(t *testing.T) {
 
 // TestVerify_RejectsUndecodablePubkey: a 32-byte value that is NOT a valid
 // point encoding must be rejected as a structural reject (non-nil error), since
-// isSmallOrderPubkey fails closed on an undecodable key. The encoding y=2
+// VerifyCanonical fails closed when the pubkey A does not decode. The encoding y=2
 // (0x02 followed by zeros) is undecodable: its y-coordinate yields a non-square,
 // so no valid x exists on the curve.
 func TestVerify_RejectsUndecodablePubkey(t *testing.T) {
@@ -98,8 +99,9 @@ func TestVerify_RejectsWrongLengthPubkey(t *testing.T) {
 }
 
 // TestVerifyCanonical_FrozenVectorStillPasses guards the STOP condition: the
-// honest RFC-8032 frozen signature MUST still verify under ZIP-215 (which
-// accepts all honest signatures). If this fails, the check was weakened wrongly.
+// honest RFC-8032 frozen signature MUST still verify under cofactorless strict
+// verification (which accepts all honest signatures). If this fails, the check
+// was weakened wrongly.
 func TestVerifyCanonical_FrozenVectorStillPasses(t *testing.T) {
 	pub := ed25519.PublicKey(mustDecodeHex(t, frozenPubkeyHex))
 	canonical := identity.CanonicalBytesFromTrusted(mustDecodeHex(t, frozenCanonicalBytesHex))
@@ -107,7 +109,7 @@ func TestVerifyCanonical_FrozenVectorStillPasses(t *testing.T) {
 	ok, err := identity.VerifyCanonical(pub, canonical, sig)
 	require.NoError(t, err)
 	assert.True(t, ok,
-		"honest frozen RFC-8032 signature must still verify under ZIP-215")
+		"honest frozen RFC-8032 signature must still verify under cofactorless strict verification")
 }
 
 // --- Fix 2: schema gate wired into the signing path ---
