@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 	"unicode/utf8"
 
@@ -28,6 +29,14 @@ const (
 	FieldToAgent    = "to_agent"
 	FieldTS         = "ts"
 
+	// FieldFromClass, FieldKind, FieldVouchesFor, FieldGateRef are the OPTIONAL
+	// human-principal signed fields (S3). Each is OMITTED when absent (absent !=
+	// null in JCS), exactly like room/to_agent — never emitted as a null value.
+	FieldFromClass  = "from_class"
+	FieldKind       = "kind"
+	FieldVouchesFor = "vouches_for"
+	FieldGateRef    = "gate_ref"
+
 	// FieldSig and FieldFromPubKey are TRANSPORT field names (NOT in the signed
 	// subset). They are the keys of the {sig, from_pubkey, key_epoch} result the
 	// caller stamps into the wire envelope after signing.
@@ -48,6 +57,22 @@ const (
 	// MinKeyEpoch is the inclusive lower bound for key_epoch (same anti-rollback
 	// floor as the registry: a zero/negative epoch is rejected).
 	MinKeyEpoch = 1
+)
+
+// Human-principal enum values (SSOT). from_class and kind, when present, must be
+// EXACTLY one of these — any other value is a typed wrap-side reject.
+const (
+	// FromClassAgent | FromClassBridge | FromClassHuman are the valid from_class
+	// values. FromClassAgent is also the registry's default effective class
+	// (registry.ClassAgent).
+	FromClassAgent  = "agent"
+	FromClassBridge = "bridge"
+	FromClassHuman  = "human"
+
+	// KindChat | KindApproval are the valid kind values. An absent kind is treated
+	// as chat at verify (no effect), but a PRESENT kind must be one of these.
+	KindChat     = "chat"
+	KindApproval = "approval"
 )
 
 // Gate reject messages (SSOT — referenced from the gate path and asserted by
@@ -72,6 +97,40 @@ const (
 	// ErrRoutingExactlyOne is returned when NOT exactly one of room|to_agent is
 	// present (both set, or neither set). Absent != null is load-bearing in JCS.
 	ErrRoutingExactlyOne = "envelope: exactly one of room or to_agent must be present"
+
+	// ErrFieldNotUTF8 is returned when a present human-principal string field
+	// (from_class, kind, vouches_for, gate_ref) is not valid UTF-8.
+	ErrFieldNotUTF8 = "envelope: signed string field is not valid UTF-8"
+	// ErrFieldNotNFC is returned when a present human-principal string field is
+	// not Unicode NFC (no silent normalize — same discipline as body).
+	ErrFieldNotNFC = "envelope: signed string field must be Unicode NFC-normalized"
+	// ErrFromClassInvalid is returned when a present from_class is not one of
+	// agent|bridge|human.
+	ErrFromClassInvalid = "envelope: from_class must be agent, bridge, or human"
+	// ErrKindInvalid is returned when a present kind is not one of chat|approval.
+	ErrKindInvalid = "envelope: kind must be chat or approval"
+	// ErrBridgeNeedsVouch is returned when from_class=bridge but vouches_for is
+	// absent (a bridge MUST name whom it vouches for).
+	ErrBridgeNeedsVouch = "envelope: from_class=bridge requires vouches_for"
+	// ErrVouchNeedsBridge is returned when vouches_for is present but from_class
+	// is not bridge (only a bridge may vouch).
+	ErrVouchNeedsBridge = "envelope: vouches_for requires from_class=bridge"
+	// ErrApprovalNeedsGateRef is returned when kind=approval but gate_ref is
+	// absent (an approval MUST reference the gate it approves).
+	ErrApprovalNeedsGateRef = "envelope: kind=approval requires gate_ref"
+	// ErrGateRefNeedsApproval is returned when gate_ref is present but kind is not
+	// approval (gate_ref is only meaningful on an approval).
+	ErrGateRefNeedsApproval = "envelope: gate_ref requires kind=approval"
+
+	// ErrVerifyClassMismatch is returned by VerifyEnvelope when an envelope's
+	// PRESENT from_class claim does not equal the resolved binding's effective
+	// class. The signature authenticates the claim; only the registry binding
+	// AUTHORIZES it (authenticated != authorized — fail closed).
+	ErrVerifyClassMismatch = "envelope: from_class claim does not match the registry binding class"
+	// ErrVerifyVouchNotAllowed is returned by VerifyEnvelope when a bridge's
+	// vouches_for is not in the binding's VouchAllowlist (empty allowlist ⇒ every
+	// vouch rejected).
+	ErrVerifyVouchNotAllowed = "envelope: vouches_for is not in the binding's vouch allowlist"
 
 	// errMarshalSigned wraps a marshal failure of the signed-subset object.
 	errMarshalSigned = "envelope: marshal signed subset"
@@ -103,6 +162,14 @@ type Fields struct {
 	ToAgent *string
 	Seq     int64
 	TS      int64
+	// FromClass, Kind, VouchesFor, GateRef are the OPTIONAL human-principal signed
+	// fields. Each is a POINTER so absent (nil) is OMITTED from the signed bytes
+	// (never emitted as null), exactly like Room/ToAgent. When present they enter
+	// the JCS map by lexicographic key name and are gated by checkGates.
+	FromClass  *string
+	Kind       *string
+	VouchesFor *string
+	GateRef    *string
 }
 
 // SignResult is what SignEnvelope returns: the base64 fields the caller stamps
@@ -149,6 +216,20 @@ func CanonicalizeEnvelope(fields Fields) (identity.CanonicalBytes, error) {
 	} else {
 		subset[FieldToAgent] = *fields.ToAgent
 	}
+	// Optional human-principal fields: emit each present one, OMIT the absent
+	// (absent != null in JCS — same load-bearing discipline as room/to_agent).
+	if fields.FromClass != nil {
+		subset[FieldFromClass] = *fields.FromClass
+	}
+	if fields.Kind != nil {
+		subset[FieldKind] = *fields.Kind
+	}
+	if fields.VouchesFor != nil {
+		subset[FieldVouchesFor] = *fields.VouchesFor
+	}
+	if fields.GateRef != nil {
+		subset[FieldGateRef] = *fields.GateRef
+	}
 
 	raw, err := json.Marshal(subset)
 	if err != nil {
@@ -170,8 +251,73 @@ func checkGates(f Fields) error {
 	if !intInRange(f.KeyEpoch, MinKeyEpoch) {
 		return fmt.Errorf("%s", ErrKeyEpochRange)
 	}
-	return checkBodyNonceRouting(f)
+	if err := checkBodyNonceRouting(f); err != nil {
+		return err
+	}
+	return checkHumanPrincipalGates(f)
 }
+
+// checkHumanPrincipalGates enforces the STRUCTURAL wrap-side gates for the four
+// optional human-principal fields so a malformed human envelope cannot
+// canonicalize. It mirrors workhorse's Rust wrap-side gates: NFC discipline on
+// the new strings, enum validity for from_class/kind, and the two biconditional
+// relationships (bridge⇔vouches_for, approval⇔gate_ref).
+func checkHumanPrincipalGates(f Fields) error {
+	// UTF-8 + NFC on every PRESENT new string (no silent normalize, same rule as
+	// body).
+	for _, s := range []*string{f.FromClass, f.Kind, f.VouchesFor, f.GateRef} {
+		if s != nil {
+			if err := checkSignedString(*s); err != nil {
+				return err
+			}
+		}
+	}
+	// from_class / kind enums when present.
+	if f.FromClass != nil && !validFromClass(*f.FromClass) {
+		return fmt.Errorf("%s", ErrFromClassInvalid)
+	}
+	if f.Kind != nil && !validKind(*f.Kind) {
+		return fmt.Errorf("%s", ErrKindInvalid)
+	}
+	// bridge ⇔ vouches_for: bridge REQUIRES a vouch, and a vouch REQUIRES bridge.
+	isBridge := f.FromClass != nil && *f.FromClass == FromClassBridge
+	if isBridge && f.VouchesFor == nil {
+		return fmt.Errorf("%s", ErrBridgeNeedsVouch)
+	}
+	if f.VouchesFor != nil && !isBridge {
+		return fmt.Errorf("%s", ErrVouchNeedsBridge)
+	}
+	// approval ⇔ gate_ref: approval REQUIRES a gate_ref, and a gate_ref REQUIRES
+	// approval.
+	isApproval := f.Kind != nil && *f.Kind == KindApproval
+	if isApproval && f.GateRef == nil {
+		return fmt.Errorf("%s", ErrApprovalNeedsGateRef)
+	}
+	if f.GateRef != nil && !isApproval {
+		return fmt.Errorf("%s", ErrGateRefNeedsApproval)
+	}
+	return nil
+}
+
+// checkSignedString enforces the shared UTF-8 + NFC discipline on a present
+// human-principal string field.
+func checkSignedString(s string) error {
+	if !utf8.ValidString(s) {
+		return fmt.Errorf("%s", ErrFieldNotUTF8)
+	}
+	if !norm.NFC.IsNormalString(s) {
+		return fmt.Errorf("%s", ErrFieldNotNFC)
+	}
+	return nil
+}
+
+// validFromClass reports whether c is a valid from_class enum value.
+func validFromClass(c string) bool {
+	return c == FromClassAgent || c == FromClassBridge || c == FromClassHuman
+}
+
+// validKind reports whether k is a valid kind enum value.
+func validKind(k string) bool { return k == KindChat || k == KindApproval }
 
 // checkBodyNonceRouting enforces the body/nonce/routing gates (split out of
 // checkGates to keep each function small).
@@ -259,5 +405,50 @@ func VerifyEnvelope(reg registry.Registry, fields Fields, sig []byte, now time.T
 	// key_epoch is already gate-bounded to [1, 2^53] above, so the int64->int
 	// narrowing at the registry boundary is lossless on this project's 64-bit
 	// targets. (The registry layer's own int width is tracked separately.)
-	return registry.VerifyMessage(reg, fields.FromAgent, int(fields.KeyEpoch), canonical, sig, now)
+	keyEpoch := int(fields.KeyEpoch)
+	ok, err := registry.VerifyMessage(reg, fields.FromAgent, keyEpoch, canonical, sig, now)
+	if err != nil || !ok {
+		// Preserve the contract: (false, error)=structural reject (unknown /
+		// revoked / expired / not-yet-valid / epoch-mismatch / small-order / gate),
+		// (false, nil)=honest signature non-match. Authority is only enforced once
+		// the signature + binding are authenticated.
+		return ok, err
+	}
+	// Signature + binding authenticated. Enforce AUTHORITY (authenticated !=
+	// authorized): a signed from_class is a CLAIM, the registry binding decides.
+	return enforceAuthority(reg, fields, keyEpoch, now)
+}
+
+// enforceAuthority enforces the verify-side human-principal authority gate,
+// FAIL-CLOSED, AFTER VerifyMessage has authenticated the signature + binding:
+//
+//   - from_class ABSENT ⇒ legacy/agent path, no class check (unchanged behavior).
+//   - from_class PRESENT ⇒ the resolved binding's effective class
+//     (Class, ""→agent) MUST equal the claim, else ErrVerifyClassMismatch. Since
+//     no binding sets Class yet, ANY bridge/human claim is rejected until the
+//     registry GRANTS the class — fail closed.
+//   - from_class=bridge ⇒ vouches_for (gate-guaranteed present) MUST be in the
+//     binding's VouchAllowlist (empty allowlist ⇒ every vouch rejected), else
+//     ErrVerifyVouchNotAllowed.
+func enforceAuthority(reg registry.Registry, fields Fields, keyEpoch int, now time.Time) (bool, error) {
+	if fields.FromClass == nil {
+		return true, nil
+	}
+	// VerifyMessage just succeeded for this exact tuple, so ResolveTuple resolves
+	// the SAME binding; an error here would be an internal inconsistency — fail
+	// closed regardless.
+	binding, err := registry.ResolveTuple(reg, fields.FromAgent, keyEpoch, now)
+	if err != nil {
+		return false, err
+	}
+	if binding.EffectiveClass() != *fields.FromClass {
+		return false, fmt.Errorf("%s", ErrVerifyClassMismatch)
+	}
+	if *fields.FromClass == FromClassBridge {
+		// vouches_for is gate-guaranteed present when from_class=bridge.
+		if !slices.Contains(binding.VouchAllowlist, *fields.VouchesFor) {
+			return false, fmt.Errorf("%s", ErrVerifyVouchNotAllowed)
+		}
+	}
+	return true, nil
 }

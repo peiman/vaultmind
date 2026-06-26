@@ -1,0 +1,24 @@
+{
+  "_comment": "Contract-B human-principal envelope cross-language canonicalization fixture. Both the Go side (vaultmind-oss internal/identity/envelope.CanonicalizeEnvelope) and the Rust side (agent-chat chat-core canonicalize_envelope) MUST produce the listed `canonical` bytes for the given `fields`, and sha256(canonical) MUST equal `sha256`. Vendored byte-identical into both repos; a drift fails CI on either side (the S3 dual-pin, same discipline as strict_verify_cross_language_vectors.json).",
+  "vectors": [
+    {
+      "name": "bridge_attested_chat",
+      "note": "the frozen sample: a Bridge principal signs, vouching for a human, kind=chat. All 4 human-principal fields present.",
+      "fields": {
+        "alg_version": 1,
+        "body": "hello from a human",
+        "from_agent": "agent:bridge",
+        "from_class": "bridge",
+        "key_epoch": 1,
+        "kind": "chat",
+        "nonce": "n1",
+        "room": "mesh",
+        "seq": 5,
+        "ts": 1782360000,
+        "vouches_for": "human:siavoush"
+      },
+      "canonical": "{\"alg_version\":1,\"body\":\"hello from a human\",\"from_agent\":\"agent:bridge\",\"from_class\":\"bridge\",\"key_epoch\":1,\"kind\":\"chat\",\"nonce\":\"n1\",\"room\":\"mesh\",\"seq\":5,\"ts\":1782360000,\"vouches_for\":\"human:siavoush\"}",
+      "sha256": "730268fa5a353e2461cd55bade24409ff5a183f189ad9e613a76860d35ad5bfd"
+    }
+  ]
+}
