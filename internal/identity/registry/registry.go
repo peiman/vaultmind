@@ -101,6 +101,12 @@ const (
 // range [1, MaxSafeEpoch].
 func epochInRange(e int) bool { return e >= 1 && e <= MaxSafeEpoch }
 
+// ClassAgent is the DEFAULT effective class of a binding whose Class is empty.
+// An empty Class means "agent" so existing bindings (which set neither Class nor
+// VouchAllowlist) authorize only the plain agent path; bridge/human authority
+// must be explicitly GRANTED by setting Class. This is the SSOT for the default.
+const ClassAgent = "agent"
+
 // AgentBinding binds a slug to a validated ed25519 public key for one key epoch,
 // with a freshness window and an optional revocation timestamp. The ed25519
 // pubkey is the identity; the slug is a label.
@@ -122,6 +128,26 @@ type AgentBinding struct {
 	// RevokedAt is the unix-seconds revocation time, or nil if the binding is
 	// live. A revoked binding never resolves or verifies.
 	RevokedAt *int
+	// Class is the AUTHORITY class the root GRANTS this binding (agent | bridge |
+	// human). An empty Class means agent (see ClassAgent / EffectiveClass). It is
+	// the registry's authoritative answer to a message's signed from_class CLAIM:
+	// the claim is authenticated by the signature, but only the binding's Class
+	// AUTHORIZES it. NOTE: not yet parsed from the signed registry wire schema —
+	// populating Class/VouchAllowlist from the canonical bytes is a separate
+	// cross-language slice; for now these default to empty/agent.
+	Class string
+	// VouchAllowlist is the set of principals (e.g. "human:siavoush") a bridge
+	// binding may vouch for. An empty allowlist authorizes NO vouch (fail closed).
+	VouchAllowlist []string
+}
+
+// EffectiveClass returns the binding's authority class, defaulting an empty
+// Class to ClassAgent. It is the SSOT for the empty-Class-means-agent rule.
+func (b AgentBinding) EffectiveClass() string {
+	if b.Class == "" {
+		return ClassAgent
+	}
+	return b.Class
 }
 
 // Registry is the root-signed binding set with a monotonic epoch and a freshness
@@ -484,6 +510,15 @@ func VerifyMessage(
 		return false, err
 	}
 	return identity.VerifyCanonical(b.PubKey.Bytes(), canonical, sig)
+}
+
+// ResolveTuple exposes the shared {slug,key_epoch} default-deny resolution for
+// callers (the envelope verify layer) that need the RESOLVED binding to enforce
+// class/vouch AUTHORITY after a successful VerifyMessage. It applies the SAME
+// revoked/expired/not-yet-valid/epoch-mismatch default-deny as VerifyMessage, so
+// a binding ResolveTuple returns is exactly the one VerifyMessage verified under.
+func ResolveTuple(reg Registry, slug string, keyEpoch int, now time.Time) (AgentBinding, error) {
+	return resolveTuple(reg, slug, keyEpoch, now)
 }
 
 // resolveTuple resolves the live binding for the EXACT {slug,key_epoch} tuple at
