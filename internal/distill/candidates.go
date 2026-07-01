@@ -21,6 +21,15 @@ const (
 	// principle ("principle 5"). A frequent precursor to a lens-redirected
 	// decision — an arc shape, when the lens actually overrides an instinct.
 	RuleManifestoLens RuleID = "manifesto-lens"
+	// RuleEvidenceGate — the partner makes proceeding conditional on the agent's
+	// OWN confidence or the evidence ("if you're confident, merge"; "only if
+	// you're sure"). A sibling of authority-grant: standing trust gated on the
+	// agent's judgment rather than transferred outright. Marks the moment the
+	// agent's evidence-bar becomes the deciding factor — a recurring arc
+	// precursor that no authority-grant phrase catches (added after the Siavoush
+	// content-machine field report, 2026-06-19: the detector missed an "if you
+	// are confident we merge" arc precisely because it isn't a "you decide").
+	RuleEvidenceGate RuleID = "evidence-gate"
 )
 
 // Candidate is a surfaced transformation moment — a propose-only pointer into
@@ -75,6 +84,21 @@ var manifestoLensLexemes = []string{
 
 var principleNRe = regexp.MustCompile(`principle\s+\d`)
 
+// evidenceGateLexemes are confidence-conditional delegation phrases — the
+// partner hands off the decision contingent on the agent's own certainty
+// ("if you're confident we merge"). Kept deliberately tight (the conditional +
+// a confidence word together) so it stays high-precision like the other rules:
+// bare "confident"/"sure" prose does not fire — only the "if you're <conf>"
+// construction. Matched case-insensitively as substrings.
+var evidenceGateLexemes = []string{
+	"if you're confident", "if you are confident",
+	"if you're sure", "if you are sure",
+	"if you feel confident",
+	"as long as you're confident", "as long as you are confident",
+	"as long as you're sure", "as long as you are sure",
+	"only if you're sure", "only if you are sure",
+}
+
 // ExtractCandidates applies the mechanical rules to an episode's USER turns
 // only. Commit/build/TDD noise lives in ASSISTANT turns, which are never
 // scanned, so it is excluded by construction (no rule can fire on it). A turn
@@ -93,6 +117,9 @@ func ExtractCandidates(ep *Episode) []Candidate {
 			out = append(out, candidate(RuleManifestoLens, ep, t, m))
 		} else if loc := principleNRe.FindString(lower); loc != "" {
 			out = append(out, candidate(RuleManifestoLens, ep, t, loc))
+		}
+		if m := matchAny(lower, evidenceGateLexemes); m != "" {
+			out = append(out, candidate(RuleEvidenceGate, ep, t, m))
 		}
 	}
 	return out

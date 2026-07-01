@@ -81,7 +81,7 @@ func shouldEnableCoreML() bool {
 // whether to warn about BGE-M3 indexing being about to run on the slow path.
 // Stays "ort" regardless of CoreML state so the slow-backend guard works as
 // a binary check; CoreML status is surfaced separately via Acceleration().
-func BackendName() string { return "ort" }
+func BackendName() string { return BackendNameORT }
 
 // Acceleration reports the active execution-provider stack for this binary
 // at runtime. Useful for the doctor command and index summary so the
@@ -106,29 +106,52 @@ func detectORTLibDir() string {
 	if runtime.GOOS == "darwin" {
 		systemDirs = append([]string{"/opt/homebrew/lib"}, systemDirs...)
 	}
-	exeDir := ""
-	if exe, err := os.Executable(); err == nil {
-		exeDir = filepath.Dir(exe)
-	}
-	return resolveORTLibDir(os.Getenv("ORT_LIB_DIR"), exeDir, libName, systemDirs, func(p string) bool {
+	return resolveORTLibDir(os.Getenv("ORT_LIB_DIR"), executableLibDirs(), libName, systemDirs, func(p string) bool {
 		_, err := os.Stat(p)
 		return err == nil
 	})
 }
 
+// executableLibDirs returns the candidate directories that may hold the bundled
+// libonnxruntime, in priority order: the directory of the invoked executable
+// path, then the directory of its symlink-resolved real path. macOS computes a
+// process's executable path from the SYMLINK used to launch it — os.Executable
+// does not resolve it — so a symlinked-on-PATH install
+// (~/.local/bin/vaultmind → ~/.local/vaultmind/vaultmind) would otherwise look
+// for the dylib next to the symlink, miss the bundle sitting next to the real
+// binary, and silently degrade to MiniLM. Checking the resolved dir too makes a
+// downloaded archive portable through a PATH symlink (Siavoush field report,
+// 2026-06-19).
+func executableLibDirs() []string {
+	exe, err := os.Executable()
+	if err != nil {
+		return nil
+	}
+	dirs := []string{filepath.Dir(exe)}
+	if resolved, rerr := filepath.EvalSymlinks(exe); rerr == nil {
+		if d := filepath.Dir(resolved); d != dirs[0] {
+			dirs = append(dirs, d)
+		}
+	}
+	return dirs
+}
+
 // resolveORTLibDir picks the directory to load libonnxruntime from, in priority
-// order: an explicit ORT_LIB_DIR override, then the executable's OWN directory
-// (the prebuilt-release bundle layout — a libonnxruntime shipped next to the
-// binary is found with zero config, so a downloaded archive just runs), then
-// standard system locations (homebrew / /usr/local). Pure and injectable so the
-// order is unit-testable without a real install. Returns "" when none has the
-// library, leaving the runtime to surface its own load error.
-func resolveORTLibDir(ortLibDirEnv, exeDir, libName string, systemDirs []string, fileExists func(string) bool) string {
+// order: an explicit ORT_LIB_DIR override, then each executable-relative
+// directory (the prebuilt-release bundle layout — a libonnxruntime shipped next
+// to the binary, or next to its symlink-resolved real path, is found with zero
+// config so a downloaded archive just runs), then standard system locations
+// (homebrew / /usr/local). Pure and injectable so the order is unit-testable
+// without a real install. Returns "" when none has the library, leaving the
+// runtime to surface its own load error.
+func resolveORTLibDir(ortLibDirEnv string, exeDirs []string, libName string, systemDirs []string, fileExists func(string) bool) string {
 	if ortLibDirEnv != "" {
 		return ortLibDirEnv
 	}
-	if exeDir != "" && fileExists(filepath.Join(exeDir, libName)) {
-		return exeDir
+	for _, dir := range exeDirs {
+		if dir != "" && fileExists(filepath.Join(dir, libName)) {
+			return dir
+		}
 	}
 	for _, dir := range systemDirs {
 		if fileExists(filepath.Join(dir, libName)) {

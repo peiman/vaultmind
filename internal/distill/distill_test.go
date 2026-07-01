@@ -154,6 +154,38 @@ func TestExtractCandidates_AuthorityGrantLexemes(t *testing.T) {
 	}
 }
 
+// The evidence-gate rule fires when the partner makes proceeding conditional on
+// the agent's own confidence — the arc shape the detector missed in the Siavoush
+// content-machine field report (an "if you are confident we merge" arc that no
+// authority-grant phrase caught).
+func TestExtractCandidates_EvidenceGateFires(t *testing.T) {
+	for _, msg := range []string{
+		"if you are confident we merge",
+		"if you're confident, ship it",
+		"only if you are sure — otherwise ask me",
+		"as long as you're sure, go ahead and refactor",
+	} {
+		ep := &distill.Episode{ID: "e", UserTurns: []distill.Turn{{Index: 1, Text: msg}}}
+		cands := distill.ExtractCandidates(ep)
+		require.Len(t, cands, 1, "confidence-conditional delegation %q must fire", msg)
+		assert.Equal(t, distill.RuleEvidenceGate, cands[0].Rule)
+	}
+}
+
+// Precision guard: bare confidence/sureness prose is NOT a delegation gate —
+// only the "if you're <confident>" construction is. Keeps the rule as tight as
+// the others (the 2026-05-31 review's precision bar).
+func TestExtractCandidates_EvidenceGateRejectsBareConfidence(t *testing.T) {
+	for _, msg := range []string{
+		"are you sure about this?",
+		"I'm confident this is right",
+		"make sure the tests pass",
+	} {
+		ep := &distill.Episode{ID: "e", UserTurns: []distill.Turn{{Index: 1, Text: msg}}}
+		assert.Empty(t, distill.ExtractCandidates(ep), "bare confidence prose %q must not fire", msg)
+	}
+}
+
 // The manifesto-lens rule also fires on a numbered-principle citation
 // ("principle 7"), via principleNRe — but not on un-numbered "principled" prose.
 func TestExtractCandidates_PrincipleNFiresManifestoLens(t *testing.T) {

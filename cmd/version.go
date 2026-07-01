@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"runtime/debug"
 
+	"github.com/peiman/vaultmind/internal/embedding"
 	"github.com/spf13/cobra"
 )
 
@@ -47,15 +48,21 @@ func buildVersionInfo(ldVersion, ldCommit, ldDate string, info *debug.BuildInfo,
 // while `--help` listed it under Setup — a first-impression papercut surfaced
 // by the first knowledge-vault adopter (focalc field report, P2). Checking the
 // version is often the very first thing a new user does.
+//
+// The trailing "(backend: …)" names the embedding backend the binary was built
+// against (ort+cpu / ort+coreml / go-cpu). Whether a binary is ORT- or pure-Go
+// is invisible without running an embed pass and reading doctor; an adopter
+// hitting a silent MiniLM degrade (Siavoush field report, 2026-06-19) can now
+// confirm at a glance which binary is on PATH.
 var versionCmd = &cobra.Command{
 	Use:   "version",
-	Short: "Print the version, commit, and build date",
+	Short: "Print the version, commit, build date, and embedding backend",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		info, ok := debug.ReadBuildInfo()
 		v, c, d := buildVersionInfo(Version, Commit, Date, info, ok)
-		_, err := fmt.Fprintf(cmd.OutOrStdout(), "%s version %s, commit %s, built at %s\n",
-			binaryName, v, c, d)
+		_, err := fmt.Fprintf(cmd.OutOrStdout(), "%s version %s, commit %s, built at %s (backend: %s)\n",
+			binaryName, v, c, d, embedding.Acceleration())
 		return err
 	},
 }

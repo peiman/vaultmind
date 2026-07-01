@@ -13,6 +13,7 @@ import (
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/config/commands"
+	"github.com/peiman/vaultmind/internal/embedding"
 	"github.com/peiman/vaultmind/internal/envelope"
 	"github.com/peiman/vaultmind/internal/hooks"
 	"github.com/peiman/vaultmind/internal/query"
@@ -36,6 +37,25 @@ const staleIndexRemedy = "vaultmind index --vault <vault>"
 // details (close the loop — hand the next command). frontmatter validate is
 // the subcommand that reports broken_reference per-note (FrontmatterValidateMetadata).
 const brokenReferencesRemedy = "vaultmind frontmatter validate --vault <path>"
+
+// minilmRemedy returns the upgrade path for a MiniLM-degraded index, branched on
+// the binary's embedding backend. On an ORT-built binary the binary is ALREADY
+// BGE-M3-capable, so the index↔binary mismatch is fixed by re-embedding — no
+// download or build. On a pure-Go binary the binary itself cannot run BGE-M3
+// indexing, so the remedy is to get an ORT binary (prebuilt archive or source).
+// Naming the right path closes the loop: an adopter holding the good binary but
+// a stale MiniLM index (e.g. after the symlink-dylib fix, Siavoush field report
+// 2026-06-19) must not be told to re-download what they already have.
+func minilmRemedy(backend string) string {
+	if backend == embedding.BackendNameORT {
+		return "this binary is ORT-capable (no download needed) — rebuild the index for the " +
+			"full 4-way BGE-M3 hybrid (dense + sparse + ColBERT):\n" +
+			"  vaultmind index --embed --model bge-m3 --full --vault <vault>"
+	}
+	return "For the full 4-way BGE-M3 hybrid (dense + sparse + ColBERT): on " +
+		"darwin-arm64/linux-amd64 download the prebuilt ORT binary from the release " +
+		"(no build), or build from source — see:\n  " + embeddingBackendsDocURL
+}
 
 var doctorCmd = MustNewCommand(commands.DoctorMetadata, runDoctor)
 
@@ -77,13 +97,12 @@ func writeEmbeddingStatus(w io.Writer, emb *query.DoctorEmbeddings) error {
 		// (full-text + dense) and silently lacks BGE-M3's sparse + ColBERT
 		// lanes. `go install` yields a pure-Go/MiniLM binary, so an adopter
 		// can land here without ever being told their recall is degraded
-		// (focalc field report, P1). Name the cliff at the moment it matters.
+		// (focalc field report, P1). Name the cliff at the moment it matters,
+		// with a remedy tuned to the binary on PATH (minilmRemedy).
 		_, err := fmt.Fprintf(w,
 			"⚠ degraded recall: this vault is indexed with MiniLM — dense-only "+
-				"(2 lanes: full-text + dense). For the full 4-way BGE-M3 hybrid "+
-				"(dense + sparse + ColBERT): on darwin-arm64/linux-amd64 download the "+
-				"prebuilt ORT binary from the release (no build), or build from source — see:\n  %s\n",
-			embeddingBackendsDocURL)
+				"(2 lanes: full-text + dense). %s\n",
+			minilmRemedy(embedding.BackendName()))
 		return err
 	}
 	if emb.Model == "mixed" && len(emb.MixedModel) > 0 {

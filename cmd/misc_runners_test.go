@@ -285,7 +285,29 @@ func TestWriteEmbeddingStatus_MiniLMSurfacesDegradedWarning(t *testing.T) {
 	out := buf.String()
 	assert.Contains(t, out, "degraded recall")
 	assert.Contains(t, out, "MiniLM")
-	assert.Contains(t, out, "embedding-backends.md")
+	// Backend-agnostic: both remedies (ORT re-embed vs pure-Go download) name the
+	// BGE-M3 hybrid upgrade. The per-backend remedy text is asserted separately
+	// in TestMinilmRemedy_*, so this stays green on both build tags.
+	assert.Contains(t, out, "BGE-M3")
+}
+
+// On an ORT-built binary, a MiniLM index is a binary↔index MISMATCH, not a
+// capability gap: the binary can already run BGE-M3, so the remedy is to
+// re-embed — never to re-download a binary the user already has (Siavoush field
+// report 2026-06-19).
+func TestMinilmRemedy_ORTBinarySaysReembedNoDownload(t *testing.T) {
+	r := minilmRemedy(embedding.BackendNameORT)
+	assert.Contains(t, r, "--model bge-m3 --full", "must hand the re-embed command")
+	assert.Contains(t, r, "no download needed")
+	assert.NotContains(t, r, "embedding-backends.md", "ORT binary needs no download/build path")
+}
+
+// On a pure-Go binary, BGE-M3 indexing cannot run at all — the remedy is to get
+// an ORT binary (prebuilt archive or source), pointing at the backends doc.
+func TestMinilmRemedy_PureGoSaysDownloadOrBuild(t *testing.T) {
+	r := minilmRemedy(embedding.BackendNameGo)
+	assert.Contains(t, r, "embedding-backends.md")
+	assert.Contains(t, r, "prebuilt ORT binary")
 }
 
 // A full BGE-M3 index must NOT emit the degraded-recall warning.
