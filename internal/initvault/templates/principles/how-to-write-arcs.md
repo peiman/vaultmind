@@ -24,6 +24,20 @@ Common shifts worth an arc: a partner's challenge that broke a frame you didn't 
 
 Common things that look like arcs but aren't: completing a feature, fixing a bug, learning a new API, deciding between two options on technical merit. Those are *facts*. They go in notes, commit messages, and ADRs.
 
+## How to hunt — read the session for change, not keywords
+
+Arcs live in the narrative, so you find them by *reading the session start to finish*, not by scanning for phrases. (`vaultmind arc candidates` phrase-matches a couple of easy shapes, but most real arcs are not phrase-shaped — it is a net for the obvious, never the whole catch.) Look for these shapes:
+
+1. **Reversal** — "wait—", "actually—": a direction changed or a decision undone mid-thought.
+2. **Reframe** — a push that changed the *frame*, not just a fact.
+3. **Frame-break** — the moment the task wasn't what you thought it was.
+4. **Method-invalidation** — a shortcut or assumption exposed as invalid.
+5. **Cost-of-rule** — a rule held even though following it cost you something.
+6. **Evidence/trust gate** — proceeding was gated on your confidence or the evidence.
+7. **Ownership assertion** — a boundary of sole responsibility was drawn.
+
+**The diff test** decides the close call: would a future you answer some question *differently* because of this moment? If yes, it is an arc. If nothing downstream changes, it is a note.
+
 ## The shape
 
 Every arc has the same skeleton:

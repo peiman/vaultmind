@@ -35,10 +35,19 @@ func TestFormatReport_ProposeOnlyAndGrouped(t *testing.T) {
 	assert.Less(t, strings.Index(out, "## ep-a"), strings.Index(out, "## ep-b"))
 	assert.Less(t, strings.Index(out, "turn 2"), strings.Index(out, "turn 9"))
 	assert.Contains(t, out, "full autonomy")
+
+	// Honest about its own low recall + hands the agent the manual method, so the
+	// report can't be mistaken for "all your arcs" (the 3/3-miss field finding).
+	assert.Contains(t, out, "arc guide")
+	assert.Contains(t, out, "misses")
 }
 
 func TestFormatReport_Empty(t *testing.T) {
 	var buf bytes.Buffer
 	require.NoError(t, distill.FormatReport(distill.Report{EpisodesScanned: 2, EpisodesKept: 0}, &buf))
-	assert.Contains(t, buf.String(), "No candidate moments found")
+	out := buf.String()
+	assert.Contains(t, out, "No candidate moments found")
+	// Even with zero phrase-matches, point the agent at the manual method — empty
+	// here means "nothing phrase-shaped," not "no arcs in this session."
+	assert.Contains(t, out, "arc guide")
 }

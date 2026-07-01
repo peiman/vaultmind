@@ -24,6 +24,17 @@ type Report struct {
 // text report prints; the full text lives in the episode.
 const reportVerbatimMax = 240
 
+// arcGuideHint is the honest-about-recall pointer printed with every candidate
+// report. The detector phrase-matches only a few shapes (authority-grant,
+// manifesto-lens); most real arcs are NOT phrase-shaped, so the
+// report must hand the agent the manual method rather than imply these are all
+// its arcs — a surface that under-delivers silently is the lie principle-ax-design
+// warns against. Siavoush content-machine field report, 2026-06-19 (the detector
+// missed 3/3 of the agent's real arcs).
+const arcGuideHint = "These are only the easy, phrase-matched moments — the detector misses reversals, " +
+	"reframes, frame-breaks, cost-of-rule and more. Hunt the rest by reading the session yourself; " +
+	"run `vaultmind arc guide` for the method (the seven shapes, the bar, the self-check)."
+
 // FormatReport writes a human-readable, propose-only candidate report. It leads
 // and closes with the contract — these are MOMENTS, not arcs; the mind drafts
 // and approves — so the output can't be mistaken for finished identity.
@@ -35,7 +46,7 @@ func FormatReport(r Report, w io.Writer) error {
 		return err
 	}
 	if len(r.Candidates) == 0 {
-		_, err := fmt.Fprintln(w, "\nNo candidate moments found.")
+		_, err := fmt.Fprintf(w, "\nNo candidate moments found.\n\n%s\n", arcGuideHint)
 		return err
 	}
 
@@ -57,9 +68,10 @@ func FormatReport(r Report, w io.Writer) error {
 		}
 	}
 
-	_, err := fmt.Fprint(w,
+	_, err := fmt.Fprintf(w,
 		"\nA real arc needs a before/after shift in seeing, a verbatim push, and the cost — "+
-			"many of these won't qualify. Draft the ones that did; ignore the rest. Never auto-write identity.\n")
+			"many of these won't qualify. Draft the ones that did; ignore the rest. Never auto-write identity.\n"+
+			"\n%s\n", arcGuideHint)
 	return err
 }
 

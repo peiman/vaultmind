@@ -249,6 +249,11 @@ var commandCatalog = map[string]catalogEntry{
 		when:  "you finished a session and want candidate transformation moments to review for arcs.",
 		short: "Surface candidate transformation moments for arc distillation",
 	},
+	"vaultmind arc guide": {
+		group: groupLifecycle,
+		when:  "you want to learn how to find and write your own arcs — the shapes, the bar, and the self-check.",
+		short: "Print the arc-writing discipline — how to find and write your own arcs",
+	},
 	"vaultmind identity": {
 		group: groupLifecycle,
 		when:  "you need Contract-B agent identity: mint a keypair or sign an entry via the keyless signer.",
