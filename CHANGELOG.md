@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-07-02
+
+### Fixed
+- **Release artifacts now cross-compile for Windows.** The Contract-B custody signer's
+  peer-credential check (`peerUID`, unix-only via `SO_PEERCRED`/`LOCAL_PEERCRED`) had no
+  non-unix build target, so goreleaser's Windows build failed and v0.2.0 published as a Go
+  module (installable via `go install`) but *without* its GitHub Release artifacts — including
+  the prebuilt **ORT/BGE-M3** archives. Added a fail-closed non-unix stub so the binary
+  cross-compiles; the `identity signer` daemon itself remains unix-only. v0.2.1 carries all of
+  v0.2.0 plus this fix, and is the release to pull the ORT archives from.
+
 ## [0.2.0] — 2026-07-02
 
 ### Added
