@@ -25,10 +25,10 @@ import (
 // backends forces explicit decision if a new backend is added.
 func TestDefaultModel_MatchesBackend(t *testing.T) {
 	switch embedding.BackendName() {
-	case "ort":
+	case embedding.BackendNameORT:
 		assert.Equal(t, "bge-m3", embedding.DefaultModel(),
 			"ORT-tagged build defaults to bge-m3 — the recommended fast hybrid path")
-	case "go":
+	case embedding.BackendNameGo:
 		assert.Equal(t, "minilm", embedding.DefaultModel(),
 			"pure-Go build defaults to minilm — BGE-M3 on pure-Go takes hours")
 	default:

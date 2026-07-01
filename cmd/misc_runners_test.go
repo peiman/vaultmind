@@ -553,7 +553,7 @@ func TestAsk_ReturnsResultWithQuery(t *testing.T) {
 // The refusal must include a concrete pointer at `task build:ort` so the
 // operator knows what to do next, not just what not to do.
 func TestGuardBGEM3SlowBackend_RefusesOnGoBackend(t *testing.T) {
-	if embedding.BackendName() != "go" {
+	if embedding.BackendName() != embedding.BackendNameGo {
 		t.Skip("guard only fires on pure-Go builds")
 	}
 	cmd := &cobra.Command{}

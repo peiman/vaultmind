@@ -249,7 +249,7 @@ func formatIndexResult(r index.IndexAndEmbedResult, model string, w io.Writer) e
 // operator opts in) when BGE-M3 indexing would run on pure-Go hugot.
 // Any other model path — or ORT-built binaries — is a no-op.
 func guardBGEM3SlowBackend(cmd *cobra.Command, model string) error {
-	if model != "bge-m3" || embedding.BackendName() == "ort" {
+	if model != "bge-m3" || embedding.BackendName() == embedding.BackendNameORT {
 		return nil
 	}
 	allow := getConfigValueWithFlags[bool](cmd, "allow-slow-backend", config.KeyAppIndexAllowSlowBackend)
