@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-07-02
+
+### Added
+- **Contract-B agent identity — a full ed25519 trust-root subsystem under `vaultmind identity`.** The
+  headline addition: forgery-proof agent identity for a multi-agent mesh, built in reviewed slices.
+  - **Signing core + custody** — the JCS-canonical (RFC 8785) ed25519 signing core (small-order pubkey
+    rejection, ZIP-215-strict verify, schema-gated signing path) and a **keyless custody signer daemon**
+    (`identity signer`) that holds the private key behind a 0600 Unix-domain socket; every CLI verb is
+    keyless and reaches the key only over the socket.
+  - **Trust-root registry** — a root-signed, epoched, freshness-bounded `slug→pubkey` binding with
+    combined revocation (monotonic epoch + `revoked-at` + fail-closed staleness), a distribution
+    envelope, and a frozen cross-language fixture proving Go↔Rust byte-exact agreement.
+  - **Enrollment journey** — `identity invite` (token carrying root pubkey + network id + relay),
+    `identity enroll` (member self-enroll), `identity enroll-add` (admin), `identity sign-registry` /
+    `sign-enrollment` / `sign-envelope`, OOB trust-anchor pinning persisted at enroll, and
+    `identity --print-instructions` self-serve onboarding.
+  - **Message-envelope signing** and **strict cofactorless verification** closing the Go↔Rust seam;
+    plus the S3 human-principal verify-side (fail-closed authority, canonicalize parity).
+- **`doctor` mesh-section** — Contract-B identity health as part of the vault health hub
+  (custody / binding-resolves / chat-reachability, green only when cryptographically proven).
+- **`vaultmind arc guide`** — the self-serve arc-writing discipline (the seven hunt shapes, the 5-part
+  bar, the diff test, a self-pressure checklist); `arc candidates` now owns its own low recall and
+  points at the guide.
+
+### Changed
+- **ORT backend honesty.** On an ORT binary, a BGE-M3 load failure now **fails loud** (naming the
+  remedy) instead of silently degrading to MiniLM; `version` and `doctor` report the active backend
+  (`ort+cpu` / `ort+coreml` / `go-cpu`) and give backend-appropriate remedies; a symlink-on-PATH ORT
+  install is now resolved instead of silently falling back.
+
+### Fixed
+- **Indexing robustness** — cap BGE-M3 input by real token count so embedding never hangs; surface
+  dropped notes and skip empty-body notes on embed; migrate `_path:`-form ids to frontmatter `id` on
+  re-index with no silent data loss.
+- **`doctor` honesty** — `--all` rollup totals reconcile with the per-vault reports; broken references
+  are surfaced and the JSON issue-count axes are distinctly labeled; the text rollup counts the
+  surfaced issue set (not the raw validation aggregate).
+- **`doctor heal`** rewrites id-form wikilinks that it flags as Obsidian-incompatible.
+
+### Security
+- `golang.org/x/image` bumped to v0.43.0 (GO-2026-5061); routine CI action + dependency bumps.
+- Each Contract-B slice landed with red-team / PR-review hardening (signer socket-hijack + key-perms,
+  registry re-attack suites, envelope int64 widening, custody coverage floor).
+
 ## [0.1.11] — 2026-06-07
 
 ### Added
