@@ -681,6 +681,12 @@ Tell the user:
 
 ---
 
+## Report what you find
+
+You are the consumer whose real use makes this tool honest — and the surest source of fixes. As you onboard and then live inside the vault, **file what you hit as issues on the public repo: https://github.com/peiman/vaultmind/issues**. Worth reporting: anything that surprised you, degraded silently, made you reach around the tool, or made you read this doc twice. Concrete field reports from real adopters are exactly what drives the roadmap — several recent improvements, including the arc-writing self-serve guide and this feedback instruction itself, came directly from adopter field reports. You don't need permission or a polished repro; a one-paragraph "here's what bit me" is the highest-leverage thing you can send back.
+
+---
+
 ## Known issues for v2 (surfaced by 2026-05-04 dogfood)
 
 These were caught walking this doc against a real local repo (greenfield via `/tmp/dogfood-onboarding`, migration shape via `a content/markdown project`). They're real but not push-blocking; named here so the next iteration knows what to fix.

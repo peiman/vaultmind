@@ -66,3 +66,11 @@ vaultmind ask "who am I" --vault <vault>   # see what the agent would see
 ```bash
 vaultmind init --print-instructions --full
 ```
+
+## 8. Report what you find
+
+You are the consumer whose real use makes this tool honest — the surest source of
+fixes. When something surprises you, degrades silently, or makes you reach around
+the tool, **file an issue: https://github.com/peiman/vaultmind/issues**. Concrete
+field reports from adopters drive what gets fixed next — this onboarding keeps
+improving because of them.

@@ -49,6 +49,18 @@ func TestInstructions_ContainsStructuralAnchors(t *testing.T) {
 	}
 }
 
+// TestOnboarding_PointsToIssuesFeedback — both the default quick-start and the
+// full guide must tell the adopting agent to report findings as vaultmind-oss
+// issues (Peiman 2026-06-23). The consumer-evidence loop only closes if a
+// self-serve adopter (no mesh link) is handed an explicit channel.
+func TestOnboarding_PointsToIssuesFeedback(t *testing.T) {
+	const issuesURL = "github.com/peiman/vaultmind/issues"
+	assert.Contains(t, string(onboard.QuickStart()), issuesURL,
+		"quick-start must name the issues feedback channel")
+	assert.Contains(t, string(onboard.Instructions()), issuesURL,
+		"full guide must name the issues feedback channel")
+}
+
 // TestPrintInstructions_WritesToWriter — `--print-instructions`
 // composes via PrintInstructions(w). Pin the contract that it writes
 // to the supplied writer (not stdout directly), so the cmd layer can
