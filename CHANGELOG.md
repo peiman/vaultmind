@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] — 2026-07-27
+
+### Fixed
+- **BGE-M3 embedding no longer deadlocks partway through a vault (the "24/42 wedge").** The
+  Python inference sidecar's stderr was captured but never drained during the batch loop, so a
+  note past BGE-M3's 8192-token limit flooded stderr with tokenizer warnings, filled the OS
+  pipe, and blocked the sidecar — and the indexer — indefinitely. stderr is now drained
+  continuously into a bounded buffer; the sidecar's `Close()` joins that drain and force-kills
+  an overstaying process. (#66)
+- **`vaultmind index --embed` no longer silently produces a mixed-dimension index.** Re-embedding
+  a bge-m3 vault (dense 1024-dim) with `--model minilm` (384-dim), or vice-versa, used to skip the
+  already-embedded notes and leave a mixed index whose minority-dimension notes silently vanish
+  from semantic retrieval. An incremental embed whose model dimension differs from the vault's now
+  **fails closed** with an actionable message pointing at `--full` and `doctor`, and an
+  unrecognized `--model` token is rejected instead of silently coercing to minilm. (#67)
+
+### Changed
+- **`vaultmind index --full --embed` now purges and re-embeds every note.** Previously `--full`
+  rebuilt the content index but preserved existing embeddings, so it could not switch models and
+  left mixed vaults uncorrected. It now purges all embeddings and re-embeds the whole vault as the
+  requested model — which also **heals** an already-mixed vault. The purge runs only after the
+  embedder loads successfully, and a `--full` run that then fails to re-embed exits non-zero
+  rather than reporting success with an emptied index. A habitual `--full --embed` now pays the
+  full embedding cost each run; plain `--embed` remains the cheap incremental convergence path. (#67)
+
+### Security
+- Bump `golang.org/x/text` to v0.39.0 to clear GO-2026-5970 (infinite loop on invalid input),
+  reachable via Unicode normalization in the embedding and identity/envelope paths.
+
 ## [0.2.1] — 2026-07-02
 
 ### Fixed
@@ -259,7 +288,10 @@ The initial public tag, retracted in favor of [0.1.3]. It shipped without the
 maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; do
 not install.
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.1.11...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/peiman/vaultmind/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/peiman/vaultmind/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/peiman/vaultmind/compare/v0.1.11...v0.2.0
 [0.1.11]: https://github.com/peiman/vaultmind/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/peiman/vaultmind/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/peiman/vaultmind/compare/v0.1.8...v0.1.9
