@@ -273,6 +273,26 @@ func TestWriteEmbeddingStatus_ModalityImbalanceSurfacesRemedy(t *testing.T) {
 	assert.Contains(t, out, "vaultmind index --embed --model bge-m3")
 }
 
+// A minilm or mixed-model vault cannot converge to bge-m3 incrementally — the
+// index-time dimension guard refuses an incremental model switch — so the doctor
+// remedy must name a --full rebuild, not an incremental embed.
+func TestWriteEmbeddingStatus_MixedVaultRemedyUsesFullRebuild(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, writeEmbeddingStatus(&buf, &query.DoctorEmbeddings{
+		SemanticReady:        true,
+		TotalNotes:           100,
+		Model:                "mixed",
+		DenseCount:           100,
+		SparseCount:          40,
+		ColBERTCount:         40,
+		HasModalityImbalance: true,
+	}))
+	out := buf.String()
+	assert.Contains(t, out, "Partial BGE-M3 coverage")
+	assert.Contains(t, out, "vaultmind index --full --embed --model bge-m3",
+		"a mixed/minilm vault must be told to --full rebuild, not embed incrementally")
+}
+
 // MiniLM index → a first-class degraded-recall WARN naming the upgrade path.
 // focalc field report P1: the MiniLM↔BGE-M3 quality cliff was silent — doctor
 // printed "(minilm)" factually but offered no judgment or remedy.

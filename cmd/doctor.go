@@ -92,7 +92,7 @@ func writeEmbeddingStatus(w io.Writer, emb *query.DoctorEmbeddings) error {
 		emb.ColBERTCount, emb.TotalNotes); err != nil {
 		return err
 	}
-	if emb.Model == "minilm" {
+	if emb.Model == embedding.ModelMiniLM {
 		// First-class degraded-recall WARN. A MiniLM index runs 2-lane recall
 		// (full-text + dense) and silently lacks BGE-M3's sparse + ColBERT
 		// lanes. `go install` yields a pure-Go/MiniLM binary, so an adopter
@@ -120,11 +120,19 @@ func writeEmbeddingStatus(w io.Writer, emb *query.DoctorEmbeddings) error {
 		}
 	}
 	if emb.HasModalityImbalance {
+		// A pure bge-m3 vault with partial modality coverage converges
+		// incrementally (the dimension already matches). A minilm or mixed-model
+		// vault cannot — the index-time dimension guard refuses an incremental
+		// model switch — so it needs a --full purge + re-embed.
+		embedCmd := "vaultmind index --embed --model bge-m3 --vault <vault>"
+		if emb.Model != embedding.ModelBGEM3 {
+			embedCmd = "vaultmind index --full --embed --model bge-m3 --vault <vault>"
+		}
 		_, err := fmt.Fprintf(w,
 			"⚠ Partial BGE-M3 coverage: %d note(s) missing sparse, %d missing colbert — "+
 				"hybrid RRF ranking will be compressed for these notes.\n"+
-				"  run: vaultmind index --embed --model bge-m3 --vault <vault>\n",
-			emb.DenseCount-emb.SparseCount, emb.DenseCount-emb.ColBERTCount)
+				"  run: %s\n",
+			emb.DenseCount-emb.SparseCount, emb.DenseCount-emb.ColBERTCount, embedCmd)
 		return err
 	}
 	return nil
