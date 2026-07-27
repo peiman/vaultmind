@@ -233,8 +233,10 @@ func TestRunEmbed_LazyLoad_SkipsModelWhenNoPendingWork(t *testing.T) {
 	idxr := index.NewIndexer(vaultRoot, dbPath, cfg)
 
 	// Fully embed first using the fake dense embedder so all rows have
-	// the dense column populated.
-	emb := fakeDenseEmbedder{dims: 8}
+	// the dense column populated. Seed at the MiniLM dimension so the
+	// dimension guard in RunEmbed(...,"minilm") sees a match and proceeds
+	// to the lazy-skip path (a mismatched dim would fail closed instead).
+	emb := fakeDenseEmbedder{dims: embedding.DefaultDims}
 	r1, err := idxr.EmbedNotes(context.Background(), dbPath, emb)
 	require.NoError(t, err)
 	require.Equal(t, 3, r1.Embedded)
@@ -253,7 +255,7 @@ func TestRunEmbed_LazyLoad_SkipsModelWhenNoPendingWork(t *testing.T) {
 	// constructor would attempt a model download if the model isn't
 	// cached, which would either error out or be slow — neither happens
 	// here when lazy-load works.
-	r2, err := idxr.RunEmbed(context.Background(), dbPath, "minilm")
+	r2, err := idxr.RunEmbed(context.Background(), dbPath, embedding.ModelMiniLM, false)
 	require.NoError(t, err, "lazy-load: RunEmbed must succeed without constructing the embedder when nothing is pending")
 	assert.Equal(t, 0, r2.Embedded, "no notes should be embedded — already all done")
 	assert.Equal(t, 3, r2.Skipped, "all 3 already-embedded notes counted as skipped")
