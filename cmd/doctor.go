@@ -121,9 +121,10 @@ func writeEmbeddingStatus(w io.Writer, emb *query.DoctorEmbeddings) error {
 	}
 	if emb.HasModalityImbalance {
 		// A pure bge-m3 vault with partial modality coverage converges
-		// incrementally (the dimension already matches). A minilm or mixed-model
-		// vault cannot — the index-time dimension guard refuses an incremental
-		// model switch — so it needs a --full purge + re-embed.
+		// incrementally (the dimension already matches). A mixed-model vault
+		// cannot — the index-time dimension guard refuses an incremental model
+		// switch — so it needs a --full purge + re-embed. (A pure-minilm vault
+		// never reaches here; it gets the degraded-recall WARN above instead.)
 		embedCmd := "vaultmind index --embed --model bge-m3 --vault <vault>"
 		if emb.Model != embedding.ModelBGEM3 {
 			embedCmd = "vaultmind index --full --embed --model bge-m3 --vault <vault>"

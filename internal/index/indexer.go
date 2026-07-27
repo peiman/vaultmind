@@ -193,9 +193,11 @@ func (idx *Indexer) RunEmbed(ctx context.Context, dbPath, model string, full boo
 // out from RunEmbed so the purge→re-embed round-trip is testable with an injected
 // embedder (RunEmbed itself constructs a real, ~2.2GB one).
 func (idx *Indexer) embedResolved(ctx context.Context, dbPath string, embedder embedding.Embedder, modelUsed string, full bool) (*EmbedResult, error) {
+	var purged int64
 	if full {
-		if _, err := PurgeEmbeddings(dbPath); err != nil {
-			return nil, fmt.Errorf("purging embeddings for a full re-embed: %w", err)
+		var perr error
+		if purged, perr = PurgeEmbeddings(dbPath); perr != nil {
+			return nil, fmt.Errorf("purging embeddings for a full re-embed: %w", perr)
 		}
 	}
 	res, err := idx.EmbedNotes(ctx, dbPath, embedder)
@@ -204,6 +206,21 @@ func (idx *Indexer) embedResolved(ctx context.Context, dbPath string, embedder e
 		// bge-m3 to minilm), so the caller stamps it, calibrates the noise floor
 		// for it, and the mixed-model guard sees the truth.
 		res.Model = modelUsed
+	}
+	// EmbedNotes is failure-tolerant: a per-batch embed/store failure is logged,
+	// counted in res.Errors, and skipped — and it returns a nil error even if EVERY
+	// batch failed or produced empty output. That's fine for an incremental run
+	// (already-embedded notes are left untouched), but a --full run has just PURGED
+	// every embedding, so anything short of a re-embed is data loss. Fail loud
+	// (non-nil error → non-zero exit) when a --full run had failures, OR purged real
+	// embeddings yet re-embedded none (a total wipe, e.g. all-empty-output), so it
+	// can't report success to a hook or script that keys on the exit code.
+	if err == nil && full && res != nil && (res.Errors > 0 || (purged > 0 && res.Embedded == 0)) {
+		return res, fmt.Errorf(
+			"--full purged %d embedding(s) but re-embedded only %d note(s) as %s (%d failed); the "+
+				"vault is now empty or partially indexed — fix the cause (see the warnings above) and "+
+				"re-run 'vaultmind index --full --embed --model %s'",
+			purged, res.Embedded, modelUsed, res.Errors, modelUsed)
 	}
 	return res, err
 }
@@ -354,8 +371,10 @@ func PurgeEmbeddings(dbPath string) (int64, error) {
 // dense dimension differs from what `model` produces — the mixed-model index that
 // otherwise arises from an incremental `--embed --model X` after a model switch.
 // It is a pure stored-dim vs expected-dim check that loads no embedder, so it runs
-// on RunEmbed's lazy path before the (multi-GB) model would be constructed. A
-// vault with no embeddings (dim 0) or embeddings that all match proceeds.
+// on RunEmbed's lazy path before the (multi-GB) model would be constructed. A vault
+// with no embeddings yet proceeds (DetectEmbeddingDimsCounts counts only non-NULL
+// dense, so its result is empty), as does one whose embeddings all match; the
+// loop's dim-0 skip is a defensive case for a zero-length blob.
 //
 //nolint:contextcheck // Open does not accept a context; this is a fast count query, not the heavy embed pass
 func guardEmbeddingModel(dbPath, model string) error {
