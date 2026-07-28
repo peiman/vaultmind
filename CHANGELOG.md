@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] — 2026-07-28
+
+### Fixed
+- **BGE-M3 embedding no longer hangs on a note that exceeds the model's token limit.** hugot
+  defaults the tokenizer's hard truncation to the model's `max_position_embeddings` (8194 for
+  BGE-M3), but XLM-RoBERTa derives position IDs with a `padding_idx+1` offset, so a sequence of
+  that full length indexes *past* the position-embedding table — the ONNX
+  `position_embeddings/Gather` node then wedges the forward pass (an unbounded hang on some ONNX
+  Runtime builds, an out-of-bounds error on others). A dense ~12k-token note therefore stalled
+  indexing at the wedge point with no output. The BGE-M3 tokenizer's own limit is now clamped to
+  the embedding token budget (`BGEM3MaxTokens`, 8190) — safely below the positional ceiling — at
+  pipeline construction, so no note can reach the model oversized regardless of the code path; the
+  char/token pre-truncation becomes an optimization rather than the sole safeguard. (#39)
+
 ## [0.2.2] — 2026-07-27
 
 ### Fixed
@@ -288,7 +302,8 @@ The initial public tag, retracted in favor of [0.1.3]. It shipped without the
 maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; do
 not install.
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/peiman/vaultmind/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/peiman/vaultmind/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/peiman/vaultmind/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/peiman/vaultmind/compare/v0.1.11...v0.2.0
