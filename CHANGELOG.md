@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`episode capture --incremental` captures a session's transcript in bounded segments instead
+  of re-rendering the whole thing on every call.** A long-lived session that never closes used to
+  have its `SessionEnd` hook re-render the ENTIRE transcript into the same episode file every
+  invocation, growing that file without bound. With `--incremental`, each capture resumes from a
+  cursor (persisted per session and target vault under `--cursor-dir`, defaulting to the XDG state
+  dir) and writes only the new content as its own small `-partNNNNNNNN` segment, so an
+  ever-growing session produces several bounded files instead of one unbounded one. (#72)
+
 ## [0.2.3] — 2026-07-28
 
 ### Fixed
