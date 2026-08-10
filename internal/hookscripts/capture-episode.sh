@@ -80,13 +80,13 @@ mkdir -p "$output_dir"
 # closes (or is manually resumed across many technical restarts) would
 # otherwise re-render into one ever-growing episode file at every SessionEnd.
 if [[ -n "$binary" ]]; then
-    "$binary" episode capture "$transcript" --output-dir "$output_dir" --incremental >/dev/null 2>&1 || {
-        echo "capture-episode: binary run failed" >&2
+    err=$("$binary" episode capture "$transcript" --output-dir "$output_dir" --incremental 2>&1 >/dev/null) || {
+        echo "capture-episode: binary run failed: $err" >&2
         exit 0
     }
 else
-    (cd "$project_dir" && go run . episode capture "$transcript" --output-dir "$output_dir" --incremental >/dev/null 2>&1) || {
-        echo "capture-episode: go run failed" >&2
+    err=$(cd "$project_dir" && go run . episode capture "$transcript" --output-dir "$output_dir" --incremental 2>&1 >/dev/null) || {
+        echo "capture-episode: go run failed: $err" >&2
         exit 0
     }
 fi
