@@ -80,6 +80,7 @@ func ParseTranscriptFrom(path string, startLine int) (*Episode, int, error) {
 	scanner.Buffer(make([]byte, 1<<20), 1<<24) // up to 16 MiB per line
 
 	lineNum := 0
+	tailFailedParse := false
 	for scanner.Scan() {
 		lineNum++
 		if lineNum <= startLine {
@@ -88,8 +89,18 @@ func ParseTranscriptFrom(path string, startLine int) (*Episode, int, error) {
 
 		var rec record
 		if err := json.Unmarshal(scanner.Bytes(), &rec); err != nil {
+			// A line that fails to unmarshal is normally tolerated as noise
+			// (malformed/legacy records elsewhere in the file). But if THIS
+			// is the last line the scanner reaches, it may be a record
+			// Claude Code is still mid-flush on, not permanently bad data —
+			// tailFailedParse is checked after the loop and, if still true,
+			// backs the cursor off by one line so this exact line gets a
+			// real second chance next call instead of being silently
+			// skipped forever the moment the cursor passes it.
+			tailFailedParse = true
 			continue
 		}
+		tailFailedParse = false
 		if ep.SessionID == "" && rec.SessionID != "" {
 			ep.SessionID = rec.SessionID
 		}
@@ -120,14 +131,35 @@ func ParseTranscriptFrom(path string, startLine int) (*Episode, int, error) {
 		return nil, startLine, fmt.Errorf("scan transcript: %w", err)
 	}
 	if lineNum < startLine {
-		lineNum = startLine // file hasn't grown past the cursor; don't regress it
+		// This function can't tell "the file genuinely shrank since a real
+		// prior cursor was recorded" apart from "the caller simply asked
+		// for a startLine this file never reached" — both look identical
+		// from here. Stay conservative and never regress the returned
+		// line below what was asked for; CaptureIncremental is where
+		// shrinkage actually gets detected and handled, because it alone
+		// knows startLine came from a real, previously-persisted cursor.
+		lineNum = startLine
+	}
+	if tailFailedParse && lineNum > startLine {
+		// The last line reached failed to unmarshal — it may be a record
+		// Claude Code hasn't finished writing yet, not permanently bad
+		// data. Don't let the cursor advance past it: back off by one line
+		// so it gets a real second chance whole, next call, instead of
+		// being silently and permanently skipped the moment the cursor
+		// moves past it.
+		lineNum--
 	}
 
 	// A delta can have zero new records but the transcript still identifies
 	// its session (e.g. a re-scan past the end of an already-captured file) —
 	// recover the session id from the whole file so a no-op capture still
 	// knows whose cursor to leave alone. Cheap: SessionID appears on the
-	// first record.
+	// first record. sidErr is deliberately not propagated: this is a
+	// best-effort recovery on top of an already-empty ep.SessionID, so a
+	// failure here just leaves it empty, exactly as if the fallback had never
+	// run — callers that require a non-empty SessionID (e.g.
+	// CaptureIncremental's own sessionIDOf call) already check for that and
+	// fail loudly on their own terms.
 	if ep.SessionID == "" {
 		if sid, sidErr := sessionIDOf(path); sidErr == nil {
 			ep.SessionID = sid
@@ -161,6 +193,29 @@ func sessionIDOf(path string) (string, error) {
 		}
 	}
 	return "", scanner.Err()
+}
+
+// CountLines returns the total number of lines in path, without parsing any
+// of them — used to detect a shrunken transcript cheaply, without paying for
+// a full JSON-unmarshaling re-scan on the (common) path where nothing has
+// changed. See CaptureIncremental's shrinkage check.
+func CountLines(path string) (int, error) {
+	// #nosec G304 -- caller-supplied path, read-only.
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = f.Close() }()
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 1<<20), 1<<24)
+	n := 0
+	for scanner.Scan() {
+		n++
+	}
+	if err := scanner.Err(); err != nil {
+		return 0, err
+	}
+	return n, nil
 }
 
 type record struct {
