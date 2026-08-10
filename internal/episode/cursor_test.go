@@ -58,6 +58,16 @@ func TestReadCursor_ErrorsOnCorruptCursorFile(t *testing.T) {
 	require.Error(t, err, "a corrupt cursor must fail loud, never silently restart from zero and re-blob the transcript")
 }
 
+func TestReadCursor_ErrorsOnNegativeLine(t *testing.T) {
+	dir := t.TempDir()
+	// strconv.Atoi accepts a leading "-", so this must be explicitly rejected
+	// rather than sailing through as a "valid" (nonsensical) cursor value.
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "session-abc.cursor"), []byte("-5"), 0o600))
+
+	_, err := episode.ReadCursor(dir, "session-abc")
+	require.Error(t, err, "a negative line number is corrupt data, not a valid cursor")
+}
+
 func TestWriteCursor_ErrorsWhenCursorDirCannotBeCreated(t *testing.T) {
 	// A regular file sits where a directory is needed, so MkdirAll must fail.
 	blocker := filepath.Join(t.TempDir(), "blocker")
@@ -68,6 +78,9 @@ func TestWriteCursor_ErrorsWhenCursorDirCannotBeCreated(t *testing.T) {
 }
 
 func TestWriteCursor_ErrorsWhenDestinationCannotBeWritten(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses directory permissions; cannot exercise the write-error path")
+	}
 	dir := t.TempDir()
 	require.NoError(t, os.Chmod(dir, 0o500)) // read+execute only, no write
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
