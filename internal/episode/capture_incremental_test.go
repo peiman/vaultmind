@@ -129,9 +129,20 @@ func TestCaptureIncremental_ToolOnlyDeltaWithNoTextIsStillCapturable(t *testing.
 func TestCaptureIncremental_PropagatesACorruptCursorAsAnError(t *testing.T) {
 	outDir := filepath.Join(t.TempDir(), "episodes")
 	cursorDir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(cursorDir, "test-session-abc12345.cursor"), []byte("not-a-number"), 0o600))
 
+	// The cursor key is a vault-scoped internal detail (sessionID combined
+	// with a hash of outputDir) — discover the real file CaptureIncremental
+	// wrote rather than assuming its name, so this test doesn't silently
+	// stop exercising the real ReadCursor path the moment that scheme changes.
 	_, err := episode.CaptureIncremental(fixturePath, outDir, cursorDir)
+	require.NoError(t, err)
+
+	entries, err := os.ReadDir(cursorDir)
+	require.NoError(t, err)
+	require.Len(t, entries, 1, "exactly one cursor file should exist after one capture")
+	require.NoError(t, os.WriteFile(filepath.Join(cursorDir, entries[0].Name()), []byte("not-a-number"), 0o600))
+
+	_, err = episode.CaptureIncremental(fixturePath, outDir, cursorDir)
 	require.Error(t, err)
 }
 
@@ -162,6 +173,89 @@ func TestCaptureIncremental_NoiseOnlyDeltaAdvancesCursorWithoutWritingAFile(t *t
 	assert.Len(t, entries, 1, "only the original real content produced a file")
 }
 
+// The window this whole cursor design exists to make safe: the segment file
+// write succeeds, then the cursor write fails (disk fills, permissions
+// change mid-run, whatever). The segment is now on disk with content the
+// cursor doesn't know about. This must self-heal: a later successful call
+// re-reads the stale (unadvanced) cursor, re-derives the SAME segment id —
+// since startLine didn't move — and overwrites that same file rather than
+// losing the content or leaving a stray duplicate behind.
+func TestCaptureIncremental_SelfHealsWhenCursorWriteFailsAfterSegmentIsWritten(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses directory permissions; cannot exercise the cursor-write-failure path")
+	}
+	outDir := filepath.Join(t.TempDir(), "episodes")
+	cursorDir := t.TempDir()
+	txn := newGrowingTranscript(t, fixturePath)
+
+	first, err := episode.CaptureIncremental(txn.path, outDir, cursorDir)
+	require.NoError(t, err)
+	require.NotEmpty(t, first)
+
+	txn.grow(t, `{"type":"user","message":{"role":"user","content":"partial-failure content"},"timestamp":"2026-04-24T10:03:00.000Z","sessionId":"test-session-abc12345"}`)
+
+	require.NoError(t, os.Chmod(cursorDir, 0o500)) // readable+listable, not writable
+	t.Cleanup(func() { _ = os.Chmod(cursorDir, 0o700) })
+
+	_, err = episode.CaptureIncremental(txn.path, outDir, cursorDir)
+	require.Error(t, err, "the cursor write must fail and surface, not be swallowed")
+
+	entries, err := os.ReadDir(outDir)
+	require.NoError(t, err)
+	require.Len(t, entries, 2, "the segment write already committed before the cursor write failed")
+	second := filepath.Join(outDir, entries[1].Name())
+	body, err := os.ReadFile(second) // #nosec G304 -- test-controlled path
+	require.NoError(t, err)
+	assert.Contains(t, string(body), "partial-failure content", "the segment genuinely has the new content, despite the cursor not knowing it yet")
+
+	require.NoError(t, os.Chmod(cursorDir, 0o700))
+	third, err := episode.CaptureIncremental(txn.path, outDir, cursorDir)
+	require.NoError(t, err, "the stale cursor lets this retry the same delta cleanly")
+	assert.Equal(t, second, third, "re-derives the SAME segment id — the cursor never advanced — and overwrites it")
+
+	entriesAfter, err := os.ReadDir(outDir)
+	require.NoError(t, err)
+	assert.Len(t, entriesAfter, 2, "no stray duplicate left behind by the retry")
+}
+
+// A transcript that now has FEWER lines than the persisted cursor already
+// consumed (truncated, rotated, or replaced underneath the hook) must not
+// get stuck reporting "nothing new" forever, silently losing every future
+// real message. CaptureIncremental is the only layer that can safely detect
+// this — its startLine came from a real cursor it wrote for THIS session,
+// unlike the low-level ParseTranscriptFrom, which can't tell "shrank" apart
+// from "never grew that far" (see TestParseTranscriptFrom_
+// StartLineNeverReachedStaysAtStartLineNotBelow for that boundary).
+func TestCaptureIncremental_ShrunkenTranscriptResetsAndRescans(t *testing.T) {
+	outDir := filepath.Join(t.TempDir(), "episodes")
+	cursorDir := t.TempDir()
+	txn := newGrowingTranscript(t, fixturePath)
+
+	first, err := episode.CaptureIncremental(txn.path, outDir, cursorDir)
+	require.NoError(t, err)
+	require.NotEmpty(t, first)
+
+	// Replace the transcript with a much shorter one — same session,
+	// simulating rotation/truncation rather than ordinary append growth.
+	require.NoError(t, os.WriteFile(txn.path, []byte(
+		`{"type":"user","message":{"role":"user","content":"replaced after truncation"},"timestamp":"2026-05-01T00:00:00.000Z","sessionId":"test-session-abc12345"}`+"\n",
+	), 0o600))
+
+	second, err := episode.CaptureIncremental(txn.path, outDir, cursorDir)
+	require.NoError(t, err)
+	require.NotEmpty(t, second, "must re-capture the shrunken file, not silently report nothing-new forever")
+
+	body, err := os.ReadFile(second) // #nosec G304 -- test-controlled path
+	require.NoError(t, err)
+	assert.Contains(t, string(body), "replaced after truncation")
+
+	// And the cursor genuinely reset, rather than getting stuck: a further
+	// no-op call now correctly reports nothing new against the SHORT file.
+	third, err := episode.CaptureIncremental(txn.path, outDir, cursorDir)
+	require.NoError(t, err)
+	assert.Empty(t, third, "cursor is caught up with the (short) file again, not stuck mid-reset")
+}
+
 func TestCaptureIncremental_ErrorsWhenOutputDirCannotBeCreated(t *testing.T) {
 	blocker := filepath.Join(t.TempDir(), "blocker")
 	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0o600))
@@ -187,6 +281,36 @@ func TestCaptureIncremental_DifferentSessionsDoNotShareACursor(t *testing.T) {
 	assert.NotEmpty(t, a)
 	assert.NotEmpty(t, b)
 	assert.NotEqual(t, a, b)
+}
+
+// Routing the SAME session's capture at two different --output-dirs (e.g. two
+// separate identity vaults sharing one --cursor-dir) must not let the first
+// vault's cursor silently truncate the second vault's capture — each vault
+// needs its own full view of the session, not whatever line the OTHER vault
+// happened to already consume.
+func TestCaptureIncremental_DifferentOutputDirsDoNotShareACursor(t *testing.T) {
+	cursorDir := t.TempDir()
+	vaultA := filepath.Join(t.TempDir(), "vault-a", "episodes")
+	vaultB := filepath.Join(t.TempDir(), "vault-b", "episodes")
+
+	a, err := episode.CaptureIncremental(fixturePath, vaultA, cursorDir)
+	require.NoError(t, err)
+	require.NotEmpty(t, a, "first vault must capture the full session")
+
+	b, err := episode.CaptureIncremental(fixturePath, vaultB, cursorDir)
+	require.NoError(t, err)
+	require.NotEmpty(t, b, "second vault must ALSO capture the full session, not see it as already-consumed by vault A's cursor")
+
+	aEntries, err := os.ReadDir(vaultA)
+	require.NoError(t, err)
+	assert.Len(t, aEntries, 1)
+	bEntries, err := os.ReadDir(vaultB)
+	require.NoError(t, err)
+	assert.Len(t, bEntries, 1)
+
+	cursorEntries, err := os.ReadDir(cursorDir)
+	require.NoError(t, err)
+	assert.Len(t, cursorEntries, 2, "each vault gets its own cursor file, not a shared one")
 }
 
 func TestCaptureIncremental_ErrorsOnBadTranscript(t *testing.T) {

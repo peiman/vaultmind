@@ -1,6 +1,8 @@
 package episode
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io/fs"
 	"os"
@@ -32,6 +34,29 @@ func Capture(transcriptPath, outputDir string) (string, error) {
 	return outPath, nil
 }
 
+// vaultScopedCursorKey combines outputDir and sessionID into a single cursor
+// key so that capturing the same session into two different --output-dirs
+// (vaults) never shares — or silently truncates — the same cursor. Keying
+// purely on sessionID would mean pointing capture at a second vault while
+// reusing the same --cursor-dir resumes from wherever the FIRST vault's
+// capture left off, silently skipping content the second vault has never
+// actually captured.
+//
+// outputDir is hashed rather than embedded verbatim because it's an
+// arbitrary filesystem path — spaces, unicode, and other characters
+// cursorFilePath's safeCursorKeyRe rejects are all valid there. sessionID
+// stays in the clear for debuggability; cursorFilePath still validates the
+// composed result, so a transcript carrying a malicious sessionId is
+// rejected exactly as before.
+func vaultScopedCursorKey(outputDir, sessionID string) (string, error) {
+	abs, err := filepath.Abs(outputDir)
+	if err != nil {
+		return "", fmt.Errorf("resolve output dir: %w", err)
+	}
+	sum := sha256.Sum256([]byte(filepath.Clean(abs)))
+	return sessionID + "-" + hex.EncodeToString(sum[:])[:12], nil
+}
+
 // CaptureIncremental captures only the transcript segment written since the
 // last CaptureIncremental call for this session (tracked via a cursor file in
 // cursorDir), writing it as a new, uniquely-named episode segment file in
@@ -52,8 +77,12 @@ func CaptureIncremental(transcriptPath, outputDir, cursorDir string) (string, er
 	if sessionID == "" {
 		return "", fmt.Errorf("transcript has no session id — empty or not a Claude Code transcript: %s", transcriptPath)
 	}
+	cursorKey, err := vaultScopedCursorKey(outputDir, sessionID)
+	if err != nil {
+		return "", err
+	}
 
-	startLine, err := ReadCursor(cursorDir, sessionID)
+	startLine, err := ReadCursor(cursorDir, cursorKey)
 	if err != nil {
 		return "", err
 	}
@@ -63,13 +92,37 @@ func CaptureIncremental(transcriptPath, outputDir, cursorDir string) (string, er
 		return "", err
 	}
 	if endLine == startLine {
-		return "", nil // nothing new since the last capture
+		// Looks like a no-op, but ParseTranscriptFrom can't tell "genuinely
+		// nothing new" apart from "the file shrank below startLine" — both
+		// return endLine == startLine (it never regresses on its own). This
+		// is the one place that CAN tell: startLine came from a real cursor
+		// WE persisted for THIS session, so if the file's true current line
+		// count is now less than that, the transcript was truncated,
+		// rotated, or replaced underneath us. Left unhandled, the cursor
+		// would stay stuck there forever, reporting "nothing new" on every
+		// future call while real content silently piles up uncaptured.
+		//
+		// CountLines is a cheap line-count-only pass (no JSON parsing), paid
+		// only on this branch — the hook also fires on Stop (every turn),
+		// not just SessionEnd, so a true no-op is the common case and must
+		// not pay for a second full parse every time.
+		if total, cErr := CountLines(transcriptPath); cErr == nil && total < startLine {
+			// Reset the cursor to 0 FIRST, then recurse — the recursive
+			// call's own ReadCursor must see the reset, not the stale
+			// value, or this would loop forever re-detecting the same
+			// shrinkage instead of actually re-capturing.
+			if err := WriteCursor(cursorDir, cursorKey, 0); err != nil {
+				return "", fmt.Errorf("reset cursor after detecting a shrunken transcript: %w", err)
+			}
+			return CaptureIncremental(transcriptPath, outputDir, cursorDir)
+		}
+		return "", nil // genuinely nothing new since the last capture
 	}
 	if !hasCapturableContent(ep) {
 		// The transcript grew, but only with filtered noise (e.g. more
 		// system-reminders) — advance the cursor so it's never re-scanned,
 		// but don't write an episode file with nothing in it.
-		return "", WriteCursor(cursorDir, sessionID, endLine)
+		return "", WriteCursor(cursorDir, cursorKey, endLine)
 	}
 
 	if err := os.MkdirAll(outputDir, 0o750); err != nil {
@@ -80,7 +133,7 @@ func CaptureIncremental(transcriptPath, outputDir, cursorDir string) (string, er
 	if err := atomicWriteFile(outPath, []byte(RenderMarkdown(ep))); err != nil {
 		return "", fmt.Errorf("write episode segment: %w", err)
 	}
-	if err := WriteCursor(cursorDir, sessionID, endLine); err != nil {
+	if err := WriteCursor(cursorDir, cursorKey, endLine); err != nil {
 		return "", fmt.Errorf("advance cursor after writing %s: %w", outPath, err)
 	}
 	return outPath, nil
@@ -103,6 +156,11 @@ func hasCapturableContent(ep *Episode) bool {
 // ever advances forward, so two segments of the same session can never
 // collide — unlike a full-transcript ID keyed only on (date, session
 // prefix), which silently overwrites when more than one capture shares both.
+//
+// The "-partNNNNNNNN" suffix is that raw transcript line number, not a
+// sequential 0/1/2/… segment index — two segments from the same session can
+// legitimately jump from, say, -part00000012 to -part00000340 if a lot of
+// filtered noise separated them, with nothing in between.
 func deriveSegmentID(startedAt, sessionID string, startLine int) string {
 	return fmt.Sprintf("%s-part%08d", deriveID(startedAt, sessionID), startLine)
 }
