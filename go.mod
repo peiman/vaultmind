@@ -6,7 +6,7 @@ require (
 	filippo.io/edwards25519 v1.2.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/go-git/go-git/v5 v5.19.1
+	github.com/go-git/go-git/v5 v5.19.2
 	github.com/gowebpki/jcs v1.0.1
 	github.com/knights-analytics/hugot v0.7.0
 	github.com/mattn/go-isatty v0.0.22
