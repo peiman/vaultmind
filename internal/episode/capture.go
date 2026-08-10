@@ -86,8 +86,16 @@ func CaptureIncremental(transcriptPath, outputDir, cursorDir string) (string, er
 	return outPath, nil
 }
 
+// hasCapturableContent reports whether ep carries anything worth writing an
+// episode segment for. Checks every field the Episode struct can carry, not
+// a subset — a delta that touched files via Read/Edit/Write but produced no
+// text block (tool calls without prose) still has real, worth-keeping
+// signal, and treating it as empty would silently drop it while still
+// advancing the cursor past it.
 func hasCapturableContent(ep *Episode) bool {
-	return len(ep.UserMessages) > 0 || len(ep.AssistantMessages) > 0 || len(ep.PRs) > 0 || len(ep.Commits) > 0
+	return len(ep.UserMessages) > 0 || len(ep.AssistantMessages) > 0 ||
+		len(ep.PRs) > 0 || len(ep.Commits) > 0 ||
+		len(ep.FilesTouched) > 0 || len(ep.ToolCounts) > 0
 }
 
 // deriveSegmentID names one incremental-capture segment uniquely within its

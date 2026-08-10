@@ -100,6 +100,29 @@ func TestCaptureIncremental_GrowingTranscriptProducesASecondBoundedSegment(t *te
 	assert.NotContains(t, string(thirdBody), "run the tests please", "and none of the already-captured content")
 }
 
+// A delta consisting only of tool-use records (no text block) still has
+// real, worth-keeping signal — which files were touched, which tools ran —
+// and must not be classified as empty just because it produced no prose.
+func TestCaptureIncremental_ToolOnlyDeltaWithNoTextIsStillCapturable(t *testing.T) {
+	outDir := filepath.Join(t.TempDir(), "episodes")
+	cursorDir := t.TempDir()
+	txn := newGrowingTranscript(t, fixturePath)
+
+	first, err := episode.CaptureIncremental(txn.path, outDir, cursorDir)
+	require.NoError(t, err)
+	require.NotEmpty(t, first)
+
+	txn.grow(t, `{"type":"assistant","message":{"model":"claude-opus-4-7","role":"assistant","content":[{"type":"tool_use","id":"t9","name":"Read","input":{"file_path":"/tmp/foo.go"}}]},"timestamp":"2026-04-24T10:01:00.000Z","sessionId":"test-session-abc12345"}`)
+
+	second, err := episode.CaptureIncremental(txn.path, outDir, cursorDir)
+	require.NoError(t, err)
+	require.NotEmpty(t, second, "a tool-only delta (file touched, no prose) must still be captured, not silently dropped")
+
+	body, err := os.ReadFile(second) // #nosec G304 -- test-controlled path
+	require.NoError(t, err)
+	assert.Contains(t, string(body), "/tmp/foo.go", "the file-touch signal must survive into the written segment")
+}
+
 func TestCaptureIncremental_DifferentSessionsDoNotShareACursor(t *testing.T) {
 	outDir := filepath.Join(t.TempDir(), "episodes")
 	cursorDir := t.TempDir()
