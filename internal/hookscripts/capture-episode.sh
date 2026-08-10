@@ -75,13 +75,17 @@ fi
 
 mkdir -p "$output_dir"
 
+# --incremental: capture only the transcript delta since this session's last
+# SessionEnd, not the whole transcript every time. A session that never
+# closes (or is manually resumed across many technical restarts) would
+# otherwise re-render into one ever-growing episode file at every SessionEnd.
 if [[ -n "$binary" ]]; then
-    "$binary" episode capture "$transcript" --output-dir "$output_dir" >/dev/null 2>&1 || {
+    "$binary" episode capture "$transcript" --output-dir "$output_dir" --incremental >/dev/null 2>&1 || {
         echo "capture-episode: binary run failed" >&2
         exit 0
     }
 else
-    (cd "$project_dir" && go run . episode capture "$transcript" --output-dir "$output_dir" >/dev/null 2>&1) || {
+    (cd "$project_dir" && go run . episode capture "$transcript" --output-dir "$output_dir" --incremental >/dev/null 2>&1) || {
         echo "capture-episode: go run failed" >&2
         exit 0
     }

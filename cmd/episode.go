@@ -12,9 +12,11 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/peiman/vaultmind/internal/episode"
+	"github.com/peiman/vaultmind/internal/xdg"
 	"github.com/spf13/cobra"
 )
 
@@ -77,9 +79,31 @@ OUTPUT
 
 FLAGS
 
-  --output-dir: Directory to write the episode markdown file (string,
-                default: "vaultmind-identity/episodes"). Created if it
-                does not exist.
+  --output-dir:  Directory to write the episode markdown file (string,
+                 default: "vaultmind-identity/episodes"). Created if it
+                 does not exist.
+
+  --incremental: Capture only the transcript delta since the last incremental
+                 capture of this session, instead of re-rendering the whole
+                 transcript. Fixes the failure mode where a session that
+                 never closes produces one ever-growing episode file: each
+                 call writes a new, small, uniquely-named segment covering
+                 only what's genuinely new. Tracks progress via a per-session
+                 cursor file (--cursor-dir). Ignored for directory input
+                 (bootstrap capture always wants the full history).
+
+  --cursor-dir:  Where incremental-capture cursor files live (string,
+                 default: the XDG state dir). Only meaningful with
+                 --incremental.
+
+OUTPUT (--incremental)
+
+  Prints the new segment's path, same as a normal capture. When there is
+  nothing new since the last call — the common case for a SessionEnd hook
+  firing on a session that hasn't produced new content — prints one line
+  saying so and exits 0; it never prints a blank line or writes an empty
+  episode file, so "nothing happened" and "silently failed" are never the
+  same output.
 
 EXAMPLES
 
@@ -92,6 +116,9 @@ EXAMPLES
   vaultmind episode capture "$CLAUDE_SESSION_TRANSCRIPT"
       # Typical hook invocation; CLAUDE_SESSION_TRANSCRIPT set by Claude Code
 
+  vaultmind episode capture "$CLAUDE_SESSION_TRANSCRIPT" --incremental
+      # Long-lived-session-safe hook invocation: bounded segments, not one blob
+
   vaultmind episode capture ~/.claude/projects/my-project --output-dir vaultmind-identity/episodes
       # BOOTSTRAP: pass a DIRECTORY to capture every *.jsonl transcript under it
       # (recursively). Seed an identity vault from sessions that already exist —
@@ -102,8 +129,31 @@ EXAMPLES
 		if info, err := os.Stat(args[0]); err == nil && info.IsDir() {
 			return runEpisodeCaptureDir(cmd, args[0], outputDir)
 		}
-		path, err := episode.Capture(args[0], outputDir)
+
+		incremental, _ := cmd.Flags().GetBool("incremental")
+		if !incremental {
+			path, err := episode.Capture(args[0], outputDir)
+			if err != nil {
+				return err
+			}
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), path)
+			return err
+		}
+
+		cursorDir, _ := cmd.Flags().GetString("cursor-dir")
+		if cursorDir == "" {
+			dir, err := xdg.StateDir()
+			if err != nil {
+				return fmt.Errorf("resolve default cursor dir: %w", err)
+			}
+			cursorDir = filepath.Join(dir, "episode-cursors")
+		}
+		path, err := episode.CaptureIncremental(args[0], outputDir, cursorDir)
 		if err != nil {
+			return err
+		}
+		if path == "" {
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), "(nothing new to capture since the last incremental capture)")
 			return err
 		}
 		_, err = fmt.Fprintln(cmd.OutOrStdout(), path)
@@ -137,6 +187,8 @@ func runEpisodeCaptureDir(cmd *cobra.Command, dir, outputDir string) error {
 
 func init() {
 	episodeCaptureCmd.Flags().String("output-dir", "vaultmind-identity/episodes", "Directory to write the episode markdown file")
+	episodeCaptureCmd.Flags().Bool("incremental", false, "Capture only the delta since the last incremental capture of this session (bounded segments, not one ever-growing file)")
+	episodeCaptureCmd.Flags().String("cursor-dir", "", "Where incremental-capture cursor files live (default: XDG state dir)")
 	episodeCmd.AddCommand(episodeCaptureCmd)
 	MustAddToRoot(episodeCmd)
 }

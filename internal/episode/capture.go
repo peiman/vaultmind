@@ -32,6 +32,73 @@ func Capture(transcriptPath, outputDir string) (string, error) {
 	return outPath, nil
 }
 
+// CaptureIncremental captures only the transcript segment written since the
+// last CaptureIncremental call for this session (tracked via a cursor file in
+// cursorDir), writing it as a new, uniquely-named episode segment file in
+// outputDir. Returns "" with a nil error when there is nothing new to
+// capture — a no-op SessionEnd, or a delta containing only filtered noise,
+// must never write an empty episode file.
+//
+// This is the fix for a long-lived session that never closes: Capture
+// re-renders the WHOLE transcript into the SAME file every SessionEnd, which
+// silently grows one episode without bound. CaptureIncremental instead
+// accumulates several small, bounded segment files, each covering only what
+// was genuinely new since the last capture.
+func CaptureIncremental(transcriptPath, outputDir, cursorDir string) (string, error) {
+	sessionID, err := sessionIDOf(transcriptPath)
+	if err != nil {
+		return "", fmt.Errorf("read session id: %w", err)
+	}
+	if sessionID == "" {
+		return "", fmt.Errorf("transcript has no session id — empty or not a Claude Code transcript: %s", transcriptPath)
+	}
+
+	startLine, err := ReadCursor(cursorDir, sessionID)
+	if err != nil {
+		return "", err
+	}
+
+	ep, endLine, err := ParseTranscriptFrom(transcriptPath, startLine)
+	if err != nil {
+		return "", err
+	}
+	if endLine == startLine {
+		return "", nil // nothing new since the last capture
+	}
+	if !hasCapturableContent(ep) {
+		// The transcript grew, but only with filtered noise (e.g. more
+		// system-reminders) — advance the cursor so it's never re-scanned,
+		// but don't write an episode file with nothing in it.
+		return "", WriteCursor(cursorDir, sessionID, endLine)
+	}
+
+	if err := os.MkdirAll(outputDir, 0o750); err != nil {
+		return "", fmt.Errorf("create output dir: %w", err)
+	}
+	ep.ID = deriveSegmentID(ep.StartedAt, sessionID, startLine)
+	outPath := filepath.Join(outputDir, ep.ID+".md")
+	if err := atomicWriteFile(outPath, []byte(RenderMarkdown(ep))); err != nil {
+		return "", fmt.Errorf("write episode segment: %w", err)
+	}
+	if err := WriteCursor(cursorDir, sessionID, endLine); err != nil {
+		return "", fmt.Errorf("advance cursor after writing %s: %w", outPath, err)
+	}
+	return outPath, nil
+}
+
+func hasCapturableContent(ep *Episode) bool {
+	return len(ep.UserMessages) > 0 || len(ep.AssistantMessages) > 0 || len(ep.PRs) > 0 || len(ep.Commits) > 0
+}
+
+// deriveSegmentID names one incremental-capture segment uniquely within its
+// session. startLine is the cursor position the segment began at, which only
+// ever advances forward, so two segments of the same session can never
+// collide — unlike a full-transcript ID keyed only on (date, session
+// prefix), which silently overwrites when more than one capture shares both.
+func deriveSegmentID(startedAt, sessionID string, startLine int) string {
+	return fmt.Sprintf("%s-part%08d", deriveID(startedAt, sessionID), startLine)
+}
+
 // CaptureBatch summarizes a directory capture: the episode files written and the
 // transcripts that were skipped (with the reason). Skipping is deliberate — a noise
 // or partial transcript in a large history must not abort the whole batch.

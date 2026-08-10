@@ -23,6 +23,45 @@ func TestEpisodeCapture_SingleFile(t *testing.T) {
 	assert.Len(t, entries, 1)
 }
 
+// `episode capture <file> --incremental` writes a bounded segment and prints
+// its path, same as a normal capture, on the first call for a session.
+func TestEpisodeCapture_Incremental_FirstCallWritesASegment(t *testing.T) {
+	outDir := filepath.Join(t.TempDir(), "episodes")
+	cursorDir := t.TempDir()
+
+	out, _, err := runRootCmd(t, "episode", "capture", episodeFixture,
+		"--output-dir", outDir, "--incremental", "--cursor-dir", cursorDir)
+	require.NoError(t, err)
+	assert.Contains(t, out.String(), "episode-", "prints the written segment's path")
+
+	entries, err := os.ReadDir(outDir)
+	require.NoError(t, err)
+	assert.Len(t, entries, 1)
+}
+
+// A second `--incremental` call on the same, unchanged transcript must not
+// print a blank line or write a duplicate/empty file — it must say plainly
+// that there was nothing new, so a human running it manually (or reading
+// hook logs) never has to guess whether "no output" meant success or a
+// silent failure.
+func TestEpisodeCapture_Incremental_SecondCallOnUnchangedTranscriptSaysSo(t *testing.T) {
+	outDir := filepath.Join(t.TempDir(), "episodes")
+	cursorDir := t.TempDir()
+
+	_, _, err := runRootCmd(t, "episode", "capture", episodeFixture,
+		"--output-dir", outDir, "--incremental", "--cursor-dir", cursorDir)
+	require.NoError(t, err)
+
+	out, _, err := runRootCmd(t, "episode", "capture", episodeFixture,
+		"--output-dir", outDir, "--incremental", "--cursor-dir", cursorDir)
+	require.NoError(t, err)
+	assert.Contains(t, out.String(), "nothing new to capture")
+
+	entries, err := os.ReadDir(outDir)
+	require.NoError(t, err)
+	assert.Len(t, entries, 1, "the no-op second call wrote nothing new")
+}
+
 // `episode capture <dir>` batch-captures every transcript under the directory,
 // skipping non-transcripts and pointing at the next step. Covers the RunE
 // directory-detection branch + runEpisodeCaptureDir.

@@ -48,10 +48,27 @@ type Episode struct {
 // blocks) are filtered — only real human/assistant exchanges, tool uses, and
 // structural events are kept.
 func ParseTranscript(path string) (*Episode, error) {
+	ep, _, err := ParseTranscriptFrom(path, 0)
+	return ep, err
+}
+
+// ParseTranscriptFrom parses only the transcript lines strictly after
+// startLine (0 = parse from the beginning) and returns the resulting delta
+// Episode plus the new total line count, for a caller (CaptureIncremental) to
+// persist as the next call's startLine.
+//
+// This is what makes cursor-based incremental capture possible: a long-lived
+// session's SessionEnd hook can re-parse only the tail written since the last
+// capture instead of re-rendering the whole transcript every time, which is
+// what produces one ever-growing episode file for a session that never
+// closes. A startLine at or beyond the current end of file is not an error —
+// it returns an empty delta at the same line count, the correct "nothing new
+// since last time" result for a SessionEnd fired with no new records.
+func ParseTranscriptFrom(path string, startLine int) (*Episode, int, error) {
 	// #nosec G304 -- caller-supplied path, read-only; this is a CLI tool, not a server.
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("open transcript: %w", err)
+		return nil, startLine, fmt.Errorf("open transcript: %w", err)
 	}
 	defer func() { _ = f.Close() }()
 
@@ -62,7 +79,13 @@ func ParseTranscript(path string) (*Episode, error) {
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 1<<20), 1<<24) // up to 16 MiB per line
 
+	lineNum := 0
 	for scanner.Scan() {
+		lineNum++
+		if lineNum <= startLine {
+			continue
+		}
+
 		var rec record
 		if err := json.Unmarshal(scanner.Bytes(), &rec); err != nil {
 			continue
@@ -94,12 +117,50 @@ func ParseTranscript(path string) (*Episode, error) {
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("scan transcript: %w", err)
+		return nil, startLine, fmt.Errorf("scan transcript: %w", err)
+	}
+	if lineNum < startLine {
+		lineNum = startLine // file hasn't grown past the cursor; don't regress it
+	}
+
+	// A delta can have zero new records but the transcript still identifies
+	// its session (e.g. a re-scan past the end of an already-captured file) —
+	// recover the session id from the whole file so a no-op capture still
+	// knows whose cursor to leave alone. Cheap: SessionID appears on the
+	// first record.
+	if ep.SessionID == "" {
+		if sid, sidErr := sessionIDOf(path); sidErr == nil {
+			ep.SessionID = sid
+		}
 	}
 
 	ep.FilesTouched = sortedKeys(filesSeen)
 	ep.ID = deriveID(ep.StartedAt, ep.SessionID)
-	return ep, nil
+	return ep, lineNum, nil
+}
+
+// sessionIDOf returns the sessionId carried by the first record that has
+// one, scanning from the start regardless of any cursor — used only to label
+// a zero-record delta with the right session, never to extract content.
+func sessionIDOf(path string) (string, error) {
+	// #nosec G304 -- caller-supplied path, read-only.
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = f.Close() }()
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 1<<20), 1<<24)
+	for scanner.Scan() {
+		var rec record
+		if err := json.Unmarshal(scanner.Bytes(), &rec); err != nil {
+			continue
+		}
+		if rec.SessionID != "" {
+			return rec.SessionID, nil
+		}
+	}
+	return "", scanner.Err()
 }
 
 type record struct {
