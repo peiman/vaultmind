@@ -39,6 +39,27 @@ func TestEpisodeCapture_Incremental_FirstCallWritesASegment(t *testing.T) {
 	assert.Len(t, entries, 1)
 }
 
+// Omitting --cursor-dir must resolve a real, working default (the XDG state
+// dir) rather than silently doing nothing — the flag is documented as
+// optional, so the default path is a real code path, not a formality.
+//
+// Isolation: xdg.StateDir() ignores XDG_STATE_HOME entirely on darwin
+// (internal/xdg's stateBase() hardcodes ~/Library/Application Support there —
+// consistent with every other StateDir/DataDir consumer in this codebase).
+// $HOME is what actually redirects it on every platform this package
+// supports, so that's what must be overridden — not XDG_STATE_HOME, which
+// would silently no-op here and let the test write into the real user's
+// Application Support directory. Confirmed by hand: an earlier version of
+// this test using XDG_STATE_HOME did exactly that.
+func TestEpisodeCapture_Incremental_DefaultsCursorDirToXDGStateWhenOmitted(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	outDir := filepath.Join(t.TempDir(), "episodes")
+
+	out, _, err := runRootCmd(t, "episode", "capture", episodeFixture, "--output-dir", outDir, "--incremental")
+	require.NoError(t, err)
+	assert.Contains(t, out.String(), "episode-", "captures via the default cursor dir, no --cursor-dir needed")
+}
+
 // A second `--incremental` call on the same, unchanged transcript must not
 // print a blank line or write a duplicate/empty file — it must say plainly
 // that there was nothing new, so a human running it manually (or reading

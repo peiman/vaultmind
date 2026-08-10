@@ -57,3 +57,21 @@ func TestReadCursor_ErrorsOnCorruptCursorFile(t *testing.T) {
 	_, err := episode.ReadCursor(dir, "session-abc")
 	require.Error(t, err, "a corrupt cursor must fail loud, never silently restart from zero and re-blob the transcript")
 }
+
+func TestWriteCursor_ErrorsWhenCursorDirCannotBeCreated(t *testing.T) {
+	// A regular file sits where a directory is needed, so MkdirAll must fail.
+	blocker := filepath.Join(t.TempDir(), "blocker")
+	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0o600))
+
+	err := episode.WriteCursor(filepath.Join(blocker, "cursors"), "session-abc", 1)
+	require.Error(t, err)
+}
+
+func TestWriteCursor_ErrorsWhenDestinationCannotBeWritten(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.Chmod(dir, 0o500)) // read+execute only, no write
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+
+	err := episode.WriteCursor(dir, "session-abc", 1)
+	require.Error(t, err, "a cursor dir that exists but can't be written to must error, not silently no-op")
+}

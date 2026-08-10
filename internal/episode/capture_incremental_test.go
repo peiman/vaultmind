@@ -123,6 +123,53 @@ func TestCaptureIncremental_ToolOnlyDeltaWithNoTextIsStillCapturable(t *testing.
 	assert.Contains(t, string(body), "/tmp/foo.go", "the file-touch signal must survive into the written segment")
 }
 
+// A corrupt cursor file must fail the whole capture loudly, not silently
+// fall back to zero and re-render the transcript — that fallback would
+// recreate the exact ever-growing-blob failure this mechanism exists to fix.
+func TestCaptureIncremental_PropagatesACorruptCursorAsAnError(t *testing.T) {
+	outDir := filepath.Join(t.TempDir(), "episodes")
+	cursorDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(cursorDir, "test-session-abc12345.cursor"), []byte("not-a-number"), 0o600))
+
+	_, err := episode.CaptureIncremental(fixturePath, outDir, cursorDir)
+	require.Error(t, err)
+}
+
+// A delta that grew the transcript with only filtered noise (no real content)
+// must still advance the cursor — so the noise is never re-scanned — but must
+// not write an episode file for it.
+func TestCaptureIncremental_NoiseOnlyDeltaAdvancesCursorWithoutWritingAFile(t *testing.T) {
+	outDir := filepath.Join(t.TempDir(), "episodes")
+	cursorDir := t.TempDir()
+	txn := newGrowingTranscript(t, fixturePath)
+
+	first, err := episode.CaptureIncremental(txn.path, outDir, cursorDir)
+	require.NoError(t, err)
+	require.NotEmpty(t, first)
+
+	txn.grow(t, `{"type":"user","message":{"role":"user","content":"<system-reminder>ignore me</system-reminder>"},"timestamp":"2026-04-24T10:02:00.000Z","sessionId":"test-session-abc12345"}`)
+
+	second, err := episode.CaptureIncremental(txn.path, outDir, cursorDir)
+	require.NoError(t, err)
+	assert.Empty(t, second, "filtered noise alone is not capturable content")
+
+	third, err := episode.CaptureIncremental(txn.path, outDir, cursorDir)
+	require.NoError(t, err)
+	assert.Empty(t, third, "the cursor must have advanced past the noise, or this would re-detect it forever")
+
+	entries, err := os.ReadDir(outDir)
+	require.NoError(t, err)
+	assert.Len(t, entries, 1, "only the original real content produced a file")
+}
+
+func TestCaptureIncremental_ErrorsWhenOutputDirCannotBeCreated(t *testing.T) {
+	blocker := filepath.Join(t.TempDir(), "blocker")
+	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0o600))
+
+	_, err := episode.CaptureIncremental(fixturePath, filepath.Join(blocker, "episodes"), t.TempDir())
+	require.Error(t, err)
+}
+
 func TestCaptureIncremental_DifferentSessionsDoNotShareACursor(t *testing.T) {
 	outDir := filepath.Join(t.TempDir(), "episodes")
 	cursorDir := t.TempDir()
