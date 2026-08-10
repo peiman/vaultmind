@@ -127,6 +127,9 @@ EXAMPLES
 	RunE: func(cmd *cobra.Command, args []string) error {
 		outputDir, _ := cmd.Flags().GetString("output-dir")
 		if info, err := os.Stat(args[0]); err == nil && info.IsDir() {
+			if incremental, _ := cmd.Flags().GetBool("incremental"); incremental {
+				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "episode capture: --incremental is ignored for directory input (bootstrap capture always wants the full history)")
+			}
 			return runEpisodeCaptureDir(cmd, args[0], outputDir)
 		}
 
@@ -140,25 +143,33 @@ EXAMPLES
 			return err
 		}
 
-		cursorDir, _ := cmd.Flags().GetString("cursor-dir")
-		if cursorDir == "" {
-			dir, err := xdg.StateDir()
-			if err != nil {
-				return fmt.Errorf("resolve default cursor dir: %w", err)
-			}
-			cursorDir = filepath.Join(dir, "episode-cursors")
-		}
-		path, err := episode.CaptureIncremental(args[0], outputDir, cursorDir)
-		if err != nil {
-			return err
-		}
-		if path == "" {
-			_, err = fmt.Fprintln(cmd.OutOrStdout(), "(nothing new to capture since the last incremental capture)")
-			return err
-		}
-		_, err = fmt.Fprintln(cmd.OutOrStdout(), path)
-		return err
+		return runEpisodeCaptureIncremental(cmd, args[0], outputDir)
 	},
+}
+
+// runEpisodeCaptureIncremental resolves the cursor dir (defaulting to the XDG
+// state dir when --cursor-dir is omitted) and prints either the new segment's
+// path or a plain "nothing new" line, so a hook invocation's stdout never
+// leaves "no output" ambiguous between success and silent failure.
+func runEpisodeCaptureIncremental(cmd *cobra.Command, transcriptPath, outputDir string) error {
+	cursorDir, _ := cmd.Flags().GetString("cursor-dir")
+	if cursorDir == "" {
+		dir, err := xdg.StateDir()
+		if err != nil {
+			return fmt.Errorf("resolve default cursor dir: %w", err)
+		}
+		cursorDir = filepath.Join(dir, "episode-cursors")
+	}
+	path, err := episode.CaptureIncremental(transcriptPath, outputDir, cursorDir)
+	if err != nil {
+		return err
+	}
+	if path == "" {
+		_, err = fmt.Fprintln(cmd.OutOrStdout(), "(nothing new to capture since the last incremental capture)")
+		return err
+	}
+	_, err = fmt.Fprintln(cmd.OutOrStdout(), path)
+	return err
 }
 
 // runEpisodeCaptureDir batch-captures every *.jsonl transcript under dir and prints

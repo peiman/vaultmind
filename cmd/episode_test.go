@@ -43,16 +43,22 @@ func TestEpisodeCapture_Incremental_FirstCallWritesASegment(t *testing.T) {
 // dir) rather than silently doing nothing — the flag is documented as
 // optional, so the default path is a real code path, not a formality.
 //
-// Isolation: xdg.StateDir() ignores XDG_STATE_HOME entirely on darwin
-// (internal/xdg's stateBase() hardcodes ~/Library/Application Support there —
-// consistent with every other StateDir/DataDir consumer in this codebase).
-// $HOME is what actually redirects it on every platform this package
-// supports, so that's what must be overridden — not XDG_STATE_HOME, which
-// would silently no-op here and let the test write into the real user's
-// Application Support directory. Confirmed by hand: an earlier version of
-// this test using XDG_STATE_HOME did exactly that.
+// Isolation: internal/xdg's stateBase() resolves differently PER PLATFORM —
+// darwin hardcodes ~/Library/Application Support (ignores XDG_STATE_HOME
+// entirely); Linux honors XDG_STATE_HOME first, falling back to
+// ~/.local/state; Windows honors AppData. An earlier version of this test
+// overrode only HOME, which correctly isolated on darwin (confirmed by hand:
+// it had silently written into the real ~/Library/Application Support) but
+// would NOT isolate on Linux — the only platform this repo's CI actually
+// runs on — if XDG_STATE_HOME happened to be set in that environment. All
+// three variables are overridden together so this test is genuinely
+// isolated on every platform stateBase() supports, not just the one it
+// happened to be caught on.
 func TestEpisodeCapture_Incremental_DefaultsCursorDirToXDGStateWhenOmitted(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+	t.Setenv("XDG_STATE_HOME", tmp)
+	t.Setenv("AppData", tmp)
 	outDir := filepath.Join(t.TempDir(), "episodes")
 
 	out, _, err := runRootCmd(t, "episode", "capture", episodeFixture, "--output-dir", outDir, "--incremental")
@@ -100,4 +106,19 @@ func TestEpisodeCapture_Directory_BatchAndSkips(t *testing.T) {
 	assert.Contains(t, body, "Captured 1 episode(s)")
 	assert.Contains(t, body, "Skipped 1 file(s)")
 	assert.Contains(t, body, "arc candidates", "points at the next step")
+}
+
+// `episode capture <dir> --incremental` silently drops the flag (bootstrap
+// capture always wants the full history) — but must say so on stderr rather
+// than leaving no trace that the flag had no effect.
+func TestEpisodeCapture_Directory_IncrementalFlagIsIgnoredWithANote(t *testing.T) {
+	dir := t.TempDir()
+	src, err := os.ReadFile(episodeFixture) // #nosec G304 -- test fixture
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "real.jsonl"), src, 0o600))
+
+	outDir := filepath.Join(t.TempDir(), "episodes")
+	_, errOut, err := runRootCmd(t, "episode", "capture", dir, "--output-dir", outDir, "--incremental")
+	require.NoError(t, err)
+	assert.Contains(t, errOut.String(), "--incremental is ignored for directory input")
 }
