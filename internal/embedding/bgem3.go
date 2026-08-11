@@ -56,6 +56,20 @@ func NewBGEM3Embedder(cfg HugotConfig) (*BGEM3Embedder, error) {
 		return nil, fmt.Errorf("creating BGE-M3 pipeline: %w", err)
 	}
 
+	// hugot sets the tokenizer's hard truncation to the model's
+	// max_position_embeddings (8194 for bge-m3). But XLM-RoBERTa derives position
+	// IDs with a padding_idx+1 offset, so a sequence of that full length indexes
+	// PAST the position-embedding table and the ORT forward pass hangs (vaultmind#39
+	// — a dense ~12k-token note wedged at the Gather node; the char/token pre-cut
+	// added earlier reduced but did not eliminate it). Clamp the tokenizer's own
+	// limit to a budget that sits safely below the positional
+	// ceiling, so no input can reach the model oversized no matter which code path
+	// builds the batch. This is the root-cause fix; the char/token pre-truncation in
+	// preprocessWithinTokenLimit is now an optimization, not the sole safeguard.
+	if pipeline.Model != nil {
+		clampTokenizer(pipeline.Model.Tokenizer, cfg.MaxTokens)
+	}
+
 	// Load sparse head weights: Linear(1024, 1)
 	sparseW, sparseB, err := LoadLinearWeights(filepath.Join(modelDir, "sparse_linear.pt"))
 	if err != nil {
@@ -194,6 +208,29 @@ func (e *BGEM3Embedder) preprocessWithinTokenLimit(texts []string) (*backends.Pi
 		return nil, fmt.Errorf("preprocessing: %w", err)
 	}
 	return batch, nil
+}
+
+// clampTokenizer bounds the tokenizer's hard truncation to a length the bge-m3
+// model can embed without indexing past its position embeddings (vaultmind#39).
+// hugot defaults MaxAllowedTokens to the model's max_position_embeddings, which for
+// bge-m3 is two tokens past the usable positional ceiling. No-op on a nil tokenizer.
+func clampTokenizer(tok *backends.Tokenizer, configured int) {
+	if tok == nil {
+		return
+	}
+	tok.MaxAllowedTokens = safeTokenizerLimit(configured)
+}
+
+// safeTokenizerLimit resolves the limit to clamp the bge-m3 tokenizer to. A
+// caller-supplied budget is honored only when it is positive AND already within
+// BGEM3MaxTokens; anything else — including the "0 = no truncation" default this
+// model cannot satisfy, or a value above the safe ceiling — falls back to
+// BGEM3MaxTokens, so an oversized note can never reach the forward oversized.
+func safeTokenizerLimit(configured int) int {
+	if configured > 0 && configured < BGEM3MaxTokens {
+		return configured
+	}
+	return BGEM3MaxTokens
 }
 
 // tokenCounts tokenizes texts and returns each one's token count (via a throwaway

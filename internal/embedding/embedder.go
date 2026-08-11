@@ -43,6 +43,43 @@ const (
 	BGEM3OnnxFilePath = "onnx/model.onnx"
 )
 
+// CLI model tokens — the values the --model flag and RunEmbed receive. Distinct
+// from the HuggingFace IDs above (DefaultModelName / BGEM3ModelName); named here
+// so the token→dimension mapping has a single source of truth.
+const (
+	ModelMiniLM = "minilm"
+	ModelBGEM3  = "bge-m3"
+)
+
+// ExpectedDenseDims returns the dense-embedding dimensionality a CLI model token
+// produces, and whether the token is recognized. It is a pure lookup — it never
+// loads a model — so callers can compare a vault's stored dimension against a
+// requested model without paying the (multi-GB, multi-second) embedder load.
+func ExpectedDenseDims(model string) (dims int, known bool) {
+	switch model {
+	case ModelMiniLM:
+		return DefaultDims, true
+	case ModelBGEM3:
+		return BGEM3Dims, true
+	default:
+		return 0, false
+	}
+}
+
+// ModelForDenseDims is the reverse of ExpectedDenseDims: the CLI model token that
+// produces embeddings of the given dense dimension, and whether it is recognized.
+// Used to name the model behind a vault's stored embeddings in diagnostics.
+func ModelForDenseDims(dims int) (model string, known bool) {
+	switch dims {
+	case DefaultDims:
+		return ModelMiniLM, true
+	case BGEM3Dims:
+		return ModelBGEM3, true
+	default:
+		return "", false
+	}
+}
+
 // BGEM3Config returns the HugotConfig for BGE-M3.
 func BGEM3Config() HugotConfig {
 	return HugotConfig{

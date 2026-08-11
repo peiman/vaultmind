@@ -247,3 +247,25 @@ func TestSignalFilter_DropsNoiseEpisodes(t *testing.T) {
 	assert.Contains(t, kept, gone, "an un-stat-able path is KEPT, not silently dropped (H1)")
 	assert.NotContains(t, kept, small)
 }
+
+// A bounded incremental-capture segment (internal/episode's `-partNNNNNNNN`
+// naming) is *supposed* to be small — MinEpisodeBytes was calibrated against
+// whole-session files, a different unit. Applying it to segments would
+// silently drop real signal in every one of them, defeating the reason
+// episodes exist. Segments are exempt from the floor regardless of size; a
+// same-size file that ISN'T a segment is still dropped as noise.
+func TestSignalFilter_ExemptsIncrementalSegmentsFromTheFloorRegardlessOfSize(t *testing.T) {
+	dir := t.TempDir()
+	segment := filepath.Join(dir, "episode-2026-08-10-abcd1234-part00000042.md")
+	tinySegment := filepath.Join(dir, "episode-2026-08-10-abcd1234-part00000099.md")
+	ordinaryNoise := filepath.Join(dir, "episode-2026-08-10-abcd1234.md")
+	require.NoError(t, os.WriteFile(segment, make([]byte, 500), 0o600))
+	require.NoError(t, os.WriteFile(tinySegment, []byte("x"), 0o600))
+	require.NoError(t, os.WriteFile(ordinaryNoise, make([]byte, 500), 0o600))
+
+	kept := distill.SignalFilter([]string{segment, tinySegment, ordinaryNoise}, distill.MinEpisodeBytes)
+
+	assert.Contains(t, kept, segment, "a small segment is real, bounded content, not noise")
+	assert.Contains(t, kept, tinySegment, "even a near-empty segment is exempt — size isn't the signal here")
+	assert.NotContains(t, kept, ordinaryNoise, "a non-segment file the same size is still confirmed noise")
+}

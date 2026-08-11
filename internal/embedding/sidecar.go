@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog/log"
 )
@@ -33,13 +34,41 @@ import (
 // line to stdin, read JSON line from stdout). Mutex serializes access since
 // the protocol is synchronous request/response on a single FD pair.
 type SidecarBGEM3Embedder struct {
-	cmd    *exec.Cmd
-	stdin  io.WriteCloser
-	stdout *bufio.Reader
-	stderr io.ReadCloser
-	mu     sync.Mutex
-	closed bool
-	device string // "mps" or "cpu" — set on startup ready signal
+	cmd        *exec.Cmd
+	stdin      io.WriteCloser
+	stdout     *bufio.Reader
+	stderr     io.ReadCloser
+	stderrTail *boundedBuffer
+	drainDone  chan struct{} // closed when the stderr-drain goroutine exits
+	mu         sync.Mutex
+	closed     bool
+	device     string // "mps" or "cpu" — set on startup ready signal
+}
+
+// boundedBuffer is a goroutine-safe io.Writer that retains only the last `max`
+// bytes written to it. The sidecar's stderr is copied into one continuously so
+// the OS pipe can never fill (which would deadlock inference); the retained tail
+// is used only to enrich a startup-failure error message.
+type boundedBuffer struct {
+	mu  sync.Mutex
+	max int
+	buf []byte
+}
+
+func (b *boundedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.buf = append(b.buf, p...)
+	if len(b.buf) > b.max {
+		b.buf = b.buf[len(b.buf)-b.max:]
+	}
+	return len(p), nil
+}
+
+func (b *boundedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return string(b.buf)
 }
 
 // SidecarBGEM3Config controls how the sidecar process is launched.
@@ -94,11 +123,21 @@ func NewSidecarBGEM3(cfg SidecarBGEM3Config) (*SidecarBGEM3Embedder, error) {
 
 	stdout := bufio.NewReaderSize(stdoutPipe, 1<<20) // 1MB buffer; ColBERT responses can be hundreds of KB
 	emb := &SidecarBGEM3Embedder{
-		cmd:    cmd,
-		stdin:  stdin,
-		stdout: stdout,
-		stderr: stderrPipe,
+		cmd:        cmd,
+		stdin:      stdin,
+		stdout:     stdout,
+		stderr:     stderrPipe,
+		stderrTail: &boundedBuffer{max: 8192},
+		drainDone:  make(chan struct{}),
 	}
+
+	// Continuously drain the sidecar's stderr into the bounded tail. Left unread,
+	// its OS pipe (~64KB) fills the moment the sidecar gets chatty mid-batch — e.g.
+	// the tokenizer's repeated "sequence length longer than maximum" warning on a
+	// long note — and the sidecar then blocks writing stderr while we block reading
+	// stdout: a deadlock that surfaced as an --embed run wedging at a fixed note
+	// count. Draining forever makes it impossible; the tail is kept only for errors.
+	go func() { _, _ = io.Copy(emb.stderrTail, emb.stderr); close(emb.drainDone) }()
 
 	// Wait for ready signal. The sidecar emits exactly one line on startup:
 	// either {"ready":true,"device":"mps"|"cpu"} on success, or
@@ -106,8 +145,10 @@ func NewSidecarBGEM3(cfg SidecarBGEM3Config) (*SidecarBGEM3Embedder, error) {
 	// 10-30 seconds.
 	line, err := stdout.ReadString('\n')
 	if err != nil {
+		// Close joins the stderr-drain goroutine, so the tail holds whatever the
+		// process wrote to stderr before dying — richer than a bare read error.
 		_ = emb.Close()
-		return nil, fmt.Errorf("sidecar startup: %w (stderr: %s)", err, drainStderr(stderrPipe))
+		return nil, fmt.Errorf("sidecar startup: %w (stderr: %s)", err, emb.stderrTail.String())
 	}
 	var ready struct {
 		Ready  bool   `json:"ready"`
@@ -239,15 +280,24 @@ func (e *SidecarBGEM3Embedder) Close() error {
 	// in the read loop.
 	_ = e.stdin.Close()
 	if e.cmd != nil && e.cmd.Process != nil {
-		// Best-effort: wait for graceful exit, kill if it hangs.
-		done := make(chan error, 1)
-		go func() { done <- e.cmd.Wait() }()
+		// Wait for graceful exit; force-kill if it overstays so we never leak the
+		// process. cmd.Wait also closes the stderr pipe, which unblocks the drain
+		// goroutine joined below.
+		waitDone := make(chan struct{})
+		go func() { _ = e.cmd.Wait(); close(waitDone) }()
 		select {
-		case <-done:
-			// clean exit
-		default:
-			// fallthrough — give it up to 5s in real use, but in Close we
-			// just let the OS clean up if it doesn't exit immediately
+		case <-waitDone:
+		case <-time.After(5 * time.Second):
+			_ = e.cmd.Process.Kill()
+		}
+	}
+	// Join the stderr-drain goroutine so Close leaves nothing running. It ends
+	// when io.Copy hits EOF on the pipe closed by cmd.Wait; bound the wait so a
+	// wedged sidecar can't hang Close.
+	if e.drainDone != nil {
+		select {
+		case <-e.drainDone:
+		case <-time.After(2 * time.Second):
 		}
 	}
 	return nil
@@ -256,14 +306,3 @@ func (e *SidecarBGEM3Embedder) Close() error {
 // Device reports the device the sidecar selected ("mps" or "cpu").
 // Useful for the doctor / index summary so the operator sees acceleration.
 func (e *SidecarBGEM3Embedder) Device() string { return e.device }
-
-// drainStderr reads as much as it can from stderr without blocking. Used
-// when the startup ready line fails so we can surface a richer error.
-func drainStderr(r io.Reader) string {
-	buf := make([]byte, 8192)
-	n, _ := r.Read(buf)
-	if n <= 0 {
-		return ""
-	}
-	return string(buf[:n])
-}
