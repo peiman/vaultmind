@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`episode capture --incremental` captures a session's transcript in bounded segments instead
+  of re-rendering the whole thing on every call.** A long-lived session that never closes used to
+  have its `SessionEnd` hook re-render the ENTIRE transcript into the same episode file every
+  invocation, growing that file without bound. With `--incremental`, each capture resumes from a
+  cursor (persisted per session and target vault under `--cursor-dir`, defaulting to the XDG state
+  dir) and writes only the new content as its own small `-partNNNNNNNN` segment, so an
+  ever-growing session produces several bounded files instead of one unbounded one. (#72)
+
+## [0.2.3] — 2026-07-28
+
+### Fixed
+- **BGE-M3 embedding no longer hangs on a note that exceeds the model's token limit.** hugot
+  defaults the tokenizer's hard truncation to the model's `max_position_embeddings` (8194 for
+  BGE-M3), but XLM-RoBERTa derives position IDs with a `padding_idx+1` offset, so a sequence of
+  that full length indexes *past* the position-embedding table — the ONNX
+  `position_embeddings/Gather` node then wedges the forward pass (an unbounded hang on some ONNX
+  Runtime builds, an out-of-bounds error on others). A dense ~12k-token note therefore stalled
+  indexing at the wedge point with no output. The BGE-M3 tokenizer's own limit is now clamped to
+  the embedding token budget (`BGEM3MaxTokens`, 8190) — safely below the positional ceiling — at
+  pipeline construction, so no note can reach the model oversized regardless of the code path; the
+  char/token pre-truncation becomes an optimization rather than the sole safeguard. (#39)
+
+## [0.2.2] — 2026-07-27
+
+### Fixed
+- **BGE-M3 embedding no longer deadlocks partway through a vault (the "24/42 wedge").** The
+  Python inference sidecar's stderr was captured but never drained during the batch loop, so a
+  note past BGE-M3's 8192-token limit flooded stderr with tokenizer warnings, filled the OS
+  pipe, and blocked the sidecar — and the indexer — indefinitely. stderr is now drained
+  continuously into a bounded buffer; the sidecar's `Close()` joins that drain and force-kills
+  an overstaying process. (#66)
+- **`vaultmind index --embed` no longer silently produces a mixed-dimension index.** Re-embedding
+  a bge-m3 vault (dense 1024-dim) with `--model minilm` (384-dim), or vice-versa, used to skip the
+  already-embedded notes and leave a mixed index whose minority-dimension notes silently vanish
+  from semantic retrieval. An incremental embed whose model dimension differs from the vault's now
+  **fails closed** with an actionable message pointing at `--full` and `doctor`, and an
+  unrecognized `--model` token is rejected instead of silently coercing to minilm. (#67)
+
+### Changed
+- **`vaultmind index --full --embed` now purges and re-embeds every note.** Previously `--full`
+  rebuilt the content index but preserved existing embeddings, so it could not switch models and
+  left mixed vaults uncorrected. It now purges all embeddings and re-embeds the whole vault as the
+  requested model — which also **heals** an already-mixed vault. The purge runs only after the
+  embedder loads successfully, and a `--full` run that then fails to re-embed exits non-zero
+  rather than reporting success with an emptied index. A habitual `--full --embed` now pays the
+  full embedding cost each run; plain `--embed` remains the cheap incremental convergence path. (#67)
+
+### Security
+- Bump `golang.org/x/text` to v0.39.0 to clear GO-2026-5970 (infinite loop on invalid input),
+  reachable via Unicode normalization in the embedding and identity/envelope paths.
+
 ## [0.2.1] — 2026-07-02
 
 ### Fixed
@@ -259,7 +311,11 @@ The initial public tag, retracted in favor of [0.1.3]. It shipped without the
 maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; do
 not install.
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.1.11...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/peiman/vaultmind/compare/v0.2.2...v0.2.3
+[0.2.2]: https://github.com/peiman/vaultmind/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/peiman/vaultmind/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/peiman/vaultmind/compare/v0.1.11...v0.2.0
 [0.1.11]: https://github.com/peiman/vaultmind/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/peiman/vaultmind/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/peiman/vaultmind/compare/v0.1.8...v0.1.9
