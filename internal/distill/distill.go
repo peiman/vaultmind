@@ -63,15 +63,35 @@ func ScanEpisodes(dir string) (Report, error) {
 	return r, nil
 }
 
+// incrementalSegmentRe matches the filename shape internal/episode's
+// deriveSegmentID produces (`capture.go`) for a bounded incremental-capture
+// segment: `...-part` + 8 digits + `.md`. MUST mirror that function's format
+// — the wire contract between the episode writer and this reader — same
+// reason the turn-header markers above aren't a shared const either.
+var incrementalSegmentRe = regexp.MustCompile(`-part\d{8}\.md$`)
+
 // SignalFilter drops episode paths CONFIRMED below minBytes — the minimum-signal
 // threshold that keeps noise captures out of the corpus. A path that can't be
 // stat'd is KEPT, not silently dropped: the size is unknown, so the safe move is
 // to let it through and let ParseEpisodeFile surface any real error downstream
 // (dropping a possibly signal-dense episode on a transient stat error is the
 // failure mode to avoid).
+//
+// Incremental-capture segments (see internal/episode) are exempt from the
+// floor. MinEpisodeBytes was calibrated against whole-session files; a
+// bounded segment is *supposed* to be small — that's the point of bounding
+// it — so the same threshold applied to a different unit would silently
+// drop real signal in every segment, defeating the reason episodes exist.
+// The asymmetry favors exemption: a stray noise segment costs a human a
+// few seconds during the propose-only review this package explicitly
+// defers to; a dropped real segment is permanent, invisible data loss.
 func SignalFilter(paths []string, minBytes int64) []string {
 	kept := make([]string, 0, len(paths))
 	for _, p := range paths {
+		if incrementalSegmentRe.MatchString(p) {
+			kept = append(kept, p)
+			continue
+		}
 		if info, err := os.Stat(p); err == nil && info.Size() < minBytes {
 			continue // confirmed noise — drop
 		}
