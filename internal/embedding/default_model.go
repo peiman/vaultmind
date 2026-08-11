@@ -33,7 +33,7 @@ const (
 // matching the model to what the binary can actually run well.
 func DefaultModel() string {
 	if BackendName() == BackendNameORT {
-		return "bge-m3"
+		return ModelBGEM3
 	}
-	return "minilm"
+	return ModelMiniLM
 }

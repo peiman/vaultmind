@@ -29,6 +29,17 @@ if ! command -v grype &> /dev/null; then
     exit 1
 fi
 
+# Ensure grype's vulnerability DB is current before scanning. grype enforces a
+# maximum DB age (5 days) and refuses to scan with a stale or missing database —
+# which surfaces as a scan *error* (the else-branch below), not a vulnerability
+# finding. A freshly `go install`ed grype (as in CI) has no primed DB, so refresh
+# it up front. Non-fatal: if the update fails (e.g. transient network), grype
+# falls back to whatever DB it has and the scan below remains the real gate.
+echo "  Updating grype vulnerability database..."
+if ! grype db update; then
+    echo "  ⚠ grype db update failed — scanning with grype's existing database"
+fi
+
 check_header "Scanning SBOM for vulnerabilities"
 
 # Find the latest SBOM file

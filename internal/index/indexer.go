@@ -86,19 +86,45 @@ type IndexAndEmbedResult struct {
 // notes — hooks, scripts, retries, doctor checks) used to pay that
 // load cost unconditionally. Heat without work. Counting pending notes
 // first lets us skip the model load entirely when there's nothing to do.
-func (idx *Indexer) RunEmbed(ctx context.Context, dbPath, model string) (*EmbedResult, error) {
-	// Count pending notes first, without instantiating the embedder.
-	// The pending-row condition matches what EmbedNotes would later use:
-	// for BGE-M3 (FullEmbedder) all three columns must be present; for
-	// MiniLM only the dense column.
-	//
-	//nolint:contextcheck // countPendingForModel calls Open which does not accept a context; the heavy work in EmbedNotes uses ctx properly
-	pending, skipped, err := countPendingForModel(dbPath, model)
-	if err != nil {
-		return nil, err
+func (idx *Indexer) RunEmbed(ctx context.Context, dbPath, model string, full bool) (*EmbedResult, error) {
+	// Reject an unrecognized model token up front: loadEmbedder silently treats
+	// anything other than bge-m3 as minilm, so a typo'd --model would embed
+	// 384-dim vectors under a bogus name — and, on a bge-m3 vault, mix dimensions.
+	if _, known := embedding.ExpectedDenseDims(model); !known {
+		return nil, fmt.Errorf("unrecognized embedding model %q; use %q or %q",
+			model, embedding.ModelMiniLM, embedding.ModelBGEM3)
 	}
-	if pending == 0 {
-		return &EmbedResult{Skipped: skipped, Model: model}, nil
+
+	// Decide whether there's work to do — and, for incremental, whether the model
+	// is even compatible — BEFORE loading the embedder, and for --full BEFORE
+	// purging. The --full purge happens only after a working embedder is in hand
+	// (embedResolved, below), so a load failure can never leave the index
+	// purged-but-not-re-embedded (an empty index, worse than a stale one).
+	if full {
+		// --full re-embeds every note; the only "nothing to do" case is an empty
+		// vault. Check cheaply so we never load a 2.2GB model to embed zero notes.
+		//nolint:contextcheck // countNotes calls Open which does not accept a context
+		n, err := countNotes(dbPath)
+		if err != nil {
+			return nil, err
+		}
+		if n == 0 {
+			return &EmbedResult{Model: model}, nil
+		}
+	} else {
+		// Incremental: refuse a model switch that would mix dimensions, then apply
+		// the lazy-load short-circuit when nothing is pending.
+		if err := guardEmbeddingModel(dbPath, model); err != nil {
+			return nil, err
+		}
+		//nolint:contextcheck // countPendingForModel calls Open which does not accept a context; the heavy work in EmbedNotes uses ctx properly
+		pending, skipped, err := countPendingForModel(dbPath, model)
+		if err != nil {
+			return nil, err
+		}
+		if pending == 0 {
+			return &EmbedResult{Skipped: skipped, Model: model}, nil
+		}
 	}
 
 	// There IS work to do — pay the model-load cost now.
@@ -112,7 +138,7 @@ func (idx *Indexer) RunEmbed(ctx context.Context, dbPath, model string) (*EmbedR
 	// failure so the embed pass still completes — graceful degradation
 	// rather than blocking on a fragile new path.
 	var embedder embedding.Embedder
-	if model == "bge-m3" && os.Getenv("VAULTMIND_USE_SIDECAR") != "" {
+	if model == embedding.ModelBGEM3 && os.Getenv("VAULTMIND_USE_SIDECAR") != "" {
 		side, sideErr := embedding.NewSidecarBGEM3(embedding.SidecarBGEM3Config{
 			Python:     os.Getenv("VAULTMIND_SIDECAR_PYTHON"),
 			ScriptPath: os.Getenv("VAULTMIND_SIDECAR_SCRIPT"),
@@ -127,12 +153,13 @@ func (idx *Indexer) RunEmbed(ctx context.Context, dbPath, model string) (*EmbedR
 	modelUsed := model
 	if embedder == nil {
 		var used string
-		embedder, used, err = loadEmbedder(model, embedding.BackendName(),
+		var lerr error
+		embedder, used, lerr = loadEmbedder(model, embedding.BackendName(),
 			func() (embedding.Embedder, error) { return embedding.NewBGEM3Embedder(embedding.BGEM3Config()) },
 			func() (embedding.Embedder, error) { return embedding.NewHugotEmbedder(embedding.DefaultHugotConfig()) },
 		)
-		if err != nil {
-			return nil, fmt.Errorf("creating embedder: %w", err)
+		if lerr != nil {
+			return nil, fmt.Errorf("creating embedder: %w", lerr)
 		}
 		modelUsed = used
 	}
@@ -144,7 +171,7 @@ func (idx *Indexer) RunEmbed(ctx context.Context, dbPath, model string) (*EmbedR
 	// at query time. Refuse rather than corrupt: the fresh-vault (onboarding)
 	// case has no bge-m3 rows and proceeds; a partial bge-m3 vault is told to
 	// fix ORT or rebuild as minilm.
-	if model == "bge-m3" && modelUsed == "minilm" {
+	if model == embedding.ModelBGEM3 && modelUsed == embedding.ModelMiniLM {
 		hasBGE, herr := hasBGEM3Embeddings(dbPath)
 		if herr != nil {
 			return nil, fmt.Errorf("checking existing embeddings before minilm fallback: %w", herr)
@@ -156,12 +183,44 @@ func (idx *Indexer) RunEmbed(ctx context.Context, dbPath, model string) (*EmbedR
 		}
 	}
 
+	return idx.embedResolved(ctx, dbPath, embedder, modelUsed, full)
+}
+
+// embedResolved runs the embed pass with an already-constructed embedder. For a
+// --full run it purges every existing embedding FIRST — now that a working
+// embedder is in hand — so each note re-embeds as the requested model instead of
+// the pending query skipping wrong-dimension survivors into a mixed index. Split
+// out from RunEmbed so the purge→re-embed round-trip is testable with an injected
+// embedder (RunEmbed itself constructs a real, ~2.2GB one).
+func (idx *Indexer) embedResolved(ctx context.Context, dbPath string, embedder embedding.Embedder, modelUsed string, full bool) (*EmbedResult, error) {
+	var purged int64
+	if full {
+		var perr error
+		if purged, perr = PurgeEmbeddings(dbPath); perr != nil {
+			return nil, fmt.Errorf("purging embeddings for a full re-embed: %w", perr)
+		}
+	}
 	res, err := idx.EmbedNotes(ctx, dbPath, embedder)
 	if res != nil {
 		// Report the model ACTUALLY used (loadEmbedder may have fallen back from
 		// bge-m3 to minilm), so the caller stamps it, calibrates the noise floor
 		// for it, and the mixed-model guard sees the truth.
 		res.Model = modelUsed
+	}
+	// EmbedNotes is failure-tolerant: a per-batch embed/store failure is logged,
+	// counted in res.Errors, and skipped — and it returns a nil error even if EVERY
+	// batch failed or produced empty output. That's fine for an incremental run
+	// (already-embedded notes are left untouched), but a --full run has just PURGED
+	// every embedding, so anything short of a re-embed is data loss. Fail loud
+	// (non-nil error → non-zero exit) when a --full run had failures, OR purged real
+	// embeddings yet re-embedded none (a total wipe, e.g. all-empty-output), so it
+	// can't report success to a hook or script that keys on the exit code.
+	if err == nil && full && res != nil && (res.Errors > 0 || (purged > 0 && res.Embedded == 0)) {
+		return res, fmt.Errorf(
+			"--full purged %d embedding(s) but re-embedded only %d note(s) as %s (%d failed); the "+
+				"vault is now empty or partially indexed — fix the cause (see the warnings above) and "+
+				"re-run 'vaultmind index --full --embed --model %s'",
+			purged, res.Embedded, modelUsed, res.Errors, modelUsed)
 	}
 	return res, err
 }
@@ -208,7 +267,7 @@ func errORTBGEUnavailable(cause error) error {
 // index. Returns the embedder and the model ACTUALLY used so the caller
 // stamps/calibrates reality.
 func loadEmbedder(model, backend string, newBGE, newMini embedderCtor) (embedding.Embedder, string, error) {
-	if model != "bge-m3" {
+	if model != embedding.ModelBGEM3 {
 		e, err := newMini()
 		if err != nil {
 			return nil, "", err
@@ -217,7 +276,7 @@ func loadEmbedder(model, backend string, newBGE, newMini embedderCtor) (embeddin
 	}
 	bge, err := newBGE()
 	if err == nil {
-		return bge, "bge-m3", nil
+		return bge, embedding.ModelBGEM3, nil
 	}
 	// On an ORT-built binary, bge-m3 is the whole reason that build exists — a
 	// load failure means a broken install (e.g. libonnxruntime not found next to
@@ -234,7 +293,7 @@ func loadEmbedder(model, backend string, newBGE, newMini embedderCtor) (embeddin
 	if ferr != nil {
 		return nil, "", fmt.Errorf("bge-m3 unavailable (%w) and minilm fallback also failed: %w", err, ferr)
 	}
-	return fallback, "minilm", nil
+	return fallback, embedding.ModelMiniLM, nil
 }
 
 // countPendingForModel reports how many notes need embedding under the
@@ -248,7 +307,7 @@ func countPendingForModel(dbPath, model string) (pending int, skipped int, err e
 	}
 	defer func() { _ = db.Close() }()
 	var pendingQuery, skipQuery string
-	if model == "bge-m3" {
+	if model == embedding.ModelBGEM3 {
 		pendingQuery = "SELECT COUNT(*) FROM notes WHERE embedding IS NULL OR sparse_embedding IS NULL OR colbert_embedding IS NULL"
 		skipQuery = "SELECT COUNT(*) FROM notes WHERE embedding IS NOT NULL AND sparse_embedding IS NOT NULL AND colbert_embedding IS NOT NULL"
 	} else {
@@ -262,6 +321,89 @@ func countPendingForModel(dbPath, model string) (pending int, skipped int, err e
 		return 0, 0, fmt.Errorf("counting skipped notes: %w", err)
 	}
 	return pending, skipped, nil
+}
+
+// countNotes returns the total number of notes in the index. Used by RunEmbed to
+// skip the model-load cost of a --full run over an empty vault.
+//
+//nolint:contextcheck // Open does not accept a context; this is a single count query
+func countNotes(dbPath string) (int, error) {
+	db, err := Open(dbPath)
+	if err != nil {
+		return 0, fmt.Errorf("opening index database to count notes: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+	var n int
+	if err := db.QueryRow("SELECT COUNT(*) FROM notes").Scan(&n); err != nil {
+		return 0, fmt.Errorf("counting notes: %w", err)
+	}
+	return n, nil
+}
+
+// PurgeEmbeddings clears every stored embedding (dense, sparse, colbert) in the
+// vault's index, returning the number of rows cleared. It is what --full does
+// before re-embedding: switching embedding models requires discarding the old
+// vectors, since a mixed-dimension index silently breaks retrieval. All three
+// columns are cleared in ONE UPDATE so the bgem3 modality-parity trigger (which
+// aborts a bge-m3 dense left without sparse+colbert) never fires mid-flight.
+//
+//nolint:contextcheck // Open does not accept a context; this is a single UPDATE, not the heavy embed pass
+func PurgeEmbeddings(dbPath string) (int64, error) {
+	db, err := Open(dbPath)
+	if err != nil {
+		return 0, fmt.Errorf("opening index database to purge embeddings: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+	res, err := db.Exec(`
+		UPDATE notes SET embedding = NULL, sparse_embedding = NULL, colbert_embedding = NULL
+		WHERE embedding IS NOT NULL OR sparse_embedding IS NOT NULL OR colbert_embedding IS NOT NULL`)
+	if err != nil {
+		return 0, fmt.Errorf("purging embeddings: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("counting purged embeddings: %w", err)
+	}
+	return n, nil
+}
+
+// guardEmbeddingModel fails closed when the vault already holds embeddings whose
+// dense dimension differs from what `model` produces — the mixed-model index that
+// otherwise arises from an incremental `--embed --model X` after a model switch.
+// It is a pure stored-dim vs expected-dim check that loads no embedder, so it runs
+// on RunEmbed's lazy path before the (multi-GB) model would be constructed. A vault
+// with no embeddings yet proceeds (DetectEmbeddingDimsCounts counts only non-NULL
+// dense, so its result is empty), as does one whose embeddings all match; the
+// loop's dim-0 skip is a defensive case for a zero-length blob.
+//
+//nolint:contextcheck // Open does not accept a context; this is a fast count query, not the heavy embed pass
+func guardEmbeddingModel(dbPath, model string) error {
+	expected, _ := embedding.ExpectedDenseDims(model) // model is a known token (validated by RunEmbed)
+	db, err := Open(dbPath)
+	if err != nil {
+		return fmt.Errorf("opening index database to check embedding dimensions: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+	counts, err := DetectEmbeddingDimsCounts(db)
+	if err != nil {
+		return fmt.Errorf("detecting stored embedding dimensions: %w", err)
+	}
+	for _, c := range counts {
+		if c.Dims == 0 || c.Dims == expected {
+			continue // unembedded rows, or rows that already match the requested model
+		}
+		stored, ok := embedding.ModelForDenseDims(c.Dims)
+		if !ok {
+			stored = fmt.Sprintf("%d-dimension", c.Dims)
+		}
+		return fmt.Errorf(
+			"vault already holds %s embeddings but --model %s produces %d-dimension vectors; "+
+				"embedding incrementally would create a mixed-model index that silently breaks retrieval. "+
+				"Re-run with --full to purge and re-embed the whole vault as %s, or keep --model %s. "+
+				"Run 'vaultmind doctor --vault <vault>' to inspect the current state",
+			stored, model, expected, model, stored)
+	}
+	return nil
 }
 
 // Indexer orchestrates vault scanning, parsing, and SQLite storage.

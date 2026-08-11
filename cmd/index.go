@@ -98,7 +98,7 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 		if err := guardBGEM3SlowBackend(cmd, model); err != nil {
 			return err
 		}
-		embedResult, err = idxr.RunEmbed(cmd.Context(), dbPath, model)
+		embedResult, err = idxr.RunEmbed(cmd.Context(), dbPath, model, fullRebuild)
 		if err != nil {
 			return fmt.Errorf("embedding notes: %w", err)
 		}
@@ -215,7 +215,7 @@ func formatIndexResult(r index.IndexAndEmbedResult, model string, w io.Writer) e
 			r.Embed.Embedded, r.Embed.Skipped, r.Embed.Errors, model); err != nil {
 			return err
 		}
-		if model == "minilm" {
+		if model == embedding.ModelMiniLM {
 			// `go install` (and onboarding scripts that wrap it) silently land on
 			// the pure-Go MiniLM build — dense-only, no sparse/ColBERT. An adopter
 			// who never runs `doctor` never learns the full hybrid exists, or that
@@ -249,7 +249,7 @@ func formatIndexResult(r index.IndexAndEmbedResult, model string, w io.Writer) e
 // operator opts in) when BGE-M3 indexing would run on pure-Go hugot.
 // Any other model path — or ORT-built binaries — is a no-op.
 func guardBGEM3SlowBackend(cmd *cobra.Command, model string) error {
-	if model != "bge-m3" || embedding.BackendName() == embedding.BackendNameORT {
+	if model != embedding.ModelBGEM3 || embedding.BackendName() == embedding.BackendNameORT {
 		return nil
 	}
 	allow := getConfigValueWithFlags[bool](cmd, "allow-slow-backend", config.KeyAppIndexAllowSlowBackend)

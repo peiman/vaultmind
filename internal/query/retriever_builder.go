@@ -249,12 +249,12 @@ func detectEmbedderForDB(db *index.DB) (embedding.Embedder, func(), error) {
 		switch c.Dims {
 		case embedding.BGEM3Dims:
 			hasBGEM3 = true
-		case 384:
+		case embedding.DefaultDims:
 			hasMiniLM = true
 		}
 	}
 	if hasBGEM3 && hasMiniLM {
-		log.Warn().Msg("vault is in mixed-model state (MiniLM + BGE-M3); loading BGE-M3 — run 'vaultmind index --embed --model bge-m3' to converge")
+		log.Warn().Msg("vault is in mixed-model state (MiniLM + BGE-M3); loading BGE-M3 — run 'vaultmind index --full --embed --model bge-m3' to converge")
 	}
 	if hasBGEM3 {
 		bgem3, bgem3Err := embedding.NewBGEM3Embedder(embedding.BGEM3Config())
