@@ -58,6 +58,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   N notes is below the 30 needed to calibrate this vault; showing the top hit anyway` and renders
   the body instead of withholding it: a vault that small has no context budget worth protecting.
   Vaults at or above the gate are unchanged, as are confident hits and keyword-only results.
+- **`capture-episode.sh` surfaces the real error when a capture fails** instead of reporting a
+  generic failure, so a broken SessionEnd hook is diagnosable from its own output. (#72)
+
+### Security
+- Bump `github.com/go-git/go-git` to v5.19.2, clearing GHSA-hc8v-wwc9-vgxm. Reachable from the git
+  policy checker and committer used by `note create --commit` and `apply`. (#73)
+
+### Changed
+- Dependency bumps: `go-isatty`, `ckeletin-go`, `goose`, `golang.org/x/sync`, `golang.org/x/sys`,
+  `golang.org/x/text`, `modernc.org/sqlite`, and CI actions (`actions/checkout`,
+  `actions/setup-go`, `goreleaser/goreleaser-action`, `github/codeql-action`). (#75)
 
 ## [0.2.3] — 2026-07-28
 
