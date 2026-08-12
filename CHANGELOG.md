@@ -16,6 +16,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dir) and writes only the new content as its own small `-partNNNNNNNN` segment, so an
   ever-growing session produces several bounded files instead of one unbounded one. (#72)
 
+### Fixed
+- **Vault auto-discovery no longer silently selects your home directory.** When no `--vault` was
+  given, the walk-up looked for a `.vaultmind/` from the working directory all the way to the
+  filesystem root. A stray `.vaultmind/` at `$HOME` — the debris one errant `vaultmind index` run
+  from the home directory leaves behind — therefore captured *every* invocation made anywhere
+  beneath `$HOME` that wasn't already inside another vault. `ask` answered from that wrong vault
+  while reporting `status: "ok"`, and the remedy it printed for the resulting zero hits
+  (`vaultmind index --embed`) aimed the indexer at the entire home directory. `$HOME` is now never
+  auto-selected; the walk continues past it, so a real vault below (or deliberately above) it still
+  resolves, and naming it explicitly via `--vault` or `VAULTMIND_VAULT` still works. This blocks
+  the accident, not the choice.
+
 ## [0.2.3] — 2026-07-28
 
 ### Fixed
