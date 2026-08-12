@@ -143,7 +143,16 @@ func writeHooksInstallHuman(w io.Writer, res *hooks.InstallResult, mergeRes *hoo
 		return // merge handles the wiring messaging; the paste stanza is redundant
 	}
 	if res.SettingsStanza != "" {
-		_, _ = fmt.Fprintf(w, "\nWire these into .claude/settings.json (merge under an existing \"hooks\" key if present), or re-run with --merge to apply automatically:\n\n%s\n", res.SettingsStanza)
+		// Lead with the one command that does this correctly. The stanza below
+		// is ~60 lines of JSON, so anything said after it has already scrolled
+		// past — which left hand-merging as the de-facto default even though
+		// --merge is additive, idempotent, and keeps a project's own hooks.
+		// The preview flag goes in the same breath: the reason people paste by
+		// hand is not wanting a tool to edit settings.json unseen.
+		_, _ = fmt.Fprintf(w, "\nNext: wire these into .claude/settings.json.\n")
+		_, _ = fmt.Fprintf(w, "  vaultmind hooks install --merge --dry-run   preview the merged file, write nothing\n")
+		_, _ = fmt.Fprintf(w, "  vaultmind hooks install --merge             apply it (additive — existing hooks preserved)\n")
+		_, _ = fmt.Fprintf(w, "\nOr paste this yourself, merging under an existing \"hooks\" key if present:\n\n%s\n", res.SettingsStanza)
 	}
 }
 
