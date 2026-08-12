@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
@@ -27,9 +26,6 @@ func runFrontmatterValidate(cmd *cobra.Command, _ []string) error {
 
 	result, indexHash, err := runValidation(cmd, vaultPath, live)
 	if err != nil {
-		if errors.Is(err, cmdutil.ErrAlreadyWritten) {
-			return nil
-		}
 		return err
 	}
 

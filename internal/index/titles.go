@@ -10,6 +10,17 @@ type NoteTitle struct {
 	Title string
 }
 
+// NoteCount returns how many notes the index holds. Callers use it to decide
+// whether corpus-scale judgements (e.g. noise-floor relevance) are meaningful
+// for this vault at all, so it counts rows rather than loading them.
+func (d *DB) NoteCount() (int, error) {
+	var n int
+	if err := d.QueryRow("SELECT COUNT(*) FROM notes").Scan(&n); err != nil {
+		return 0, fmt.Errorf("counting notes: %w", err)
+	}
+	return n, nil
+}
+
 // AllNoteTitles returns every note's ID and title from the index. Titles
 // that are empty in the notes table (shouldn't happen post-index but guard
 // anyway) are returned as-is — callers filter if they care.

@@ -3,15 +3,24 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/output"
 	"github.com/peiman/vaultmind/cmd"
+	"github.com/peiman/vaultmind/internal/cmdutil"
 )
 
 func run() int {
 	if err := cmd.Execute(); err != nil {
+		// The command already wrote its own error envelope and said so. Exit
+		// non-zero — the envelope reports the failure, but a caller checking
+		// only the exit status must not read success — while staying silent
+		// here, so the failure is described exactly once.
+		if errors.Is(err, cmdutil.ErrAlreadyWritten) {
+			return 1
+		}
 		if output.IsJSONMode() {
 			_ = output.RenderJSON(os.Stdout, output.JSONEnvelope{
 				Status:  "error",

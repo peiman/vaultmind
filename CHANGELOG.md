@@ -16,6 +16,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dir) and writes only the new content as its own small `-partNNNNNNNN` segment, so an
   ever-growing session produces several bounded files instead of one unbounded one. (#72)
 
+### Fixed
+- **Vault auto-discovery no longer silently selects your home directory.** When no `--vault` was
+  given, the walk-up looked for a `.vaultmind/` from the working directory all the way to the
+  filesystem root. A stray `.vaultmind/` at `$HOME` — the debris one errant `vaultmind index` run
+  from the home directory leaves behind — therefore captured *every* invocation made anywhere
+  beneath `$HOME` that wasn't already inside another vault. `ask` answered from that wrong vault
+  while reporting `status: "ok"`, and the remedy it printed for the resulting zero hits
+  (`vaultmind index --embed`) aimed the indexer at the entire home directory. `$HOME` is now never
+  auto-selected; the walk continues past it, so a real vault below (or deliberately above) it still
+  resolves, and naming it explicitly via `--vault` or `VAULTMIND_VAULT` still works. This blocks
+  the accident, not the choice.
+- **A command that had to *guess* its vault now fails closed instead of answering from a
+  non-vault directory.** `vault.LoadConfig` deliberately treats any directory as a usable vault, so
+  when discovery fell back to `"."` a command would happily query whatever directory you were
+  standing in and report `status: "ok"` with zero hits — which reads as "your vault has nothing on
+  this topic" when the truth is "you have no vault", two answers that call for opposite next steps.
+  Opening it also *created* `.vaultmind/index.db` there, promoting that directory to a vault every
+  future walk-up would find, so the mistake propagated itself. A guessed path must now already be a
+  vault; a named one (`--vault`, `VAULTMIND_VAULT`) keeps the permissive behaviour. The error names
+  both ways out: point at an existing vault, or `vaultmind init` here.
+- **`--json` failures now exit non-zero.** Every command that failed after deciding to speak JSON
+  wrote an error envelope, returned an internal "already written" sentinel to avoid printing it
+  twice — and then translated that sentinel into success, so the process exited **0** while the
+  envelope it had just printed said `status: "error"`. `vaultmind ask --json … || handle_failure`
+  therefore never fired, and any hook or script wrapping a `--json` call read success on every
+  error. The sentinel now travels out to the exit code (still printing the envelope exactly once,
+  on stdout, with stderr empty). Affects `ask`, `search`, `note get`/`mget`/`create`, `resolve`,
+  `self`, `apply`, `doctor`, `doctor heal`, `memory links`/`neighbors`/`pack`/`related`/`summarize`,
+  `frontmatter validate`, and `dataview lint`/`render`. **Scripts that (correctly) check exit
+  status will start seeing failures they previously missed — that is the fix, not a regression.**
+- **A brand-new vault no longer reports its own correct answer as noise.** `vaultmind init`
+  scaffolds six notes and prints `ask "who am I"` as the next step; that query returned
+  `identity-who-am-i` at rank 1 — exactly right — under the header
+  `[relevance: weak (z=-0.11, 0.1σ below the off-topic noise floor) — body suppressed]`, so a
+  user's first query on the vault we just built for them looked like a failure. Retrieval was
+  correct; the *label* was wrong, because z is measured against a floor calibrated for a large
+  corpus and six notes cannot clear it. The existing mitigation (the "tight vault" hint) is derived
+  from a calibration snapshot needing ≥30 notes, so it was structurally unavailable to exactly the
+  vaults that needed it. Below that same gate, `ask` now reports `relevance: not yet measurable —
+  N notes is below the 30 needed to calibrate this vault; showing the top hit anyway` and renders
+  the body instead of withholding it: a vault that small has no context budget worth protecting.
+  Vaults at or above the gate are unchanged, as are confident hits and keyword-only results.
+- **`capture-episode.sh` surfaces the real error when a capture fails** instead of reporting a
+  generic failure, so a broken SessionEnd hook is diagnosable from its own output. (#72)
+
+### Security
+- Bump `github.com/go-git/go-git` to v5.19.2, clearing GHSA-hc8v-wwc9-vgxm. Reachable from the git
+  policy checker and committer used by `note create --commit` and `apply`. (#73)
+
+### Changed
+- Dependency bumps: `go-isatty`, `ckeletin-go`, `goose`, `golang.org/x/sync`, `golang.org/x/sys`,
+  `golang.org/x/text`, `modernc.org/sqlite`, and CI actions (`actions/checkout`,
+  `actions/setup-go`, `goreleaser/goreleaser-action`, `github/codeql-action`). (#75)
+
 ## [0.2.3] — 2026-07-28
 
 ### Fixed

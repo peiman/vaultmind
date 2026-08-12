@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 
@@ -42,9 +41,6 @@ func runDataviewLint(cmd *cobra.Command, _ []string) error {
 
 	result, indexHash, err := executeDataviewLint(cmd, vaultPath)
 	if err != nil {
-		if errors.Is(err, cmdutil.ErrAlreadyWritten) {
-			return nil
-		}
 		return err
 	}
 	if useJSON {

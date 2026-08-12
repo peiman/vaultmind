@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -26,9 +25,6 @@ func runMemorySummarize(cmd *cobra.Command, args []string) error {
 	vaultPath := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppMemorysummarizeVault)
 	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, "memory summarize")
 	if err != nil {
-		if errors.Is(err, cmdutil.ErrAlreadyWritten) {
-			return nil
-		}
 		return err
 	}
 	defer vdb.Close()

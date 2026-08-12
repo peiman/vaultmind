@@ -9,6 +9,7 @@ import (
 
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/memory"
+	"github.com/peiman/vaultmind/internal/noisefloor"
 	"github.com/peiman/vaultmind/internal/retrieval"
 )
 
@@ -133,7 +134,15 @@ func formatAskWithOptions(result *AskResult, w io.Writer, opts formatOpts) error
 	// signal the agent has to read; this makes the rendering itself
 	// reflect the same epistemic posture without the agent having to
 	// remember to check.
-	if result.TopHitConfidence == ConfidenceNoMatch || result.TopHitConfidence == ConfidenceWeak {
+	//
+	// Exception: a vault below the calibration gate. There the low-confidence
+	// verdict is not a finding about the top hit, it is an artifact of judging a
+	// handful of notes against a floor calibrated for a large corpus — and a
+	// vault that small has no working-context budget worth protecting. Withhold
+	// the body there and a new user's first query, on the vault `init` just
+	// scaffolded for them, returns the right note and refuses to show it.
+	if !result.tooSmallToJudge() &&
+		(result.TopHitConfidence == ConfidenceNoMatch || result.TopHitConfidence == ConfidenceWeak) {
 		opts.pointersOnly = true
 	}
 	if err := writeAskHeader(w, result, opts.explain); err != nil {
@@ -168,6 +177,21 @@ func formatAskWithOptions(result *AskResult, w io.Writer, opts formatOpts) error
 func writeAskHeader(w io.Writer, result *AskResult, explain bool) error {
 	header := fmt.Sprintf("Search: %q (%d hits)", result.Query, len(result.TopHits))
 	if result.NoiseFloorApplied {
+		// Below the calibration gate, report the absence of a judgement rather
+		// than a judgement. Quoting σ against a handful of notes dresses a
+		// shipped default up as a measurement of THIS vault, and the tiers that
+		// would be reported there ("weak", "nothing relevant") both read as
+		// verdicts on the top hit when the real state is "not enough corpus to
+		// have an opinion". Confident tiers are left alone: clearing a
+		// conservative floor on a small vault is still information.
+		if result.tooSmallToJudge() &&
+			(result.TopHitConfidence == ConfidenceWeak || result.TopHitConfidence == ConfidenceNoMatch) {
+			header += fmt.Sprintf(
+				"  [relevance: not yet measurable — %d notes is below the %d needed to calibrate this vault; showing the top hit anyway]",
+				result.VaultNoteCount, noisefloor.MinCalibNotes)
+			_, err := fmt.Fprintln(w, header)
+			return err
+		}
 		switch result.TopHitConfidence {
 		case ConfidenceNoMatch:
 			header += fmt.Sprintf("  [relevance: nothing relevant — top hit at/below the off-topic noise floor (z=%+.2f); body suppressed]", result.RelevanceZ)

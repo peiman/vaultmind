@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -60,9 +59,6 @@ func executeApply(cmd *cobra.Command, planArg string) error {
 
 	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, "apply")
 	if err != nil {
-		if errors.Is(err, cmdutil.ErrAlreadyWritten) {
-			return nil
-		}
 		return err
 	}
 	defer vdb.Close()

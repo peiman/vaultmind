@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
@@ -24,9 +23,6 @@ func runResolve(cmd *cobra.Command, args []string) error {
 	vaultPath := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppResolveVault)
 	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, "resolve")
 	if err != nil {
-		if errors.Is(err, cmdutil.ErrAlreadyWritten) {
-			return nil
-		}
 		return err
 	}
 	defer vdb.Close()

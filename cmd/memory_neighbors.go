@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
@@ -58,9 +57,6 @@ func runNeighborsWithKeys(cmd *cobra.Command, args []string, keys neighborsKeys)
 	vaultPath := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppMemoryneighborsVault)
 	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, "memory neighbors")
 	if err != nil {
-		if errors.Is(err, cmdutil.ErrAlreadyWritten) {
-			return nil
-		}
 		return err
 	}
 	defer vdb.Close()
