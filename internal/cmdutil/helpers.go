@@ -137,9 +137,68 @@ func classifyVaultError(err error) string {
 	return "vault_error"
 }
 
+// vaultMarkerDir is the subdirectory whose presence marks a directory as a
+// vault root — the same marker discovery walks up looking for.
+const vaultMarkerDir = ".vaultmind"
+
+// vaultEnvVar mirrors cmd.vaultEnvVar. Duplicated rather than imported because
+// internal/cmdutil cannot import cmd (which imports it).
+const vaultEnvVar = "VAULTMIND_VAULT"
+
+// errGuessedNonVault reports that no vault was named and the guessed path is
+// not one. It names both ways out, because a caller in this state either has a
+// vault elsewhere or has none at all.
+func errGuessedNonVault(vaultPath string) error {
+	return fmt.Errorf(
+		"no vault found: %q is not a vault (no %s/ directory) and none was specified.\n"+
+			"  Point at an existing vault:  --vault <path>  (or set %s)\n"+
+			"  Create one here:             vaultmind init %s",
+		vaultPath, vaultMarkerDir, vaultEnvVar, vaultPath)
+}
+
+// vaultWasNamed reports whether the caller deliberately chose this vault, via
+// the --vault flag or VAULTMIND_VAULT, rather than having it guessed for them
+// by discovery's fallback.
+func vaultWasNamed(cmd *cobra.Command) bool {
+	if cmd.Flags().Changed("vault") {
+		return true
+	}
+	if strings.TrimSpace(os.Getenv(vaultEnvVar)) != "" {
+		return true
+	}
+	// A command with no --vault flag at all never went through discovery, so
+	// its path came from its own logic; treat it as named.
+	return cmd.Flags().Lookup("vault") == nil
+}
+
+// isVaultRoot reports whether dir contains a .vaultmind/ subdirectory.
+func isVaultRoot(dir string) bool {
+	info, err := os.Stat(filepath.Join(dir, vaultMarkerDir))
+	return err == nil && info.IsDir()
+}
+
 // OpenVaultDBOrWriteErr opens the vault DB. On failure with --json set,
 // writes a JSON error envelope and returns ErrAlreadyWritten.
+//
+// When no vault was named — no --vault, no VAULTMIND_VAULT — the path is
+// whatever discovery fell back to, normally the working directory. Opening a
+// non-vault directory in that case is wrong twice over: the command answers
+// from a vault the user never chose (reporting "ok" and zero hits, which reads
+// as "your vault has nothing on this" rather than "you have no vault"), and
+// OpenVaultDB CREATES .vaultmind/index.db there on the way — quietly promoting
+// that directory to a vault that every future walk-up will find. So a guessed
+// path must prove it is already a vault before it is opened, while a named one
+// keeps the permissive behaviour that lets any directory serve as a vault.
 func OpenVaultDBOrWriteErr(cmd *cobra.Command, vaultPath, commandName string) (*VaultDB, error) {
+	if !vaultWasNamed(cmd) && !isVaultRoot(vaultPath) {
+		err := errGuessedNonVault(vaultPath)
+		if isJSONOutput(cmd) {
+			_ = WriteJSONError(cmd.OutOrStdout(), commandName, "vault_not_found", err.Error())
+			return nil, ErrAlreadyWritten
+		}
+		return nil, err
+	}
+
 	vdb, err := OpenVaultDB(vaultPath)
 	if err != nil {
 		if isJSONOutput(cmd) {

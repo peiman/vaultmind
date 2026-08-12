@@ -27,6 +27,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   auto-selected; the walk continues past it, so a real vault below (or deliberately above) it still
   resolves, and naming it explicitly via `--vault` or `VAULTMIND_VAULT` still works. This blocks
   the accident, not the choice.
+- **A command that had to *guess* its vault now fails closed instead of answering from a
+  non-vault directory.** `vault.LoadConfig` deliberately treats any directory as a usable vault, so
+  when discovery fell back to `"."` a command would happily query whatever directory you were
+  standing in and report `status: "ok"` with zero hits — which reads as "your vault has nothing on
+  this topic" when the truth is "you have no vault", two answers that call for opposite next steps.
+  Opening it also *created* `.vaultmind/index.db` there, promoting that directory to a vault every
+  future walk-up would find, so the mistake propagated itself. A guessed path must now already be a
+  vault; a named one (`--vault`, `VAULTMIND_VAULT`) keeps the permissive behaviour. The error names
+  both ways out: point at an existing vault, or `vaultmind init` here.
 
 ## [0.2.3] — 2026-07-28
 
