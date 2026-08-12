@@ -46,6 +46,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `self`, `apply`, `doctor`, `doctor heal`, `memory links`/`neighbors`/`pack`/`related`/`summarize`,
   `frontmatter validate`, and `dataview lint`/`render`. **Scripts that (correctly) check exit
   status will start seeing failures they previously missed — that is the fix, not a regression.**
+- **A brand-new vault no longer reports its own correct answer as noise.** `vaultmind init`
+  scaffolds six notes and prints `ask "who am I"` as the next step; that query returned
+  `identity-who-am-i` at rank 1 — exactly right — under the header
+  `[relevance: weak (z=-0.11, 0.1σ below the off-topic noise floor) — body suppressed]`, so a
+  user's first query on the vault we just built for them looked like a failure. Retrieval was
+  correct; the *label* was wrong, because z is measured against a floor calibrated for a large
+  corpus and six notes cannot clear it. The existing mitigation (the "tight vault" hint) is derived
+  from a calibration snapshot needing ≥30 notes, so it was structurally unavailable to exactly the
+  vaults that needed it. Below that same gate, `ask` now reports `relevance: not yet measurable —
+  N notes is below the 30 needed to calibrate this vault; showing the top hit anyway` and renders
+  the body instead of withholding it: a vault that small has no context budget worth protecting.
+  Vaults at or above the gate are unchanged, as are confident hits and keyword-only results.
 
 ## [0.2.3] — 2026-07-28
 

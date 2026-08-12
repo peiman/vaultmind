@@ -98,6 +98,22 @@ type AskResult struct {
 	// a "weak" top hit often means the best available correct match, not
 	// "irrelevant". The formatter renders a one-line hint when it's set.
 	LowContrastVault bool `json:"low_contrast_vault,omitempty"`
+	// VaultNoteCount is how many notes the vault holds, used to decide whether a
+	// relevance judgement is meaningful at all. Below noisefloor.MinCalibNotes
+	// the floor is a shipped default calibrated for a large corpus, so a "weak"
+	// or "nothing relevant" verdict states a measurement the vault is too small
+	// to support. Zero means "not measured" and preserves the original
+	// behaviour for any caller that doesn't populate it.
+	VaultNoteCount int `json:"vault_note_count,omitempty"`
+}
+
+// tooSmallToJudge reports whether the vault holds too few notes for the
+// noise-floor relevance verdict to carry information. It reuses the same gate
+// that decides whether a MEASURED calibration snapshot can be trusted — one
+// threshold for "enough notes to say something about relevance", so the two
+// cannot drift apart.
+func (r *AskResult) tooSmallToJudge() bool {
+	return r.NoiseFloorApplied && r.VaultNoteCount > 0 && r.VaultNoteCount < noisefloor.MinCalibNotes
 }
 
 // Confidence tier strings. The noisefloor package is the single source of
@@ -260,6 +276,15 @@ func Ask(ctx context.Context, retriever retrieval.Retriever, resolver *graph.Res
 			result.TopHitConfidence = label
 			result.NoiseFloorApplied = true
 			result.LowContrastVault = cfg.VaultLowContrast
+			// Vault size decides whether the verdict just computed means
+			// anything (see AskResult.tooSmallToJudge). Best-effort: a count
+			// failure leaves 0 = "not measured", which keeps the original
+			// labelling rather than silently switching to the small-vault one.
+			if n, cntErr := db.NoteCount(); cntErr != nil {
+				log.Debug().Err(cntErr).Msg("note count failed; relevance label keeps default calibration posture")
+			} else {
+				result.VaultNoteCount = n
+			}
 		} else {
 			// Caller wanted honest noise-floor labeling but the top hit has no
 			// cosine in the similarities map (keyword-only hit, or similarity
