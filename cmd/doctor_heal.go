@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
@@ -77,9 +76,6 @@ type healResult struct {
 func runWikilinkFix(cmd *cobra.Command, vaultPath string, jsonOut, apply bool, modeLabel, cmdName string) error {
 	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, cmdName)
 	if err != nil {
-		if errors.Is(err, cmdutil.ErrAlreadyWritten) {
-			return nil
-		}
 		return err
 	}
 	defer vdb.Close()

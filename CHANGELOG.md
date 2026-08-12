@@ -36,6 +36,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   future walk-up would find, so the mistake propagated itself. A guessed path must now already be a
   vault; a named one (`--vault`, `VAULTMIND_VAULT`) keeps the permissive behaviour. The error names
   both ways out: point at an existing vault, or `vaultmind init` here.
+- **`--json` failures now exit non-zero.** Every command that failed after deciding to speak JSON
+  wrote an error envelope, returned an internal "already written" sentinel to avoid printing it
+  twice — and then translated that sentinel into success, so the process exited **0** while the
+  envelope it had just printed said `status: "error"`. `vaultmind ask --json … || handle_failure`
+  therefore never fired, and any hook or script wrapping a `--json` call read success on every
+  error. The sentinel now travels out to the exit code (still printing the envelope exactly once,
+  on stdout, with stderr empty). Affects `ask`, `search`, `note get`/`mget`/`create`, `resolve`,
+  `self`, `apply`, `doctor`, `doctor heal`, `memory links`/`neighbors`/`pack`/`related`/`summarize`,
+  `frontmatter validate`, and `dataview lint`/`render`. **Scripts that (correctly) check exit
+  status will start seeing failures they previously missed — that is the fix, not a regression.**
 
 ## [0.2.3] — 2026-07-28
 

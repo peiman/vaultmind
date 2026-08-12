@@ -3,7 +3,6 @@ package cmd
 import (
 	"crypto/sha256"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -70,9 +69,6 @@ func executeNoteCreate(cmd *cobra.Command, notePath string) error {
 
 	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, "note create")
 	if err != nil {
-		if errors.Is(err, cmdutil.ErrAlreadyWritten) {
-			return nil
-		}
 		return err
 	}
 	defer vdb.Close()

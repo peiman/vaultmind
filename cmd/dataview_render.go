@@ -29,8 +29,10 @@ func runDataviewRender(cmd *cobra.Command, args []string) error {
 
 	result, indexHash, err := executeDataviewRender(cmd, vaultPath, args[0])
 	if err != nil {
+		// The envelope is already written; propagate the sentinel so the exit
+		// code reports the failure rather than re-rendering it.
 		if errors.Is(err, cmdutil.ErrAlreadyWritten) {
-			return nil
+			return err
 		}
 		return dataviewRenderError(cmd, useJSON, err)
 	}

@@ -30,9 +30,6 @@ func runMutation(cmd *cobra.Command, req mutation.MutationRequest,
 
 	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, cmdName)
 	if err != nil {
-		if errors.Is(err, cmdutil.ErrAlreadyWritten) {
-			return nil
-		}
 		return err
 	}
 	defer vdb.Close()

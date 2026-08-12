@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -159,9 +158,6 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 func runDoctorCore(cmd *cobra.Command, vaultPath string, jsonOut, summaryOnly bool) error {
 	result, indexHash, err := diagnoseVault(cmd, vaultPath)
 	if err != nil {
-		if errors.Is(err, cmdutil.ErrAlreadyWritten) {
-			return nil
-		}
 		return err
 	}
 

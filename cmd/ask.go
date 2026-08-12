@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 
@@ -99,9 +98,6 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	vaultPath := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppAskVault)
 	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, "ask")
 	if err != nil {
-		if errors.Is(err, cmdutil.ErrAlreadyWritten) {
-			return nil
-		}
 		return err
 	}
 	defer vdb.Close()

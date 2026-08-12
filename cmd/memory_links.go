@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
@@ -55,9 +54,6 @@ func runLinksDirection(cmd *cobra.Command, args []string, direction string) erro
 	vaultPath := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppMemorylinksVault)
 	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, "memory links")
 	if err != nil {
-		if errors.Is(err, cmdutil.ErrAlreadyWritten) {
-			return nil
-		}
 		return err
 	}
 	defer vdb.Close()
