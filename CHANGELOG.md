@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`arc candidates` now reads the desk, not just session episodes.** The scanner grepped
+  transcripts for a handful of phrases while the notes a mind writes *specifically* to record its
+  own transformations sat unread one directory over. Journal-type notes in the scanned vault are
+  now surfaced as pending arc material, above the phrase-matched moments — a candidate is a guess
+  ("a phrase fired, go look"), a desk entry is a judgement already made, and printing the guesses
+  first buried the judgements. Mark one done with `distilled_to: <arc-id>` in its frontmatter; the
+  state lives on the note rather than in a cross-vault link. Pointing at an identity vault reads
+  its episodes, pointing at a desk vault reads its entries — no new flag.
+
+### Fixed
+- **`arc candidates` fails closed on a vault path that does not exist.** It scans directories
+  directly rather than opening the vault DB, so nothing validated `--vault`: a typo produced
+  `Scanned 0 episodes → 0 candidate moments` and exit 0, indistinguishable from a real vault with
+  nothing pending — two states calling for opposite responses (fix the path vs. go write
+  something).
+- **The empty-report line no longer contradicts the entries above it.** With desk entries pending
+  but no phrase matches, the report printed "No candidate moments found" directly beneath the list
+  it had just rendered.
+
 ## [0.3.0] — 2026-08-13
 
 ### Added

@@ -14,6 +14,11 @@ type Report struct {
 	EpisodesScanned int
 	EpisodesKept    int
 	Candidates      []Candidate `json:"candidates"`
+	// DeskPending lists undistilled desk entries. They print ABOVE the candidate
+	// moments because they are a different kind of item: a candidate is a phrase
+	// match to go check, a desk entry is a transformation the mind already judged
+	// worth recording. Printing the guesses first would bury the judgements.
+	DeskPending []DeskEntry `json:"desk_pending,omitempty"`
 	// ParseErrors records episodes that failed to parse, surfaced rather than
 	// silently skipped (distill is infrastructure and can't log, so the visible
 	// error rides in the report itself).
@@ -35,6 +40,34 @@ const arcGuideHint = "These are only the easy, phrase-matched moments — the de
 	"reframes, frame-breaks, cost-of-rule and more. Hunt the rest by reading the session yourself; " +
 	"run `vaultmind arc guide` for the method (the seven shapes, the bar, the self-check)."
 
+// writeDeskSection prints undistilled desk entries, which outrank the
+// phrase-matched moments below them: the mind already decided each of these was
+// worth recording, so they need no detector to vouch for them. Silent when the
+// desk is empty or absent — most vaults have no desk.
+func writeDeskSection(entries []DeskEntry, w io.Writer) error {
+	if len(entries) == 0 {
+		return nil
+	}
+	if _, err := fmt.Fprintf(w,
+		"\n## Desk entries awaiting distillation (%d)\n"+
+			"Raw transformations you already judged worth keeping — the strongest arc material there is.\n"+
+			"Mark one done by adding `%s: <arc-id>` to its frontmatter.\n\n", len(entries), distilledToField); err != nil {
+		return err
+	}
+	for _, e := range entries {
+		ref := e.ID
+		if ref == "" {
+			// No id means `note get` can't reach it and no arc can link to it —
+			// say so here rather than printing a blank where a handle belongs.
+			ref = e.Path + "  (no id — unciteable; add one)"
+		}
+		if _, err := fmt.Fprintf(w, "  %-12s %s — %s\n", e.Date, ref, e.Title); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // FormatReport writes a human-readable, propose-only candidate report. It leads
 // and closes with the contract — these are MOMENTS, not arcs; the mind drafts
 // and approves — so the output can't be mistaken for finished identity.
@@ -45,8 +78,20 @@ func FormatReport(r Report, w io.Writer) error {
 		r.EpisodesScanned, r.EpisodesKept, len(r.Candidates)); err != nil {
 		return err
 	}
+	if err := writeDeskSection(r.DeskPending, w); err != nil {
+		return err
+	}
 	if len(r.Candidates) == 0 {
-		_, err := fmt.Fprintf(w, "\nNo candidate moments found.\n\n%s\n", arcGuideHint)
+		// Only one of the two sources came up empty when the desk has entries.
+		// Saying "nothing found" under a list of found things is the same
+		// reports-nothing-while-holding-something failure this scanner exists to
+		// fix — and a summary line caught contradicting the body once stops
+		// being read at all.
+		empty := "\nNo candidate moments found.\n\n%s\n"
+		if len(r.DeskPending) > 0 {
+			empty = "\nNo phrase-matched moments in the episodes — the desk entries above are the material.\n\n%s\n"
+		}
+		_, err := fmt.Fprintf(w, empty, arcGuideHint)
 		return err
 	}
 
