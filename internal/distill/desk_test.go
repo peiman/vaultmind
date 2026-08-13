@@ -51,7 +51,6 @@ func TestScanDesk_SurfacesUndistilledJournalEntries(t *testing.T) {
 	assert.Equal(t, "journal-2026-08-13-the-stranger-test", entries[0].ID)
 	assert.Equal(t, "The stranger test", entries[0].Title)
 	assert.Equal(t, "2026-08-13", entries[0].Date)
-	assert.False(t, entries[0].Distilled)
 }
 
 func TestScanDesk_OmitsEntriesAlreadyDistilled(t *testing.T) {
@@ -150,4 +149,92 @@ func TestFormatReport_TrulyEmptyStillSaysSo(t *testing.T) {
 	var buf strings.Builder
 	require.NoError(t, FormatReport(Report{}, &buf))
 	assert.Contains(t, buf.String(), "No candidate moments found")
+}
+
+// A desk root that exists but cannot be read is NOT an empty backlog. Reporting
+// "nothing pending" for a permissions failure hides entries that are sitting
+// right there — the same silent-success shape this scanner was built to end.
+func TestScanDesk_UnreadableRootIsAnError(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses directory permissions")
+	}
+	dir := t.TempDir()
+	sub := filepath.Join(dir, "locked")
+	require.NoError(t, os.MkdirAll(sub, 0o750))
+	writeNote(t, sub, "journal/e.md", deskEntryFixture)
+	require.NoError(t, os.Chmod(sub, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(sub, 0o750) })
+
+	_, err := ScanDesk(sub)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "locked")
+}
+
+// A non-directory path is not a desk, and is not an error either.
+func TestScanDesk_FilePathIsNotADesk(t *testing.T) {
+	dir := t.TempDir()
+	f := filepath.Join(dir, "notadir.md")
+	require.NoError(t, os.WriteFile(f, []byte("x"), 0o600))
+
+	entries, err := ScanDesk(f)
+	require.NoError(t, err)
+	assert.Empty(t, entries)
+}
+
+// A frontmatter value that is neither string nor date still surfaces rather
+// than vanishing — a silently dropped field is indistinguishable from an absent
+// one, and the reader can't tell which they're looking at.
+func TestScanDesk_NonStringFieldStillSurfaces(t *testing.T) {
+	dir := t.TempDir()
+	writeNote(t, dir, "journal/n.md", "---\nid: journal-n\ntype: journal\ndate: 2026-08-13\ntitle: 12345\n---\n")
+
+	entries, err := ScanDesk(dir)
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	assert.Equal(t, "12345", entries[0].Title)
+}
+
+// The no-id case has to be visible in the RENDERED output, not just the struct:
+// an entry nothing can cite is exactly the one a reader must be told to fix.
+func TestFormatReport_UnciteableEntryIsLabelled(t *testing.T) {
+	var buf strings.Builder
+	require.NoError(t, FormatReport(Report{
+		DeskPending: []DeskEntry{{Title: "No id", Date: "2026-08-13", Path: "journal/no-id.md"}},
+	}, &buf))
+
+	out := buf.String()
+	assert.Contains(t, out, "journal/no-id.md")
+	assert.Contains(t, out, "no id", "say why it can't be referenced, rather than printing a blank handle")
+}
+
+// Both sources populated: desk entries lead, phrase matches follow.
+func TestFormatReport_DeskEntriesPrintAboveCandidates(t *testing.T) {
+	var buf strings.Builder
+	require.NoError(t, FormatReport(Report{
+		EpisodesScanned: 1,
+		EpisodesKept:    1,
+		DeskPending:     []DeskEntry{{ID: "journal-x", Title: "T", Date: "2026-08-13"}},
+		Candidates: []Candidate{{
+			Rule: RuleAuthorityGrant, EpisodeID: "episode-1", TurnIndex: 3,
+			Verbatim: "you decide", Trigger: "you decide",
+		}},
+	}, &buf))
+
+	out := buf.String()
+	deskAt, candAt := strings.Index(out, "journal-x"), strings.Index(out, "episode-1")
+	require.NotEqual(t, -1, deskAt)
+	require.NotEqual(t, -1, candAt)
+	assert.Less(t, deskAt, candAt, "judgements outrank guesses; printing guesses first buries them")
+}
+
+// The section renderer must propagate write failures rather than swallow them.
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) { return 0, assert.AnError }
+
+func TestFormatReport_PropagatesWriteErrors(t *testing.T) {
+	err := FormatReport(Report{
+		DeskPending: []DeskEntry{{ID: "journal-x", Title: "T", Date: "2026-08-13"}},
+	}, failingWriter{})
+	require.Error(t, err)
 }

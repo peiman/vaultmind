@@ -33,13 +33,15 @@ const distilledToField = "distilled_to"
 // mid-session and decided this was worth keeping. Collapsing the two would
 // force a fake episode ID and turn index onto something that has neither, and
 // would flatten a real difference in how much the reader should trust the item.
+// There is deliberately no Distilled/DistilledTo field: ScanDesk filters
+// distilled entries OUT, so such fields could only ever serialize as false/""
+// and would tell a JSON consumer the opposite of something useful. Every entry
+// in this list is, by construction, still pending.
 type DeskEntry struct {
-	ID          string `json:"id"`
-	Title       string `json:"title"`
-	Date        string `json:"date"`
-	Path        string `json:"path"`
-	Distilled   bool   `json:"distilled"`
-	DistilledTo string `json:"distilled_to,omitempty"`
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Date  string `json:"date"`
+	Path  string `json:"path"`
 }
 
 // ScanDesk walks deskPath and returns every journal entry NOT yet marked as
