@@ -19,6 +19,10 @@ type Report struct {
 	// match to go check, a desk entry is a transformation the mind already judged
 	// worth recording. Printing the guesses first would bury the judgements.
 	DeskPending []DeskEntry `json:"desk_pending,omitempty"`
+	// Recurrences are shapes that surfaced across several sources — Rule 2, the
+	// signal no per-episode reader can see. They print FIRST: a thing recurring
+	// across sessions is a structural finding, which outranks any single moment.
+	Recurrences []RecurrenceGroup `json:"recurrences,omitempty"`
 	// ParseErrors records episodes that failed to parse, surfaced rather than
 	// silently skipped (distill is infrastructure and can't log, so the visible
 	// error rides in the report itself).
@@ -39,6 +43,40 @@ const reportVerbatimMax = 240
 const arcGuideHint = "These are only the easy, phrase-matched moments — the detector misses reversals, " +
 	"reframes, frame-breaks, cost-of-rule and more. Hunt the rest by reading the session yourself; " +
 	"run `vaultmind arc guide` for the method (the seven shapes, the bar, the self-check)."
+
+// writeRecurrenceSection prints shapes that recurred across sources.
+//
+// This is the one section whose VALUE is the reading rather than the list, so
+// the reading is stated: a thing that keeps coming back across sessions is
+// structural — a property of the system — not a discipline failure to try
+// harder at. That is the principle every instance of this rule produced in the
+// 2026-05-31 corpus, and it is the reason the rule was called the money rule.
+//
+// It still refuses to draft. The count is mechanical; what the recurrence MEANS
+// is the mind's to say.
+func writeRecurrenceSection(groups []RecurrenceGroup, w io.Writer) error {
+	if len(groups) == 0 {
+		return nil
+	}
+	if _, err := fmt.Fprintf(w,
+		"\n## Recurring shapes (%d)\n"+
+			"The same thing surfacing across separate sessions. When something recurs, the finding is\n"+
+			"usually STRUCTURAL — a property of the system, not a discipline problem to try harder at.\n"+
+			"No single-session scan can see these.\n\n", len(groups)); err != nil {
+		return err
+	}
+	for _, g := range groups {
+		if _, err := fmt.Fprintf(w, "  across %d sources: %s\n", g.SourceCount, strings.Join(g.Sources, ", ")); err != nil {
+			return err
+		}
+		for _, m := range g.Members {
+			if _, err := fmt.Fprintf(w, "      · %q\n", truncate(oneLine(m), reportVerbatimMax)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
 
 // writeDeskSection prints undistilled desk entries, which outrank the
 // phrase-matched moments below them: the mind already decided each of these was
@@ -105,6 +143,9 @@ func FormatReport(r Report, w io.Writer) error {
 		"Arc candidates — propose-only. These are MOMENTS, not arcs; you draft and approve (see how-to-write-arcs).\n\n"+
 			"Scanned %d episodes (%d after signal filter) → %d candidate moments.\n",
 		r.EpisodesScanned, r.EpisodesKept, len(r.Candidates)); err != nil {
+		return err
+	}
+	if err := writeRecurrenceSection(r.Recurrences, w); err != nil {
 		return err
 	}
 	if err := writeDeskSection(r.DeskPending, w); err != nil {

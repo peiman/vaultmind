@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`arc candidates` detects recurrence across sources (Rule 2).** The 2026-05-31 review called this
+  "the proven money rule; the one thing a per-episode reader cannot do" and it was the last
+  high-value rule unbuilt: a single instance of a recurring failure looks unremarkable, the fifth is
+  a structural finding, and only something reading ACROSS sources can tell them apart. Proposals
+  that talk about the same thing are clustered (single-link over cosine) and reported when they span
+  several distinct sources, broadest first. Only the counting is mechanised — what a recurrence
+  MEANS stays with the reader, as the review concluded. Three false-positive classes are filtered,
+  each found by running it on the real corpus rather than reasoning about it: repeats within one
+  source, byte-identical text (a compaction summary replaying an earlier turn captures the same push
+  under two episode ids), and clusters held together by a shared trigger phrase (the detector
+  finding its own lexeme — "manifesto lens on" across two sessions is true and is not a
+  transformation).
 - **`arc candidates` shows the existing arcs each proposal resembles, with cosine scores.** The
   2026-05-31 distillation review named de-duplication — not extraction — the biggest risk in this
   pipeline, having measured two independent miners mis-tagging the same candidate to two different
