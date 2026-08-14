@@ -43,17 +43,21 @@ func AnnotateNearestArcs(ctx context.Context, r Report, f ArcFinder, limit int) 
 	if f == nil {
 		return r
 	}
-	var failures []string
-	note := func(subject string, err error) {
-		// One line per distinct failure reason: a locked index would otherwise
-		// repeat the same message once per proposal and bury the report.
-		msg := fmt.Sprintf("nearest-arc lookup failed for %s: %v", subject, err)
-		for _, existing := range failures {
-			if existing == msg {
-				return
-			}
+	// One line per distinct failure REASON, counted.
+	//
+	// The first version keyed on the formatted message, which embedded the
+	// per-proposal subject — so two proposals never produced an equal string and
+	// nothing ever collapsed. A locked index across 27 proposals emitted 27
+	// identical-in-substance lines, exactly the outcome the code claimed to
+	// prevent. Keying on the error text is what the comment always meant.
+	counts := map[string]int{}
+	order := []string{}
+	note := func(_ string, err error) {
+		reason := err.Error()
+		if _, seen := counts[reason]; !seen {
+			order = append(order, reason)
 		}
-		failures = append(failures, msg)
+		counts[reason]++
 	}
 
 	for i := range r.DeskPending {
@@ -74,7 +78,10 @@ func AnnotateNearestArcs(ctx context.Context, r Report, f ArcFinder, limit int) 
 		r.Candidates[i].NearestArcs = near
 	}
 
-	r.ParseErrors = append(r.ParseErrors, failures...)
+	for _, reason := range order {
+		r.Diagnostics = append(r.Diagnostics,
+			fmt.Sprintf("nearest-arc lookup failed for %d proposal(s): %s", counts[reason], reason))
+	}
 	return r
 }
 

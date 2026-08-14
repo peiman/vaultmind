@@ -19,10 +19,16 @@ type Report struct {
 	// match to go check, a desk entry is a transformation the mind already judged
 	// worth recording. Printing the guesses first would bury the judgements.
 	DeskPending []DeskEntry `json:"desk_pending,omitempty"`
-	// Recurrences are shapes that surfaced across several sources — Rule 2, the
-	// signal no per-episode reader can see. They print FIRST: a thing recurring
-	// across sessions is a structural finding, which outranks any single moment.
-	Recurrences []RecurrenceGroup `json:"recurrences,omitempty"`
+	// Diagnostics records DEGRADATIONS — things that did not work but did not
+	// stop the report: an unreadable desk, an unavailable de-duplication aid, a
+	// desk entry whose frontmatter would not parse.
+	//
+	// Separate from ParseErrors because that field is documented in the public
+	// JSON contract as "episodes that failed to parse" and is rendered with that
+	// prefix. Routing degradations into it made the text report announce
+	// "parse error (episode skipped)" for a mistyped --arcs-vault, which is
+	// false twice over. Additive, so the published envelope keeps its meaning.
+	Diagnostics []string `json:"diagnostics,omitempty"`
 	// ParseErrors records episodes that failed to parse, surfaced rather than
 	// silently skipped (distill is infrastructure and can't log, so the visible
 	// error rides in the report itself).
@@ -43,40 +49,6 @@ const reportVerbatimMax = 240
 const arcGuideHint = "These are only the easy, phrase-matched moments — the detector misses reversals, " +
 	"reframes, frame-breaks, cost-of-rule and more. Hunt the rest by reading the session yourself; " +
 	"run `vaultmind arc guide` for the method (the seven shapes, the bar, the self-check)."
-
-// writeRecurrenceSection prints shapes that recurred across sources.
-//
-// This is the one section whose VALUE is the reading rather than the list, so
-// the reading is stated: a thing that keeps coming back across sessions is
-// structural — a property of the system — not a discipline failure to try
-// harder at. That is the principle every instance of this rule produced in the
-// 2026-05-31 corpus, and it is the reason the rule was called the money rule.
-//
-// It still refuses to draft. The count is mechanical; what the recurrence MEANS
-// is the mind's to say.
-func writeRecurrenceSection(groups []RecurrenceGroup, w io.Writer) error {
-	if len(groups) == 0 {
-		return nil
-	}
-	if _, err := fmt.Fprintf(w,
-		"\n## Recurring shapes (%d)\n"+
-			"The same thing surfacing across separate sessions. When something recurs, the finding is\n"+
-			"usually STRUCTURAL — a property of the system, not a discipline problem to try harder at.\n"+
-			"No single-session scan can see these.\n\n", len(groups)); err != nil {
-		return err
-	}
-	for _, g := range groups {
-		if _, err := fmt.Fprintf(w, "  across %d sources: %s\n", g.SourceCount, strings.Join(g.Sources, ", ")); err != nil {
-			return err
-		}
-		for _, m := range g.Members {
-			if _, err := fmt.Fprintf(w, "      · %q\n", truncate(oneLine(m), reportVerbatimMax)); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
 
 // writeDeskSection prints undistilled desk entries, which outrank the
 // phrase-matched moments below them: the mind already decided each of these was
@@ -135,6 +107,23 @@ func writeNearestArcs(near []NearArc, w io.Writer) error {
 	return err
 }
 
+// writeDegradations prints what did not work, with a prefix that says which
+// kind of failure it was. Called from every exit path in FormatReport, because
+// the one thing a degradation must not do is disappear.
+func writeDegradations(r Report, w io.Writer) error {
+	for _, d := range r.Diagnostics {
+		if _, err := fmt.Fprintf(w, "\n! degraded: %s\n", d); err != nil {
+			return err
+		}
+	}
+	for _, pe := range r.ParseErrors {
+		if _, err := fmt.Fprintf(w, "\n! parse error (episode skipped): %s\n", pe); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // FormatReport writes a human-readable, propose-only candidate report. It leads
 // and closes with the contract — these are MOMENTS, not arcs; the mind drafts
 // and approves — so the output can't be mistaken for finished identity.
@@ -145,10 +134,15 @@ func FormatReport(r Report, w io.Writer) error {
 		r.EpisodesScanned, r.EpisodesKept, len(r.Candidates)); err != nil {
 		return err
 	}
-	if err := writeRecurrenceSection(r.Recurrences, w); err != nil {
+	if err := writeDeskSection(r.DeskPending, w); err != nil {
 		return err
 	}
-	if err := writeDeskSection(r.DeskPending, w); err != nil {
+	// Degradations render before the early return below. They used to sit after
+	// it, so every one of them vanished whenever there were no phrase-matched
+	// candidates — which is the NORMAL state of a desk-only vault, the exact
+	// configuration these features were built for. A report that hides why it is
+	// thin is the failure this whole package argues against.
+	if err := writeDegradations(r, w); err != nil {
 		return err
 	}
 	if len(r.Candidates) == 0 {
@@ -177,12 +171,6 @@ func FormatReport(r Report, w io.Writer) error {
 			if err := writeNearestArcs(c.NearestArcs, w); err != nil {
 				return err
 			}
-		}
-	}
-
-	for _, pe := range r.ParseErrors {
-		if _, err := fmt.Fprintf(w, "\n! parse error (episode skipped): %s\n", pe); err != nil {
-			return err
 		}
 	}
 

@@ -115,6 +115,7 @@ Wrong" arc). Each of these is the single source for its constant:
 | `experiment.MinElapsedHours = 1/3600` | `internal/experiment/activation.go` | Soft floor on log(elapsed) for recent accesses |
 | `query.DefaultRRFK = 60` | `internal/query/hybrid_retriever.go` | Reciprocal Rank Fusion smoothing |
 | `memory.PriorityExplicitRelation/Link/MediumConfidence/LowConfidence` | `internal/memory/contextpack.go` | Edge-priority tiers (0/1/2/3; feed distance-weighted ranking) |
+| `query.DefaultNearestArcs = 3` | `internal/query/arcfinder.go` | Similar-arc neighbours shown per arc-distillation proposal |
 
 **Changing a scoring value:**
 1. Update the named constant.

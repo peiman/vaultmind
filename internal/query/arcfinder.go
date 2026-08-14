@@ -15,6 +15,13 @@ import (
 // nothing about whether this transformation is already recorded.
 const ArcTypeName = "arc"
 
+// DefaultNearestArcs is how many similar existing arcs de-duplication surfaces
+// per proposal. Three reveals a near-tie — itself the signal that the
+// covered/new judgement is hard — without turning the report into a ranking
+// exercise. Locked by arcfinder_ssot_test.go per the scoring-constant SSOT rule
+// in AGENTS.md.
+const DefaultNearestArcs = 3
+
 // ArcMatch is an existing arc that resembles a proposal, with the cosine that
 // says how much. It is evidence for a human judgement, never the judgement.
 type ArcMatch struct {
@@ -58,6 +65,14 @@ type ArcFinder struct {
 // A vault with no embedded arcs yields a finder that answers nothing: correct,
 // and still cheap.
 func NewArcFinder(db *index.DB, embedder embedding.Embedder) (*ArcFinder, error) {
+	// A nil embedder means the vault has no embeddings, or the model could not
+	// load. Accepting it produced a finder that answered "no similar arcs" to
+	// every question — indistinguishable, to the reader, from "your vault holds
+	// nothing like this, go ahead and draft it". That is the precise mistake
+	// de-duplication exists to prevent, so it fails loudly instead.
+	if embedder == nil {
+		return nil, fmt.Errorf("no embedder available: run 'vaultmind index --embed' on the arcs vault first")
+	}
 	all, err := index.LoadAllEmbeddings(db)
 	if err != nil {
 		return nil, fmt.Errorf("loading arc embeddings: %w", err)
@@ -84,26 +99,28 @@ func (f *ArcFinder) NearestArcs(ctx context.Context, text string, limit int) ([]
 		return nil, fmt.Errorf("embedding proposal text: %w", err)
 	}
 
+	// A dimension mismatch means the arc was embedded by a DIFFERENT model —
+	// a state this tool explicitly supports mid-migration (MiniLM + BGE-M3).
+	// CosineSimilarity returns 0 for that, and 0 rendered beside a real score
+	// reads as "not similar" when the truth is "not comparable". Skip them, and
+	// say how many were skipped rather than printing arbitrary 0.00 neighbours.
 	scored := make([]ArcMatch, 0, len(f.arcs))
+	skipped := 0
 	for _, a := range f.arcs {
+		if len(a.vec) != len(vec) {
+			skipped++
+			continue
+		}
 		scored = append(scored, ArcMatch{
 			ID: a.id, Title: a.title, Score: CosineSimilarity(vec, a.vec),
 		})
 	}
+	if len(scored) == 0 && skipped > 0 {
+		return nil, fmt.Errorf("all %d arcs are embedded by a different model (mixed-model vault); re-run 'vaultmind index --full --embed'", skipped)
+	}
 	sort.SliceStable(scored, func(i, j int) bool { return scored[i].Score > scored[j].Score })
-	if len(scored) > limit {
+	if limit > 0 && len(scored) > limit {
 		scored = scored[:limit]
 	}
 	return scored, nil
-}
-
-// EmbedTexts vectorizes many proposal texts at once, satisfying the recurrence
-// detector's Vectorizer. Batched because recurrence embeds every proposal in
-// the report, where per-item calls were what made the first de-duplication
-// implementation unusably slow.
-func (f *ArcFinder) EmbedTexts(ctx context.Context, texts []string) ([][]float32, error) {
-	if f == nil || f.embedder == nil || len(texts) == 0 {
-		return nil, nil
-	}
-	return f.embedder.EmbedBatch(ctx, texts)
 }

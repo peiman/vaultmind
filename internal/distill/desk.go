@@ -58,21 +58,28 @@ type DeskEntry struct {
 // Entries are not scored or ranked. The filtering that matters already happened
 // when the mind chose to write one, so re-judging them here would only discard
 // signal it cannot recover.
-func ScanDesk(deskPath string) ([]DeskEntry, error) {
+func ScanDesk(deskPath string) ([]DeskEntry, []string, error) {
 	info, err := os.Stat(deskPath)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
-		return nil, nil // no desk at all — the normal case, not a failure
+		return nil, nil, nil // no desk at all — the normal case, not a failure
 	case err != nil:
 		// A desk that exists but can't be read (permissions, a broken mount) is
 		// NOT the same as no desk, and returning "nothing pending" for it would
 		// silently report an empty backlog while entries sit unreachable.
-		return nil, fmt.Errorf("reading desk %q: %w", deskPath, err)
+		return nil, nil, fmt.Errorf("reading desk %q: %w", deskPath, err)
 	case !info.IsDir():
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	var entries []DeskEntry
+	// A desk entry that cannot be read or parsed must be REPORTED, not dropped.
+	// The report calls these "the strongest arc material there is", and this
+	// module's own de-duplication design refuses a covered/new verdict precisely
+	// because silently discarding a transformation is unrecoverable. Dropping one
+	// over an unquoted colon in a title would do exactly that, and tell the
+	// reader the desk was clear.
+	var diagnostics []string
 	walkErr := filepath.WalkDir(deskPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -87,13 +94,21 @@ func ScanDesk(deskPath string) ([]DeskEntry, error) {
 		if !strings.EqualFold(filepath.Ext(d.Name()), ".md") {
 			return nil
 		}
-		if entry, ok := readDeskEntry(path, deskPath); ok {
+		entry, ok, why := readDeskEntry(path, deskPath)
+		switch {
+		case ok:
 			entries = append(entries, entry)
+		case why != "":
+			rel, relErr := filepath.Rel(deskPath, path)
+			if relErr != nil {
+				rel = path
+			}
+			diagnostics = append(diagnostics, fmt.Sprintf("desk entry %s skipped: %s", rel, why))
 		}
 		return nil
 	})
 	if walkErr != nil {
-		return nil, fmt.Errorf("scanning desk %q: %w", deskPath, walkErr)
+		return nil, nil, fmt.Errorf("scanning desk %q: %w", deskPath, walkErr)
 	}
 
 	// Newest first: the freshest transformation is the one whose understanding
@@ -104,32 +119,33 @@ func ScanDesk(deskPath string) ([]DeskEntry, error) {
 		}
 		return entries[i].ID < entries[j].ID
 	})
-	return entries, nil
+	sort.Strings(diagnostics)
+	return entries, diagnostics, nil
 }
 
-// readDeskEntry reports whether a file is an undistilled desk entry, and its
-// details if so. It returns no error by design: "unreadable" and "no
-// frontmatter" are not failures here, they are simply answers of "not a desk
-// entry". A vault legitimately holds READMEs, drafts, and templates, and
-// aborting the scan over one of them would make the feature useless in any real
-// directory. Failures that DO matter — an unreadable desk root, a broken walk —
-// are caught by the caller, which can distinguish them from ordinary files.
-func readDeskEntry(path, root string) (DeskEntry, bool) {
+// readDeskEntry reports whether a file is an undistilled desk entry. The third
+// return is a non-empty reason when the file LOOKED like one and could not be
+// used — an unreadable file or malformed frontmatter — as distinct from an
+// ordinary non-entry (a README, a template), which is silent.
+func readDeskEntry(path, root string) (DeskEntry, bool, string) {
 	content, err := os.ReadFile(path) // #nosec G304 -- path comes from walking the caller's own vault
 	if err != nil {
-		return DeskEntry{}, false
+		return DeskEntry{}, false, "unreadable: " + err.Error()
 	}
 	fm, body, err := parser.ExtractFrontmatter(content)
-	if err != nil || fm == nil {
-		return DeskEntry{}, false
+	if err != nil {
+		return DeskEntry{}, false, "malformed frontmatter: " + err.Error()
+	}
+	if fm == nil {
+		return DeskEntry{}, false, "" // no frontmatter at all: not a note, not an error
 	}
 	if !strings.EqualFold(stringField(fm, "type"), deskEntryType) {
-		return DeskEntry{}, false
+		return DeskEntry{}, false, ""
 	}
 	if to := stringField(fm, distilledToField); to != "" {
 		// Already became an arc. Surfacing it again would train the reader to
 		// skim the list, which is how a propose-only surface stops being read.
-		return DeskEntry{}, false
+		return DeskEntry{}, false, ""
 	}
 
 	rel, relErr := filepath.Rel(root, path)
@@ -142,7 +158,7 @@ func readDeskEntry(path, root string) (DeskEntry, bool) {
 		Date:    stringField(fm, "date"),
 		Path:    rel,
 		Snippet: headOf(body, snippetMax),
-	}, true
+	}, true, ""
 }
 
 // stringField reads a frontmatter value as a string.

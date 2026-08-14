@@ -57,6 +57,10 @@ func TestArcCandidates_JSONCarriesDeskEntries(t *testing.T) {
 	require.Len(t, env.Result.DeskPending, 1)
 	assert.Equal(t, "journal-e", env.Result.DeskPending[0].ID)
 	assert.Equal(t, "An entry", env.Result.DeskPending[0].Title)
+	// The --json consumer is the primary reader of this command, so the shape
+	// of what it receives is part of the contract: tagging a section `json:"-"`
+	// must fail a test rather than silently emptying the payload.
+	assert.Contains(t, out.String(), `"desk_pending"`)
 }
 
 // The de-duplication aid must degrade, never take the report down with it: a
@@ -80,10 +84,78 @@ func TestArcCandidates_UnindexedArcsVaultStillReports(t *testing.T) {
 	var env struct {
 		Result struct {
 			DeskPending []struct{ ID string } `json:"desk_pending"`
-			ParseErrors []string              `json:"parse_errors"`
+			Diagnostics []string              `json:"diagnostics"`
 		} `json:"result"`
 	}
 	require.NoError(t, json.Unmarshal(out.Bytes(), &env))
 	assert.Len(t, env.Result.DeskPending, 1)
-	assert.NotEmpty(t, env.Result.ParseErrors, "the degradation is reported, not silent")
+	assert.NotEmpty(t, env.Result.Diagnostics, "the degradation is reported, not silent")
+}
+
+// REGRESSION (found by review 2026-08-15): `arc candidates` must not create a
+// vault where it was merely pointed.
+//
+// v0.3.0 fixed exactly this in the read path — OpenVaultDB CREATES
+// .vaultmind/index.db under whatever path it is given, promoting that directory
+// to a vault every later walk-up finds. This command reintroduced it by calling
+// the raw opener for the arcs vault, and `--arcs-vault` had no path validation
+// at all.
+func TestArcCandidates_DoesNotCreateAVaultWhereItLooks(t *testing.T) {
+	scanned := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(scanned, ".vaultmind"), 0o750))
+	plainDir := t.TempDir() // exists, but is NOT a vault
+
+	_, _, _ = runRootCmd(t, "arc", "candidates", "--vault", scanned, "--arcs-vault", plainDir)
+
+	_, err := os.Stat(filepath.Join(plainDir, ".vaultmind"))
+	assert.True(t, os.IsNotExist(err),
+		"pointing the arc comparison at a directory must not turn that directory into a vault")
+}
+
+// A --arcs-vault that doesn't exist is a typo in the flag whose entire purpose
+// is de-duplication. It must be reported, not silently ignored.
+func TestArcCandidates_BadArcsVaultIsReportedInHumanOutput(t *testing.T) {
+	vault := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(vault, "journal"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(vault, "journal", "e.md"),
+		[]byte("---\nid: journal-e\ntype: journal\ndate: 2026-08-13\ntitle: An entry\n---\n\nBody.\n"), 0o600))
+
+	out, _, err := runRootCmd(t, "arc", "candidates", "--vault", vault, "--arcs-vault", "/does/not/exist")
+	require.NoError(t, err)
+	assert.Contains(t, out.String(), "de-duplication",
+		"the human report must say the aid was unavailable; only JSON carrying it is not enough")
+}
+
+// The --arcs-vault HAPPY path: desk in one vault, arcs in another. Only the
+// failure case was covered, so deleting the "empty means use the scanned vault"
+// fallback passed CI while leaving the aid permanently inert.
+func TestArcCandidates_CrossVaultNeighboursAreFound(t *testing.T) {
+	deskVault := buildIndexedTestVault(t)
+	require.NoError(t, os.MkdirAll(filepath.Join(deskVault, "journal"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(deskVault, "journal", "e.md"),
+		[]byte("---\nid: journal-e\ntype: journal\ndate: 2026-08-15\ntitle: An entry\n---\n\nBody.\n"), 0o600))
+
+	// A separate, unembedded arcs vault: the aid must report that it could not
+	// run, rather than silently returning no neighbours.
+	arcsVault := buildIndexedTestVault(t)
+	out, _, err := runRootCmd(t, "arc", "candidates", "--vault", deskVault, "--arcs-vault", arcsVault, "--json")
+	require.NoError(t, err)
+
+	var env struct {
+		Status string `json:"status"`
+		Result struct {
+			DeskPending []struct {
+				ID          string `json:"id"`
+				NearestArcs []struct {
+					ID    string  `json:"id"`
+					Score float64 `json:"score"`
+				} `json:"nearest_arcs"`
+			} `json:"desk_pending"`
+			Diagnostics []string `json:"diagnostics"`
+		} `json:"result"`
+	}
+	require.NoError(t, json.Unmarshal(out.Bytes(), &env))
+	require.Len(t, env.Result.DeskPending, 1, "the desk entry is reported from the scanned vault")
+	assert.NotEmpty(t, env.Result.Diagnostics, "an arcs vault without embeddings must say so")
+	assert.Equal(t, "warning", env.Status, "a degraded run must not report unqualified success")
 }

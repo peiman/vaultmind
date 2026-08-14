@@ -64,6 +64,9 @@ func TestArcCandidates_EmptyEpisodesDir_JSONOutput(t *testing.T) {
 	out, _, err := runRootCmd(t, "arc", "candidates", "--vault", vault, "--json")
 	require.NoError(t, err)
 
+	// This fixture vault is indexed but NOT embedded, so arc de-duplication is
+	// genuinely unavailable and the envelope now says so ("warning") instead of
+	// reporting unqualified success. That degradation used to be invisible.
 	var env struct {
 		Status  string `json:"status"`
 		Command string `json:"command"`
@@ -72,7 +75,7 @@ func TestArcCandidates_EmptyEpisodesDir_JSONOutput(t *testing.T) {
 		} `json:"result"`
 	}
 	require.NoError(t, json.Unmarshal(out.Bytes(), &env))
-	assert.Equal(t, "ok", env.Status)
+	assert.Contains(t, []string{"ok", "warning"}, env.Status)
 	assert.Equal(t, "arc-candidates", env.Command)
 	assert.Empty(t, env.Result.Candidates, "empty dir produces no candidates")
 }
@@ -574,7 +577,7 @@ func TestNoteMget_IDsFlag_JSONOutput(t *testing.T) {
 		} `json:"result"`
 	}
 	require.NoError(t, json.Unmarshal(out.Bytes(), &env))
-	assert.Equal(t, "ok", env.Status)
+	assert.Contains(t, []string{"ok", "warning"}, env.Status)
 	require.Len(t, env.Result.Notes, 1)
 	assert.Equal(t, "proj-beta", env.Result.Notes[0].ID)
 	assert.Equal(t, []string{"does-not-exist"}, env.Result.NotFound)
