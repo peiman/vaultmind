@@ -96,14 +96,3 @@ func (f *ArcFinder) NearestArcs(ctx context.Context, text string, limit int) ([]
 	}
 	return scored, nil
 }
-
-// EmbedTexts vectorizes many proposal texts at once, satisfying the recurrence
-// detector's Vectorizer. Batched because recurrence embeds every proposal in
-// the report, where per-item calls were what made the first de-duplication
-// implementation unusably slow.
-func (f *ArcFinder) EmbedTexts(ctx context.Context, texts []string) ([][]float32, error) {
-	if f == nil || f.embedder == nil || len(texts) == 0 {
-		return nil, nil
-	}
-	return f.embedder.EmbedBatch(ctx, texts)
-}
