@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`arc candidates` shows the existing arcs each proposal resembles, with cosine scores.** The
+  2026-05-31 distillation review named de-duplication — not extraction — the biggest risk in this
+  pipeline, having measured two independent miners mis-tagging the same candidate to two different
+  existing arcs, both wrong. Every proposal now carries its top-3 nearest arcs. The tool finds the
+  neighbours and deliberately refuses the covered/new verdict: a duplicate proposal costs seconds
+  of reading, while a wrong "already covered" silently discards a transformation nobody will look
+  for again. New `--arcs-vault` points the comparison at a different vault, for setups where raw
+  entries and curated arcs live apart.
 - **`arc candidates` now reads the desk, not just session episodes.** The scanner grepped
   transcripts for a handful of phrases while the notes a mind writes *specifically* to record its
   own transformations sat unread one directory over. Journal-type notes in the scanned vault are

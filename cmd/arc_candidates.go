@@ -1,17 +1,27 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
+	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/config/commands"
 	"github.com/peiman/vaultmind/internal/distill"
 	"github.com/peiman/vaultmind/internal/envelope"
+	"github.com/peiman/vaultmind/internal/query"
 	"github.com/spf13/cobra"
 )
+
+// nearestArcsPerProposal is how many similar existing arcs to show per proposal.
+// Three is the number the 2026-05-31 review specified: enough to reveal a near-tie
+// (which is itself the signal that the judgement is hard) without turning the
+// report into a ranking exercise.
+const nearestArcsPerProposal = 3
 
 var arcCandidatesCmd = MustNewCommand(commands.ArcCandidatesMetadata, runArcCandidates)
 
@@ -50,8 +60,65 @@ func runArcCandidates(cmd *cobra.Command, _ []string) error {
 		report.ParseErrors = append(report.ParseErrors, deskErr.Error())
 	}
 	report.DeskPending = desk
+
+	// De-duplication: annotate every proposal with the existing arcs it
+	// resembles. The 2026-05-31 review named mis-attribution — not extraction —
+	// the biggest risk in this pipeline, so the tool finds the neighbours and
+	// leaves the covered/new verdict to the reader. A vault with no usable index
+	// simply skips the aid rather than losing the proposals.
+	// Arcs need not live in the vault being scanned. A desk is its own vault
+	// (raw, ungated) while arcs live in the curated identity vault, so without
+	// this the de-duplication would find nothing in exactly the setup that needs
+	// it most — the aid would be inert precisely where proposals originate.
+	arcsVault := getConfigValueWithFlags[string](cmd, "arcs-vault", config.KeyAppArcCandidatesArcsVault)
+	if strings.TrimSpace(arcsVault) == "" {
+		arcsVault = vaultPath
+	}
+	if finder, closeFn, ferr := openArcFinder(arcsVault); ferr == nil {
+		defer closeFn()
+		report = distill.AnnotateNearestArcs(cmd.Context(), report, finder, nearestArcsPerProposal)
+	} else {
+		report.ParseErrors = append(report.ParseErrors,
+			"nearest-arc de-duplication unavailable (vault not indexed?): "+ferr.Error())
+	}
 	if getConfigValueWithFlags[bool](cmd, "json", config.KeyAppArcCandidatesJson) {
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(envelope.OK("arc-candidates", report))
 	}
 	return distill.FormatReport(report, cmd.OutOrStdout())
+}
+
+// arcFinderAdapter bridges query.ArcFinder to the distill.ArcFinder interface.
+// The two types are kept apart on purpose: distill is a pure package with no
+// retrieval dependency, and query must not depend on distill (both are business
+// logic — ADR-009). cmd is the layer allowed to know about both, so the seam
+// lives here, where wiring belongs.
+type arcFinderAdapter struct{ inner *query.ArcFinder }
+
+func (a arcFinderAdapter) NearestArcs(ctx context.Context, text string, limit int) ([]distill.NearArc, error) {
+	matches, err := a.inner.NearestArcs(ctx, text, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]distill.NearArc, 0, len(matches))
+	for _, m := range matches {
+		out = append(out, distill.NearArc{ID: m.ID, Title: m.Title, Score: m.Score})
+	}
+	return out, nil
+}
+
+// openArcFinder opens the arcs vault and builds a finder over it, returning the
+// finder plus the closer for the resources it borrows.
+func openArcFinder(arcsVault string) (distill.ArcFinder, func(), error) {
+	vdb, err := cmdutil.OpenVaultDB(arcsVault)
+	if err != nil {
+		return nil, nil, err
+	}
+	ret := query.BuildAutoRetrieverFull(vdb.DB)
+	finder, err := query.NewArcFinder(vdb.DB, ret.Embedder)
+	if err != nil {
+		ret.Cleanup()
+		vdb.Close()
+		return nil, nil, err
+	}
+	return arcFinderAdapter{inner: finder}, func() { ret.Cleanup(); vdb.Close() }, nil
 }

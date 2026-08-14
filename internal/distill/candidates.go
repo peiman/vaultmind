@@ -41,6 +41,9 @@ type Candidate struct {
 	Timestamp string
 	Verbatim  string // the user turn that triggered the rule (for the mind to quote)
 	Trigger   string // the exact phrase that fired the rule (shows WHY; aids judgment)
+	// NearestArcs are existing arcs this moment resembles — evidence for the
+	// mind's covered/new judgement, never that judgement. See AnnotateNearestArcs.
+	NearestArcs []NearArc `json:"nearest_arcs,omitempty"`
 }
 
 // compactionMarker prefixes the machine-injected context-compaction summary,

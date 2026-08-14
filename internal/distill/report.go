@@ -64,8 +64,37 @@ func writeDeskSection(entries []DeskEntry, w io.Writer) error {
 		if _, err := fmt.Fprintf(w, "  %-12s %s — %s\n", e.Date, ref, e.Title); err != nil {
 			return err
 		}
+		if err := writeNearestArcs(e.NearestArcs, w); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+// writeNearestArcs prints the existing arcs a proposal resembles, with scores
+// and WITHOUT a verdict.
+//
+// The 2026-05-31 review measured why: two miners mis-tagged the same candidate
+// to two different existing arcs, both wrong. Attribution is the unreliable step,
+// so the tool does the reliable half (find the neighbours, show how close) and
+// refuses the unreliable one. The asymmetry decides it — a duplicate proposal
+// costs seconds of reading, while a wrong "already covered" silently discards a
+// transformation nobody will go looking for again.
+func writeNearestArcs(near []NearArc, w io.Writer) error {
+	if len(near) == 0 {
+		return nil
+	}
+	parts := make([]string, 0, len(near))
+	for _, n := range near {
+		label := n.ID
+		if label == "" {
+			label = n.Title
+		}
+		parts = append(parts, fmt.Sprintf("%s %.2f", label, n.Score))
+	}
+	_, err := fmt.Fprintf(w, "               resembles: %s   (yours to judge — covered or new)\n",
+		strings.Join(parts, " · "))
+	return err
 }
 
 // FormatReport writes a human-readable, propose-only candidate report. It leads
@@ -102,6 +131,9 @@ func FormatReport(r Report, w io.Writer) error {
 		for _, c := range ep.candidates {
 			if _, err := fmt.Fprintf(w, "  [%-15s via %q] turn %d: %q\n",
 				c.Rule, c.Trigger, c.TurnIndex, truncate(oneLine(c.Verbatim), reportVerbatimMax)); err != nil {
+				return err
+			}
+			if err := writeNearestArcs(c.NearestArcs, w); err != nil {
 				return err
 			}
 		}

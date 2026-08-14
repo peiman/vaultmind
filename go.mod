@@ -1,6 +1,6 @@
 module github.com/peiman/vaultmind
 
-go 1.26.5
+go 1.26.6
 
 require (
 	filippo.io/edwards25519 v1.2.0
@@ -22,7 +22,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/sync v0.22.0
 	golang.org/x/sys v0.47.0
-	golang.org/x/text v0.40.0
+	golang.org/x/text v0.41.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.54.0
@@ -96,7 +96,7 @@ require (
 	github.com/yalue/onnxruntime_go v1.30.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/crypto v0.54.0 // indirect
+	golang.org/x/crypto v0.55.0 // indirect
 	golang.org/x/exp v0.0.0-20260718201538-764159d718ef // indirect
 	golang.org/x/image v0.43.0 // indirect
 	golang.org/x/net v0.57.0 // indirect

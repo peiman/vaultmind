@@ -28,6 +28,7 @@ const (
 	KeyAppApplyCommit                        = "app.apply.commit"                         // Stage and commit all changes
 	KeyAppArcCandidatesVault                 = "app.arc.candidates.vault"                 // Path to vault root
 	KeyAppArcCandidatesJson                  = "app.arc.candidates.json"                  // Output in JSON format
+	KeyAppArcCandidatesArcsVault             = "app.arc.candidates.arcs_vault"            // Vault holding the existing arcs to compare proposals against (default: the sc...
 	KeyAppAskVault                           = "app.ask.vault"                            // Path to vault root
 	KeyAppAskJson                            = "app.ask.json"                             // Output in JSON format
 	KeyAppAskBudget                          = "app.ask.budget"                           // Token budget for context-pack
