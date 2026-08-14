@@ -58,3 +58,32 @@ func TestArcCandidates_JSONCarriesDeskEntries(t *testing.T) {
 	assert.Equal(t, "journal-e", env.Result.DeskPending[0].ID)
 	assert.Equal(t, "An entry", env.Result.DeskPending[0].Title)
 }
+
+// The de-duplication aid must degrade, never take the report down with it: a
+// vault that can't be opened for arc comparison still yields the proposals,
+// with the reason recorded.
+func TestOpenArcFinder_MissingVaultErrors(t *testing.T) {
+	_, _, err := openArcFinder("/does/not/exist")
+	require.Error(t, err)
+}
+
+func TestArcCandidates_UnindexedArcsVaultStillReports(t *testing.T) {
+	vault := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(vault, "journal"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(vault, "journal", "e.md"),
+		[]byte("---\nid: journal-e\ntype: journal\ndate: 2026-08-13\ntitle: An entry\n---\n\nBody.\n"), 0o600))
+
+	out, _, err := runRootCmd(t, "arc", "candidates", "--vault", vault,
+		"--arcs-vault", "/does/not/exist", "--json")
+	require.NoError(t, err, "the proposals survive a failed neighbour lookup")
+
+	var env struct {
+		Result struct {
+			DeskPending []struct{ ID string } `json:"desk_pending"`
+			ParseErrors []string              `json:"parse_errors"`
+		} `json:"result"`
+	}
+	require.NoError(t, json.Unmarshal(out.Bytes(), &env))
+	assert.Len(t, env.Result.DeskPending, 1)
+	assert.NotEmpty(t, env.Result.ParseErrors, "the degradation is reported, not silent")
+}

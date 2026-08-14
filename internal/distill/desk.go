@@ -42,6 +42,13 @@ type DeskEntry struct {
 	Title string `json:"title"`
 	Date  string `json:"date"`
 	Path  string `json:"path"`
+	// Snippet is the head of the body, used to find similar existing arcs. It is
+	// not serialized: it exists to be matched on, and echoing it back would just
+	// duplicate content the reader can open by id.
+	Snippet string `json:"-"`
+	// NearestArcs are existing arcs this entry resembles — evidence for the
+	// reader's covered/new judgement, never that judgement. See AnnotateNearestArcs.
+	NearestArcs []NearArc `json:"nearest_arcs,omitempty"`
 }
 
 // ScanDesk walks deskPath and returns every journal entry NOT yet marked as
@@ -112,7 +119,7 @@ func readDeskEntry(path, root string) (DeskEntry, bool) {
 	if err != nil {
 		return DeskEntry{}, false
 	}
-	fm, _, err := parser.ExtractFrontmatter(content)
+	fm, body, err := parser.ExtractFrontmatter(content)
 	if err != nil || fm == nil {
 		return DeskEntry{}, false
 	}
@@ -130,10 +137,11 @@ func readDeskEntry(path, root string) (DeskEntry, bool) {
 		rel = path
 	}
 	return DeskEntry{
-		ID:    stringField(fm, "id"),
-		Title: stringField(fm, "title"),
-		Date:  stringField(fm, "date"),
-		Path:  rel,
+		ID:      stringField(fm, "id"),
+		Title:   stringField(fm, "title"),
+		Date:    stringField(fm, "date"),
+		Path:    rel,
+		Snippet: headOf(body, snippetMax),
 	}, true
 }
 
@@ -161,3 +169,21 @@ func stringField(fm map[string]interface{}, key string) string {
 
 // dateLayout is the date-only form desk filenames and frontmatter both use.
 const dateLayout = "2006-01-02"
+
+// snippetMax bounds the body text used for arc similarity. Enough to carry the
+// transformation's vocabulary, short enough that one long entry doesn't dominate
+// the query.
+const snippetMax = 1200
+
+// headOf returns the first n characters of s on a rune boundary.
+func headOf(s string, n int) string {
+	s = strings.TrimSpace(s)
+	if len(s) <= n {
+		return s
+	}
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n])
+}

@@ -13,8 +13,9 @@ var ArcCandidatesMetadata = config.CommandMetadata{
 		"principle-how-to-write-arcs for the bar a real arc must clear.",
 	ConfigPrefix: "app.arc.candidates",
 	FlagOverrides: map[string]string{
-		"app.arc.candidates.vault": "vault",
-		"app.arc.candidates.json":  "json",
+		"app.arc.candidates.vault":      "vault",
+		"app.arc.candidates.json":       "json",
+		"app.arc.candidates.arcs_vault": "arcs-vault",
 	},
 }
 
@@ -23,6 +24,7 @@ func ArcCandidatesOptions() []config.ConfigOption {
 	return []config.ConfigOption{
 		{Key: "app.arc.candidates.vault", DefaultValue: ".", Description: "Path to vault root", Type: "string"},
 		{Key: "app.arc.candidates.json", DefaultValue: false, Description: "Output in JSON format", Type: "bool"},
+		{Key: "app.arc.candidates.arcs_vault", DefaultValue: "", Description: "Vault holding the existing arcs to compare proposals against (default: the scanned vault). Set this when the desk and the arcs live in different vaults", Type: "string"},
 	}
 }
 
