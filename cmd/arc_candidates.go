@@ -77,6 +77,7 @@ func runArcCandidates(cmd *cobra.Command, _ []string) error {
 	if finder, closeFn, ferr := openArcFinder(arcsVault); ferr == nil {
 		defer closeFn()
 		report = distill.AnnotateNearestArcs(cmd.Context(), report, finder, nearestArcsPerProposal)
+		report = annotateRecurrences(cmd.Context(), report, finder)
 	} else {
 		report.ParseErrors = append(report.ParseErrors,
 			"nearest-arc de-duplication unavailable (vault not indexed?): "+ferr.Error())
@@ -93,6 +94,10 @@ func runArcCandidates(cmd *cobra.Command, _ []string) error {
 // logic — ADR-009). cmd is the layer allowed to know about both, so the seam
 // lives here, where wiring belongs.
 type arcFinderAdapter struct{ inner *query.ArcFinder }
+
+func (a arcFinderAdapter) EmbedTexts(ctx context.Context, texts []string) ([][]float32, error) {
+	return a.inner.EmbedTexts(ctx, texts)
+}
 
 func (a arcFinderAdapter) NearestArcs(ctx context.Context, text string, limit int) ([]distill.NearArc, error) {
 	matches, err := a.inner.NearestArcs(ctx, text, limit)
@@ -121,4 +126,50 @@ func openArcFinder(arcsVault string) (distill.ArcFinder, func(), error) {
 		return nil, nil, err
 	}
 	return arcFinderAdapter{inner: finder}, func() { ret.Cleanup(); vdb.Close() }, nil
+}
+
+// minRecurrenceSources is how many distinct sources a shape must cross before
+// it is reported. Two is the smallest number that can mean "again" — the whole
+// point of Rule 2 is crossing a session boundary, which one source cannot do.
+const minRecurrenceSources = 2
+
+// annotateRecurrences runs Rule 2 over every proposal in the report: the desk
+// entries and the phrase-matched moments together, since a shape that recurs
+// across BOTH is the strongest structural signal available.
+//
+// A failure degrades to no recurrences and is recorded — the proposals matter
+// more than the analysis over them.
+func annotateRecurrences(ctx context.Context, report distill.Report, finder distill.ArcFinder) distill.Report {
+	vz, ok := finder.(distill.Vectorizer)
+	if !ok {
+		return report
+	}
+	items := make([]distill.RecurrenceItem, 0, len(report.DeskPending)+len(report.Candidates))
+	for _, e := range report.DeskPending {
+		if text := firstNonEmpty(e.Snippet, e.Title); text != "" {
+			items = append(items, distill.RecurrenceItem{Source: e.ID, Text: text})
+		}
+	}
+	for _, c := range report.Candidates {
+		if text := strings.TrimSpace(c.Verbatim); text != "" {
+			items = append(items, distill.RecurrenceItem{Source: c.EpisodeID, Text: text, Trigger: c.Trigger})
+		}
+	}
+
+	groups, err := distill.FindRecurrences(ctx, items, vz, minRecurrenceSources)
+	if err != nil {
+		report.ParseErrors = append(report.ParseErrors, "recurrence detection failed: "+err.Error())
+		return report
+	}
+	report.Recurrences = groups
+	return report
+}
+
+func firstNonEmpty(candidates ...string) string {
+	for _, c := range candidates {
+		if s := strings.TrimSpace(c); s != "" {
+			return s
+		}
+	}
+	return ""
 }

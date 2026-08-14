@@ -2,7 +2,6 @@ package query
 
 import (
 	"context"
-	"math"
 
 	"github.com/peiman/vaultmind/internal/embedding"
 	"github.com/peiman/vaultmind/internal/index"
@@ -30,20 +29,7 @@ func NoteSimilarities(ctx context.Context, queryText string, embedder embedding.
 	return sims, nil
 }
 
-// CosineSimilarity computes the cosine similarity between two float32 vectors.
-// Returns 0 if vectors have different lengths, zero length, or zero magnitude.
-func CosineSimilarity(a, b []float32) float64 {
-	if len(a) != len(b) || len(a) == 0 {
-		return 0
-	}
-	var dot, normA, normB float64
-	for i := range a {
-		dot += float64(a[i]) * float64(b[i])
-		normA += float64(a[i]) * float64(a[i])
-		normB += float64(b[i]) * float64(b[i])
-	}
-	if normA == 0 || normB == 0 {
-		return 0
-	}
-	return dot / (math.Sqrt(normA) * math.Sqrt(normB))
-}
+// CosineSimilarity is retained as the query-layer name for the shared
+// implementation in internal/embedding. One definition, so the two layers that
+// need it cannot drift apart (ADR-009 forbids distill importing query).
+func CosineSimilarity(a, b []float32) float64 { return embedding.CosineSimilarity(a, b) }
