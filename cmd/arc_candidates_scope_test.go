@@ -57,6 +57,10 @@ func TestArcCandidates_JSONCarriesDeskEntries(t *testing.T) {
 	require.Len(t, env.Result.DeskPending, 1)
 	assert.Equal(t, "journal-e", env.Result.DeskPending[0].ID)
 	assert.Equal(t, "An entry", env.Result.DeskPending[0].Title)
+	// The --json consumer is the primary reader of this command, so the shape
+	// of what it receives is part of the contract: tagging a section `json:"-"`
+	// must fail a test rather than silently emptying the payload.
+	assert.Contains(t, out.String(), `"desk_pending"`)
 }
 
 // The de-duplication aid must degrade, never take the report down with it: a
@@ -120,4 +124,38 @@ func TestArcCandidates_BadArcsVaultIsReportedInHumanOutput(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out.String(), "de-duplication",
 		"the human report must say the aid was unavailable; only JSON carrying it is not enough")
+}
+
+// The --arcs-vault HAPPY path: desk in one vault, arcs in another. Only the
+// failure case was covered, so deleting the "empty means use the scanned vault"
+// fallback passed CI while leaving the aid permanently inert.
+func TestArcCandidates_CrossVaultNeighboursAreFound(t *testing.T) {
+	deskVault := buildIndexedTestVault(t)
+	require.NoError(t, os.MkdirAll(filepath.Join(deskVault, "journal"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(deskVault, "journal", "e.md"),
+		[]byte("---\nid: journal-e\ntype: journal\ndate: 2026-08-15\ntitle: An entry\n---\n\nBody.\n"), 0o600))
+
+	// A separate, unembedded arcs vault: the aid must report that it could not
+	// run, rather than silently returning no neighbours.
+	arcsVault := buildIndexedTestVault(t)
+	out, _, err := runRootCmd(t, "arc", "candidates", "--vault", deskVault, "--arcs-vault", arcsVault, "--json")
+	require.NoError(t, err)
+
+	var env struct {
+		Status string `json:"status"`
+		Result struct {
+			DeskPending []struct {
+				ID          string `json:"id"`
+				NearestArcs []struct {
+					ID    string  `json:"id"`
+					Score float64 `json:"score"`
+				} `json:"nearest_arcs"`
+			} `json:"desk_pending"`
+			Diagnostics []string `json:"diagnostics"`
+		} `json:"result"`
+	}
+	require.NoError(t, json.Unmarshal(out.Bytes(), &env))
+	require.Len(t, env.Result.DeskPending, 1, "the desk entry is reported from the scanned vault")
+	assert.NotEmpty(t, env.Result.Diagnostics, "an arcs vault without embeddings must say so")
+	assert.Equal(t, "warning", env.Status, "a degraded run must not report unqualified success")
 }

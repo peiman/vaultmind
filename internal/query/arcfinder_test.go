@@ -65,7 +65,12 @@ func TestArcFinder_RespectsLimit(t *testing.T) {
 
 	got, err := f.NearestArcs(context.Background(), "q", 2)
 	require.NoError(t, err)
-	assert.Len(t, got, 2)
+	require.Len(t, got, 2)
+	// Assert WHICH two: truncating before sorting would return two arbitrary
+	// arcs and still pass a length-only check, while showing the reader the
+	// wrong neighbours.
+	assert.Equal(t, "a", got[0].ID)
+	assert.Equal(t, "b", got[1].ID)
 }
 
 // Degenerate inputs are quiet no-ops, never errors: neighbours are an aid, and
