@@ -95,8 +95,11 @@ func TestAnnotateNearestArcs_FinderFailureKeepsTheReport(t *testing.T) {
 	assert.Len(t, got.DeskPending, 1, "entries survive a failed lookup")
 	assert.Len(t, got.Candidates, 1)
 	assert.Empty(t, got.DeskPending[0].NearestArcs)
-	require.NotEmpty(t, got.ParseErrors, "the degradation is reported, not silent")
-	assert.Contains(t, strings.Join(got.ParseErrors, " "), "index locked")
+	require.NotEmpty(t, got.Diagnostics, "the degradation is reported, not silent")
+	assert.Contains(t, strings.Join(got.Diagnostics, " "), "index locked")
+	assert.Len(t, got.Diagnostics, 1,
+		"one line per distinct REASON — 27 proposals behind one locked index must not print 27 lines")
+	assert.Contains(t, got.Diagnostics[0], "2 proposal(s)", "the count replaces the repetition")
 }
 
 // A nil finder is the no-index case (the vault was never indexed). It must be a
@@ -161,4 +164,39 @@ func TestHeadOf_CutsOnRuneBoundary(t *testing.T) {
 	got := headOf(multi, 10)
 	assert.Equal(t, 10, len([]rune(got)))
 	assert.True(t, utf8.ValidString(got), "must not split a rune")
+}
+
+// REGRESSION (review 2026-08-15): degradations must be VISIBLE, not merely
+// carried on the struct.
+//
+// The original test asserted only that ParseErrors was populated and stopped
+// there — while FormatReport returned early on zero candidates and never
+// rendered them. A desk-only vault has zero candidates by definition, so every
+// degradation was invisible in exactly the configuration these features serve.
+// The test validated the assumption (the error is carried) instead of the
+// reality (the reader sees it).
+func TestFormatReport_DegradationsAreVisibleWithNoCandidates(t *testing.T) {
+	var buf strings.Builder
+	require.NoError(t, FormatReport(Report{
+		DeskPending: []DeskEntry{{ID: "journal-x", Title: "T", Date: "2026-08-13"}},
+		Diagnostics: []string{"nearest-arc de-duplication unavailable: no embedder"},
+		ParseErrors: []string{"episode-x: bad frontmatter"},
+	}, &buf))
+
+	out := buf.String()
+	assert.Contains(t, out, "de-duplication unavailable",
+		"a degradation the reader cannot see is a degradation that did not get reported")
+	assert.Contains(t, out, "episode-x")
+	assert.Contains(t, out, "degraded:", "degradations are labelled as such, not as skipped episodes")
+}
+
+// The two channels must stay distinct: a mistyped --arcs-vault is not a
+// "parse error (episode skipped)", which is false about both the cause and the
+// consequence.
+func TestFormatReport_DegradationIsNotLabelledAnEpisodeParseError(t *testing.T) {
+	var buf strings.Builder
+	require.NoError(t, FormatReport(Report{
+		Diagnostics: []string{"nearest-arc de-duplication unavailable: nope"},
+	}, &buf))
+	assert.NotContains(t, buf.String(), "episode skipped")
 }

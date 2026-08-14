@@ -5,9 +5,11 @@ import "math"
 // CosineSimilarity is the cosine between two vectors, or 0 when they are
 // unusable (mismatched length, empty, or zero-magnitude).
 //
-// It lives in the embedding package because both the retrieval layer and the
-// distillation layer need it, and the architecture forbids one importing the
-// other (ADR-009). A second copy would drift — and this project has an arc
+// It lives in the embedding package because both the retrieval layer
+// (internal/query, business) and the distillation layer (internal/distill,
+// infrastructure) need it, and ADR-009 forbids distill importing query. Putting
+// it in the shared infrastructure both may use is the only placement that gives
+// them one definition. A second copy would drift — and this project has an arc
 // about a similarity number that silently meant the wrong thing, so one
 // definition is the point.
 func CosineSimilarity(a, b []float32) float64 {

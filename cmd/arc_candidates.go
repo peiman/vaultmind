@@ -17,12 +17,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// nearestArcsPerProposal is how many similar existing arcs to show per proposal.
-// Three is the number the 2026-05-31 review specified: enough to reveal a near-tie
-// (which is itself the signal that the judgement is hard) without turning the
-// report into a ranking exercise.
-const nearestArcsPerProposal = 3
-
 var arcCandidatesCmd = MustNewCommand(commands.ArcCandidatesMetadata, runArcCandidates)
 
 func init() {
@@ -55,10 +49,11 @@ func runArcCandidates(cmd *cobra.Command, _ []string) error {
 	}
 	// A desk scan failure must not lose the episode candidates already found:
 	// report what it has and surface the reason alongside the parse errors.
-	desk, deskErr := distill.ScanDesk(vaultPath)
+	desk, deskDiags, deskErr := distill.ScanDesk(vaultPath)
 	if deskErr != nil {
-		report.ParseErrors = append(report.ParseErrors, deskErr.Error())
+		report.Diagnostics = append(report.Diagnostics, deskErr.Error())
 	}
+	report.Diagnostics = append(report.Diagnostics, deskDiags...)
 	report.DeskPending = desk
 
 	// De-duplication: annotate every proposal with the existing arcs it
@@ -76,13 +71,22 @@ func runArcCandidates(cmd *cobra.Command, _ []string) error {
 	}
 	if finder, closeFn, ferr := openArcFinder(arcsVault); ferr == nil {
 		defer closeFn()
-		report = distill.AnnotateNearestArcs(cmd.Context(), report, finder, nearestArcsPerProposal)
+		report = distill.AnnotateNearestArcs(cmd.Context(), report, finder, query.DefaultNearestArcs)
 	} else {
-		report.ParseErrors = append(report.ParseErrors,
-			"nearest-arc de-duplication unavailable (vault not indexed?): "+ferr.Error())
+		report.Diagnostics = append(report.Diagnostics,
+			"nearest-arc de-duplication unavailable: "+ferr.Error())
 	}
 	if getConfigValueWithFlags[bool](cmd, "json", config.KeyAppArcCandidatesJson) {
-		return json.NewEncoder(cmd.OutOrStdout()).Encode(envelope.OK("arc-candidates", report))
+		env := envelope.OK("arc-candidates", report)
+		// A degraded run must not report unqualified success. v0.3.0's headline
+		// fix was a command answering from the wrong vault while saying
+		// status "ok"; a caller gating on status must see that the de-duplication
+		// aid was off or the desk went unread.
+		for _, d := range report.Diagnostics {
+			env.AddWarning("degraded", d, "")
+		}
+		env.Meta.VaultPath = vaultPath
+		return json.NewEncoder(cmd.OutOrStdout()).Encode(env)
 	}
 	return distill.FormatReport(report, cmd.OutOrStdout())
 }
@@ -109,6 +113,18 @@ func (a arcFinderAdapter) NearestArcs(ctx context.Context, text string, limit in
 // openArcFinder opens the arcs vault and builds a finder over it, returning the
 // finder plus the closer for the resources it borrows.
 func openArcFinder(arcsVault string) (distill.ArcFinder, func(), error) {
+	// The GUARDED opener, not the raw one. cmdutil.OpenVaultDB CREATES
+	// .vaultmind/index.db under whatever path it is handed — the self-propagating
+	// mistake v0.3.0 fixed in the read path. Using it here reintroduced it: a
+	// scan pointed at a plain directory quietly turned that directory into a
+	// vault every later walk-up would find. A propose-only reader must not
+	// write a database anywhere.
+	if info, statErr := os.Stat(arcsVault); statErr != nil || !info.IsDir() {
+		return nil, nil, fmt.Errorf("arcs vault %q does not exist or is not a directory", arcsVault)
+	}
+	if _, statErr := os.Stat(filepath.Join(arcsVault, ".vaultmind")); statErr != nil {
+		return nil, nil, fmt.Errorf("arcs vault %q is not a vault (no .vaultmind/ directory)", arcsVault)
+	}
 	vdb, err := cmdutil.OpenVaultDB(arcsVault)
 	if err != nil {
 		return nil, nil, err

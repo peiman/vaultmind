@@ -45,7 +45,7 @@ func TestScanDesk_SurfacesUndistilledJournalEntries(t *testing.T) {
 	dir := t.TempDir()
 	writeNote(t, dir, "journal/2026-08-13-the-stranger-test.md", deskEntryFixture)
 
-	entries, err := ScanDesk(dir)
+	entries, _, err := ScanDesk(dir)
 	require.NoError(t, err)
 	require.Len(t, entries, 1)
 	assert.Equal(t, "journal-2026-08-13-the-stranger-test", entries[0].ID)
@@ -66,7 +66,7 @@ distilled_to: arc-the-desk-is-mine
 Body.
 `)
 
-	entries, err := ScanDesk(dir)
+	entries, _, err := ScanDesk(dir)
 	require.NoError(t, err)
 	assert.Empty(t, entries,
 		"an entry that names the arc it became is done; re-surfacing it trains the reader to ignore the list")
@@ -77,7 +77,7 @@ func TestScanDesk_IgnoresNonJournalTypes(t *testing.T) {
 	writeNote(t, dir, "OWNER.md", "---\nid: manifest-x\ntype: manifest\ntitle: Manifest\n---\n\nBody.\n")
 	writeNote(t, dir, "arcs/a.md", "---\nid: arc-x\ntype: arc\ntitle: An arc\n---\n\nBody.\n")
 
-	entries, err := ScanDesk(dir)
+	entries, _, err := ScanDesk(dir)
 	require.NoError(t, err)
 	assert.Empty(t, entries, "only journal entries are raw arc material")
 }
@@ -87,7 +87,7 @@ func TestScanDesk_SkipsNotesWithoutFrontmatterAndDotDirs(t *testing.T) {
 	writeNote(t, dir, "README.md", "# Not a note\n")
 	writeNote(t, dir, ".vaultmind/cache.md", "---\nid: journal-cache\ntype: journal\ntitle: Cache\n---\n")
 
-	entries, err := ScanDesk(dir)
+	entries, _, err := ScanDesk(dir)
 	require.NoError(t, err)
 	assert.Empty(t, entries, "a vault's own dotdirs and un-frontmattered files are not desk entries")
 }
@@ -97,7 +97,7 @@ func TestScanDesk_NewestFirst(t *testing.T) {
 	writeNote(t, dir, "journal/old.md", "---\nid: journal-old\ntype: journal\ndate: 2026-06-03\ntitle: Old\n---\n")
 	writeNote(t, dir, "journal/new.md", "---\nid: journal-new\ntype: journal\ndate: 2026-08-13\ntitle: New\n---\n")
 
-	entries, err := ScanDesk(dir)
+	entries, _, err := ScanDesk(dir)
 	require.NoError(t, err)
 	require.Len(t, entries, 2)
 	assert.Equal(t, "journal-new", entries[0].ID, "most recent first — the freshest transformation is the one still recoverable")
@@ -106,7 +106,7 @@ func TestScanDesk_NewestFirst(t *testing.T) {
 // A missing desk is the normal case for a vault that has no desk, not an error:
 // arc candidates must keep working for anyone who never made one.
 func TestScanDesk_MissingDirectoryIsNotAnError(t *testing.T) {
-	entries, err := ScanDesk(filepath.Join(t.TempDir(), "nope"))
+	entries, _, err := ScanDesk(filepath.Join(t.TempDir(), "nope"))
 	require.NoError(t, err)
 	assert.Empty(t, entries)
 }
@@ -118,7 +118,7 @@ func TestScanDesk_EntryWithoutIDIsStillSurfaced(t *testing.T) {
 	dir := t.TempDir()
 	writeNote(t, dir, "journal/no-id.md", "---\ntype: journal\ndate: 2026-08-13\ntitle: No id\n---\n")
 
-	entries, err := ScanDesk(dir)
+	entries, _, err := ScanDesk(dir)
 	require.NoError(t, err)
 	require.Len(t, entries, 1)
 	assert.Empty(t, entries[0].ID)
@@ -165,7 +165,7 @@ func TestScanDesk_UnreadableRootIsAnError(t *testing.T) {
 	require.NoError(t, os.Chmod(sub, 0o000))
 	t.Cleanup(func() { _ = os.Chmod(sub, 0o750) })
 
-	_, err := ScanDesk(sub)
+	_, _, err := ScanDesk(sub)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "locked")
 }
@@ -176,7 +176,7 @@ func TestScanDesk_FilePathIsNotADesk(t *testing.T) {
 	f := filepath.Join(dir, "notadir.md")
 	require.NoError(t, os.WriteFile(f, []byte("x"), 0o600))
 
-	entries, err := ScanDesk(f)
+	entries, _, err := ScanDesk(f)
 	require.NoError(t, err)
 	assert.Empty(t, entries)
 }
@@ -188,7 +188,7 @@ func TestScanDesk_NonStringFieldStillSurfaces(t *testing.T) {
 	dir := t.TempDir()
 	writeNote(t, dir, "journal/n.md", "---\nid: journal-n\ntype: journal\ndate: 2026-08-13\ntitle: 12345\n---\n")
 
-	entries, err := ScanDesk(dir)
+	entries, _, err := ScanDesk(dir)
 	require.NoError(t, err)
 	require.Len(t, entries, 1)
 	assert.Equal(t, "12345", entries[0].Title)

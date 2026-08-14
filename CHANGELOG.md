@@ -26,6 +26,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its episodes, pointing at a desk vault reads its entries — no new flag.
 
 ### Fixed
+- **Degradations are no longer invisible.** Every "this didn't work but I continued" message — an
+  unreadable desk, an unavailable de-duplication aid, a desk entry whose frontmatter won't parse —
+  was rendered only *after* an early return taken whenever there were no phrase-matched candidates.
+  A desk-only vault has none by definition, so in the exact configuration these features serve, a
+  mistyped `--arcs-vault` silently disabled de-duplication and reported a clean run. Degradations
+  now render on every path, in a `diagnostics` channel distinct from `parse_errors` (which is
+  documented as *episodes* that failed to parse, and was announcing "parse error (episode skipped)"
+  for failures involving no episode), and they set the envelope to `warning` so a caller gating on
+  status can see the run was degraded.
+- **De-duplication fails loudly on a vault with no embeddings.** A nil embedder was accepted, so the
+  finder answered "no similar arcs" to every question — indistinguishable from "nothing in your
+  vault resembles this, go ahead and draft it", which is the single mistake the feature exists to
+  prevent, in the most common configuration (`index` without `--embed`).
+- **`arc candidates` no longer creates a vault where it was merely pointed.** It called the raw
+  vault opener, which creates `.vaultmind/index.db` under whatever path it is handed — the
+  self-propagating mistake fixed in v0.3.0, reintroduced on the `--arcs-vault` path, which had no
+  validation at all. A propose-only reader must not write a database anywhere.
+- **Desk entries that can't be read or parsed are reported instead of dropped.** An unquoted colon
+  in a `title:` made an entry vanish while the report called the desk clear.
+- **Mixed-model vaults don't get fabricated similarity scores.** An arc embedded by a different
+  model scored exactly 0.00 against the query and was printed beside real scores, reading as "not
+  similar" when the truth is "not comparable".
 - **`arc candidates` fails closed on a vault path that does not exist.** It scans directories
   directly rather than opening the vault DB, so nothing validated `--vault`: a typo produced
   `Scanned 0 episodes → 0 candidate moments` and exit 0, indistinguishable from a real vault with

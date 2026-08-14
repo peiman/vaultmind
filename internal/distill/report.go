@@ -19,6 +19,16 @@ type Report struct {
 	// match to go check, a desk entry is a transformation the mind already judged
 	// worth recording. Printing the guesses first would bury the judgements.
 	DeskPending []DeskEntry `json:"desk_pending,omitempty"`
+	// Diagnostics records DEGRADATIONS — things that did not work but did not
+	// stop the report: an unreadable desk, an unavailable de-duplication aid, a
+	// desk entry whose frontmatter would not parse.
+	//
+	// Separate from ParseErrors because that field is documented in the public
+	// JSON contract as "episodes that failed to parse" and is rendered with that
+	// prefix. Routing degradations into it made the text report announce
+	// "parse error (episode skipped)" for a mistyped --arcs-vault, which is
+	// false twice over. Additive, so the published envelope keeps its meaning.
+	Diagnostics []string `json:"diagnostics,omitempty"`
 	// ParseErrors records episodes that failed to parse, surfaced rather than
 	// silently skipped (distill is infrastructure and can't log, so the visible
 	// error rides in the report itself).
@@ -97,6 +107,23 @@ func writeNearestArcs(near []NearArc, w io.Writer) error {
 	return err
 }
 
+// writeDegradations prints what did not work, with a prefix that says which
+// kind of failure it was. Called from every exit path in FormatReport, because
+// the one thing a degradation must not do is disappear.
+func writeDegradations(r Report, w io.Writer) error {
+	for _, d := range r.Diagnostics {
+		if _, err := fmt.Fprintf(w, "\n! degraded: %s\n", d); err != nil {
+			return err
+		}
+	}
+	for _, pe := range r.ParseErrors {
+		if _, err := fmt.Fprintf(w, "\n! parse error (episode skipped): %s\n", pe); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // FormatReport writes a human-readable, propose-only candidate report. It leads
 // and closes with the contract — these are MOMENTS, not arcs; the mind drafts
 // and approves — so the output can't be mistaken for finished identity.
@@ -108,6 +135,14 @@ func FormatReport(r Report, w io.Writer) error {
 		return err
 	}
 	if err := writeDeskSection(r.DeskPending, w); err != nil {
+		return err
+	}
+	// Degradations render before the early return below. They used to sit after
+	// it, so every one of them vanished whenever there were no phrase-matched
+	// candidates — which is the NORMAL state of a desk-only vault, the exact
+	// configuration these features were built for. A report that hides why it is
+	// thin is the failure this whole package argues against.
+	if err := writeDegradations(r, w); err != nil {
 		return err
 	}
 	if len(r.Candidates) == 0 {
@@ -136,12 +171,6 @@ func FormatReport(r Report, w io.Writer) error {
 			if err := writeNearestArcs(c.NearestArcs, w); err != nil {
 				return err
 			}
-		}
-	}
-
-	for _, pe := range r.ParseErrors {
-		if _, err := fmt.Fprintf(w, "\n! parse error (episode skipped): %s\n", pe); err != nil {
-			return err
 		}
 	}
 
