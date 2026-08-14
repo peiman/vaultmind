@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -138,4 +139,26 @@ func TestFormatReport_ShowsNeighboursWithoutVerdict(t *testing.T) {
 	assert.NotContains(t, strings.ToLower(out), "duplicate of")
 	assert.Contains(t, out, "yours to judge",
 		"say plainly that the verdict is the reader's, since the tool deliberately withholds it")
+}
+
+// A neighbour with no id still has to render something the reader can act on.
+func TestFormatReport_NeighbourFallsBackToTitle(t *testing.T) {
+	var buf strings.Builder
+	require.NoError(t, FormatReport(Report{
+		DeskPending: []DeskEntry{{ID: "journal-x", Title: "T", Date: "2026-08-13",
+			NearestArcs: []NearArc{{Title: "An Untitled-Id Arc", Score: 0.5}}}},
+	}, &buf))
+	assert.Contains(t, buf.String(), "An Untitled-Id Arc")
+}
+
+// Long bodies are cut on a rune boundary, so a multi-byte character at the
+// limit can't be split into invalid UTF-8 and poison the embedding query.
+func TestHeadOf_CutsOnRuneBoundary(t *testing.T) {
+	assert.Equal(t, "abc", headOf("abc", 10), "short input is returned whole")
+	assert.Equal(t, "abc", headOf("  abc  ", 10), "surrounding space is trimmed")
+
+	multi := strings.Repeat("é", 50) // 2 bytes per rune
+	got := headOf(multi, 10)
+	assert.Equal(t, 10, len([]rune(got)))
+	assert.True(t, utf8.ValidString(got), "must not split a rune")
 }
