@@ -2,6 +2,7 @@ package query
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -14,6 +15,17 @@ import (
 // proposal can only duplicate an ARC; resembling a principle or a reference says
 // nothing about whether this transformation is already recorded.
 const ArcTypeName = "arc"
+
+// ErrNoEmbedder reports that de-duplication cannot run because the vault holds
+// no embeddings.
+//
+// It is a distinct sentinel because it is NOT a fault: `vaultmind index` without
+// `--embed` is a valid, common configuration, and the aid is an optional
+// enhancement over it. Callers surface it to the reader (who must not conclude
+// "nothing resembles this") without flagging the run as degraded — a warning
+// that fires on an ordinary setup is noise, and noise is how a report teaches
+// people to stop reading its warnings.
+var ErrNoEmbedder = errors.New("no embedder available: run 'vaultmind index --embed' on the arcs vault first")
 
 // DefaultNearestArcs is how many similar existing arcs de-duplication surfaces
 // per proposal. Three reveals a near-tie — itself the signal that the
@@ -71,7 +83,7 @@ func NewArcFinder(db *index.DB, embedder embedding.Embedder) (*ArcFinder, error)
 	// nothing like this, go ahead and draft it". That is the precise mistake
 	// de-duplication exists to prevent, so it fails loudly instead.
 	if embedder == nil {
-		return nil, fmt.Errorf("no embedder available: run 'vaultmind index --embed' on the arcs vault first")
+		return nil, ErrNoEmbedder
 	}
 	all, err := index.LoadAllEmbeddings(db)
 	if err != nil {
