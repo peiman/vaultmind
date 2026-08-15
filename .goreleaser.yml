@@ -239,11 +239,14 @@ release:
 
     Thank you for using {{ .ProjectName }}!
 
-  # Footer template for release notes
+  # Footer template for release notes.
+  # The compare link is spelled out rather than built from .ReleaseURL: that
+  # variable already ends in /releases/tag/<tag>, so appending /compare/... gave
+  # a 404 on every release through v0.4.0.
   footer: |
     ---
 
-    **Full Changelog**: {{ .ReleaseURL }}/compare/{{ .PreviousTag }}...{{ .Tag }}
+    **Full Changelog**: https://github.com/peiman/vaultmind/compare/{{ .PreviousTag }}...{{ .Tag }}
 
     ## Installation
 
