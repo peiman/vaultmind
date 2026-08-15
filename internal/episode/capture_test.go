@@ -48,6 +48,38 @@ func TestCapture_ErrorsOnBadTranscript(t *testing.T) {
 	require.Error(t, err)
 }
 
+// On failure the path must be empty. Returning the path it WOULD have written
+// hands the caller a filename for a file that does not exist — an invitation to
+// print or store it if the error is ever checked second.
+func TestCapture_ReturnsNoPathWhenTheWriteFails(t *testing.T) {
+	blocked := filepath.Join(t.TempDir(), "not-a-dir")
+	require.NoError(t, os.WriteFile(blocked, []byte("x"), 0o600))
+
+	path, err := episode.Capture(fixturePath, filepath.Join(blocked, "episodes"))
+	require.Error(t, err)
+	assert.Empty(t, path, "no file was written, so there is no path to hand back")
+}
+
+// A write failure is OUR fault, not the transcript's, and it is systemic: the
+// output directory is the same for every transcript in the batch, so the first
+// failure will repeat for all of them. Reporting them one by one as skipped
+// files told the user their entire session history was junk — with exit 0 —
+// when the real cause was an unusable --output-dir. Abort and say so.
+func TestCaptureDir_WriteFailureAbortsInsteadOfBlamingTheTranscripts(t *testing.T) {
+	src, err := os.ReadFile(fixturePath) // #nosec G304 -- test fixture
+	require.NoError(t, err)
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.jsonl"), src, 0o600))
+
+	blocked := filepath.Join(t.TempDir(), "not-a-dir")
+	require.NoError(t, os.WriteFile(blocked, []byte("x"), 0o600))
+
+	batch, err := episode.CaptureDir(dir, filepath.Join(blocked, "episodes"))
+	require.Error(t, err, "an unusable output dir must fail the run, not be absorbed")
+	assert.Contains(t, err.Error(), "not a directory", "and must name the real cause")
+	assert.Empty(t, batch.Skipped, "a good transcript is never recorded as a bad one")
+}
+
 // sidechainTranscript renders a subagent transcript: Claude Code marks these
 // with agentId + isSidechain and — critically — stamps them with the PARENT
 // session's id, which is what makes them collide with the real session.

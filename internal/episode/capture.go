@@ -21,7 +21,10 @@ func Capture(transcriptPath, outputDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return outPath, writeEpisode(ep, outPath)
+	if err := writeEpisode(ep, outPath); err != nil {
+		return "", err // nothing was written; a path here would name a file that does not exist
+	}
+	return outPath, nil
 }
 
 // prepareEpisode parses and validates a transcript and derives the path its
@@ -248,8 +251,11 @@ func CaptureDir(dir, outputDir string) (CaptureBatch, error) {
 			continue
 		}
 		if err := writeEpisode(ep, out); err != nil {
-			batch.Skipped[t] = err.Error()
-			continue
+			// Not this transcript's fault, and not survivable: outputDir is the
+			// same for every entry, so this failure will repeat for all of them.
+			// Recording it per-file as a skip reported a good history as junk —
+			// with a zero exit — while the real cause was an unusable --output-dir.
+			return batch, fmt.Errorf("writing %s: %w", out, err)
 		}
 		writtenBy[out] = t
 		batch.Captured = append(batch.Captured, out)
