@@ -86,6 +86,29 @@ vaultmind episode capture ~/.claude/projects/<project> --output-dir ~/.vaultmind
 vaultmind arc candidates --vault ~/.vaultmind/persona
 ```
 
+Subagent and workflow transcripts nested under a session are passed over: they carry the parent session's id, so capturing them would overwrite the session itself. The summary reports how many. (Pass one directly if you do want it captured.)
+
+### The desk — where raw material lands
+
+`arc candidates` reads two sources. `<vault>/episodes` holds session captures, which it phrase-matches for candidate moments — guesses worth checking. **The desk** is any note in the vault whose frontmatter says `type: journal`: something the agent stopped mid-session to write down, already judged worth keeping. Episodes are found; desk entries are chosen, and the report weights them accordingly.
+
+```markdown
+---
+type: journal
+created: 2026-08-15
+---
+Spent an hour on a bug that turned out to be the test asserting the wrong thing.
+The suite was green the whole time. Green means "matches what I assumed", not "correct".
+```
+
+Add `distilled_to: <arc-id>` to an entry once you've written its arc, and it stops being surfaced — so the list stays what's *pending*, not everything ever written. Each proposal is shown with the existing arcs it most resembles, which needs embeddings (`vaultmind index --embed`); without them the proposals still appear, minus the neighbours.
+
+Keep the desk somewhere the agent owns outright. Use `--arcs-vault` when the desk and the arcs live in different vaults:
+
+```bash
+vaultmind arc candidates --vault ./agent-desk --arcs-vault ./agent-identity
+```
+
 ## Opt-in usage telemetry
 
 VaultMind records local retrieval events (which queries surfaced which notes) to power activation-weighted reranking. Sharing that data is **opt-in and sanitized** — no note bodies, no content, no query text; only counts and identifiers — for anyone who wants to contribute anonymized retrieval signal back to the project. It is off by default and never leaves your machine unless you run the export.

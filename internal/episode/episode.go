@@ -195,6 +195,49 @@ func sessionIDOf(path string) (string, error) {
 	return "", scanner.Err()
 }
 
+// sidechainScanLimit bounds how far isSidechainTranscript reads before deciding.
+// A subagent transcript is marked from its very first record, so the answer
+// arrives immediately in practice; the limit only bounds the negative case, where
+// a large real session would otherwise be scanned end-to-end just to learn what
+// its opening records already said.
+const sidechainScanLimit = 64
+
+// isSidechainTranscript reports whether path is a subagent or workflow
+// transcript rather than a session of the user's own. Claude Code nests these
+// under the session directory and stamps them with the PARENT session's id, so
+// they cannot be told apart by name or by session id — only by the agentId /
+// isSidechain markers they carry.
+//
+// Measured across four project histories before being relied on: 1,759 nested
+// transcripts, all carrying agentId; 141 top-level session transcripts, none
+// carrying it. isSidechain alone was the weaker signal (156/161 on the first
+// corpus — workflow journal files carry agentId without it), so both are
+// checked and either one is sufficient.
+//
+// An unreadable or unparseable file is not a sidechain: it is a fault, and
+// returning false routes it to Capture, which reports it properly instead of
+// letting it vanish into a silent skip.
+func isSidechainTranscript(path string) bool {
+	// #nosec G304 -- caller-supplied path, read-only.
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = f.Close() }()
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 1<<20), 1<<24)
+	for n := 0; n < sidechainScanLimit && scanner.Scan(); n++ {
+		var rec record
+		if err := json.Unmarshal(scanner.Bytes(), &rec); err != nil {
+			continue
+		}
+		if rec.AgentID != "" || rec.IsSidechain {
+			return true
+		}
+	}
+	return false
+}
+
 // CountLines returns the total number of lines in path, without parsing any
 // of them — used to detect a shrunken transcript cheaply, without paying for
 // a full JSON-unmarshaling re-scan on the (common) path where nothing has
@@ -221,6 +264,8 @@ func CountLines(path string) (int, error) {
 type record struct {
 	Type         string          `json:"type"`
 	SessionID    string          `json:"sessionId"`
+	AgentID      string          `json:"agentId"`
+	IsSidechain  bool            `json:"isSidechain"`
 	Timestamp    string          `json:"timestamp"`
 	CWD          string          `json:"cwd"`
 	GitBranch    string          `json:"gitBranch"`

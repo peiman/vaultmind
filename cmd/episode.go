@@ -122,7 +122,10 @@ EXAMPLES
   vaultmind episode capture ~/.claude/projects/my-project --output-dir vaultmind-identity/episodes
       # BOOTSTRAP: pass a DIRECTORY to capture every *.jsonl transcript under it
       # (recursively). Seed an identity vault from sessions that already exist —
-      # then run 'vaultmind arc candidates'. Empty/non-transcript files are skipped.`,
+      # then run 'vaultmind arc candidates'. Empty/non-transcript files are skipped,
+      # and subagent/workflow transcripts are passed over: they carry the parent
+      # session's id, so capturing them would overwrite the session itself.
+      # Pass one of those files directly if you do want it captured.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		outputDir, _ := cmd.Flags().GetString("output-dir")
@@ -186,8 +189,11 @@ func runEpisodeCaptureDir(cmd *cobra.Command, dir, outputDir string) error {
 		out += "\n"
 	}
 	out += fmt.Sprintf("Captured %d episode(s) from %s\n", len(batch.Captured), dir)
+	if batch.Sidechains > 0 {
+		out += fmt.Sprintf("Passed over %d subagent/workflow transcript(s) — those are tool runs, not sessions.\n", batch.Sidechains)
+	}
 	if len(batch.Skipped) > 0 {
-		out += fmt.Sprintf("Skipped %d file(s) (empty or not a Claude Code transcript).\n", len(batch.Skipped))
+		out += fmt.Sprintf("Skipped %d file(s) (empty, malformed, or colliding on a derived episode id).\n", len(batch.Skipped))
 	}
 	if len(batch.Captured) > 0 {
 		out += "\nNext: surface arc candidates with `vaultmind arc candidates`.\n"
