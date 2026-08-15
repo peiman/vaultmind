@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-08-15
+
+Every fix here came out of a review pass over v0.4.0, and all but one is a defect in code or
+documentation v0.4.0 itself shipped. The decisive findings came from running the binary against
+real session histories rather than reading the diff.
+
 ### Fixed
 - **An unusable `--output-dir` is an error, not 179 junk transcripts.** Every write failure was
   recorded per-file as a skipped transcript, so pointing a bootstrap capture at a path blocked by a
@@ -36,6 +42,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   consistent and no one had run them against each other. Both are accepted now (`date` wins if
   both are present), including for sort order. The documented example has been corrected: followed
   verbatim, it produced an entry with no date, no title and no id.
+- **The "Full Changelog" link in every release's notes 404'd.** The template appended `/compare/…`
+  to a URL that already ends in `/releases/tag/<tag>`, producing a nested path that does not exist.
+  It had been wrong for every release through v0.4.0 (whose notes were corrected by hand).
 
 ## [0.4.0] — 2026-08-15
 
@@ -471,7 +480,8 @@ The initial public tag, retracted in favor of [0.1.3]. It shipped without the
 maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; do
 not install.
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/peiman/vaultmind/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/peiman/vaultmind/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/peiman/vaultmind/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/peiman/vaultmind/compare/v0.2.2...v0.2.3
