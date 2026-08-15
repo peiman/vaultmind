@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/peiman/vaultmind/internal/episode"
@@ -193,13 +194,44 @@ func runEpisodeCaptureDir(cmd *cobra.Command, dir, outputDir string) error {
 		out += fmt.Sprintf("Passed over %d subagent/workflow transcript(s) — those are tool runs, not sessions.\n", batch.Sidechains)
 	}
 	if len(batch.Skipped) > 0 {
-		out += fmt.Sprintf("Skipped %d file(s) (empty, malformed, or colliding on a derived episode id).\n", len(batch.Skipped))
+		out += fmt.Sprintf("Skipped %d file(s) (empty or not a Claude Code transcript).\n", len(batch.Skipped))
 	}
+	out += renderCollisions(batch.Collisions)
 	if len(batch.Captured) > 0 {
 		out += "\nNext: surface arc candidates with `vaultmind arc candidates`.\n"
 	}
 	_, err = fmt.Fprint(cmd.OutOrStdout(), out)
 	return err
+}
+
+// maxListedCollisions bounds the named list. Collisions are rare by nature, so
+// this only guards the pathological case; the count line still reports the true
+// total, and truncation is stated rather than silent.
+const maxListedCollisions = 5
+
+// renderCollisions names the transcripts that lost a derived episode id. A bare
+// count cannot be acted on — a collision means two transcripts existed and only
+// one survived, so the reader needs to know WHICH, and the reason string already
+// carries it. Computing that reason and then printing only a total is the same
+// class of failure this whole command was fixed for.
+func renderCollisions(collisions map[string]string) string {
+	if len(collisions) == 0 {
+		return ""
+	}
+	paths := make([]string, 0, len(collisions))
+	for p := range collisions {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths) // map order is random; a summary that reorders itself run to run is unreadable
+	out := fmt.Sprintf("%d transcript(s) collided on a derived episode id and were NOT captured:\n", len(collisions))
+	for i, p := range paths {
+		if i == maxListedCollisions {
+			out += fmt.Sprintf("  … and %d more\n", len(paths)-maxListedCollisions)
+			break
+		}
+		out += fmt.Sprintf("  %s — %s\n", p, collisions[p])
+	}
+	return out
 }
 
 func init() {

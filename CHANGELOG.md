@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Colliding transcripts are named, not counted.** `episode capture <dir>` built a precise reason
+  for each collision — which transcript won, and on which episode id — and then printed only
+  "Skipped N file(s)", discarding it. A collision is the one outcome where something may have been
+  lost, so it is now reported separately from malformed files, with the pair named. Found by
+  tracing every `continue` in the new code to what a user actually sees; the reason string existed
+  and reached nothing.
+- **Desk entries dated with `created` no longer render blank.** `created` is the vault's canonical
+  date field — it is in the schema registry, and every scaffolded and example note uses it — but
+  the desk scanner read only `date`. The scanner had been written against a desk that uses `date`
+  and the documentation against the convention that uses `created`, so each half was internally
+  consistent and no one had run them against each other. Both are accepted now (`date` wins if
+  both are present), including for sort order. The documented example has been corrected: followed
+  verbatim, it produced an entry with no date, no title and no id.
+
 ## [0.4.0] — 2026-08-15
 
 ### Added
@@ -42,10 +57,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   top-level session transcripts carry none (`isSidechain` alone was weaker — workflow journals
   carry `agentId` without it — so either marker suffices). Passing a sidechain path directly still
   captures it: an explicit path is a choice, a directory sweep is not.
-- **The capture count matches the files on disk.** Two transcripts deriving one episode id now
-  keep the first and report the rest, instead of silently overwriting and counting both. The check
-  has to run before the write; after it, "kept the first" is a claim the code has already
-  falsified.
+- **The capture count reports what the run actually wrote.** Two transcripts deriving one episode
+  id now keep the first and report the rest, instead of silently overwriting and counting both.
+  (The count covers this run's captures, not the total contents of an output directory that may
+  already hold episodes from elsewhere.) The check has to run before the write; after it, "kept
+  the first" is a claim the code has already falsified.
 - **Degradations are no longer invisible.** Every "this didn't work but I continued" message — an
   unreadable desk, an unavailable de-duplication aid, a desk entry whose frontmatter won't parse —
   was rendered only *after* an early return taken whenever there were no phrase-matched candidates.

@@ -26,6 +26,16 @@ const deskEntryType = "journal"
 // travels with the file and survives re-indexing, moves, and copies.
 const distilledToField = "distilled_to"
 
+// dateFields are the frontmatter keys read for an entry's date, in preference
+// order. `created` is the vault-wide canonical field — it is in the schema
+// registry and every scaffolded and example note uses it — while `date` is the
+// shorter form journal entries tend to be written with. Reading only one of them
+// left the other rendering as a blank column, and which one broke depended
+// entirely on whose notes you looked at: this scanner was written against a desk
+// that uses `date`, and the documentation was written against the convention
+// that uses `created`, so each half was self-consistent and they disagreed.
+var dateFields = []string{"date", "created"}
+
 // DeskEntry is a raw transformation record awaiting distillation into an arc.
 //
 // It is deliberately NOT a Candidate. A Candidate is a guess — a phrase matched,
@@ -155,10 +165,20 @@ func readDeskEntry(path, root string) (DeskEntry, bool, string) {
 	return DeskEntry{
 		ID:      stringField(fm, "id"),
 		Title:   stringField(fm, "title"),
-		Date:    stringField(fm, "date"),
+		Date:    firstStringField(fm, dateFields...),
 		Path:    rel,
 		Snippet: headOf(body, snippetMax),
 	}, true, ""
+}
+
+// firstStringField returns the first of keys that carries a non-empty value.
+func firstStringField(fm map[string]interface{}, keys ...string) string {
+	for _, k := range keys {
+		if v := stringField(fm, k); v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // stringField reads a frontmatter value as a string.

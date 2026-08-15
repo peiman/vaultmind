@@ -103,6 +103,47 @@ func TestScanDesk_NewestFirst(t *testing.T) {
 	assert.Equal(t, "journal-new", entries[0].ID, "most recent first — the freshest transformation is the one still recoverable")
 }
 
+// `created` is the vault's canonical date field — it is in the schema registry
+// and every scaffolded and example note uses it — so an entry written to the
+// documented convention must not render with a blank date. The scanner was built
+// against a desk that uses the shorter `date`, and nothing ever ran the two
+// conventions against each other.
+func TestScanDesk_AcceptsTheCanonicalCreatedField(t *testing.T) {
+	dir := t.TempDir()
+	writeNote(t, dir, "journal/canonical.md", "---\nid: journal-canonical\ntype: journal\ncreated: 2026-08-15\ntitle: Written to the documented convention\n---\n")
+
+	entries, _, err := ScanDesk(dir)
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	assert.Equal(t, "2026-08-15", entries[0].Date, "created is read when date is absent")
+}
+
+// When both are present, `date` wins — every existing desk entry uses it, and a
+// silent reordering of dates in an established desk is a worse outcome than
+// preferring the older convention where they disagree.
+func TestScanDesk_DatePreferredOverCreatedWhenBothPresent(t *testing.T) {
+	dir := t.TempDir()
+	writeNote(t, dir, "journal/both.md", "---\nid: journal-both\ntype: journal\ndate: 2026-08-13\ncreated: 2026-01-01\ntitle: Both\n---\n")
+
+	entries, _, err := ScanDesk(dir)
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	assert.Equal(t, "2026-08-13", entries[0].Date)
+}
+
+// Sorting must use whichever field supplied the date, or an entry written to the
+// canonical convention sinks to the bottom of the list regardless of its age.
+func TestScanDesk_NewestFirstAcrossMixedDateFields(t *testing.T) {
+	dir := t.TempDir()
+	writeNote(t, dir, "journal/old.md", "---\nid: journal-old\ntype: journal\ndate: 2026-06-03\ntitle: Old\n---\n")
+	writeNote(t, dir, "journal/new.md", "---\nid: journal-new\ntype: journal\ncreated: 2026-08-15\ntitle: New, canonical field\n---\n")
+
+	entries, _, err := ScanDesk(dir)
+	require.NoError(t, err)
+	require.Len(t, entries, 2)
+	assert.Equal(t, "journal-new", entries[0].ID, "a `created` entry sorts by its real date, not as undated")
+}
+
 // A missing desk is the normal case for a vault that has no desk, not an error:
 // arc candidates must keep working for anyone who never made one.
 func TestScanDesk_MissingDirectoryIsNotAnError(t *testing.T) {
