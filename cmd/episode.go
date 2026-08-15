@@ -193,15 +193,50 @@ func runEpisodeCaptureDir(cmd *cobra.Command, dir, outputDir string) error {
 	if batch.Sidechains > 0 {
 		out += fmt.Sprintf("Passed over %d subagent/workflow transcript(s) — those are tool runs, not sessions.\n", batch.Sidechains)
 	}
-	if len(batch.Skipped) > 0 {
-		out += fmt.Sprintf("Skipped %d file(s) (empty or not a Claude Code transcript).\n", len(batch.Skipped))
-	}
+	out += renderSkipped(batch.Skipped)
 	out += renderCollisions(batch.Collisions)
 	if len(batch.Captured) > 0 {
 		out += "\nNext: surface arc candidates with `vaultmind arc candidates`.\n"
 	}
 	_, err = fmt.Fprint(cmd.OutOrStdout(), out)
 	return err
+}
+
+// maxListedSkips bounds the named list of skipped transcripts. A large history
+// can contain many stray files, so the list is capped — but the count above it
+// is always the true total, and the truncation is stated.
+const maxListedSkips = 5
+
+// renderSkipped names why each transcript was passed over. A bare count folded
+// "this file is empty", "I could not read it", and "its first line is 40 MB"
+// into one sentence that asserted the first — so a permissions problem or a
+// genuinely large session read as noise the user could ignore.
+func renderSkipped(skipped map[string]string) string {
+	if len(skipped) == 0 {
+		return ""
+	}
+	out := fmt.Sprintf("Skipped %d file(s) — not usable as transcripts:\n", len(skipped))
+	return out + listReasons(skipped, maxListedSkips)
+}
+
+// listReasons renders a path -> reason map in sorted order, capped. Map
+// iteration order is random, and a summary that reorders itself between
+// identical runs cannot be diffed or trusted.
+func listReasons(reasons map[string]string, limit int) string {
+	paths := make([]string, 0, len(reasons))
+	for p := range reasons {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+	var out string
+	for i, p := range paths {
+		if i == limit {
+			out += fmt.Sprintf("  … and %d more\n", len(paths)-limit)
+			break
+		}
+		out += fmt.Sprintf("  %s — %s\n", p, reasons[p])
+	}
+	return out
 }
 
 // maxListedCollisions bounds the named list. Collisions are rare by nature, so
@@ -218,20 +253,8 @@ func renderCollisions(collisions map[string]string) string {
 	if len(collisions) == 0 {
 		return ""
 	}
-	paths := make([]string, 0, len(collisions))
-	for p := range collisions {
-		paths = append(paths, p)
-	}
-	sort.Strings(paths) // map order is random; a summary that reorders itself run to run is unreadable
 	out := fmt.Sprintf("%d transcript(s) collided on a derived episode id and were NOT captured:\n", len(collisions))
-	for i, p := range paths {
-		if i == maxListedCollisions {
-			out += fmt.Sprintf("  … and %d more\n", len(paths)-maxListedCollisions)
-			break
-		}
-		out += fmt.Sprintf("  %s — %s\n", p, collisions[p])
-	}
-	return out
+	return out + listReasons(collisions, maxListedCollisions)
 }
 
 func init() {

@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **An unusable `--output-dir` is an error, not 179 junk transcripts.** Every write failure was
+  recorded per-file as a skipped transcript, so pointing a bootstrap capture at a path blocked by a
+  regular file (or read-only, or full) printed `Captured 0 … Skipped 179 file(s) (empty or not a
+  Claude Code transcript)` and **exited 0** — telling the user their entire session history was
+  garbage when the real cause was the destination. The identical condition already failed loudly in
+  single-file mode; only the directory sweep lied. The output directory is the same for every
+  transcript in a batch, so the first such failure is systemic: the run now aborts and names the
+  cause.
+- **Skip reasons are printed, so "unreadable" no longer reads as "empty".** A permissions error, a
+  transcript whose first line exceeds the scan buffer, and a genuinely empty file were folded into
+  one count whose parenthetical asserted the last of the three. Each skipped path is now listed with
+  its reason (capped, with the total always exact).
+- **`Capture` returns no path when the write fails.** It handed back the filename it *would* have
+  written alongside the error — a path to a file that does not exist, waiting for a caller that
+  checks the error second.
 - **Colliding transcripts are named, not counted.** `episode capture <dir>` built a precise reason
   for each collision — which transcript won, and on which episode id — and then printed only
   "Skipped N file(s)", discarding it. A collision is the one outcome where something may have been

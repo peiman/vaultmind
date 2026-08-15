@@ -130,6 +130,44 @@ func TestEpisodeCapture_Directory_ReportsPassedOverSubagents(t *testing.T) {
 	assert.NotContains(t, body, "Skipped", "a sidechain is routine, not a fault to report as one")
 }
 
+// "empty", "unreadable", and "one line too large to scan" are three different
+// problems with three different fixes. Folding them into one count that asserts
+// the first turned a permissions error into noise the user would ignore.
+func TestEpisodeCapture_Directory_NamesWhyEachFileWasSkipped(t *testing.T) {
+	src, err := os.ReadFile(episodeFixture) // #nosec G304 -- test fixture
+	require.NoError(t, err)
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "good.jsonl"), src, 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "junk.jsonl"), []byte("not json\n"), 0o600))
+
+	outDir := filepath.Join(t.TempDir(), "episodes")
+	out, _, err := runRootCmd(t, "episode", "capture", dir, "--output-dir", outDir)
+	require.NoError(t, err)
+	body := out.String()
+
+	assert.Contains(t, body, "Skipped 1 file(s)")
+	assert.Contains(t, body, "junk.jsonl", "the file is named")
+	assert.Contains(t, body, "no session id", "and so is the reason")
+}
+
+// An unusable --output-dir must not be reported as 179 junk transcripts with a
+// zero exit. Directory mode was silent about this while single-file mode failed
+// loudly on the identical condition.
+func TestEpisodeCapture_Directory_UnusableOutputDirIsAnError(t *testing.T) {
+	src, err := os.ReadFile(episodeFixture) // #nosec G304 -- test fixture
+	require.NoError(t, err)
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "good.jsonl"), src, 0o600))
+
+	blocked := filepath.Join(t.TempDir(), "not-a-dir")
+	require.NoError(t, os.WriteFile(blocked, []byte("x"), 0o600))
+
+	out, _, err := runRootCmd(t, "episode", "capture", dir, "--output-dir", filepath.Join(blocked, "episodes"))
+	require.Error(t, err, "the run fails, so the exit code is non-zero")
+	assert.Contains(t, err.Error(), "not a directory")
+	assert.NotContains(t, out.String(), "Skipped", "the transcripts were fine — do not blame them")
+}
+
 // A collision means two transcripts existed and one was not captured. The
 // reason string names which transcript won and on what id — computing it and
 // then printing only "Skipped 1 file(s)" would hand the user a number they
