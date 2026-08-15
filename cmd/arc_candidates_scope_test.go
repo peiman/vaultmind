@@ -156,6 +156,32 @@ func TestArcCandidates_CrossVaultNeighboursAreFound(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(out.Bytes(), &env))
 	require.Len(t, env.Result.DeskPending, 1, "the desk entry is reported from the scanned vault")
-	assert.NotEmpty(t, env.Result.Diagnostics, "an arcs vault without embeddings must say so")
-	assert.Equal(t, "warning", env.Status, "a degraded run must not report unqualified success")
+	assert.NotEmpty(t, env.Result.Diagnostics,
+		"the reader must be told the aid did not run, or they will read no neighbours as 'nothing resembles this'")
+	assert.Equal(t, "ok", env.Status,
+		"a vault without embeddings is a CONFIGURATION, not a fault: warning here would fire on an ordinary setup and teach the reader to ignore warnings")
+}
+
+// The other side of that line: something actually broken must reach a caller
+// gating on status. A mistyped --arcs-vault is the flag whose entire purpose is
+// de-duplication, so it cannot pass as an ordinary run.
+func TestArcCandidates_RealFailureSetsWarningStatus(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	require.NoError(t, os.MkdirAll(filepath.Join(vault, "journal"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(vault, "journal", "e.md"),
+		[]byte("---\nid: journal-e\ntype: journal\ndate: 2026-08-15\ntitle: An entry\n---\n\nBody.\n"), 0o600))
+
+	out, _, err := runRootCmd(t, "arc", "candidates", "--vault", vault,
+		"--arcs-vault", "/does/not/exist", "--json")
+	require.NoError(t, err)
+
+	var env struct {
+		Status   string `json:"status"`
+		Warnings []struct {
+			Message string `json:"message"`
+		} `json:"warnings"`
+	}
+	require.NoError(t, json.Unmarshal(out.Bytes(), &env))
+	assert.Equal(t, "warning", env.Status, "a bad path is broken, not merely unconfigured")
+	assert.NotEmpty(t, env.Warnings)
 }

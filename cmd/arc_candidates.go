@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -47,13 +48,19 @@ func runArcCandidates(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	// failures are the diagnostics that represent something BROKEN, as opposed
+	// to an optional capability simply not being configured. Only these set the
+	// envelope to "warning".
+	var failures []string
 	// A desk scan failure must not lose the episode candidates already found:
 	// report what it has and surface the reason alongside the parse errors.
 	desk, deskDiags, deskErr := distill.ScanDesk(vaultPath)
 	if deskErr != nil {
 		report.Diagnostics = append(report.Diagnostics, deskErr.Error())
+		failures = append(failures, deskErr.Error()) // an unreadable desk IS a fault
 	}
 	report.Diagnostics = append(report.Diagnostics, deskDiags...)
+	failures = append(failures, deskDiags...) // an unparseable entry is a fault too
 	report.DeskPending = desk
 
 	// De-duplication: annotate every proposal with the existing arcs it
@@ -75,6 +82,13 @@ func runArcCandidates(cmd *cobra.Command, _ []string) error {
 	} else {
 		report.Diagnostics = append(report.Diagnostics,
 			"nearest-arc de-duplication unavailable: "+ferr.Error())
+		// An unembedded vault is a CONFIGURATION, not a fault: the reader is
+		// told the aid did not run (above), but the run itself is not degraded.
+		// Anything else — a path that isn't a vault, an unreadable index — is a
+		// real failure and must reach a caller gating on status.
+		if !errors.Is(ferr, query.ErrNoEmbedder) {
+			failures = append(failures, ferr.Error())
+		}
 	}
 	if getConfigValueWithFlags[bool](cmd, "json", config.KeyAppArcCandidatesJson) {
 		env := envelope.OK("arc-candidates", report)
@@ -82,8 +96,8 @@ func runArcCandidates(cmd *cobra.Command, _ []string) error {
 		// fix was a command answering from the wrong vault while saying
 		// status "ok"; a caller gating on status must see that the de-duplication
 		// aid was off or the desk went unread.
-		for _, d := range report.Diagnostics {
-			env.AddWarning("degraded", d, "")
+		for _, f := range failures {
+			env.AddWarning("degraded", f, "")
 		}
 		env.Meta.VaultPath = vaultPath
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(env)

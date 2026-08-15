@@ -34,7 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now render on every path, in a `diagnostics` channel distinct from `parse_errors` (which is
   documented as *episodes* that failed to parse, and was announcing "parse error (episode skipped)"
   for failures involving no episode), and they set the envelope to `warning` so a caller gating on
-  status can see the run was degraded.
+  status can see the run was degraded — but only for things that are actually BROKEN. A vault
+  without embeddings is a valid configuration rather than a fault: the report says the aid did not
+  run, and the status stays `ok`. A warning that fires on an ordinary setup is noise, and noise is
+  how a report teaches people to stop reading its warnings.
 - **De-duplication fails loudly on a vault with no embeddings.** A nil embedder was accepted, so the
   finder answered "no similar arcs" to every question — indistinguishable from "nothing in your
   vault resembles this, go ahead and draft it", which is the single mistake the feature exists to
