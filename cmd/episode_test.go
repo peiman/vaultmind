@@ -108,6 +108,28 @@ func TestEpisodeCapture_Directory_BatchAndSkips(t *testing.T) {
 	assert.Contains(t, body, "arc candidates", "points at the next step")
 }
 
+// The summary must account for subagent transcripts explicitly. Silence would
+// read as "your history was 1 session" when the directory held 4 files, and the
+// user has no other way to learn why 3 produced nothing.
+func TestEpisodeCapture_Directory_ReportsPassedOverSubagents(t *testing.T) {
+	src, err := os.ReadFile(episodeFixture) // #nosec G304 -- test fixture
+	require.NoError(t, err)
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "real.jsonl"), src, 0o600))
+	nested := filepath.Join(dir, "session", "subagents")
+	require.NoError(t, os.MkdirAll(nested, 0o750))
+	sidechain := []byte(`{"type":"user","isSidechain":true,"agentId":"a1","message":{"role":"user","content":"go"},"timestamp":"2026-04-24T11:00:00.000Z","sessionId":"test-session-abc12345"}` + "\n")
+	require.NoError(t, os.WriteFile(filepath.Join(nested, "agent-a1.jsonl"), sidechain, 0o600))
+
+	outDir := filepath.Join(t.TempDir(), "episodes")
+	out, _, err := runRootCmd(t, "episode", "capture", dir, "--output-dir", outDir)
+	require.NoError(t, err)
+	body := out.String()
+	assert.Contains(t, body, "Captured 1 episode(s)")
+	assert.Contains(t, body, "Passed over 1 subagent/workflow transcript(s)")
+	assert.NotContains(t, body, "Skipped", "a sidechain is routine, not a fault to report as one")
+}
+
 // `episode capture <dir> --incremental` silently drops the flag (bootstrap
 // capture always wants the full history) — but must say so on stderr rather
 // than leaving no trace that the flag had no effect.

@@ -17,21 +17,37 @@ import (
 // a finalized transcript is idempotent by design. Uses atomic temp-file +
 // rename so concurrent SessionEnd hook invocations cannot produce torn files.
 func Capture(transcriptPath, outputDir string) (string, error) {
-	ep, err := ParseTranscript(transcriptPath)
+	ep, outPath, err := prepareEpisode(transcriptPath, outputDir)
 	if err != nil {
 		return "", err
 	}
+	return outPath, writeEpisode(ep, outPath)
+}
+
+// prepareEpisode parses and validates a transcript and derives the path its
+// episode would be written to, without writing anything. CaptureDir needs the
+// destination BEFORE the write in order to detect that two transcripts claim
+// the same one — a check that is worthless after the fact, since by then the
+// second has already overwritten the first.
+func prepareEpisode(transcriptPath, outputDir string) (*Episode, string, error) {
+	ep, err := ParseTranscript(transcriptPath)
+	if err != nil {
+		return nil, "", err
+	}
 	if ep.SessionID == "" {
-		return "", fmt.Errorf("transcript has no session id — empty or not a Claude Code transcript: %s", transcriptPath)
+		return nil, "", fmt.Errorf("transcript has no session id — empty or not a Claude Code transcript: %s", transcriptPath)
 	}
-	if err := os.MkdirAll(outputDir, 0o750); err != nil {
-		return "", fmt.Errorf("create output dir: %w", err)
+	return ep, filepath.Join(outputDir, ep.ID+".md"), nil
+}
+
+func writeEpisode(ep *Episode, outPath string) error {
+	if err := os.MkdirAll(filepath.Dir(outPath), 0o750); err != nil {
+		return fmt.Errorf("create output dir: %w", err)
 	}
-	outPath := filepath.Join(outputDir, ep.ID+".md")
 	if err := atomicWriteFile(outPath, []byte(RenderMarkdown(ep))); err != nil {
-		return "", fmt.Errorf("write episode: %w", err)
+		return fmt.Errorf("write episode: %w", err)
 	}
-	return outPath, nil
+	return nil
 }
 
 // vaultScopedCursorKey combines outputDir and sessionID into a single cursor
@@ -168,9 +184,15 @@ func deriveSegmentID(startedAt, sessionID string, startLine int) string {
 // CaptureBatch summarizes a directory capture: the episode files written and the
 // transcripts that were skipped (with the reason). Skipping is deliberate — a noise
 // or partial transcript in a large history must not abort the whole batch.
+//
+// Sidechains is counted separately from Skipped because it is not a fault:
+// subagent transcripts are routine, they outnumber real sessions by an order of
+// magnitude (1,759 to 141 across four measured project histories), and listing
+// them as problems would bury the handful that are.
 type CaptureBatch struct {
-	Captured []string          // episode file paths written, in transcript-path order
-	Skipped  map[string]string // transcript path -> reason (empty/malformed/parse error)
+	Captured   []string          // episode file paths written, in transcript-path order
+	Skipped    map[string]string // transcript path -> reason (empty/malformed/collision)
+	Sidechains int               // subagent/workflow transcripts passed over by design
 }
 
 // CaptureDir captures every *.jsonl transcript found recursively under dir into
@@ -178,6 +200,17 @@ type CaptureBatch struct {
 // transcript directory (e.g. ~/.claude/projects/<slug>) to seed an identity vault
 // from sessions that already exist. Malformed/empty transcripts go into
 // Skipped rather than failing the run; capture itself is idempotent.
+//
+// Subagent and workflow transcripts are passed over (counted in Sidechains).
+// They are records of tools running, not of the collaboration, and because they
+// carry the parent session's id they derive the same episode filename as the
+// real session — capturing them overwrites it. Pointing `episode capture` at a
+// single sidechain file still captures it: an explicit path is a choice, a
+// directory sweep is not.
+//
+// Two transcripts can still derive one episode id (same date, same session id
+// prefix). The first wins and the rest are reported as collisions, so Captured
+// always equals the files on disk — a count the user can check with `ls`.
 func CaptureDir(dir, outputDir string) (CaptureBatch, error) {
 	batch := CaptureBatch{Skipped: map[string]string{}}
 	var transcripts []string
@@ -194,12 +227,26 @@ func CaptureDir(dir, outputDir string) (CaptureBatch, error) {
 		return batch, fmt.Errorf("scanning %s: %w", dir, walkErr)
 	}
 	sort.Strings(transcripts)
+	writtenBy := map[string]string{} // episode path -> the transcript that claimed it
 	for _, t := range transcripts {
-		out, err := Capture(t, outputDir)
+		if isSidechainTranscript(t) {
+			batch.Sidechains++
+			continue
+		}
+		ep, out, err := prepareEpisode(t, outputDir)
 		if err != nil {
 			batch.Skipped[t] = err.Error()
 			continue
 		}
+		if first, taken := writtenBy[out]; taken {
+			batch.Skipped[t] = fmt.Sprintf("derives the same episode id as %s (%s) — kept the first", first, filepath.Base(out))
+			continue
+		}
+		if err := writeEpisode(ep, out); err != nil {
+			batch.Skipped[t] = err.Error()
+			continue
+		}
+		writtenBy[out] = t
 		batch.Captured = append(batch.Captured, out)
 	}
 	return batch, nil

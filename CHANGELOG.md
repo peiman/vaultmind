@@ -26,6 +26,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its episodes, pointing at a desk vault reads its entries — no new flag.
 
 ### Fixed
+- **Subagent transcripts no longer overwrite the session they came from.** Claude Code nests
+  subagent and workflow transcripts under each session directory and stamps them with the *parent*
+  session's id, so every one of them derived the same episode filename as the real session — one
+  session had 154. Last writer won, and the winner was a sidechain: a cold-start capture of a real
+  project history reported "Captured 179 episode(s)", left 32 files on disk, and the surviving
+  episode held a subagent's prompt ("Review this change for security vulnerabilities…", 1 user
+  message) in place of the 34-message session. That is the material an agent later reconstructs
+  itself from, so the cost is not a lost file but a self furnished with tool-chatter — every arc
+  candidate the flagship cold-start path then surfaced was that bot's prompt. Directory sweeps now
+  pass sidechains over, counted and reported. The discriminator was measured before being relied
+  on: across four project histories, 1,759 nested transcripts all carry `agentId` and 141
+  top-level session transcripts carry none (`isSidechain` alone was weaker — workflow journals
+  carry `agentId` without it — so either marker suffices). Passing a sidechain path directly still
+  captures it: an explicit path is a choice, a directory sweep is not.
+- **The capture count matches the files on disk.** Two transcripts deriving one episode id now
+  keep the first and report the rest, instead of silently overwriting and counting both. The check
+  has to run before the write; after it, "kept the first" is a claim the code has already
+  falsified.
 - **Degradations are no longer invisible.** Every "this didn't work but I continued" message — an
   unreadable desk, an unavailable de-duplication aid, a desk entry whose frontmatter won't parse —
   was rendered only *after* an early return taken whenever there were no phrase-matched candidates.

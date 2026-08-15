@@ -61,7 +61,40 @@ vaultmind arc candidates --vault ~/.vaultmind/persona
 transformation moments across them. Then you (with the agent) judge each candidate and
 write the real ones as arcs — same discipline as always, just with raw material you
 already have. Start with the one or two projects whose work best defines the agent, not
-your whole history at once. (Empty or non-transcript files are skipped.)
+your whole history at once. (Empty or non-transcript files are skipped; so are the
+subagent and workflow transcripts nested under a session, which carry the parent's
+session id and would otherwise overwrite the session itself.)
+
+## The desk: raw material the agent chose to keep
+
+Episodes are a net — the detector guesses at moments and is often wrong. The **desk** is
+the other source, and a better one: any note in the vault whose frontmatter says
+`type: journal`, written by the agent mid-session because something landed. Nobody had to
+detect it; the agent already judged it worth keeping.
+
+```markdown
+---
+type: journal
+created: 2026-08-15
+---
+Spent an hour on a bug that turned out to be the test asserting the wrong thing.
+The suite was green the whole time. Green means "matches what I assumed", not "correct".
+```
+
+`arc candidates` lists these alongside the episode moments. Add `distilled_to: <arc-id>`
+once the arc is written and the entry drops off the list, so what remains is what's
+*pending*. Give the desk to the agent outright — a vault it owns, not one you curate.
+It's where thought lands before it has earned an arc, and that only works if writing
+there costs nothing. When the desk and the arcs live in different vaults, point at both:
+
+```bash
+vaultmind arc candidates --vault ./agent-desk --arcs-vault ./agent-identity
+```
+
+Each proposal is shown with the existing arcs it most resembles — the guard against
+writing the same realization three times in different words. That comparison needs
+embeddings (`vaultmind index --embed`); without them proposals still appear, minus the
+neighbours, and the report tells you so rather than implying nothing was similar.
 
 ## The note types
 
