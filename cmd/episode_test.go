@@ -130,6 +130,27 @@ func TestEpisodeCapture_Directory_ReportsPassedOverSubagents(t *testing.T) {
 	assert.NotContains(t, body, "Skipped", "a sidechain is routine, not a fault to report as one")
 }
 
+// A collision means two transcripts existed and one was not captured. The
+// reason string names which transcript won and on what id — computing it and
+// then printing only "Skipped 1 file(s)" would hand the user a number they
+// cannot act on, which is the failure this command was fixed for.
+func TestEpisodeCapture_Directory_NamesCollidingTranscripts(t *testing.T) {
+	src, err := os.ReadFile(episodeFixture) // #nosec G304 -- test fixture
+	require.NoError(t, err)
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.jsonl"), src, 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "b.jsonl"), src, 0o600))
+
+	outDir := filepath.Join(t.TempDir(), "episodes")
+	out, _, err := runRootCmd(t, "episode", "capture", dir, "--output-dir", outDir)
+	require.NoError(t, err)
+	body := out.String()
+
+	assert.Contains(t, body, "1 transcript(s) collided")
+	assert.Contains(t, body, "b.jsonl", "the losing transcript is named")
+	assert.Contains(t, body, "kept the first", "and so is what happened to it")
+}
+
 // `episode capture <dir> --incremental` silently drops the flag (bootstrap
 // capture always wants the full history) — but must say so on stderr rather
 // than leaving no trace that the flag had no effect.

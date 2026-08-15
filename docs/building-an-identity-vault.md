@@ -74,12 +74,16 @@ detect it; the agent already judged it worth keeping.
 
 ```markdown
 ---
+id: journal-2026-08-15-green-means-matches-my-assumption
 type: journal
 created: 2026-08-15
+title: Green means "matches what I assumed", not "correct"
 ---
 Spent an hour on a bug that turned out to be the test asserting the wrong thing.
-The suite was green the whole time. Green means "matches what I assumed", not "correct".
+The suite was green the whole time.
 ```
+
+`type: journal` is what makes it a desk entry — the folder is a convention, the type is the mechanism. The `id` is how the arc it becomes can point back at it; an entry without one is still surfaced, flagged as unciteable.
 
 `arc candidates` lists these alongside the episode moments. Add `distilled_to: <arc-id>`
 once the arc is written and the entry drops off the list, so what remains is what's

@@ -189,9 +189,14 @@ func deriveSegmentID(startedAt, sessionID string, startLine int) string {
 // subagent transcripts are routine, they outnumber real sessions by an order of
 // magnitude (1,759 to 141 across four measured project histories), and listing
 // them as problems would bury the handful that are.
+// Collisions is separate from Skipped because it is the one outcome where the
+// user may actually have lost something: two transcripts existed and only one
+// is representable. That calls for naming the pair, where a malformed file only
+// calls for a count.
 type CaptureBatch struct {
 	Captured   []string          // episode file paths written, in transcript-path order
-	Skipped    map[string]string // transcript path -> reason (empty/malformed/collision)
+	Skipped    map[string]string // transcript path -> reason (empty/malformed/write error)
+	Collisions map[string]string // transcript path -> the episode id it lost, and to whom
 	Sidechains int               // subagent/workflow transcripts passed over by design
 }
 
@@ -212,7 +217,7 @@ type CaptureBatch struct {
 // prefix). The first wins and the rest are reported as collisions, so Captured
 // always equals the files on disk — a count the user can check with `ls`.
 func CaptureDir(dir, outputDir string) (CaptureBatch, error) {
-	batch := CaptureBatch{Skipped: map[string]string{}}
+	batch := CaptureBatch{Skipped: map[string]string{}, Collisions: map[string]string{}}
 	var transcripts []string
 	walkErr := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -239,7 +244,7 @@ func CaptureDir(dir, outputDir string) (CaptureBatch, error) {
 			continue
 		}
 		if first, taken := writtenBy[out]; taken {
-			batch.Skipped[t] = fmt.Sprintf("derives the same episode id as %s (%s) — kept the first", first, filepath.Base(out))
+			batch.Collisions[t] = fmt.Sprintf("derives the same episode id as %s (%s) — kept the first", first, filepath.Base(out))
 			continue
 		}
 		if err := writeEpisode(ep, out); err != nil {

@@ -94,12 +94,16 @@ Subagent and workflow transcripts nested under a session are passed over: they c
 
 ```markdown
 ---
+id: journal-2026-08-15-green-means-matches-my-assumption
 type: journal
 created: 2026-08-15
+title: Green means "matches what I assumed", not "correct"
 ---
 Spent an hour on a bug that turned out to be the test asserting the wrong thing.
-The suite was green the whole time. Green means "matches what I assumed", not "correct".
+The suite was green the whole time.
 ```
+
+`type: journal` is what makes it a desk entry; the `id` is what lets you cite it later (from the arc it becomes, or via `note get`). An entry without one is still surfaced, flagged as unciteable.
 
 Add `distilled_to: <arc-id>` to an entry once you've written its arc, and it stops being surfaced — so the list stays what's *pending*, not everything ever written. Each proposal is shown with the existing arcs it most resembles, which needs embeddings (`vaultmind index --embed`); without them the proposals still appear, minus the neighbours.
 
