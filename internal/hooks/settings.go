@@ -26,6 +26,8 @@ const (
 	hookHealthScript           = "vaultmind-health.sh"
 	hookUserPromptSubmitScript = "vault-recall.sh"
 	hookPreToolUseScript       = "vault-track-read.sh"
+	hookReachScript            = "vault-reach.sh"
+	hookPreCompactScript       = "precompact-preserve.sh"
 	hookSessionEndScript       = "capture-episode.sh"
 )
 
@@ -45,6 +47,7 @@ type hooksObject struct {
 	SessionStart     []hookGroup `json:"SessionStart"`
 	UserPromptSubmit []hookGroup `json:"UserPromptSubmit"`
 	PreToolUse       []hookGroup `json:"PreToolUse"`
+	PreCompact       []hookGroup `json:"PreCompact"`
 	SessionEnd       []hookGroup `json:"SessionEnd"`
 }
 
@@ -78,6 +81,19 @@ func canonicalHooks(vaultPath string) []canonicalHook {
 		{Event: "SessionStart", Script: hookHealthScript, Group: hookGroup{Matcher: "startup", Hooks: []hookCommand{cmd(hookHealthScript)}}},
 		{Event: "UserPromptSubmit", Script: hookUserPromptSubmitScript, Group: hookGroup{Hooks: []hookCommand{cmd(hookUserPromptSubmitScript)}}},
 		{Event: "PreToolUse", Script: hookPreToolUseScript, Group: hookGroup{Matcher: "Read", Hooks: []hookCommand{cmd(hookPreToolUseScript)}}},
+		// Pointers AT the reach, not on the turn. An arc that surfaces all day and
+		// never at the instant it applies is not surfacing — allowlisted to
+		// irreversible or outward-facing commands, because noise is this channel's
+		// failure mode, not silence. Shares PreToolUse with read-tracking under a
+		// different matcher.
+		{Event: "PreToolUse", Script: hookReachScript, Group: hookGroup{Matcher: "Bash", Hooks: []hookCommand{cmd(hookReachScript)}}},
+		// The WRITE-path trigger. Every other hook is read-path or telemetry;
+		// nothing fired at the moment a transformation could be written down, and a
+		// desk that depends on remembering collects nothing (measured: two entries
+		// in ten weeks). Compaction is the only moment that is all three of: the
+		// raw material still exists, it is provably about to be destroyed, and the
+		// system knows in advance.
+		{Event: "PreCompact", Script: hookPreCompactScript, Group: hookGroup{Hooks: []hookCommand{cmd(hookPreCompactScript)}}},
 		{Event: "SessionEnd", Script: hookSessionEndScript, Group: hookGroup{Hooks: []hookCommand{cmd(hookSessionEndScript)}}},
 	}
 }
@@ -92,11 +108,16 @@ func canonicalHooks(vaultPath string) []canonicalHook {
 // the built-in default ($CLAUDE_PROJECT_DIR/vaultmind-identity). The scripts
 // honor VAULTMIND_VAULT as an override; an empty vaultPath leaves the
 // commands unparameterized so they fall back to that default.
-func SettingsStanza(vaultPath string) (string, error) {
+// buildHooksObject maps canonical hooks onto the lifecycle-ordered struct the
+// stanza serializes. Separate from SettingsStanza so the unhandled-event guard
+// below is reachable in a test: a guard nobody can exercise is a comment.
+//
+// Append (not assign) per event — an event can carry more than one canonical
+// group. SessionStart wires both load-persona.sh and vaultmind-health.sh, and
+// PreToolUse wires read-tracking and reach-pointers under different matchers.
+func buildHooksObject(chs []canonicalHook) (hooksObject, error) {
 	var obj hooksObject
-	// Append (not assign) per event: an event can carry more than one canonical
-	// group — SessionStart wires both load-persona.sh and vaultmind-health.sh.
-	for _, ch := range canonicalHooks(vaultPath) {
+	for _, ch := range chs {
 		switch ch.Event {
 		case "SessionStart":
 			obj.SessionStart = append(obj.SessionStart, ch.Group)
@@ -104,9 +125,28 @@ func SettingsStanza(vaultPath string) (string, error) {
 			obj.UserPromptSubmit = append(obj.UserPromptSubmit, ch.Group)
 		case "PreToolUse":
 			obj.PreToolUse = append(obj.PreToolUse, ch.Group)
+		case "PreCompact":
+			obj.PreCompact = append(obj.PreCompact, ch.Group)
 		case "SessionEnd":
 			obj.SessionEnd = append(obj.SessionEnd, ch.Group)
+		default:
+			// A canonical hook whose event has no field here would render as
+			// nothing at all — the wiring table would list it, the stanza would
+			// omit it, and the hook would simply never fire. Fail loudly:
+			// adding an event to canonicalHooks and forgetting the field is a
+			// programming error, not a runtime condition. Observed once already,
+			// as `"PreCompact": null`.
+			return hooksObject{}, fmt.Errorf(
+				"canonical hook %q has an unhandled event %q — add it to hooksObject", ch.Script, ch.Event)
 		}
+	}
+	return obj, nil
+}
+
+func SettingsStanza(vaultPath string) (string, error) {
+	obj, err := buildHooksObject(canonicalHooks(vaultPath))
+	if err != nil {
+		return "", err
 	}
 	out, err := json.MarshalIndent(settingsStanza{Hooks: obj}, "", "  ")
 	if err != nil {
