@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/cmdutil"
+	"github.com/peiman/vaultmind/internal/hooks"
 	"github.com/peiman/vaultmind/internal/hookscripts"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -104,4 +105,57 @@ func TestHooksStatus_JSONCarriesEveryScriptState(t *testing.T) {
 	assert.True(t, env.Result.Installed)
 	assert.Len(t, env.Result.Scripts, len(hookscripts.Names()),
 		"every canonical script gets a state, not just the interesting ones")
+}
+
+// A stat failure on the scripts path must surface, not be reported as a clean
+// project. `.claude` as a FILE makes `.claude/scripts` unstattable (ENOTDIR),
+// which is the shape a real permissions or symlink problem takes.
+func TestHooksStatus_UnreadableScriptsPathIsAnError(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".claude"), []byte("not a dir"), 0o600))
+
+	_, _, err := runRootCmd(t, "hooks", "status", dir)
+	require.Error(t, err, "an unreadable hooks path is not an empty success")
+}
+
+func TestHooksStatus_UnreadableScriptsPathJSONIsAnErrorEnvelope(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".claude"), []byte("not a dir"), 0o600))
+
+	out, _, err := runRootCmd(t, "hooks", "status", dir, "--json")
+	require.Error(t, err)
+	var env struct {
+		Status string `json:"status"`
+		Errors []struct {
+			Code string `json:"code"`
+		} `json:"errors"`
+	}
+	require.NoError(t, json.Unmarshal(out.Bytes(), &env))
+	assert.Equal(t, "error", env.Status)
+	require.NotEmpty(t, env.Errors)
+	assert.Equal(t, "status_failed", env.Errors[0].Code)
+}
+
+// Every write in the renderer is checked; a truncated report must not be
+// mistaken for a short one. Drives each write-error return in turn.
+func TestRenderHooksStatus_PropagatesWriteErrors(t *testing.T) {
+	all := hookscripts.Names()
+	report := hooks.StatusReport{
+		ProjectDir: "/tmp/p",
+		Installed:  true,
+		Scripts: []hooks.ScriptStatus{
+			{Name: all[0], State: hooks.ScriptDrifted},
+			{Name: all[1], State: hooks.ScriptMissing},
+		},
+	}
+	for n := range 5 {
+		err := renderHooksStatus(&failAfterNWriter{ok: n}, report)
+		require.Errorf(t, err, "write #%d must propagate its failure", n)
+	}
+}
+
+// The not-installed branch writes too, and its failure must also surface.
+func TestRenderHooksStatus_NotInstalledPropagatesWriteError(t *testing.T) {
+	err := renderHooksStatus(&failAfterNWriter{ok: 0}, hooks.StatusReport{ProjectDir: "/tmp/p"})
+	require.Error(t, err)
 }
