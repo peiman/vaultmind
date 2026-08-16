@@ -40,3 +40,35 @@ func TestResolvedVersion_MatchesTheVersionCommand(t *testing.T) {
 	assert.Truef(t, strings.Contains(out.String(), v),
 		"`version` printed %q which does not contain the resolved %q", out.String(), v)
 }
+
+// The notice a user actually sees: what is available, what they are running,
+// how to get it, and how to make it stop. All four, because a notice missing
+// the last one is the kind people disable by uninstalling the feature.
+func TestRenderUpdateNotice_NamesVersionsUpgradeAndOptOut(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, renderUpdateNotice(&buf, release.Info{
+		Current: "v0.4.1", Latest: "v0.5.0", Newer: true,
+	}))
+
+	text := buf.String()
+	assert.Contains(t, text, "v0.5.0 is available")
+	assert.Contains(t, text, "running v0.4.1")
+	assert.Contains(t, text, "go install github.com/peiman/vaultmind@v0.5.0")
+	assert.Contains(t, text, release.DisableEnv, "the way to silence it is part of the notice")
+}
+
+func TestRenderUpdateNotice_CurrentVersionSaysNothing(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, renderUpdateNotice(&buf, release.Info{
+		Current: "v0.5.0", Latest: "v0.5.0", Newer: false,
+	}))
+	assert.Empty(t, buf.String(), "being up to date is not news")
+}
+
+// A doctor run must not fail because stdout closed mid-notice.
+func TestRenderUpdateNotice_PropagatesWriteError(t *testing.T) {
+	err := renderUpdateNotice(&failAfterNWriter{ok: 0}, release.Info{
+		Current: "v0.4.1", Latest: "v0.5.0", Newer: true,
+	})
+	require.Error(t, err)
+}

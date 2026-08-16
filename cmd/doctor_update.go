@@ -38,10 +38,20 @@ func writeUpdateNotice(w io.Writer, currentVersion string) error {
 		cacheDir = "" // no cache: Check still works, it just re-asks next time
 	}
 	info, ok := release.Check(context.Background(), currentVersion, cacheDir)
-	if !ok || !info.Newer {
+	if !ok {
 		return nil
 	}
-	_, err = fmt.Fprintf(w,
+	return renderUpdateNotice(w, info)
+}
+
+// renderUpdateNotice is the printing half, split from the deciding half so the
+// notice itself is testable without a network stub reaching into another
+// package. Silent when there is nothing to say.
+func renderUpdateNotice(w io.Writer, info release.Info) error {
+	if !info.Newer {
+		return nil
+	}
+	_, err := fmt.Fprintf(w,
 		"⬆ VaultMind %s is available (running %s)\n"+
 			"  go install github.com/peiman/vaultmind@%s   (or download the ORT archive from the release)\n"+
 			"  silence this: %s=1\n",
