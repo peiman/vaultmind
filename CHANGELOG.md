@@ -7,13 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.4.2] — 2026-08-16
+## [0.5.0] — 2026-08-16
 
 An external review of v0.4.1 found four high-severity defects. All four are fixed here, and every
 one of them was a silent failure: something the tool did wrong while reporting that it had
 succeeded. Two were in code that earlier fixes had already touched without closing the class.
 
 **Read the Changed section before upgrading** — the exit-code fix is breaking for scripts.
+
+> **v0.4.2 was these same fixes released under a patch number, and is superseded by v0.5.0.**
+> A patch number reads as "safe to auto-upgrade", which is wrong for a cluster that changes the
+> exit contract, when `index` creates a vault, what counts as a vault, and where the model cache
+> lives. In 0.x that is a minor. The v0.4.2 tag stays because the Go module proxy caches versions
+> permanently and it cannot be unpublished — but v0.5.0 is the version to use, and the two are the
+> same fixes.
 
 ### Changed
 
@@ -552,8 +559,8 @@ The initial public tag, retracted in favor of [0.1.3]. It shipped without the
 maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; do
 not install.
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.4.2...HEAD
-[0.4.2]: https://github.com/peiman/vaultmind/compare/v0.4.1...v0.4.2
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/peiman/vaultmind/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/peiman/vaultmind/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/peiman/vaultmind/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/peiman/vaultmind/compare/v0.2.3...v0.3.0
