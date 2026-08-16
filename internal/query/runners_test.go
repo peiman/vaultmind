@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/envelope"
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/memory"
 	"github.com/peiman/vaultmind/internal/query"
@@ -110,7 +111,7 @@ func TestRunNoteGet_UnknownIDEmitsNotFoundEnvelope(t *testing.T) {
 	err := query.RunNoteGet(db, query.NoteGetConfig{
 		Input: "nope", JSONOutput: true, VaultPath: dir,
 	}, &buf)
-	require.NoError(t, err)
+	require.ErrorIs(t, err, envelope.ErrAlreadyWritten)
 
 	var env struct {
 		Status string `json:"status"`
@@ -287,7 +288,8 @@ body
 	err = query.RunNoteGet(db, query.NoteGetConfig{
 		Input: "Shared Title", JSONOutput: true, VaultPath: dir,
 	}, &buf)
-	require.NoError(t, err)
+	require.ErrorIs(t, err, envelope.ErrAlreadyWritten,
+		"an ambiguous title is a failure the caller must be able to branch on")
 
 	var env struct {
 		Status string `json:"status"`

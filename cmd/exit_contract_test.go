@@ -3,6 +3,8 @@ package cmd
 import (
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/cmdutil"
@@ -59,6 +61,63 @@ func TestJSONErrorMustNotReportSuccess(t *testing.T) {
 				"the sentinel must survive to main, which maps it to exit 1 without printing twice")
 		})
 	}
+}
+
+// The cases above all fail at vault-open, which was the only failure the
+// contract originally covered — so the fix reached only that one. Everything
+// below fails AFTER a working vault is open: a missing id, an ambiguous title,
+// an unreadable plan. Those are the everyday failures an agent actually hits,
+// and every one of them wrote status "error" and exited 0.
+func TestJSONErrorMustNotReportSuccess_AfterTheVaultOpens(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	badPlan := filepath.Join(t.TempDir(), "bad.json")
+	require.NoError(t, os.WriteFile(badPlan, []byte("{not json"), 0o600))
+
+	cases := []struct {
+		name string
+		args []string
+		code string
+	}{
+		{"note get: unknown id", []string{"note", "get", "no-such-id", "--vault", vault, "--json"}, "not_found"},
+		{"memory links: unresolvable", []string{"memory", "links", "no-such-id", "--vault", vault, "--json"}, ""},
+		{"memory pack: unresolvable", []string{"memory", "pack", "no-such-id", "--vault", vault, "--json"}, ""},
+		{"apply: unreadable plan", []string{"apply", "/does/not/exist.json", "--vault", vault, "--json"}, "read_error"},
+		{"apply: unparseable plan", []string{"apply", badPlan, "--vault", vault, "--json"}, "parse_error"},
+		{"note create: path traversal", []string{"note", "create", "../out.md", "--type", "concept",
+			"--field", "title=T", "--vault", vault, "--json"}, "path_traversal"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out, _, err := runRootCmd(t, tc.args...)
+
+			var env envelope.Envelope
+			require.NoError(t, json.Unmarshal(out.Bytes(), &env))
+			require.Equal(t, "error", env.Status)
+			if tc.code != "" {
+				require.NotEmpty(t, env.Errors)
+				assert.Equal(t, tc.code, env.Errors[0].Code)
+			}
+
+			require.Error(t, err, "the envelope says error; the exit code must agree")
+			assert.True(t, errors.Is(err, cmdutil.ErrAlreadyWritten),
+				"and the sentinel must survive to main so the failure is described exactly once")
+		})
+	}
+}
+
+// Text mode is the other half, and the half that looked like a judgement call.
+// `vaultmind note get "$id" || fallback` took the found path on every typo. The
+// friendly line is still printed — the exit code is what changes.
+func TestTextModeNotFoundAlsoFails(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	out, _, err := runRootCmd(t, "note", "get", "no-such-id", "--vault", vault)
+
+	assert.Contains(t, out.String(), "No note found",
+		"the human-readable line stays — this is not a regression in message quality")
+	require.Error(t, err, "and a missing note is a failure in text mode too")
+	assert.True(t, errors.Is(err, cmdutil.ErrAlreadyWritten),
+		"the sentinel means main sets the exit code without printing the failure a second time")
 }
 
 // The success path must stay quiet: no error, so exit 0.

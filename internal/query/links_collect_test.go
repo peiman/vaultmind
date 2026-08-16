@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/envelope"
 	"github.com/peiman/vaultmind/internal/query"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -189,7 +190,8 @@ func TestRunLinks_UnresolvableInputJSONEmitsErrorEnvelope(t *testing.T) {
 	err := query.RunLinks(db, query.LinksConfig{
 		Input: "no-such-note", Direction: "out", VaultPath: dir, JSONOutput: true,
 	}, &buf)
-	require.NoError(t, err, "JSON mode: error is encoded in the envelope, not returned as Go error")
+	require.ErrorIs(t, err, envelope.ErrAlreadyWritten,
+		"JSON mode: the error is encoded in the envelope AND signalled to the caller")
 
 	var env struct {
 		Status string `json:"status"`

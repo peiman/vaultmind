@@ -4,7 +4,6 @@ package cmdutil
 import (
 	"crypto/sha256"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -107,13 +106,20 @@ func WriteJSON(w io.Writer, command string, result interface{}, vaultPath, index
 }
 
 // WriteJSONError writes a JSON error envelope to the writer.
+// It returns ErrAlreadyWritten on success. Every caller does
+// `return cmdutil.WriteJSONError(...)`, and while this returned nil on success
+// each of those was a command that wrote status "error" and then exited 0 —
+// so `vaultmind … --json || handle_failure` never fired. Returning the sentinel
+// from here fixes all of them at once and, more to the point, makes the broken
+// combination unexpressible rather than merely absent.
 func WriteJSONError(w io.Writer, command, code, message string) error {
-	env := envelope.Error(command, code, message, "")
-	return json.NewEncoder(w).Encode(env)
+	return envelope.WriteError(w, envelope.Error(command, code, message, ""))
 }
 
-// ErrAlreadyWritten signals that a JSON error envelope was already written.
-var ErrAlreadyWritten = errors.New("error already written to output")
+// ErrAlreadyWritten signals that an error envelope was already written. Aliased
+// to the envelope package's sentinel so the command layer and the query layer
+// raise the same one and main.go needs to recognize only that.
+var ErrAlreadyWritten = envelope.ErrAlreadyWritten
 
 func isJSONOutput(cmd *cobra.Command) bool {
 	jsonFlag, _ := cmd.Flags().GetBool("json")

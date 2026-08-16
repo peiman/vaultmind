@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/marker"
@@ -102,7 +103,8 @@ func TestNoteCreate_PathTraversalReturnsStructuredError(t *testing.T) {
 		"--type", "concept",
 		"--field", "title=Traversal",
 		"--vault", vault, "--json")
-	require.NoError(t, err)
+	require.ErrorIs(t, err, cmdutil.ErrAlreadyWritten,
+		"a refused path traversal must not exit 0 — this is the one place a script most needs the exit code")
 
 	var env struct {
 		Status string `json:"status"`

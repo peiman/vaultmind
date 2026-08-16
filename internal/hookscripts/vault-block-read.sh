@@ -90,10 +90,12 @@ NOTE_STATUS=$?
 # Allow Read if note get fails — episode files, malformed frontmatter,
 # transient errors. PostToolUse tracker still fires as fallback.
 #
-# `vaultmind note get` exits 0 even for unresolved ids (it prints
-# "No note found for ..." to stdout). Detect that pattern explicitly —
-# without it, episodes and unindexed files would be blocked with a
-# bogus body that doesn't match the file.
+# `vaultmind note get` exits NON-ZERO for an unresolved id and prints
+# "No note found for ..." to stdout. The status check is the primary
+# signal; the string check stays as a belt-and-braces guard for binaries
+# older than the exit-code fix, which returned 0 here. Without either,
+# episodes and unindexed files would be blocked with a bogus body that
+# doesn't match the file.
 NOTE_RESOLVED=1
 if [ "$NOTE_STATUS" != "0" ] || [ -z "$NOTE_OUTPUT" ]; then
   NOTE_RESOLVED=0

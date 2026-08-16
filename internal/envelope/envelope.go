@@ -1,7 +1,34 @@
 // Package envelope provides the standard JSON response wrapper for all --json output.
 package envelope
 
-import "time"
+import (
+	"encoding/json"
+	"errors"
+	"io"
+	"time"
+)
+
+// ErrAlreadyWritten signals that an error envelope has already been written to
+// output, so the caller must set a non-zero exit status WITHOUT describing the
+// failure a second time.
+//
+// It lives here rather than beside one of its users because both the command
+// layer and the query layer produce envelopes and cannot import each other.
+// Before this, only the command layer had a sentinel: the query layer encoded
+// an envelope saying status "error" and returned nil, so
+// `vaultmind note get missing-id --json || handle_failure` never fired.
+var ErrAlreadyWritten = errors.New("error already written to output")
+
+// WriteError encodes env and returns ErrAlreadyWritten, so that "wrote an error
+// envelope" and "reported success" stop being a state a caller can express.
+// An encoding failure is returned as itself — nothing reached the reader, so
+// there is no envelope for an exit code to agree with.
+func WriteError(w io.Writer, env *Envelope) error {
+	if err := json.NewEncoder(w).Encode(env); err != nil {
+		return err
+	}
+	return ErrAlreadyWritten
+}
 
 // SchemaVersion is the public contract version. Consumers decoding this
 // envelope should branch on major-version changes (v1 -> v2) and expect

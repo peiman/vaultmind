@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,7 +24,8 @@ func TestApply_MissingPlanFileReturnsReadErrorJSON(t *testing.T) {
 	vault := buildIndexedTestVault(t)
 	out, _, err := runRootCmd(t, "apply", "/does/not/exist/plan.json",
 		"--vault", vault, "--json")
-	require.NoError(t, err, "JSON-mode error is returned via envelope, not Go error")
+	require.ErrorIs(t, err, cmdutil.ErrAlreadyWritten,
+		"the envelope carries the detail and the exit code says failure; checking either one must reach the same conclusion")
 
 	var env struct {
 		Status string `json:"status"`
@@ -45,7 +47,7 @@ func TestApply_InvalidPlanJSONReturnsParseErrorJSON(t *testing.T) {
 	require.NoError(t, os.WriteFile(planPath, []byte("{this is not json"), 0o644))
 
 	out, _, err := runRootCmd(t, "apply", planPath, "--vault", vault, "--json")
-	require.NoError(t, err)
+	require.ErrorIs(t, err, cmdutil.ErrAlreadyWritten)
 
 	var env struct {
 		Status string `json:"status"`
