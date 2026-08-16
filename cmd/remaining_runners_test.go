@@ -333,6 +333,28 @@ func TestFormatIndexResult_SurfacesSkippedFileErrors(t *testing.T) {
 	assert.Contains(t, out, "mapping values are not allowed here")
 }
 
+// A duplicate id means a file on disk is absent from the index entirely. The
+// count was JSON-only, so in human output the note vanished with no message —
+// and doctor cannot report it either, because notes.id is UNIQUE and a
+// row-duplicate query is structurally zero. Name both paths.
+func TestFormatIndexResult_NamesDuplicateIDs(t *testing.T) {
+	var buf bytes.Buffer
+	err := formatIndexResult(index.IndexAndEmbedResult{
+		Index: &index.IndexResult{
+			DuplicateIDs: 1,
+			DuplicateDetails: []index.DuplicateID{
+				{ID: "arc-the-gate", Kept: "arcs/gate.md", Skipped: "drafts/gate-copy.md"},
+			},
+		},
+	}, "", &buf)
+	require.NoError(t, err)
+	out := buf.String()
+	assert.Contains(t, out, "1 duplicate id(s)")
+	assert.Contains(t, out, "arc-the-gate")
+	assert.Contains(t, out, "arcs/gate.md", "the file that kept the id")
+	assert.Contains(t, out, "drafts/gate-copy.md", "and the file that is not in the index")
+}
+
 // failAfterNWriter fails on the (ok+1)th Write — drives formatIndexResult's
 // write-error returns inside the #40 skipped-files block.
 type failAfterNWriter struct{ ok int }

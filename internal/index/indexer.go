@@ -31,7 +31,18 @@ type IndexResult struct {
 	DurationMs        int64              `json:"duration_ms"`
 	CompletedAt       string             `json:"completed_at"`
 	ErrorDetails      []IndexError       `json:"error_details,omitempty"`
+	DuplicateDetails  []DuplicateID      `json:"duplicate_details,omitempty"`
 	PostIndexWarnings []PostIndexWarning `json:"post_index_warnings,omitempty"`
+}
+
+// DuplicateID names one id claimed by two files on disk, and which file kept
+// it. The DuplicateIDs counter says how many collisions occurred; without the
+// paths the operator cannot act, and the losing file is NOT in the index at all
+// — a note absent from memory with only a number to show for it.
+type DuplicateID struct {
+	ID      string `json:"id"`
+	Kept    string `json:"kept"`    // path that holds the id
+	Skipped string `json:"skipped"` // path that was not indexed
 }
 
 // IndexError names a specific per-file failure during Rebuild or
@@ -479,6 +490,8 @@ func (idx *Indexer) Rebuild() (*IndexResult, error) {
 					Str("first_path", firstPath).
 					Msg("duplicate ID detected — second file skipped")
 				result.DuplicateIDs++
+				result.DuplicateDetails = append(result.DuplicateDetails,
+					DuplicateID{ID: rec.ID, Kept: firstPath, Skipped: file.RelPath})
 				continue // skip the duplicate — first file wins
 			}
 			seenIDs[rec.ID] = file.RelPath
@@ -637,6 +650,40 @@ func (idx *Indexer) IndexFile(relPath string) error {
 
 // Incremental scans the vault and only indexes files that are new or changed
 // (detected via content hash). Deleted files are removed from the index.
+// duplicateIDHolder reports whether relPath is the SECOND live file claiming
+// rec.ID, and if so which path already holds it.
+//
+// The distinction that matters is duplicate vs. move. Incremental stores notes
+// before it sweeps orphans, so when a renamed file is stored its old path still
+// owns the row — treating "another path holds this id" as a duplicate would
+// reject every rename and strand the note at a path that no longer exists.
+// A collision is therefore only a collision when the incumbent is still on disk.
+//
+// A lookup failure is deliberately not treated as a duplicate: refusing to index
+// a note because the database could not answer would turn a transient error into
+// a missing memory, and the pre-existing upsert behaviour is the safer fallback.
+//
+// There is deliberately no in-run "already claimed" map to mirror Rebuild's
+// seenIDs. Rebuild needs one because it stores in a single batched transaction;
+// Incremental commits each note as it goes, so the database already knows about
+// a file stored moments ago. A parallel map would be bookkeeping that can
+// disagree with the source of truth — and being set before the store, it would
+// also block the second file when the first one failed to store.
+func duplicateIDHolder(db *DB, rec NoteRecord, relPath string, onDisk map[string]bool) (string, bool) {
+	owner, err := db.PathOwningID(rec.ID)
+	if err != nil {
+		log.Warn().Err(err).Str("id", rec.ID).Msg("could not check id ownership; proceeding with upsert")
+		return "", false
+	}
+	if owner == "" || owner == relPath {
+		return "", false
+	}
+	if !onDisk[owner] {
+		return "", false // the incumbent is gone: this is a move, not a collision
+	}
+	return owner, true
+}
+
 func (idx *Indexer) Incremental() (*IndexResult, error) {
 	start := time.Now()
 
@@ -657,11 +704,16 @@ func (idx *Indexer) Incremental() (*IndexResult, error) {
 	}
 
 	result := &IndexResult{DBPath: idx.dbPath}
-	diskPaths := make(map[string]bool, len(files))
 
+	// Built in full BEFORE the store loop, not as we go: the duplicate-id guard
+	// below has to know whether the CURRENT owner of an id still exists on disk,
+	// and that owner may sort after the file being stored.
+	diskPaths := make(map[string]bool, len(files))
 	for _, file := range files {
 		diskPaths[file.RelPath] = true
+	}
 
+	for _, file := range files {
 		info, ok := stored[file.RelPath]
 
 		// Mtime fast path: skip file read entirely if mtime unchanged
@@ -706,6 +758,21 @@ func (idx *Indexer) Incremental() (*IndexResult, error) {
 		}
 
 		rec := buildNoteRecord(file, content, parsed)
+
+		if rec.IsDomain {
+			if holder, dup := duplicateIDHolder(db, rec, file.RelPath, diskPaths); dup {
+				log.Warn().
+					Str("id", rec.ID).
+					Str("path", file.RelPath).
+					Str("first_path", holder).
+					Msg("duplicate ID detected — second file skipped")
+				result.DuplicateIDs++
+				result.DuplicateDetails = append(result.DuplicateDetails,
+					DuplicateID{ID: rec.ID, Kept: holder, Skipped: file.RelPath})
+				continue // first file wins, exactly as Rebuild decides it
+			}
+		}
+
 		if storeErr := StoreNote(db, rec); storeErr != nil {
 			log.Warn().Err(storeErr).Str("path", file.RelPath).Msg("skipping file with store error")
 			result.Errors++

@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -98,6 +99,22 @@ func (d *DB) NoteHashes() (map[string]NoteHashInfo, error) {
 		result[path] = NoteHashInfo{Hash: hash, MTime: mtime}
 	}
 	return result, rows.Err()
+}
+
+// PathOwningID returns the path currently indexed under id, or "" if no row
+// holds it. The incremental indexer needs this because notes.id is UNIQUE and
+// upsertNote resolves a conflict by reassigning path — so without asking first,
+// a second file claiming an existing id takes the row silently.
+func (d *DB) PathOwningID(id string) (string, error) {
+	var path string
+	err := d.QueryRow("SELECT path FROM notes WHERE id = ?", id).Scan(&path)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("looking up owner of id %q: %w", id, err)
+	}
+	return path, nil
 }
 
 // UpdateMTime updates the mtime column for the note at the given path.

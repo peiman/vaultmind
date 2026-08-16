@@ -203,6 +203,21 @@ func formatIndexResult(r index.IndexAndEmbedResult, model string, w io.Writer) e
 			}
 		}
 	}
+	// A duplicate id means a note on disk is NOT in the index — it is absent
+	// from every recall, and the id the agent does retrieve belongs to a
+	// different file. Printing only the counter (JSON-only until now) left that
+	// invisible in the human output, and `doctor` cannot see it either: notes.id
+	// is UNIQUE, so a row-duplicate query is structurally zero.
+	if len(r.Index.DuplicateDetails) > 0 {
+		if _, err := fmt.Fprintf(w, "⚠ %d duplicate id(s) — one file per id was NOT indexed:\n", r.Index.DuplicateIDs); err != nil {
+			return err
+		}
+		for _, d := range r.Index.DuplicateDetails {
+			if _, err := fmt.Fprintf(w, "  - %q: kept %s, skipped %s\n", d.ID, d.Kept, d.Skipped); err != nil {
+				return err
+			}
+		}
+	}
 	if r.Embed != nil {
 		// Name the model in the human-readable output. Pure-Go fallback
 		// silently producing minilm-only embeddings was the surprise the
