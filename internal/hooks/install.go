@@ -20,7 +20,6 @@ import (
 	"path/filepath"
 
 	"github.com/peiman/vaultmind/internal/hookscripts"
-	"github.com/peiman/vaultmind/internal/shellparse"
 )
 
 // InstallConfig controls a hooks-install run.
@@ -169,35 +168,22 @@ func Install(cfg InstallConfig) (*InstallResult, error) {
 // drift — they're "not installed" (a separate signal). Names
 // present but behaviorally matching are not counted (clean state).
 // Only behavioral divergence from canonical counts.
+// Implemented on top of Status so "what counts as drift" is decided in exactly
+// one place — this view and `hooks status` disagreeing would be worse than
+// either being wrong alone, since doctor reports one and the operator acts on
+// the other.
 func CompareInstalled(projectDir string) ([]string, error) {
-	scriptsDir := filepath.Join(projectDir, ".claude", "scripts")
-	if _, err := os.Stat(scriptsDir); os.IsNotExist(err) {
-		// No scripts dir = nothing installed = nothing to drift.
-		// Doctor surfaces "no hooks installed" as a separate signal
-		// if it cares to.
-		return nil, nil
+	report, err := Status(projectDir)
+	if err != nil {
+		return nil, err
+	}
+	if !report.Installed {
+		return nil, nil // nothing installed = nothing to drift
 	}
 	drifted := []string{}
-	for _, name := range hookscripts.Names() {
-		canonical, ok := hookscripts.Get(name)
-		if !ok {
-			continue
-		}
-		dst := filepath.Join(scriptsDir, name)
-		// dst is built from the (caller-supplied) projectDir + an
-		// embed-FS-validated filename. Same trust tier as Install.
-		existing, err := os.ReadFile(dst) // #nosec G304
-		if err != nil {
-			if os.IsNotExist(err) {
-				continue // not installed; not drift
-			}
-			return nil, fmt.Errorf("reading %s: %w", dst, err)
-		}
-		// Behavioral compare: comment-only and blank-line differences are
-		// not drift (a hook's behavior is its code, not its annotations);
-		// a real code change still is.
-		if shellparse.StripCommentsAndBlanks(string(existing)) != shellparse.StripCommentsAndBlanks(string(canonical)) {
-			drifted = append(drifted, name)
+	for _, s := range report.Scripts {
+		if s.State == ScriptDrifted {
+			drifted = append(drifted, s.Name)
 		}
 	}
 	return drifted, nil

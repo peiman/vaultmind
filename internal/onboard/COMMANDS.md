@@ -55,6 +55,7 @@ Generated from the command tree — do not edit by hand (run `task generate:docs
 | `vaultmind episode capture` | Convert session transcripts into episode notes | you have a session transcript (or a directory of them) to convert into episode notes. |
 | `vaultmind hooks` | Manage VaultMind's Claude Code hook scripts | you need to install, remove, or check VaultMind's Claude Code hook scripts. |
 | `vaultmind hooks install` | Install Claude Code hook scripts into a project | you want to wire VaultMind into a project by writing its hook scripts. |
+| `vaultmind hooks status` | Compare a project's installed hook scripts against the canonical ones | you want to know whether a project's hook scripts still match the ones this binary ships — before an update overwrites a local change, or after one that should have installed something. |
 | `vaultmind hooks uninstall` | Remove VaultMind's Claude Code hook entries from a project | you want to remove VaultMind's Claude Code hook entries from a project. |
 | `vaultmind identity` | Contract-B agent identity: keypair custody and signing | you need Contract-B agent identity: mint a keypair or sign an entry via the keyless signer. |
 | `vaultmind identity enroll` | Enroll into a Contract-B network from an invite, then self-sign the request | you are a member with an invite and want to enroll: cross-check the relay's root against the invite, confirm the fingerprint, and self-sign an enrollment request for your admin. |

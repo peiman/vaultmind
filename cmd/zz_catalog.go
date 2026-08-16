@@ -319,6 +319,11 @@ var commandCatalog = map[string]catalogEntry{
 		when:  "you want to remove VaultMind's Claude Code hook entries from a project.",
 		short: "Remove VaultMind's Claude Code hook entries from a project",
 	},
+	"vaultmind hooks status": {
+		group: groupLifecycle,
+		when:  "you want to know whether a project's hook scripts still match the ones this binary ships — before an update overwrites a local change, or after one that should have installed something.",
+		short: "Compare a project's installed hook scripts against the canonical ones",
+	},
 
 	// ── Setup & introspection ────────────────────────────────────────────
 	"vaultmind config": {
