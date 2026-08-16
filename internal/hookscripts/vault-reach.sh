@@ -102,6 +102,7 @@ printf '{"timestamp":"%s","matched":true,"injected":true,"chars":%d}\n' "$TS" "$
 python3 -c "
 import json, sys
 pointers = sys.stdin.read()
+vault = sys.argv[1]
 print(json.dumps({
     'hookSpecificOutput': {
         'hookEventName': 'PreToolUse',
@@ -111,8 +112,8 @@ print(json.dumps({
             'These are ranked against what you are about to do:\n\n'
             + pointers
             + '\nRead one before proceeding if it bears on this call '
-              '(vaultmind note get <id> --vault vaultmind-identity).'
+              '(vaultmind note get <id> --vault ' + vault + ').'
         ),
     }
 }))
-" <<< "$POINTERS"
+" "$VAULT_PATH" <<< "$POINTERS"

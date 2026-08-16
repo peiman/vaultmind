@@ -117,6 +117,12 @@ vaultmind arc candidates --vault ./agent-desk --arcs-vault ./agent-identity
 
 VaultMind records local retrieval events (which queries surfaced which notes) to power activation-weighted reranking. Sharing that data is **opt-in and sanitized** — no note bodies, no content, no query text; only counts and identifiers — for anyone who wants to contribute anonymized retrieval signal back to the project. It is off by default and never leaves your machine unless you run the export.
 
+## The one network call
+
+`vaultmind doctor` asks the Go module proxy once a day whether a newer VaultMind exists, and prints a line if so. That is the only time VaultMind reaches the network on its own, and it sends nothing about you or your vault — it is a `GET` for a version number, the same request `go install …@latest` makes. The answer is cached for 24 hours, times out in 3 seconds, and is silent on any failure.
+
+It lives on `doctor` and nowhere else: that is the command you run to ask whether your setup is healthy, so a network call there is expected rather than a surprise — and putting it on `ask` would tax every query. Set `VAULTMIND_NO_UPDATE_CHECK=1` to opt out; the check returns before making any request, and the notice itself tells you that variable exists.
+
 ## Contributing
 
 VaultMind is a Go CLI built on the [ckeletin-go](https://github.com/peiman/ckeletin-go) scaffold (the `.ckeletin/` framework layer). `task check` is the single quality gate — it runs formatting, linting, architecture and security checks, the full test suite, and the coverage floor. If it passes, the change is sound regardless of who wrote it.
