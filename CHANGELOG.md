@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Hook vault queries are bounded, and `timeout` is resolved rather than assumed.**
+  `vault-recall.sh` had no bound: on a loaded machine the query ran past Claude Code's hook budget,
+  and the harness killed it and discarded the output — the whole budget spent to inject nothing. It
+  now gives up (15s default) and stays silent. `vault-reach.sh` had the opposite bug: a hardcoded
+  `timeout`, which stock macOS does not ship, so every reach came back empty and logged
+  `"injected":false` — the same line it writes when the vault genuinely had nothing to say. Both now
+  use the `timeout` → `gtimeout` → unbounded chain `vault-track-read.sh` already had, and
+  `VAULTMIND_HOOK_QUERY_TIMEOUT` tunes it for a large vault or a slow machine.
+
 - **The reach hook's pointer named the default vault instead of the configured one.**
   `vault-reach.sh` queried `$VAULT_PATH` — which honours `VAULTMIND_VAULT` — and then told the
   agent to read the result with `--vault vaultmind-identity`, hardcoded. Anyone whose vault is
