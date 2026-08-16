@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The reach hook's pointer named the default vault instead of the configured one.**
+  `vault-reach.sh` queried `$VAULT_PATH` — which honours `VAULTMIND_VAULT` — and then told the
+  agent to read the result with `--vault vaultmind-identity`, hardcoded. Anyone whose vault is
+  named anything else got a pointer list *from* their vault and an instruction pointing *at* a
+  tree that does not exist. Reinstall with `vaultmind hooks install --force <project-dir>` to pick
+  this up; `vaultmind hooks status` reports the drift either way.
+
+### Documentation
+
+- **The update check is documented rather than defaulted away.** `README.md` gained a "The one
+  network call" section: `doctor` asks the Go module proxy once a day whether a newer VaultMind
+  exists, sends nothing about you or your vault, caches for 24 hours, times out in 3 seconds, and
+  is silenced by `VAULTMIND_NO_UPDATE_CHECK=1`. Making it opt-in instead would have left the notice
+  reaching only the people who already knew to look for it — the gap it exists to close.
+- **`docs/reviews/` keeps findings as written and stamps their outcome.** The v0.4.1 CLI review is
+  published unedited, with a resolution block naming the PR and commit that closed each High.
+
 ## [0.5.0] — 2026-08-16
 
 An external review of v0.4.1 found four high-severity defects. All four are fixed here, and every
