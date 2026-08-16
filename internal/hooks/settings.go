@@ -26,6 +26,8 @@ const (
 	hookHealthScript           = "vaultmind-health.sh"
 	hookUserPromptSubmitScript = "vault-recall.sh"
 	hookPreToolUseScript       = "vault-track-read.sh"
+	hookReachScript            = "vault-reach.sh"
+	hookPreCompactScript       = "precompact-preserve.sh"
 	hookSessionEndScript       = "capture-episode.sh"
 )
 
@@ -45,6 +47,7 @@ type hooksObject struct {
 	SessionStart     []hookGroup `json:"SessionStart"`
 	UserPromptSubmit []hookGroup `json:"UserPromptSubmit"`
 	PreToolUse       []hookGroup `json:"PreToolUse"`
+	PreCompact       []hookGroup `json:"PreCompact"`
 	SessionEnd       []hookGroup `json:"SessionEnd"`
 }
 
@@ -78,6 +81,19 @@ func canonicalHooks(vaultPath string) []canonicalHook {
 		{Event: "SessionStart", Script: hookHealthScript, Group: hookGroup{Matcher: "startup", Hooks: []hookCommand{cmd(hookHealthScript)}}},
 		{Event: "UserPromptSubmit", Script: hookUserPromptSubmitScript, Group: hookGroup{Hooks: []hookCommand{cmd(hookUserPromptSubmitScript)}}},
 		{Event: "PreToolUse", Script: hookPreToolUseScript, Group: hookGroup{Matcher: "Read", Hooks: []hookCommand{cmd(hookPreToolUseScript)}}},
+		// Pointers AT the reach, not on the turn. An arc that surfaces all day and
+		// never at the instant it applies is not surfacing — allowlisted to
+		// irreversible or outward-facing commands, because noise is this channel's
+		// failure mode, not silence. Shares PreToolUse with read-tracking under a
+		// different matcher.
+		{Event: "PreToolUse", Script: hookReachScript, Group: hookGroup{Matcher: "Bash", Hooks: []hookCommand{cmd(hookReachScript)}}},
+		// The WRITE-path trigger. Every other hook is read-path or telemetry;
+		// nothing fired at the moment a transformation could be written down, and a
+		// desk that depends on remembering collects nothing (measured: two entries
+		// in ten weeks). Compaction is the only moment that is all three of: the
+		// raw material still exists, it is provably about to be destroyed, and the
+		// system knows in advance.
+		{Event: "PreCompact", Script: hookPreCompactScript, Group: hookGroup{Hooks: []hookCommand{cmd(hookPreCompactScript)}}},
 		{Event: "SessionEnd", Script: hookSessionEndScript, Group: hookGroup{Hooks: []hookCommand{cmd(hookSessionEndScript)}}},
 	}
 }
@@ -104,8 +120,17 @@ func SettingsStanza(vaultPath string) (string, error) {
 			obj.UserPromptSubmit = append(obj.UserPromptSubmit, ch.Group)
 		case "PreToolUse":
 			obj.PreToolUse = append(obj.PreToolUse, ch.Group)
+		case "PreCompact":
+			obj.PreCompact = append(obj.PreCompact, ch.Group)
 		case "SessionEnd":
 			obj.SessionEnd = append(obj.SessionEnd, ch.Group)
+		default:
+			// A canonical hook whose event has no field here would render as
+			// nothing at all — the wiring table would list it, the stanza would
+			// omit it, and the hook would simply never fire. Fail loudly instead:
+			// adding an event to canonicalHooks and forgetting the field is a
+			// programming error, not a runtime condition.
+			return "", fmt.Errorf("canonical hook %q has an unhandled event %q — add it to hooksObject", ch.Script, ch.Event)
 		}
 	}
 	out, err := json.MarshalIndent(settingsStanza{Hooks: obj}, "", "  ")

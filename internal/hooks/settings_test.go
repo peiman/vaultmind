@@ -109,7 +109,8 @@ func TestSettingsStanza_VaultPathBakedIntoEveryCommand(t *testing.T) {
 			}
 		}
 	}
-	assert.Equal(t, 5, commandCount, "five hooks wired (persona + health on SessionStart, plus recall/track/episode)")
+	assert.Equal(t, 7, commandCount,
+		"seven hooks wired: persona + health on SessionStart, recall, read-tracking, reach, precompact, episode")
 }
 
 func TestSettingsStanza_VaultPathIsShellQuoted(t *testing.T) {
