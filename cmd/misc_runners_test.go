@@ -444,6 +444,41 @@ func TestIndex_MissingVaultReturnsStructuredError(t *testing.T) {
 	}
 }
 
+// `vaultmind index` with no --vault, standing in a directory that is not a
+// vault, must refuse — and above all must leave NOTHING behind. index is the
+// command that creates .vaultmind/index.db, which is the marker every later
+// walk-up discovers, so a guess here does not merely answer wrongly once: it
+// promotes the directory permanently and captures every future invocation from
+// any child directory. Reported live 2026-08-16 in a plain project checkout.
+func TestIndex_GuessedNonVaultRefusesAndLeavesNoMarker(t *testing.T) {
+	t.Setenv("VAULTMIND_VAULT", "")
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "README.md"), []byte("# a plain project"), 0o600))
+	t.Chdir(dir)
+
+	_, _, err := runRootCmd(t, "index")
+	require.Error(t, err, "a guessed non-vault must fail closed")
+	assert.Contains(t, err.Error(), "--vault", "and name the way out")
+
+	_, statErr := os.Stat(filepath.Join(dir, ".vaultmind"))
+	assert.True(t, os.IsNotExist(statErr),
+		"no marker may be left behind — creating it is what makes this self-propagating")
+}
+
+// The escape hatch stays open: naming a directory is how you deliberately turn
+// one into a vault, and `init` is not the only way people do it.
+func TestIndex_NamedNonVaultStillCreates(t *testing.T) {
+	t.Setenv("VAULTMIND_VAULT", "")
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "note.md"),
+		[]byte("---\nid: n1\ntype: concept\ntitle: N\ncreated: 2026-08-16\n---\nbody"), 0o600))
+
+	_, _, err := runRootCmd(t, "index", "--vault", dir)
+	require.NoError(t, err)
+	_, statErr := os.Stat(filepath.Join(dir, ".vaultmind"))
+	assert.NoError(t, statErr, "a named directory may still become a vault")
+}
+
 // Incremental index over an unchanged vault must report 0 added/updated/deleted
 // — if it thought every note had changed, every re-index would nuke embeddings.
 func TestIndex_IncrementalReturnsSkipsForUnchangedVault(t *testing.T) {

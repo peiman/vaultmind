@@ -67,6 +67,14 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("vault path %q does not exist or is not a directory", vaultPath)
 	}
 
+	// Must run BEFORE LoadConfig and NewIndexer: LoadConfig returns defaults for
+	// a directory with no .vaultmind/config.yaml, and index.Open then MkdirAlls
+	// .vaultmind/ and creates index.db. By the time anything else could object,
+	// the directory has already been promoted to a vault.
+	if err := cmdutil.RequireRealVaultIfGuessed(cmd, vaultPath, "index"); err != nil {
+		return err
+	}
+
 	cfg, err := vault.LoadConfig(vaultPath)
 	if err != nil {
 		if jsonOut {

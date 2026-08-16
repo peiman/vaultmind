@@ -136,7 +136,11 @@ func openArcFinder(arcsVault string) (distill.ArcFinder, func(), error) {
 	if info, statErr := os.Stat(arcsVault); statErr != nil || !info.IsDir() {
 		return nil, nil, fmt.Errorf("arcs vault %q does not exist or is not a directory", arcsVault)
 	}
-	if _, statErr := os.Stat(filepath.Join(arcsVault, ".vaultmind")); statErr != nil {
+	// Stricter than the guessed-vs-named rule on purpose: this path must be a
+	// real vault even when the user named it, because a propose-only reader has
+	// no business creating one. Shares cmdutil's marker check rather than
+	// spelling ".vaultmind" a third time.
+	if !cmdutil.IsVaultRoot(arcsVault) {
 		return nil, nil, fmt.Errorf("arcs vault %q is not a vault (no .vaultmind/ directory)", arcsVault)
 	}
 	vdb, err := cmdutil.OpenVaultDB(arcsVault)
