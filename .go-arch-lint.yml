@@ -132,6 +132,8 @@ components:
       - internal/discovery/**
       # VaultMind Contract-B trust-root signing core (pure: RFC 8785 JCS canonicalization, ed25519 sign/verify over canonical bytes, schema-validation gate; stdlib + jcs vendor only, no business deps):
       - internal/identity/**
+      # VaultMind release-version check (stdlib only: module-proxy query with a cached, TTL'd answer; no business deps — lets doctor say when the BINARY is behind, next to where it says the hook scripts are):
+      - internal/release/**
 
   # -------------------------------------------------------------------------
   # PROJECT-MANAGED: Business Logic Layer

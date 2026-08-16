@@ -282,6 +282,11 @@ func writeDoctorHuman(w io.Writer, result *query.DoctorResult, summaryOnly bool)
 	if err := writeHookDrift(w, &result.Issues, summaryOnly); err != nil {
 		return err
 	}
+	// Two staleness questions, adjacent on purpose: are this project's hook
+	// scripts behind the binary, and is the binary itself behind the world.
+	if err := writeUpdateNotice(w, resolvedVersion()); err != nil {
+		return err
+	}
 	if err := writeLegacyHooksJSON(w, &result.Issues); err != nil {
 		return err
 	}
