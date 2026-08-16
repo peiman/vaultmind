@@ -31,6 +31,30 @@ if [ -z "$PROMPT" ] || [ "${#PROMPT}" -lt 12 ]; then
   exit 0
 fi
 
+# Not every UserPromptSubmit payload is a human asking something. Background
+# task completions, hook output and system reminders arrive through this SAME
+# `prompt` field, and ranking notes against a task-id envelope produces pointers
+# about nothing — retrieval working correctly on garbage input. These payloads
+# are long, so the length threshold above waves them straight through.
+#
+# Measured on one real session before this guard existed: 93 injections, 48% of
+# them ranked against a prompt over 250 chars that was a <task-notification>
+# envelope — roughly 103k pointer characters of noise. Half a channel's output
+# being noise is precisely how an agent learns to skip the channel, and then
+# misses the half that mattered. That is a tooling defect, not a discipline
+# problem: the fix belongs here, not in a resolution to read more carefully.
+#
+# Matched anywhere in the prompt rather than only at the start — a notification
+# envelope is often preceded by a banner line. The ANGLE-BRACKETED form is what
+# separates a payload from prose about one, so "why does the hook skip a
+# system-reminder?" still queries; typing the brackets out does not. That is an
+# accepted, rare cost in exchange for silence on the common case.
+case "$PROMPT" in
+  *"<task-notification>"*|*"<system-reminder>"*|*"<local-command-"*|*"hook success:"*)
+    exit 0
+    ;;
+esac
+
 # Use PATH-installed vaultmind. /tmp/vaultmind is the dev-loop binary
 # (auto-rebuilt by load-persona.sh on Go-source change) and not a
 # valid fallback for general use — users install via `task install`.
