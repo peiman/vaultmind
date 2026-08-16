@@ -117,7 +117,7 @@ func RunLinks(db *index.DB, cfg LinksConfig, w io.Writer) error {
 	noteID, err := resolveNoteID(db, cfg)
 	if err != nil {
 		if cfg.JSONOutput {
-			return json.NewEncoder(w).Encode(
+			return envelope.WriteError(w,
 				envelope.Error("links "+cfg.Direction, "resolution_failed",
 					fmt.Sprintf("could not resolve %q unambiguously", cfg.Input), ""))
 		}

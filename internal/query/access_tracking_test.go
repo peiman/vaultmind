@@ -5,6 +5,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/envelope"
 	"github.com/peiman/vaultmind/internal/graph"
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/query"
@@ -92,10 +93,11 @@ func TestRunNoteGet_DoesNotRecordAccessForUnknownID(t *testing.T) {
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
-	// Unknown id — RunNoteGet writes a not_found envelope, doesn't error.
-	require.NoError(t, query.RunNoteGet(db, query.NoteGetConfig{
+	// Unknown id — RunNoteGet writes a not_found envelope AND signals failure,
+	// so the caller's exit code agrees with the envelope it just emitted.
+	require.ErrorIs(t, query.RunNoteGet(db, query.NoteGetConfig{
 		Input: "concept-does-not-exist", JSONOutput: true, VaultPath: dir,
-	}, &buf))
+	}, &buf), envelope.ErrAlreadyWritten)
 
 	after, err := index.LookupNoteAccess(db, "concept-alpha")
 	require.NoError(t, err)

@@ -29,11 +29,18 @@ func RunNoteGet(db *index.DB, cfg NoteGetConfig, w io.Writer) error {
 
 	if !resolved.Resolved {
 		if cfg.JSONOutput {
-			return json.NewEncoder(w).Encode(envelope.Error("note get", "not_found",
+			return envelope.WriteError(w, envelope.Error("note get", "not_found",
 				fmt.Sprintf("no note matches %q", cfg.Input), ""))
 		}
-		_, err = fmt.Fprintf(w, "No note found for %q\n", cfg.Input)
-		return err
+		// Text mode fails too. A missing id is a failure in both modes, and text
+		// is the half that looked like a judgement call while still being the
+		// wrong success: `vaultmind note get "$id" || fallback` silently took the
+		// found path on every typo. The friendly line is still printed; the
+		// sentinel sets the exit status without describing the failure twice.
+		if _, ferr := fmt.Fprintf(w, "No note found for %q\n", cfg.Input); ferr != nil {
+			return ferr
+		}
+		return envelope.ErrAlreadyWritten
 	}
 
 	if resolved.Ambiguous {
@@ -44,7 +51,7 @@ func RunNoteGet(db *index.DB, cfg NoteGetConfig, w io.Writer) error {
 				env.Errors[0].Candidates[i] = m.ID
 			}
 			env.Result = resolved
-			return json.NewEncoder(w).Encode(env)
+			return envelope.WriteError(w, env)
 		}
 		return fmt.Errorf("ambiguous: %d matches", len(resolved.Matches))
 	}

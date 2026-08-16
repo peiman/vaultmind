@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING (exit codes): a `--json` error envelope now exits non-zero, and so does a text-mode
+  `note get` for a missing id.** Vault-open failures were fixed in v0.3.0; every *other* failure
+  still wrote `"status": "error"` and exited **0**, so `vaultmind … --json || handle_failure` never
+  fired for a missing id, an ambiguous title, an unreadable plan, a refused path traversal, a
+  failed discovery. Text-mode `note get` printed `No note found for "x"` and exited 0 too — the
+  half that looked like a judgement call and was still the wrong success, since
+  `vaultmind note get "$id" || fallback` took the found path on every typo.
+
+  The fix is structural rather than 19 careful edits: `WriteJSONError` and the new
+  `envelope.WriteError` return the already-written sentinel themselves, so "wrote an error envelope"
+  and "reported success" stop being a state a caller can express. The sentinel moved to
+  `internal/envelope` because the command layer and the query layer both emit envelopes and cannot
+  import each other — the query layer previously had no sentinel at all, which is why `note get`
+  was affected.
+
+  Output is unchanged: the envelope and the human-readable line are exactly as before, and success
+  still exits 0. Only the exit status moves. **If you have scripts that treat these as success, they
+  will now take the failure branch — which is the point.** Six existing tests asserted the old
+  behaviour, several with comments explaining why it was correct; they now assert the contract.
+
+
 ## [0.4.1] — 2026-08-15
 
 Every fix here came out of a review pass over v0.4.0, and all but one is a defect in code or

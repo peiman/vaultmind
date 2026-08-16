@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/memory"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -67,13 +68,14 @@ func TestMemoryLinksBoth_HumanOutputUnresolvableErrors(t *testing.T) {
 }
 
 // memory links --both --json with an unresolvable ID must write a JSON error
-// envelope to stdout and return nil (so callers can parse the failure code).
+// envelope to stdout AND fail, so a caller can parse the failure code or branch
+// on the exit status and reach the same conclusion either way.
 func TestMemoryLinksBoth_JSONUnresolvableWritesErrorEnvelope(t *testing.T) {
 	vault := buildIndexedTestVault(t)
 	out, _, err := runRootCmd(t, "memory", "links", "no-such-id",
 		"--both", "--vault", vault, "--json")
-	require.NoError(t, err,
-		"JSON mode must encode errors in the envelope, not as a Go error")
+	require.ErrorIs(t, err, cmdutil.ErrAlreadyWritten,
+		"JSON mode encodes the error in the envelope AND exits non-zero")
 
 	var env struct {
 		Status string `json:"status"`
@@ -192,8 +194,8 @@ func TestMemoryPack_JSONErrorEnvelopeOnUnresolvableID(t *testing.T) {
 	vault := buildIndexedTestVault(t)
 	out, _, err := runRootCmd(t, "memory", "pack", "no-such-note",
 		"--vault", vault, "--budget", "4000", "--max-items", "8", "--json")
-	require.NoError(t, err,
-		"JSON mode must encode errors in the envelope, not return a Go error")
+	require.ErrorIs(t, err, cmdutil.ErrAlreadyWritten,
+		"JSON mode encodes the error in the envelope AND exits non-zero")
 
 	require.True(t, json.Valid(out.Bytes()),
 		"error envelope must be valid JSON")

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -37,14 +38,17 @@ func TestNoteGet_ReturnsRequestedNote(t *testing.T) {
 	assert.NotContains(t, string(env.Result), "proj-beta", "note get must return the requested note, not a related one")
 }
 
-// note get with an unknown id must surface a "not_found" error envelope —
-// a silent success or missing error code would mask typos and bad ID
-// pipelines. The process exit is left non-zero by convention elsewhere; here
-// we assert the structured signal the envelope carries.
+// note get with an unknown id must surface a "not_found" error envelope AND a
+// non-zero exit. The comment here used to claim "the process exit is left
+// non-zero by convention elsewhere" while the assertion below required NoError
+// — the convention was stated and contradicted in the same breath, and the
+// assertion is what ran. `vaultmind note get X --json || handle_failure` never
+// fired on a typo.
 func TestNoteGet_UnknownIDProducesNotFoundEnvelope(t *testing.T) {
 	vault := buildIndexedTestVault(t)
 	out, _, err := runRootCmd(t, "note", "get", "does-not-exist", "--vault", vault, "--json")
-	require.NoError(t, err) // RunNoteGet writes the error envelope; it does not return a Go error
+	require.Error(t, err, "an error envelope must be accompanied by a non-zero exit")
+	require.ErrorIs(t, err, cmdutil.ErrAlreadyWritten, "and it must not be described twice")
 
 	var env struct {
 		Status string `json:"status"`

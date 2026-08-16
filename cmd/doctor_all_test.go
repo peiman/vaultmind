@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/vault"
 	"github.com/stretchr/testify/assert"
@@ -325,7 +326,8 @@ func TestDoctorAll_ZeroVaultsJSON(t *testing.T) {
 func TestDoctorAll_MissingRootJSONError(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "nope")
 	out, _, err := runRootCmd(t, "doctor", "--all", "--root", missing, "--json")
-	require.NoError(t, err, "a discovery failure is reported in the envelope, not as a process error")
+	require.ErrorIs(t, err, cmdutil.ErrAlreadyWritten,
+		"a discovery failure is reported in the envelope AND as a non-zero exit")
 	var env struct {
 		Status string `json:"status"`
 		Errors []struct {

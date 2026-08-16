@@ -21,9 +21,9 @@
 # retrieval pattern.
 #
 # Mechanism: detect vault paths, run `vaultmind note get` synchronously
-# (captures output to detect whether the path actually resolves to an
-# indexed note — note get exits 0 even for unresolved ids, printing
-# "No note found"). On resolution, emit JSON
+# (an unresolved id exits non-zero AND prints "No note found"; the status
+# is the primary signal and the string check remains as a guard for
+# binaries older than the exit-code fix). On resolution, emit JSON
 # `hookSpecificOutput.additionalContext` to inject a header the agent
 # sees. On non-resolution (episode files, frontmatter quirks, transient
 # errors), silently allow Read — no misleading header.
