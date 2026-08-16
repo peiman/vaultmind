@@ -108,11 +108,16 @@ func canonicalHooks(vaultPath string) []canonicalHook {
 // the built-in default ($CLAUDE_PROJECT_DIR/vaultmind-identity). The scripts
 // honor VAULTMIND_VAULT as an override; an empty vaultPath leaves the
 // commands unparameterized so they fall back to that default.
-func SettingsStanza(vaultPath string) (string, error) {
+// buildHooksObject maps canonical hooks onto the lifecycle-ordered struct the
+// stanza serializes. Separate from SettingsStanza so the unhandled-event guard
+// below is reachable in a test: a guard nobody can exercise is a comment.
+//
+// Append (not assign) per event — an event can carry more than one canonical
+// group. SessionStart wires both load-persona.sh and vaultmind-health.sh, and
+// PreToolUse wires read-tracking and reach-pointers under different matchers.
+func buildHooksObject(chs []canonicalHook) (hooksObject, error) {
 	var obj hooksObject
-	// Append (not assign) per event: an event can carry more than one canonical
-	// group — SessionStart wires both load-persona.sh and vaultmind-health.sh.
-	for _, ch := range canonicalHooks(vaultPath) {
+	for _, ch := range chs {
 		switch ch.Event {
 		case "SessionStart":
 			obj.SessionStart = append(obj.SessionStart, ch.Group)
@@ -127,11 +132,21 @@ func SettingsStanza(vaultPath string) (string, error) {
 		default:
 			// A canonical hook whose event has no field here would render as
 			// nothing at all — the wiring table would list it, the stanza would
-			// omit it, and the hook would simply never fire. Fail loudly instead:
+			// omit it, and the hook would simply never fire. Fail loudly:
 			// adding an event to canonicalHooks and forgetting the field is a
-			// programming error, not a runtime condition.
-			return "", fmt.Errorf("canonical hook %q has an unhandled event %q — add it to hooksObject", ch.Script, ch.Event)
+			// programming error, not a runtime condition. Observed once already,
+			// as `"PreCompact": null`.
+			return hooksObject{}, fmt.Errorf(
+				"canonical hook %q has an unhandled event %q — add it to hooksObject", ch.Script, ch.Event)
 		}
+	}
+	return obj, nil
+}
+
+func SettingsStanza(vaultPath string) (string, error) {
+	obj, err := buildHooksObject(canonicalHooks(vaultPath))
+	if err != nil {
+		return "", err
 	}
 	out, err := json.MarshalIndent(settingsStanza{Hooks: obj}, "", "  ")
 	if err != nil {
