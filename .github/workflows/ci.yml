@@ -74,6 +74,21 @@ jobs:
         with:
           fail-on-severity: high
           deny-licenses: GPL-2.0-only, GPL-3.0-only, AGPL-3.0-only
+          # The deny list exists to keep copyleft out of the binary we ship.
+          # A GitHub Action is not in that binary: it runs on the runner, is
+          # never linked, and never reaches an adopter — so its license cannot
+          # follow the artifact. Blocking one is the gate misfiring, not the
+          # gate working.
+          #
+          # arduino/setup-task is GPL-3.0 and installs the task runner in the
+          # fuzz workflow. It has been in use since v2.0.0 without complaint;
+          # the gate only noticed because dependency-review looks at the diff,
+          # so the v3.0.0 bump read as a new dependency (#57).
+          #
+          # This is an allowance for one action, not for the ecosystem: a new
+          # GPL action still fails here and gets this same reasoning applied
+          # deliberately.
+          allow-dependencies-licenses: pkg:githubactions/arduino/setup-task
 
   # ═══════════════════════════════════════════════════════════════════
   # MULTI-OS TESTING (Main + Releases only)
