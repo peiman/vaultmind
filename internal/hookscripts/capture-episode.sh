@@ -91,4 +91,76 @@ else
     }
 fi
 
+# days_between prints whole days from $1 to $2 (both YYYY-MM-DD), or nothing when
+# either cannot be parsed. GNU and BSD date disagree on the flag for parsing a
+# date string, so both are tried: a version using only `date -j` left the gap
+# permanently "unknown" on Linux, which reads as "no history" rather than "this
+# platform was not handled".
+days_between() {
+    local a b
+    a=$(date -j -f "%Y-%m-%d" "$1" +%s 2>/dev/null || date -d "$1" +%s 2>/dev/null || true)
+    b=$(date -j -f "%Y-%m-%d" "$2" +%s 2>/dev/null || date -d "$2" +%s 2>/dev/null || true)
+    [ -n "$a" ] && [ -n "$b" ] && echo $(( (b - a) / 86400 ))
+}
+
+# append_accumulation_record answers the one question an episode cannot: did this
+# session leave anything KEPT, or only telemetry?
+#
+# Everything `episode capture` writes records what the session DID. A desk entry
+# — a note the agent stopped to write because something landed — records what it
+# UNDERSTOOD. Without this line, a run of sessions that captured perfectly and
+# distilled nothing looks identical to a run that grew the vault.
+#
+# The desk is VAULTMIND_DESK_DIR, else <vault>/journal. When neither exists the
+# section is skipped entirely rather than written with "Desk entry: NO": this
+# hook must not report an absence it never looked for.
+append_accumulation_record() {
+    local desk_dir today ep wrote last gap days
+    desk_dir="${VAULTMIND_DESK_DIR:-$vault_root/journal}"
+    [ -d "$desk_dir" ] || return 0
+
+    today=$(date +%Y-%m-%d)
+
+    # The episode just written for this session; fall back to the newest. Silent
+    # on a miss — SessionEnd must never fail over a bookkeeping addendum.
+    ep=""
+    if [ -n "$session_id" ]; then
+        ep=$(grep -rl "session_id: $session_id" "$output_dir" 2>/dev/null | head -n1 || true)
+    fi
+    [ -z "$ep" ] && ep=$(ls -1t "$output_dir"/episode-*.md 2>/dev/null | head -n1 || true)
+    [ -z "$ep" ] && return 0
+    [ -f "$ep" ] || return 0
+
+    grep -q "^## Accumulation" "$ep" 2>/dev/null && return 0   # idempotent
+
+    wrote=""
+    [ -n "$session_id" ] && wrote=$(grep -rl "$session_id" "$desk_dir" 2>/dev/null | head -n1 || true)
+    [ -z "$wrote" ] && wrote=$(ls -1 "$desk_dir/$today"-*.md 2>/dev/null | head -n1 || true)
+    last=$(ls -1 "$desk_dir" 2>/dev/null | grep -Eo '^[0-9]{4}-[0-9]{2}-[0-9]{2}' | sort | tail -1 || true)
+
+    gap="unknown"
+    if [ -n "$last" ]; then
+        days=$(days_between "$last" "$today")
+        [ -n "$days" ] && gap="$days days"
+    fi
+
+    {
+        printf '\n## Accumulation\n\n'
+        printf 'Everything above this line is telemetry — what this session DID.\n'
+        printf 'This section is the only part that says whether anything was KEPT,\n'
+        printf 'and it is written by the SessionEnd hook, not by `episode capture`.\n\n'
+        if [ -n "$wrote" ]; then
+            printf -- '- Desk entry: YES — `%s`\n' "${wrote#"$project_dir/"}"
+        else
+            printf -- '- Desk entry: **NO — this session left no transformation.** Its\n'
+            printf '  understanding is now recoverable only by re-reading the transcript,\n'
+            printf '  which is precisely the failure mode this vault exists to prevent.\n'
+        fi
+        printf -- '- Last desk entry: %s (gap: %s)\n' "${last:-never}" "$gap"
+    } >> "$ep" 2>/dev/null || true
+    return 0
+}
+
+append_accumulation_record || true
+
 exit 0
