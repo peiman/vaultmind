@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] — 2026-08-16
+
+An external review of v0.4.1 found four high-severity defects. All four are fixed here, and every
+one of them was a silent failure: something the tool did wrong while reporting that it had
+succeeded. Two were in code that earlier fixes had already touched without closing the class.
+
+**Read the Changed section before upgrading** — the exit-code fix is breaking for scripts.
+
 ### Changed
 
 - **BREAKING (exit codes): a `--json` error envelope now exits non-zero, and so does a text-mode
@@ -28,6 +36,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   still exits 0. Only the exit status moves. **If you have scripts that treat these as success, they
   will now take the failure branch — which is the point.** Six existing tests asserted the old
   behaviour, several with comments explaining why it was correct; they now assert the contract.
+
+- **The model cache moved to the platform cache directory** (`~/Library/Caches/vaultmind/models` on
+  macOS, XDG elsewhere) from `~/.vaultmind/models`, by rename — never a re-download. See the
+  upgrade note below if you run more than one version of the binary.
+
+### Fixed
+
+- **Incremental indexing no longer trades a duplicate id back and forth.** Two files claiming one
+  id made `note get <id>` return a *different note* on every `vaultmind index` — B, then A, then B
+  — while `doctor` reported `duplicate_ids: 0` throughout. `Rebuild` guarded this; `Incremental`
+  upserted through `ON CONFLICT(id) DO UPDATE SET path=…`, and because stored hashes are keyed by
+  path the dispossessed file looked new on the next run and took the id back, forever. Doctor
+  cannot see it: `notes.id` is UNIQUE, so a row-duplicate query is structurally zero. For a memory
+  system this is the worst failure available — what the agent recalls under a stable id silently
+  changes, and the health check says the vault is clean. The guard distinguishes a collision from a
+  MOVE (a rename's old path still owns the row at store time, because orphans are swept afterward),
+  and the losing file is now named in the output instead of only counted in JSON.
+- **`vaultmind index` no longer creates a vault where it was merely pointed.** Running it in a plain
+  project directory left `.vaultmind/index.db` behind and exited 0, promoting that directory to a
+  vault every later walk-up would find. The read commands were guarded in v0.3.0 and `arc
+  candidates` in v0.4.0 — both times without reaching the command that actually mints the marker.
+- **A bare `.vaultmind/` is a cache, not a vault.** The model cache used to live at
+  `~/.vaultmind/models`, so on any machine that had downloaded BGE-M3 weights the home directory
+  answered "yes" to the marker test — and the guessed-vault guard waved `$HOME` through and indexed
+  it (walk-up skips `$HOME`; the fallback to `.` did not). The marker is now the type registry at
+  `.vaultmind/config.yaml`, which `init` writes and a cache never has, and the error says which of
+  the two you are looking at. `doctor --all` stops reporting cache directories as vaults.
+- **`index --vault <dir>` on a plain directory writes the type registry** instead of a `.vaultmind/`
+  holding only `index.db`. That half-vault satisfied the old marker while carrying no schema. It
+  writes the config alone, not `init`'s scaffold — pointing at markdown you already have must not
+  drop a README and four starter notes into your notes.
+- **`Capture` returns no path when the write fails** — it previously handed back the filename it
+  *would* have written.
+
+### Upgrade note — the model cache moved
+
+If you run more than one version of the binary (a pinned hook, a second install), the **older** one
+does not know the cache moved and will start re-downloading BGE-M3 into `~/.vaultmind/models`. If
+you see an unexpected multi-GB download: upgrade the other binary, or point the old path at the new
+one (`ln -s ~/Library/Caches/vaultmind/models ~/.vaultmind/models`), or delete the leftover
+directory. Nothing is lost either way — the migrated weights are the ones in the platform cache.
 
 
 ## [0.4.1] — 2026-08-15
@@ -503,7 +552,8 @@ The initial public tag, retracted in favor of [0.1.3]. It shipped without the
 maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; do
 not install.
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/peiman/vaultmind/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/peiman/vaultmind/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/peiman/vaultmind/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/peiman/vaultmind/compare/v0.2.3...v0.3.0
