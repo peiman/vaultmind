@@ -67,7 +67,12 @@ func TestComputeBatchScores_WithAccesses(t *testing.T) {
 	})
 
 	params := experiment.DefaultActivationParams(0.2)
-	scores, features, err := experiment.ComputeBatchScores(db, []string{"note-a", "note-b", "note-c"}, params, nil)
+	// An hour after the accesses: the assertion below is about access count, and
+	// count only decides once the recency power law has flattened. Scored at
+	// time.Now() this passed or failed on whether the LogEvent calls straddled a
+	// second boundary. See TestScoreFromData_CountWinsOnlyOnceRecencyFades.
+	scoreAt := time.Now().UTC().Add(time.Hour)
+	scores, features, err := experiment.ComputeBatchScoresAt(db, []string{"note-a", "note-b", "note-c"}, params, nil, scoreAt)
 	require.NoError(t, err)
 
 	assert.Greater(t, scores["note-a"], scores["note-b"])
@@ -98,7 +103,12 @@ func TestComputeBatchScores_WithSimilarities(t *testing.T) {
 		"note-b": 0.1,
 	}
 
-	scores, feats, err := experiment.ComputeBatchScores(db, []string{"note-a", "note-b"}, params, similarities)
+	// Same reason, sharper: both notes are accessed once, so the *only* thing
+	// that should separate them is the similarity boost. At time.Now() the two
+	// accesses differ in age by a hair, and that hair is a power-law term that
+	// can outweigh delta — the test would then pass for the wrong reason, or fail.
+	scoreAt := time.Now().UTC().Add(time.Hour)
+	scores, feats, err := experiment.ComputeBatchScoresAt(db, []string{"note-a", "note-b"}, params, similarities, scoreAt)
 	require.NoError(t, err)
 
 	// note-a should score higher due to similarity boost

@@ -2,6 +2,7 @@ package experiment_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/stretchr/testify/assert"
@@ -26,9 +27,19 @@ func TestActivation_EndToEnd(t *testing.T) {
 
 	noteIDs := []string{"frequently-accessed", "rarely-accessed", "never-accessed"}
 
+	// Score an hour after the accesses, not at time.Now(). "More accesses ranks
+	// higher" is a long-run property: retrieval strength is a power law in
+	// elapsed time, so in the first moments a single newer access outranks five
+	// older ones. Event timestamps are stored at second resolution while now
+	// carries nanoseconds, so scoring at now made this test's verdict depend on
+	// whether two LogEvent calls straddled a second boundary — which on a loaded
+	// CI runner they eventually did. See
+	// TestScoreFromData_CountWinsOnlyOnceRecencyFades for the two regimes.
+	scoreAt := time.Now().UTC().Add(time.Hour)
+
 	// compressed-0.2
 	params02 := experiment.DefaultActivationParams(0.2)
-	scores02, feats02, err := experiment.ComputeBatchScores(db, noteIDs, params02, nil)
+	scores02, feats02, err := experiment.ComputeBatchScoresAt(db, noteIDs, params02, nil, scoreAt)
 	require.NoError(t, err)
 	assert.Greater(t, scores02["frequently-accessed"], scores02["rarely-accessed"])
 	assert.Equal(t, 0.0, scores02["never-accessed"])
@@ -36,13 +47,13 @@ func TestActivation_EndToEnd(t *testing.T) {
 
 	// wall-clock
 	paramsWC := experiment.DefaultActivationParams(1.0)
-	scoresWC, _, err := experiment.ComputeBatchScores(db, noteIDs, paramsWC, nil)
+	scoresWC, _, err := experiment.ComputeBatchScoresAt(db, noteIDs, paramsWC, nil, scoreAt)
 	require.NoError(t, err)
 	assert.Greater(t, scoresWC["frequently-accessed"], scoresWC["rarely-accessed"])
 
 	// none (gamma=0)
 	paramsNone := experiment.DefaultActivationParams(0.0)
-	scoresNone, _, err := experiment.ComputeBatchScores(db, noteIDs, paramsNone, nil)
+	scoresNone, _, err := experiment.ComputeBatchScoresAt(db, noteIDs, paramsNone, nil, scoreAt)
 	require.NoError(t, err)
 	// With gamma=0, only active session time counts. Storage still works.
 	assert.Greater(t, scoresNone["frequently-accessed"], 0.0)
