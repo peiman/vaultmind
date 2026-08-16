@@ -10,12 +10,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// mkVault creates a directory at rel under root and marks it as a vault by
-// adding a .vaultmind/ subdir. Returns the absolute vault path.
+// mkVault creates a directory at rel under root and makes it a vault by writing
+// the type registry. The bare .vaultmind/ directory is deliberately NOT enough:
+// the model cache lives at ~/.vaultmind/models, so a directory-only marker made
+// every home directory with downloaded weights look like a vault.
 func mkVault(t *testing.T, root, rel string) string {
 	t.Helper()
 	dir := filepath.Join(root, rel)
-	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".vaultmind"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".vaultmind"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".vaultmind", "config.yaml"), []byte("types: {}"), 0o600))
 	return dir
 }
 
@@ -33,7 +36,8 @@ func TestDiscoverVaults_FindsDirectChildren(t *testing.T) {
 
 func TestDiscoverVaults_RootItselfIsAVault(t *testing.T) {
 	root := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(root, ".vaultmind"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, ".vaultmind"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(root, ".vaultmind", "config.yaml"), []byte("types: {}"), 0o600))
 
 	got, err := discovery.DiscoverVaults(root, discovery.DefaultMaxDepth)
 	require.NoError(t, err)
@@ -141,4 +145,22 @@ func TestDiscoverVaults_IgnoresFilesNamedVaultmind(t *testing.T) {
 	got, err := discovery.DiscoverVaults(root, discovery.DefaultMaxDepth)
 	require.NoError(t, err)
 	assert.Empty(t, got, "a .vaultmind FILE (not a directory) does not make a vault")
+}
+
+// A directory holding only the model cache (~/.vaultmind/models) must not be
+// discovered as a vault. Before the registry became the marker, `doctor --all`
+// listed every home directory with downloaded BGE-M3 weights.
+func TestDiscoverVaults_ModelCacheIsNotAVault(t *testing.T) {
+	root := t.TempDir()
+	cacheOnly := filepath.Join(root, "home-like")
+	require.NoError(t, os.MkdirAll(filepath.Join(cacheOnly, ".vaultmind", "models"), 0o750))
+
+	real := filepath.Join(root, "real-vault")
+	require.NoError(t, os.MkdirAll(filepath.Join(real, ".vaultmind"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(real, ".vaultmind", "config.yaml"), []byte("types: {}"), 0o600))
+
+	found, err := discovery.DiscoverVaults(root, discovery.DefaultMaxDepth)
+	require.NoError(t, err)
+	assert.Contains(t, found, real)
+	assert.NotContains(t, found, cacheOnly, "a cache directory is not a vault")
 }

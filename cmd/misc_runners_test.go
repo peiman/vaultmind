@@ -466,8 +466,11 @@ func TestIndex_GuessedNonVaultRefusesAndLeavesNoMarker(t *testing.T) {
 }
 
 // The escape hatch stays open: naming a directory is how you deliberately turn
-// one into a vault, and `init` is not the only way people do it.
-func TestIndex_NamedNonVaultStillCreates(t *testing.T) {
+// one into a vault, and `init` is not the only way people do it. But it must
+// become a REAL vault — with the type registry — not a .vaultmind/ holding only
+// index.db. That half-vault satisfied the old marker test while carrying no
+// schema, which is how a bare .vaultmind/ became ambiguous with the model cache.
+func TestIndex_NamedNonVaultBecomesARealVault(t *testing.T) {
 	t.Setenv("VAULTMIND_VAULT", "")
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "note.md"),
@@ -475,8 +478,39 @@ func TestIndex_NamedNonVaultStillCreates(t *testing.T) {
 
 	_, _, err := runRootCmd(t, "index", "--vault", dir)
 	require.NoError(t, err)
-	_, statErr := os.Stat(filepath.Join(dir, ".vaultmind"))
-	assert.NoError(t, statErr, "a named directory may still become a vault")
+	assert.FileExists(t, filepath.Join(dir, ".vaultmind", "config.yaml"),
+		"a named directory becomes a vault with its registry, not a bare marker")
+
+	// init's scaffold must NOT be dropped into someone's existing notes: those
+	// starter notes would index as real notes.
+	assert.NoFileExists(t, filepath.Join(dir, "README.md"), "no scaffold in an existing notes folder")
+	assert.NoDirExists(t, filepath.Join(dir, "arcs"))
+
+	// And having become a vault, it now works without --vault.
+	t.Chdir(dir)
+	_, _, err = runRootCmd(t, "index")
+	require.NoError(t, err, "the registry it just wrote is what makes the guessed path legal")
+}
+
+// THE case this class exists for. The tool keeps its model cache at
+// ~/.vaultmind/models, so a bare-marker test answers "yes" for any home
+// directory that has downloaded BGE-M3 weights — and the guessed-vault guard,
+// whose entire job is refusing a directory the user never chose, waved $HOME
+// through and indexed it. Reproduced live 2026-08-16: two private notes indexed,
+// exit 0, no warning.
+func TestIndex_ModelCacheDirIsNotAVault(t *testing.T) {
+	t.Setenv("VAULTMIND_VAULT", "")
+	home := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(home, ".vaultmind", "models"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(home, "secret.md"), []byte("# private"), 0o600))
+	t.Chdir(home)
+
+	_, _, err := runRootCmd(t, "index")
+	require.Error(t, err, "a model cache is not a vault")
+	assert.Contains(t, err.Error(), "cache, not a vault",
+		"and the message must say so — otherwise it reads as 'your home vault is broken'")
+	assert.NoFileExists(t, filepath.Join(home, ".vaultmind", "index.db"),
+		"nothing indexed, nothing written")
 }
 
 // Incremental index over an unchanged vault must report 0 added/updated/deleted

@@ -149,11 +149,20 @@ const vaultEnvVar = "VAULTMIND_VAULT"
 // not one. It names both ways out, because a caller in this state either has a
 // vault elsewhere or has none at all.
 func errGuessedNonVault(vaultPath string) error {
+	reason := fmt.Sprintf("no %s", vault.ConfigRelPath)
+	// A bare .vaultmind/ here is almost always the tool's own model cache —
+	// ~/.vaultmind/models — which used to satisfy the marker check and let the
+	// home directory be indexed as a vault. Say so, or the message reads as
+	// "your vault is broken" to someone whose home is simply not a vault.
+	if _, err := os.Stat(filepath.Join(vaultPath, vaultMarkerDir)); err == nil {
+		reason = fmt.Sprintf("it has a %s/ directory but no %s — that is a cache, not a vault",
+			vaultMarkerDir, vault.ConfigRelPath)
+	}
 	return fmt.Errorf(
-		"no vault found: %q is not a vault (no %s/ directory) and none was specified.\n"+
+		"no vault found: %q is not a vault (%s) and none was specified.\n"+
 			"  Point at an existing vault:  --vault <path>  (or set %s)\n"+
 			"  Create one here:             vaultmind init %s",
-		vaultPath, vaultMarkerDir, vaultEnvVar, vaultPath)
+		vaultPath, reason, vaultEnvVar, vaultPath)
 }
 
 // vaultWasNamed reports whether the caller deliberately chose this vault, via
@@ -171,12 +180,22 @@ func vaultWasNamed(cmd *cobra.Command) bool {
 	return cmd.Flags().Lookup("vault") == nil
 }
 
-// IsVaultRoot reports whether dir contains a .vaultmind/ subdirectory. Exported
-// so callers that must require a REAL vault even when the path was named — a
-// propose-only reader, say — can ask without spelling the marker themselves.
+// IsVaultRoot reports whether dir is a vault: it must hold the type registry at
+// .vaultmind/config.yaml, not merely a .vaultmind/ directory.
+//
+// The bare-directory test was wrong in the one place it mattered most. The tool
+// keeps its model cache at ~/.vaultmind/models, so on any machine that has
+// downloaded BGE-M3 weights the marker exists in the home directory — and the
+// guessed-vault guard, whose whole job is to refuse a directory the user never
+// chose, waved $HOME through and indexed it. Walk-up skips $HOME; the fallback
+// to "." did not. A registry is written by `init` (or by `index` when a vault is
+// named), never by a cache.
+//
+// Exported so callers that must require a REAL vault even when the path was
+// named — a propose-only reader, say — can ask without spelling the path.
 func IsVaultRoot(dir string) bool {
-	info, err := os.Stat(filepath.Join(dir, vaultMarkerDir))
-	return err == nil && info.IsDir()
+	info, err := os.Stat(filepath.Join(dir, filepath.FromSlash(vault.ConfigRelPath)))
+	return err == nil && !info.IsDir()
 }
 
 // RequireRealVaultIfGuessed enforces the guessed-vs-named rule on its own, for

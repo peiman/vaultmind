@@ -123,6 +123,19 @@ func newVaultCmd(t *testing.T, jsonOut bool) (*cobra.Command, *bytes.Buffer) {
 func TestRequireRealVaultIfGuessed(t *testing.T) {
 	realVault := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(realVault, ".vaultmind"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(realVault, ".vaultmind", "config.yaml"), []byte("types: {}"), 0o600))
+
+	// A directory holding only the model cache is NOT a vault, however much it
+	// looks like one — this is the $HOME case the whole change exists for.
+	cacheOnly := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(cacheOnly, ".vaultmind", "models"), 0o750))
+	t.Run("model cache is refused, and says why", func(t *testing.T) {
+		t.Setenv("VAULTMIND_VAULT", "")
+		cmd, _ := newVaultCmd(t, false)
+		err := cmdutil.RequireRealVaultIfGuessed(cmd, cacheOnly, "index")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "cache, not a vault")
+	})
 
 	t.Run("guessed non-vault is refused", func(t *testing.T) {
 		t.Setenv("VAULTMIND_VAULT", "")

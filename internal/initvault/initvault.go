@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/peiman/vaultmind/internal/schema"
+	"github.com/peiman/vaultmind/internal/vault"
 )
 
 //go:embed all:templates
@@ -25,6 +26,37 @@ var templates embed.FS
 type Result struct {
 	VaultPath  string
 	FilesAdded int
+}
+
+// WriteConfigOnly writes the type registry into an existing directory, creating
+// .vaultmind/ if needed, and reports whether it wrote anything. It is a no-op
+// when a config is already there.
+//
+// This is the path for "index a directory of markdown I already have". Init
+// would also drop a README and four starter notes in, which then index AS notes
+// — fine for a fresh vault, wrong for someone's existing notes folder. Without
+// it, `index --vault <plain-dir>` created a .vaultmind/ holding only index.db:
+// a directory that looked like a vault to the old marker check while carrying
+// no registry, which is the same implicit-create the guessed-path guard exists
+// to end.
+func WriteConfigOnly(vaultPath string) (bool, error) {
+	cfgPath := filepath.Join(vaultPath, filepath.FromSlash(vault.ConfigRelPath))
+	if _, err := os.Stat(cfgPath); err == nil {
+		return false, nil
+	} else if !os.IsNotExist(err) {
+		return false, fmt.Errorf("stat %s: %w", cfgPath, err)
+	}
+	body, err := templates.ReadFile("templates/" + vault.ConfigRelPath)
+	if err != nil {
+		return false, fmt.Errorf("read config template: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o750); err != nil {
+		return false, fmt.Errorf("create %s: %w", filepath.Dir(cfgPath), err)
+	}
+	if err := os.WriteFile(cfgPath, body, 0o600); err != nil {
+		return false, fmt.Errorf("write %s: %w", cfgPath, err)
+	}
+	return true, nil
 }
 
 // Init scaffolds a fresh vault at vaultPath. The directory must not
