@@ -78,10 +78,26 @@ VAULTMIND=$(command -v vaultmind)
 LOG_DIR="${HOME}/.vaultmind/reach-hook"
 mkdir -p "$LOG_DIR" 2>/dev/null
 
+# Bound the query so a slow answer never delays the tool call this hook is
+# standing in front of. `timeout` is GNU coreutils: every Linux box has it, NO
+# stock macOS does — it arrives via Homebrew, as `timeout` or `gtimeout`.
+#
+# This script hardcoded `timeout 10`. On a stock Mac that command did not exist,
+# the substitution came back empty, and the hook logged
+# `"matched":true,"injected":false` — the same line it writes when the vault
+# genuinely had nothing to say. Silent because a binary was missing, recorded as
+# silent by choice. Resolve the binary; run unbounded when there is none.
+TIMEOUT_CMD=""
+if command -v timeout >/dev/null 2>&1; then
+  TIMEOUT_CMD="timeout ${VAULTMIND_HOOK_QUERY_TIMEOUT:-10}"
+elif command -v gtimeout >/dev/null 2>&1; then
+  TIMEOUT_CMD="gtimeout ${VAULTMIND_HOOK_QUERY_TIMEOUT:-10}"
+fi
+
 # Same relevance floor as vault-recall.sh: --quiet-on-no-match means an
 # off-domain reach prints nothing rather than pointing at whatever ranked least
 # badly. max-items 2 because this fires mid-task, where attention is scarcest.
-POINTERS=$(VAULTMIND_CALLER=vaultmind-reach-hook timeout 10 "$VAULTMIND" ask "$QUERY" \
+POINTERS=$(VAULTMIND_CALLER=vaultmind-reach-hook $TIMEOUT_CMD "$VAULTMIND" ask "$QUERY" \
   --vault "$VAULT_PATH" \
   --max-items 2 \
   --budget 900 \
