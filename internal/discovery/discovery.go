@@ -8,12 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-)
 
-// vaultMarker is the subdirectory whose presence marks a directory as a
-// VaultMind vault root. Same marker the rest of the tool keys off
-// (vault.LoadConfig reads .vaultmind/config.yaml).
-const vaultMarker = ".vaultmind"
+	"github.com/peiman/vaultmind/internal/vault"
+)
 
 // DefaultMaxDepth bounds how deep DiscoverVaults walks below the root. A small
 // bound keeps discovery fast and prevents an accidental walk of an enormous
@@ -81,9 +78,14 @@ func walk(dir string, depth, maxDepth int, found *[]string) error {
 	return nil
 }
 
-// isVault reports whether dir contains a .vaultmind/ SUBDIRECTORY. A file named
-// .vaultmind does not qualify the directory as a vault.
+// isVault reports whether dir holds the type registry at .vaultmind/config.yaml.
+//
+// The bare .vaultmind/ directory is not sufficient: the model cache lives at
+// ~/.vaultmind/models, so a directory test reported every home directory with
+// downloaded weights as a vault — and `doctor --all` duly listed it. A registry
+// is written by `init`, or by `index` when a vault is explicitly named; a cache
+// never carries one.
 func isVault(dir string) bool {
-	info, err := os.Stat(filepath.Join(dir, vaultMarker))
-	return err == nil && info.IsDir()
+	info, err := os.Stat(filepath.Join(dir, filepath.FromSlash(vault.ConfigRelPath)))
+	return err == nil && !info.IsDir()
 }

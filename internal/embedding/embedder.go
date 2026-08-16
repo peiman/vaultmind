@@ -5,6 +5,9 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+
+	"github.com/peiman/vaultmind/internal/xdg"
+	"github.com/rs/zerolog/log"
 )
 
 // Default model configuration for the all-MiniLM-L6-v2 embedder.
@@ -15,13 +18,70 @@ const (
 	DefaultOnnxFilePath = "onnx/model.onnx"
 )
 
-// DefaultCacheDir returns the default model cache directory (~/.vaultmind/models).
-func DefaultCacheDir() string {
+// legacyCacheDir is where model weights used to live: ~/.vaultmind/models.
+//
+// That put the tool's own cache behind the vault marker, so every home directory
+// that had ever downloaded weights answered "yes" to "is this a vault?" — and
+// the guessed-vault guard, whose job is refusing directories the user never
+// chose, waved $HOME through and indexed it. Making the type registry the marker
+// fixes the bug; moving the cache out is what stops the ambiguity existing.
+func legacyCacheDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		home = "."
 	}
 	return filepath.Join(home, ".vaultmind", "models")
+}
+
+// DefaultCacheDir returns the model cache directory — the XDG cache dir.
+//
+// Weights are ~2.2 GB, so relocating must never mean re-downloading. On first
+// use an existing legacy cache is renamed into place: instant when both live
+// under $HOME, as they normally do. If the rename fails (separate filesystem,
+// permissions), the legacy directory keeps being used rather than silently
+// starting an empty cache beside a full one.
+func DefaultCacheDir() string {
+	xdgCache, err := xdg.CacheDir()
+	if err != nil {
+		return legacyCacheDir()
+	}
+	target := filepath.Join(xdgCache, "models")
+	legacy := legacyCacheDir()
+
+	migrateLegacyCache(legacy, target)
+
+	if _, statErr := os.Stat(target); statErr == nil {
+		return target
+	}
+	if _, statErr := os.Stat(legacy); statErr == nil {
+		return legacy // migration did not happen; keep using what is there
+	}
+	return target
+}
+
+// migrateLegacyCache renames the legacy cache into target. Deliberately not
+// guarded by a sync.Once: a once-per-process guard made the outcome depend on
+// which caller ran first, which is untestable and, across processes, does not
+// bound anything anyway. The stat checks below make it a cheap no-op after the
+// first success, and os.Rename is atomic — two processes racing means one wins
+// and the loser simply finds the target already in place.
+func migrateLegacyCache(legacy, target string) {
+	if _, err := os.Stat(target); err == nil {
+		return // already migrated
+	}
+	if _, err := os.Stat(legacy); err != nil {
+		return // nothing to move
+	}
+	if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
+		log.Debug().Err(err).Msg("model cache migration skipped; using the legacy directory")
+		return
+	}
+	if err := os.Rename(legacy, target); err != nil {
+		log.Debug().Err(err).Msg("model cache migration skipped; using the legacy directory")
+		return
+	}
+	log.Info().Str("from", legacy).Str("to", target).
+		Msg("moved the model cache out of the vault-marker directory")
 }
 
 // DefaultHugotConfig returns the standard HugotConfig for all-MiniLM-L6-v2.

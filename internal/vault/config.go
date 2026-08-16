@@ -9,6 +9,16 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// ConfigRelPath is the vault's type registry, relative to the vault root, in
+// slash form. Its presence is what makes a directory a vault.
+//
+// The marker used to be the .vaultmind/ directory alone, which is wrong in the
+// one place it matters most: the model cache lives at ~/.vaultmind/models, so on
+// any machine that has downloaded BGE-M3 weights a bare-directory test answers
+// "yes" for the home directory. A registry is written by `init` (or by `index`
+// when a vault is explicitly named); a cache never carries one.
+const ConfigRelPath = ".vaultmind/config.yaml"
+
 // Config represents the full .vaultmind/config.yaml
 type Config struct {
 	Vault  VaultConfig        `yaml:"vault"`
@@ -81,7 +91,7 @@ func LoadConfig(vaultRoot string) (*Config, error) {
 		},
 	}
 
-	configPath := filepath.Join(vaultRoot, ".vaultmind", "config.yaml")
+	configPath := filepath.Join(vaultRoot, filepath.FromSlash(ConfigRelPath))
 	cleanPath := filepath.Clean(configPath)
 
 	data, err := os.ReadFile(cleanPath)

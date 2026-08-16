@@ -14,6 +14,7 @@ import (
 	"github.com/peiman/vaultmind/internal/envelope"
 	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/index"
+	"github.com/peiman/vaultmind/internal/initvault"
 	"github.com/peiman/vaultmind/internal/vault"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -73,6 +74,27 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 	// the directory has already been promoted to a vault.
 	if err := cmdutil.RequireRealVaultIfGuessed(cmd, vaultPath, "index"); err != nil {
 		return err
+	}
+
+	// A named directory that is not yet a vault becomes one properly — with the
+	// type registry — instead of getting a .vaultmind/ holding only index.db.
+	// That half-vault satisfied the old marker check while carrying no schema,
+	// which is the same implicit create the guard above exists to end; it is also
+	// what made a bare .vaultmind/ ambiguous with the model cache. Writing only
+	// the config, not init's full scaffold, keeps this usable for the real case:
+	// pointing at a directory of markdown that already exists, without dropping
+	// a README and four starter notes into someone's notes.
+	if !cmdutil.IsVaultRoot(vaultPath) {
+		written, werr := initvault.WriteConfigOnly(vaultPath)
+		if werr != nil {
+			if jsonOut {
+				return cmdutil.WriteJSONError(cmd.OutOrStdout(), "index", "config_error", werr.Error())
+			}
+			return werr
+		}
+		if written {
+			log.Info().Str("vault", vaultPath).Msg("wrote .vaultmind/config.yaml — directory is now a vault")
+		}
 	}
 
 	cfg, err := vault.LoadConfig(vaultPath)
