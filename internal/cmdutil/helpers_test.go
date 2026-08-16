@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/cmdutil"
@@ -110,6 +112,51 @@ func newVaultCmd(t *testing.T, jsonOut bool) (*cobra.Command, *bytes.Buffer) {
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	return cmd, &buf
+}
+
+// The guessed-vault rule has to be callable by commands that never open a
+// VaultDB. `index` is the one that matters: it is the command that CREATES
+// .vaultmind/index.db, so it is the command that mints the marker every later
+// walk-up finds. Guarding only the readers left the writer open — the same
+// mistake fixed for `ask` in v0.3.0 and for `arc candidates` in v0.4.0, each
+// time without touching the source.
+func TestRequireRealVaultIfGuessed(t *testing.T) {
+	realVault := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(realVault, ".vaultmind"), 0o750))
+
+	t.Run("guessed non-vault is refused", func(t *testing.T) {
+		t.Setenv("VAULTMIND_VAULT", "")
+		cmd, _ := newVaultCmd(t, false)
+		err := cmdutil.RequireRealVaultIfGuessed(cmd, t.TempDir(), "index")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "--vault", "the error names the way out")
+	})
+
+	t.Run("guessed real vault is allowed", func(t *testing.T) {
+		t.Setenv("VAULTMIND_VAULT", "")
+		cmd, _ := newVaultCmd(t, false)
+		require.NoError(t, cmdutil.RequireRealVaultIfGuessed(cmd, realVault, "index"))
+	})
+
+	t.Run("named non-vault stays permissive", func(t *testing.T) {
+		t.Setenv("VAULTMIND_VAULT", "")
+		cmd, _ := newVaultCmd(t, false)
+		require.NoError(t, cmd.Flags().Set("vault", "somewhere"))
+		require.NoError(t, cmdutil.RequireRealVaultIfGuessed(cmd, t.TempDir(), "index"),
+			"naming a directory is how you deliberately make one a vault")
+	})
+
+	t.Run("json mode writes an envelope and reports already-written", func(t *testing.T) {
+		t.Setenv("VAULTMIND_VAULT", "")
+		cmd, buf := newVaultCmd(t, true)
+		err := cmdutil.RequireRealVaultIfGuessed(cmd, t.TempDir(), "index")
+		require.True(t, errors.Is(err, cmdutil.ErrAlreadyWritten))
+		var env envelope.Envelope
+		require.NoError(t, json.Unmarshal(buf.Bytes(), &env))
+		assert.Equal(t, "error", env.Status)
+		require.Len(t, env.Errors, 1)
+		assert.Equal(t, "vault_not_found", env.Errors[0].Code)
+	})
 }
 
 func TestOpenVaultDBOrWriteErr_GuessedNonVaultFailsClosed(t *testing.T) {

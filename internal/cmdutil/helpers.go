@@ -171,10 +171,35 @@ func vaultWasNamed(cmd *cobra.Command) bool {
 	return cmd.Flags().Lookup("vault") == nil
 }
 
-// isVaultRoot reports whether dir contains a .vaultmind/ subdirectory.
-func isVaultRoot(dir string) bool {
+// IsVaultRoot reports whether dir contains a .vaultmind/ subdirectory. Exported
+// so callers that must require a REAL vault even when the path was named — a
+// propose-only reader, say — can ask without spelling the marker themselves.
+func IsVaultRoot(dir string) bool {
 	info, err := os.Stat(filepath.Join(dir, vaultMarkerDir))
 	return err == nil && info.IsDir()
+}
+
+// RequireRealVaultIfGuessed enforces the guessed-vs-named rule on its own, for
+// commands that act on a vault path without going through OpenVaultDBOrWriteErr.
+// With --json set it writes the error envelope and returns ErrAlreadyWritten.
+//
+// It exists because guarding only the readers left the writer open. `index` is
+// the command that CREATES .vaultmind/index.db — the marker every later walk-up
+// discovers — so a guess there does not merely answer from the wrong vault once:
+// it promotes the directory permanently and captures every future invocation
+// from any child of it. The rule was written for `ask` in v0.3.0 and applied
+// again to `arc candidates` in v0.4.0, both times without reaching the command
+// that mints the marker.
+func RequireRealVaultIfGuessed(cmd *cobra.Command, vaultPath, commandName string) error {
+	if vaultWasNamed(cmd) || IsVaultRoot(vaultPath) {
+		return nil
+	}
+	err := errGuessedNonVault(vaultPath)
+	if isJSONOutput(cmd) {
+		_ = WriteJSONError(cmd.OutOrStdout(), commandName, "vault_not_found", err.Error())
+		return ErrAlreadyWritten
+	}
+	return err
 }
 
 // OpenVaultDBOrWriteErr opens the vault DB. On failure with --json set,
@@ -190,12 +215,7 @@ func isVaultRoot(dir string) bool {
 // path must prove it is already a vault before it is opened, while a named one
 // keeps the permissive behaviour that lets any directory serve as a vault.
 func OpenVaultDBOrWriteErr(cmd *cobra.Command, vaultPath, commandName string) (*VaultDB, error) {
-	if !vaultWasNamed(cmd) && !isVaultRoot(vaultPath) {
-		err := errGuessedNonVault(vaultPath)
-		if isJSONOutput(cmd) {
-			_ = WriteJSONError(cmd.OutOrStdout(), commandName, "vault_not_found", err.Error())
-			return nil, ErrAlreadyWritten
-		}
+	if err := RequireRealVaultIfGuessed(cmd, vaultPath, commandName); err != nil {
 		return nil, err
 	}
 
