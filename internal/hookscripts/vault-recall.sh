@@ -83,6 +83,22 @@ LOG_DIR="${HOME}/.vaultmind/userprompt-hook"
 mkdir -p "$LOG_DIR" 2>/dev/null
 TIMESTAMP=$(date +%Y%m%dT%H%M%S)
 
+# Bound the query. Claude Code kills a UserPromptSubmit hook at its own budget
+# and DISCARDS the output, so an unbounded query on a loaded machine spends the
+# whole budget and injects nothing — the turn pays and gets nothing back.
+# Better to give up early and stay silent: pointers are a courtesy, and this
+# hook is fail-open by design.
+#
+# macOS doesn't ship `timeout` — same fallback chain vault-track-read.sh uses:
+# `timeout`, then `gtimeout` (coreutils via brew), then an unbounded call.
+# VAULTMIND_HOOK_QUERY_TIMEOUT tunes it for a large vault or a slow machine.
+TIMEOUT_CMD=""
+if command -v timeout >/dev/null 2>&1; then
+  TIMEOUT_CMD="timeout ${VAULTMIND_HOOK_QUERY_TIMEOUT:-15}"
+elif command -v gtimeout >/dev/null 2>&1; then
+  TIMEOUT_CMD="gtimeout ${VAULTMIND_HOOK_QUERY_TIMEOUT:-15}"
+fi
+
 # Pointers-only ask, low max-items to keep noise bounded. VAULTMIND_CALLER
 # tags the event in the experiment DB so we can separate per-turn auto-recall
 # events from explicit user queries.
@@ -93,7 +109,7 @@ TIMESTAMP=$(date +%Y%m%dT%H%M%S)
 # instead of irrelevant pointers. It also skips the access fan-out, so
 # off-domain prompts don't reinforce the notes they happened to surface.
 ASK_ERR=$(mktemp -t vaultmind-userprompt-err.XXXXXX)
-POINTERS=$(VAULTMIND_CALLER=vaultmind-userprompt-hook "$VAULTMIND" ask "$PROMPT" \
+POINTERS=$(VAULTMIND_CALLER=vaultmind-userprompt-hook $TIMEOUT_CMD "$VAULTMIND" ask "$PROMPT" \
   --vault "$VAULT_PATH" \
   --max-items 3 \
   --budget 1500 \
