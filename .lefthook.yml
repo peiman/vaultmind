@@ -46,14 +46,21 @@ pre-push:
 
 commit-msg:
   commands:
+    # The `!` before the colon is the breaking-change marker the Conventional
+    # Commits spec defines (<type>[optional scope][!]: <description>). The regex
+    # used to omit it, so `fix(cli)!:` was REJECTED and a breaking change could
+    # only be signalled in a footer — which is where breaking changes get buried.
+    # A format that refuses its own way of shouting is fighting itself.
     conventional-commit:
       run: |
         MSG=$(head -1 {1})
-        if ! echo "$MSG" | grep -qE '^(feat|fix|docs|test|refactor|style|perf|build|ci|chore)(\(.+\))?: .+'; then
+        if ! echo "$MSG" | grep -qE '^(feat|fix|docs|test|refactor|style|perf|build|ci|chore)(\(.+\))?!?: .+'; then
           echo "❌ Commit message must follow Conventional Commits format:"
-          echo "   <type>[optional scope]: <description>"
+          echo "   <type>[optional scope][!]: <description>"
           echo ""
           echo "   Types: feat, fix, docs, test, refactor, style, perf, build, ci, chore"
+          echo "   Append ! before the colon for a breaking change (fix(cli)!: ...),"
+          echo "   and/or add a BREAKING CHANGE: footer."
           echo "   Your message: $MSG"
           exit 1
         fi
