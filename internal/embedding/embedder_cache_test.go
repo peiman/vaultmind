@@ -35,3 +35,38 @@ func TestDefaultCacheDir_MigratesLegacyWeightsInsteadOfRedownloading(t *testing.
 	assert.FileExists(t, filepath.Join(dir, "weights.onnx"), "existing weights came along")
 	assert.NoDirExists(t, legacy, "and the legacy directory is gone, so $HOME stops looking like a vault")
 }
+
+// With no legacy cache, the XDG location is used directly — the ordinary case
+// for a fresh install.
+func TestDefaultCacheDir_UsesXDGWhenThereIsNothingToMigrate(t *testing.T) {
+	xdg.SetAppName("vaultmind")
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, ".cache"))
+
+	dir := embedding.DefaultCacheDir()
+	assert.NotContains(t, dir, filepath.Join(".vaultmind", "models"))
+	assert.Contains(t, dir, "models")
+}
+
+// An already-migrated cache must not be touched again, and a legacy directory
+// left behind (by an older binary re-downloading, which does happen) must not
+// win over it.
+func TestDefaultCacheDir_PrefersTheMigratedCacheOverALingeringLegacyOne(t *testing.T) {
+	xdg.SetAppName("vaultmind")
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, ".cache"))
+
+	legacy := filepath.Join(home, ".vaultmind", "models")
+	require.NoError(t, os.MkdirAll(legacy, 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(legacy, "stale.onnx"), []byte("older binary"), 0o600))
+
+	first := embedding.DefaultCacheDir() // migrates
+	require.NoError(t, os.MkdirAll(legacy, 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(legacy, "stale.onnx"), []byte("older binary again"), 0o600))
+
+	second := embedding.DefaultCacheDir()
+	assert.Equal(t, first, second, "the migrated cache stays the answer")
+	assert.FileExists(t, filepath.Join(second, "stale.onnx"), "and still holds the migrated weights")
+}

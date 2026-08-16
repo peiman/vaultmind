@@ -492,6 +492,45 @@ func TestIndex_NamedNonVaultBecomesARealVault(t *testing.T) {
 	require.NoError(t, err, "the registry it just wrote is what makes the guessed path legal")
 }
 
+// If the registry cannot be written, say so. Proceeding would index into a
+// directory the guard refuses on the very next run, with nothing explaining why.
+func TestIndex_NamedDirThatCannotHoldARegistryReportsWhy(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	t.Setenv("VAULTMIND_VAULT", "")
+	dir := t.TempDir()
+	require.NoError(t, os.Chmod(dir, 0o555))
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o750) })
+
+	_, _, err := runRootCmd(t, "index", "--vault", dir)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), ".vaultmind", "names the path it could not create")
+	assert.Contains(t, err.Error(), "permission denied", "and the reason")
+}
+
+func TestIndex_RegistryWriteFailureIsAJSONEnvelope(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores directory permissions")
+	}
+	t.Setenv("VAULTMIND_VAULT", "")
+	dir := t.TempDir()
+	require.NoError(t, os.Chmod(dir, 0o555))
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o750) })
+
+	out, _, _ := runRootCmd(t, "index", "--vault", dir, "--json")
+	var env struct {
+		Status string `json:"status"`
+		Errors []struct {
+			Code string `json:"code"`
+		} `json:"errors"`
+	}
+	require.NoError(t, json.Unmarshal(out.Bytes(), &env))
+	assert.Equal(t, "error", env.Status)
+	require.NotEmpty(t, env.Errors)
+	assert.Equal(t, "config_error", env.Errors[0].Code)
+}
+
 // THE case this class exists for. The tool keeps its model cache at
 // ~/.vaultmind/models, so a bare-marker test answers "yes" for any home
 // directory that has downloaded BGE-M3 weights — and the guessed-vault guard,
