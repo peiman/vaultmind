@@ -56,13 +56,22 @@ func executeDataviewLint(cmd *cobra.Command, vaultPath string) (dataviewLintResu
 	}
 	defer vdb.Close()
 
-	files, err := vault.Scan(vaultPath, vdb.Config.Vault.Exclude)
+	scan, err := vault.Scan(vaultPath, vdb.Config.Vault.Exclude)
 	if err != nil {
 		return dataviewLintResult{}, "", fmt.Errorf("scanning vault: %w", err)
 	}
 
 	result := dataviewLintResult{Issues: []dataviewIssue{}}
-	for _, f := range files {
+	// A symlinked note is not linted. Reported rather than dropped: a clean
+	// report that silently covered fewer files than the vault holds is worse
+	// than a noisy one.
+	for _, rel := range scan.SkippedSymlinks {
+		result.Issues = append(result.Issues, dataviewIssue{
+			Path: rel, Rule: "symlink_skipped",
+			Message: "symlinks are not followed; this file was not linted",
+		})
+	}
+	for _, f := range scan.Files {
 		result.FilesChecked++
 		raw, readErr := os.ReadFile(f.AbsPath) //nolint:gosec // path from vault scanner
 		if readErr != nil {
