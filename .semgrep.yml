@@ -82,6 +82,7 @@ rules:
         - internal/query/doctor.go         # Reads vault .md files for content-hash drift detection (paths from DB, joined under user-provided vault root)
         - internal/hooks/install.go        # Reads/writes <project>/.claude/scripts/<embedded-script-name> — filename comes from go:embed FS, not user input; project dir is the user-provided arg (same trust tier as `vaultmind init <path>`)
         - internal/hooks/settingsfile.go   # Reads/writes <project>/.claude/settings{,.local}.json — filename is a package constant, not user input; project dir is the user-provided arg (same trust tier as internal/hooks/install.go)
+        - internal/hooks/status.go         # Reads <project>/.claude/scripts/<embedded-script-name> to compare against canonical — same trust tier as internal/hooks/install.go, and additionally REJECTS any canonical name that is not a bare filename before joining
     message: "Potential path traversal. Validate and sanitize file paths."
     languages: [go]
     severity: WARNING
