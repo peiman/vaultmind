@@ -562,3 +562,16 @@ func TestFormatIndexResult_NamesSkippedSymlinks(t *testing.T) {
 	assert.Contains(t, out, "inbox/alias.md")
 	assert.Contains(t, out, "wikilink", "say what to do instead, not just what failed")
 }
+
+// The symlink block writes three times (header, per-path, remedy line). A
+// write error on any of them must propagate rather than leave a half-printed
+// warning that reads as a complete one.
+func TestFormatIndexResult_SkippedSymlinksPropagateWriteErrors(t *testing.T) {
+	res := index.IndexAndEmbedResult{
+		Index: &index.IndexResult{SkippedSymlinks: []string{"secrets.md"}},
+	}
+	// 2nd write = the "⚠ N symlink(s) skipped" header; 3rd = the path; 4th = remedy.
+	require.Error(t, formatIndexResult(res, "", &failAfterNWriter{ok: 1}))
+	require.Error(t, formatIndexResult(res, "", &failAfterNWriter{ok: 2}))
+	require.Error(t, formatIndexResult(res, "", &failAfterNWriter{ok: 3}))
+}
