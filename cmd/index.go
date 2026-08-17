@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/internal/cmdutil"
@@ -106,7 +105,10 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	dbPath := filepath.Join(vaultPath, cfg.Index.DBPath)
+	dbPath, err := vault.ResolveInside(vaultPath, cfg.Index.DBPath)
+	if err != nil {
+		return fmt.Errorf("index db_path: %w", err)
+	}
 	idxr := index.NewIndexer(vaultPath, dbPath, cfg)
 
 	var result *index.IndexResult

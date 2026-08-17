@@ -65,7 +65,13 @@ func OpenVaultDB(vaultPath string) (*VaultDB, error) {
 		return nil, fmt.Errorf("loading config: %w", err)
 	}
 
-	dbPath := filepath.Join(vaultPath, cfg.Index.DBPath)
+	// LoadConfig already refuses an absolute or escaping db_path; this is the
+	// belt to that suspenders. index.Open creates parent directories for the
+	// path it is handed, and config is not the only way a value reaches here.
+	dbPath, err := vault.ResolveInside(vaultPath, cfg.Index.DBPath)
+	if err != nil {
+		return nil, fmt.Errorf("index db_path: %w", err)
+	}
 	db, err := index.Open(dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("opening index: %w", err)

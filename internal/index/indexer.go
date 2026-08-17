@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -615,10 +614,19 @@ func (idx *Indexer) Rebuild() (*IndexResult, error) {
 }
 
 // IndexFile re-indexes a single file by its vault-relative path.
+//
+// The path is confined here rather than trusted from the caller. The previous
+// //nolint comment asserted "relPath is vault-relative" — an invariant nothing
+// enforced, true only because every current caller happens to pass a validated
+// path. That is the state H3/H4 were in right up until someone added a caller
+// who did not.
 func (idx *Indexer) IndexFile(relPath string) error {
-	absPath := filepath.Join(idx.vaultRoot, relPath)
+	absPath, err := vault.ResolveInside(idx.vaultRoot, relPath)
+	if err != nil {
+		return fmt.Errorf("indexing %q: %w", relPath, err)
+	}
 
-	content, err := os.ReadFile(absPath) //nolint:gosec // absPath is built from vaultRoot (trusted) + relPath (vault-relative)
+	content, err := os.ReadFile(absPath) //nolint:gosec // absPath comes from vault.ResolveInside above, which returns ErrEscapesVault for anything outside the root
 	if err != nil {
 		return fmt.Errorf("reading file %q: %w", relPath, err)
 	}

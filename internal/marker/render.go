@@ -269,8 +269,25 @@ func renderAllSections(cfg RenderConfig, absPath string, raw []byte, preHash, no
 // .vaultmind/sections/{noteType}/{sectionKey}.md inside the vault.
 // Returns MutationError{Code: "template_not_found"} if the file is absent.
 func LoadSectionTemplate(vaultPath, noteType, sectionKey string) ([]byte, error) {
+	// noteType comes from the note's OWN frontmatter (extractNoteType) and
+	// sectionKey from the markers in its body. In any vault the operator did not
+	// write themselves both are attacker-controlled — and both are single path
+	// COMPONENTS, so a whitelist is the right check rather than confining the
+	// join afterwards: a type called "../../../etc" is not a legal type whatever
+	// it happens to resolve to. The `.md` suffix bounded what could be read; it
+	// never bounded where.
+	for _, seg := range []struct{ name, value string }{{"type", noteType}, {"section key", sectionKey}} {
+		if !vault.ValidSegment(seg.value) {
+			return nil, &mutation.MutationError{
+				Code:    "invalid_target",
+				Message: fmt.Sprintf("%s %q is not a valid name (letters, digits, _ and - only)", seg.name, seg.value),
+				Field:   seg.value,
+			}
+		}
+	}
+
 	tmplPath := filepath.Join(vaultPath, ".vaultmind", "sections", noteType, sectionKey+".md")
-	data, err := os.ReadFile(tmplPath) //nolint:gosec // path is constructed from trusted vault path + config values
+	data, err := os.ReadFile(tmplPath) //nolint:gosec // both segments pass vault.ValidSegment above — no separators, no dots — so the join cannot leave .vaultmind/sections
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, &mutation.MutationError{
