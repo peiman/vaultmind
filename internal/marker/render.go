@@ -9,6 +9,7 @@ import (
 
 	"github.com/peiman/vaultmind/internal/git"
 	"github.com/peiman/vaultmind/internal/mutation"
+	"github.com/peiman/vaultmind/internal/vault"
 	"gopkg.in/yaml.v3"
 )
 
@@ -52,13 +53,9 @@ type RenderResult struct {
 //  9. Atomic write (temp + rename + chmod)
 //  10. Return result
 func RenderRegion(cfg RenderConfig) (*RenderResult, error) {
-	// Step 1: Read file
-	absPath := filepath.Clean(filepath.Join(cfg.VaultPath, cfg.Target))
-
-	// Vault boundary check (I3: path traversal prevention)
-	cleanVault := filepath.Clean(cfg.VaultPath)
-	cleanAbs := filepath.Clean(absPath)
-	if !strings.HasPrefix(cleanAbs, cleanVault+string(filepath.Separator)) && cleanAbs != cleanVault {
+	// Step 1: Read file, confined to the vault (I3: path traversal prevention)
+	absPath, confineErr := vault.ResolveInside(cfg.VaultPath, cfg.Target)
+	if confineErr != nil {
 		return nil, &mutation.MutationError{
 			Code:    "path_traversal",
 			Message: fmt.Sprintf("target path %q escapes vault directory", cfg.Target),

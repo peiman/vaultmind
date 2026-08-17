@@ -8,14 +8,13 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/peiman/vaultmind/internal/vault"
 	"gopkg.in/yaml.v3"
 )
 
 func CreateNote(vaultPath string, op Operation) (*OpResult, error) {
-	absPath := filepath.Join(vaultPath, op.Path)
-	cleanVault := filepath.Clean(vaultPath)
-	cleanAbs := filepath.Clean(absPath)
-	if !strings.HasPrefix(cleanAbs, cleanVault+string(filepath.Separator)) && cleanAbs != cleanVault {
+	absPath, confineErr := vault.ResolveInside(vaultPath, op.Path)
+	if confineErr != nil {
 		return nil, &planError{Code: "path_traversal", Message: fmt.Sprintf("path %q escapes vault", op.Path)}
 	}
 	if _, err := os.Stat(absPath); err == nil {

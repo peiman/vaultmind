@@ -10,6 +10,7 @@ import (
 
 	"github.com/peiman/vaultmind/internal/git"
 	"github.com/peiman/vaultmind/internal/schema"
+	"github.com/peiman/vaultmind/internal/vault"
 	"gopkg.in/yaml.v3"
 )
 
@@ -212,12 +213,13 @@ func (m *Mutator) resolveTarget(target string) (string, ParsedNoteInfo, error) {
 		}
 	}
 
-	absPath := filepath.Clean(filepath.Join(m.VaultPath, target))
-
-	// S1: Validate resolved path stays within vault directory.
-	cleanVault := filepath.Clean(m.VaultPath)
-	cleanAbs := filepath.Clean(absPath)
-	if !strings.HasPrefix(cleanAbs, cleanVault+string(filepath.Separator)) && cleanAbs != cleanVault {
+	// S1: Validate resolved path stays within vault directory. Note this is
+	// confinement ONLY — it says nothing about the path being a symlink, and a
+	// confined symlink still writes outside. Walkers pair this with
+	// vault.SkipSymlink; this function's callers pass a target the operator
+	// named, not one discovered on disk.
+	absPath, confineErr := vault.ResolveInside(m.VaultPath, target)
+	if confineErr != nil {
 		return "", ParsedNoteInfo{}, &MutationError{
 			Code:    "path_traversal",
 			Message: fmt.Sprintf("target path %q escapes vault directory", target),
@@ -231,6 +233,12 @@ func (m *Mutator) resolveTarget(target string) (string, ParsedNoteInfo, error) {
 		}
 	}
 
+	// #nosec G304 -- absPath comes from vault.ResolveInside above, which returns
+	// ErrEscapesVault for anything outside the root (internal/vault/confine.go,
+	// tested in confine_test.go). gosec flagged this only once the check moved
+	// behind a function call: its taint analysis followed the inline
+	// filepath.Clean and cannot follow the helper. The check did not weaken —
+	// the analyzer's view of it did.
 	raw, err := os.ReadFile(absPath)
 	if err != nil {
 		return "", ParsedNoteInfo{}, &MutationError{

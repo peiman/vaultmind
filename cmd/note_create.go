@@ -16,6 +16,7 @@ import (
 	"github.com/peiman/vaultmind/internal/git"
 	"github.com/peiman/vaultmind/internal/index"
 	tmpl "github.com/peiman/vaultmind/internal/template"
+	"github.com/peiman/vaultmind/internal/vault"
 	"github.com/spf13/cobra"
 )
 
@@ -77,12 +78,9 @@ func executeNoteCreate(cmd *cobra.Command, notePath string) error {
 		return fmt.Errorf("unknown type %q (registered: %s)", noteType, strings.Join(vdb.Reg.ListTypes(), ", "))
 	}
 
-	absPath := filepath.Join(vaultPath, notePath)
-
 	// C1: Reject paths that escape the vault directory.
-	cleanVault := filepath.Clean(vaultPath)
-	cleanAbs := filepath.Clean(absPath)
-	if !strings.HasPrefix(cleanAbs, cleanVault+string(filepath.Separator)) && cleanAbs != cleanVault {
+	absPath, confineErr := vault.ResolveInside(vaultPath, notePath)
+	if confineErr != nil {
 		if jsonOut {
 			return cmdutil.WriteJSONError(cmd.OutOrStdout(), "note create", "path_traversal", fmt.Sprintf("path %q escapes vault", notePath))
 		}
