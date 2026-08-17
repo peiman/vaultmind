@@ -5,7 +5,6 @@
 //   - rollup.go: CountSessions, CountEvents, CountOutcomes, WriteRollup,
 //     MarshalJSON (all at 0%)
 //   - context.go: outcomeWindow default (OutcomeWindow == 0 branch)
-//   - telemetry.go: PromptTelemetry when reader is empty (scanner.Scan=false)
 //   - caller.go: GetSessionCaller with unknown session ID (ErrNoRows path),
 //     SessionsByUserSession with unknown user-session (returns empty)
 //   - export.go: sessionRecord full-tier fields (CallerMeta, EndedAt, Caller,
@@ -251,17 +250,6 @@ func TestSession_LogContextPackEvent_NilDataDefaultsToEmptyMap(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// telemetry.go — PromptTelemetry with empty reader (scanner.Scan returns false)
-// ---------------------------------------------------------------------------
-
-// When the reader is exhausted before a line is read, PromptTelemetry must
-// return the anonymous default rather than panicking or returning the empty string.
-func TestPromptTelemetry_EmptyReaderDefaultsToAnonymous(t *testing.T) {
-	var out bytes.Buffer
-	result := experiment.PromptTelemetry(strings.NewReader(""), &out)
-	assert.Equal(t, experiment.TelemetryAnonymous, result,
-		"empty reader should fall back to anonymous default")
-}
 
 // ---------------------------------------------------------------------------
 // caller.go — GetSessionCaller with unknown session ID (ErrNoRows path)

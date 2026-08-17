@@ -113,9 +113,23 @@ Keep the desk somewhere the agent owns outright. Use `--arcs-vault` when the des
 vaultmind arc candidates --vault ./agent-desk --arcs-vault ./agent-identity
 ```
 
-## Opt-in usage telemetry
+## The local usage log
 
-VaultMind records local retrieval events (which queries surfaced which notes) to power activation-weighted reranking. Sharing that data is **opt-in and sanitized** — no note bodies, no content, no query text; only counts and identifiers — for anyone who wants to contribute anonymized retrieval signal back to the project. It is off by default and never leaves your machine unless you run the export.
+VaultMind keeps a local SQLite log of retrieval events — which queries surfaced which notes — because that history is what powers activation-weighted reranking: notes you actually open become more retrievable. It is on by default, and it is worth knowing exactly what that means.
+
+**On your disk, by default**, at `<XDG_DATA_HOME>/vaultmind/experiments.db`: the **full query text**, the vault path, the note ids returned, and caller metadata (`$USER`, hostname, `CLAUDE_PROJECT_DIR`). The file is created `0600`. Nothing is transmitted — VaultMind has no uploader, and `doctor`'s once-a-day version check is the only network call it makes on its own (see "The one network call").
+
+**`experiments.telemetry` chooses what leaves**, not what is written:
+
+| | writes locally | `vaultmind export` emits |
+|---|---|---|
+| `anonymous` *(default)* | everything above | query text, vault path, note ids and paths **stripped** |
+| `full` | everything above | everything |
+| `off` | **nothing** — the database is never opened | nothing to export |
+
+So `anonymous` means *anonymous when shared*. It is not a redaction at write time, and a reader who opens the database will find their queries in it. If that is not what you want, `experiments.telemetry: off` writes nothing at all — at the cost of activation reranking, which has no history to weight.
+
+Sharing remains something you do on purpose: there is no automatic upload, and `export` only writes a file.
 
 ## The one network call
 

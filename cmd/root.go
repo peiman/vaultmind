@@ -22,7 +22,6 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"github.com/mattn/go-isatty"
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/.ckeletin/pkg/logger"
 	"github.com/peiman/vaultmind/.ckeletin/pkg/output"
@@ -269,28 +268,18 @@ var RootCmd = &cobra.Command{
 		} else if expDB, expErr := openExperimentDB(); expErr != nil {
 			log.Debug().Err(expErr).Msg("Experiment DB unavailable")
 		} else {
-			// Prompt for telemetry on first run (interactive TTY only)
-			if telemetry == "" {
-				if firstRun, _ := expDB.IsFirstRun(); firstRun {
-					if isatty.IsTerminal(os.Stdin.Fd()) {
-						telemetry = experiment.PromptTelemetry(os.Stdin, cmd.ErrOrStderr())
-						viper.Set(config.KeyExperimentsTelemetry, telemetry)
-						if cf := viper.ConfigFileUsed(); cf != "" {
-							if err := persistTelemetryChoice(telemetry, cf); err != nil {
-								log.Debug().Err(err).Msg("Failed to persist telemetry choice to config file")
-							}
-						}
-						if telemetry == experiment.TelemetryOff {
-							log.Debug().Msg("User chose telemetry: off")
-							_ = expDB.Close()
-							return nil
-						}
-					} else {
-						log.Debug().Msg("Non-interactive session, defaulting to anonymous telemetry")
-					}
-				}
-			}
-
+			// There was a first-run consent prompt here. It could never fire: it
+			// required experiments.telemetry to be empty, and the config registry
+			// defaults it to "anonymous", so the condition was false on every run
+			// this binary has ever made. Dead since it was written.
+			//
+			// Deleted rather than repaired, because what it asked was also wrong.
+			// It offered "[1] Anonymous usage statistics" and "[2] Full data
+			// sharing" for a feature that shares nothing — there is no uploader,
+			// and anonymous and full write identical rows to a local SQLite file.
+			// A consent dialog for a transmission that does not happen teaches the
+			// wrong thing about what the tool does. The README documents the local
+			// log instead, which is the thing that is actually true.
 			if recovered, recErr := expDB.RecoverOrphans(); recErr != nil {
 				log.Debug().Err(recErr).Msg("Failed to recover orphan sessions")
 			} else if recovered > 0 {

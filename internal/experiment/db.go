@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/rs/zerolog/log"
 	_ "modernc.org/sqlite" // pure-Go SQLite driver
 )
 
@@ -165,6 +166,16 @@ func Open(dbPath string) (*DB, error) {
 	if err := d.applyPragmas(); err != nil {
 		_ = sqlDB.Close()
 		return nil, fmt.Errorf("applying pragmas: %w", err)
+	}
+	// 0600 to match the fingerprint file, which already had it. This database
+	// holds full query text, vault paths, note ids and caller metadata
+	// ($USER, hostname, CLAUDE_PROJECT_DIR) — the most identifying artifact the
+	// tool writes — and SQLite creates it 0644, world-readable. Applied after
+	// the connection exists so the file is certain to be there; a failure is
+	// logged rather than fatal, because a health-adjacent permission fix must
+	// not be the reason a command cannot run.
+	if err := os.Chmod(cleanPath, 0o600); err != nil {
+		log.Debug().Err(err).Str("path", cleanPath).Msg("could not tighten experiment DB permissions")
 	}
 	if err := d.migrate(); err != nil {
 		_ = sqlDB.Close()
