@@ -83,20 +83,9 @@ func Scan(vaultRoot string, excludes []string) (ScanResult, error) {
 			return fmt.Errorf("computing relative path: %w", relErr)
 		}
 
-		// Never follow a symlink. WalkDir does not descend into directory
-		// symlinks, but it DOES hand back a file symlink named *.md — and
-		// os.ReadFile follows it. A note `secrets.md -> ~/.ssh/id_rsa` was
-		// hashed, parsed, stored in FTS, embedded, returned by `ask`, and
-		// exported: untrusted vault content as a read primitive against the
-		// operator's filesystem, with the result persisted in index.db.
-		//
-		// Skipped whatever the target is, including a target inside the vault.
-		// Resolving first and confining after would mean an EvalSymlinks result
-		// that can change before the read (check-then-read), and would let one
-		// file enter the index under two paths — the duplicate-id class we just
-		// closed. `d.Type()` is Lstat-derived, so this is the link itself.
-		if d.Type()&fs.ModeSymlink != 0 {
-			skippedSymlinks = append(skippedSymlinks, relPath)
+		// Never follow a symlink; SkipSymlink carries the whole reasoning.
+		if rel, skip := SkipSymlink(absRoot, path, d); skip {
+			skippedSymlinks = append(skippedSymlinks, rel)
 			return nil
 		}
 

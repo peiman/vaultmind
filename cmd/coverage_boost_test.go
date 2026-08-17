@@ -651,3 +651,22 @@ func TestFrontmatterMerge_TooFewArgs_Error(t *testing.T) {
 	_, _, err := runRootCmd(t, "frontmatter", "merge", "--vault", vault)
 	require.Error(t, err)
 }
+
+// "Scanned N files" must not count a file that was never opened. A *.md symlink
+// is passed over whatever it points at, so its frontmatter is unexamined and
+// the operator has to be told which one.
+func TestFrontmatterFix_NamesSkippedSymlinks(t *testing.T) {
+	vaultDir := buildIndexedTestVault(t)
+
+	outside := t.TempDir()
+	target := filepath.Join(outside, "elsewhere.md")
+	require.NoError(t, os.WriteFile(target,
+		[]byte("---\nid: not-yours\ntype: concept\ntitle: Outside\n---\nBody.\n"), 0o644))
+	require.NoError(t, os.Symlink(target, filepath.Join(vaultDir, "linked.md")))
+
+	out, _, err := runRootCmd(t, "frontmatter", "fix", "--vault", vaultDir)
+	require.NoError(t, err)
+	text := out.String()
+	assert.Contains(t, text, "1 symlink(s) skipped")
+	assert.Contains(t, text, "linked.md")
+}
