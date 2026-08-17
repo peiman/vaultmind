@@ -290,6 +290,9 @@ func writeDoctorHuman(w io.Writer, result *query.DoctorResult, summaryOnly bool)
 	if err := writeLegacyHooksJSON(w, &result.Issues); err != nil {
 		return err
 	}
+	if err := writeIndexStatusUnknown(w, result); err != nil {
+		return err
+	}
 	if err := writeIndexReconciliation(w, &result.Issues, summaryOnly); err != nil {
 		return err
 	}
@@ -430,6 +433,27 @@ func writeStaleIndex(w io.Writer, issues *query.DoctorIssues, summaryOnly bool) 
 		}
 	}
 	return nil
+}
+
+// writeIndexStatusUnknown prints the one state the rest of the report cannot
+// express: the disk reconciliation did not run at all.
+//
+// Silence is not available here. Every other index finding prints a ⚠ line and
+// says nothing when the vault is healthy — so a silent "unknown" is
+// indistinguishable from a clean bill of health, which is exactly the collapse
+// (could-not-check read as checked-and-current) that this whole section exists
+// to undo. The status line appears ONLY in that state; a current or stale
+// vault is already described by the lines around it.
+func writeIndexStatusUnknown(w io.Writer, result *query.DoctorResult) error {
+	if result.IndexStatus != query.IndexStatusUnknown {
+		return nil
+	}
+	_, err := fmt.Fprintf(w,
+		"⚠ Index status: unknown — the vault could not be reconciled against disk\n"+
+			"  %s\n"+
+			"  stale, orphaned, unindexed and duplicate-id findings below are NOT reliable\n",
+		result.IndexStatusReason)
+	return err
 }
 
 // writeIndexReconciliation prints the other three ways the index can stop

@@ -187,10 +187,17 @@ func SurfacedIssueCounts(issues DoctorIssues) (errors, warnings int) {
 		issues.PathPseudoIDLinks // dead links: target file does not exist
 
 	// Warnings — surfaced advisories the vault still functions despite.
+	//
+	// Orphaned and unindexed belong here for the same reason StaleIndex does:
+	// the report prints a ⚠ line for each, and a rollup that then says "0
+	// warnings" is the H1 shape inverted — a finding on the page and a summary
+	// that denies it. Anything printed as an issue must be counted as one.
 	warnings = issues.UnresolvedLinks +
 		issues.BrokenReferences +
 		issues.ObsidianIncompatibleLinks +
 		issues.StaleIndex +
+		issues.OrphanedEntries +
+		issues.UnindexedFiles +
 		issues.HookDrift
 	if issues.LegacyHooksJSON {
 		warnings++

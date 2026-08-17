@@ -246,3 +246,45 @@ func TestVaultStatus_IndexStaleMatchesDoctor(t *testing.T) {
 	assert.Equal(t, doc.IndexStatus, st.IndexStatus)
 	assert.True(t, st.IndexStale, "IndexStale was declared and never written")
 }
+
+// A ⚠ line on the page and "0 warnings" at the bottom is H1 inverted: the
+// finding is printed and the summary denies it. Anything the report surfaces
+// as an issue must be counted as one.
+func TestSurfacedIssueCounts_CountsOrphanedAndUnindexed(t *testing.T) {
+	errs, warns := query.SurfacedIssueCounts(query.DoctorIssues{OrphanedEntries: 2})
+	assert.Equal(t, 0, errs)
+	assert.Equal(t, 2, warns, "an orphaned entry prints a warning; the rollup must say so")
+
+	errs, warns = query.SurfacedIssueCounts(query.DoctorIssues{UnindexedFiles: 3})
+	assert.Equal(t, 0, errs)
+	assert.Equal(t, 3, warns)
+
+	// And together with the two that already counted, so nothing double-counts
+	// or drops when they co-occur.
+	errs, warns = query.SurfacedIssueCounts(query.DoctorIssues{
+		StaleIndex: 1, OrphanedEntries: 2, UnindexedFiles: 3, DuplicateIDs: 4,
+	})
+	assert.Equal(t, 4, errs, "duplicate ids are an integrity error, not an advisory")
+	assert.Equal(t, 6, warns, "1 stale + 2 orphaned + 3 unindexed")
+}
+
+// The end-to-end version: a broken vault must not produce a report whose
+// bottom line says the vault is fine.
+func TestDoctor_RollupMatchesTheFindingsItPrints(t *testing.T) {
+	vaultDir, db := indexedVault(t, map[string]string{
+		"kept.md": note("ref-kept", "Kept"),
+		"gone.md": note("ref-gone", "Gone"),
+	})
+	require.NoError(t, os.Remove(filepath.Join(vaultDir, "gone.md")))
+	require.NoError(t, os.WriteFile(filepath.Join(vaultDir, "fresh.md"),
+		[]byte(note("ref-fresh", "Fresh")), 0o644))
+
+	res, err := query.Doctor(db, vaultDir, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, res.Issues.OrphanedEntries)
+	require.Equal(t, 1, res.Issues.UnindexedFiles)
+
+	_, warns := query.ResultSurfacedIssueCounts(res)
+	assert.Equal(t, 2, warns,
+		"doctor prints two warnings here; a rollup saying 0 would deny its own output")
+}

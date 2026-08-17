@@ -78,3 +78,36 @@ func TestWriteIndexReconciliation_PropagatesWriteErrors(t *testing.T) {
 			"write failure at position %d must propagate", ok)
 	}
 }
+
+// "Could not check" must be visible. Every other index finding prints only when
+// something is wrong and says nothing otherwise, so a silent unknown is
+// indistinguishable from a clean bill of health — the exact collapse the
+// reconciliation exists to undo.
+func TestWriteIndexStatusUnknown_SaysSoAndWhy(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, writeIndexStatusUnknown(&buf, &query.DoctorResult{
+		IndexStatus:       query.IndexStatusUnknown,
+		IndexStatusReason: "scanning vault: lstat /gone: no such file or directory",
+	}))
+	out := buf.String()
+	assert.Contains(t, out, "unknown")
+	assert.Contains(t, out, "no such file or directory", "the reason, not just the state")
+	assert.Contains(t, out, "NOT reliable",
+		"the findings below it are absences of evidence, not evidence of absence")
+}
+
+// A current or stale vault is already described by the lines around it; a
+// status line on every run is noise that trains the reader to skip the section.
+func TestWriteIndexStatusUnknown_SilentWhenTheCheckRan(t *testing.T) {
+	for _, status := range []string{query.IndexStatusCurrent, query.IndexStatusStale} {
+		var buf bytes.Buffer
+		require.NoError(t, writeIndexStatusUnknown(&buf, &query.DoctorResult{IndexStatus: status}))
+		assert.Empty(t, buf.String(), "status %q needs no banner", status)
+	}
+}
+
+func TestWriteIndexStatusUnknown_PropagatesWriteErrors(t *testing.T) {
+	require.Error(t, writeIndexStatusUnknown(&failAfterNWriter{ok: 0}, &query.DoctorResult{
+		IndexStatus: query.IndexStatusUnknown, IndexStatusReason: "boom",
+	}))
+}

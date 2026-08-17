@@ -31,10 +31,14 @@ type StatusResult struct {
 	// IndexStatusReason is set only when IndexStatus is "unknown": what stopped
 	// the disk reconciliation. Absent otherwise. Mirrors DoctorResult so the two
 	// commands report an unavailable check the same way.
-	IndexStatusReason string                    `json:"index_status_reason,omitempty"`
-	IndexStale        bool                      `json:"index_stale"`
-	Types             map[string]StatusTypeInfo `json:"types"`
-	IssuesSummary     StatusIssuesSummary       `json:"issues_summary"`
+	IndexStatusReason string `json:"index_status_reason,omitempty"`
+	// IndexStale is meaningful ONLY when IndexStatus is "current" or "stale".
+	// A bool cannot express "not checked", so when IndexStatus is "unknown"
+	// this field is false for lack of a third state, NOT because the index is
+	// fresh. Branch on IndexStatus first.
+	IndexStale    bool                      `json:"index_stale"`
+	Types         map[string]StatusTypeInfo `json:"types"`
+	IssuesSummary StatusIssuesSummary       `json:"issues_summary"`
 }
 
 // VaultStatus combines doctor, schema, and validation into a single cold-start response.
@@ -77,6 +81,11 @@ func VaultStatus(db *index.DB, vaultPath string, cfg *vault.Config, reg *schema.
 		// defaulting to "current" is the bug this replaced.
 		result.IndexStatus = IndexStatusUnknown
 		result.IndexStatusReason = err.Error()
+		// IndexStale stays FALSE only because it is a bool and has no third
+		// state — which is precisely why it must not be read on this path.
+		// index_status is the field that can say "unknown"; a consumer reading
+		// index_stale alone would take false to mean healthy, so the two are
+		// documented as a pair on StatusResult.IndexStale.
 		return result, nil //nolint:nilerr // degraded section, reported via IndexStatus
 	}
 	result.IndexStatus = truth.Status()
