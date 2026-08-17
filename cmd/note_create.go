@@ -94,7 +94,13 @@ func executeNoteCreate(cmd *cobra.Command, notePath string) error {
 	fields := parseFieldSlice(fieldSlice)
 
 	td, _ := vdb.Reg.GetTypeDef(noteType)
-	templatePath := filepath.Join(vaultPath, td.Template)
+	// The registry's template: value is read from disk. LoadConfig refuses an
+	// absolute or escaping value; confining the join keeps the guarantee local
+	// to the place that opens the file.
+	templatePath, err := vault.ResolveInside(vaultPath, td.Template)
+	if err != nil {
+		return fmt.Errorf("type %q template: %w", noteType, err)
+	}
 
 	result, err := tmpl.Process(tmpl.ProcessConfig{
 		VaultPath:      vaultPath,

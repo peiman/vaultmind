@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -110,5 +111,53 @@ func LoadConfig(vaultRoot string) (*Config, error) {
 		cfg.Vault.Exclude = append([]string{}, defaultExcludes...)
 	}
 
+	if err := validateConfigPaths(cfg); err != nil {
+		return nil, fmt.Errorf("in %s: %w", cleanPath, err)
+	}
+
 	return cfg, nil
+}
+
+// validateConfigPaths refuses config values that get joined onto the vault root
+// and then opened: the index database (whose parent directories are created for
+// it) and each type's template (which is read).
+//
+// Refused at LOAD rather than at each use. ResolveInside catches an escape
+// downstream, but by then the error describes a resolved path the operator
+// never wrote, surfacing inside a command that is nominally about something
+// else. Naming the config key is the difference between a fixable message and a
+// confusing one.
+//
+// Absolute values are refused even though they do NOT escape: filepath.Join
+// re-roots an absolute second argument under the first, so `/tmp/index.db`
+// silently becomes `<vault>/tmp/index.db`. Confinement is satisfied and the
+// operator still did not get the path they asked for. "Did it escape" and "is
+// it the path that was written" are different questions, and asking only the
+// first is how this stays surprising.
+func validateConfigPaths(cfg *Config) error {
+	if err := checkVaultRelative("index.db_path", cfg.Index.DBPath); err != nil {
+		return err
+	}
+	for typeName, def := range cfg.Types {
+		if err := checkVaultRelative(fmt.Sprintf("types.%s.template", typeName), def.Template); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// checkVaultRelative reports whether value is usable as a vault-relative path.
+func checkVaultRelative(key, value string) error {
+	if value == "" {
+		return nil
+	}
+	if filepath.IsAbs(value) || strings.HasPrefix(value, "/") {
+		return fmt.Errorf("%s: %q must be relative to the vault root, not absolute", key, value)
+	}
+	// Cleaned first, so "a/../../b" is caught alongside the plain "../b".
+	clean := filepath.Clean(filepath.FromSlash(value))
+	if clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("%s: %q escapes the vault root", key, value)
+	}
+	return nil
 }
