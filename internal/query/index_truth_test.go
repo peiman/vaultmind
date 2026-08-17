@@ -288,3 +288,18 @@ func TestDoctor_RollupMatchesTheFindingsItPrints(t *testing.T) {
 	assert.Equal(t, 2, warns,
 		"doctor prints two warnings here; a rollup saying 0 would deny its own output")
 }
+
+// The unknown banner is a printed ⚠ like any other, so the rollup counts it.
+// Leaving it out would end an unreconcilable vault's report with "0 warnings"
+// directly under a warning — the same denial this work removed everywhere else.
+func TestResultSurfacedIssueCounts_CountsTheUnknownState(t *testing.T) {
+	_, warns := query.ResultSurfacedIssueCounts(&query.DoctorResult{
+		IndexStatus: query.IndexStatusUnknown, IndexStatusReason: "scanning vault: no such file",
+	})
+	assert.Equal(t, 1, warns, "the unknown banner is printed; it must be counted")
+
+	for _, status := range []string{query.IndexStatusCurrent, query.IndexStatusStale} {
+		_, w := query.ResultSurfacedIssueCounts(&query.DoctorResult{IndexStatus: status})
+		assert.Equal(t, 0, w, "status %q prints no banner and adds no warning", status)
+	}
+}

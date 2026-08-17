@@ -215,6 +215,14 @@ func SurfacedIssueCounts(issues DoctorIssues) (errors, warnings int) {
 func ResultSurfacedIssueCounts(result *DoctorResult) (errs, warns int) {
 	errs, warns = SurfacedIssueCounts(result.Issues)
 	mErrs, mWarns := MeshSurfacedCounts(result.MeshIdentity)
+	// An unreconcilable vault prints its own ⚠ line, so it is counted like any
+	// other printed finding — the rollup must not close a report that carries a
+	// warning by saying there are none. It lives here rather than in
+	// SurfacedIssueCounts because the state is on the result, not on Issues:
+	// same reason the mesh section folds in at this level.
+	if result.IndexStatus == IndexStatusUnknown {
+		warns++
+	}
 	return errs + mErrs, warns + mWarns
 }
 
