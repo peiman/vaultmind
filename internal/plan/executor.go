@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/peiman/vaultmind/internal/git"
 	"github.com/peiman/vaultmind/internal/index"
@@ -258,11 +257,13 @@ func (e *Executor) backupFile(op Operation) (backup, error) {
 	return backup{relPath: target, data: data}, nil
 }
 
-// safePath validates that target stays within the vault directory and returns the absolute path.
+// safePath validates that target stays within the vault directory and returns
+// the absolute path. Kept as a named function rather than inlining
+// vault.ResolveInside at each call site: the error phrasing here is part of
+// this package's output contract.
 func safePath(vaultPath, target string) (string, error) {
-	absPath := filepath.Clean(filepath.Join(vaultPath, target))
-	cleanVault := filepath.Clean(vaultPath)
-	if !strings.HasPrefix(absPath, cleanVault+string(filepath.Separator)) && absPath != cleanVault {
+	absPath, err := vault.ResolveInside(vaultPath, target)
+	if err != nil {
 		return "", fmt.Errorf("path %q escapes vault directory", target)
 	}
 	return absPath, nil
