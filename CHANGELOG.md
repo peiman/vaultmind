@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+The v0.4.1 review's two remaining security findings are closed here. Both are the same gap: **write**
+targets were confined to the vault, **reads and opens** were not — so vault *content* and vault
+*config*, which are inputs, could steer VaultMind at files outside the vault.
+
+**This is a minor, not a patch.** Three behaviours change for setups that work today; see Changed
+below before upgrading. A patch number would say "safe to auto-upgrade", and this cluster is not.
+
+### Changed
+
+- **BREAKING: an absolute or escaping `db_path` / `template:` is now refused at config load.**
+  These are joined onto the vault root and then opened — the index DB with its parent directories
+  created for it. `../` escaped; an absolute value did something arguably worse, because
+  `filepath.Join` re-roots it: `db_path: /tmp/index.db` silently meant `<vault>/tmp/index.db`, and
+  nothing said so. Both are now refused by name at load:
+
+  ```
+  Error: loading config: in …/.vaultmind/config.yaml:
+    index.db_path: "/tmp/index.db" must be relative to the vault root, not absolute
+  ```
+
+  **To upgrade:** rewrite an absolute `db_path` as a path under the vault (the default is
+  `.vaultmind/index.db`), or drop the key. Same for any `types.<name>.template`. A vault that
+  already uses relative paths — every vault `init` scaffolds — needs no change.
+
+- **BREAKING: `*.md` symlinks are no longer indexed, linted, healed, or backfilled.**
+  `filepath.WalkDir` hands back file symlinks and `os.ReadFile` follows them, so a note
+  `secrets.md -> ~/.ssh/id_rsa` in a cloned or shared vault was hashed, parsed, stored in FTS,
+  embedded, and returned by `ask` — untrusted vault content as a read primitive, with the result
+  persisted in `index.db`. `os.WriteFile` follows them too: `notes.md -> ~/.zshrc` was **rewritten
+  in place** by the wikilink healer.
+
+  Skipped whatever the target is, including a target inside the vault: resolving first and confining
+  after needs `EvalSymlinks`, whose answer can change between the check and the call, and would let
+  one file enter the index under two paths. Every skip is reported by path — a note that vanishes
+  in silence is the failure this project keeps closing.
+
+  **To upgrade:** replace a `*.md` symlink with the real file, or link to the target with a
+  `[[wikilink]]` instead. `vaultmind index` names every one it skipped. An index built before this
+  release drops the affected rows on the next run through the existing orphan sweep; no migration.
+
+- **`dataview lint` gained a `symlink_skipped` issue rule.** A clean report that quietly covered
+  fewer files than the vault holds is worse than a noisy one. Consumers parsing lint issues by rule
+  name will see the new value.
+
 ### Fixed
 
 - **Hook vault queries are bounded, and `timeout` is resolved rather than assumed.**
@@ -34,6 +78,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reaching only the people who already knew to look for it — the gap it exists to close.
 - **`docs/reviews/` keeps findings as written and stamps their outcome.** The v0.4.1 CLI review is
   published unedited, with a resolution block naming the PR and commit that closed each High.
+
+### Security
+
+- **Confinement and "do not follow a link" are separate checks, and stay separate.** `notes.md ->
+  ~/.zshrc` passes confinement — `notes.md` really is inside the vault — and writing to it still
+  lands outside. The mutator confined every path it wrote and would have overwritten the target
+  anyway. Merging the two predicates is how the second one disappears, so `vault.ResolveInside`
+  (confinement) and `vault.SkipSymlink` (never follow) are one definition each, applied at every
+  site, with the reasoning in their doc comments rather than in a review thread.
+- **A note can no longer choose its own template path.** `LoadSectionTemplate` took `noteType` from
+  the note's own frontmatter and `sectionKey` from its markers and joined both into
+  `.vaultmind/sections/{type}/{key}.md`. Both are single path components now validated against
+  `^[A-Za-z0-9_-]+$`: a type called `../../../etc` is not a legal type whatever it resolves to. The
+  `.md` suffix bounded what could be read; it never bounded where.
+- **`Indexer.IndexFile` confines its own argument** instead of asserting, in a lint suppression,
+  that its callers pass a vault-relative path.
 
 ## [0.5.0] — 2026-08-16
 
