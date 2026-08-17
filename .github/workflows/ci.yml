@@ -34,6 +34,22 @@ on:
   schedule:
     - cron: '0 0 * * 0'  # Weekly on Sunday at midnight UTC (catch upstream license changes)
 
+  # Re-cut the ORT archives for a tag that is ALREADY released.
+  #
+  # Needed because a workflow run uses the YAML from the ref it runs on: when the
+  # ORT jobs fail for a reason that lives in this file, re-running them on the tag
+  # replays the same broken YAML. v0.6.0 hit exactly that — a pipefail/SIGPIPE bug
+  # in the smoke test failed both platforms on an archive that was fine.
+  #
+  # This dispatch builds the named TAG's tree with the CURRENT workflow, and
+  # uploads to that tag's existing release. It never creates or moves a tag.
+  workflow_dispatch:
+    inputs:
+      ort_tag:
+        description: 'Existing tag to build and attach ORT archives to (e.g. v0.6.0)'
+        required: true
+        type: string
+
 # Concurrency controls to prevent wasting CI minutes
 # Cancel in-progress runs for PRs, but let main branch builds complete
 concurrency:
@@ -260,7 +276,10 @@ jobs:
       - name: Verify Dev Commands Hidden
         run: |
           echo "Testing production build..."
-          if ./${{ steps.binary-name.outputs.name }} dev 2>&1 | grep -q "unknown command"; then
+          # Captured rather than piped: see the ORT smoke test below for why
+          # `cmd | grep -q` under pipefail can report the opposite of the truth.
+          DEV_OUT="$(./${{ steps.binary-name.outputs.name }} dev 2>&1 || true)"
+          if grep -q "unknown command" <<<"$DEV_OUT"; then
             echo "✅ Dev commands hidden in production build"
           else
             echo "❌ Dev commands should not exist in production build"
@@ -468,8 +487,14 @@ jobs:
     name: ORT prebuilt (${{ matrix.goos }}/${{ matrix.goarch }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
-    if: startsWith(github.ref, 'refs/tags/')
-    needs: [release] # the GitHub release must exist before we upload assets to it
+    # `always()` is required because `release` is skipped on a dispatch run; the
+    # explicit result check keeps the tag-push path gated on it succeeding.
+    if: |
+      always() && (
+        (startsWith(github.ref, 'refs/tags/') && needs.release.result == 'success') ||
+        (github.event_name == 'workflow_dispatch' && inputs.ort_tag != '')
+      )
+    needs: [release] # on a tag push the GitHub release must exist before we upload assets to it
     permissions:
       contents: write # upload release assets
       id-token: write # keyless cosign signing via OIDC
@@ -488,9 +513,37 @@ jobs:
             goarch: amd64
             ort_asset: onnxruntime-linux-x64-1.25.0.tgz
     steps:
+      - name: Resolve the target tag
+        id: target
+        # The input is bound through env, never interpolated into the script:
+        # this job holds contents:write and signs with OIDC, so a dispatch value
+        # reaching the shell would be a release-asset write primitive. It is also
+        # constrained to a release tag — a dispatch must not become a general
+        # "check out any ref and upload to any release".
+        env:
+          ORT_TAG_INPUT: ${{ inputs.ort_tag }}
+        run: |
+          set -euo pipefail
+          if [ -n "$ORT_TAG_INPUT" ]; then
+            TAG="$ORT_TAG_INPUT"
+          else
+            TAG="${GITHUB_REF##*/}"
+          fi
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::not a release tag (expected vMAJOR.MINOR.PATCH) — refusing to check out or upload"
+            printf 'refused value: %s\n' "$TAG"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Building ORT archives for $TAG"
+        shell: bash
+
       - name: Checkout Code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          # The TAG's tree, not the dispatch ref: a re-cut must ship the code
+          # that was released, built by the workflow that is current.
+          ref: ${{ steps.target.outputs.tag }}
           fetch-depth: 0 # version stamping via git describe
 
       - name: Set up Go
@@ -543,12 +596,14 @@ jobs:
 
       - name: Bundle self-contained ORT archive
         id: bundle
+        env:
+          TARGET_TAG: ${{ steps.target.outputs.tag }}
         run: |
           set -euo pipefail
           ARCHIVE="$(bash .claude/scripts/bundle-ort-release.sh \
             --goos '${{ matrix.goos }}' --goarch '${{ matrix.goarch }}' \
             --ort-version "$ORT_VERSION" --ort-libdir '${{ steps.ort.outputs.libdir }}' \
-            --binary /tmp/vaultmind-ort --version "${GITHUB_REF##*/}" --out dist)"
+            --binary /tmp/vaultmind-ort --version "$TARGET_TAG" --out dist)"
           echo "archive=$ARCHIVE" >> "$GITHUB_OUTPUT"
 
       - name: Smoke-test the bundled archive end-to-end
@@ -563,8 +618,18 @@ jobs:
           # bundled libonnxruntime must dlopen (no system lib on a fresh runner)
           # and BGE-M3 must actually embed — not silently fall back to MiniLM.
           "$D/vaultmind" index --vault /tmp/smoke/vault --embed --model bge-m3
-          "$D/vaultmind" doctor --vault /tmp/smoke/vault | grep -q '(bge-m3)' \
-            || { echo '::error::bundled archive did not embed with bge-m3 — libonnxruntime may not have loaded'; exit 1; }
+          # Captured, NOT piped. `doctor | grep -q` fails even when the pattern
+          # matches: grep -q exits at the first match, doctor writes the rest of
+          # its report into a closed pipe, takes SIGPIPE, and returns 141 — which
+          # `set -o pipefail` makes the pipeline's status. The gate then reports
+          # "did not embed with bge-m3" about a run that embedded with bge-m3.
+          # It was latent until doctor grew output after the Embeddings line.
+          DOCTOR_OUT="$("$D/vaultmind" doctor --vault /tmp/smoke/vault)"
+          if ! grep -q '(bge-m3)' <<<"$DOCTOR_OUT"; then
+            echo "$DOCTOR_OUT"
+            echo '::error::bundled archive did not embed with bge-m3 — libonnxruntime may not have loaded'
+            exit 1
+          fi
 
       - name: Sign the archive (cosign keyless)
         run: |
@@ -575,9 +640,10 @@ jobs:
       - name: Upload to the release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_TAG: ${{ steps.target.outputs.tag }}
         run: |
           set -euo pipefail
-          TAG="${GITHUB_REF##*/}"
+          TAG="$TARGET_TAG"
           gh release upload "$TAG" \
             "${{ steps.bundle.outputs.archive }}" \
             "${{ steps.bundle.outputs.archive }}.sigstore.json" \
