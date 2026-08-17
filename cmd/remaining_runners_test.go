@@ -543,3 +543,35 @@ func TestDataviewRenderText_ModeDistinctions(t *testing.T) {
 	assert.Contains(t, buf.String(), "Dry run")
 	assert.Contains(t, buf.String(), "no changes written")
 }
+
+// Same class as the duplicate-id line above: the file is on disk and NOT in the
+// index. Reporting only in JSON would leave the human output claiming a clean
+// run over a vault where a note was passed over — and a symlink is passed over
+// precisely because it could point anywhere the user can read.
+func TestFormatIndexResult_NamesSkippedSymlinks(t *testing.T) {
+	var buf bytes.Buffer
+	err := formatIndexResult(index.IndexAndEmbedResult{
+		Index: &index.IndexResult{
+			SkippedSymlinks: []string{"secrets.md", "inbox/alias.md"},
+		},
+	}, "", &buf)
+	require.NoError(t, err)
+	out := buf.String()
+	assert.Contains(t, out, "2 symlink(s) skipped")
+	assert.Contains(t, out, "secrets.md")
+	assert.Contains(t, out, "inbox/alias.md")
+	assert.Contains(t, out, "wikilink", "say what to do instead, not just what failed")
+}
+
+// The symlink block writes three times (header, per-path, remedy line). A
+// write error on any of them must propagate rather than leave a half-printed
+// warning that reads as a complete one.
+func TestFormatIndexResult_SkippedSymlinksPropagateWriteErrors(t *testing.T) {
+	res := index.IndexAndEmbedResult{
+		Index: &index.IndexResult{SkippedSymlinks: []string{"secrets.md"}},
+	}
+	// 2nd write = the "⚠ N symlink(s) skipped" header; 3rd = the path; 4th = remedy.
+	require.Error(t, formatIndexResult(res, "", &failAfterNWriter{ok: 1}))
+	require.Error(t, formatIndexResult(res, "", &failAfterNWriter{ok: 2}))
+	require.Error(t, formatIndexResult(res, "", &failAfterNWriter{ok: 3}))
+}

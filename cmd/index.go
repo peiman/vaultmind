@@ -248,6 +248,24 @@ func formatIndexResult(r index.IndexAndEmbedResult, model string, w io.Writer) e
 			}
 		}
 	}
+	// Same reasoning as duplicates: the note is on disk and NOT in the index, so
+	// silence here reads as "indexed fine". Symlinks are never followed — an
+	// untrusted vault could otherwise point one at any file the user can read —
+	// and the operator needs the path to fix it or accept it.
+	if len(r.Index.SkippedSymlinks) > 0 {
+		if _, err := fmt.Fprintf(w, "⚠ %d symlink(s) skipped — symlinks are not followed, so these are NOT indexed:\n",
+			len(r.Index.SkippedSymlinks)); err != nil {
+			return err
+		}
+		for _, s := range r.Index.SkippedSymlinks {
+			if _, err := fmt.Fprintf(w, "  - %s\n", s); err != nil {
+				return err
+			}
+		}
+		if _, err := fmt.Fprintln(w, "  copy the file into the vault, or link to it with a [[wikilink]]"); err != nil {
+			return err
+		}
+	}
 	if r.Embed != nil {
 		// Name the model in the human-readable output. Pure-Go fallback
 		// silently producing minilm-only embeddings was the surprise the

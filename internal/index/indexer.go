@@ -32,6 +32,7 @@ type IndexResult struct {
 	CompletedAt       string             `json:"completed_at"`
 	ErrorDetails      []IndexError       `json:"error_details,omitempty"`
 	DuplicateDetails  []DuplicateID      `json:"duplicate_details,omitempty"`
+	SkippedSymlinks   []string           `json:"skipped_symlinks,omitempty"`
 	PostIndexWarnings []PostIndexWarning `json:"post_index_warnings,omitempty"`
 }
 
@@ -443,12 +444,13 @@ func (idx *Indexer) Rebuild() (*IndexResult, error) {
 	}
 	defer func() { _ = db.Close() }()
 
-	files, err := vault.Scan(idx.vaultRoot, idx.cfg.Vault.Exclude)
+	scan, err := vault.Scan(idx.vaultRoot, idx.cfg.Vault.Exclude)
 	if err != nil {
 		return nil, fmt.Errorf("scanning vault: %w", err)
 	}
+	files := scan.Files
 
-	result := &IndexResult{DBPath: idx.dbPath}
+	result := &IndexResult{DBPath: idx.dbPath, SkippedSymlinks: scan.SkippedSymlinks}
 	seenIDs := make(map[string]string) // id → first path
 
 	// Parse all files first, then store in a single batch transaction
@@ -698,12 +700,13 @@ func (idx *Indexer) Incremental() (*IndexResult, error) {
 		return nil, fmt.Errorf("loading stored hashes: %w", err)
 	}
 
-	files, err := vault.Scan(idx.vaultRoot, idx.cfg.Vault.Exclude)
+	scan, err := vault.Scan(idx.vaultRoot, idx.cfg.Vault.Exclude)
 	if err != nil {
 		return nil, fmt.Errorf("scanning vault: %w", err)
 	}
+	files := scan.Files
 
-	result := &IndexResult{DBPath: idx.dbPath}
+	result := &IndexResult{DBPath: idx.dbPath, SkippedSymlinks: scan.SkippedSymlinks}
 
 	// Built in full BEFORE the store loop, not as we go: the duplicate-id guard
 	// below has to know whether the CURRENT owner of an id still exists on disk,

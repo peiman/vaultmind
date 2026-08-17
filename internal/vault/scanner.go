@@ -15,12 +15,29 @@ type ScannedFile struct {
 	ModTime time.Time // Last modification time
 }
 
+// ScanResult is what a walk found: the notes to index, and what was passed over
+// for a reason the caller has to answer for.
+//
+// A struct rather than extra return values because "skipped, and why" is a
+// growing category — and a plain []ScannedFile let a whole class of skip go
+// unmentioned, which is how a note vanishes from an index in silence.
+type ScanResult struct {
+	Files []ScannedFile
+
+	// SkippedSymlinks holds vault-relative paths of *.md symlinks that were not
+	// followed. Callers are expected to REPORT these, not drop them: from the
+	// outside, a skipped note and a missing note look identical.
+	SkippedSymlinks []string
+}
+
 // Scan walks the vault directory and returns all .md files,
 // excluding directories that match any of the exclude patterns.
-func Scan(vaultRoot string, excludes []string) ([]ScannedFile, error) {
+//
+// Symlinks are never followed — see the guard below for why.
+func Scan(vaultRoot string, excludes []string) (ScanResult, error) {
 	absRoot, err := filepath.Abs(vaultRoot)
 	if err != nil {
-		return nil, fmt.Errorf("resolving vault root: %w", err)
+		return ScanResult{}, fmt.Errorf("resolving vault root: %w", err)
 	}
 
 	excludeSet := make(map[string]bool, len(excludes))
@@ -29,6 +46,7 @@ func Scan(vaultRoot string, excludes []string) ([]ScannedFile, error) {
 	}
 
 	var files []ScannedFile
+	var skippedSymlinks []string
 
 	err = filepath.WalkDir(absRoot, func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -65,6 +83,23 @@ func Scan(vaultRoot string, excludes []string) ([]ScannedFile, error) {
 			return fmt.Errorf("computing relative path: %w", relErr)
 		}
 
+		// Never follow a symlink. WalkDir does not descend into directory
+		// symlinks, but it DOES hand back a file symlink named *.md — and
+		// os.ReadFile follows it. A note `secrets.md -> ~/.ssh/id_rsa` was
+		// hashed, parsed, stored in FTS, embedded, returned by `ask`, and
+		// exported: untrusted vault content as a read primitive against the
+		// operator's filesystem, with the result persisted in index.db.
+		//
+		// Skipped whatever the target is, including a target inside the vault.
+		// Resolving first and confining after would mean an EvalSymlinks result
+		// that can change before the read (check-then-read), and would let one
+		// file enter the index under two paths — the duplicate-id class we just
+		// closed. `d.Type()` is Lstat-derived, so this is the link itself.
+		if d.Type()&fs.ModeSymlink != 0 {
+			skippedSymlinks = append(skippedSymlinks, relPath)
+			return nil
+		}
+
 		// Exclude files too, not just directories: a basename match (e.g.
 		// "README.md" — vault meta, not a knowledge note) or an exact
 		// vault-relative path. Without this, a vault's own README indexed as a
@@ -88,8 +123,8 @@ func Scan(vaultRoot string, excludes []string) ([]ScannedFile, error) {
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("scanning vault %s: %w", absRoot, err)
+		return ScanResult{}, fmt.Errorf("scanning vault %s: %w", absRoot, err)
 	}
 
-	return files, nil
+	return ScanResult{Files: files, SkippedSymlinks: skippedSymlinks}, nil
 }
