@@ -260,7 +260,10 @@ jobs:
       - name: Verify Dev Commands Hidden
         run: |
           echo "Testing production build..."
-          if ./${{ steps.binary-name.outputs.name }} dev 2>&1 | grep -q "unknown command"; then
+          # Captured rather than piped: see the ORT smoke test below for why
+          # `cmd | grep -q` under pipefail can report the opposite of the truth.
+          DEV_OUT="$(./${{ steps.binary-name.outputs.name }} dev 2>&1 || true)"
+          if grep -q "unknown command" <<<"$DEV_OUT"; then
             echo "✅ Dev commands hidden in production build"
           else
             echo "❌ Dev commands should not exist in production build"
@@ -563,8 +566,18 @@ jobs:
           # bundled libonnxruntime must dlopen (no system lib on a fresh runner)
           # and BGE-M3 must actually embed — not silently fall back to MiniLM.
           "$D/vaultmind" index --vault /tmp/smoke/vault --embed --model bge-m3
-          "$D/vaultmind" doctor --vault /tmp/smoke/vault | grep -q '(bge-m3)' \
-            || { echo '::error::bundled archive did not embed with bge-m3 — libonnxruntime may not have loaded'; exit 1; }
+          # Captured, NOT piped. `doctor | grep -q` fails even when the pattern
+          # matches: grep -q exits at the first match, doctor writes the rest of
+          # its report into a closed pipe, takes SIGPIPE, and returns 141 — which
+          # `set -o pipefail` makes the pipeline's status. The gate then reports
+          # "did not embed with bge-m3" about a run that embedded with bge-m3.
+          # It was latent until doctor grew output after the Embeddings line.
+          DOCTOR_OUT="$("$D/vaultmind" doctor --vault /tmp/smoke/vault)"
+          if ! grep -q '(bge-m3)' <<<"$DOCTOR_OUT"; then
+            echo "$DOCTOR_OUT"
+            echo '::error::bundled archive did not embed with bge-m3 — libonnxruntime may not have loaded'
+            exit 1
+          fi
 
       - name: Sign the archive (cosign keyless)
         run: |
