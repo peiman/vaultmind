@@ -374,3 +374,26 @@ func TestDataviewLint_SurvivesLintRemoval(t *testing.T) {
 	require.NoError(t, json.Unmarshal(out.Bytes(), &env))
 	assert.Greater(t, env.Result.FilesChecked, 0)
 }
+
+// "Files scanned: N" implies coverage. A symlinked note is neither read nor
+// written, so its links are still broken after a run that reported success —
+// the operator has to be told which file that was.
+func TestDoctorHeal_NamesSkippedSymlinks(t *testing.T) {
+	vaultDir, _ := buildHealableVault(t)
+
+	outside := t.TempDir()
+	victim := filepath.Join(outside, "zshrc")
+	require.NoError(t, os.WriteFile(victim, []byte("export PATH=/bin\n"), 0o644))
+	require.NoError(t, os.Symlink(victim, filepath.Join(vaultDir, "notes.md")))
+
+	out, _, err := runRootCmd(t, "doctor", "heal", "--vault", vaultDir)
+	require.NoError(t, err)
+	text := out.String()
+	assert.Contains(t, text, "1 symlink(s) skipped")
+	assert.Contains(t, text, "notes.md")
+
+	after, err := os.ReadFile(victim)
+	require.NoError(t, err)
+	assert.Equal(t, "export PATH=/bin\n", string(after),
+		"heal must not write through a symlink to a file outside the vault")
+}

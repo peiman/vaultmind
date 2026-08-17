@@ -63,6 +63,11 @@ type Result struct {
 	NotesAffected int    `json:"notes_affected"`
 	Items         []Item `json:"items"`
 	Applied       bool   `json:"applied"`
+
+	// SkippedSymlinks holds vault-relative paths of *.md symlinks that were not
+	// examined. A backfill reporting "0 notes affected" over a vault where a
+	// note was never opened is telling the operator the wrong thing.
+	SkippedSymlinks []string `json:"skipped_symlinks,omitempty"`
 }
 
 // Item is one note that needs backfill.
@@ -129,6 +134,14 @@ func RunBackfill(cfg Config) (*Result, error) {
 			return nil
 		}
 		if !strings.HasSuffix(d.Name(), ".md") {
+			return nil
+		}
+		// The write here goes through the mutator, which confines the path —
+		// and confinement is not the same predicate. `notes.md -> ~/.zshrc`
+		// passes confinement (notes.md is inside the vault) and the write still
+		// lands on the target. See vault.SkipSymlink.
+		if rel, skip := vault.SkipSymlink(cfg.VaultPath, path, d); skip {
+			result.SkippedSymlinks = append(result.SkippedSymlinks, rel)
 			return nil
 		}
 		result.FilesScanned++

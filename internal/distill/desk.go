@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/peiman/vaultmind/internal/parser"
+	"github.com/peiman/vaultmind/internal/vault"
 )
 
 // deskEntryType is the note type that marks raw, self-recorded transformation
@@ -102,6 +103,16 @@ func ScanDesk(deskPath string) ([]DeskEntry, []string, error) {
 			return nil
 		}
 		if !strings.EqualFold(filepath.Ext(d.Name()), ".md") {
+			return nil
+		}
+		// Not followed, for the same reason nothing else in the vault is: a
+		// *.md symlink can point at any file the user can read, and readDeskEntry
+		// would pull it into the candidate report. Reported through diagnostics
+		// — the channel this function already uses for "there was material here
+		// and I did not use it". See vault.SkipSymlink.
+		if rel, skip := vault.SkipSymlink(deskPath, path, d); skip {
+			diagnostics = append(diagnostics, fmt.Sprintf(
+				"%s: symlink not followed — desk entries are read from real files only", rel))
 			return nil
 		}
 		entry, ok, why := readDeskEntry(path, deskPath)

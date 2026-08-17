@@ -111,6 +111,20 @@ func runWikilinkFix(cmd *cobra.Command, vaultPath string, jsonOut, apply bool, m
 			return err
 		}
 	}
+	// "Files scanned: N" would otherwise imply the whole vault was covered. A
+	// symlinked note is not read and not written, so its links are still broken
+	// after a run that reported success.
+	if len(result.SkippedSymlinks) > 0 {
+		if _, err = fmt.Fprintf(w,
+			"⚠ %d symlink(s) skipped — not read, not healed:\n", len(result.SkippedSymlinks)); err != nil {
+			return err
+		}
+		for _, s := range result.SkippedSymlinks {
+			if _, err = fmt.Fprintf(w, "  - %s\n", s); err != nil {
+				return err
+			}
+		}
+	}
 	if indexStale {
 		if _, err = fmt.Fprintf(w,
 			"⚠ Index is now stale (%d file(s) rewritten) — run: %s\n",

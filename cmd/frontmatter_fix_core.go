@@ -55,6 +55,20 @@ func runFrontmatterFixCore(cmd *cobra.Command, vaultPath string, apply, jsonOut 
 			return err
 		}
 	}
+	// "Scanned N files" must not cover files that were never opened. A symlink
+	// is passed over whatever it points at, so its frontmatter is unexamined.
+	if len(res.SkippedSymlinks) > 0 {
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(),
+			"⚠ %d symlink(s) skipped — not scanned, not backfilled:\n",
+			len(res.SkippedSymlinks)); err != nil {
+			return err
+		}
+		for _, s := range res.SkippedSymlinks {
+			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "  - %s\n", s); err != nil {
+				return err
+			}
+		}
+	}
 	if !apply && len(res.Items) > 0 {
 		if _, err := fmt.Fprintln(cmd.OutOrStdout(),
 			"\nDry-run only — re-run with --apply to write changes."); err != nil {

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/peiman/vaultmind/internal/index"
+	"github.com/peiman/vaultmind/internal/vault"
 )
 
 // FixWikilinksResult is the output of a FixWikilinks run.
@@ -16,6 +17,12 @@ type FixWikilinksResult struct {
 	FilesChanged int             `json:"files_changed"`
 	LinksFixed   int             `json:"links_fixed"`
 	Details      []LinkFixDetail `json:"details,omitempty"`
+
+	// SkippedSymlinks holds vault-relative paths of *.md symlinks that were
+	// neither read nor written. On the result rather than in a log line: a file
+	// this run passed over still has whatever links it had, and the caller is
+	// the only one who can tell the operator so.
+	SkippedSymlinks []string `json:"skipped_symlinks,omitempty"`
 }
 
 // LinkFixDetail describes a single wikilink rewrite.
@@ -58,6 +65,15 @@ func FixWikilinks(db *index.DB, vaultPath string, fix bool) (*FixWikilinksResult
 			return nil
 		}
 		if !strings.HasSuffix(d.Name(), ".md") {
+			return nil
+		}
+
+		// Before the read, and long before the write: os.WriteFile follows a
+		// symlink, so `notes.md -> ~/.zshrc` made this function replace the
+		// target's contents with rewritten note text. Confinement would not have
+		// caught it — notes.md really is inside the vault. See vault.SkipSymlink.
+		if rel, skip := vault.SkipSymlink(vaultPath, path, d); skip {
+			result.SkippedSymlinks = append(result.SkippedSymlinks, rel)
 			return nil
 		}
 
