@@ -2,9 +2,7 @@
 package query
 
 import (
-	"crypto/sha256"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -36,11 +34,14 @@ import (
 // These are distinct labeled axes: validation_summary is the raw aggregate;
 // result.issues is the surfaced/actionable set.
 type DoctorResult struct {
-	VaultPath         string                    `json:"vault_path"`
-	TotalFiles        int                       `json:"total_files"`
-	DomainNotes       int                       `json:"domain_notes"`
-	UnstructuredNotes int                       `json:"unstructured_notes"`
-	IndexStatus       string                    `json:"index_status"`
+	VaultPath         string `json:"vault_path"`
+	TotalFiles        int    `json:"total_files"`
+	DomainNotes       int    `json:"domain_notes"`
+	UnstructuredNotes int    `json:"unstructured_notes"`
+	IndexStatus       string `json:"index_status"`
+	// IndexStatusReason is set only when IndexStatus is "unknown": what stopped
+	// the disk reconciliation from running. Absent otherwise.
+	IndexStatusReason string                    `json:"index_status_reason,omitempty"`
 	Embeddings        *DoctorEmbeddings         `json:"embeddings,omitempty"`
 	Types             map[string]StatusTypeInfo `json:"types,omitempty"`
 	ValidationSummary *StatusIssuesSummary      `json:"validation_summary,omitempty"`
@@ -113,6 +114,26 @@ type DoctorIssues struct {
 	// precise: only actual content edits trigger drift.
 	StaleIndex        int            `json:"stale_index"`
 	StaleIndexDetails []ContentDrift `json:"stale_index_details,omitempty"`
+
+	// OrphanedEntries counts index rows whose file is gone from disk. Until the
+	// next incremental pass sweeps them they answer queries and cannot be
+	// opened. Previously invisible: the drift detector `continue`d on the read
+	// error, and its own test was named DeletedFileSilent.
+	OrphanedEntries      int             `json:"orphaned_entries"`
+	OrphanedEntryDetails []OrphanedEntry `json:"orphaned_entry_details,omitempty"`
+
+	// UnindexedFiles counts *.md files on disk with no index row — notes that
+	// are in no query result. total_files cannot reveal them: that count comes
+	// from the database, so a never-indexed note is not even a mismatch.
+	// Symlinks the scanner refused are NOT counted here; see IndexTruth.Skipped.
+	UnindexedFiles       int      `json:"unindexed_files"`
+	UnindexedFileDetails []string `json:"unindexed_file_details,omitempty"`
+
+	// DuplicateIDDetails names each contested id and every file claiming it.
+	// The counter above it used to come from a SQL query against a UNIQUE
+	// column, which is structurally zero; this comes from the disk, which is
+	// the only place the collision is visible.
+	DuplicateIDDetails []DuplicateOnDisk `json:"duplicate_id_details,omitempty"`
 
 	// HookDrift counts Claude Code hook scripts in the project's
 	// `.claude/scripts/` whose bytes differ from the embedded canonical
@@ -225,10 +246,10 @@ type IncompatibleLink struct {
 // close the silent-failure shape where MissingRequiredFields was a
 // declared output that never got populated.
 func Doctor(db *index.DB, vaultPath string, reg *schema.Registry) (*DoctorResult, error) {
-	result := &DoctorResult{
-		VaultPath:   vaultPath,
-		IndexStatus: "current",
-	}
+	// IndexStatus is deliberately NOT set here. It used to be the string
+	// "current", assigned once and never revisited — a constant success signal
+	// that automation branched on. It is derived from the reconciliation below.
+	result := &DoctorResult{VaultPath: vaultPath}
 
 	// Count total, domain, unstructured
 	if err := db.QueryRow("SELECT COUNT(*) FROM notes").Scan(&result.TotalFiles); err != nil {
@@ -289,10 +310,12 @@ func Doctor(db *index.DB, vaultPath string, reg *schema.Registry) (*DoctorResult
 		}
 	}
 
-	// Duplicate IDs (should be 0 with UNIQUE constraint, but check anyway)
-	if err := db.QueryRow("SELECT COUNT(*) FROM (SELECT id FROM notes GROUP BY id HAVING COUNT(*) > 1)").Scan(&result.Issues.DuplicateIDs); err != nil {
-		return nil, fmt.Errorf("counting duplicate IDs: %w", err)
-	}
+	// duplicate_ids is answered by the reconciliation below, from the DISK.
+	// The query that used to live here — GROUP BY id HAVING COUNT(*) > 1 — ran
+	// against a column declared UNIQUE and could only ever return 0. Deleting it
+	// rather than keeping it "as a belt and braces check": a line that looks
+	// like a check and reports 0 forever would mask the real one if it ever
+	// broke, which is the whole failure this section exists to end.
 
 	// Links resolved to _path: pseudo-IDs (files that don't exist in the vault)
 	pseudoRows, err := db.Query(`
@@ -377,16 +400,37 @@ func Doctor(db *index.DB, vaultPath string, reg *schema.Registry) (*DoctorResult
 	// operations that bump mtime without changing content do NOT trigger
 	// drift (the false-positive shape that retired the prior mtime-based
 	// detector).
-	drifts, err := DetectContentDrift(db, vaultPath)
+	// A reconciliation that cannot run does NOT fail the whole command. doctor
+	// is a health hub: embeddings, validation, links and mesh identity are all
+	// still worth reporting when the vault root has gone unreadable, and a
+	// single unavailable section wedging the rest is the same shape as a broken
+	// hook wedging a session. It reports "unknown" with the reason instead —
+	// never "current", which would be the bug this section removed.
+	truth, err := ReconcileIndex(db, vaultPath)
 	if err != nil {
-		return nil, fmt.Errorf("detecting content drift: %w", err)
+		result.IndexStatus = IndexStatusUnknown
+		result.IndexStatusReason = err.Error()
+		return result, nil
 	}
-	result.Issues.StaleIndex = len(drifts)
-	if len(drifts) > 0 {
-		result.Issues.StaleIndexDetails = drifts
-	}
+	applyIndexTruth(result, truth)
 
 	return result, nil
+}
+
+// applyIndexTruth copies the reconciliation onto the report. Extracted so
+// Doctor stays under the gocyclo bar, and so there is one place where a new
+// category of "the index is lying" gets surfaced.
+func applyIndexTruth(result *DoctorResult, truth *IndexTruth) {
+	result.IndexStatus = truth.Status()
+
+	result.Issues.StaleIndex = len(truth.Drifted)
+	result.Issues.StaleIndexDetails = truth.Drifted
+	result.Issues.OrphanedEntries = len(truth.Orphaned)
+	result.Issues.OrphanedEntryDetails = truth.Orphaned
+	result.Issues.UnindexedFiles = len(truth.Unindexed)
+	result.Issues.UnindexedFileDetails = truth.Unindexed
+	result.Issues.DuplicateIDs = len(truth.Duplicate)
+	result.Issues.DuplicateIDDetails = truth.Duplicate
 }
 
 // collectEmbeddingStatus inspects the index DB for per-lane embedding counts
@@ -454,49 +498,23 @@ func collectEmbeddingStatus(db *index.DB, total int) (*DoctorEmbeddings, error) 
 // sha256 over the full file gives precise content identity — only
 // real content edits trigger drift.
 //
-// Per-note IO failures (deleted files, unreadable permissions) are
-// silently skipped. The indexer reports those via its own path; doctor's
-// job is health summary, not filesystem-error reporting. ORDER BY path
-// gives deterministic output (the experiment framework consumes this
-// JSON; stable order avoids spurious diffs).
+// Deleted files are NOT drift — they are orphaned index entries, and
+// ReconcileIndex reports them as such. Unreadable files are still skipped: a
+// per-file IO problem must not abort a health run. ORDER BY path gives
+// deterministic output (the experiment framework consumes this JSON; stable
+// order avoids spurious diffs).
+//
+// Kept as a named function delegating to ReconcileIndex so the drift contract
+// and its tests stay addressable, with one implementation underneath.
 func DetectContentDrift(db *index.DB, vaultPath string) ([]ContentDrift, error) {
-	rows, err := db.Query(`SELECT id, path, hash FROM notes WHERE is_domain = TRUE ORDER BY path`)
+	truth, err := ReconcileIndex(db, vaultPath)
 	if err != nil {
-		return nil, fmt.Errorf("querying domain notes: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	drifts := make([]ContentDrift, 0)
-	for rows.Next() {
-		// Plain strings: schema declares id/path/hash as NOT NULL
-		// (001_baseline_schema.sql), so NullString defensiveness here
-		// would be dead code. If a future migration makes any nullable,
-		// add a typed guard with an explicit test for that path.
-		var id, path, storedHash string
-		if scanErr := rows.Scan(&id, &path, &storedHash); scanErr != nil {
-			return nil, fmt.Errorf("scanning domain note: %w", scanErr)
-		}
-		abs := filepath.Join(vaultPath, path)
-		// abs is vault root + DB-stored relative path, not raw user input.
-		content, readErr := os.ReadFile(abs) // #nosec G304
-		if readErr != nil {
-			continue
-		}
-		h := sha256.Sum256(content)
-		currentHash := fmt.Sprintf("%x", h[:])
-		if currentHash != storedHash {
-			drifts = append(drifts, ContentDrift{
-				NoteID:      id,
-				Path:        path,
-				CurrentHash: currentHash,
-				StoredHash:  storedHash,
-			})
-		}
-	}
-	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	return drifts, nil
+	if truth.Drifted == nil {
+		return []ContentDrift{}, nil
+	}
+	return truth.Drifted, nil
 }
 
 // modelNameForDims maps a dense embedding length (in float32 elements) to
