@@ -290,6 +290,12 @@ func writeDoctorHuman(w io.Writer, result *query.DoctorResult, summaryOnly bool)
 	if err := writeLegacyHooksJSON(w, &result.Issues); err != nil {
 		return err
 	}
+	if err := writeIndexStatusUnknown(w, result); err != nil {
+		return err
+	}
+	if err := writeIndexReconciliation(w, &result.Issues, summaryOnly); err != nil {
+		return err
+	}
 	if err := writeStaleIndex(w, &result.Issues, summaryOnly); err != nil {
 		return err
 	}
@@ -424,6 +430,82 @@ func writeStaleIndex(w io.Writer, issues *query.DoctorIssues, summaryOnly bool) 
 		if _, err := fmt.Fprintf(w, "  %s: current_hash=%s stored_hash=%s\n",
 			sv.Path, short(sv.CurrentHash), short(sv.StoredHash)); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// writeIndexStatusUnknown prints the one state the rest of the report cannot
+// express: the disk reconciliation did not run at all.
+//
+// Silence is not available here. Every other index finding prints a ⚠ line and
+// says nothing when the vault is healthy — so a silent "unknown" is
+// indistinguishable from a clean bill of health, which is exactly the collapse
+// (could-not-check read as checked-and-current) that this whole section exists
+// to undo. The status line appears ONLY in that state; a current or stale
+// vault is already described by the lines around it.
+func writeIndexStatusUnknown(w io.Writer, result *query.DoctorResult) error {
+	if result.IndexStatus != query.IndexStatusUnknown {
+		return nil
+	}
+	_, err := fmt.Fprintf(w,
+		"⚠ Index status: unknown — the vault could not be reconciled against disk\n"+
+			"  %s\n"+
+			"  stale, orphaned, unindexed and duplicate-id findings below are NOT reliable\n",
+		result.IndexStatusReason)
+	return err
+}
+
+// writeIndexReconciliation prints the other three ways the index can stop
+// describing the vault: rows whose file is gone, files with no row, and one id
+// claimed by two files on disk. Every one of these was previously invisible —
+// two were checks that could not fail and the third was never checked at all —
+// so each prints the PATHS, not just a count. A count with no path is what H1
+// was about.
+func writeIndexReconciliation(w io.Writer, issues *query.DoctorIssues, summaryOnly bool) error {
+	if issues.OrphanedEntries > 0 {
+		if _, err := fmt.Fprintf(w,
+			"⚠ Orphaned index entries: %d note(s) indexed but gone from disk\n"+
+				"  they still answer queries and cannot be opened; run: %s\n",
+			issues.OrphanedEntries, staleIndexRemedy); err != nil {
+			return err
+		}
+		if !summaryOnly {
+			for _, o := range issues.OrphanedEntryDetails {
+				if _, err := fmt.Fprintf(w, "  %s (id: %s)\n", o.Path, o.NoteID); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	if issues.UnindexedFiles > 0 {
+		if _, err := fmt.Fprintf(w,
+			"⚠ Unindexed files: %d note(s) on disk with no index entry\n"+
+				"  they are in no query result; run: %s\n",
+			issues.UnindexedFiles, staleIndexRemedy); err != nil {
+			return err
+		}
+		if !summaryOnly {
+			for _, path := range issues.UnindexedFileDetails {
+				if _, err := fmt.Fprintf(w, "  %s\n", path); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	if len(issues.DuplicateIDDetails) > 0 {
+		if _, err := fmt.Fprintf(w,
+			"⚠ Duplicate ids on disk: %d id(s) claimed by more than one file\n"+
+				"  only one file per id is indexed; the others are absent from memory\n",
+			len(issues.DuplicateIDDetails)); err != nil {
+			return err
+		}
+		if !summaryOnly {
+			for _, d := range issues.DuplicateIDDetails {
+				if _, err := fmt.Fprintf(w, "  %q: %s\n", d.ID, strings.Join(d.Paths, ", ")); err != nil {
+					return err
+				}
+			}
 		}
 	}
 	return nil

@@ -23,22 +23,30 @@ type StatusIssuesSummary struct {
 
 // StatusResult is the JSON response for vault status.
 type StatusResult struct {
-	VaultPath         string                    `json:"vault_path"`
-	TotalFiles        int                       `json:"total_files"`
-	DomainNotes       int                       `json:"domain_notes"`
-	UnstructuredNotes int                       `json:"unstructured_notes"`
-	IndexStatus       string                    `json:"index_status"`
-	IndexStale        bool                      `json:"index_stale"`
-	Types             map[string]StatusTypeInfo `json:"types"`
-	IssuesSummary     StatusIssuesSummary       `json:"issues_summary"`
+	VaultPath         string `json:"vault_path"`
+	TotalFiles        int    `json:"total_files"`
+	DomainNotes       int    `json:"domain_notes"`
+	UnstructuredNotes int    `json:"unstructured_notes"`
+	IndexStatus       string `json:"index_status"`
+	// IndexStatusReason is set only when IndexStatus is "unknown": what stopped
+	// the disk reconciliation. Absent otherwise. Mirrors DoctorResult so the two
+	// commands report an unavailable check the same way.
+	IndexStatusReason string `json:"index_status_reason,omitempty"`
+	// IndexStale is meaningful ONLY when IndexStatus is "current" or "stale".
+	// A bool cannot express "not checked", so when IndexStatus is "unknown"
+	// this field is false for lack of a third state, NOT because the index is
+	// fresh. Branch on IndexStatus first.
+	IndexStale    bool                      `json:"index_stale"`
+	Types         map[string]StatusTypeInfo `json:"types"`
+	IssuesSummary StatusIssuesSummary       `json:"issues_summary"`
 }
 
 // VaultStatus combines doctor, schema, and validation into a single cold-start response.
 func VaultStatus(db *index.DB, vaultPath string, cfg *vault.Config, reg *schema.Registry) (*StatusResult, error) {
-	result := &StatusResult{
-		VaultPath:   vaultPath,
-		IndexStatus: "current",
-	}
+	// IndexStatus and IndexStale are both derived below, not assigned here.
+	// They were a string literal and a never-written bool: two declared outputs
+	// that could only ever report health. See query.ReconcileIndex.
+	result := &StatusResult{VaultPath: vaultPath}
 
 	// Note counts
 	if err := db.QueryRow("SELECT COUNT(*) FROM notes").Scan(&result.TotalFiles); err != nil {
@@ -62,6 +70,26 @@ func VaultStatus(db *index.DB, vaultPath string, cfg *vault.Config, reg *schema.
 		return nil, err
 	}
 	result.IssuesSummary = summary
+
+	// Same reconciliation doctor uses, so cold start and the health hub cannot
+	// disagree about whether the index is current.
+	truth, err := ReconcileIndex(db, vaultPath)
+	if err != nil {
+		// Deliberate: cold start still reports counts, types and validation when
+		// the disk cannot be read. "unknown" plus the reason is the honest answer;
+		// failing the command outright would give the caller nothing, and
+		// defaulting to "current" is the bug this replaced.
+		result.IndexStatus = IndexStatusUnknown
+		result.IndexStatusReason = err.Error()
+		// IndexStale stays FALSE only because it is a bool and has no third
+		// state — which is precisely why it must not be read on this path.
+		// index_status is the field that can say "unknown"; a consumer reading
+		// index_stale alone would take false to mean healthy, so the two are
+		// documented as a pair on StatusResult.IndexStale.
+		return result, nil //nolint:nilerr // degraded section, reported via IndexStatus
+	}
+	result.IndexStatus = truth.Status()
+	result.IndexStale = !truth.IsCurrent()
 
 	return result, nil
 }
