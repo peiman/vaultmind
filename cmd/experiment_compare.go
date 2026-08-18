@@ -47,7 +47,7 @@ func runExperimentCompare(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("resolving experiment db path: %w", err)
 	}
-	db, err := experiment.Open(dbPath)
+	db, err := experiment.OpenExisting(dbPath)
 	if err != nil {
 		return fmt.Errorf("opening experiment db: %w", err)
 	}

@@ -85,7 +85,7 @@ const (
 	KeyAppExperimentcomparePerEvent          = "app.experimentcompare.per_event"          // Emit one row per event in addition to aggregates
 	KeyAppExperimentcompareJson              = "app.experimentcompare.json"               // Output in JSON format
 	KeyExperiments                           = "experiments"                              // Top-level experiment definitions map
-	KeyExperimentsTelemetry                  = "experiments.telemetry"                    // Telemetry level: anonymous, full, off
+	KeyExperimentsTelemetry                  = "experiments.telemetry"                    // What export may emit — anonymous (strips vault paths, query text, note ids,...
 	KeyExperimentsOutcomeWindowSessions      = "experiments.outcome_window_sessions"      // Sessions to look back for outcome linkage
 	KeyExperimentsActivationDelta            = "experiments.activation.delta"             // Spreading activation weight (0.0 disables similarity component)
 	KeyAppExportOutput                       = "app.export.output"                        // Output file path (empty = stdout)

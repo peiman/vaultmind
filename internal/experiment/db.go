@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/rs/zerolog/log"
 	_ "modernc.org/sqlite" // pure-Go SQLite driver
 )
 
@@ -144,13 +145,63 @@ type DB struct {
 	db *sql.DB
 }
 
+// MemoryPath opens a database that exists only in RAM. Used by the read path
+// when no log is on disk, so an empty export runs through the real readers.
+const MemoryPath = ":memory:"
+
+// restrictBeforeOpen makes the database 0600 BEFORE SQLite opens it.
+//
+// Order is the whole fix. This file holds full query text, vault paths, note
+// ids and caller metadata ($USER, hostname, CLAUDE_PROJECT_DIR) — the most
+// identifying artifact the tool writes — and SQLite creates it 0644.
+//
+// An earlier version chmod'd AFTER opening. That tightened the main file and
+// left `-wal` and `-shm` world-readable, holding the same query text: SQLite
+// derives sidecar permissions from the main file's mode as it observed it at
+// open time, and the sidecars do not exist yet when a post-open chmod runs.
+// Measured, both ways:
+//
+//	chmod after open:   experiments.db 0600, -wal 0644, -shm 0644
+//	chmod before open:  experiments.db 0600, -wal 0600, -shm 0600
+//
+// Creating the file ourselves when it is absent also closes the create-then-
+// chmod window, in which SQLite's own 0644 file is briefly readable.
+//
+// Failures warn rather than abort: a permissions fix must not be the reason a
+// command cannot run. Warn, not Debug — a silent failure here means the whole
+// property is absent, and the operator would have no way to know. The project
+// treats file-permission problems the same way in
+// .ckeletin/pkg/config/security.go.
+func restrictBeforeOpen(cleanPath string) {
+	if _, err := os.Stat(cleanPath); os.IsNotExist(err) {
+		// #nosec G304 -- cleanPath is the app's own XDG data path (xdg.DataFile),
+		// already filepath.Clean'd above; O_EXCL means we only ever create, never
+		// open something that is already there.
+		f, createErr := os.OpenFile(cleanPath, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
+		if createErr != nil {
+			log.Warn().Err(createErr).Str("path", cleanPath).
+				Msg("could not pre-create the usage log with restricted permissions; it may be world-readable")
+			return
+		}
+		_ = f.Close()
+		return
+	}
+	if err := os.Chmod(cleanPath, 0o600); err != nil {
+		log.Warn().Err(err).Str("path", cleanPath).
+			Msg("could not restrict usage-log permissions; query text may be readable by other accounts")
+	}
+}
+
 // Open opens (or creates) a SQLite database at dbPath, creates the parent
 // directory if needed, applies pragmas (WAL mode, foreign key enforcement),
 // and runs pending migrations using PRAGMA user_version for versioning.
 func Open(dbPath string) (*DB, error) {
 	cleanPath := filepath.Clean(dbPath)
-	if err := os.MkdirAll(filepath.Dir(cleanPath), 0o750); err != nil {
-		return nil, fmt.Errorf("creating db directory: %w", err)
+	if cleanPath != MemoryPath {
+		if err := os.MkdirAll(filepath.Dir(cleanPath), 0o750); err != nil {
+			return nil, fmt.Errorf("creating db directory: %w", err)
+		}
+		restrictBeforeOpen(cleanPath)
 	}
 
 	sqlDB, err := sql.Open("sqlite", cleanPath)

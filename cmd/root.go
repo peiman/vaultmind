@@ -22,7 +22,6 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"github.com/mattn/go-isatty"
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/.ckeletin/pkg/logger"
 	"github.com/peiman/vaultmind/.ckeletin/pkg/output"
@@ -269,28 +268,23 @@ var RootCmd = &cobra.Command{
 		} else if expDB, expErr := openExperimentDB(); expErr != nil {
 			log.Debug().Err(expErr).Msg("Experiment DB unavailable")
 		} else {
-			// Prompt for telemetry on first run (interactive TTY only)
-			if telemetry == "" {
-				if firstRun, _ := expDB.IsFirstRun(); firstRun {
-					if isatty.IsTerminal(os.Stdin.Fd()) {
-						telemetry = experiment.PromptTelemetry(os.Stdin, cmd.ErrOrStderr())
-						viper.Set(config.KeyExperimentsTelemetry, telemetry)
-						if cf := viper.ConfigFileUsed(); cf != "" {
-							if err := persistTelemetryChoice(telemetry, cf); err != nil {
-								log.Debug().Err(err).Msg("Failed to persist telemetry choice to config file")
-							}
-						}
-						if telemetry == experiment.TelemetryOff {
-							log.Debug().Msg("User chose telemetry: off")
-							_ = expDB.Close()
-							return nil
-						}
-					} else {
-						log.Debug().Msg("Non-interactive session, defaulting to anonymous telemetry")
-					}
-				}
-			}
-
+			// There was a first-run consent prompt here, gated on
+			// experiments.telemetry being empty. The registry defaults it to
+			// "anonymous", so it never fired on a default install — but it was
+			// NOT dead code, and an earlier version of this comment said it was.
+			// A config file can still yield an empty value: `telemetry: ""`
+			// explicitly, and — the one that matters — a bare `experiments: off`,
+			// where viper sees a non-map at the parent and returns "" for the
+			// child. That second form is what a user reaching to disable this
+			// would plausibly write.
+			//
+			// Deleted anyway, because what it asked was wrong.
+			// It offered "[1] Anonymous usage statistics" and "[2] Full data
+			// sharing" for a feature that shares nothing — there is no uploader,
+			// and anonymous and full write identical rows to a local SQLite file.
+			// A consent dialog for a transmission that does not happen teaches the
+			// wrong thing about what the tool does. The README documents the local
+			// log instead, which is the thing that is actually true.
 			if recovered, recErr := expDB.RecoverOrphans(); recErr != nil {
 				log.Debug().Err(recErr).Msg("Failed to recover orphan sessions")
 			} else if recovered > 0 {
@@ -690,6 +684,17 @@ func openExperimentDB() (*experiment.DB, error) {
 		return nil, fmt.Errorf("resolving experiment db path: %w", err)
 	}
 	return experiment.Open(dbPath)
+}
+
+// openExistingExperimentDB is the READ-path opener: it refuses to create the
+// usage log. Commands that report on the log must not be the reason one exists
+// — see experiment.OpenExisting.
+func openExistingExperimentDB() (*experiment.DB, error) {
+	dbPath, err := xdg.DataFile("experiments.db")
+	if err != nil {
+		return nil, fmt.Errorf("resolving experiment db path: %w", err)
+	}
+	return experiment.OpenExisting(dbPath)
 }
 
 // getKeyValue retrieves a configuration value from Viper by key only.

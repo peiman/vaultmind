@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The usage-log documentation now describes what is written, not what is exported.**
+  The README said telemetry was "off by default" and stored "no query text". Both were
+  false for the local database and true for `vaultmind export`: `experiments.telemetry`
+  defaults to `anonymous`, and `anonymous` and `full` write **identical** rows —
+  full query text, vault path, note ids, and caller metadata (`$USER`, hostname,
+  `CLAUDE_PROJECT_DIR`). The tier governs what `export` emits; it is not a redaction at
+  write time, and there is no uploader for it to gate.
+
+  The default is unchanged: turning it off would leave activation-weighted reranking with
+  no history to weight, and redacting at write time would gut `experiment trace`. What was
+  wrong was the copy, so the copy is what changed. `experiments.telemetry: off` still writes
+  nothing at all.
+
+### Fixed
+
+- **The README says where the config file lives.** It told you to set
+  `experiments.telemetry: off` without ever mentioning that a config file exists or where —
+  advice you cannot follow. It now names the path and the environment variable.
+
+- **Reading the usage log no longer creates it.** `experiment trace|summary|compare|report`
+  and `export` called the same opener the write path uses, which creates the file and runs
+  migrations — so asking "what is in the log?" under `experiments.telemetry: off` wrote a
+  fresh database as a side effect of reporting that there was nothing to report. A read that
+  creates its own subject also made the documented promise false. They now use
+  `experiment.OpenExisting`, which refuses to create and returns `ErrNoUsageLog`. Reading an
+  *existing* log under `off` is still allowed: turning telemetry off is a decision about new
+  data, not a lock on what was already collected.
+
+- **The experiment database and its WAL sidecars are `0600`.** The database holds the most
+  identifying material VaultMind writes — query text, vault paths, note ids, `$USER`,
+  hostname — and SQLite created it `0644`, readable by every account on the machine. The
+  telemetry *fingerprint* file has been `0600` since it was added; the database that dwarfs
+  it was not.
+
+  The restriction is applied **before** SQLite opens the file, which is the whole fix.
+  Tightening afterwards left `experiments.db-wal` and `experiments.db-shm` world-readable
+  with the same query text inside them: SQLite derives sidecar permissions from the main
+  file's mode as it observed it at open time, and the sidecars do not exist yet when a
+  post-open `chmod` runs. Creating the file ourselves when absent also closes the window in
+  which SQLite's own `0644` file is briefly readable. An existing `0644` database is
+  restricted on the next command.
+
+### Removed
+
+- **The first-run telemetry consent prompt**, which asked the wrong question. It offered
+  "[1] Anonymous usage statistics" and "[2] Full data sharing" for a feature that shares
+  nothing — a consent dialog for a transmission that does not happen. The README documents
+  the local log instead.
+
+  It was gated on `experiments.telemetry` being empty and the registry defaults it to
+  `anonymous`, so it never fired on a default install — but it was **not** dead code, and an
+  earlier draft of this entry said it was. A config file can still produce an empty value:
+  `telemetry: ""`, or a bare `experiments: off`, which viper reads as a non-map parent and
+  resolves the child to `""`. The v0.4.1 review said "which the default prevents, so *most*
+  installs never see it" and was right to say most.
+
 ## [0.6.0] — 2026-08-17
 
 The v0.4.1 review's two remaining security findings are closed here. Both are the same gap: **write**
@@ -637,6 +695,13 @@ github.com/peiman/vaultmind@latest` resolves here.
   archives (BGE-M3) for `darwin-arm64` and `linux-amd64`.
 - A fictional example vault at `examples/ada-vault`.
 - Opt-in, sanitized usage telemetry (counts and identifiers only).
+  > **Correction (2026-08-17):** this line was wrong when written. The usage log
+  > is on by default, and it stores full query text, vault path, note ids and
+  > caller metadata locally. "Sanitized" describes `vaultmind export` under the
+  > `anonymous` tier, not what is written to disk. Nothing was ever transmitted —
+  > there is no uploader — but the sentence described the export path as though
+  > it were the write path. Left in place with this note rather than edited away:
+  > the record of what users were told is the point of a changelog.
 
 ### Removed
 - Retracted v0.1.0–v0.1.2 in `go.mod`: withdrawn versions on this module path that
