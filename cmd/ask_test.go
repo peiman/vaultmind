@@ -30,7 +30,7 @@ func TestLogAskExperiment_LogsTopHitNoteAccess(t *testing.T) {
 		TopHits: []retrieval.ScoredResult{{ID: "identity-who-i-am", Score: 0.065}},
 	}
 
-	logAskExperiment(cmd, "who am I", "/vault", "hybrid", result, nil, false)
+	logAskExperiment(cmd, "who am I", "/vault", "hybrid", result, nil, false, false)
 
 	ids, err := db.AccessedNoteIDs()
 	require.NoError(t, err)
@@ -64,7 +64,7 @@ func TestLogAskExperiment_NoNoteAccessOnRetrievalError(t *testing.T) {
 		Query:   "broken",
 		TopHits: []retrieval.ScoredResult{{ID: "stale-hit", Score: 0.01}},
 	}
-	logAskExperiment(cmd, "broken", "/vault", "hybrid", result, assert.AnError, false)
+	logAskExperiment(cmd, "broken", "/vault", "hybrid", result, assert.AnError, false, false)
 
 	ids, err := db.AccessedNoteIDs()
 	require.NoError(t, err)
@@ -84,7 +84,7 @@ func TestLogAskExperiment_NoNoteAccessOnEmptyHits(t *testing.T) {
 	cmd.SetContext(experiment.WithSession(context.Background(), session))
 
 	result := &query.AskResult{Query: "no-hits", TopHits: nil}
-	logAskExperiment(cmd, "no-hits", "/vault", "hybrid", result, nil, false)
+	logAskExperiment(cmd, "no-hits", "/vault", "hybrid", result, nil, false, false)
 
 	ids, err := db.AccessedNoteIDs()
 	require.NoError(t, err)
@@ -107,7 +107,7 @@ func TestLogAskExperiment_NoNoteAccessWhenSuppressed(t *testing.T) {
 		Query:   "best recipe for sourdough bread",
 		TopHits: []retrieval.ScoredResult{{ID: "reference-current-context", Score: 0.02}},
 	}
-	logAskExperiment(cmd, "best recipe for sourdough bread", "/vault", "hybrid", result, nil, true)
+	logAskExperiment(cmd, "best recipe for sourdough bread", "/vault", "hybrid", result, nil, true, false)
 
 	ids, err := db.AccessedNoteIDs()
 	require.NoError(t, err)

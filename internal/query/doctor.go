@@ -47,12 +47,54 @@ type DoctorResult struct {
 	ValidationSummary *StatusIssuesSummary      `json:"validation_summary,omitempty"`
 	Issues            DoctorIssues              `json:"issues"`
 
+	// MemoryUse is the "is this vault actually used" section: notes surfaced to
+	// an agent, how many carried a body, how many were then read, and how many
+	// notes were banked. A POINTER with omitempty, on the same principle as
+	// ValidationSummary — nil means "not measured" (no usage log on this
+	// machine), which must stay distinguishable from a measured zero.
+	//
+	// It lives on doctor rather than only in `experiment memory` because a
+	// number behind a command nobody remembers to run is the same failure as a
+	// pointer nobody follows. This is the health hub; this is health.
+	MemoryUse *DoctorMemoryUse `json:"memory_use,omitempty"`
+
 	// MeshIdentity is the Contract-B identity-health section. It is a POINTER
 	// with omitempty so it is ABSENT from --json unless a mesh signal exists
 	// (identity key file present, an anchor exists, a --mesh-* flag passed, or
 	// the daemon is reachable). Populated by the cmd layer (paths come from xdg +
 	// flags + env). nil ⇒ no mesh substrate, the section is omitted entirely.
 	MeshIdentity *DoctorMeshIdentity `json:"mesh_identity,omitempty"`
+}
+
+// DoctorMemoryUse is the memory-usage rollup doctor prints. Populated by the
+// cmd layer (which owns the experiment-DB handle) so query.Doctor's signature
+// stays stable — the same arrangement HookDrift and MeshIdentity use.
+type DoctorMemoryUse struct {
+	WindowDays      int `json:"window_days"`
+	Injections      int `json:"injections"`
+	BodiesDelivered int `json:"bodies_delivered"`
+	Consumed        int `json:"consumed"`
+	NotesBanked     int `json:"notes_banked"`
+	VaultNotes      int `json:"vault_notes"`
+	// PerCaller is each hook's own verdict. The aggregate hides which of the
+	// three injection points is earning its tokens, and they are different bets:
+	// session-start, mid-task, and compaction.
+	PerCaller []DoctorCallerUse `json:"per_caller,omitempty"`
+}
+
+// DoctorCallerUse is one hook's slice of the rollup.
+type DoctorCallerUse struct {
+	Caller     string `json:"caller"`
+	Injections int    `json:"injections"`
+	Consumed   int    `json:"consumed"`
+}
+
+// ConsumedRate is consumed/injections, 0 when nothing was surfaced.
+func (m DoctorMemoryUse) ConsumedRate() float64 {
+	if m.Injections == 0 {
+		return 0
+	}
+	return float64(m.Consumed) / float64(m.Injections)
 }
 
 // DoctorEmbeddings reports the vault's semantic-retrieval readiness. Surfaces

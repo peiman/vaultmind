@@ -2,6 +2,22 @@ package experiment
 
 import "github.com/rs/zerolog/log"
 
+// Why bodies were withheld from an ask result. These name the branches that
+// already exist in the formatter; recording which one fired turns "the agent
+// ignored it" and "the tool never handed it over" into separate, countable
+// facts.
+const (
+	// SuppressedByCaller: --pointers-only. The caller asked for ids.
+	SuppressedByCaller = "pointers_only"
+	// SuppressedBelowFloor: the top hit sat at or under the off-topic noise
+	// floor, so the body was judged not worth the tokens.
+	SuppressedBelowFloor = "below_floor"
+	// SuppressedLowContrast: a tight vault, where the embedder cannot spread
+	// scores and a "weak" top hit is often the best available correct match.
+	// This is the reason most likely to be withholding something useful.
+	SuppressedLowContrast = "low_contrast"
+)
+
 // AskEventParams is the boundary-clean input for composing an ask event
 // payload. The cmd layer converts retrieval/result types into this shape so
 // the experiment package stays agnostic of retrieval implementation details
@@ -21,6 +37,18 @@ type AskEventParams struct {
 	// ActivationOn reports whether the activation experiment is enabled for
 	// this event. When false, PrimaryVariant is omitted from the payload.
 	ActivationOn bool
+	// BodyDelivered reports whether the caller actually received note BODIES,
+	// as opposed to a list of ids it would have to go and fetch.
+	//
+	// The distinction is the whole question. A hook that surfaces five perfect
+	// pointers and no text has not delivered memory — it has delivered
+	// homework, and the agent mid-task does not do homework. Without this
+	// field, "surfaced but unused" cannot be told apart from "never actually
+	// handed over", and those two have opposite fixes.
+	BodyDelivered bool
+	// SuppressedReason names why bodies were withheld, when they were. Empty
+	// when they were delivered. See SuppressedReason* constants.
+	SuppressedReason string
 	// RetrievalErr, when non-nil, causes BuildRetrievalEventData to populate
 	// the "error" field so failed retrievals are distinguishable from
 	// zero-hit successes.
@@ -42,6 +70,10 @@ func BuildAskEventData(p AskEventParams) map[string]any {
 	}
 	data := BuildRetrievalEventData(variants, len(p.TopHits), p.RetrievalErr)
 	data["top_hits"] = len(p.TopHits)
+	data["body_delivered"] = p.BodyDelivered
+	if p.SuppressedReason != "" {
+		data["suppressed_reason"] = p.SuppressedReason
+	}
 	if p.ActivationOn {
 		data["primary_variant"] = p.PrimaryVariant
 	}

@@ -69,7 +69,7 @@ func computeActivationScores(ctx context.Context, similarities map[string]float6
 // regardless of ask error so failures are observable — retrievalErr becomes
 // the event_data.error field. retrievalMode is the retriever label (e.g.
 // "hybrid", "keyword") used as the variant key for the actual retrieval hits.
-func logAskExperiment(cmd *cobra.Command, queryText, vaultPath, retrievalMode string, result *query.AskResult, retrievalErr error, suppressed bool) {
+func logAskExperiment(cmd *cobra.Command, queryText, vaultPath, retrievalMode string, result *query.AskResult, retrievalErr error, suppressed, pointersOnly bool) {
 	session := experiment.FromContext(cmd.Context())
 	if session == nil {
 		return
@@ -81,6 +81,10 @@ func logAskExperiment(cmd *cobra.Command, queryText, vaultPath, retrievalMode st
 		TopHits:       askRetrievalHits(result),
 		RetrievalErr:  retrievalErr,
 	}
+	// Whether the caller actually received text, and if not which rule withheld
+	// it. Without this the log cannot separate "surfaced and ignored" from
+	// "never handed over", and those have opposite fixes.
+	params.BodyDelivered, params.SuppressedReason = result.BodyDecision(pointersOnly)
 	if result != nil {
 		if actDef, ok := loadExperimentDefs()["activation"]; ok && actDef.Enabled && result.Context != nil {
 			params.ActivationOn = true

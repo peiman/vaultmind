@@ -14,8 +14,10 @@ import (
 	"github.com/peiman/vaultmind/internal/config/commands"
 	"github.com/peiman/vaultmind/internal/embedding"
 	"github.com/peiman/vaultmind/internal/envelope"
+	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/hooks"
 	"github.com/peiman/vaultmind/internal/query"
+	"github.com/peiman/vaultmind/internal/xdg"
 	"github.com/spf13/cobra"
 )
 
@@ -256,7 +258,58 @@ func populateDoctorResult(vdb *cmdutil.VaultDB, vaultPath string) (*query.Doctor
 		result.Issues.LegacyHooksJSON = hooks.DetectLegacyHooksJSON(projectDir)
 	}
 
+	result.MemoryUse = collectMemoryUse(vdb)
+
 	return result, nil
+}
+
+// memoryUseWindowDays is the reporting window for the memory-use section. A
+// week smooths a quiet day without averaging away a change worth seeing.
+const memoryUseWindowDays = 7
+
+// collectMemoryUse builds the "is this vault actually used" section: how much
+// memory was surfaced to an agent, how much of it carried a body, how much was
+// then read, and how many notes were written back.
+//
+// Returns nil when there is no usage log — "not measured" must stay
+// distinguishable from a measured zero, or a machine that has never run a hook
+// reads identically to one where memory is being ignored.
+//
+// Populated here because internal/query and internal/experiment are both
+// business-layer per ADR-009; the same reason HookDrift is filled in above.
+func collectMemoryUse(vdb *cmdutil.VaultDB) *query.DoctorMemoryUse {
+	dbPath, err := xdg.DataFile("experiments.db")
+	if err != nil {
+		return nil
+	}
+	expDB, err := experiment.OpenExisting(dbPath)
+	if err != nil {
+		return nil // no log yet, and asking must not create one (#117)
+	}
+	defer func() { _ = expDB.Close() }()
+
+	use, err := expDB.MemoryUseSince(memoryUseWindowDays)
+	if err != nil {
+		return nil
+	}
+	out := &query.DoctorMemoryUse{
+		WindowDays:      use.WindowDays,
+		Injections:      use.Injections,
+		BodiesDelivered: use.BodiesDelivered,
+		Consumed:        use.Consumed,
+	}
+	for _, c := range use.PerCaller {
+		out.PerCaller = append(out.PerCaller, query.DoctorCallerUse{
+			Caller: c.Caller, Injections: c.Injections, Consumed: c.Consumed,
+		})
+	}
+	// The write side, from this vault's own index rather than the shared log:
+	// banking is per-vault, and the usage log spans every vault on the machine.
+	if rate, rateErr := query.BankRateSince(vdb.DB, memoryUseWindowDays); rateErr == nil {
+		out.NotesBanked = rate.Added
+		out.VaultNotes = rate.Total
+	}
+	return out
 }
 
 // writeDoctorHuman renders a single DoctorResult as the human-readable doctor
@@ -288,6 +341,9 @@ func writeDoctorHuman(w io.Writer, result *query.DoctorResult, summaryOnly bool)
 		return err
 	}
 	if err := writeLegacyHooksJSON(w, &result.Issues); err != nil {
+		return err
+	}
+	if err := writeMemoryUse(w, result.MemoryUse); err != nil {
 		return err
 	}
 	if err := writeIndexStatusUnknown(w, result); err != nil {
@@ -431,6 +487,48 @@ func writeStaleIndex(w io.Writer, issues *query.DoctorIssues, summaryOnly bool) 
 			sv.Path, short(sv.CurrentHash), short(sv.StoredHash)); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// writeMemoryUse prints whether this vault is actually being used as memory:
+// how much was surfaced to an agent, how much of it carried a body, how much
+// was then read, and how many notes were written back.
+//
+// It prints on every run with data, not only when something is wrong. The other
+// sections are exception reports — silence means healthy — but "nobody is
+// reading this vault" produces no exception anywhere: retrieval succeeds,
+// doctor is green, and the memory goes unused for months. That is the state
+// this line exists to make impossible to miss.
+func writeMemoryUse(w io.Writer, m *query.DoctorMemoryUse) error {
+	if m == nil || m.Injections == 0 {
+		// No usage log, or nothing surfaced yet. A fresh install must not be
+		// told its memory is being ignored.
+		return nil
+	}
+	if _, err := fmt.Fprintf(w,
+		"Memory use (%dd): %d surfaced → %d bodies delivered → %d read (%.1f%%)\n",
+		m.WindowDays, m.Injections, m.BodiesDelivered, m.Consumed, m.ConsumedRate()*100); err != nil {
+		return err
+	}
+	if m.BodiesDelivered == 0 {
+		// The distinction that decides what to fix: text that was never handed
+		// over cannot have been ignored.
+		if _, err := fmt.Fprintln(w,
+			"  ⚠ no bodies delivered — every injection was pointers only, so low reads "+
+				"measure the tool withholding, not the agent ignoring"); err != nil {
+			return err
+		}
+	}
+	for _, c := range m.PerCaller {
+		if _, err := fmt.Fprintf(w, "  %-28s %d surfaced, %d read\n",
+			c.Caller, c.Injections, c.Consumed); err != nil {
+			return err
+		}
+	}
+	if _, err := fmt.Fprintf(w, "  banked (%dd): %d note(s) of %d in this vault\n",
+		m.WindowDays, m.NotesBanked, m.VaultNotes); err != nil {
+		return err
 	}
 	return nil
 }

@@ -141,8 +141,10 @@ func formatAskWithOptions(result *AskResult, w io.Writer, opts formatOpts) error
 	// vault that small has no working-context budget worth protecting. Withhold
 	// the body there and a new user's first query, on the vault `init` just
 	// scaffolded for them, returns the right note and refuses to show it.
-	if !result.tooSmallToJudge() &&
-		(result.TopHitConfidence == ConfidenceNoMatch || result.TopHitConfidence == ConfidenceWeak) {
+	// Same decision the telemetry records, from the same function — see
+	// AskResult.BodyDecision. Two copies of this rule would let the log claim a
+	// body was delivered on a render that withheld it.
+	if delivered, _ := result.BodyDecision(opts.pointersOnly); !delivered {
 		opts.pointersOnly = true
 	}
 	if err := writeAskHeader(w, result, opts.explain); err != nil {
@@ -292,6 +294,19 @@ func countItemsWithBodies(items []memory.ContextItem, opts formatOpts) int {
 // keeps the line terse when nothing was truncated. See the truncation
 // footer for the matching remedy hint.
 func writeContextHeader(w io.Writer, ctx *memory.ContextPackResult, withBodies int, opts formatOpts) error {
+	// When bodies are withheld, the used/budget pair describes work the caller
+	// never received. It read "0 items, 900/900 tokens" — a full budget and
+	// nothing in it — on every reach-hook injection: true of the pack, false of
+	// what landed in the agent's context. UsedTokens counts the target's body,
+	// and pointers-only mode then drops that body silently.
+	//
+	// So say what happened instead: the text exists, it was not shown, and here
+	// is the flag that shows it. A withheld body with no remedy is just bad news.
+	if opts.pointersOnly && packHoldsText(ctx) {
+		_, err := fmt.Fprintf(w, "\nContext from: %s (%d items, %d tokens of note text withheld — use --read N)\n",
+			ctx.TargetID, len(ctx.Context), ctx.UsedTokens)
+		return err
+	}
 	suffix := ""
 	if !opts.pointersOnly && len(ctx.Context) > 0 && withBodies < len(ctx.Context) {
 		suffix = fmt.Sprintf(", %d with bodies", withBodies)
@@ -299,6 +314,21 @@ func writeContextHeader(w io.Writer, ctx *memory.ContextPackResult, withBodies i
 	_, err := fmt.Fprintf(w, "\nContext from: %s (%d items%s, %d/%d tokens)\n",
 		ctx.TargetID, len(ctx.Context), suffix, ctx.UsedTokens, ctx.BudgetTokens)
 	return err
+}
+
+// packHoldsText reports whether the pack actually assembled note TEXT — as
+// opposed to frontmatter alone, which carries no body to withhold. Claiming
+// text was withheld when there was none would be its own small lie.
+func packHoldsText(ctx *memory.ContextPackResult) bool {
+	if ctx.Target != nil && ctx.Target.Body != "" {
+		return true
+	}
+	for _, item := range ctx.Context {
+		if item.Body != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // writeContextTarget emits the target note's [type] title plus body
