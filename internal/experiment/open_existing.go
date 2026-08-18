@@ -44,5 +44,5 @@ func OpenExisting(dbPath string) (*DB, error) {
 // alternative, a separate "there is nothing to export" code path, is a second
 // implementation of the output format that drifts from the first.
 func OpenMemory() (*DB, error) {
-	return Open(":memory:")
+	return Open(MemoryPath)
 }

@@ -117,7 +117,7 @@ vaultmind arc candidates --vault ./agent-desk --arcs-vault ./agent-identity
 
 VaultMind keeps a local SQLite log of retrieval events — which queries surfaced which notes — because that history is what powers activation-weighted reranking: notes you actually open become more retrievable. It is on by default, and it is worth knowing exactly what that means.
 
-**On your disk, by default:** the **full query text**, the vault path, the note ids returned, and caller metadata (`$USER`, hostname, `CLAUDE_PROJECT_DIR`). The file is created `0600`, at
+**On your disk, by default:** the **full query text**, the vault path, the note ids returned, and caller metadata (`$USER`, hostname, `CLAUDE_PROJECT_DIR`). The file is created `0600` — together with the `-wal` and `-shm` sidecars SQLite writes beside it, which hold the same material — at
 
 - **macOS:** `~/Library/Application Support/vaultmind/experiments.db`
 - **Linux:** `$XDG_DATA_HOME/vaultmind/experiments.db` (default `~/.local/share/vaultmind/experiments.db`)

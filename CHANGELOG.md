@@ -37,10 +37,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   *existing* log under `off` is still allowed: turning telemetry off is a decision about new
   data, not a lock on what was already collected.
 
-- **The experiment database is created `0600`.** It holds the most identifying material
-  VaultMind writes — query text, vault paths, note ids, `$USER`, hostname — and SQLite
-  created it `0644`, readable by every account on the machine. The telemetry *fingerprint*
-  file has been `0600` since it was added; the database that dwarfs it was not.
+- **The experiment database and its WAL sidecars are `0600`.** The database holds the most
+  identifying material VaultMind writes — query text, vault paths, note ids, `$USER`,
+  hostname — and SQLite created it `0644`, readable by every account on the machine. The
+  telemetry *fingerprint* file has been `0600` since it was added; the database that dwarfs
+  it was not.
+
+  The restriction is applied **before** SQLite opens the file, which is the whole fix.
+  Tightening afterwards left `experiments.db-wal` and `experiments.db-shm` world-readable
+  with the same query text inside them: SQLite derives sidecar permissions from the main
+  file's mode as it observed it at open time, and the sidecars do not exist yet when a
+  post-open `chmod` runs. Creating the file ourselves when absent also closes the window in
+  which SQLite's own `0644` file is briefly readable. An existing `0644` database is
+  restricted on the next command.
 
 ### Removed
 
