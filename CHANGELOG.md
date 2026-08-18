@@ -24,6 +24,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Reading the usage log no longer creates it.** `experiment trace|summary|compare|report`
+  and `export` called the same opener the write path uses, which creates the file and runs
+  migrations — so asking "what is in the log?" under `experiments.telemetry: off` wrote a
+  fresh database as a side effect of reporting that there was nothing to report. A read that
+  creates its own subject also made the documented promise false. They now use
+  `experiment.OpenExisting`, which refuses to create and returns `ErrNoUsageLog`. Reading an
+  *existing* log under `off` is still allowed: turning telemetry off is a decision about new
+  data, not a lock on what was already collected.
+
 - **The experiment database is created `0600`.** It holds the most identifying material
   VaultMind writes — query text, vault paths, note ids, `$USER`, hostname — and SQLite
   created it `0644`, readable by every account on the machine. The telemetry *fingerprint*

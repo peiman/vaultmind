@@ -681,6 +681,17 @@ func openExperimentDB() (*experiment.DB, error) {
 	return experiment.Open(dbPath)
 }
 
+// openExistingExperimentDB is the READ-path opener: it refuses to create the
+// usage log. Commands that report on the log must not be the reason one exists
+// — see experiment.OpenExisting.
+func openExistingExperimentDB() (*experiment.DB, error) {
+	dbPath, err := xdg.DataFile("experiments.db")
+	if err != nil {
+		return nil, fmt.Errorf("resolving experiment db path: %w", err)
+	}
+	return experiment.OpenExisting(dbPath)
+}
+
 // getKeyValue retrieves a configuration value from Viper by key only.
 //
 // This function is used when flags are already bound to Viper and you want to

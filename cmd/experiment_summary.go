@@ -27,7 +27,7 @@ func runExperimentSummary(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("resolving experiment db path: %w", err)
 	}
-	expDB, err := experiment.Open(dbPath)
+	expDB, err := experiment.OpenExisting(dbPath)
 	if err != nil {
 		return fmt.Errorf("opening experiment db: %w", err)
 	}

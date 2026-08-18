@@ -117,17 +117,22 @@ vaultmind arc candidates --vault ./agent-desk --arcs-vault ./agent-identity
 
 VaultMind keeps a local SQLite log of retrieval events — which queries surfaced which notes — because that history is what powers activation-weighted reranking: notes you actually open become more retrievable. It is on by default, and it is worth knowing exactly what that means.
 
-**On your disk, by default**, at `<XDG_DATA_HOME>/vaultmind/experiments.db`: the **full query text**, the vault path, the note ids returned, and caller metadata (`$USER`, hostname, `CLAUDE_PROJECT_DIR`). The file is created `0600`. Nothing is transmitted — VaultMind has no uploader, and `doctor`'s once-a-day version check is the only network call it makes on its own (see "The one network call").
+**On your disk, by default:** the **full query text**, the vault path, the note ids returned, and caller metadata (`$USER`, hostname, `CLAUDE_PROJECT_DIR`). The file is created `0600`, at
+
+- **macOS:** `~/Library/Application Support/vaultmind/experiments.db`
+- **Linux:** `$XDG_DATA_HOME/vaultmind/experiments.db` (default `~/.local/share/vaultmind/experiments.db`)
+
+Nothing is transmitted — VaultMind has no uploader, and `doctor`'s once-a-day version check is the only network call it makes on its own (see "The one network call").
 
 **`experiments.telemetry` chooses what leaves**, not what is written:
 
 | | writes locally | `vaultmind export` emits |
 |---|---|---|
-| `anonymous` *(default)* | everything above | query text, vault path, note ids and paths **stripped** |
+| `anonymous` *(default)* | everything above | query text, vault path, note ids and paths, and caller metadata **stripped** |
 | `full` | everything above | everything |
-| `off` | **nothing** — the database is never opened | nothing to export |
+| `off` | **nothing** — the log is never created | nothing to export |
 
-So `anonymous` means *anonymous when shared*. It is not a redaction at write time, and a reader who opens the database will find their queries in it. If that is not what you want, `experiments.telemetry: off` writes nothing at all — at the cost of activation reranking, which has no history to weight.
+So `anonymous` means *anonymous when shared*. It is not a redaction at write time, and a reader who opens the database will find their queries in it. If that is not what you want, `experiments.telemetry: off` writes nothing at all — at the cost of activation reranking, which has no history to weight. Reading an existing log still works under `off`; turning it off is a decision about new data, not a lock on what you already have.
 
 Sharing remains something you do on purpose: there is no automatic upload, and `export` only writes a file.
 

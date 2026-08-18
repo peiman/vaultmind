@@ -32,7 +32,7 @@ func runExperimentReport(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("resolving experiment db path: %w", err)
 	}
-	expDB, err := experiment.Open(dbPath)
+	expDB, err := experiment.OpenExisting(dbPath)
 	if err != nil {
 		if jsonOut {
 			env := envelope.Error("experiment report", "db_error", err.Error(), "")

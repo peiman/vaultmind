@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -28,10 +29,30 @@ func runExport(cmd *cobra.Command, _ []string) error {
 		tier = getConfigValueWithFlags[string](cmd, "", config.KeyExperimentsTelemetry)
 	}
 	if tier == "" {
-		return fmt.Errorf("no telemetry tier set — run vaultmind interactively once to opt in, or pass --tier")
+		// Reachable only if the config registry's default is removed; the
+		// message no longer points at the first-run prompt, which was deleted
+		// because it could never fire.
+		return fmt.Errorf("no telemetry tier set — set experiments.telemetry (off|anonymous|full) or pass --tier")
 	}
 
-	expDB, err := openExperimentDB()
+	// A missing log is not an error here, and it does not justify creating one.
+	// export is a data-out contract: a consumer piping it wants a valid empty
+	// stream, the same way `search` returns zero hits rather than failing. So an
+	// absent log means zero rows — emitted through the SAME writer path, so the
+	// manifest and framing are identical to a real export.
+	//
+	// The diagnostic commands (experiment trace|summary|compare|report) take the
+	// opposite branch and refuse: for them an empty report and a missing log are
+	// indistinguishable on the page, and that ambiguity is the failure this
+	// codebase keeps closing.
+	expDB, err := openExistingExperimentDB()
+	if errors.Is(err, experiment.ErrNoUsageLog) {
+		// An empty log that lives nowhere, rather than a second export path.
+		// Every downstream reader, the manifest shape and the rollup framing
+		// stay byte-identical to a real export — a parallel "empty" writer is
+		// how the two drift and a consumer learns to special-case us.
+		expDB, err = experiment.OpenMemory()
+	}
 	if err != nil {
 		return fmt.Errorf("open experiment db: %w", err)
 	}
