@@ -23,8 +23,11 @@ package experiment
 //	note_type) MAY be sent under Anonymous. Under Full, the uploader MAY
 //	send everything.
 //
-// If you're adding the uploader: verify this contract still matches the
-// promise in WriteTelemetryPrompt. If the promise changes, update both.
+// If you're adding the uploader: verify this contract still matches what the
+// README's "The local usage log" section promises, and what `export --preview`
+// prints. Those are the two places the promise is now made — the consent prompt
+// this used to point at was deleted for asking about a transmission that does
+// not happen.
 const (
 	TelemetryOff       = "off"
 	TelemetryAnonymous = "anonymous"

@@ -41,7 +41,7 @@ EXAMPLES
       Write to a file directly.
 
   vaultmind export --tier full
-      Override the configured tier (requires opt-in record).
+      Override the configured tier (the tier only selects what is stripped; export never required a consent record).
 
 PRIVACY
 

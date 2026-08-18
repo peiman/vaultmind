@@ -38,6 +38,11 @@
           "properties": {
             "candidates": {
               "properties": {
+                "arcs_vault": {
+                  "default": "",
+                  "description": "Vault holding the existing arcs to compare proposals against (default: the scanned vault). Set this when the desk and the arcs live in different vaults",
+                  "type": "string"
+                },
                 "json": {
                   "default": false,
                   "description": "Output in JSON format",
@@ -254,6 +259,26 @@
               "default": false,
               "description": "Output in JSON format",
               "type": "boolean"
+            },
+            "mesh_heartbeat": {
+              "default": "",
+              "description": "Override the wake-watcher heartbeat file path used for mesh watcher-liveness",
+              "type": "string"
+            },
+            "mesh_registry": {
+              "default": "",
+              "description": "Verify an offline Contract-B signed-registry file instead of fetching from the local daemon",
+              "type": "string"
+            },
+            "mesh_root_pubkey": {
+              "default": "",
+              "description": "Pin the Contract-B network root pubkey (base64) for authenticated mesh health; overrides the enroll-persisted anchor",
+              "type": "string"
+            },
+            "mesh_slug": {
+              "default": "",
+              "description": "Override the agent slug used to resolve your binding in the mesh registry (default: agents.yaml)",
+              "type": "string"
             },
             "root": {
               "default": ".",
@@ -673,6 +698,16 @@
           },
           "type": "object"
         },
+        "hooksstatus": {
+          "properties": {
+            "json": {
+              "default": false,
+              "description": "Output in JSON format",
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
         "hooksuninstall": {
           "properties": {
             "json": {
@@ -693,11 +728,106 @@
           },
           "type": "object"
         },
+        "identityenroll": {
+          "properties": {
+            "display_name": {
+              "default": "",
+              "description": "Your display name in the network (required; Unicode NFC)",
+              "type": "string"
+            },
+            "invite": {
+              "default": "",
+              "description": "Network invite: a vmenroll1: token or enroll URL (required)",
+              "type": "string"
+            },
+            "pubkey": {
+              "default": "",
+              "description": "Your base64-std ed25519 identity pubkey from `identity init` (required)",
+              "type": "string"
+            },
+            "signer_socket": {
+              "default": "",
+              "description": "Signer socket path (default: XDG state dir)",
+              "type": "string"
+            },
+            "slug": {
+              "default": "",
+              "description": "Your short ASCII handle/slug (required)",
+              "type": "string"
+            },
+            "transport_endpoint": {
+              "default": "",
+              "description": "Optional reachable host:port (IPv6 bracketed); omitted when empty",
+              "type": "string"
+            },
+            "transport_pubkey": {
+              "default": "",
+              "description": "Your base64-std 32-byte WireGuard pubkey from `wg pubkey` (required)",
+              "type": "string"
+            },
+            "yes": {
+              "default": false,
+              "description": "Skip the out-of-band fingerprint confirmation prompt",
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
+        "identityenrolladd": {
+          "properties": {
+            "network_id": {
+              "default": "",
+              "description": "Admin network id (vmnet1:…); alternative to --root-pubkey (\u003e=1 required; both must agree)",
+              "type": "string"
+            },
+            "origin_daemon": {
+              "default": "",
+              "description": "Comma-separated authorized origin daemon ids for the new binding (default none)",
+              "type": "string"
+            },
+            "registry": {
+              "default": "",
+              "description": "Current registry file: unsigned wireRegistry OR signed envelope (absent =\u003e fresh)",
+              "type": "string"
+            },
+            "request": {
+              "default": "",
+              "description": "Signed enrollment-request JSON file (stdin when empty or \"-\")",
+              "type": "string"
+            },
+            "root_pubkey": {
+              "default": "",
+              "description": "Base64-std root ed25519 pubkey (required for a signed-envelope --registry; derives the network)",
+              "type": "string"
+            },
+            "validity_seconds": {
+              "default": "",
+              "description": "Registry+binding issuance window in seconds (default 31536000 = one year)",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
         "identityinit": {
           "properties": {
             "signer_key": {
               "default": "",
               "description": "Sealed signer key path (default: XDG data dir)",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "identityinvite": {
+          "properties": {
+            "relay": {
+              "default": "",
+              "description": "Relay base URL, e.g. https://chat.acme.com (required)",
+              "type": "string"
+            },
+            "root_pubkey": {
+              "default": "",
+              "description": "Network ROOT public key (base64-std of the 32-byte ed25519 key; required)",
               "type": "string"
             }
           },
@@ -718,6 +848,21 @@
           },
           "type": "object"
         },
+        "identitysignenrollment": {
+          "properties": {
+            "file": {
+              "default": "",
+              "description": "Read enrollment request JSON from this file instead of stdin",
+              "type": "string"
+            },
+            "signer_socket": {
+              "default": "",
+              "description": "Signer socket path (default: XDG state dir)",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
         "identitysignenvelope": {
           "properties": {
             "file": {
@@ -728,6 +873,36 @@
             "from_pubkey": {
               "default": "",
               "description": "Signer public key (base64) stamped as the from_pubkey hint; not signed",
+              "type": "string"
+            },
+            "signer_socket": {
+              "default": "",
+              "description": "Signer socket path (default: XDG state dir)",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "identitysigner": {
+          "properties": {
+            "signer_key": {
+              "default": "",
+              "description": "Sealed signer key path (default: XDG data dir)",
+              "type": "string"
+            },
+            "signer_socket": {
+              "default": "",
+              "description": "Signer socket path (default: XDG state dir)",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "identitysignregistry": {
+          "properties": {
+            "file": {
+              "default": "",
+              "description": "Read registry JSON from this file instead of stdin",
               "type": "string"
             },
             "signer_socket": {
@@ -1431,7 +1606,7 @@
         },
         "telemetry": {
           "default": "anonymous",
-          "description": "Telemetry level: anonymous, full, off",
+          "description": "What export may emit — anonymous (strips vault paths, query text, note ids, result paths, caller_meta) | full | off (nothing is written locally either)",
           "type": "string"
         }
       },

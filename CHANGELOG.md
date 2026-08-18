@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The README says where the config file lives.** It told you to set
+  `experiments.telemetry: off` without ever mentioning that a config file exists or where —
+  advice you cannot follow. It now names the path and the environment variable.
+
 - **Reading the usage log no longer creates it.** `experiment trace|summary|compare|report`
   and `export` called the same opener the write path uses, which creates the file and runs
   migrations — so asking "what is in the log?" under `experiments.telemetry: off` wrote a
@@ -40,12 +44,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
-- **The first-run telemetry consent prompt**, which could never fire and asked the wrong
-  question. It required `experiments.telemetry` to be empty; the config registry defaults it
-  to `anonymous`, so the branch was dead from the day it was written. It also offered
+- **The first-run telemetry consent prompt**, which asked the wrong question. It offered
   "[1] Anonymous usage statistics" and "[2] Full data sharing" for a feature that shares
   nothing — a consent dialog for a transmission that does not happen. The README documents
   the local log instead.
+
+  It was gated on `experiments.telemetry` being empty and the registry defaults it to
+  `anonymous`, so it never fired on a default install — but it was **not** dead code, and an
+  earlier draft of this entry said it was. A config file can still produce an empty value:
+  `telemetry: ""`, or a bare `experiments: off`, which viper reads as a non-map parent and
+  resolves the child to `""`. The v0.4.1 review said "which the default prevents, so *most*
+  installs never see it" and was right to say most.
 
 ## [0.6.0] — 2026-08-17
 

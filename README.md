@@ -132,7 +132,18 @@ Nothing is transmitted — VaultMind has no uploader, and `doctor`'s once-a-day 
 | `full` | everything above | everything |
 | `off` | **nothing** — the log is never created | nothing to export |
 
-So `anonymous` means *anonymous when shared*. It is not a redaction at write time, and a reader who opens the database will find their queries in it. If that is not what you want, `experiments.telemetry: off` writes nothing at all — at the cost of activation reranking, which has no history to weight. Reading an existing log still works under `off`; turning it off is a decision about new data, not a lock on what you already have.
+So `anonymous` means *anonymous when shared*. It is not a redaction at write time, and a reader who opens the database will find their queries in it. Reading an existing log still works under `off`; turning it off is a decision about new data, not a lock on what you already have.
+
+**To turn it off** — in `~/.config/vaultmind/config.yaml` (or `$XDG_CONFIG_HOME/vaultmind/config.yaml`):
+
+```yaml
+experiments:
+  telemetry: off
+```
+
+The nesting matters. A bare `experiments: off` does **not** work — it is read as an empty value and you get the `anonymous` default, which is the opposite of what you asked for. `VAULTMIND_EXPERIMENTS_TELEMETRY=off` works too, and `vaultmind config` prints what is currently in effect.
+
+The cost of `off` is activation-weighted reranking, which then has no history to weight.
 
 Sharing remains something you do on purpose: there is no automatic upload, and `export` only writes a file.
 

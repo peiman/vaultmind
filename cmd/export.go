@@ -29,9 +29,10 @@ func runExport(cmd *cobra.Command, _ []string) error {
 		tier = getConfigValueWithFlags[string](cmd, "", config.KeyExperimentsTelemetry)
 	}
 	if tier == "" {
-		// Reachable only if the config registry's default is removed; the
-		// message no longer points at the first-run prompt, which was deleted
-		// because it could never fire.
+		// Reachable from a config file that yields an empty telemetry value
+		// (`telemetry: ""`, or a bare `experiments: off` that viper reads as a
+		// non-map parent). The message no longer points at the first-run prompt,
+		// which was deleted for asking the wrong question.
 		return fmt.Errorf("no telemetry tier set — set experiments.telemetry (off|anonymous|full) or pass --tier")
 	}
 

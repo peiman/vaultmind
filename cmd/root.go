@@ -268,12 +268,17 @@ var RootCmd = &cobra.Command{
 		} else if expDB, expErr := openExperimentDB(); expErr != nil {
 			log.Debug().Err(expErr).Msg("Experiment DB unavailable")
 		} else {
-			// There was a first-run consent prompt here. It could never fire: it
-			// required experiments.telemetry to be empty, and the config registry
-			// defaults it to "anonymous", so the condition was false on every run
-			// this binary has ever made. Dead since it was written.
+			// There was a first-run consent prompt here, gated on
+			// experiments.telemetry being empty. The registry defaults it to
+			// "anonymous", so it never fired on a default install — but it was
+			// NOT dead code, and an earlier version of this comment said it was.
+			// A config file can still yield an empty value: `telemetry: ""`
+			// explicitly, and — the one that matters — a bare `experiments: off`,
+			// where viper sees a non-map at the parent and returns "" for the
+			// child. That second form is what a user reaching to disable this
+			// would plausibly write.
 			//
-			// Deleted rather than repaired, because what it asked was also wrong.
+			// Deleted anyway, because what it asked was wrong.
 			// It offered "[1] Anonymous usage statistics" and "[2] Full data
 			// sharing" for a feature that shares nothing — there is no uploader,
 			// and anonymous and full write identical rows to a local SQLite file.
