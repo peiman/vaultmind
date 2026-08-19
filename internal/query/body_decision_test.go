@@ -31,7 +31,14 @@ func TestBodyDecision_MatchesWhatIsActuallyRendered(t *testing.T) {
 	}{
 		{"moderate hit delivers", ConfidenceModerate, false, false, "", true},
 		{"weak hit is withheld", ConfidenceWeak, false, false, experiment.SuppressedBelowFloor, false},
-		{"weak hit in a tight vault is withheld, and says which rule", ConfidenceWeak, true, false, experiment.SuppressedLowContrast, false},
+		// Changed deliberately. A tight vault's weak hit now DELIVERS: low
+		// contrast is a property of the vault — its notes are all about one
+		// subject — not evidence about the hit, and suppressing on it withheld
+		// every body from exactly the vaults this tool exists to serve. The
+		// row is kept here (rather than deleted) because this test's job is to
+		// prove the decision and the rendered bytes agree, and that must hold
+		// for the new contract too. Argument in body_decision_lowcontrast_test.go.
+		{"weak hit in a tight vault delivers — low contrast describes the vault, not the hit", ConfidenceWeak, true, false, "", true},
 		{"no match is withheld", ConfidenceNoMatch, false, false, experiment.SuppressedBelowFloor, false},
 		{"caller asking for pointers beats a good hit", ConfidenceModerate, false, true, experiment.SuppressedByCaller, false},
 	}

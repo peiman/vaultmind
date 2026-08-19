@@ -33,12 +33,24 @@ func (r *AskResult) BodyDecision(callerAsked bool) (delivered bool, reason strin
 		return false, experiment.SuppressedBelowFloor
 	case ConfidenceWeak:
 		// A tight vault's notes are so self-similar that a correct hit cannot
-		// rise far above the floor, so genuine matches read "weak". The
-		// formatter already says so in the output; recording it separately is
-		// what will show how much of the withholding is this case rather than a
-		// genuinely bad hit.
+		// rise far above the floor, so genuine matches read "weak". That is a
+		// fact about the VAULT, not evidence about the hit — and it holds more
+		// strongly the better curated the vault is, because curation is what
+		// makes a vault tight.
+		//
+		// This branch used to suppress, which meant an identity vault — tight by
+		// construction, every note being about one agent — could not deliver a
+		// body at all: all four reach-hook trigger queries measure inside this
+		// band (z = +0.17, +1.25, −0.32, +0.32). The formatter was already
+		// printing "a weak top hit here is often the best available correct
+		// match ... use --read 1 for the body" and then withholding the body,
+		// telling the agent to fetch by hand what the pack had already
+		// assembled and paid for.
+		//
+		// Genuinely irrelevant hits are unaffected: they land at/below the floor
+		// as ConfidenceNoMatch above and stay suppressed in every vault.
 		if r.LowContrastVault {
-			return false, experiment.SuppressedLowContrast
+			return true, ""
 		}
 		return false, experiment.SuppressedBelowFloor
 	}
