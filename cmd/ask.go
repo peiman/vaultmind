@@ -169,14 +169,18 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	// Read once, here, and passed to both the telemetry and the formatter
 	// selection below — reading the flag twice invites the two to disagree.
 	pointersOnly := getConfigValueWithFlags[bool](cmd, "pointers-only", config.KeyAppAskPointersOnly)
+	// Read before the telemetry call: --pointers-only gates only the TEXT
+	// formatter, while the JSON envelope carries bodies regardless, so whether
+	// content reached the caller depends on the output mode. Logging without it
+	// recorded a 5,770-character JSON delivery as no delivery at all.
+	jsonOut := getConfigValueWithFlags[bool](cmd, "json", config.KeyAppAskJson)
 
-	logAskExperiment(cmd, args[0], vaultPath, mode, result, err, suppressed, pointersOnly)
+	logAskExperiment(cmd, args[0], vaultPath, mode, result, err, suppressed, pointersOnly, jsonOut)
 
 	if err != nil {
 		return fmt.Errorf("ask: %w", err)
 	}
 
-	jsonOut := getConfigValueWithFlags[bool](cmd, "json", config.KeyAppAskJson)
 	// Suppress only the human-readable recall noise. A --json consumer still
 	// gets the envelope (with no_match + nil context) so the signal isn't lost.
 	if suppressed && !jsonOut {

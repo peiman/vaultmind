@@ -84,9 +84,9 @@ func FormatAskRead(result *AskResult, note *index.FullNote, w io.Writer) error {
 // short-circuited before the explain path was read; this is the
 // rendering side of the fix.
 func FormatAskReadWithOptions(result *AskResult, note *index.FullNote, w io.Writer, explain bool) error {
-	// --read is an explicit request for a body, so the caller never asked for
-	// pointers here.
-	if err := writeAskHeader(w, result, explain, false); err != nil {
+	// --read exists to render a body and always does, so the header is told
+	// exactly that rather than left to infer it from the confidence label.
+	if err := writeAskHeader(w, result, explain, true); err != nil {
 		return err
 	}
 	if err := writeAskHits(w, result.TopHits, formatOpts{explain: explain}); err != nil {
@@ -149,11 +149,11 @@ func formatAskWithOptions(result *AskResult, w io.Writer, opts formatOpts) error
 	// Captured before the mutation below: after it, opts.pointersOnly means
 	// "no bodies will render" rather than "the caller asked for ids", and the
 	// header needs the caller's original request to decide what to promise.
-	callerAsked := opts.pointersOnly
-	if delivered, _ := result.BodyDecision(opts.pointersOnly); !delivered {
+	delivered, _ := result.BodyDecision(opts.pointersOnly)
+	if !delivered {
 		opts.pointersOnly = true
 	}
-	if err := writeAskHeader(w, result, opts.explain, callerAsked); err != nil {
+	if err := writeAskHeader(w, result, opts.explain, delivered); err != nil {
 		return err
 	}
 	if err := writeAskHits(w, result.TopHits, opts); err != nil {
@@ -182,11 +182,13 @@ func formatAskWithOptions(result *AskResult, w io.Writer, opts formatOpts) error
 // synonym. With explain set, a reconstruction line shows the z derivation (and
 // surfaces a stale/cross-vault N). Without a noise floor (keyword-only), it
 // keeps the legacy RRF-gap vocabulary.
-func writeAskHeader(w io.Writer, result *AskResult, explain, callerAsked bool) error {
-	// Whether a body is coming is BodyDecision's call, not this function's.
-	// Deriving it a second time here is how the hint came to say "body
-	// suppressed" directly above a delivered body.
-	bodyDelivered, _ := result.BodyDecision(callerAsked)
+func writeAskHeader(w io.Writer, result *AskResult, explain, bodyDelivered bool) error {
+	// bodyDelivered is the ANSWER, passed in — not a question this function
+	// re-derives. It took `callerAsked` and computed the answer itself, which
+	// cannot express "a body is definitely coming": --read always renders one,
+	// so the header printed "body suppressed; use --read N to override" directly
+	// above the body --read had just delivered. A caller that knows what is
+	// about to happen has to be able to say so.
 	suppressedNote := ""
 	if !bodyDelivered {
 		suppressedNote = " — body suppressed; use --read N to override"
@@ -344,14 +346,31 @@ func writeContextHeader(w io.Writer, ctx *memory.ContextPackResult, withBodies i
 		return err
 	}
 	suffix := ""
+	capNote := ""
 	if !opts.pointersOnly && len(ctx.Context) > 0 && withBodies < len(ctx.Context) {
 		suffix = fmt.Sprintf(", %d with bodies", withBodies)
-		if excerpted := countItemsExcerpted(ctx.Context, opts); excerpted > 0 {
+		// The TARGET counts too. countItemsExcerpted walks only ctx.Context, so
+		// the header read "2 items, 2 excerpted" while three blocks rendered and
+		// all three were excerpts — the target is in the list but not the count,
+		// and it is the block an agent reads first.
+		excerpted := countItemsExcerpted(ctx.Context, opts)
+		if ctx.Target != nil && ctx.Target.BodyExcerpted && ctx.Target.Body != "" {
+			excerpted++
+		}
+		if excerpted > 0 {
 			suffix += fmt.Sprintf(", %d excerpted", excerpted)
+			// "863/6000" with most of the budget unused reads as "the vault had
+			// nothing more to give". It means "a cap bound every item and 5,137
+			// tokens went unspent" — a different fact, and the one that tells the
+			// reader which knob to turn. Same shape as "0 items, 900/900 tokens":
+			// a true number describing the pack rather than what happened.
+			if unspent := ctx.BudgetTokens - ctx.UsedTokens; unspent > ctx.BudgetTokens/2 {
+				capNote = fmt.Sprintf(" — bound by --excerpt, %d tokens unspent", unspent)
+			}
 		}
 	}
-	_, err := fmt.Fprintf(w, "\nContext from: %s (%d items%s, %d/%d tokens)\n",
-		ctx.TargetID, len(ctx.Context), suffix, ctx.UsedTokens, ctx.BudgetTokens)
+	_, err := fmt.Fprintf(w, "\nContext from: %s (%d items%s, %d/%d tokens%s)\n",
+		ctx.TargetID, len(ctx.Context), suffix, ctx.UsedTokens, ctx.BudgetTokens, capNote)
 	return err
 }
 
@@ -382,7 +401,14 @@ func writeContextTarget(w io.Writer, target *memory.ContextPackTarget, opts form
 		return err
 	}
 	if !opts.pointersOnly && target.Body != "" {
-		_, err := fmt.Fprintf(w, "    %s\n", Truncate(target.Body, 120))
+		// An excerpt already carries its own budget-derived bound. Truncating it
+		// again here would cut the target — the slot the agent reads first — at
+		// 120 runes, discarding the half that carries the rule.
+		body := target.Body
+		if !target.BodyExcerpted {
+			body = Truncate(body, itemBodyPreviewRunes)
+		}
+		_, err := fmt.Fprintf(w, "    %s\n", body)
 		return err
 	}
 	return nil

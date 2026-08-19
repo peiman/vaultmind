@@ -22,10 +22,13 @@ project_dir="${CLAUDE_PROJECT_DIR:-$(pwd)}"
 # the hook works for any contributor's checkout path, not just the author's.
 transcripts_subdir=$(printf '%s' "$project_dir" | sed 's|/|-|g')
 transcripts_dir="$HOME/.claude/projects/$transcripts_subdir"
-# VAULTMIND_VAULT lets a consumer capture episodes into their own vault (set
-# by `vaultmind hooks install --vault`). Falls back to the vaultmind-identity
-# convention when unset, so existing installs are unaffected (issue #41.6).
-vault_root="${VAULTMIND_VAULT:-$project_dir/vaultmind-identity}"
+# Per-concern env routing: VAULTMIND_EPISODE_VAULT routes *episode writes* to
+# their own vault, independent of per-turn recall and persona-load. It falls
+# back to the overloaded VAULTMIND_VAULT (set by `vaultmind hooks install
+# --vault`, and the simple single-var default), then to the vaultmind-identity
+# convention. A dual-vault adopter can write episodes to a vault distinct from
+# the recall/persona vault; a single-var setup is unchanged (issue #41.6).
+vault_root="${VAULTMIND_EPISODE_VAULT:-${VAULTMIND_VAULT:-$project_dir/vaultmind-identity}}"
 output_dir="$vault_root/episodes"
 
 # Resolve vaultmind binary: prefer a project-local build (e.g.
@@ -72,16 +75,92 @@ fi
 
 mkdir -p "$output_dir"
 
+# --incremental: capture only the transcript delta since this session's last
+# SessionEnd, not the whole transcript every time. A session that never
+# closes (or is manually resumed across many technical restarts) would
+# otherwise re-render into one ever-growing episode file at every SessionEnd.
 if [[ -n "$binary" ]]; then
-    "$binary" episode capture "$transcript" --output-dir "$output_dir" >/dev/null 2>&1 || {
-        echo "capture-episode: binary run failed" >&2
+    err=$("$binary" episode capture "$transcript" --output-dir "$output_dir" --incremental 2>&1 >/dev/null) || {
+        echo "capture-episode: binary run failed: $err" >&2
         exit 0
     }
 else
-    (cd "$project_dir" && go run . episode capture "$transcript" --output-dir "$output_dir" >/dev/null 2>&1) || {
-        echo "capture-episode: go run failed" >&2
+    err=$(cd "$project_dir" && go run . episode capture "$transcript" --output-dir "$output_dir" --incremental 2>&1 >/dev/null) || {
+        echo "capture-episode: go run failed: $err" >&2
         exit 0
     }
 fi
+
+# days_between prints whole days from $1 to $2 (both YYYY-MM-DD), or nothing when
+# either cannot be parsed. GNU and BSD date disagree on the flag for parsing a
+# date string, so both are tried: a version using only `date -j` left the gap
+# permanently "unknown" on Linux, which reads as "no history" rather than "this
+# platform was not handled".
+days_between() {
+    local a b
+    a=$(date -j -f "%Y-%m-%d" "$1" +%s 2>/dev/null || date -d "$1" +%s 2>/dev/null || true)
+    b=$(date -j -f "%Y-%m-%d" "$2" +%s 2>/dev/null || date -d "$2" +%s 2>/dev/null || true)
+    [ -n "$a" ] && [ -n "$b" ] && echo $(( (b - a) / 86400 ))
+}
+
+# append_accumulation_record answers the one question an episode cannot: did this
+# session leave anything KEPT, or only telemetry?
+#
+# Everything `episode capture` writes records what the session DID. A desk entry
+# — a note the agent stopped to write because something landed — records what it
+# UNDERSTOOD. Without this line, a run of sessions that captured perfectly and
+# distilled nothing looks identical to a run that grew the vault.
+#
+# The desk is VAULTMIND_DESK_DIR, else <vault>/journal. When neither exists the
+# section is skipped entirely rather than written with "Desk entry: NO": this
+# hook must not report an absence it never looked for.
+append_accumulation_record() {
+    local desk_dir today ep wrote last gap days
+    desk_dir="${VAULTMIND_DESK_DIR:-$vault_root/journal}"
+    [ -d "$desk_dir" ] || return 0
+
+    today=$(date +%Y-%m-%d)
+
+    # The episode just written for this session; fall back to the newest. Silent
+    # on a miss — SessionEnd must never fail over a bookkeeping addendum.
+    ep=""
+    if [ -n "$session_id" ]; then
+        ep=$(grep -rl "session_id: $session_id" "$output_dir" 2>/dev/null | head -n1 || true)
+    fi
+    [ -z "$ep" ] && ep=$(ls -1t "$output_dir"/episode-*.md 2>/dev/null | head -n1 || true)
+    [ -z "$ep" ] && return 0
+    [ -f "$ep" ] || return 0
+
+    grep -q "^## Accumulation" "$ep" 2>/dev/null && return 0   # idempotent
+
+    wrote=""
+    [ -n "$session_id" ] && wrote=$(grep -rl "$session_id" "$desk_dir" 2>/dev/null | head -n1 || true)
+    [ -z "$wrote" ] && wrote=$(ls -1 "$desk_dir/$today"-*.md 2>/dev/null | head -n1 || true)
+    last=$(ls -1 "$desk_dir" 2>/dev/null | grep -Eo '^[0-9]{4}-[0-9]{2}-[0-9]{2}' | sort | tail -1 || true)
+
+    gap="unknown"
+    if [ -n "$last" ]; then
+        days=$(days_between "$last" "$today")
+        [ -n "$days" ] && gap="$days days"
+    fi
+
+    {
+        printf '\n## Accumulation\n\n'
+        printf 'Everything above this line is telemetry — what this session DID.\n'
+        printf 'This section is the only part that says whether anything was KEPT,\n'
+        printf 'and it is written by the SessionEnd hook, not by `episode capture`.\n\n'
+        if [ -n "$wrote" ]; then
+            printf -- '- Desk entry: YES — `%s`\n' "${wrote#"$project_dir/"}"
+        else
+            printf -- '- Desk entry: **NO — this session left no transformation.** Its\n'
+            printf '  understanding is now recoverable only by re-reading the transcript,\n'
+            printf '  which is precisely the failure mode this vault exists to prevent.\n'
+        fi
+        printf -- '- Last desk entry: %s (gap: %s)\n' "${last:-never}" "$gap"
+    } >> "$ep" 2>/dev/null || true
+    return 0
+}
+
+append_accumulation_record || true
 
 exit 0

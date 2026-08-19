@@ -68,6 +68,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`vaultmind self` asks whether an access DELIVERED, instead of guessing from
+  who fired it** (migration 008 adds `note_accesses.body_delivered`).
+
+  `self` excluded the `hook` and `agent-neighbor` callers because neither ever
+  delivered note text — the caller name was a sound proxy for "was this a real
+  read". The delivery work in this same release made both of them deliver, and
+  the proxy inverted: `self` began hiding genuine reads, and hid more of them the
+  better delivery worked. A hook could hand an agent several notes' worth of
+  content while `self` reported that nothing had happened.
+
+  Caller could not be repaired into a delivery signal. `resolveCaller` collapses
+  anything containing "hook" to `CallerHook`, overriding the explicit
+  target/neighbour labels the ask path passes, so for a majority of rows the
+  ledger cannot even distinguish the deliberate target from the fan-out. The
+  dimension was simply the wrong one for the question.
+
+  Delivery is now recorded directly, from the same `AskResult.DeliveredTo` value
+  the usage log writes — one source of truth for "did content reach the agent",
+  consulted by both ledgers rather than two heuristics that can disagree.
+
+  **Rows written before this carry NULL, which is not the same as false.** For
+  them the caller heuristic was correct at the time — a `hook` row really did
+  deliver nothing — so NULL falls back to that original meaning. Writing 0 would
+  assert a measurement nobody took; writing 1 would fabricate deliveries. `caller`
+  is kept and keeps its real meaning: who *initiated* the access, which is still
+  the right axis for deliberate-vs-ambient.
+
+  Explicitly not done: copying the old caller filter into the activation
+  candidate list. That would have excluded exactly the rows this release turned
+  into real deliveries.
+
 - **Activation no longer reinforces notes that were never read.** A `note_access`
   event was written for a query's top hit whenever the hit cleared the relevance
   floor — a check on *relevance*, not on *delivery*. Under `--pointers-only` no

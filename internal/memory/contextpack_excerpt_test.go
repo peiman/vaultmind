@@ -70,6 +70,38 @@ func TestContextPack_ExcerptDoesNotReplaceFullBodies(t *testing.T) {
 	assert.Positive(t, withText(result), "a large budget must still deliver whole bodies")
 }
 
+// Found by inspecting real --json output after shipping: the target was capped
+// at ExcerptTokens while a context item whose body happened to FIT was included
+// whole — 2,685 characters (~670 tokens) against a requested cap of 80. The
+// flag's own description says it "applies to the target note and every context
+// item", so the documentation described behaviour the code did not have.
+//
+// A cap that only engages on overflow is not a cap. It also makes the budget
+// unpredictable in exactly the setting this flag exists for: a hook that must
+// fit several notes into a small, fixed allowance.
+func TestContextPack_ExcerptCapsItemsThatWouldOtherwiseFit(t *testing.T) {
+	db := buildTestDB(t)
+	resolver := graph.NewResolver(db)
+
+	const cap = 20
+
+	result, err := memory.ContextPack(resolver, db, memory.ContextPackConfig{
+		Input: "proj-vaultmind", Budget: 8192, MaxItems: 3, ExcerptTokens: cap,
+	})
+	require.NoError(t, err)
+
+	for _, item := range result.Context {
+		if item.Body == "" {
+			continue
+		}
+		assert.LessOrEqual(t, memory.EstimateTokens(item.Body), cap,
+			"item %s carries %d tokens against a %d-token cap — a cap that only engages on overflow is not a cap",
+			item.ID, memory.EstimateTokens(item.Body), cap)
+		assert.True(t, item.BodyExcerpted,
+			"item %s carries capped text, so it must be reported as an excerpt", item.ID)
+	}
+}
+
 // ExcerptTokens == 0 is the released behaviour and must stay byte-identical, so
 // upgrading cannot silently change what an existing caller is handed.
 func TestContextPack_ExcerptOptInIsDefaultOff(t *testing.T) {

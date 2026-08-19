@@ -78,6 +78,17 @@ func (d *DB) RecentSessionWindows(limit int) ([]SessionWindow, error) {
 }
 
 // BatchNoteAccessTimes returns access times for multiple notes in one pass.
+//
+// THIS is the function the activation scorer calls (activation_scorer.go,
+// shadow_variants.go) — not NoteAccessTimes. When the phantom-read filter was
+// first added it was applied to NoteAccessTimes and AccessedNoteIDs and missed
+// here, so a note with even one genuine read stayed in the candidate set and
+// kept every phantom alongside it: the fix was a no-op on the exact note it
+// cited as evidence.
+//
+// Any new query over EventNoteAccess must call activationSignalFrom before
+// treating a row as a retrieval. There are three such queries in this file and
+// they are the entire input surface of the scorer.
 func (d *DB) BatchNoteAccessTimes(noteIDs []string) (map[string][]time.Time, error) {
 	result := make(map[string][]time.Time, len(noteIDs))
 	for _, id := range noteIDs {
@@ -113,6 +124,9 @@ func (d *DB) BatchNoteAccessTimes(noteIDs []string) (map[string][]time.Time, err
 		}
 		noteID, ok := data["note_id"].(string)
 		if !ok || !wanted[noteID] {
+			continue
+		}
+		if !activationSignalFrom(data) {
 			continue
 		}
 		t, err := time.Parse(time.RFC3339, ts)

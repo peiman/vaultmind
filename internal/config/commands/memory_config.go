@@ -396,6 +396,7 @@ WHEN TO USE
 		"app.memorypack.depth":     "depth",
 		"app.memorypack.max_items": "max-items",
 		"app.memorypack.slim":      "slim",
+		"app.memorypack.excerpt":   "excerpt",
 	},
 }
 
@@ -430,6 +431,7 @@ func MemoryPackOptions() []config.ConfigOption {
 		{Key: "app.memorypack.budget", DefaultValue: 4096, Description: "Token budget", Type: "int"},
 		{Key: "app.memorypack.depth", DefaultValue: 1, Description: "BFS traversal depth (1 = direct neighbors only)", Type: "int"},
 		{Key: "app.memorypack.max_items", DefaultValue: 0, Description: "Max context items (0 = unlimited)", Type: "int"},
+		{Key: "app.memorypack.excerpt", DefaultValue: 0, Description: "Cap each note's contribution at N tokens, preferring its decision-bearing passage — the Principle section where a note has one, else its opening prose. 0 = off, which also means a note larger than the remaining budget contributes no text at all while the pack still counts it", Type: "int"},
 		{Key: "app.memorypack.slim", DefaultValue: false, Description: "Slim frontmatter (type, title, status only)", Type: "bool"},
 	}
 }

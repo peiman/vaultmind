@@ -70,9 +70,10 @@ func TestRunNoteGet_RecordsAccessForResolvedNote(t *testing.T) {
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
-	require.NoError(t, query.RunNoteGet(db, query.NoteGetConfig{
+	_, getErr := query.RunNoteGet(db, query.NoteGetConfig{
 		Input: "concept-alpha", JSONOutput: true, VaultPath: dir,
-	}, &buf))
+	}, &buf)
+	require.NoError(t, getErr)
 
 	after, err := index.LookupNoteAccess(db, "concept-alpha")
 	require.NoError(t, err)
@@ -95,9 +96,10 @@ func TestRunNoteGet_DoesNotRecordAccessForUnknownID(t *testing.T) {
 	var buf bytes.Buffer
 	// Unknown id — RunNoteGet writes a not_found envelope AND signals failure,
 	// so the caller's exit code agrees with the envelope it just emitted.
-	require.ErrorIs(t, query.RunNoteGet(db, query.NoteGetConfig{
+	_, missErr := query.RunNoteGet(db, query.NoteGetConfig{
 		Input: "concept-does-not-exist", JSONOutput: true, VaultPath: dir,
-	}, &buf), envelope.ErrAlreadyWritten)
+	}, &buf)
+	require.ErrorIs(t, missErr, envelope.ErrAlreadyWritten)
 
 	after, err := index.LookupNoteAccess(db, "concept-alpha")
 	require.NoError(t, err)

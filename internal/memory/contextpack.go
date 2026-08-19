@@ -32,7 +32,12 @@ type ContextPackConfig struct {
 type ContextPackTarget struct {
 	ID          string                 `json:"id"`
 	Frontmatter map[string]interface{} `json:"frontmatter"`
-	Body        string                 `json:"body,omitempty"`
+	// BodyExcerpted marks Body as the note's decision-bearing passage rather
+	// than its whole text — same meaning as on ContextItem, and needed here for
+	// the same reason: a renderer that cannot tell the difference will truncate
+	// an already-bounded excerpt a second time.
+	BodyExcerpted bool   `json:"body_excerpted,omitempty"`
+	Body          string `json:"body,omitempty"`
 }
 
 // ContextItem holds context metadata for a single related note.
@@ -291,13 +296,18 @@ func attachBody(item *ContextItem, body string, remaining *int, excerptTokens in
 	if body == "" || *remaining <= 0 {
 		return 0
 	}
-	if tokens := EstimateTokens(body); tokens <= *remaining {
-		item.BodyIncluded = true
-		item.Body = body
-		*remaining -= tokens
-		return tokens
-	}
+	// The cap is checked BEFORE the fits-whole path, not only as an overflow
+	// fallback. A cap that engages only on overflow is not a cap: it let a note
+	// that happened to fit contribute ~670 tokens against a requested 80, which
+	// makes the budget unpredictable in exactly the setting this exists for — a
+	// hook fitting several notes into a small fixed allowance.
 	if excerptTokens <= 0 {
+		if tokens := EstimateTokens(body); tokens <= *remaining {
+			item.BodyIncluded = true
+			item.Body = body
+			*remaining -= tokens
+			return tokens
+		}
 		return 0
 	}
 	budget := min(excerptTokens, *remaining)
@@ -371,7 +381,6 @@ func packTargetContent(full *index.FullNote, budget, excerptTokens int, result *
 	fm := extractFrontmatter(full, false)
 	fmJSON, _ := json.Marshal(fm)
 	fmTokens := EstimateTokens(string(fmJSON))
-	bodyTokens := EstimateTokens(full.Body)
 
 	target := &ContextPackTarget{
 		ID:          full.ID,
@@ -388,25 +397,32 @@ func packTargetContent(full *index.FullNote, budget, excerptTokens int, result *
 		return target, remaining
 	}
 
-	if bodyTokens <= remaining {
-		target.Body = full.Body
-		remaining -= bodyTokens
-		result.UsedTokens += bodyTokens
-		return target, remaining
-	}
-
-	// The target is what the agent is most likely to act on, and it is what the
-	// budget starves first. When the caller opted into excerpting, give it the
-	// note's most decision-relevant passage instead of the raw byte slice below
-	// — which cuts mid-word and, because it slices bytes rather than runes, can
-	// split a multi-byte character outright.
+	// The target is the slot the agent reads first, so it gets the excerpt
+	// treatment BEFORE the fits-whole check, not only as a fallback when the
+	// body overflows. Ordering this the other way meant that at a budget where
+	// the body happened to fit, the target was stored whole and then truncated
+	// from the top for display — showing an arc's "Trigger" (its story setup)
+	// while the smaller context items below it showed properly chosen Principle
+	// excerpts. The best slot got the worst content.
+	//
+	// It also avoids the raw byte slice further down, which cuts mid-word and,
+	// because it slices bytes rather than runes, can split a multi-byte
+	// character outright.
 	if excerptTokens > 0 && remaining > 0 && full.Body != "" {
 		if excerpt := Excerpt(full.Body, min(excerptTokens, remaining)); excerpt != "" {
 			target.Body = excerpt
+			target.BodyExcerpted = true
 			used := EstimateTokens(excerpt)
+			// Truncated means "the BUDGET forced a cut" — `memory pack` renders it
+			// as "(truncated)" next to the token counts. An excerpt taken by policy
+			// on a budget with room to spare cost the reader nothing, and saying
+			// otherwise reports an event that did not happen. Only claim it when
+			// the whole body genuinely would not have fit.
+			if EstimateTokens(full.Body) > remaining {
+				result.Truncated = true
+			}
 			remaining -= used
 			result.UsedTokens += used
-			result.Truncated = true
 			return target, remaining
 		}
 	}

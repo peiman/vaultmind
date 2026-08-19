@@ -86,7 +86,7 @@ Nothing linked.
 func TestRunNoteGet_JSONReturnsRequestedNote(t *testing.T) {
 	db, dir := smallIndexedVault(t)
 	var buf bytes.Buffer
-	err := query.RunNoteGet(db, query.NoteGetConfig{
+	_, err := query.RunNoteGet(db, query.NoteGetConfig{
 		Input: "concept-alpha", JSONOutput: true, VaultPath: dir,
 	}, &buf)
 	require.NoError(t, err)
@@ -108,7 +108,7 @@ func TestRunNoteGet_JSONReturnsRequestedNote(t *testing.T) {
 func TestRunNoteGet_UnknownIDEmitsNotFoundEnvelope(t *testing.T) {
 	db, dir := smallIndexedVault(t)
 	var buf bytes.Buffer
-	err := query.RunNoteGet(db, query.NoteGetConfig{
+	_, err := query.RunNoteGet(db, query.NoteGetConfig{
 		Input: "nope", JSONOutput: true, VaultPath: dir,
 	}, &buf)
 	require.ErrorIs(t, err, envelope.ErrAlreadyWritten)
@@ -130,7 +130,7 @@ func TestRunNoteGet_UnknownIDEmitsNotFoundEnvelope(t *testing.T) {
 func TestRunNoteGet_FrontmatterOnlyStripsBody(t *testing.T) {
 	db, dir := smallIndexedVault(t)
 	var buf bytes.Buffer
-	err := query.RunNoteGet(db, query.NoteGetConfig{
+	_, err := query.RunNoteGet(db, query.NoteGetConfig{
 		Input: "concept-alpha", FrontmatterOnly: true, JSONOutput: true, VaultPath: dir,
 	}, &buf)
 	require.NoError(t, err)
@@ -153,7 +153,7 @@ func TestRunNoteGet_FrontmatterOnlyStripsBody(t *testing.T) {
 func TestRunNoteGet_HumanModeShowsHeaderAndBody(t *testing.T) {
 	db, dir := smallIndexedVault(t)
 	var buf bytes.Buffer
-	err := query.RunNoteGet(db, query.NoteGetConfig{
+	_, err := query.RunNoteGet(db, query.NoteGetConfig{
 		Input: "concept-alpha", VaultPath: dir,
 	}, &buf)
 	require.NoError(t, err)
@@ -172,7 +172,7 @@ func TestRunNoteGet_HumanModeShowsHeaderAndBody(t *testing.T) {
 func TestRunNoteGet_HumanModeFrontmatterOnlyStripsBody(t *testing.T) {
 	db, dir := smallIndexedVault(t)
 	var buf bytes.Buffer
-	err := query.RunNoteGet(db, query.NoteGetConfig{
+	_, err := query.RunNoteGet(db, query.NoteGetConfig{
 		Input: "concept-alpha", FrontmatterOnly: true, VaultPath: dir,
 	}, &buf)
 	require.NoError(t, err)
@@ -285,7 +285,7 @@ body
 	defer db.Close()
 
 	var buf bytes.Buffer
-	err = query.RunNoteGet(db, query.NoteGetConfig{
+	_, err = query.RunNoteGet(db, query.NoteGetConfig{
 		Input: "Shared Title", JSONOutput: true, VaultPath: dir,
 	}, &buf)
 	require.ErrorIs(t, err, envelope.ErrAlreadyWritten,

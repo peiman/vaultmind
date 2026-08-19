@@ -29,16 +29,23 @@ func runNoteGet(cmd *cobra.Command, args []string) error {
 	}
 	defer vdb.Close()
 
-	// Log note access for experiment outcome linkage (non-blocking)
-	if session := experiment.FromContext(cmd.Context()); session != nil {
-		session.SetVaultPath(vaultPath)
-		_, _ = session.LogNoteAccessEvent(args[0], experiment.AccessSourceRead, true) // note get prints the body
-	}
-
-	return query.RunNoteGet(vdb.DB, query.NoteGetConfig{
+	outcome, runErr := query.RunNoteGet(vdb.DB, query.NoteGetConfig{
 		Input:           args[0],
 		FrontmatterOnly: getConfigValueWithFlags[bool](cmd, "frontmatter-only", config.KeyAppNoteFrontmatterOnly),
 		JSONOutput:      getConfigValueWithFlags[bool](cmd, "json", config.KeyAppNoteJson),
 		VaultPath:       vaultPath,
 	}, cmd.OutOrStdout())
+
+	// Log AFTER the read, keyed on the RESOLVED id and on what was actually
+	// rendered. Logging before it ran, with args[0] and a hardcoded true,
+	// produced three wrong things at once: a key no lookup can match when the
+	// input was a title or path, a delivered read for --frontmatter-only which
+	// renders no body, and a delivered read for a note that does not exist.
+	// note_get is trusted unconditionally by the activation gate, so each of
+	// those entered the ranking. Best-effort — telemetry never fails the read.
+	if session := experiment.FromContext(cmd.Context()); session != nil && outcome.NoteID != "" {
+		session.SetVaultPath(vaultPath)
+		_, _ = session.LogNoteAccessEvent(outcome.NoteID, experiment.AccessSourceRead, outcome.BodyDelivered)
+	}
+	return runErr
 }

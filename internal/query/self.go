@@ -61,10 +61,13 @@ func RunSelf(db *index.DB, cfg SelfConfig, w io.Writer) error {
 	// — CallerAgent stays in (Ask target + note get), everything else
 	// stays out by default. See docs/reviews/help-redesign-followup-
 	// response.md for the round-2 evidence.
-	all, err := index.ListAccessedNotesExcludingCallers(db, []string{
-		index.CallerHook,
-		index.CallerAgentNeighbor,
-	})
+	// Superseded by migration 008. The caller exclusion above was right while
+	// hook and neighbour accesses delivered nothing — caller was a sound proxy
+	// for "was this a real read". The delivery work made both deliver, and the
+	// proxy inverted: `self` began hiding genuine reads, and hid more of them
+	// the better delivery worked. Ask the delivery question directly instead;
+	// caller keeps its real meaning, which is who initiated.
+	all, err := index.ListDeliveredNotes(db)
 	if err != nil {
 		return fmt.Errorf("self: listing accessed notes: %w", err)
 	}

@@ -47,6 +47,69 @@ func TestContextPack_TargetIsExcerptedNotByteSliced(t *testing.T) {
 		"got %q — a starved target should end on a sentence or a marked cut, never mid-word", body)
 }
 
+// Caught by running the real recall hook after shipping: at a budget where the
+// target's body FITS, it was stored whole and then truncated from the top for
+// display — so the most prominent slot in the whole injection showed an arc's
+// "Trigger" (its story setup) while the smaller context items below it showed
+// properly chosen Principle excerpts. The best slot got the worst content.
+//
+// So --excerpt means "cap every note at N tokens, preferring its
+// decision-bearing passage", not "fall back to an excerpt only when the note is
+// too big". A caller that opts in wants bounded, decision-bearing text
+// throughout; one that does not is unaffected.
+func TestContextPack_TargetIsExcerptedEvenWhenBodyFits(t *testing.T) {
+	db := buildTestDB(t)
+	resolver := graph.NewResolver(db)
+
+	// Verified by sweep: at 400 the fixture's target body fits whole, so this
+	// exercises the fits-but-should-still-be-excerpted path.
+	const roomyBudget = 400
+
+	withExcerpt, err := memory.ContextPack(resolver, db, memory.ContextPackConfig{
+		Input: "proj-vaultmind", Budget: roomyBudget, MaxItems: 2, ExcerptTokens: 30,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, withExcerpt.Target)
+
+	assert.LessOrEqual(t, memory.EstimateTokens(withExcerpt.Target.Body), 30,
+		"opting into excerpts must bound the target too — it is the slot the agent reads first")
+}
+
+// Truncated means "the budget forced a cut", and `memory pack` renders it to the
+// user as "tokens: 11 / 100000 (truncated)". Setting it when an excerpt was
+// taken by POLICY on a budget with room to spare tells the reader the budget
+// cost them something it did not — a flag reporting an event that never
+// happened, which is the defect class this whole change-set exists to remove.
+func TestContextPack_PolicyExcerptIsNotReportedAsTruncation(t *testing.T) {
+	db := buildTestDB(t)
+	resolver := graph.NewResolver(db)
+
+	result, err := memory.ContextPack(resolver, db, memory.ContextPackConfig{
+		Input: "proj-vaultmind", Budget: 100000, MaxItems: 2, ExcerptTokens: 60,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result.Target)
+	require.True(t, result.Target.BodyExcerpted, "precondition: the target was excerpted by policy")
+
+	assert.False(t, result.Truncated,
+		"a 100k budget cut nothing; excerpting by policy must not be reported as budget truncation")
+}
+
+// When the budget genuinely cannot hold the body, Truncated is correct and must
+// still be set — otherwise this fix would trade one wrong flag for another.
+func TestContextPack_BudgetForcedExcerptStillReportsTruncation(t *testing.T) {
+	db := buildTestDB(t)
+	resolver := graph.NewResolver(db)
+
+	result, err := memory.ContextPack(resolver, db, memory.ContextPackConfig{
+		Input: "proj-vaultmind", Budget: 80, MaxItems: 2, ExcerptTokens: 60,
+	})
+	require.NoError(t, err)
+
+	assert.True(t, result.Truncated,
+		"at a budget too small for the body, the cut IS budget-forced and must be reported")
+}
+
 // Unchanged when the caller has not opted in: the released byte-slice behaviour
 // still applies, so upgrading cannot silently alter existing output.
 func TestContextPack_TargetTruncationUnchangedWithoutExcerpt(t *testing.T) {

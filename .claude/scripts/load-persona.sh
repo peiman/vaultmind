@@ -89,7 +89,26 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
   #    trap documented in the plasticity-gap arc and the
   #    2026-04-25 design signal under step 3 of the plasticity roadmap.
   ASK_ERR=$(mktemp -t vaultmind-persona-err.XXXXXX)
-  IDENTITY=$(VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" ask "who am I" --vault "$VAULT_PATH" --max-items 8 --budget 6000 2>"$ASK_ERR")
+  # --excerpt caps each of the 8 items at a bounded, decision-bearing passage.
+  # Without it the budget is spent first-come: the earliest items arrive whole
+  # and the rest arrive with no text at all. Measured on a real 63-note identity
+  # vault: 3 of 8 with bodies and 5 with nothing. Capped, all 8 arrive.
+  #
+  # 300 is where the cap stops binding, measured on that vault:
+  #   --excerpt  90 -> 716/6000    (the cap is trimming real content)
+  #   --excerpt 300 -> 863/6000
+  #   --excerpt 600 -> 863/6000    (identical — extraction is now the limit)
+  # Above 300 the constraint is the length of a Principle section, not the cap,
+  # so a larger number buys nothing. Below it, sections get cut.
+  #
+  # The pack deliberately leaves most of the 6,000 unspent: 8 decision rules
+  # beat 3 whole arcs plus 5 titles for reconstruction. That trade is worth
+  # revisiting if the budget is ever wanted for depth instead of breadth.
+  #
+  # The "what matters most right now" query below deliberately KEEPS
+  # --pointers-only — see the preload-trap reasoning above. That one is a design
+  # choice about forcing an explicit read, not an oversight.
+  IDENTITY=$(VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" ask "who am I" --vault "$VAULT_PATH" --max-items 8 --budget 6000 --excerpt 300 2>"$ASK_ERR")
   IDENTITY_STATUS=$?
   CONTEXT=$(VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" ask "what matters most right now" --vault "$VAULT_PATH" --max-items 5 --budget 2000 --pointers-only 2>>"$ASK_ERR")
 
@@ -106,6 +125,12 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
   # vault either leave default (the `[ -d ]` guard below skips
   # silently if the dir doesn't exist) or set
   # LOAD_PERSONA_RESEARCH_VAULT to their second vault.
+  #
+  # NOTE: the research/second vault runs ONLY `vaultmind self` (the
+  # memory/activation-state surface — hot/recent note titles), NOT a
+  # content `ask`. It surfaces what's been reinforced in that vault,
+  # not note bodies. So this block is cheap and ambient even on a large
+  # research vault; it never preloads bodies the agent didn't query.
   RESEARCH_VAULT="${LOAD_PERSONA_RESEARCH_VAULT:-$PROJECT_DIR/vaultmind-vault}"
   SELF_IDENTITY=$(VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" self --vault "$VAULT_PATH" --limit 5 2>>"$ASK_ERR" || true)
   SELF_RESEARCH=""

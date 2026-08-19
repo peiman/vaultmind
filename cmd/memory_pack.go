@@ -38,6 +38,11 @@ func runMemoryPack(cmd *cobra.Command, args []string) error {
 		MaxItems:         getConfigValueWithFlags[int](cmd, "max-items", config.KeyAppMemorypackMaxItems),
 		Slim:             getConfigValueWithFlags[bool](cmd, "slim", config.KeyAppMemorypackSlim),
 		ActivationScores: computeActivationScores(cmd.Context(), nil, 0),
+		// Without this, the command whose entire job is assembling a context
+		// pack was the one command that could not ask for excerpts — so it kept
+		// the original "N items, 0 with bodies" behaviour after every other
+		// caller had been fixed.
+		ExcerptTokens: getConfigValueWithFlags[int](cmd, "excerpt", config.KeyAppMemorypackExcerpt),
 	})
 	if err != nil {
 		if jsonOut {

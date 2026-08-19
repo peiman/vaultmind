@@ -115,6 +115,7 @@ func principleSection(body string) string {
 // A block counts as prose when it ends a sentence or runs longer than a heading
 // plausibly would. Headings do neither.
 func leadParagraph(body string) string {
+	var firstContent string
 	for _, block := range strings.Split(body, "\n\n") {
 		var lines []string
 		for _, line := range strings.Split(block, "\n") {
@@ -129,16 +130,52 @@ func leadParagraph(body string) string {
 		if isProse(text) {
 			return text
 		}
+		// Not prose-shaped, but it IS content. Hold the first such block as a
+		// fallback rather than discarding it — see below.
+		if firstContent == "" {
+			firstContent = text
+		}
 	}
-	return ""
+	// THE INVARIANT: a non-empty body never excerpts to nothing. Plenty of real
+	// notes are bullet lists, tables, or short CJK lines — none of which contain
+	// ASCII sentence punctuation or run longer than a heading. Returning ""
+	// for those turned a cap into content loss: a note that previously arrived
+	// whole arrived empty instead.
+	return firstContent
 }
 
 // maxHeadingChars is the length past which a block is prose regardless of
 // punctuation — a heading that long is not a heading.
 const maxHeadingChars = 80
 
+// sentenceEnders covers the CJK forms alongside the ASCII ones. Without the
+// wide variants, 研究は重要である。 reads as "not prose" — it ends in a full stop the
+// ASCII set does not contain, and is far too short to clear maxHeadingChars.
+const sentenceEnders = ".!?。！？"
+
 func isProse(text string) bool {
-	return strings.ContainsAny(text, ".!?") || len(text) > maxHeadingChars
+	if isCitation(text) {
+		return false
+	}
+	return strings.ContainsAny(text, sentenceEnders) || len(text) > maxHeadingChars
+}
+
+// isCitation reports whether a block is a bare file path or URL rather than
+// something an agent could act on.
+//
+// This was the 96% case's worst output. Most notes have no Principle section, so
+// the lead-paragraph fallback runs — and it accepted any block containing a
+// period, which a filename satisfies. A live hook injection delivered
+// `~/.claude/projects/…/663a071c-….jsonl` under the banner "the excerpt above is
+// the decision rule, not a pointer to one".
+//
+// The test is deliberately narrow: one unbroken token containing a slash. Prose
+// has whitespace between words; CJK has neither spaces nor slashes and so stays
+// correctly classified as prose. A citation is only skipped when there is other
+// prose to prefer — leadParagraph's fallback still returns it when a note has
+// nothing else, because delivering nothing is worse.
+func isCitation(text string) bool {
+	return !strings.ContainsAny(text, " \t") && strings.Contains(text, "/")
 }
 
 // isSectionHeading reports whether line is the named heading, with or without
@@ -199,6 +236,12 @@ func splitSentences(text string) []string {
 
 // hardTruncate cuts at a word boundary and marks the cut, for the case where a
 // single sentence exceeds the whole budget.
+//
+// When not even one word fits it returns "" rather than a bare ellipsis. An
+// ellipsis alone is a delivery that delivers nothing, and callers mark an item
+// as carrying a body whenever the excerpt is non-empty — so returning "…" let a
+// pack report "3 items, 3 excerpted" while handing the agent three ellipses.
+// Returning empty makes that state unexpressible instead of merely unlikely.
 func hardTruncate(text string, maxTokens int) string {
 	words := strings.Fields(text)
 	var kept []string
@@ -210,7 +253,7 @@ func hardTruncate(text string, maxTokens int) string {
 		kept = candidate
 	}
 	if len(kept) == 0 {
-		return ellipsis
+		return ""
 	}
 	return strings.Join(kept, " ") + ellipsis
 }
