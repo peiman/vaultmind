@@ -223,6 +223,7 @@ const (
 	KeyAppMemorypackBudget                   = "app.memorypack.budget"                    // Token budget
 	KeyAppMemorypackDepth                    = "app.memorypack.depth"                     // BFS traversal depth (1 = direct neighbors only)
 	KeyAppMemorypackMaxItems                 = "app.memorypack.max_items"                 // Max context items (0 = unlimited)
+	KeyAppMemorypackExcerpt                  = "app.memorypack.excerpt"                   // Cap each note's contribution at N tokens, preferring its decision-bearing pas...
 	KeyAppMemorypackSlim                     = "app.memorypack.slim"                      // Slim frontmatter (type, title, status only)
 	KeyAppNoteVault                          = "app.note.vault"                           // Path to vault root
 	KeyAppNoteJson                           = "app.note.json"                            // Output in JSON format

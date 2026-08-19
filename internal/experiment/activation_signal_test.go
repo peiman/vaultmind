@@ -28,9 +28,27 @@ func TestIsActivationSignal(t *testing.T) {
 			source: AccessSourceRead, bodyDelivered: false, want: true,
 			why: "the agent typed the id — content was fetched regardless of any earlier render",
 		},
+		// Changed after review. The constant's comment claimed "recall renders
+		// the note", but source="recall" was written by `memory recall` — which
+		// 835472a renamed to `memory neighbors`, same code, same formatter,
+		// printing `id [type] "title" depth N` and nothing else. It is the
+		// literal ancestor of the command classified two cases below as "the
+		// agent sees a title at most", and it was being trusted unconditionally
+		// while its own descendant is default-denied. 63 such events pass as
+		// genuine reads in a live log.
+		//
+		// No production code writes it any more, so it is gated on delivery
+		// rather than deleted: if a recall path is ever wired again, it earns
+		// activation the same way `ask` does instead of inheriting a whitelist.
 		{
-			name: "recall delivers content", source: AccessSourceRecall, want: true,
-			why: "recall renders the note; the agent encountered it",
+			name:   "legacy recall without a delivered body does not count",
+			source: AccessSourceRecall, bodyDelivered: false, want: false,
+			why: "it rendered titles; the rename is what the old comment missed",
+		},
+		{
+			name:   "a recall that did deliver a body counts",
+			source: AccessSourceRecall, bodyDelivered: true, want: true,
+			why: "delivery decides, so a future recall path is not pre-trusted",
 		},
 		{
 			name:   "an ask that delivered its body counts",

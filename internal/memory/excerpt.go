@@ -154,7 +154,28 @@ const maxHeadingChars = 80
 const sentenceEnders = ".!?。！？"
 
 func isProse(text string) bool {
+	if isCitation(text) {
+		return false
+	}
 	return strings.ContainsAny(text, sentenceEnders) || len(text) > maxHeadingChars
+}
+
+// isCitation reports whether a block is a bare file path or URL rather than
+// something an agent could act on.
+//
+// This was the 96% case's worst output. Most notes have no Principle section, so
+// the lead-paragraph fallback runs — and it accepted any block containing a
+// period, which a filename satisfies. A live hook injection delivered
+// `~/.claude/projects/…/663a071c-….jsonl` under the banner "the excerpt above is
+// the decision rule, not a pointer to one".
+//
+// The test is deliberately narrow: one unbroken token containing a slash. Prose
+// has whitespace between words; CJK has neither spaces nor slashes and so stays
+// correctly classified as prose. A citation is only skipped when there is other
+// prose to prefer — leadParagraph's fallback still returns it when a note has
+// nothing else, because delivering nothing is worse.
+func isCitation(text string) bool {
+	return !strings.ContainsAny(text, " \t") && strings.Contains(text, "/")
 }
 
 // isSectionHeading reports whether line is the named heading, with or without

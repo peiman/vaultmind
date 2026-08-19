@@ -19,17 +19,33 @@ type NoteGetConfig struct {
 	VaultPath       string
 }
 
-// RunNoteGet executes the note get logic.
-func RunNoteGet(db *index.DB, cfg NoteGetConfig, w io.Writer) error {
+// NoteGetOutcome reports what a note get actually did, so the caller can log it
+// instead of guessing.
+//
+// The caller used to log args[0] — the RAW INPUT — because RunNoteGet resolved
+// internally and returned only an error. A title- or path-resolved read
+// therefore landed on a key no lookup can match, and `note get` is the
+// highest-signal event the tool emits. It also hardcoded "a body was
+// delivered", which --frontmatter-only and every miss falsified.
+type NoteGetOutcome struct {
+	// NoteID is the RESOLVED id, empty when the input did not resolve.
+	NoteID string
+	// BodyDelivered is whether note text was actually rendered — false for
+	// --frontmatter-only, for misses, and for ambiguous input.
+	BodyDelivered bool
+}
+
+// RunNoteGet executes the note get logic and reports what it delivered.
+func RunNoteGet(db *index.DB, cfg NoteGetConfig, w io.Writer) (NoteGetOutcome, error) {
 	resolver := graph.NewResolver(db)
 	resolved, err := resolver.Resolve(cfg.Input)
 	if err != nil {
-		return fmt.Errorf("resolving: %w", err)
+		return NoteGetOutcome{}, fmt.Errorf("resolving: %w", err)
 	}
 
 	if !resolved.Resolved {
 		if cfg.JSONOutput {
-			return envelope.WriteError(w, envelope.Error("note get", "not_found",
+			return NoteGetOutcome{}, envelope.WriteError(w, envelope.Error("note get", "not_found",
 				fmt.Sprintf("no note matches %q", cfg.Input), ""))
 		}
 		// Text mode fails too. A missing id is a failure in both modes, and text
@@ -38,9 +54,9 @@ func RunNoteGet(db *index.DB, cfg NoteGetConfig, w io.Writer) error {
 		// found path on every typo. The friendly line is still printed; the
 		// sentinel sets the exit status without describing the failure twice.
 		if _, ferr := fmt.Fprintf(w, "No note found for %q\n", cfg.Input); ferr != nil {
-			return ferr
+			return NoteGetOutcome{}, ferr
 		}
-		return envelope.ErrAlreadyWritten
+		return NoteGetOutcome{}, envelope.ErrAlreadyWritten
 	}
 
 	if resolved.Ambiguous {
@@ -51,17 +67,17 @@ func RunNoteGet(db *index.DB, cfg NoteGetConfig, w io.Writer) error {
 				env.Errors[0].Candidates[i] = m.ID
 			}
 			env.Result = resolved
-			return envelope.WriteError(w, env)
+			return NoteGetOutcome{}, envelope.WriteError(w, env)
 		}
-		return fmt.Errorf("ambiguous: %d matches", len(resolved.Matches))
+		return NoteGetOutcome{}, fmt.Errorf("ambiguous: %d matches", len(resolved.Matches))
 	}
 
 	note, err := db.QueryFullNote(resolved.Matches[0].ID)
 	if err != nil {
-		return fmt.Errorf("querying note: %w", err)
+		return NoteGetOutcome{}, fmt.Errorf("querying note: %w", err)
 	}
 	if note == nil {
-		return fmt.Errorf("note %q not found in index", resolved.Matches[0].ID)
+		return NoteGetOutcome{}, fmt.Errorf("note %q not found in index", resolved.Matches[0].ID)
 	}
 
 	// Plasticity roadmap step 5 (Track A.2): explicit `note get <id>` is
@@ -71,34 +87,38 @@ func RunNoteGet(db *index.DB, cfg NoteGetConfig, w io.Writer) error {
 	// reader of access_count. Best-effort: a tracking miss is logged at
 	// debug and never fails the user query. CallerAgent because direct
 	// id-naming is the most deliberate retrieval signal we have.
-	if recErr := index.RecordNoteAccessAs(db, note.ID, index.CallerAgent); recErr != nil {
-		log.Debug().Err(recErr).Str("note_id", note.ID).Msg("recording note-get access failed (non-fatal)")
-	}
-
+	// Strip BEFORE deciding delivery. --frontmatter-only clears the body a few
+	// lines down, and recording the access above that meant a flag on this very
+	// command falsified the "a body was delivered" it recorded.
 	if cfg.FrontmatterOnly {
 		note.Body = ""
 		note.Headings = nil
 		note.Blocks = nil
 	}
+	outcome := NoteGetOutcome{NoteID: note.ID, BodyDelivered: note.Body != ""}
+
+	if recErr := index.RecordNoteAccessDelivered(db, note.ID, index.CallerAgent, outcome.BodyDelivered); recErr != nil {
+		log.Debug().Err(recErr).Str("note_id", note.ID).Msg("recording note-get access failed (non-fatal)")
+	}
 
 	if cfg.JSONOutput {
 		env := envelope.OK("note get", note)
 		env.Meta.VaultPath = cfg.VaultPath
-		return json.NewEncoder(w).Encode(env)
+		return outcome, json.NewEncoder(w).Encode(env)
 	}
 
 	if _, err = fmt.Fprintf(w, "%s (%s) — %s\n", note.ID, note.Type, note.Title); err != nil {
-		return err
+		return outcome, err
 	}
 	// Render the body in human mode unless the caller asked for
 	// frontmatter-only. Pre-2026-04-30 human mode returned only the
 	// header; agents fell back to the Read tool for bodies, which
 	// silently bypassed the access tracker. Printing the body here
 	// makes `note get` both the cleanest and the tracked read path.
-	if !cfg.FrontmatterOnly && note.Body != "" {
+	if note.Body != "" {
 		if _, err = fmt.Fprintf(w, "\n%s\n", note.Body); err != nil {
-			return err
+			return outcome, err
 		}
 	}
-	return nil
+	return outcome, nil
 }

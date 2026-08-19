@@ -13,8 +13,15 @@ const (
 	// neighbour. The agent sees a title at most.
 	AccessSourceNeighbors = "neighbors"
 
-	// AccessSourceRecall is written by the recall command, which renders the
-	// note.
+	// AccessSourceRecall was written by `memory recall`, which 835472a renamed
+	// to `memory neighbors` — same code, same formatter, printing
+	// `id [type] "title" depth N` and no body at all. It is the literal ancestor
+	// of AccessSourceNeighbors above.
+	//
+	// Nothing writes it today. It is kept, and gated on delivery like ask,
+	// because deleting it would silently reclassify the events already in
+	// people's logs, and pre-trusting it would let a future recall path reopen
+	// the phantom loop the moment someone rewires it.
 	AccessSourceRecall = "recall"
 )
 
@@ -57,11 +64,15 @@ func activationSignalFrom(data map[string]any) bool {
 
 func IsActivationSignal(source string, bodyDelivered bool) bool {
 	switch source {
-	case AccessSourceRead, AccessSourceRecall:
-		// Both fetch and render the note; the agent has its content either way.
+	case AccessSourceRead:
+		// note get fetches and renders the note by name — the most deliberate
+		// signal there is, and it now records its own delivery honestly
+		// (--frontmatter-only and misses no longer claim one).
 		return true
-	case AccessSourceAsk:
-		// Only when a body actually reached the agent.
+	case AccessSourceAsk, AccessSourceRecall:
+		// Only when a body actually reached the agent. Recall is here rather
+		// than in the always-true case because its command rendered titles;
+		// see the constant.
 		return bodyDelivered
 	default:
 		return false

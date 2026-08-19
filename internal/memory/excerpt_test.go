@@ -199,6 +199,50 @@ func TestExcerpt_FallbackDoesNotOverrideProsePreference(t *testing.T) {
 	assert.NotContains(t, got, "Peiman had asked")
 }
 
+// Only 15 of 81 notes in a real identity vault have a Principle section, so the
+// lead-paragraph fallback runs for roughly 96% of notes. It accepted anything
+// containing a period — and a file path contains several.
+//
+// Live consequence, seen in an actual hook injection: the excerpt delivered for
+// reference-session-transcript was
+// `~/.claude/projects/-Users-peiman.../663a071c-....jsonl`, presented under the
+// banner "the excerpt above is the decision rule, not a pointer to one".
+//
+// A path is one unbroken token with slashes in it. Prose has whitespace. That
+// distinction is enough, and it leaves CJK — which also has no spaces but no
+// slashes either — correctly classified as prose.
+func TestExcerpt_SkipsPathsAndURLs(t *testing.T) {
+	cases := map[string]struct{ body, wantNot, want string }{
+		"leading file path": {
+			body:    "~/.claude/projects/-Users-peiman-dev/663a071c-c343.jsonl\n\nThe session where the arc method was found.",
+			wantNot: ".jsonl",
+			want:    "arc method",
+		},
+		"leading URL": {
+			body:    "https://example.com/papers/anderson-1983.pdf\n\nBase-level activation decays with time since last retrieval.",
+			wantNot: "https://",
+			want:    "Base-level activation",
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got := memory.Excerpt(tc.body, 120)
+			assert.NotContains(t, got, tc.wantNot,
+				"a bare path or URL is a citation, not a decision rule; got %q", got)
+			assert.Contains(t, got, tc.want)
+		})
+	}
+}
+
+// A path is only skipped when there is real prose to prefer. A note that is
+// nothing but a path still delivers it — the invariant that a non-empty body
+// never excerpts to nothing outranks tidiness.
+func TestExcerpt_PathOnlyNoteStillDelivers(t *testing.T) {
+	got := memory.Excerpt("~/.claude/projects/only-a-path.jsonl", 120)
+	assert.NotEmpty(t, got, "there is nothing better to show; showing nothing is worse")
+}
+
 func TestExcerpt_EmptyBody(t *testing.T) {
 	assert.Empty(t, memory.Excerpt("", 100))
 	assert.Empty(t, memory.Excerpt("   \n\n  ", 100))

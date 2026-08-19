@@ -140,7 +140,7 @@ echo "VAULT — from your own notes, relevant to what you just said:"
 echo ""
 echo "$POINTERS"
 echo ""
-echo "(excerpts above are the decision-bearing passage — full note: vaultmind note get <id> --vault $VAULT_PATH)"
+echo "(the note's own text — a Principle section where it has one, else its opening lines. Full note: vaultmind note get <id> --vault $VAULT_PATH)"
 
 # Log the successful injection
 printf '{"timestamp":"%s","prompt_len":%d,"ask_status":0,"injection":true,"pointer_chars":%d}\n' \
