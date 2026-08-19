@@ -54,6 +54,7 @@ OUTPUT INCLUDES
 		"app.ask.preview":          "preview",
 		"app.ask.read":             "read",
 		"app.ask.quiet_on_nomatch": "quiet-on-no-match",
+		"app.ask.excerpt":          "excerpt",
 	},
 }
 
@@ -70,6 +71,7 @@ func AskOptions() []config.ConfigOption {
 		{Key: "app.ask.preview", DefaultValue: false, Description: "Render a one-line body snippet under each ranked hit; bridges --pointers-only (titles only) and the full context-pack output", Type: "bool"},
 		{Key: "app.ask.read", DefaultValue: "", Description: "Read the body of the named hit inline after the menu — accepts a 1-indexed rank (e.g. --read 2) or an exact id (e.g. --read concept-foo). Single-command shortcut for probe→read when you already know which hit from the titles", Type: "string"},
 		{Key: "app.ask.quiet_on_nomatch", DefaultValue: false, Description: "Print nothing when the top hit is at/below the noise floor (no_match). For ambient recall: inject silence instead of irrelevant pointers when the prompt is off-domain. Also skips the context-pack and access fan-out so off-domain prompts don't reinforce irrelevant notes.", Type: "bool"},
+		{Key: "app.ask.excerpt", DefaultValue: 0, Description: "When a note body will not fit the remaining budget, include an excerpt of at most N tokens instead of nothing. Prefers the note's Principle section (an arc's decision rule) over its opening, which is usually setup. 0 = off: an over-budget note contributes no text at all and the pack still counts it, so a tight budget yields items with no content", Type: "int"},
 	}
 }
 

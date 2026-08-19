@@ -7,7 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`ask --excerpt N` — deliver the passage that matters when the whole note will
+  not fit.** Body inclusion was all-or-nothing: a note one token over the
+  remaining budget contributed *nothing*, while the pack still counted it. That
+  is how output could read `3 items, 0 with bodies` — three notes named, none
+  delivered — and it was the common case rather than the edge case: on a vault
+  whose median note is larger than the hook budget, nothing ever fits.
+
+  With `--excerpt N` such a note contributes at most N tokens instead of zero.
+  The excerpt prefers the note's **Principle** section where one exists, because
+  of how arcs are written — trigger, push, deeper sight, principle — which puts
+  the story setup first and the decision rule several sections down. Injecting
+  "the first paragraph" hands an agent the anecdote and withholds the lesson.
+  Notes without that structure fall back to their opening prose (skipping
+  frontmatter and headings), and truncation lands on a sentence rather than
+  mid-word.
+
+  Off by default (`0`), so existing callers see byte-identical output.
+
 ### Changed
+
+- **A tight vault's weak hit now delivers its body.** Low contrast is a property
+  of the *vault* — its notes are all about one subject — not evidence about the
+  hit, and it holds more strongly the better curated the vault is. Suppressing on
+  it withheld content from precisely the vaults VaultMind exists to serve: on a
+  real 63-note identity vault every agent-integration trigger query measured
+  inside that band, so no hook injection could ever carry content.
+
+  The formatter had been printing *"a weak top hit here is often the best
+  available correct match ... use --read 1 for the body"* and then withholding the
+  body — telling the agent to fetch by hand what the pack had already assembled
+  and paid for. Genuinely irrelevant hits are unaffected: they land at or below
+  the noise floor as `no_match` and stay suppressed in every vault.
+
+- **The context header distinguishes an excerpt from a body**, and the relevance
+  hint stops claiming suppression while delivering. `2 items, 1 with bodies,
+  1 excerpted` is now sayable; previously an excerpt was reported as a body. The
+  "body suppressed" note is derived from the same `BodyDecision` the renderer
+  uses instead of being re-derived from the confidence label — a third derivation
+  that drifted the moment the rule changed.
+
+- **An excerpt renders in full rather than being truncated again for display.**
+  The neighbour preview cut every body to 120 runes, which took an
+  already-budgeted excerpt down to about a third of itself and landed mid-word.
 
 - **The usage-log documentation now describes what is written, not what is exported.**
   The README said telemetry was "off by default" and stored "no query text". Both were

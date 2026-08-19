@@ -84,7 +84,9 @@ func FormatAskRead(result *AskResult, note *index.FullNote, w io.Writer) error {
 // short-circuited before the explain path was read; this is the
 // rendering side of the fix.
 func FormatAskReadWithOptions(result *AskResult, note *index.FullNote, w io.Writer, explain bool) error {
-	if err := writeAskHeader(w, result, explain); err != nil {
+	// --read is an explicit request for a body, so the caller never asked for
+	// pointers here.
+	if err := writeAskHeader(w, result, explain, false); err != nil {
 		return err
 	}
 	if err := writeAskHits(w, result.TopHits, formatOpts{explain: explain}); err != nil {
@@ -144,10 +146,14 @@ func formatAskWithOptions(result *AskResult, w io.Writer, opts formatOpts) error
 	// Same decision the telemetry records, from the same function — see
 	// AskResult.BodyDecision. Two copies of this rule would let the log claim a
 	// body was delivered on a render that withheld it.
+	// Captured before the mutation below: after it, opts.pointersOnly means
+	// "no bodies will render" rather than "the caller asked for ids", and the
+	// header needs the caller's original request to decide what to promise.
+	callerAsked := opts.pointersOnly
 	if delivered, _ := result.BodyDecision(opts.pointersOnly); !delivered {
 		opts.pointersOnly = true
 	}
-	if err := writeAskHeader(w, result, opts.explain); err != nil {
+	if err := writeAskHeader(w, result, opts.explain, callerAsked); err != nil {
 		return err
 	}
 	if err := writeAskHits(w, result.TopHits, opts); err != nil {
@@ -176,7 +182,15 @@ func formatAskWithOptions(result *AskResult, w io.Writer, opts formatOpts) error
 // synonym. With explain set, a reconstruction line shows the z derivation (and
 // surfaces a stale/cross-vault N). Without a noise floor (keyword-only), it
 // keeps the legacy RRF-gap vocabulary.
-func writeAskHeader(w io.Writer, result *AskResult, explain bool) error {
+func writeAskHeader(w io.Writer, result *AskResult, explain, callerAsked bool) error {
+	// Whether a body is coming is BodyDecision's call, not this function's.
+	// Deriving it a second time here is how the hint came to say "body
+	// suppressed" directly above a delivered body.
+	bodyDelivered, _ := result.BodyDecision(callerAsked)
+	suppressedNote := ""
+	if !bodyDelivered {
+		suppressedNote = " — body suppressed; use --read N to override"
+	}
 	header := fmt.Sprintf("Search: %q (%d hits)", result.Query, len(result.TopHits))
 	if result.NoiseFloorApplied {
 		// Below the calibration gate, report the absence of a judgement rather
@@ -198,7 +212,7 @@ func writeAskHeader(w io.Writer, result *AskResult, explain bool) error {
 		case ConfidenceNoMatch:
 			header += fmt.Sprintf("  [relevance: nothing relevant — top hit at/below the off-topic noise floor (z=%+.2f); body suppressed]", result.RelevanceZ)
 		case ConfidenceWeak:
-			header += fmt.Sprintf("  [relevance: weak (z=%+.2f, %s) — body suppressed; use --read N to override]", result.RelevanceZ, zGloss(result.RelevanceZ))
+			header += fmt.Sprintf("  [relevance: weak (z=%+.2f, %s)%s]", result.RelevanceZ, zGloss(result.RelevanceZ), suppressedNote)
 		default:
 			header += fmt.Sprintf("  [relevance: %s (z=%+.2f, %s)]", result.TopHitConfidence, result.RelevanceZ, zGloss(result.RelevanceZ))
 		}
@@ -206,7 +220,11 @@ func writeAskHeader(w io.Writer, result *AskResult, explain bool) error {
 			// A tight vault's notes are so self-similar the embedder can't spread a
 			// correct hit far above the noise floor, so genuine matches read weak.
 			// Say so, once, so the agent doesn't read weak as "nothing here".
-			header += "\n  [tight vault: a weak top hit here is often the best available correct match, not 'nothing relevant' — use --read 1 for the body]"
+			if bodyDelivered {
+				header += "\n  [tight vault: a weak top hit here is often the best available correct match, not 'nothing relevant' — body included below]"
+			} else {
+				header += "\n  [tight vault: a weak top hit here is often the best available correct match, not 'nothing relevant' — use --read 1 for the body]"
+			}
 		}
 		if explain {
 			// Reconstruct the derivation so the operator can see the inputs — a
@@ -228,7 +246,7 @@ func writeAskHeader(w io.Writer, result *AskResult, explain bool) error {
 		case ConfidenceNoMatch:
 			header += "  [top-hit confidence: no clear winner — top results essentially tied]"
 		case ConfidenceWeak:
-			header += "  [top-hit confidence: weak — body suppressed; use --read N to override]"
+			header += "  [top-hit confidence: weak" + suppressedNote + "]"
 		default:
 			header += fmt.Sprintf("  [top-hit confidence: %s]", result.TopHitConfidence)
 		}
@@ -282,7 +300,25 @@ func countItemsWithBodies(items []memory.ContextItem, opts formatOpts) int {
 	}
 	n := 0
 	for _, item := range items {
-		if item.BodyIncluded && item.Body != "" {
+		if item.BodyIncluded && item.Body != "" && !item.BodyExcerpted {
+			n++
+		}
+	}
+	return n
+}
+
+// countItemsExcerpted counts items carrying a bounded excerpt rather than a
+// whole body. It is kept separate from countItemsWithBodies deliberately: an
+// excerpt is a weaker delivery, and folding the two into one number would let
+// the header claim a body the agent never received — the same class of defect
+// as reporting "0 items, 900/900 tokens".
+func countItemsExcerpted(items []memory.ContextItem, opts formatOpts) int {
+	if opts.pointersOnly {
+		return 0
+	}
+	n := 0
+	for _, item := range items {
+		if item.BodyExcerpted && item.Body != "" {
 			n++
 		}
 	}
@@ -310,6 +346,9 @@ func writeContextHeader(w io.Writer, ctx *memory.ContextPackResult, withBodies i
 	suffix := ""
 	if !opts.pointersOnly && len(ctx.Context) > 0 && withBodies < len(ctx.Context) {
 		suffix = fmt.Sprintf(", %d with bodies", withBodies)
+		if excerpted := countItemsExcerpted(ctx.Context, opts); excerpted > 0 {
+			suffix += fmt.Sprintf(", %d excerpted", excerpted)
+		}
 	}
 	_, err := fmt.Fprintf(w, "\nContext from: %s (%d items%s, %d/%d tokens)\n",
 		ctx.TargetID, len(ctx.Context), suffix, ctx.UsedTokens, ctx.BudgetTokens)
@@ -349,6 +388,10 @@ func writeContextTarget(w io.Writer, target *memory.ContextPackTarget, opts form
 	return nil
 }
 
+// itemBodyPreviewRunes bounds a full body rendered as a neighbour preview.
+// Excerpts skip it: they carry their own budget-derived bound.
+const itemBodyPreviewRunes = 120
+
 // writeContextItems emits one block per context-pack neighbor —
 // [type] title, plus body when included by the budget.
 func writeContextItems(w io.Writer, items []memory.ContextItem, opts formatOpts) error {
@@ -359,7 +402,15 @@ func writeContextItems(w io.Writer, items []memory.ContextItem, opts formatOpts)
 			return err
 		}
 		if !opts.pointersOnly && item.BodyIncluded && item.Body != "" {
-			if _, err := fmt.Fprintf(w, "    %s\n", Truncate(item.Body, 120)); err != nil {
+			// An excerpt is already bounded by ExcerptTokens and was chosen to be
+			// the passage worth reading. Re-truncating it here would cut it to a
+			// third and land mid-word — computing the right text and then
+			// declining to show it.
+			body := item.Body
+			if !item.BodyExcerpted {
+				body = Truncate(body, itemBodyPreviewRunes)
+			}
+			if _, err := fmt.Fprintf(w, "    %s\n", body); err != nil {
 				return err
 			}
 		}
@@ -372,7 +423,13 @@ func writeContextItems(w io.Writer, items []memory.ContextItem, opts formatOpts)
 // menu hint. At most one fires.
 func writeContextFooter(w io.Writer, ctx *memory.ContextPackResult, withBodies int, opts formatOpts) error {
 	if !opts.pointersOnly && len(ctx.Context) > 0 && withBodies < len(ctx.Context) {
-		omitted := len(ctx.Context) - withBodies
+		// An excerpted item was not omitted — it carries text. Counting it as
+		// omitted would under-report what the agent received, the mirror of the
+		// header over-reporting it.
+		omitted := len(ctx.Context) - withBodies - countItemsExcerpted(ctx.Context, opts)
+		if omitted <= 0 {
+			return nil
+		}
 		_, err := fmt.Fprintf(w,
 			"\n(%d item%s above had body omitted to fit the %d-token budget — increase --budget to see more)\n",
 			omitted, pluralS(omitted), ctx.BudgetTokens)

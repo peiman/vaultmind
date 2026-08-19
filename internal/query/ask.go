@@ -47,6 +47,11 @@ type AskConfig struct {
 	// noise nor reinforces the irrelevant note it happened to surface. Opt-in
 	// (the recall hook sets it); interactive ask leaves it false.
 	SuppressOnNoMatch bool
+	// ExcerptTokens caps a per-item excerpt used when a whole note body will not
+	// fit the remaining budget. 0 keeps the released all-or-nothing packing,
+	// where such an item contributes no text and the pack still counts it —
+	// which is how a hook reports "3 items" while delivering only titles.
+	ExcerptTokens int
 }
 
 // AskResult is the combined output of a search + context-pack operation.
@@ -322,6 +327,7 @@ func Ask(ctx context.Context, retriever retrieval.Retriever, resolver *graph.Res
 		MaxItems:         cfg.MaxItems,
 		Slim:             true,
 		ActivationScores: activationScores,
+		ExcerptTokens:    cfg.ExcerptTokens,
 	})
 	if packErr != nil {
 		log.Debug().Err(packErr).Str("note_id", hits[0].ID).Msg("context-pack failed; returning search results only")
