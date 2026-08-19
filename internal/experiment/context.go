@@ -97,14 +97,14 @@ func (s *Session) LogContextPackEvent(data map[string]any) (string, error) {
 // ask path surfaced a top hit on every query and recorded an access for it even
 // when the body was withheld, and the activation scorer then counted those as
 // retrievals. See IsActivationSignal for the loop that produced.
-func (s *Session) LogNoteAccessEvent(noteID, source string, bodyDelivered bool) (string, error) {
+func (s *Session) LogNoteAccessEvent(noteID string, source AccessSource, bodyDelivered bool) (string, error) {
 	eventID, err := s.DB.LogEvent(Event{
 		SessionID: s.ID,
 		Type:      EventNoteAccess,
 		VaultPath: s.VaultPath,
 		Data: map[string]any{
 			"note_id":        noteID,
-			"source":         source,
+			"source":         string(source),
 			"body_delivered": bodyDelivered,
 		},
 	})

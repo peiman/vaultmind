@@ -18,7 +18,7 @@ import "testing"
 func TestIsActivationSignal(t *testing.T) {
 	cases := []struct {
 		name          string
-		source        string
+		source        AccessSource
 		bodyDelivered bool
 		want          bool
 		why           string
@@ -67,7 +67,7 @@ func TestIsActivationSignal(t *testing.T) {
 		},
 		{
 			name:   "an unknown future source is not trusted",
-			source: "some-new-path", bodyDelivered: true, want: false,
+			source: AccessSource("some-new-path"), bodyDelivered: true, want: false,
 			why: "default-deny, so a new logging site cannot silently reopen the loop",
 		},
 	}

@@ -41,7 +41,7 @@ func accessAt(t *testing.T, db *experiment.DB, noteID string, ts time.Time) {
 // It must actually USE the source it is handed: an earlier version took the
 // parameter and wrote note_get regardless, which made the re-surfacing tests
 // pass against a meter that could not tell the two apart.
-func accessWithSource(t *testing.T, db *experiment.DB, noteID string, ts time.Time, source string) {
+func accessWithSource(t *testing.T, db *experiment.DB, noteID string, ts time.Time, source experiment.AccessSource) {
 	t.Helper()
 	sid := startCallerSession(t, db, "cli")
 	_, err := db.Exec(

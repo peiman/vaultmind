@@ -5,7 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/memory"
+	"github.com/peiman/vaultmind/internal/retrieval"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -72,10 +74,13 @@ func TestAskHeader_DoesNotClaimSuppressionWhenDelivering(t *testing.T) {
 		VaultNoteCount:    500,
 		RelevanceZ:        0.83,
 	}
-	require.True(t, mustDeliver(t, result), "precondition: a tight vault's weak hit delivers")
+	delivered := mustDeliver(t, result)
+	require.True(t, delivered, "precondition: a tight vault's weak hit delivers")
 
 	var buf bytes.Buffer
-	require.NoError(t, writeAskHeader(&buf, result, false, false))
+	// The 4th arg is the ANSWER — derived here rather than hardcoded, so this
+	// test cannot drift away from what BodyDecision actually says.
+	require.NoError(t, writeAskHeader(&buf, result, false, delivered))
 
 	assert.NotContains(t, buf.String(), "body suppressed",
 		"the body is delivered; saying otherwise is the same defect class as reporting 0 items for a full pack")
@@ -92,9 +97,11 @@ func TestAskHeader_KeepsSuppressionNoticeWhenSuppressing(t *testing.T) {
 		VaultNoteCount:    500,
 		RelevanceZ:        0.4,
 	}
+	delivered := mustDeliver(t, result)
+	require.False(t, delivered, "precondition: a normal-contrast weak hit is withheld")
 
 	var buf bytes.Buffer
-	require.NoError(t, writeAskHeader(&buf, result, false, false))
+	require.NoError(t, writeAskHeader(&buf, result, false, delivered))
 
 	assert.Contains(t, buf.String(), "body suppressed")
 }
@@ -191,6 +198,86 @@ func TestContextHeader_NoUnspentNoticeWhenBudgetIsSpent(t *testing.T) {
 	require.NoError(t, writeContextHeader(&buf, ctx, countItemsWithBodies(ctx.Context, formatOpts{}), formatOpts{}))
 
 	assert.NotContains(t, buf.String(), "unspent")
+}
+
+// --read is the one path that ALWAYS renders a body — it exists to fetch one.
+// FormatAskReadWithOptions passed callerAsked=false and let writeAskHeader
+// re-derive suppression from the confidence label, so a weak hit printed
+// "body suppressed; use --read N to override" directly above the body that
+// --read had just delivered.
+//
+// `callerAsked bool` cannot express "a body is definitely coming" — it answers
+// what the caller REQUESTED, not what is about to happen. The header needs the
+// answer, so it takes one.
+func TestFormatAskRead_NeverClaimsSuppressionAboveTheBodyItPrints(t *testing.T) {
+	result := &AskResult{
+		Query:             "who am i",
+		TopHitConfidence:  ConfidenceWeak,
+		NoiseFloorApplied: true,
+		VaultNoteCount:    500,
+		RelevanceZ:        0.30,
+		TopHits:           []retrieval.ScoredResult{{ID: "arc-x", Title: "Arc", Score: 0.5}},
+	}
+	note := &index.FullNote{ID: "arc-x", Type: "arc", Title: "Arc", Body: "THE BODY IS RIGHT HERE."}
+
+	var buf bytes.Buffer
+	require.NoError(t, FormatAskRead(result, note, &buf))
+	got := buf.String()
+
+	require.Contains(t, got, "THE BODY IS RIGHT HERE.", "precondition: --read rendered the body")
+	assert.NotContains(t, got, "body suppressed",
+		"the body is printed a few lines below this claim; got:\n%s", got)
+	assert.NotContains(t, got, "--read N to override",
+		"offering --read as an override on the --read path is advice to do what was just done")
+}
+
+// countItemsExcerpted walks only ctx.Context, so an excerpted TARGET was never
+// counted — the header said "2 items, 2 excerpted" while THREE blocks rendered
+// and all three were excerpts. The target is in the list but not the count.
+//
+// ContextItem's own doc comment argues that "the agent got the note" and "the
+// agent got the gist" must stay distinguishable. That applies hardest to the
+// target, which is the block an agent reads first.
+func TestContextHeader_CountsAnExcerptedTarget(t *testing.T) {
+	ctx := &memory.ContextPackResult{
+		TargetID:     "arc-decides",
+		BudgetTokens: 900,
+		UsedTokens:   300,
+		Target: &memory.ContextPackTarget{
+			ID: "arc-decides", BodyExcerpted: true, Body: "the principle",
+			Frontmatter: map[string]interface{}{"type": "arc", "title": "Decides"},
+		},
+		Context: []memory.ContextItem{
+			{ID: "a", BodyIncluded: true, BodyExcerpted: true, Body: "one"},
+			{ID: "b"},
+		},
+	}
+
+	var buf bytes.Buffer
+	require.NoError(t, writeContextHeader(&buf, ctx, countItemsWithBodies(ctx.Context, formatOpts{}), formatOpts{}))
+
+	assert.Contains(t, buf.String(), "2 excerpted",
+		"one context item plus the target are excerpted; counting only the item under-reports "+
+			"the block the agent reads first. got %q", buf.String())
+}
+
+// A whole-bodied target must not be counted as an excerpt — the mirror error.
+func TestContextHeader_DoesNotCountAWholeTargetAsExcerpted(t *testing.T) {
+	ctx := &memory.ContextPackResult{
+		TargetID:     "arc-decides",
+		BudgetTokens: 900,
+		UsedTokens:   300,
+		Target:       &memory.ContextPackTarget{ID: "arc-decides", Body: "the whole note"},
+		Context: []memory.ContextItem{
+			{ID: "a", BodyIncluded: true, BodyExcerpted: true, Body: "one"},
+			{ID: "b"},
+		},
+	}
+
+	var buf bytes.Buffer
+	require.NoError(t, writeContextHeader(&buf, ctx, countItemsWithBodies(ctx.Context, formatOpts{}), formatOpts{}))
+
+	assert.Contains(t, buf.String(), "1 excerpted")
 }
 
 func mustDeliver(t *testing.T, r *AskResult) bool {

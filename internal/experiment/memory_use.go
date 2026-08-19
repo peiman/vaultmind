@@ -77,19 +77,18 @@ func (m MemoryUse) ConsumedRate() float64 {
 // intent that the hooks are supposed to create.
 const hookCallerPattern = "vaultmind-%hook"
 
-// AccessSourceRead is the only note_access source that means a human or agent
-// actually FETCHED a note's text.
+// The meter counts only AccessSourceRead (see activation_signal.go, where the
+// source vocabulary lives).
 //
-// This distinction is the meter. note_access is logged with source="ask"
+// That distinction IS the meter. note_access is logged with source="ask"
 // whenever a note is RETURNED by a query — so a later hook injection of the same
 // note logs an access against it, and counting those makes every repeat look
 // like consumption. With reach-hook payloads repeating 98% of the time, that is
 // not a rounding error: on this machine it turned 47 real reads into 1,657 and
 // the rate from 0.8% into 27%.
 //
-// "source=neighbors" is excluded for the same reason: a note pulled in as a
-// graph neighbour was surfaced, not read.
-const AccessSourceRead = "note_get"
+// "neighbors" is excluded for the same reason: a note pulled in as a graph
+// neighbour was surfaced, not read.
 
 // MemoryUseSince computes the meter over the last windowDays.
 //
@@ -126,7 +125,7 @@ func (d *DB) MemoryUseSince(windowDays int) (*MemoryUse, error) {
 			SELECT timestamp AS t, json_extract(event_data, '$.note_id') AS note_id
 			FROM events
 			WHERE event_type = 'note_access'
-			  AND json_extract(event_data, '$.source') = 'note_get'
+			  AND json_extract(event_data, '$.source') = ?
 			  AND timestamp > datetime('now', ?)
 		)
 		SELECT COUNT(*),
@@ -137,7 +136,7 @@ func (d *DB) MemoryUseSince(windowDays int) (*MemoryUse, error) {
 		           ) THEN 1 ELSE 0 END),
 		       SUM(CASE WHEN inj.body_delivered THEN 1 ELSE 0 END)
 		FROM inj`,
-		hookCallerPattern, since, since, window)
+		hookCallerPattern, since, string(AccessSourceRead), since, window)
 
 	// SUM over zero rows is NULL, so these are nullable even though COUNT is not.
 	var consumed, delivered *int
@@ -175,7 +174,7 @@ func (d *DB) memoryUsePerCaller(since, window string) ([]CallerUse, error) {
 			SELECT timestamp AS t, json_extract(event_data, '$.note_id') AS note_id
 			FROM events
 			WHERE event_type = 'note_access'
-			  AND json_extract(event_data, '$.source') = 'note_get'
+			  AND json_extract(event_data, '$.source') = ?
 			  AND timestamp > datetime('now', ?)
 		)
 		SELECT caller, COUNT(*),
@@ -185,7 +184,7 @@ func (d *DB) memoryUsePerCaller(since, window string) ([]CallerUse, error) {
 		               AND datetime(a.t) BETWEEN datetime(inj.t) AND datetime(inj.t, ?)
 		           ) THEN 1 ELSE 0 END)
 		FROM inj GROUP BY caller ORDER BY COUNT(*) DESC`,
-		hookCallerPattern, since, since, window)
+		hookCallerPattern, since, string(AccessSourceRead), since, window)
 	if err != nil {
 		return nil, fmt.Errorf("computing per-caller memory use: %w", err)
 	}

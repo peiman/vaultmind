@@ -1,17 +1,30 @@
 package experiment
 
-// Access sources recorded on a note_access event. They are not
-// interchangeable: they describe very different things happening to a note, and
-// only some of them mean the agent encountered its content.
+// AccessSource names what kind of event produced a note_access row.
+//
+// A defined type rather than a bare string because IsActivationSignal
+// default-denies anything it does not recognise: a typo does not fail, it
+// silently makes the event invisible to activation. That already happened — a
+// fixture seeding "search" asserted against an empty score map while appearing
+// to exercise the path, and nothing reported it. The compiler catches that now.
+//
+// The values are on disk in every existing log, so they are pinned by a test.
+type AccessSource string
+
 const (
+	// AccessSourceRead is written by `note get`: the agent named a note and its
+	// text was rendered. The single strongest signal the tool emits, and the
+	// only source trusted without also proving delivery.
+	AccessSourceRead AccessSource = "note_get"
+
 	// AccessSourceAsk is written for a query's top hit. It means "this note
 	// ranked first and cleared the relevance floor" — NOT "the agent read it".
 	// Under pointers-only no body is handed over at all.
-	AccessSourceAsk = "ask"
+	AccessSourceAsk AccessSource = "ask"
 
 	// AccessSourceNeighbors is written when the context pack selects a
 	// neighbour. The agent sees a title at most.
-	AccessSourceNeighbors = "neighbors"
+	AccessSourceNeighbors AccessSource = "neighbors"
 
 	// AccessSourceRecall was written by `memory recall`, which 835472a renamed
 	// to `memory neighbors` — same code, same formatter, printing
@@ -22,7 +35,7 @@ const (
 	// because deleting it would silently reclassify the events already in
 	// people's logs, and pre-trusting it would let a future recall path reopen
 	// the phantom loop the moment someone rewires it.
-	AccessSourceRecall = "recall"
+	AccessSourceRecall AccessSource = "recall"
 )
 
 // IsActivationSignal reports whether a note_access event is evidence that the
@@ -51,18 +64,8 @@ const (
 //
 // Default-deny, so a future logging site cannot quietly reopen the loop by
 // inventing a source nobody added here.
-// activationSignalFrom applies IsActivationSignal to a decoded event_data map.
-//
-// A missing body_delivered reads as false, which is the point: every event
-// written before the field existed lacks it, and treating absence as delivery
-// would leave the historical phantoms in the ranking permanently.
-func activationSignalFrom(data map[string]any) bool {
-	source, _ := data["source"].(string)
-	delivered, _ := data["body_delivered"].(bool)
-	return IsActivationSignal(source, delivered)
-}
 
-func IsActivationSignal(source string, bodyDelivered bool) bool {
+func IsActivationSignal(source AccessSource, bodyDelivered bool) bool {
 	switch source {
 	case AccessSourceRead:
 		// note get fetches and renders the note by name — the most deliberate
@@ -77,4 +80,15 @@ func IsActivationSignal(source string, bodyDelivered bool) bool {
 	default:
 		return false
 	}
+}
+
+// activationSignalFrom applies IsActivationSignal to a decoded event_data map.
+//
+// A missing body_delivered reads as false, which is the point: every event
+// written before the field existed lacks it, and treating absence as delivery
+// would leave the historical phantoms in the ranking permanently.
+func activationSignalFrom(data map[string]any) bool {
+	raw, _ := data["source"].(string)
+	delivered, _ := data["body_delivered"].(bool)
+	return IsActivationSignal(AccessSource(raw), delivered)
 }
