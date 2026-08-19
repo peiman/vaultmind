@@ -162,8 +162,7 @@ func formatAskWithOptions(result *AskResult, w io.Writer, opts formatOpts) error
 	if result.Context == nil {
 		return nil
 	}
-	withBodies := countItemsWithBodies(result.Context.Context, opts)
-	if err := writeContextHeader(w, result.Context, withBodies, opts); err != nil {
+	if err := writeContextHeader(w, result.Context, opts); err != nil {
 		return err
 	}
 	if err := writeContextTarget(w, result.Context.Target, opts); err != nil {
@@ -172,7 +171,7 @@ func formatAskWithOptions(result *AskResult, w io.Writer, opts formatOpts) error
 	if err := writeContextItems(w, result.Context.Context, opts); err != nil {
 		return err
 	}
-	return writeContextFooter(w, result.Context, withBodies, opts)
+	return writeContextFooter(w, result.Context, opts)
 }
 
 // writeAskHeader emits "Search: ... [relevance: ...]". In noise-floor mode the
@@ -293,84 +292,122 @@ func writeAskHits(w io.Writer, hits []retrieval.ScoredResult, opts formatOpts) e
 	return nil
 }
 
-// countItemsWithBodies returns the number of context items whose Body
-// is actually rendered in the current opts. Returns 0 in pointers-only
-// mode (no bodies render at all).
-func countItemsWithBodies(items []memory.ContextItem, opts formatOpts) int {
-	if opts.pointersOnly {
-		return 0
+// bodyIndent prefixes note text so it reads as subordinate to its title line.
+const bodyIndent = "    "
+
+// indentBody indents EVERY line of a note's text, not just the first.
+//
+// Only the first line used to be indented, so a multi-line excerpt — a
+// Principle section running to two paragraphs, say — emitted ragged
+// continuation lines flush against the left margin, where they were
+// indistinguishable from the "  [type] Title" lines that separate notes. That
+// made the render ambiguous to a reader and unparseable to a test, which is
+// the more important half: an invariant nobody can check is a convention.
+func indentBody(body string) string {
+	lines := strings.Split(body, "\n")
+	for i, line := range lines {
+		lines[i] = bodyIndent + line
 	}
-	n := 0
-	for _, item := range items {
-		if item.BodyIncluded && item.Body != "" && !item.BodyExcerpted {
-			n++
-		}
-	}
-	return n
+	return strings.Join(lines, "\n")
 }
 
-// countItemsExcerpted counts items carrying a bounded excerpt rather than a
-// whole body. It is kept separate from countItemsWithBodies deliberately: an
-// excerpt is a weaker delivery, and folding the two into one number would let
-// the header claim a body the agent never received — the same class of defect
-// as reporting "0 items, 900/900 tokens".
-func countItemsExcerpted(items []memory.ContextItem, opts formatOpts) int {
-	if opts.pointersOnly {
-		return 0
-	}
-	n := 0
-	for _, item := range items {
-		if item.BodyExcerpted && item.Body != "" {
-			n++
-		}
-	}
-	return n
+// deliveryCounts is what the header states, tallied the way a reader would
+// tally it from the rendered blocks.
+//
+// It exists as one value because the header and the footer used to count
+// independently and drifted apart: the header called an excerpt "not a body"
+// while the footer called it "not omitted", so a pack of pure excerpts read as
+// "0 with bodies" with no footer to explain it. One count, two renderers.
+type deliveryCounts struct {
+	// Notes is every block that renders, the target included. len(ctx.Context)
+	// excludes the target, which is why the old header could say "2 items"
+	// above three blocks — and the target is the one an agent reads first.
+	Notes int
+	// Delivered is the blocks that carry note text. An excerpt counts: the
+	// agent received words it can act on.
+	Delivered int
+	// Excerpted is the subset of Delivered that was capped. This is the
+	// distinction the old header was reaching for and inverted — an excerpt is
+	// not the whole note, so saying "delivered in full" of one would be the
+	// same lie in the other direction. Both facts are reported; neither is
+	// allowed to stand in for the other.
+	Excerpted int
 }
 
-// writeContextHeader emits "Context from: ... (N items[, M with bodies], used/budget tokens)".
-// The M-with-bodies count appears only when not all items got bodies —
-// keeps the line terse when nothing was truncated. See the truncation
-// footer for the matching remedy hint.
-func writeContextHeader(w io.Writer, ctx *memory.ContextPackResult, withBodies int, opts formatOpts) error {
-	// When bodies are withheld, the used/budget pair describes work the caller
-	// never received. It read "0 items, 900/900 tokens" — a full budget and
-	// nothing in it — on every reach-hook injection: true of the pack, false of
-	// what landed in the agent's context. UsedTokens counts the target's body,
-	// and pointers-only mode then drops that body silently.
-	//
-	// So say what happened instead: the text exists, it was not shown, and here
-	// is the flag that shows it. A withheld body with no remedy is just bad news.
-	if opts.pointersOnly && packHoldsText(ctx) {
-		_, err := fmt.Fprintf(w, "\nContext from: %s (%d items, %d tokens of note text withheld — use --read N)\n",
-			ctx.TargetID, len(ctx.Context), ctx.UsedTokens)
-		return err
-	}
-	suffix := ""
-	capNote := ""
-	if !opts.pointersOnly && len(ctx.Context) > 0 && withBodies < len(ctx.Context) {
-		suffix = fmt.Sprintf(", %d with bodies", withBodies)
-		// The TARGET counts too. countItemsExcerpted walks only ctx.Context, so
-		// the header read "2 items, 2 excerpted" while three blocks rendered and
-		// all three were excerpts — the target is in the list but not the count,
-		// and it is the block an agent reads first.
-		excerpted := countItemsExcerpted(ctx.Context, opts)
-		if ctx.Target != nil && ctx.Target.BodyExcerpted && ctx.Target.Body != "" {
-			excerpted++
-		}
-		if excerpted > 0 {
-			suffix += fmt.Sprintf(", %d excerpted", excerpted)
-			// "863/6000" with most of the budget unused reads as "the vault had
-			// nothing more to give". It means "a cap bound every item and 5,137
-			// tokens went unspent" — a different fact, and the one that tells the
-			// reader which knob to turn. Same shape as "0 items, 900/900 tokens":
-			// a true number describing the pack rather than what happened.
-			if unspent := ctx.BudgetTokens - ctx.UsedTokens; unspent > ctx.BudgetTokens/2 {
-				capNote = fmt.Sprintf(" — bound by --excerpt, %d tokens unspent", unspent)
+// TitlesOnly is the blocks that rendered a title and no text.
+func (c deliveryCounts) TitlesOnly() int { return c.Notes - c.Delivered }
+
+// countDelivery mirrors writeContextTarget and writeContextItems exactly: a
+// block counts as delivered under precisely the conditions that make those
+// functions print text. TestContextHeader_EveryNumberIsRecountable is what
+// keeps the mirror honest — it recounts the rendered output and compares.
+func countDelivery(ctx *memory.ContextPackResult, opts formatOpts) deliveryCounts {
+	var c deliveryCounts
+	if ctx.Target != nil {
+		c.Notes++
+		if !opts.pointersOnly && ctx.Target.Body != "" {
+			c.Delivered++
+			if ctx.Target.BodyExcerpted {
+				c.Excerpted++
 			}
 		}
 	}
-	_, err := fmt.Fprintf(w, "\nContext from: %s (%d items%s, %d/%d tokens%s)\n",
-		ctx.TargetID, len(ctx.Context), suffix, ctx.UsedTokens, ctx.BudgetTokens, capNote)
+	for _, item := range ctx.Context {
+		c.Notes++
+		if !opts.pointersOnly && item.BodyIncluded && item.Body != "" {
+			c.Delivered++
+			if item.BodyExcerpted {
+				c.Excerpted++
+			}
+		}
+	}
+	return c
+}
+
+// deliveryPhrase renders the counts as the one sentence an agent reads to
+// decide whether it has enough to act on, or has to go fetch something.
+//
+// "as excerpts" is load-bearing: it says the full note exists and is one
+// `note get` away. That is the only thing the reader can act on, so it is the
+// only qualifier the line carries.
+func deliveryPhrase(c deliveryCounts) string {
+	s := fmt.Sprintf("%d delivered", c.Delivered)
+	switch {
+	case c.Delivered == 0:
+	case c.Excerpted == c.Delivered:
+		s += " as excerpt" + pluralS(c.Excerpted)
+	case c.Excerpted > 0:
+		s += fmt.Sprintf(", %d as excerpt%s", c.Excerpted, pluralS(c.Excerpted))
+	default:
+		s += " in full"
+	}
+	if t := c.TitlesOnly(); t > 0 && c.Delivered > 0 {
+		s += fmt.Sprintf(", %d title%s only", t, pluralS(t))
+	}
+	return s
+}
+
+// writeContextHeader emits "Context from: <id> — N notes, M delivered ...".
+//
+// Every number here is recountable from the blocks below it. That is the whole
+// design rule, and it is enforced by a test rather than by care: three separate
+// defects this session were a header describing internal state that no longer
+// matched the render, and each was individually plausible.
+//
+// What is deliberately NOT here: the budget denominator. "982/6000" describes
+// the caller's knob, not what arrived, and it produced the worst line the tool
+// ever printed — "0 items, 900/900 tokens", a full budget with nothing in it,
+// on every reach-hook injection. The budget is named by the footer, and only
+// when it actually dropped a note; a number with no action attached is noise
+// at best and, as it turned out, a lie at worst.
+func writeContextHeader(w io.Writer, ctx *memory.ContextPackResult, opts formatOpts) error {
+	c := countDelivery(ctx, opts)
+	tokens := ""
+	if c.Delivered > 0 {
+		tokens = fmt.Sprintf(" (%d tok)", ctx.UsedTokens)
+	}
+	_, err := fmt.Fprintf(w, "\nContext from: %s — %d note%s, %s%s\n",
+		ctx.TargetID, c.Notes, pluralS(c.Notes), deliveryPhrase(c), tokens)
 	return err
 }
 
@@ -408,7 +445,7 @@ func writeContextTarget(w io.Writer, target *memory.ContextPackTarget, opts form
 		if !target.BodyExcerpted {
 			body = Truncate(body, itemBodyPreviewRunes)
 		}
-		_, err := fmt.Fprintf(w, "    %s\n", body)
+		_, err := fmt.Fprintf(w, "%s\n", indentBody(body))
 		return err
 	}
 	return nil
@@ -436,7 +473,7 @@ func writeContextItems(w io.Writer, items []memory.ContextItem, opts formatOpts)
 			if !item.BodyExcerpted {
 				body = Truncate(body, itemBodyPreviewRunes)
 			}
-			if _, err := fmt.Fprintf(w, "    %s\n", body); err != nil {
+			if _, err := fmt.Fprintf(w, "%s\n", indentBody(body)); err != nil {
 				return err
 			}
 		}
@@ -447,22 +484,38 @@ func writeContextItems(w io.Writer, items []memory.ContextItem, opts formatOpts)
 // writeContextFooter emits the closing hint — either a budget-truncation
 // note (when bodies were omitted to fit the budget) or the pointers-only
 // menu hint. At most one fires.
-func writeContextFooter(w io.Writer, ctx *memory.ContextPackResult, withBodies int, opts formatOpts) error {
-	if !opts.pointersOnly && len(ctx.Context) > 0 && withBodies < len(ctx.Context) {
-		// An excerpted item was not omitted — it carries text. Counting it as
-		// omitted would under-report what the agent received, the mirror of the
-		// header over-reporting it.
-		omitted := len(ctx.Context) - withBodies - countItemsExcerpted(ctx.Context, opts)
-		if omitted <= 0 {
-			return nil
+// writeContextFooter states the cause and the remedy for whatever the header
+// reported missing. The header says WHAT arrived; the footer says why the rest
+// did not and which flag changes it. A gap with no remedy is just bad news.
+//
+// The branches are mutually exclusive and ordered by what the reader can do
+// about them, most actionable first.
+func writeContextFooter(w io.Writer, ctx *memory.ContextPackResult, opts formatOpts) error {
+	if opts.pointersOnly {
+		// The pack assembled this text and then threw it away. Saying so — with
+		// the token count, so the size of what was discarded is visible — is the
+		// difference between a flag doing its job and a silent no-op.
+		//
+		// Both remedies, because they do different things: --read fetches the top
+		// hit inline, `note get` fetches whichever of the titles above the agent
+		// actually wants. Offering only the first leaves seven of eight notes
+		// unreachable without re-running the query.
+		if packHoldsText(ctx) {
+			_, err := fmt.Fprintf(w,
+				"\n(pointers only: %d tokens assembled and withheld by --pointers-only — drop the flag, "+
+					"or read one with --read N / `vaultmind note get <id>`)\n",
+				ctx.UsedTokens)
+			return err
 		}
-		_, err := fmt.Fprintf(w,
-			"\n(%d item%s above had body omitted to fit the %d-token budget — increase --budget to see more)\n",
-			omitted, pluralS(omitted), ctx.BudgetTokens)
+		_, err := fmt.Fprintf(w, "\n(pointers only — run `vaultmind note get <id>` against any id above to read the body)\n")
 		return err
 	}
-	if opts.pointersOnly {
-		_, err := fmt.Fprintf(w, "\n(pointers only — run `vaultmind ask <query>` against any id above to read the body)\n")
+	// An excerpted note was not omitted; it carries text. Counting it as omitted
+	// would under-report what arrived, the mirror of the header over-reporting.
+	if omitted := countDelivery(ctx, opts).TitlesOnly(); omitted > 0 {
+		_, err := fmt.Fprintf(w,
+			"\n(%d note%s above had no room in the %d-token budget — raise --budget, or lower --excerpt to fit more)\n",
+			omitted, pluralS(omitted), ctx.BudgetTokens)
 		return err
 	}
 	return nil
