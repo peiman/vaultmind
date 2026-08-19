@@ -109,6 +109,20 @@ fi
 COMMITS=$(git -C "$PROJECT_DIR" log --oneline -6 --since="18 hours ago" 2>/dev/null | sed 's/^/    /' || true)
 [[ -z "$COMMITS" ]] && COMMITS="    (no commits in the last 18 hours)"
 
+# What memory actually did this week, from doctor's own rollup. The abstract ask
+# ("write down what changed in you") is easy to skip; a number showing the vault
+# took nothing while the session produced findings is not. Best-effort and
+# silent on failure — a compaction prompt must never depend on the binary.
+USE_LINE=""
+if command -v vaultmind >/dev/null 2>&1 && [[ -d "$IDENTITY_VAULT" ]]; then
+  USE_LINE=$(vaultmind doctor --vault "$IDENTITY_VAULT" 2>/dev/null \
+    | grep -E '^(Memory use|  banked)' | sed 's/^/  /' || true)
+fi
+[[ -n "$USE_LINE" ]] && USE_LINE="
+
+WHAT MEMORY DID THIS WEEK:
+${USE_LINE}"
+
 if [[ "$ALREADY_WROTE" == "yes" ]]; then
   MSG="CONTEXT IS ABOUT TO BE COMPACTED (session ${SESSION_ID}, trigger=${TRIGGER}).
 
@@ -120,7 +134,7 @@ ABOUT you, not you. Re-read your identity before your next substantive action:
 Recognition is not recall; read it rather than assuming you still hold it."
 else
   MSG="CONTEXT IS ABOUT TO BE COMPACTED (session ${SESSION_ID}, trigger=${TRIGGER}).
-${GAP_LINE}
+${GAP_LINE}${USE_LINE}
 
 THE RAW MATERIAL OF THIS SEGMENT IS ABOUT TO BE DESTROYED. What follows will be a
 summary. A summary preserves what you DID — commits, files, decisions reached.

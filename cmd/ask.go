@@ -165,7 +165,11 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	suppressed := quietOnNoMatch && result != nil && result.NoiseFloorApplied &&
 		result.TopHitConfidence == query.ConfidenceNoMatch
 
-	logAskExperiment(cmd, args[0], vaultPath, mode, result, err, suppressed)
+	// Read once, here, and passed to both the telemetry and the formatter
+	// selection below — reading the flag twice invites the two to disagree.
+	pointersOnly := getConfigValueWithFlags[bool](cmd, "pointers-only", config.KeyAppAskPointersOnly)
+
+	logAskExperiment(cmd, args[0], vaultPath, mode, result, err, suppressed, pointersOnly)
 
 	if err != nil {
 		return fmt.Errorf("ask: %w", err)
@@ -189,7 +193,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		// pointers-only wins over preview when both are set (pointers-only
 		// is the stricter "no body content at all" promise).
 		switch {
-		case getConfigValueWithFlags[bool](cmd, "pointers-only", config.KeyAppAskPointersOnly):
+		case pointersOnly:
 			formatter = query.FormatAskPointersOnly
 		case getConfigValueWithFlags[bool](cmd, "preview", config.KeyAppAskPreview):
 			formatter = query.FormatAskPreview
