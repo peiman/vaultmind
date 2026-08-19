@@ -64,19 +64,36 @@ const (
 //
 // Default-deny, so a future logging site cannot quietly reopen the loop by
 // inventing a source nobody added here.
-
-func IsActivationSignal(source AccessSource, bodyDelivered bool) bool {
+//
+// bodyDelivered is TRI-state and nil means "this event predates the field",
+// which is not the same as "no body was delivered". Collapsing the two is what
+// the plain-bool version did, and it is the NULL-read-as-zero shape that
+// produced the bug this function exists to fix.
+func IsActivationSignal(source AccessSource, bodyDelivered *bool) bool {
 	switch source {
 	case AccessSourceRead:
-		// note get fetches and renders the note by name — the most deliberate
-		// signal there is, and it now records its own delivery honestly
-		// (--frontmatter-only and misses no longer claim one).
-		return true
+		// note get names an id and renders the note — the most deliberate signal
+		// there is. But --frontmatter-only prints fields and no body, and a miss
+		// prints nothing; both are intent without content and must not boost.
+		// This used to return true unconditionally while its own comment claimed
+		// the recorder had been made honest: the writer was fixed in #127 and the
+		// reader kept ignoring it.
+		//
+		// nil counts, because before the field existed note get ALWAYS rendered a
+		// body — --frontmatter-only tracking came with it. Denying those would
+		// silently retire the strongest signal in the log.
+		return bodyDelivered == nil || *bodyDelivered
 	case AccessSourceAsk, AccessSourceRecall:
 		// Only when a body actually reached the agent. Recall is here rather
 		// than in the always-true case because its command rendered titles;
 		// see the constant.
-		return bodyDelivered
+		//
+		// nil does NOT count, and the asymmetry with note get above is historical
+		// fact rather than caution: in the pre-field era no hook path delivered a
+		// body at all (#122), so an unrecorded ask is affirmatively a phantom.
+		// The scorer reads the whole history with no time window, so these cannot
+		// age out on their own.
+		return bodyDelivered != nil && *bodyDelivered
 	default:
 		return false
 	}
@@ -84,11 +101,15 @@ func IsActivationSignal(source AccessSource, bodyDelivered bool) bool {
 
 // activationSignalFrom applies IsActivationSignal to a decoded event_data map.
 //
-// A missing body_delivered reads as false, which is the point: every event
-// written before the field existed lacks it, and treating absence as delivery
-// would leave the historical phantoms in the ranking permanently.
+// The two-value type assertion is load-bearing: `data["body_delivered"].(bool)`
+// discarding its second return reports a MISSING key as false, which is exactly
+// the absence-rendered-as-zero defect this filter was written to close. It was
+// sitting inside the fix.
 func activationSignalFrom(data map[string]any) bool {
 	raw, _ := data["source"].(string)
-	delivered, _ := data["body_delivered"].(bool)
+	var delivered *bool
+	if b, present := data["body_delivered"].(bool); present {
+		delivered = &b
+	}
 	return IsActivationSignal(AccessSource(raw), delivered)
 }
