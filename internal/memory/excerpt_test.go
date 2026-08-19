@@ -131,6 +131,74 @@ committing to an estimate or an architecture.`
 	assert.Contains(t, got, "probe first")
 }
 
+// Found by an adversarial probe during review, and it is this whole change-set's
+// own failure mode turned inward: at a budget too small for even one word,
+// Excerpt returned a bare "…", attachBody stored it, and the item was marked
+// BodyIncluded — an item counted as carrying content whose entire content was an
+// ellipsis. A pack could then honestly report "3 items, 3 excerpted" and hand
+// the agent three ellipses.
+//
+// Returning "" instead makes that unexpressible: every caller already skips an
+// empty excerpt, so a budget that cannot carry a word now yields no item rather
+// than a fake one.
+func TestExcerpt_DegenerateBudgetYieldsNothingNotAnEllipsis(t *testing.T) {
+	body := "Principle\n\nAlways verify the delivery path end to end before trusting a count."
+
+	for _, budget := range []int{1, 2} {
+		got := memory.Excerpt(body, budget)
+		assert.Empty(t, got,
+			"budget %d cannot carry a word; %q is a delivery that delivers nothing", budget, got)
+	}
+
+	// A single unbreakable token (a URL) as the whole body — same rule.
+	assert.Empty(t, memory.Excerpt("https://example.com/a-very-long-single-token-url-that-never-fits", 2))
+
+	// And the first budget that CAN carry a word still does.
+	assert.Contains(t, memory.Excerpt(body, 3), "Always")
+}
+
+// THE INVARIANT: a non-empty body must never excerpt to nothing when the budget
+// can carry a word. Anything else is content loss dressed as a cap.
+//
+// Found by an adversarial probe, and it was a regression introduced by making
+// the cap unconditional: before that, a bullet-only note whose body fit was
+// delivered WHOLE; after, it was routed through Excerpt, which looked for
+// "prose" — a block containing .!? or longer than a heading — found none in a
+// list of short bullets, and returned "". So a note that used to arrive intact
+// silently arrived empty.
+//
+// CJK is the same bug wearing different clothes: 研究は重要である。 ends in a full
+// stop the ASCII check does not recognise, and is too short to clear the length
+// fallback.
+func TestExcerpt_NeverDropsANonEmptyBody(t *testing.T) {
+	cases := map[string]string{
+		"bullet list":       "- alpha\n- beta\n- gamma",
+		"markdown table":    "| a | b |\n|---|---|\n| 1 | 2 |",
+		"heading + bullets": "# Notes\n\n- one\n- two",
+		"CJK prose":         "研究は重要である。",
+		"single short word": "ship",
+		"prose":             "This is a real sentence that should survive.",
+	}
+
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			got := memory.Excerpt(body, 900)
+			assert.NotEmpty(t, got,
+				"body %q excerpted to nothing at a 900-token budget — the cap dropped content instead of bounding it", body)
+			assert.LessOrEqual(t, memory.EstimateTokens(got), 900)
+		})
+	}
+}
+
+// The prose preference still holds where prose exists — the fallback must not
+// flatten the Principle-first behaviour into "just return the head".
+func TestExcerpt_FallbackDoesNotOverrideProsePreference(t *testing.T) {
+	got := memory.Excerpt(arcBody, 120)
+
+	assert.Contains(t, got, "a request is a hypothesis")
+	assert.NotContains(t, got, "Peiman had asked")
+}
+
 func TestExcerpt_EmptyBody(t *testing.T) {
 	assert.Empty(t, memory.Excerpt("", 100))
 	assert.Empty(t, memory.Excerpt("   \n\n  ", 100))

@@ -296,13 +296,18 @@ func attachBody(item *ContextItem, body string, remaining *int, excerptTokens in
 	if body == "" || *remaining <= 0 {
 		return 0
 	}
-	if tokens := EstimateTokens(body); tokens <= *remaining {
-		item.BodyIncluded = true
-		item.Body = body
-		*remaining -= tokens
-		return tokens
-	}
+	// The cap is checked BEFORE the fits-whole path, not only as an overflow
+	// fallback. A cap that engages only on overflow is not a cap: it let a note
+	// that happened to fit contribute ~670 tokens against a requested 80, which
+	// makes the budget unpredictable in exactly the setting this exists for — a
+	// hook fitting several notes into a small fixed allowance.
 	if excerptTokens <= 0 {
+		if tokens := EstimateTokens(body); tokens <= *remaining {
+			item.BodyIncluded = true
+			item.Body = body
+			*remaining -= tokens
+			return tokens
+		}
 		return 0
 	}
 	budget := min(excerptTokens, *remaining)
@@ -408,9 +413,16 @@ func packTargetContent(full *index.FullNote, budget, excerptTokens int, result *
 			target.Body = excerpt
 			target.BodyExcerpted = true
 			used := EstimateTokens(excerpt)
+			// Truncated means "the BUDGET forced a cut" — `memory pack` renders it
+			// as "(truncated)" next to the token counts. An excerpt taken by policy
+			// on a budget with room to spare cost the reader nothing, and saying
+			// otherwise reports an event that did not happen. Only claim it when
+			// the whole body genuinely would not have fit.
+			if EstimateTokens(full.Body) > remaining {
+				result.Truncated = true
+			}
 			remaining -= used
 			result.UsedTokens += used
-			result.Truncated = true
 			return target, remaining
 		}
 	}
