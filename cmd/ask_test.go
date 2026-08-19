@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/experiment"
+	"github.com/peiman/vaultmind/internal/memory"
 	"github.com/peiman/vaultmind/internal/query"
 	"github.com/peiman/vaultmind/internal/retrieval"
 	"github.com/spf13/cobra"
@@ -25,17 +26,26 @@ func TestLogAskExperiment_LogsTopHitNoteAccess(t *testing.T) {
 	cmd := &cobra.Command{}
 	cmd.SetContext(experiment.WithSession(context.Background(), session))
 
+	// The pack must carry text for this to be a genuine activation signal.
+	// Issue #18's point was that `ask` accesses were missing from the signal;
+	// the phantom-read fix narrows that to "ask accesses THAT DELIVERED". A
+	// fixture with no Context delivers nothing and is now correctly excluded —
+	// leaving the test asserting a rule that no longer exists.
 	result := &query.AskResult{
 		Query:   "who am I",
 		TopHits: []retrieval.ScoredResult{{ID: "identity-who-i-am", Score: 0.065}},
+		Context: &memory.ContextPackResult{
+			TargetID: "identity-who-i-am",
+			Target:   &memory.ContextPackTarget{ID: "identity-who-i-am", Body: "I am Mira."},
+		},
 	}
 
-	logAskExperiment(cmd, "who am I", "/vault", "hybrid", result, nil, false, false)
+	logAskExperiment(cmd, "who am I", "/vault", "hybrid", result, nil, false, false, false /* jsonOutput: these cases exercise the text path */)
 
 	ids, err := db.AccessedNoteIDs()
 	require.NoError(t, err)
 	assert.Contains(t, ids, "identity-who-i-am",
-		"ask must log note_access for its top hit (issue #18)")
+		"an ask that delivered its top hit's body must contribute activation signal (issue #18)")
 
 	var source string
 	err = db.QueryRow(
@@ -64,7 +74,7 @@ func TestLogAskExperiment_NoNoteAccessOnRetrievalError(t *testing.T) {
 		Query:   "broken",
 		TopHits: []retrieval.ScoredResult{{ID: "stale-hit", Score: 0.01}},
 	}
-	logAskExperiment(cmd, "broken", "/vault", "hybrid", result, assert.AnError, false, false)
+	logAskExperiment(cmd, "broken", "/vault", "hybrid", result, assert.AnError, false, false, false /* jsonOutput: these cases exercise the text path */)
 
 	ids, err := db.AccessedNoteIDs()
 	require.NoError(t, err)
@@ -84,7 +94,7 @@ func TestLogAskExperiment_NoNoteAccessOnEmptyHits(t *testing.T) {
 	cmd.SetContext(experiment.WithSession(context.Background(), session))
 
 	result := &query.AskResult{Query: "no-hits", TopHits: nil}
-	logAskExperiment(cmd, "no-hits", "/vault", "hybrid", result, nil, false, false)
+	logAskExperiment(cmd, "no-hits", "/vault", "hybrid", result, nil, false, false, false /* jsonOutput: these cases exercise the text path */)
 
 	ids, err := db.AccessedNoteIDs()
 	require.NoError(t, err)
@@ -107,7 +117,7 @@ func TestLogAskExperiment_NoNoteAccessWhenSuppressed(t *testing.T) {
 		Query:   "best recipe for sourdough bread",
 		TopHits: []retrieval.ScoredResult{{ID: "reference-current-context", Score: 0.02}},
 	}
-	logAskExperiment(cmd, "best recipe for sourdough bread", "/vault", "hybrid", result, nil, true, false)
+	logAskExperiment(cmd, "best recipe for sourdough bread", "/vault", "hybrid", result, nil, true, false, false /* jsonOutput: these cases exercise the text path */)
 
 	ids, err := db.AccessedNoteIDs()
 	require.NoError(t, err)

@@ -89,7 +89,16 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
   #    trap documented in the plasticity-gap arc and the
   #    2026-04-25 design signal under step 3 of the plasticity roadmap.
   ASK_ERR=$(mktemp -t vaultmind-persona-err.XXXXXX)
-  IDENTITY=$(VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" ask "who am I" --vault "$VAULT_PATH" --max-items 8 --budget 6000 2>"$ASK_ERR")
+  # --excerpt caps each of the 8 items at a bounded, decision-bearing passage.
+  # Without it the budget is spent first-come: the earliest items arrive whole
+  # and the rest arrive with no text at all. Measured on a real 63-note identity
+  # vault: 3 of 8 items with bodies and 5 with nothing, using 5,610 of 6,000
+  # tokens. Capped, all 8 arrive in less space than those 3 took.
+  #
+  # The "what matters most right now" query below deliberately KEEPS
+  # --pointers-only — see the preload-trap reasoning above. That one is a design
+  # choice about forcing an explicit read, not an oversight.
+  IDENTITY=$(VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" ask "who am I" --vault "$VAULT_PATH" --max-items 8 --budget 6000 --excerpt 90 2>"$ASK_ERR")
   IDENTITY_STATUS=$?
   CONTEXT=$(VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" ask "what matters most right now" --vault "$VAULT_PATH" --max-items 5 --budget 2000 --pointers-only 2>>"$ASK_ERR")
 

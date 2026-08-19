@@ -114,7 +114,7 @@ POINTERS=$(VAULTMIND_CALLER=vaultmind-userprompt-hook $TIMEOUT_CMD "$VAULTMIND" 
   --max-items 3 \
   --budget 1500 \
   --quiet-on-no-match \
-  --pointers-only 2>"$ASK_ERR")
+  --excerpt 80 2>"$ASK_ERR")
 ASK_STATUS=$?
 
 if [ "$ASK_STATUS" != "0" ] || [ -z "$POINTERS" ]; then
@@ -128,13 +128,19 @@ if [ "$ASK_STATUS" != "0" ] || [ -z "$POINTERS" ]; then
 fi
 rm -f "$ASK_ERR"
 
-# Inject the pointers with a clear header that names the next move. The
-# agent should treat these as a menu — query for body if relevant, ignore
-# if not. The header phrasing avoids commanding ("you must read this") —
-# we want activation, not coercion.
-echo "VAULT POINTERS related to your message (identity vault — run 'vaultmind ask <id> --vault $VAULT_PATH' to read body):"
+# Inject with a header that names what is actually here. The phrasing avoids
+# commanding ("you must read this") — we want activation, not coercion.
+#
+# This used to say "run 'vaultmind ask <id>' to read body", which was true when
+# the query passed --pointers-only and no body was ever included. With --excerpt
+# the decision-bearing passage is inline, so the old line would be pointing at a
+# fetch for content already on the screen. The fetch is still named, as the way
+# to get the WHOLE note rather than the way to get anything at all.
+echo "VAULT — from your own notes, relevant to what you just said:"
 echo ""
 echo "$POINTERS"
+echo ""
+echo "(excerpts above are the decision-bearing passage — full note: vaultmind note get <id> --vault $VAULT_PATH)"
 
 # Log the successful injection
 printf '{"timestamp":"%s","prompt_len":%d,"ask_status":0,"injection":true,"pointer_chars":%d}\n' \

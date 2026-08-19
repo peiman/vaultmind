@@ -69,7 +69,7 @@ func computeActivationScores(ctx context.Context, similarities map[string]float6
 // regardless of ask error so failures are observable — retrievalErr becomes
 // the event_data.error field. retrievalMode is the retriever label (e.g.
 // "hybrid", "keyword") used as the variant key for the actual retrieval hits.
-func logAskExperiment(cmd *cobra.Command, queryText, vaultPath, retrievalMode string, result *query.AskResult, retrievalErr error, suppressed, pointersOnly bool) {
+func logAskExperiment(cmd *cobra.Command, queryText, vaultPath, retrievalMode string, result *query.AskResult, retrievalErr error, suppressed, pointersOnly, jsonOutput bool) {
 	session := experiment.FromContext(cmd.Context())
 	if session == nil {
 		return
@@ -115,7 +115,10 @@ func logAskExperiment(cmd *cobra.Command, queryText, vaultPath, retrievalMode st
 	// See experiment.IsActivationSignal.
 	// silent-failure-ok: telemetry.
 	if retrievalErr == nil && result != nil && len(result.TopHits) > 0 && !suppressed {
-		bodyDelivered, _ := result.BodyDecision(pointersOnly)
+		// DeliveredTo, not BodyDecision: the question is whether text reached the
+		// caller, which differs by output mode and is false when the pack is empty
+		// or nil. BodyDecision only describes the text formatter.
+		bodyDelivered, _ := result.DeliveredTo(pointersOnly, jsonOutput)
 		if _, err := session.LogNoteAccessEvent(result.TopHits[0].ID, experiment.AccessSourceAsk, bodyDelivered); err != nil {
 			log.Debug().Err(err).Msg("failed to log ask note_access event")
 		}

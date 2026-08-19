@@ -69,6 +69,44 @@ func TestNoteAccessTimes_ExcludesPhantoms(t *testing.T) {
 	assert.Len(t, delivered, 1)
 }
 
+// THE TEST THAT SHOULD HAVE EXISTED FIRST.
+//
+// The original fix filtered NoteAccessTimes and AccessedNoteIDs — and the scorer
+// calls NEITHER for its counts. It uses BatchNoteAccessTimes
+// (activation_scorer.go), which was left unfiltered, so a note with even ONE
+// genuine read stayed in the candidate set and kept every phantom alongside it.
+// The commit's own headline example — a note with 222 accesses and a handful of
+// real reads — was completely unaffected.
+//
+// This test asserts through the scorer's own entry point rather than through the
+// query functions, because that is the surface that was wrong. A predicate the
+// feeding query never calls is the same "computed and never used" defect the
+// whole change-set exists to remove — which the sibling test file says in its
+// header, above tests that did not check this one.
+func TestBatchNoteAccessTimes_ExcludesPhantoms(t *testing.T) {
+	db := seedAccessEvents(t)
+
+	// One extra REAL read on the phantom note, so it stays in the candidate set.
+	sessionID, err := db.StartSession("/v")
+	require.NoError(t, err)
+	session := &experiment.Session{DB: db, ID: sessionID, VaultPath: "/v"}
+	_, err = session.LogNoteAccessEvent("phantom-note", experiment.AccessSourceRead, true)
+	require.NoError(t, err)
+	// ...and four more phantoms on top of it.
+	for range 4 {
+		_, err = session.LogNoteAccessEvent("phantom-note", experiment.AccessSourceAsk, false)
+		require.NoError(t, err)
+	}
+
+	batch, err := db.BatchNoteAccessTimes([]string{"phantom-note", "real-note"})
+	require.NoError(t, err)
+
+	assert.Len(t, batch["phantom-note"], 1,
+		"the note has 1 real read and 5 phantoms; the scorer must see 1. Counting phantoms here "+
+			"is what made ranking self-reinforcing, and it survives filtering the other two queries")
+	assert.Len(t, batch["real-note"], 1)
+}
+
 // Events written before body_delivered existed carry no such field. Absence must
 // read as "not proven delivered" — the entire reason this went unnoticed is that
 // a missing value was treated as a benign one.

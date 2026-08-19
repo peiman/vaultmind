@@ -15,6 +15,49 @@ import "github.com/peiman/vaultmind/internal/experiment"
 // callerAsked is the caller's own --pointers-only. It wins, and it is recorded
 // separately: "the hook asked for ids" and "the tool judged the hit too weak to
 // show" are different facts with opposite remedies.
+// DeliveredTo reports whether note TEXT actually reached the caller, given the
+// output mode — which is the question telemetry needs and BodyDecision does not
+// answer.
+//
+// BodyDecision describes what the TEXT formatter will render. The JSON envelope
+// serializes bodies regardless of --pointers-only, so the two diverge there:
+// `ask --pointers-only --json` was measured returning a 5,770-character target
+// body while telemetry recorded body_delivered=false, and IsActivationSignal
+// then discarded a genuine read — reopening the phantom loop from the other
+// side.
+//
+// It also refuses to credit a delivery when no pack exists. On a context-pack
+// error the result carries a nil Context, and the previous call site credited
+// delivery anyway.
+func (r *AskResult) DeliveredTo(callerAsked, jsonOutput bool) (delivered bool, reason string) {
+	if r == nil || !r.packHasText() {
+		return false, experiment.SuppressedBelowFloor
+	}
+	if jsonOutput {
+		// The envelope carries bodies whatever the text formatter would do.
+		return true, ""
+	}
+	return r.BodyDecision(callerAsked)
+}
+
+// packHasText reports whether the assembled pack actually holds note prose, as
+// opposed to frontmatter alone. "The pack exists" and "the pack has content" are
+// different facts, and only the second is a delivery.
+func (r *AskResult) packHasText() bool {
+	if r.Context == nil {
+		return false
+	}
+	if r.Context.Target != nil && r.Context.Target.Body != "" {
+		return true
+	}
+	for _, item := range r.Context.Context {
+		if item.Body != "" {
+			return true
+		}
+	}
+	return false
+}
+
 func (r *AskResult) BodyDecision(callerAsked bool) (delivered bool, reason string) {
 	if callerAsked {
 		return false, experiment.SuppressedByCaller

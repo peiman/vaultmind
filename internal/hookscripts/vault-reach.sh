@@ -102,7 +102,7 @@ POINTERS=$(VAULTMIND_CALLER=vaultmind-reach-hook $TIMEOUT_CMD "$VAULTMIND" ask "
   --max-items 2 \
   --budget 900 \
   --quiet-on-no-match \
-  --pointers-only 2>/dev/null)
+  --excerpt 80 2>/dev/null)
 
 TS=$(date +%Y%m%dT%H%M%S)
 if [ -z "$POINTERS" ]; then
@@ -127,8 +127,9 @@ print(json.dumps({
             'VAULT — you are at a decision point, not a greeting. '
             'These are ranked against what you are about to do:\n\n'
             + pointers
-            + '\nRead one before proceeding if it bears on this call '
-              '(vaultmind note get <id> --vault ' + vault + ').'
+            + '\nThe excerpt above is the decision rule, not a pointer to one. '
+              'If it bears on this call, act on it — full note: '
+              'vaultmind note get <id> --vault ' + vault + '.'
         ),
     }
 }))
