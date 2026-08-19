@@ -107,9 +107,16 @@ func FormatAskReadWithOptions(result *AskResult, note *index.FullNote, w io.Writ
 }
 
 type formatOpts struct {
-	explain      bool
+	explain bool
+	// pointersOnly means "no bodies will render". formatAskWithOptions SETS it
+	// when confidence auto-degrades, so after that point it no longer answers
+	// "did the caller ask for ids".
 	pointersOnly bool
-	preview      bool
+	// callerAskedPointers preserves the question pointersOnly stops being able
+	// to answer. The footer needs it: naming --pointers-only as the cause, and
+	// "drop the flag" as the remedy, is wrong when no flag was passed.
+	callerAskedPointers bool
+	preview             bool
 }
 
 func formatAskWithOptions(result *AskResult, w io.Writer, opts formatOpts) error {
@@ -149,6 +156,7 @@ func formatAskWithOptions(result *AskResult, w io.Writer, opts formatOpts) error
 	// Captured before the mutation below: after it, opts.pointersOnly means
 	// "no bodies will render" rather than "the caller asked for ids", and the
 	// header needs the caller's original request to decide what to promise.
+	opts.callerAskedPointers = opts.pointersOnly
 	delivered, _ := result.BodyDecision(opts.pointersOnly)
 	if !delivered {
 		opts.pointersOnly = true
@@ -501,10 +509,18 @@ func writeContextFooter(w io.Writer, ctx *memory.ContextPackResult, opts formatO
 		// actually wants. Offering only the first leaves seven of eight notes
 		// unreachable without re-running the query.
 		if packHoldsText(ctx) {
+			// Name the cause that actually applies. When confidence auto-degrades
+			// there is no flag to drop, and saying otherwise sends the reader
+			// looking for one — the same false-cause defect this change closes.
+			cause := "the top hit's confidence is below the delivery threshold"
+			remedy := "override with --read N"
+			if opts.callerAskedPointers {
+				cause = "--pointers-only"
+				remedy = "drop the flag, or read one with --read N"
+			}
 			_, err := fmt.Fprintf(w,
-				"\n(pointers only: %d tokens assembled and withheld by --pointers-only — drop the flag, "+
-					"or read one with --read N / `vaultmind note get <id>`)\n",
-				ctx.UsedTokens)
+				"\n(pointers only: %d tokens assembled and withheld by %s — %s / `vaultmind note get <id>`)\n",
+				ctx.UsedTokens, cause, remedy)
 			return err
 		}
 		_, err := fmt.Fprintf(w, "\n(pointers only — run `vaultmind note get <id>` against any id above to read the body)\n")
