@@ -31,6 +31,30 @@ if [ -z "$PROMPT" ] || [ "${#PROMPT}" -lt 12 ]; then
   exit 0
 fi
 
+# Not every UserPromptSubmit payload is a human asking something. Background
+# task completions, hook output and system reminders arrive through this SAME
+# `prompt` field, and ranking notes against a task-id envelope produces pointers
+# about nothing — retrieval working correctly on garbage input. These payloads
+# are long, so the length threshold above waves them straight through.
+#
+# Measured on one real session before this guard existed: 93 injections, 48% of
+# them ranked against a prompt over 250 chars that was a <task-notification>
+# envelope — roughly 103k pointer characters of noise. Half a channel's output
+# being noise is precisely how an agent learns to skip the channel, and then
+# misses the half that mattered. That is a tooling defect, not a discipline
+# problem: the fix belongs here, not in a resolution to read more carefully.
+#
+# Matched anywhere in the prompt rather than only at the start — a notification
+# envelope is often preceded by a banner line. The ANGLE-BRACKETED form is what
+# separates a payload from prose about one, so "why does the hook skip a
+# system-reminder?" still queries; typing the brackets out does not. That is an
+# accepted, rare cost in exchange for silence on the common case.
+case "$PROMPT" in
+  *"<task-notification>"*|*"<system-reminder>"*|*"<local-command-"*|*"hook success:"*)
+    exit 0
+    ;;
+esac
+
 # Use PATH-installed vaultmind. /tmp/vaultmind is the dev-loop binary
 # (auto-rebuilt by load-persona.sh on Go-source change) and not a
 # valid fallback for general use — users install via `task install`.
@@ -39,10 +63,13 @@ if ! command -v vaultmind >/dev/null 2>&1; then
   exit 0
 fi
 VAULTMIND=$(command -v vaultmind)
-# VAULTMIND_VAULT lets a consumer point recall at their own vault (set by
-# `vaultmind hooks install --vault`). Falls back to the vaultmind-identity
-# convention when unset, so existing installs are unaffected (issue #41.6).
-VAULT_PATH="${VAULTMIND_VAULT:-$CLAUDE_PROJECT_DIR/vaultmind-identity}"
+# Per-concern env routing: VAULTMIND_RECALL_VAULT points *per-turn recall*
+# at its own vault, independent of persona-load and episode-write. It falls
+# back to the overloaded VAULTMIND_VAULT (set by `vaultmind hooks install
+# --vault`, and the simple single-var default), then to the vaultmind-identity
+# convention. A dual-vault adopter can route recall, episodes, and persona
+# independently; a single-var setup is unchanged (issue #41.6).
+VAULT_PATH="${VAULTMIND_RECALL_VAULT:-${VAULTMIND_VAULT:-$CLAUDE_PROJECT_DIR/vaultmind-identity}}"
 
 # Substrate not ready — silently no-op.
 if [ ! -d "$VAULT_PATH" ]; then
@@ -56,6 +83,22 @@ LOG_DIR="${HOME}/.vaultmind/userprompt-hook"
 mkdir -p "$LOG_DIR" 2>/dev/null
 TIMESTAMP=$(date +%Y%m%dT%H%M%S)
 
+# Bound the query. Claude Code kills a UserPromptSubmit hook at its own budget
+# and DISCARDS the output, so an unbounded query on a loaded machine spends the
+# whole budget and injects nothing — the turn pays and gets nothing back.
+# Better to give up early and stay silent: pointers are a courtesy, and this
+# hook is fail-open by design.
+#
+# macOS doesn't ship `timeout` — same fallback chain vault-track-read.sh uses:
+# `timeout`, then `gtimeout` (coreutils via brew), then an unbounded call.
+# VAULTMIND_HOOK_QUERY_TIMEOUT tunes it for a large vault or a slow machine.
+TIMEOUT_CMD=""
+if command -v timeout >/dev/null 2>&1; then
+  TIMEOUT_CMD="timeout ${VAULTMIND_HOOK_QUERY_TIMEOUT:-15}"
+elif command -v gtimeout >/dev/null 2>&1; then
+  TIMEOUT_CMD="gtimeout ${VAULTMIND_HOOK_QUERY_TIMEOUT:-15}"
+fi
+
 # Pointers-only ask, low max-items to keep noise bounded. VAULTMIND_CALLER
 # tags the event in the experiment DB so we can separate per-turn auto-recall
 # events from explicit user queries.
@@ -66,12 +109,12 @@ TIMESTAMP=$(date +%Y%m%dT%H%M%S)
 # instead of irrelevant pointers. It also skips the access fan-out, so
 # off-domain prompts don't reinforce the notes they happened to surface.
 ASK_ERR=$(mktemp -t vaultmind-userprompt-err.XXXXXX)
-POINTERS=$(VAULTMIND_CALLER=vaultmind-userprompt-hook "$VAULTMIND" ask "$PROMPT" \
+POINTERS=$(VAULTMIND_CALLER=vaultmind-userprompt-hook $TIMEOUT_CMD "$VAULTMIND" ask "$PROMPT" \
   --vault "$VAULT_PATH" \
   --max-items 3 \
   --budget 1500 \
   --quiet-on-no-match \
-  --pointers-only 2>"$ASK_ERR")
+  --excerpt 80 2>"$ASK_ERR")
 ASK_STATUS=$?
 
 if [ "$ASK_STATUS" != "0" ] || [ -z "$POINTERS" ]; then
@@ -85,13 +128,19 @@ if [ "$ASK_STATUS" != "0" ] || [ -z "$POINTERS" ]; then
 fi
 rm -f "$ASK_ERR"
 
-# Inject the pointers with a clear header that names the next move. The
-# agent should treat these as a menu — query for body if relevant, ignore
-# if not. The header phrasing avoids commanding ("you must read this") —
-# we want activation, not coercion.
-echo "VAULT POINTERS related to your message (identity vault — run 'vaultmind ask <id> --vault $VAULT_PATH' to read body):"
+# Inject with a header that names what is actually here. The phrasing avoids
+# commanding ("you must read this") — we want activation, not coercion.
+#
+# This used to say "run 'vaultmind ask <id>' to read body", which was true when
+# the query passed --pointers-only and no body was ever included. With --excerpt
+# the decision-bearing passage is inline, so the old line would be pointing at a
+# fetch for content already on the screen. The fetch is still named, as the way
+# to get the WHOLE note rather than the way to get anything at all.
+echo "VAULT — from your own notes, relevant to what you just said:"
 echo ""
 echo "$POINTERS"
+echo ""
+echo "(the note's own text — a Principle section where it has one, else its opening lines. Full note: vaultmind note get <id> --vault $VAULT_PATH)"
 
 # Log the successful injection
 printf '{"timestamp":"%s","prompt_len":%d,"ask_status":0,"injection":true,"pointer_chars":%d}\n' \

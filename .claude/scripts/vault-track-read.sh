@@ -21,9 +21,9 @@
 # retrieval pattern.
 #
 # Mechanism: detect vault paths, run `vaultmind note get` synchronously
-# (captures output to detect whether the path actually resolves to an
-# indexed note — note get exits 0 even for unresolved ids, printing
-# "No note found"). On resolution, emit JSON
+# (an unresolved id exits non-zero AND prints "No note found"; the status
+# is the primary signal and the string check remains as a guard for
+# binaries older than the exit-code fix). On resolution, emit JSON
 # `hookSpecificOutput.additionalContext` to inject a header the agent
 # sees. On non-resolution (episode files, frontmatter quirks, transient
 # errors), silently allow Read — no misleading header.
@@ -49,7 +49,7 @@ fi
 # Default `*/vaultmind-*/*.md` matches vaultmind-self conventions
 # (vaultmind-identity, vaultmind-vault). Consumers with non-default
 # vault dir names override per project — one project might use
-# `*/companion-vault/*.md`; another might use
+# `*/their-vault/*.md`; another might use
 # `*/vaultmind-knowledge/*.md`. Set inline in settings.json command,
 # e.g. `VAULT_PATH_PATTERN="*/companion-vault/*.md" bash <script>`.
 #
@@ -64,15 +64,18 @@ fi
 # vault names was the dogfood-found regression.
 shopt -s extglob
 # Pattern precedence (issue #41.6): an explicit VAULT_PATH_PATTERN wins (the
-# companion project extglob-alternation case). Otherwise, when VAULTMIND_VAULT is set
-# (by `vaultmind hooks install --vault`), derive the pattern from the vault's
-# basename so read-tracking actually fires for a consumer vault — bash `case`
+# companion project extglob-alternation case). Otherwise derive the pattern from the
+# recall vault's basename so read-tracking fires for a consumer vault — bash `case`
 # globs span `/`, so `*/<name>/*.md` matches notes in subdirectories too.
-# Falls back to the vaultmind-* convention when neither is set.
+# Read-tracking is a recall concern, so this prefers the per-concern
+# VAULTMIND_RECALL_VAULT, falling back to the overloaded VAULTMIND_VAULT (both
+# ${VAR:-}-guarded so set -u doesn't abort when unset). Falls back to the
+# vaultmind-* convention when neither is set.
+RECALL_VAULT="${VAULTMIND_RECALL_VAULT:-${VAULTMIND_VAULT:-}}"
 if [ -n "${VAULT_PATH_PATTERN:-}" ]; then
   PATTERN="${VAULT_PATH_PATTERN:-}"
-elif [ -n "${VAULTMIND_VAULT:-}" ]; then
-  PATTERN="*/${VAULTMIND_VAULT##*/}/*.md"
+elif [ -n "$RECALL_VAULT" ]; then
+  PATTERN="*/${RECALL_VAULT##*/}/*.md"
 else
   PATTERN="*/vaultmind-*/*.md"
 fi
