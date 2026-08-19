@@ -43,11 +43,18 @@ func TestComputeActivationScores_WithSimilarities(t *testing.T) {
 	sid, err := db.StartSession("/vault")
 	require.NoError(t, err)
 
-	// Both notes accessed once
+	// Both notes accessed once. Source and delivery must match what production
+	// writes: the scorer default-denies sources it does not recognise, so a
+	// placeholder like "search" seeds events it ignores — leaving this test
+	// asserting against an empty score map while appearing to exercise the path.
 	for _, noteID := range []string{"note-a", "note-b"} {
 		_, err = db.LogEvent(experiment.Event{
 			SessionID: sid, Type: experiment.EventNoteAccess, VaultPath: "/vault",
-			Data: map[string]any{"note_id": noteID, "source": "search"},
+			Data: map[string]any{
+				"note_id":        noteID,
+				"source":         experiment.AccessSourceRead,
+				"body_delivered": true,
+			},
 		})
 		require.NoError(t, err)
 	}

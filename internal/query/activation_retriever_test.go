@@ -60,7 +60,11 @@ func recordAccessForActivationTest(t *testing.T, idxDB *index.DB, expDB *experim
 	t.Helper()
 	require.NoError(t, index.RecordNoteAccess(idxDB, noteID))
 	sess := &experiment.Session{DB: expDB, ID: sessionID, VaultPath: "/test"}
-	_, err := sess.LogNoteAccessEvent(noteID, "test")
+	// Use the source production actually writes for a deliberate read, not a
+	// "test" placeholder. The scorer default-denies unknown sources, so a
+	// made-up one would seed events the scorer ignores — a fixture that stops
+	// describing the path it claims to exercise.
+	_, err := sess.LogNoteAccessEvent(noteID, experiment.AccessSourceRead, true)
 	require.NoError(t, err)
 }
 

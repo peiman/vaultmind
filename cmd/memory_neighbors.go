@@ -79,7 +79,7 @@ func runNeighborsWithKeys(cmd *cobra.Command, args []string, keys neighborsKeys)
 	// Log note access for experiment outcome linkage (non-blocking).
 	if session := experiment.FromContext(cmd.Context()); session != nil {
 		session.SetVaultPath(vaultPath)
-		_, _ = session.LogNoteAccessEvent(args[0], "neighbors")
+		_, _ = session.LogNoteAccessEvent(args[0], experiment.AccessSourceNeighbors, false) // lists neighbours; no body rendered
 	}
 
 	if jsonOut {

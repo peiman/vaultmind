@@ -32,6 +32,9 @@ func (d *DB) NoteAccessTimes(noteID string) ([]time.Time, error) {
 		if data["note_id"] != noteID {
 			continue
 		}
+		if !activationSignalFrom(data) {
+			continue
+		}
 		t, err := time.Parse(time.RFC3339, ts)
 		if err != nil {
 			continue
@@ -145,6 +148,9 @@ func (d *DB) AccessedNoteIDs() ([]string, error) {
 		}
 		noteID, ok := data["note_id"].(string)
 		if !ok || seen[noteID] {
+			continue
+		}
+		if !activationSignalFrom(data) {
 			continue
 		}
 		seen[noteID] = true

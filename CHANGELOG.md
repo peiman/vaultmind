@@ -68,6 +68,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Activation no longer reinforces notes that were never read.** A `note_access`
+  event was written for a query's top hit whenever the hit cleared the relevance
+  floor — a check on *relevance*, not on *delivery*. Under `--pointers-only` no
+  body is handed over at all, so a note could rank first, record a read that never
+  happened, gain activation weight, and rank first more reliably. Neither
+  activation query filtered by source, so every one of those events counted.
+
+  Measured on a live log: of **10,928** access events feeding the scorer, only
+  **2,305 survive** the fix — 79% of the activation signal was phantom. The
+  clearest single case is a note carrying **306 boosts and zero real reads**: never
+  opened once, and steadily made more retrievable for having ranked first.
+
+  This also explains a symptom that looked unrelated: a hook whose payload
+  repeated 98% of the time. That was the loop closing on itself — so
+  deduplicating the hook would have hidden the cause rather than fixed it.
+
+  `note_access` events still record everything they did before; no telemetry is
+  dropped. They now also carry `body_delivered`, and only events where content
+  actually reached the agent feed activation. A missing `body_delivered` reads as
+  *not delivered*, so events written before the field existed drop out on their
+  own rather than poisoning the ranking indefinitely — the scorer reads the whole
+  history with no time window, so they could not otherwise age out. Unknown
+  sources are denied by default, so a future logging site cannot quietly reopen
+  the loop.
+
 - **The README says where the config file lives.** It told you to set
   `experiments.telemetry: off` without ever mentioning that a config file exists or where —
   advice you cannot follow. It now names the path and the environment variable.

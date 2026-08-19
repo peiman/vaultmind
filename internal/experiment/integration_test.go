@@ -41,7 +41,7 @@ func TestIntegration_FullFlow(t *testing.T) {
 	assert.NotEmpty(t, searchEventID)
 
 	// 4. Log note access (triggers outcome linkage)
-	accessEventID, err := session.LogNoteAccessEvent("concept-spreading-activation", "note_get")
+	accessEventID, err := session.LogNoteAccessEvent("concept-spreading-activation", "note_get", true)
 	require.NoError(t, err)
 	assert.NotEmpty(t, accessEventID)
 

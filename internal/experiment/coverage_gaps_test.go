@@ -220,7 +220,7 @@ func TestSession_OutcomeWindowDefaultsToTwo(t *testing.T) {
 		VaultPath:     "/vault",
 		OutcomeWindow: 0, // explicitly zero → must use default (2)
 	}
-	_, err = session.LogNoteAccessEvent("note-z", "note_get")
+	_, err = session.LogNoteAccessEvent("note-z", "note_get", true)
 	require.NoError(t, err)
 
 	var count int
@@ -657,7 +657,7 @@ func TestSession_OutcomeWindowCustomValueLimitsLookback(t *testing.T) {
 		VaultPath:     "/vault",
 		OutcomeWindow: 1, // > 0, so outcomeWindow() returns 1
 	}
-	_, err = session.LogNoteAccessEvent("note-q", "note_get")
+	_, err = session.LogNoteAccessEvent("note-q", "note_get", true)
 	require.NoError(t, err)
 
 	var count int
