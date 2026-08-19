@@ -14,7 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   remaining budget contributed *nothing*, while the pack still counted it. That
   is how output could read `3 items, 0 with bodies` — three notes named, none
   delivered — and it was the common case rather than the edge case: on a vault
-  whose median note is larger than the hook budget, nothing ever fits.
+  whose median note is larger than the hook budget, nothing ever fits. (That
+  header wording is itself replaced later in this release; it is quoted here as
+  the symptom, not as current output.)
 
   With `--excerpt N` such a note contributes at most N tokens instead of zero.
   The excerpt prefers the note's **Principle** section where one exists, because
@@ -42,12 +44,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and paid for. Genuinely irrelevant hits are unaffected: they land at or below
   the noise floor as `no_match` and stay suppressed in every vault.
 
-- **The context header distinguishes an excerpt from a body**, and the relevance
-  hint stops claiming suppression while delivering. `2 items, 1 with bodies,
-  1 excerpted` is now sayable; previously an excerpt was reported as a body. The
-  "body suppressed" note is derived from the same `BodyDecision` the renderer
-  uses instead of being re-derived from the confidence label — a third derivation
-  that drifted the moment the rule changed.
+- **The context header states what arrived, in numbers you can recount from the
+  output below it.** It reads `9 notes, 9 delivered as excerpts (982 tok)`, or
+  `5 notes, 3 delivered in full, 2 titles only (95 tok)` when the budget dropped
+  some. `notes` counts every block that renders — including the target, which the
+  old `N items` left out even though it is the block an agent reads first.
+
+  An excerpt counts as delivered *and* says it is an excerpt. An earlier form of
+  this change made the two disjoint, so a pack of pure excerpts printed
+  `0 with bodies, 9 excerpted`: nine bodies delivered, reported as none. Both
+  facts belong on the line and neither substitutes for the other.
+
+  The `used/budget` denominator is gone — it described the caller's knob rather
+  than what was received, and it is what let `0 items, 900/900 tokens` read as a
+  full budget of context. The footer names the budget instead, and only when the
+  budget actually dropped a note.
+
+  The relevance hint also stops claiming suppression while delivering: it is
+  derived from the same `BodyDecision` the renderer uses rather than re-derived
+  from the confidence label — a third derivation that drifted the moment the rule
+  changed.
 
 - **An excerpt renders in full rather than being truncated again for display.**
   The neighbour preview cut every body to 120 runes, which took an
@@ -117,12 +133,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   `note_access` events still record everything they did before; no telemetry is
   dropped. They now also carry `body_delivered`, and only events where content
-  actually reached the agent feed activation. A missing `body_delivered` reads as
-  *not delivered*, so events written before the field existed drop out on their
-  own rather than poisoning the ranking indefinitely — the scorer reads the whole
-  history with no time window, so they could not otherwise age out. Unknown
-  sources are denied by default, so a future logging site cannot quietly reopen
-  the loop.
+  actually reached the agent feed activation. Unknown sources are denied by
+  default, so a future logging site cannot quietly reopen the loop.
+
+  A **missing** `body_delivered` — every event written before the field existed —
+  is treated as *unknown*, not as false, and resolved per source from what that
+  source did at the time. For `ask` and `recall` it means not delivered, because
+  in that era no hook path delivered a body at all, so those phantoms drop out on
+  their own; the scorer reads the whole history with no time window, so they could
+  not otherwise age out. For `note get` it means delivered, because `note get`
+  always rendered a body until `--frontmatter-only` tracking arrived alongside
+  this field. Collapsing the two would have retired the strongest signal in the
+  log.
+
+- **`note get --frontmatter-only` no longer boosts activation.** It prints type,
+  title and fields and no body; a miss prints nothing. Both recorded the same
+  activation weight as a full read — naming an id is intent, and without text it
+  is intent without content. The recorder was made honest about this in the same
+  release; the reader kept ignoring it.
+
+- **A bare URL no longer beats the content beneath it in an excerpt.** Citations
+  were correctly rejected as prose and then reinstated by the fallback that keeps
+  a note from excerpting to nothing, so a note opening with a link delivered the
+  link and skipped the list below. A citation is now reached for only when the
+  note has nothing else.
+
+- **CJK prose containing a slash is no longer discarded as a file path.**
+  `検索/取得は記憶の中心である` is a sentence; the "no whitespace plus a slash"
+  test describes a path only in languages that put spaces between words.
 
 - **The README says where the config file lives.** It told you to set
   `experiments.telemetry: off` without ever mentioning that a config file exists or where —
