@@ -7,32 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Known issue
-
-- **`vaultmind self` under-reports reads on hook-driven vaults, and this release
-  is what caused it.** `self` excludes the `hook` and `agent-neighbor` callers
-  because, historically, neither delivered any note text — a caller name was a
-  sound proxy for "was this a real read". The delivery changes in this release
-  make both of them deliver, and `note_accesses` is
-  `(note_id, caller, accessed_at)` with no column recording delivery, so the
-  proxy cannot be corrected in place.
-
-  The visible effect: a hook can hand an agent several notes' worth of content
-  and `self` will report that nothing happened. On a live 4,014-row ledger it
-  reports 47 accessed notes, excluding 87% of rows — a growing share of which
-  are now genuine deliveries.
-
-  The fix is a delivery column on `note_accesses`, written from the same
-  `AskResult.DeliveredTo` value the experiment log already records, and a `self`
-  predicate that reads it instead of guessing from the caller. Copying `self`'s
-  caller filter into the activation candidate list is explicitly **not** the fix:
-  it would exclude exactly the rows that now deliver, and leave the two ledgers
-  answering "was this a real read?" by two contradictory methods.
-
-  Until then `self`'s hot list is a lower bound. Nothing errors; the number is
-  simply smaller than the truth, which is worth knowing before reading it across
-  the upgrade.
-
 ### Added
 
 - **`ask --excerpt N` — deliver the passage that matters when the whole note will
@@ -93,6 +67,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nothing at all.
 
 ### Fixed
+
+- **`vaultmind self` asks whether an access DELIVERED, instead of guessing from
+  who fired it** (migration 008 adds `note_accesses.body_delivered`).
+
+  `self` excluded the `hook` and `agent-neighbor` callers because neither ever
+  delivered note text — the caller name was a sound proxy for "was this a real
+  read". The delivery work in this same release made both of them deliver, and
+  the proxy inverted: `self` began hiding genuine reads, and hid more of them the
+  better delivery worked. A hook could hand an agent several notes' worth of
+  content while `self` reported that nothing had happened.
+
+  Caller could not be repaired into a delivery signal. `resolveCaller` collapses
+  anything containing "hook" to `CallerHook`, overriding the explicit
+  target/neighbour labels the ask path passes, so for a majority of rows the
+  ledger cannot even distinguish the deliberate target from the fan-out. The
+  dimension was simply the wrong one for the question.
+
+  Delivery is now recorded directly, from the same `AskResult.DeliveredTo` value
+  the usage log writes — one source of truth for "did content reach the agent",
+  consulted by both ledgers rather than two heuristics that can disagree.
+
+  **Rows written before this carry NULL, which is not the same as false.** For
+  them the caller heuristic was correct at the time — a `hook` row really did
+  deliver nothing — so NULL falls back to that original meaning. Writing 0 would
+  assert a measurement nobody took; writing 1 would fabricate deliveries. `caller`
+  is kept and keeps its real meaning: who *initiated* the access, which is still
+  the right axis for deliberate-vs-ambient.
+
+  Explicitly not done: copying the old caller filter into the activation
+  candidate list. That would have excluded exactly the rows this release turned
+  into real deliveries.
 
 - **Activation no longer reinforces notes that were never read.** A `note_access`
   event was written for a query's top hit whenever the hit cleared the relevance

@@ -351,7 +351,10 @@ func Ask(ctx context.Context, retriever retrieval.Retriever, resolver *graph.Res
 		if packResult.TargetID != "" {
 			// Target of an Ask is high-intent — agent named the topic
 			// and got back its body. CallerAgent.
-			if recErr := index.RecordNoteAccessAs(db, packResult.TargetID, index.CallerAgent); recErr != nil {
+			// Delivery is recorded, not inferred. The target carries text when
+			// the pack gave it a body; caller says who asked, not what arrived.
+			targetDelivered := packResult.Target != nil && packResult.Target.Body != ""
+			if recErr := index.RecordNoteAccessDelivered(db, packResult.TargetID, index.CallerAgent, targetDelivered); recErr != nil {
 				log.Debug().Err(recErr).Str("note_id", packResult.TargetID).Msg("recording note access failed (non-fatal)")
 			}
 		}
@@ -364,7 +367,7 @@ func Ask(ctx context.Context, retriever retrieval.Retriever, resolver *graph.Res
 			// query, not by direct naming. CallerAgentNeighbor lets
 			// `self` (or future ranking) treat them differently from
 			// direct reads if it wants to.
-			if recErr := index.RecordNoteAccessAs(db, item.ID, index.CallerAgentNeighbor); recErr != nil {
+			if recErr := index.RecordNoteAccessDelivered(db, item.ID, index.CallerAgentNeighbor, item.Body != ""); recErr != nil {
 				log.Debug().Err(recErr).Str("note_id", item.ID).Msg("recording context-pack neighbor access failed (non-fatal)")
 			}
 		}

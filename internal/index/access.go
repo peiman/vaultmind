@@ -3,7 +3,6 @@ package index
 import (
 	"fmt"
 	"os"
-	"time"
 )
 
 // Caller* constants name the provenance of an access event. The string
@@ -104,40 +103,17 @@ func RecordNoteAccess(d *DB, noteID string) error {
 // Best-effort: each per-note tracking miss is the caller's
 // responsibility to log at debug; never fail the user query over
 // optional bookkeeping.
+//
+// It records no delivery information. Prefer RecordNoteAccessDelivered
+// wherever the answer is known: a nil delivery is stored as NULL, which
+// ListDeliveredNotes reads as "fall back to what caller meant at the time"
+// rather than as a recorded false. That fallback is right for rows written
+// before delivery was tracked and wrong as a habit for new ones.
+//
+// Both recorders share one write path so the two can never drift into
+// inserting different columns for the same event.
 func RecordNoteAccessAs(d *DB, noteID, caller string) error {
-	if noteID == "" {
-		return fmt.Errorf("RecordNoteAccess: noteID is empty")
-	}
-	resolved := resolveCaller(caller)
-	now := time.Now().UTC().Format(time.RFC3339Nano)
-
-	// Append the event row first — this is the new source of truth
-	// for caller-aware queries (self, future retrieval scoring). Use
-	// INSERT ... SELECT FROM notes so a missing note id silently
-	// inserts zero rows instead of triggering a foreign-key violation.
-	// Preserves the pre-2026-05-01 best-effort contract documented on
-	// RecordNoteAccess: tracking misses on phantom ids never fail the
-	// user query (e.g. when an indexer race deletes the row between
-	// retrieval and access recording).
-	if _, err := d.Exec(
-		`INSERT INTO note_accesses (note_id, caller, accessed_at)
-		 SELECT id, ?, ? FROM notes WHERE id = ?`,
-		resolved, now, noteID,
-	); err != nil {
-		return fmt.Errorf("logging access event for %q (caller %q): %w", noteID, resolved, err)
-	}
-
-	// Mirror to the scalar columns so existing callers (LookupNoteAccess,
-	// the experiment scorer, doctor) keep working without per-event-table
-	// joins. Both writes happen in a single best-effort path; if the
-	// scalar update fails the event is still in the log.
-	if _, err := d.Exec(
-		`UPDATE notes SET access_count = access_count + 1, last_accessed_at = ? WHERE id = ?`,
-		now, noteID,
-	); err != nil {
-		return fmt.Errorf("recording scalar access for %q: %w", noteID, err)
-	}
-	return nil
+	return recordAccess(d, noteID, caller, nil)
 }
 
 // NoteAccessStats reports the access counters for a single note. Useful
