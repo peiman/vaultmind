@@ -107,7 +107,7 @@ func TestSession_LogNoteAccessEvent(t *testing.T) {
 	require.NoError(t, err)
 
 	session := &experiment.Session{DB: db, ID: sessionID, VaultPath: "/vault"}
-	eventID, err := session.LogNoteAccessEvent("note-a", "note_get")
+	eventID, err := session.LogNoteAccessEvent("note-a", "note_get", true)
 	require.NoError(t, err)
 	assert.NotEmpty(t, eventID)
 

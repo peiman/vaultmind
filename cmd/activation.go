@@ -106,9 +106,17 @@ func logAskExperiment(cmd *cobra.Command, queryText, vaultPath, retrievalMode st
 	// at least one hit. Skipped when suppressed: a recall-floor no_match means
 	// nothing was relevant, so reinforcing the irrelevant top hit it surfaced
 	// would pollute the activation signal — the whole point of the floor.
+	//
+	// The event also carries whether a BODY was handed over, because "surfaced"
+	// and "read" are different facts and the scorer must not treat them alike.
+	// `suppressed` above is the relevance floor; it says nothing about delivery,
+	// so a pointers-only render recorded a read that never happened — and a note
+	// that ranked first thereby became more likely to rank first.
+	// See experiment.IsActivationSignal.
 	// silent-failure-ok: telemetry.
 	if retrievalErr == nil && result != nil && len(result.TopHits) > 0 && !suppressed {
-		if _, err := session.LogNoteAccessEvent(result.TopHits[0].ID, "ask"); err != nil {
+		bodyDelivered, _ := result.BodyDecision(pointersOnly)
+		if _, err := session.LogNoteAccessEvent(result.TopHits[0].ID, experiment.AccessSourceAsk, bodyDelivered); err != nil {
 			log.Debug().Err(err).Msg("failed to log ask note_access event")
 		}
 	}

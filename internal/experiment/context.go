@@ -90,12 +90,23 @@ func (s *Session) LogContextPackEvent(data map[string]any) (string, error) {
 }
 
 // LogNoteAccessEvent logs a note_access event and triggers outcome linkage.
-func (s *Session) LogNoteAccessEvent(noteID, source string) (string, error) {
+//
+// bodyDelivered records whether the note's CONTENT actually reached the agent,
+// which is not the same question as whether the note was surfaced. It is a
+// parameter rather than an inference so every call site has to answer it: the
+// ask path surfaced a top hit on every query and recorded an access for it even
+// when the body was withheld, and the activation scorer then counted those as
+// retrievals. See IsActivationSignal for the loop that produced.
+func (s *Session) LogNoteAccessEvent(noteID, source string, bodyDelivered bool) (string, error) {
 	eventID, err := s.DB.LogEvent(Event{
 		SessionID: s.ID,
 		Type:      EventNoteAccess,
 		VaultPath: s.VaultPath,
-		Data:      map[string]any{"note_id": noteID, "source": source},
+		Data: map[string]any{
+			"note_id":        noteID,
+			"source":         source,
+			"body_delivered": bodyDelivered,
+		},
 	})
 	if err != nil {
 		return "", err
