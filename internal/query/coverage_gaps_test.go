@@ -741,8 +741,15 @@ func TestFormatAsk_LowContrastVaultHintAppearsForWeakNoiseFloor(t *testing.T) {
 	out := buf.String()
 	assert.Contains(t, out, "tight vault",
 		"LowContrastVault=true with weak noise-floor confidence must render the tight-vault hint")
-	assert.Contains(t, out, "--read 1",
-		"tight vault hint must surface the override path")
+	// Changed deliberately. The hint used to advertise "--read 1" because a tight
+	// vault's weak hit had its body withheld, so the agent needed an override.
+	// It now delivers (low contrast describes the vault, not the hit), and the
+	// hint says so instead. Pointing at an override for a body already printed
+	// below it would be the same wrong-surface defect this hint exists to
+	// prevent — see body_decision_lowcontrast_test.go.
+	assert.Contains(t, out, "body included below",
+		"the body is delivered now; the hint must describe that, not offer an override for it")
+	assert.NotContains(t, out, "body suppressed")
 }
 
 // The tight-vault hint must NOT appear when confidence is "strong" even with

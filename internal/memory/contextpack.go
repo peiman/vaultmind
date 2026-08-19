@@ -17,6 +17,15 @@ type ContextPackConfig struct {
 	MaxItems         int                // max context items to return; 0 = unlimited (default, backward-compat)
 	Slim             bool               // reduce context item frontmatter to {type, title, status} only
 	ActivationScores map[string]float64 // optional activation scores keyed by note ID
+
+	// ExcerptTokens caps a per-item excerpt used when a whole body will not fit
+	// the remaining budget. 0 (default) keeps the released all-or-nothing
+	// behaviour, where such an item contributes no text at all.
+	//
+	// Without this, a pack can honestly report "3 items" while handing the agent
+	// nothing but titles — which is what a 900-token hook budget does against a
+	// vault whose median note is larger than the budget.
+	ExcerptTokens int
 }
 
 // ContextPackTarget holds the fully-loaded target note.
@@ -33,7 +42,12 @@ type ContextItem struct {
 	Confidence   string                 `json:"confidence"`
 	Frontmatter  map[string]interface{} `json:"frontmatter"`
 	BodyIncluded bool                   `json:"body_included"`
-	Body         string                 `json:"body,omitempty"`
+	// BodyExcerpted marks Body as the note's most decision-relevant passage
+	// rather than its whole text. It is recorded rather than inferred because
+	// "the agent got the note" and "the agent got the gist" are different facts,
+	// and a metric that cannot tell them apart reports the second as the first.
+	BodyExcerpted bool   `json:"body_excerpted,omitempty"`
+	Body          string `json:"body,omitempty"`
 }
 
 // ContextPackResult is the full output of a ContextPack operation.
@@ -131,7 +145,7 @@ func ContextPack(resolver *graph.Resolver, db *index.DB, cfg ContextPackConfig) 
 	}
 
 	// Step 3: Estimate target tokens and fill budget.
-	target, remaining := packTargetContent(full, cfg.Budget, result)
+	target, remaining := packTargetContent(full, cfg.Budget, cfg.ExcerptTokens, result)
 	result.Target = target
 
 	if remaining <= 0 {
@@ -207,14 +221,8 @@ func packBodyFirst(
 		result.UsedTokens += fmTokens
 
 		// Try to include body within remaining budget.
-		if noteFull != nil && noteFull.Body != "" {
-			bodyTokens := EstimateTokens(noteFull.Body)
-			if bodyTokens <= *remaining {
-				item.BodyIncluded = true
-				item.Body = noteFull.Body
-				*remaining -= bodyTokens
-				result.UsedTokens += bodyTokens
-			}
+		if noteFull != nil {
+			result.UsedTokens += attachBody(&item, noteFull.Body, remaining, cfg.ExcerptTokens)
 		}
 
 		result.Context = append(result.Context, item)
@@ -265,15 +273,44 @@ func packTwoPass(
 		if err != nil || fullNote == nil || fullNote.Body == "" {
 			continue
 		}
-		bodyTokens := EstimateTokens(fullNote.Body)
-		if bodyTokens <= *remaining {
-			result.Context[i].BodyIncluded = true
-			result.Context[i].Body = fullNote.Body
-			*remaining -= bodyTokens
-			result.UsedTokens += bodyTokens
-		}
+		result.UsedTokens += attachBody(&result.Context[i], fullNote.Body, remaining, cfg.ExcerptTokens)
 	}
 	return nil
+}
+
+// attachBody puts as much of a note's text into item as the budget allows: the
+// whole body when it fits, otherwise a bounded excerpt when the caller opted
+// into one. Returns the tokens consumed.
+//
+// The released behaviour was all-or-nothing — a body one token over the
+// remaining budget contributed nothing, and the pack still counted the item.
+// That is how a pack reports "3 items, 0 with bodies": three notes named, none
+// delivered. Excerpting is opt-in so this cannot change what an existing caller
+// receives.
+func attachBody(item *ContextItem, body string, remaining *int, excerptTokens int) int {
+	if body == "" || *remaining <= 0 {
+		return 0
+	}
+	if tokens := EstimateTokens(body); tokens <= *remaining {
+		item.BodyIncluded = true
+		item.Body = body
+		*remaining -= tokens
+		return tokens
+	}
+	if excerptTokens <= 0 {
+		return 0
+	}
+	budget := min(excerptTokens, *remaining)
+	excerpt := Excerpt(body, budget)
+	if excerpt == "" {
+		return 0
+	}
+	tokens := EstimateTokens(excerpt)
+	item.BodyIncluded = true
+	item.BodyExcerpted = true
+	item.Body = excerpt
+	*remaining -= tokens
+	return tokens
 }
 
 // extractFrontmatter returns the note's frontmatter, optionally slimmed.
@@ -327,7 +364,7 @@ func slimFrontmatter(fm map[string]interface{}, noteType, title string) map[stri
 // packTargetContent fills the token budget with the target note's frontmatter and body.
 // It always accounts for frontmatter tokens in UsedTokens and returns the target and
 // the remaining token budget after packing.
-func packTargetContent(full *index.FullNote, budget int, result *ContextPackResult) (*ContextPackTarget, int) {
+func packTargetContent(full *index.FullNote, budget, excerptTokens int, result *ContextPackResult) (*ContextPackTarget, int) {
 	// Inject type+title from FullNote struct fields into the Frontmatter
 	// map — they're stored as struct fields, not map keys (see
 	// extractFrontmatter for the full reasoning). vaultmind#33.
@@ -356,6 +393,22 @@ func packTargetContent(full *index.FullNote, budget int, result *ContextPackResu
 		remaining -= bodyTokens
 		result.UsedTokens += bodyTokens
 		return target, remaining
+	}
+
+	// The target is what the agent is most likely to act on, and it is what the
+	// budget starves first. When the caller opted into excerpting, give it the
+	// note's most decision-relevant passage instead of the raw byte slice below
+	// — which cuts mid-word and, because it slices bytes rather than runes, can
+	// split a multi-byte character outright.
+	if excerptTokens > 0 && remaining > 0 && full.Body != "" {
+		if excerpt := Excerpt(full.Body, min(excerptTokens, remaining)); excerpt != "" {
+			target.Body = excerpt
+			used := EstimateTokens(excerpt)
+			remaining -= used
+			result.UsedTokens += used
+			result.Truncated = true
+			return target, remaining
+		}
 	}
 
 	// Truncate body to fit remaining budget (4 chars per token).

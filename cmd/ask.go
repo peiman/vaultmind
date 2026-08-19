@@ -146,6 +146,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		HasNoiseFloor:     hasNoiseFloor,
 		VaultLowContrast:  lowContrast,
 		SuppressOnNoMatch: quietOnNoMatch,
+		ExcerptTokens:     getConfigValueWithFlags[int](cmd, "excerpt", config.KeyAppAskExcerpt),
 		ActivationFunc: func(sims map[string]float64) map[string]float64 {
 			return computeActivationScores(cmd.Context(), sims, delta)
 		},
