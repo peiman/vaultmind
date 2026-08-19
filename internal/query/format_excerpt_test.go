@@ -123,6 +123,33 @@ func TestFormatAsk_ExcerptRendersWholeNotReTruncated(t *testing.T) {
 		"the excerpt's own bound is the budget; re-truncating it for display discards what it was chosen to carry")
 }
 
+// The same re-truncation bug, one code path over. Fixing it for context items
+// and not the target left the MOST prominent slot cutting its own excerpt at
+// 120 runes — "...you hold the authority to probe i..." — while the smaller
+// items below it rendered whole. Adjacent paths need the same fix, or the fix
+// reads as done while the visible case stays broken.
+func TestFormatAsk_TargetExcerptRendersWhole(t *testing.T) {
+	full := "When you are the consumer of what you build, a request is a hypothesis, not an order — you hold the authority to probe it and to revert it when your own use of the tool says it is wrong."
+	result := &AskResult{
+		TopHitConfidence: ConfidenceStrong,
+		Context: &memory.ContextPackResult{
+			TargetID: "arc-decides", BudgetTokens: 900, UsedTokens: 100,
+			Target: &memory.ContextPackTarget{
+				ID:            "arc-decides",
+				BodyExcerpted: true,
+				Body:          full,
+				Frontmatter:   map[string]interface{}{"type": "arc", "title": "The One Who Uses It Decides"},
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	require.NoError(t, FormatAsk(result, &buf))
+
+	assert.Contains(t, buf.String(), "says it is wrong.",
+		"the target's excerpt is already budget-bounded; truncating it again discards the half that carries the rule")
+}
+
 func mustDeliver(t *testing.T, r *AskResult) bool {
 	t.Helper()
 	delivered, _ := r.BodyDecision(false)

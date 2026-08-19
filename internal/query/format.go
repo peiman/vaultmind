@@ -382,7 +382,14 @@ func writeContextTarget(w io.Writer, target *memory.ContextPackTarget, opts form
 		return err
 	}
 	if !opts.pointersOnly && target.Body != "" {
-		_, err := fmt.Fprintf(w, "    %s\n", Truncate(target.Body, 120))
+		// An excerpt already carries its own budget-derived bound. Truncating it
+		// again here would cut the target — the slot the agent reads first — at
+		// 120 runes, discarding the half that carries the rule.
+		body := target.Body
+		if !target.BodyExcerpted {
+			body = Truncate(body, itemBodyPreviewRunes)
+		}
+		_, err := fmt.Fprintf(w, "    %s\n", body)
 		return err
 	}
 	return nil

@@ -32,7 +32,12 @@ type ContextPackConfig struct {
 type ContextPackTarget struct {
 	ID          string                 `json:"id"`
 	Frontmatter map[string]interface{} `json:"frontmatter"`
-	Body        string                 `json:"body,omitempty"`
+	// BodyExcerpted marks Body as the note's decision-bearing passage rather
+	// than its whole text — same meaning as on ContextItem, and needed here for
+	// the same reason: a renderer that cannot tell the difference will truncate
+	// an already-bounded excerpt a second time.
+	BodyExcerpted bool   `json:"body_excerpted,omitempty"`
+	Body          string `json:"body,omitempty"`
 }
 
 // ContextItem holds context metadata for a single related note.
@@ -371,7 +376,6 @@ func packTargetContent(full *index.FullNote, budget, excerptTokens int, result *
 	fm := extractFrontmatter(full, false)
 	fmJSON, _ := json.Marshal(fm)
 	fmTokens := EstimateTokens(string(fmJSON))
-	bodyTokens := EstimateTokens(full.Body)
 
 	target := &ContextPackTarget{
 		ID:          full.ID,
@@ -388,21 +392,21 @@ func packTargetContent(full *index.FullNote, budget, excerptTokens int, result *
 		return target, remaining
 	}
 
-	if bodyTokens <= remaining {
-		target.Body = full.Body
-		remaining -= bodyTokens
-		result.UsedTokens += bodyTokens
-		return target, remaining
-	}
-
-	// The target is what the agent is most likely to act on, and it is what the
-	// budget starves first. When the caller opted into excerpting, give it the
-	// note's most decision-relevant passage instead of the raw byte slice below
-	// — which cuts mid-word and, because it slices bytes rather than runes, can
-	// split a multi-byte character outright.
+	// The target is the slot the agent reads first, so it gets the excerpt
+	// treatment BEFORE the fits-whole check, not only as a fallback when the
+	// body overflows. Ordering this the other way meant that at a budget where
+	// the body happened to fit, the target was stored whole and then truncated
+	// from the top for display — showing an arc's "Trigger" (its story setup)
+	// while the smaller context items below it showed properly chosen Principle
+	// excerpts. The best slot got the worst content.
+	//
+	// It also avoids the raw byte slice further down, which cuts mid-word and,
+	// because it slices bytes rather than runes, can split a multi-byte
+	// character outright.
 	if excerptTokens > 0 && remaining > 0 && full.Body != "" {
 		if excerpt := Excerpt(full.Body, min(excerptTokens, remaining)); excerpt != "" {
 			target.Body = excerpt
+			target.BodyExcerpted = true
 			used := EstimateTokens(excerpt)
 			remaining -= used
 			result.UsedTokens += used

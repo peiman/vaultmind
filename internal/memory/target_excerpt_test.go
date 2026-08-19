@@ -47,6 +47,34 @@ func TestContextPack_TargetIsExcerptedNotByteSliced(t *testing.T) {
 		"got %q — a starved target should end on a sentence or a marked cut, never mid-word", body)
 }
 
+// Caught by running the real recall hook after shipping: at a budget where the
+// target's body FITS, it was stored whole and then truncated from the top for
+// display — so the most prominent slot in the whole injection showed an arc's
+// "Trigger" (its story setup) while the smaller context items below it showed
+// properly chosen Principle excerpts. The best slot got the worst content.
+//
+// So --excerpt means "cap every note at N tokens, preferring its
+// decision-bearing passage", not "fall back to an excerpt only when the note is
+// too big". A caller that opts in wants bounded, decision-bearing text
+// throughout; one that does not is unaffected.
+func TestContextPack_TargetIsExcerptedEvenWhenBodyFits(t *testing.T) {
+	db := buildTestDB(t)
+	resolver := graph.NewResolver(db)
+
+	// Verified by sweep: at 400 the fixture's target body fits whole, so this
+	// exercises the fits-but-should-still-be-excerpted path.
+	const roomyBudget = 400
+
+	withExcerpt, err := memory.ContextPack(resolver, db, memory.ContextPackConfig{
+		Input: "proj-vaultmind", Budget: roomyBudget, MaxItems: 2, ExcerptTokens: 30,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, withExcerpt.Target)
+
+	assert.LessOrEqual(t, memory.EstimateTokens(withExcerpt.Target.Body), 30,
+		"opting into excerpts must bound the target too — it is the slot the agent reads first")
+}
+
 // Unchanged when the caller has not opted in: the released byte-slice behaviour
 // still applies, so upgrading cannot silently alter existing output.
 func TestContextPack_TargetTruncationUnchangedWithoutExcerpt(t *testing.T) {
