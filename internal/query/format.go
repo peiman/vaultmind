@@ -344,14 +344,23 @@ func writeContextHeader(w io.Writer, ctx *memory.ContextPackResult, withBodies i
 		return err
 	}
 	suffix := ""
+	capNote := ""
 	if !opts.pointersOnly && len(ctx.Context) > 0 && withBodies < len(ctx.Context) {
 		suffix = fmt.Sprintf(", %d with bodies", withBodies)
 		if excerpted := countItemsExcerpted(ctx.Context, opts); excerpted > 0 {
 			suffix += fmt.Sprintf(", %d excerpted", excerpted)
+			// "863/6000" with most of the budget unused reads as "the vault had
+			// nothing more to give". It means "a cap bound every item and 5,137
+			// tokens went unspent" — a different fact, and the one that tells the
+			// reader which knob to turn. Same shape as "0 items, 900/900 tokens":
+			// a true number describing the pack rather than what happened.
+			if unspent := ctx.BudgetTokens - ctx.UsedTokens; unspent > ctx.BudgetTokens/2 {
+				capNote = fmt.Sprintf(" — bound by --excerpt, %d tokens unspent", unspent)
+			}
 		}
 	}
-	_, err := fmt.Fprintf(w, "\nContext from: %s (%d items%s, %d/%d tokens)\n",
-		ctx.TargetID, len(ctx.Context), suffix, ctx.UsedTokens, ctx.BudgetTokens)
+	_, err := fmt.Fprintf(w, "\nContext from: %s (%d items%s, %d/%d tokens%s)\n",
+		ctx.TargetID, len(ctx.Context), suffix, ctx.UsedTokens, ctx.BudgetTokens, capNote)
 	return err
 }
 

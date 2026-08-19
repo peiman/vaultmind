@@ -150,6 +150,49 @@ func TestFormatAsk_TargetExcerptRendersWhole(t *testing.T) {
 		"the target's excerpt is already budget-bounded; truncating it again discards the half that carries the rule")
 }
 
+// "863/6000 tokens" with five sixths of the budget unspent reads as "the vault
+// had nothing more to give". It actually means "a cap bound every item and 5,137
+// tokens went unused" — a completely different fact, and the one that tells a
+// reader the cap is the knob, not the budget.
+//
+// Same defect shape as "0 items, 900/900 tokens": a true number that describes
+// the pack rather than what happened.
+func TestContextHeader_SaysWhenACapBoundThePackNotTheBudget(t *testing.T) {
+	ctx := &memory.ContextPackResult{
+		TargetID:     "identity-who-i-am",
+		BudgetTokens: 6000,
+		UsedTokens:   863,
+		Context: []memory.ContextItem{
+			{ID: "a", BodyIncluded: true, BodyExcerpted: true, Body: "one"},
+			{ID: "b", BodyIncluded: true, BodyExcerpted: true, Body: "two"},
+		},
+	}
+
+	var buf bytes.Buffer
+	require.NoError(t, writeContextHeader(&buf, ctx, countItemsWithBodies(ctx.Context, formatOpts{}), formatOpts{}))
+
+	assert.Contains(t, buf.String(), "unspent",
+		"a pack bound by its cap with most of the budget left must say so; got %q", buf.String())
+}
+
+// A pack that genuinely used its budget must NOT claim spare room — that would
+// be the mirror-image lie.
+func TestContextHeader_NoUnspentNoticeWhenBudgetIsSpent(t *testing.T) {
+	ctx := &memory.ContextPackResult{
+		TargetID:     "t",
+		BudgetTokens: 900,
+		UsedTokens:   879,
+		Context: []memory.ContextItem{
+			{ID: "a", BodyIncluded: true, BodyExcerpted: true, Body: "one"},
+		},
+	}
+
+	var buf bytes.Buffer
+	require.NoError(t, writeContextHeader(&buf, ctx, countItemsWithBodies(ctx.Context, formatOpts{}), formatOpts{}))
+
+	assert.NotContains(t, buf.String(), "unspent")
+}
+
 func mustDeliver(t *testing.T, r *AskResult) bool {
 	t.Helper()
 	delivered, _ := r.BodyDecision(false)

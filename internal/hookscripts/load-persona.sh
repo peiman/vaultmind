@@ -92,13 +92,23 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
   # --excerpt caps each of the 8 items at a bounded, decision-bearing passage.
   # Without it the budget is spent first-come: the earliest items arrive whole
   # and the rest arrive with no text at all. Measured on a real 63-note identity
-  # vault: 3 of 8 items with bodies and 5 with nothing, using 5,610 of 6,000
-  # tokens. Capped, all 8 arrive in less space than those 3 took.
+  # vault: 3 of 8 with bodies and 5 with nothing. Capped, all 8 arrive.
+  #
+  # 300 is where the cap stops binding, measured on that vault:
+  #   --excerpt  90 -> 716/6000    (the cap is trimming real content)
+  #   --excerpt 300 -> 863/6000
+  #   --excerpt 600 -> 863/6000    (identical — extraction is now the limit)
+  # Above 300 the constraint is the length of a Principle section, not the cap,
+  # so a larger number buys nothing. Below it, sections get cut.
+  #
+  # The pack deliberately leaves most of the 6,000 unspent: 8 decision rules
+  # beat 3 whole arcs plus 5 titles for reconstruction. That trade is worth
+  # revisiting if the budget is ever wanted for depth instead of breadth.
   #
   # The "what matters most right now" query below deliberately KEEPS
   # --pointers-only — see the preload-trap reasoning above. That one is a design
   # choice about forcing an explicit read, not an oversight.
-  IDENTITY=$(VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" ask "who am I" --vault "$VAULT_PATH" --max-items 8 --budget 6000 --excerpt 90 2>"$ASK_ERR")
+  IDENTITY=$(VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" ask "who am I" --vault "$VAULT_PATH" --max-items 8 --budget 6000 --excerpt 300 2>"$ASK_ERR")
   IDENTITY_STATUS=$?
   CONTEXT=$(VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" ask "what matters most right now" --vault "$VAULT_PATH" --max-items 5 --budget 2000 --pointers-only 2>>"$ASK_ERR")
 
