@@ -57,10 +57,16 @@ func TestContextFooter_NamesTheRealCauseOfWithholding(t *testing.T) {
 			"no flag was passed; there is nothing to drop")
 		assert.NotContains(t, out, "by --pointers-only",
 			"blaming a flag the caller never used is a false cause")
-		assert.Contains(t, out, "confidence",
-			"say what actually withheld it — the top hit scored below the delivery threshold")
-		assert.Contains(t, out, "--read",
-			"and the override that exists on this path")
+		// The WHOLE clause, not the word "confidence". The first version of this
+		// test asserted the word alone and passed over "withheld by the top hit's
+		// confidence is below the delivery threshold" — the cause was right and
+		// the sentence did not parse, because a fragment had been templated into
+		// a frame it could not agree with. Assert the sentence you want to read.
+		assert.Contains(t, out,
+			"withheld — the top hit's confidence is below the delivery threshold; override with --read N",
+			"say what withheld it, in a sentence")
+		assert.Contains(t, out, "note get <id>",
+			"and how to reach any note other than the top hit")
 	})
 
 	t.Run("caller asked: naming the flag is correct", func(t *testing.T) {

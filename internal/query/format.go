@@ -512,15 +512,23 @@ func writeContextFooter(w io.Writer, ctx *memory.ContextPackResult, opts formatO
 			// Name the cause that actually applies. When confidence auto-degrades
 			// there is no flag to drop, and saying otherwise sends the reader
 			// looking for one — the same false-cause defect this change closes.
-			cause := "the top hit's confidence is below the delivery threshold"
-			remedy := "override with --read N"
+			//
+			// Two whole sentences rather than one frame with the cause and remedy
+			// slotted in. The first attempt templated them and produced "withheld
+			// by the top hit's confidence is below the delivery threshold", which
+			// does not parse; the test asserted the substring "confidence" and
+			// passed over it. Fragments that must agree grammatically with their
+			// frame are a splice waiting to happen.
+			msg := fmt.Sprintf(
+				"(pointers only: %d tokens assembled and withheld — the top hit's confidence is below "+
+					"the delivery threshold; override with --read N, or read any id above with "+
+					"`vaultmind note get <id>`)", ctx.UsedTokens)
 			if opts.callerAskedPointers {
-				cause = "--pointers-only"
-				remedy = "drop the flag, or read one with --read N"
+				msg = fmt.Sprintf(
+					"(pointers only: %d tokens assembled and withheld by --pointers-only — drop the flag, "+
+						"or read one with --read N / `vaultmind note get <id>`)", ctx.UsedTokens)
 			}
-			_, err := fmt.Fprintf(w,
-				"\n(pointers only: %d tokens assembled and withheld by %s — %s / `vaultmind note get <id>`)\n",
-				ctx.UsedTokens, cause, remedy)
+			_, err := fmt.Fprintf(w, "\n%s\n", msg)
 			return err
 		}
 		_, err := fmt.Fprintf(w, "\n(pointers only — run `vaultmind note get <id>` against any id above to read the body)\n")
