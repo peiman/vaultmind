@@ -32,11 +32,24 @@ func TestContextHeader_ReportsExcerptsSeparately(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	require.NoError(t, writeContextHeader(&buf, ctx, countItemsWithBodies(ctx.Context, formatOpts{}), formatOpts{}))
+	require.NoError(t, writeContextHeader(&buf, ctx, formatOpts{}))
 	got := buf.String()
 
-	assert.Contains(t, got, "1 with bodies", "only the whole body counts as a body")
-	assert.Contains(t, got, "1 excerpted", "an excerpt is a distinct, weaker delivery and must say so")
+	// The original form of this test asserted "1 with bodies" — and that phrasing
+	// is what produced the live SessionStart line "8 items, 0 with bodies, 9
+	// excerpted". Excluding excerpts from the body count made the two categories
+	// disjoint, so a pack of pure excerpts reported ZERO delivered while nine
+	// bodies rendered underneath it.
+	//
+	// The intent above is still right; the expression was wrong. An excerpt IS a
+	// delivery — the agent received words it can act on — and it is ALSO not the
+	// whole note. Both facts are stated, and neither stands in for the other.
+	assert.Contains(t, got, "2 delivered",
+		"the whole body and the excerpt both reached the agent")
+	assert.Contains(t, got, "1 as excerpt",
+		"an excerpt is a weaker delivery and must still say so")
+	assert.NotContains(t, got, "0 delivered",
+		"the defect this test now guards: text rendered, reported as nothing")
 }
 
 // When nothing was excerpted the line must stay exactly as it reads today —
@@ -53,9 +66,11 @@ func TestContextHeader_NoExcerptNoticeWhenNoneExcerpted(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	require.NoError(t, writeContextHeader(&buf, ctx, countItemsWithBodies(ctx.Context, formatOpts{}), formatOpts{}))
+	require.NoError(t, writeContextHeader(&buf, ctx, formatOpts{}))
 
 	assert.NotContains(t, buf.String(), "excerpt")
+	assert.Contains(t, buf.String(), "1 delivered in full",
+		"and it says so positively — 'in full' is the fact that no note get is needed")
 }
 
 // The relevance hint hardcoded "body suppressed" for every weak hit. Once a
@@ -176,28 +191,23 @@ func TestContextHeader_SaysWhenACapBoundThePackNotTheBudget(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	require.NoError(t, writeContextHeader(&buf, ctx, countItemsWithBodies(ctx.Context, formatOpts{}), formatOpts{}))
+	require.NoError(t, writeContextHeader(&buf, ctx, formatOpts{}))
+	got := buf.String()
 
-	assert.Contains(t, buf.String(), "unspent",
-		"a pack bound by its cap with most of the budget left must say so; got %q", buf.String())
-}
-
-// A pack that genuinely used its budget must NOT claim spare room — that would
-// be the mirror-image lie.
-func TestContextHeader_NoUnspentNoticeWhenBudgetIsSpent(t *testing.T) {
-	ctx := &memory.ContextPackResult{
-		TargetID:     "t",
-		BudgetTokens: 900,
-		UsedTokens:   879,
-		Context: []memory.ContextItem{
-			{ID: "a", BodyIncluded: true, BodyExcerpted: true, Body: "one"},
-		},
-	}
-
-	var buf bytes.Buffer
-	require.NoError(t, writeContextHeader(&buf, ctx, countItemsWithBodies(ctx.Context, formatOpts{}), formatOpts{}))
-
-	assert.NotContains(t, buf.String(), "unspent")
+	// SUPERSEDED, deliberately. This used to assert the header said "bound by
+	// --excerpt, 5137 tokens unspent". That notice fired on `unspent >
+	// budget/2` — a budget RATIO, which --max-items or a vault with few matches
+	// produce just as easily. It described a guess about the cause.
+	//
+	// The denominator is gone instead, which removes the misreading at its
+	// source: with no "863/6000" there is nothing to misread as "the vault had
+	// nothing more to give". The budget is named by the footer, and only when a
+	// note was actually dropped for it — the same information, none of the
+	// guessing. See TestContextHeader_NamesTheBudgetOnlyWhenItBound.
+	assert.NotContains(t, got, "6000",
+		"every note fit; the budget is not what limited this pack")
+	assert.Contains(t, got, "2 delivered as excerpts",
+		"what the caller can act on is that these are excerpts, not that the budget was roomy")
 }
 
 // --read is the one path that ALWAYS renders a body — it exists to fetch one.
@@ -254,11 +264,14 @@ func TestContextHeader_CountsAnExcerptedTarget(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	require.NoError(t, writeContextHeader(&buf, ctx, countItemsWithBodies(ctx.Context, formatOpts{}), formatOpts{}))
+	require.NoError(t, writeContextHeader(&buf, ctx, formatOpts{}))
+	got := buf.String()
 
-	assert.Contains(t, buf.String(), "2 excerpted",
+	assert.Contains(t, got, "3 notes",
+		"the target renders as a block and must be counted as one; got %q", got)
+	assert.Contains(t, got, "2 delivered as excerpts",
 		"one context item plus the target are excerpted; counting only the item under-reports "+
-			"the block the agent reads first. got %q", buf.String())
+			"the block the agent reads first. got %q", got)
 }
 
 // A whole-bodied target must not be counted as an excerpt — the mirror error.
@@ -275,9 +288,12 @@ func TestContextHeader_DoesNotCountAWholeTargetAsExcerpted(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	require.NoError(t, writeContextHeader(&buf, ctx, countItemsWithBodies(ctx.Context, formatOpts{}), formatOpts{}))
+	require.NoError(t, writeContextHeader(&buf, ctx, formatOpts{}))
+	got := buf.String()
 
-	assert.Contains(t, buf.String(), "1 excerpted")
+	assert.Contains(t, got, "1 as excerpt", "only the context item was capped")
+	assert.NotContains(t, got, "2 as excerpt",
+		"the target arrived whole; calling it an excerpt sends the agent to fetch what it already has")
 }
 
 func mustDeliver(t *testing.T, r *AskResult) bool {

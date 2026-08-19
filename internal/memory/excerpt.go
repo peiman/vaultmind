@@ -1,6 +1,9 @@
 package memory
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+)
 
 // arcSections are the headings the arc discipline prescribes, in order. They are
 // the parse boundaries for Excerpt: an arc's decision rule lives under
@@ -115,7 +118,12 @@ func principleSection(body string) string {
 // A block counts as prose when it ends a sentence or runs longer than a heading
 // plausibly would. Headings do neither.
 func leadParagraph(body string) string {
-	var firstContent string
+	// Two fallbacks, in preference order. firstContent holds real content that
+	// simply is not sentence-shaped — a bullet list, a table row, a short CJK
+	// line. firstCitation holds a bare path or URL, which isProse deliberately
+	// rejected; keeping it in the same slot as the others handed it straight
+	// back and defeated the rejection.
+	var firstContent, firstCitation string
 	for _, block := range strings.Split(body, "\n\n") {
 		var lines []string
 		for _, line := range strings.Split(block, "\n") {
@@ -132,9 +140,19 @@ func leadParagraph(body string) string {
 		}
 		// Not prose-shaped, but it IS content. Hold the first such block as a
 		// fallback rather than discarding it — see below.
+		if isCitation(text) {
+			if firstCitation == "" {
+				firstCitation = text
+			}
+			continue
+		}
 		if firstContent == "" {
 			firstContent = text
 		}
+	}
+	if firstContent == "" {
+		// Nothing but a citation. A pointer still beats an empty excerpt.
+		return firstCitation
 	}
 	// THE INVARIANT: a non-empty body never excerpts to nothing. Plenty of real
 	// notes are bullet lists, tables, or short CJK lines — none of which contain
@@ -169,13 +187,34 @@ func isProse(text string) bool {
 // `~/.claude/projects/…/663a071c-….jsonl` under the banner "the excerpt above is
 // the decision rule, not a pointer to one".
 //
-// The test is deliberately narrow: one unbroken token containing a slash. Prose
-// has whitespace between words; CJK has neither spaces nor slashes and so stays
-// correctly classified as prose. A citation is only skipped when there is other
-// prose to prefer — leadParagraph's fallback still returns it when a note has
-// nothing else, because delivering nothing is worse.
+// This comment used to say "CJK has neither spaces nor slashes and so stays
+// correctly classified as prose". The first half is why the rule is unsafe and
+// the second half was simply wrong: 検索/取得は記憶の中心である is a sentence with
+// no spaces and a slash, and it matched. So the ASCII check below carries the
+// weight the whitespace check cannot — a path is ASCII, a CJK sentence is not.
+//
+// It also claimed a citation is skipped "only when there is other prose to
+// prefer". That was the intent, not the behaviour: leadParagraph's fallback
+// kept the first non-prose block whatever it was, so a note opening with a bare
+// URL delivered the URL and passed over the bullet list beneath it. The
+// fallback now prefers non-citation content and reaches for a citation only
+// when the note has nothing else, which is what this always meant to say.
 func isCitation(text string) bool {
-	return !strings.ContainsAny(text, " \t") && strings.Contains(text, "/")
+	if strings.ContainsAny(text, " \t") {
+		return false
+	}
+	if strings.Contains(text, "://") {
+		return true
+	}
+	if !strings.Contains(text, "/") {
+		return false
+	}
+	for _, r := range text {
+		if r > unicode.MaxASCII {
+			return false
+		}
+	}
+	return true
 }
 
 // isSectionHeading reports whether line is the named heading, with or without

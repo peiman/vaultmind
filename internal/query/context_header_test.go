@@ -71,7 +71,13 @@ func TestContextHeader_KeepsTheBudgetLineWhenBodiesAreDelivered(t *testing.T) {
 	var buf bytes.Buffer
 	require.NoError(t, formatAskWithOptions(result, &buf, formatOpts{}))
 	out := buf.String()
-	assert.Contains(t, out, "120/900 tokens")
+	// The denominator used to appear here as "120/900 tokens". It is gone: 900 is
+	// the caller's knob, and printing it beside what arrived is what let
+	// "0 items, 900/900 tokens" read as a full budget of delivered context. The
+	// budget is now named only by the footer, and only when it dropped a note.
+	assert.Contains(t, out, "1 delivered in full")
+	assert.Contains(t, out, "120 tok", "what it cost is still worth knowing")
+	assert.NotContains(t, out, "/900", "the budget did not bind; naming it invites the old misreading")
 	assert.NotContains(t, out, "withheld")
 }
 

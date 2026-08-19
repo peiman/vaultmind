@@ -754,12 +754,16 @@ func TestFormatAsk_SurfacesBudgetTruncationToContextItems(t *testing.T) {
 	var buf bytes.Buffer
 	require.NoError(t, query.FormatAsk(r, &buf))
 	out := buf.String()
-	assert.Contains(t, out, "4 items, 2 with bodies",
-		"header must show the with-bodies count when not all items got bodies")
-	assert.Contains(t, out, "2 items above had body omitted",
-		"footer must name how many were truncated")
-	assert.Contains(t, out, "increase --budget",
+	// "4 items" counted ctx.Context and excluded the target, which renders as a
+	// fifth block. The count now matches what a reader can tally on screen.
+	assert.Contains(t, out, "5 notes, 3 delivered in full, 2 titles only",
+		"header must state what arrived, countable against the blocks below it")
+	assert.Contains(t, out, "2 notes above had no room",
+		"footer must name how many were dropped")
+	assert.Contains(t, out, "--budget",
 		"footer must point at the remedy")
+	assert.Contains(t, out, "100-token budget",
+		"and name the budget that dropped them — the one case where the denominator is actionable")
 }
 
 // When all context items got their bodies, the header stays terse
@@ -788,11 +792,13 @@ func TestFormatAsk_NoTruncationHintWhenAllBodiesIncluded(t *testing.T) {
 	var buf bytes.Buffer
 	require.NoError(t, query.FormatAsk(r, &buf))
 	out := buf.String()
-	assert.Contains(t, out, "(2 items, 200/4000 tokens)",
-		"clean header (no with-bodies count) when nothing was truncated")
-	assert.NotContains(t, out, "with bodies",
-		"no with-bodies count when all items got bodies")
-	assert.NotContains(t, out, "had body omitted",
+	assert.Contains(t, out, "3 notes, 3 delivered in full (200 tok)",
+		"clean header when nothing was dropped — and the target is one of the three")
+	assert.NotContains(t, out, "4000",
+		"the budget did not bind, so naming it says nothing the reader can act on")
+	assert.NotContains(t, out, "titles only",
+		"no gap to report when every note arrived")
+	assert.NotContains(t, out, "no room",
 		"no truncation hint when nothing was truncated")
 }
 
@@ -1055,7 +1061,8 @@ func TestFormatAsk_RendersTargetAndContextItems(t *testing.T) {
 	require.NoError(t, query.FormatAsk(r, &buf))
 	out := buf.String()
 	assert.Contains(t, out, "Context from: concept-alpha", "target ID must appear")
-	assert.Contains(t, out, "120/1000 tokens", "budget/used line must render")
+	assert.Contains(t, out, "2 notes, 2 delivered in full (120 tok)",
+		"the delivery line must render: what arrived, and what it cost")
 	assert.Contains(t, out, "[concept] Alpha", "target [type] title line must appear")
 	assert.Contains(t, out, "Alpha is the anchor", "target body must be rendered")
 	assert.Contains(t, out, "[project] Beta", "each context item's [type] title must appear")
@@ -1111,7 +1118,12 @@ func TestFormatAskPointersOnly_SkipsBodiesEvenWhenIncluded(t *testing.T) {
 	// The hint names the next move, so the agent knows the loop closes by
 	// querying, not by waiting for context.
 	assert.Contains(t, out, "pointers only", "trailing hint must surface the mode")
-	assert.Contains(t, out, "vaultmind ask", "trailing hint must name the next-move command")
+	// `note get`, not `ask`: --read fetches only the top hit, and re-running
+	// `ask` re-runs retrieval. An agent looking at eight titles needs the one it
+	// picked, which is the command that takes an id.
+	assert.Contains(t, out, "note get", "trailing hint must name the next-move command")
+	assert.Contains(t, out, "0 delivered",
+		"and the header must agree with the footer — nothing was handed over")
 }
 
 // Context items with BodyIncluded=false must NOT leak their body into the
