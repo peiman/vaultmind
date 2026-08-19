@@ -47,6 +47,15 @@ type AskConfig struct {
 	// noise nor reinforces the irrelevant note it happened to surface. Opt-in
 	// (the recall hook sets it); interactive ask leaves it false.
 	SuppressOnNoMatch bool
+	// PointersOnly and JSONOutput describe the OUTPUT MODE, which is what
+	// decides whether text actually reached the caller. Without them the access
+	// ledger inferred delivery from `Target.Body != ""` — that is packHasText,
+	// not delivery: under --pointers-only the pack is assembled and withheld at
+	// render, so every row was marked delivered for a command that handed over
+	// nothing. See AskResult.DeliveredTo.
+	PointersOnly bool
+	JSONOutput   bool
+
 	// ExcerptTokens caps a per-item excerpt used when a whole note body will not
 	// fit the remaining budget. 0 keeps the released all-or-nothing packing,
 	// where such an item contributes no text and the pack still counts it —
@@ -347,13 +356,18 @@ func Ask(ctx context.Context, retriever retrieval.Retriever, resolver *graph.Res
 	// once the ranking layer actually consumes the counts (slice 5b').
 	// Best-effort: each per-note tracking miss is logged at debug and
 	// never fails the user query.
+	// One question, asked once, for both ledgers and every row below.
+	askDelivered, _ := result.DeliveredTo(cfg.PointersOnly, cfg.JSONOutput)
+
 	if packResult != nil {
 		if packResult.TargetID != "" {
 			// Target of an Ask is high-intent — agent named the topic
 			// and got back its body. CallerAgent.
-			// Delivery is recorded, not inferred. The target carries text when
-			// the pack gave it a body; caller says who asked, not what arrived.
-			targetDelivered := packResult.Target != nil && packResult.Target.Body != ""
+			// Delivery comes from DeliveredTo — the same value the experiment
+			// ledger records — so the two ledgers cannot disagree about the same
+			// event. Qualified per note by whether THAT note carried text: a
+			// delivering ask still delivers nothing for an item with no body.
+			targetDelivered := askDelivered && packResult.Target != nil && packResult.Target.Body != ""
 			if recErr := index.RecordNoteAccessDelivered(db, packResult.TargetID, index.CallerAgent, targetDelivered); recErr != nil {
 				log.Debug().Err(recErr).Str("note_id", packResult.TargetID).Msg("recording note access failed (non-fatal)")
 			}
@@ -367,7 +381,7 @@ func Ask(ctx context.Context, retriever retrieval.Retriever, resolver *graph.Res
 			// query, not by direct naming. CallerAgentNeighbor lets
 			// `self` (or future ranking) treat them differently from
 			// direct reads if it wants to.
-			if recErr := index.RecordNoteAccessDelivered(db, item.ID, index.CallerAgentNeighbor, item.Body != ""); recErr != nil {
+			if recErr := index.RecordNoteAccessDelivered(db, item.ID, index.CallerAgentNeighbor, askDelivered && item.Body != ""); recErr != nil {
 				log.Debug().Err(recErr).Str("note_id", item.ID).Msg("recording context-pack neighbor access failed (non-fatal)")
 			}
 		}
