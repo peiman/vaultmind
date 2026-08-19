@@ -49,13 +49,6 @@ func runAskRead(cmd *cobra.Command, queryStr, readArg string, ret query.AutoRetr
 	if note == nil {
 		return fmt.Errorf("ask --read: note %q resolved from search but missing from index", chosen.ID)
 	}
-	// Fire access on the deliberately-read note. CallerAgent because
-	// --read is the explicit "I want this body" path — it's a
-	// note-get-equivalent in terms of intent, just composed with a
-	// preceding search.
-	if recErr := index.RecordNoteAccessAs(vdb.DB, note.ID, index.CallerAgent); recErr != nil {
-		log.Debug().Err(recErr).Str("note_id", note.ID).Msg("recording ask --read access failed (non-fatal)")
-	}
 	hits.RetrievalMode = retrievalModeLabel(ret)
 	if getConfigValueWithFlags[bool](cmd, "json", config.KeyAppAskJson) {
 		// JSON consumers get the same envelope as default ask, with the
@@ -63,6 +56,17 @@ func runAskRead(cmd *cobra.Command, queryStr, readArg string, ret query.AutoRetr
 		// Keep simple: emit the AskResult; downstream callers can fetch
 		// the body via note get if they want JSON-structured body.
 		return errAskReadJSONNotYetSupported
+	}
+
+	// Fire access AFTER the JSON guard, and record the delivery explicitly.
+	// It used to fire above it, so `ask --read --json` — which returns an error
+	// and prints nothing — still logged an access; and it used the nil-delivery
+	// recorder, so the row landed NULL and was counted as delivered by the
+	// legacy caller='agent' fallback. That fallback exists for rows written
+	// before delivery was tracked, not for new ones. --read renders the body a
+	// few lines below, so true is the measured answer, not an assumption.
+	if recErr := index.RecordNoteAccessDelivered(vdb.DB, note.ID, index.CallerAgent, true); recErr != nil {
+		log.Debug().Err(recErr).Str("note_id", note.ID).Msg("recording ask --read access failed (non-fatal)")
 	}
 	// --read + --explain compose: the menu shows per-lane RRF math
 	// under each hit (so the agent can see why their chosen rank

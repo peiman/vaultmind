@@ -134,6 +134,11 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	}
 	quietOnNoMatch := getConfigValueWithFlags[bool](cmd, "quiet-on-no-match", config.KeyAppAskQuietOnNomatch)
 
+	// Read BEFORE the Ask call: the access ledger is written inside Ask, and the
+	// output mode is what decides whether text reached the caller.
+	pointersOnly := getConfigValueWithFlags[bool](cmd, "pointers-only", config.KeyAppAskPointersOnly)
+	jsonOut := getConfigValueWithFlags[bool](cmd, "json", config.KeyAppAskJson)
+
 	result, err := query.Ask(cmd.Context(), ret.Retriever, resolver, vdb.DB, query.AskConfig{
 		Query:             args[0],
 		Budget:            getConfigValueWithFlags[int](cmd, "budget", config.KeyAppAskBudget),
@@ -147,6 +152,12 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		VaultLowContrast:  lowContrast,
 		SuppressOnNoMatch: quietOnNoMatch,
 		ExcerptTokens:     getConfigValueWithFlags[int](cmd, "excerpt", config.KeyAppAskExcerpt),
+		// The output mode decides whether text reaches the caller, and the access
+		// ledger is written inside Ask. Without these it inferred delivery from
+		// "the pack has a body", which is true under --pointers-only precisely
+		// when nothing is handed over.
+		PointersOnly: pointersOnly,
+		JSONOutput:   jsonOut,
 		ActivationFunc: func(sims map[string]float64) map[string]float64 {
 			return computeActivationScores(cmd.Context(), sims, delta)
 		},
@@ -165,15 +176,6 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	// triggers it.
 	suppressed := quietOnNoMatch && result != nil && result.NoiseFloorApplied &&
 		result.TopHitConfidence == query.ConfidenceNoMatch
-
-	// Read once, here, and passed to both the telemetry and the formatter
-	// selection below — reading the flag twice invites the two to disagree.
-	pointersOnly := getConfigValueWithFlags[bool](cmd, "pointers-only", config.KeyAppAskPointersOnly)
-	// Read before the telemetry call: --pointers-only gates only the TEXT
-	// formatter, while the JSON envelope carries bodies regardless, so whether
-	// content reached the caller depends on the output mode. Logging without it
-	// recorded a 5,770-character JSON delivery as no delivery at all.
-	jsonOut := getConfigValueWithFlags[bool](cmd, "json", config.KeyAppAskJson)
 
 	logAskExperiment(cmd, args[0], vaultPath, mode, result, err, suppressed, pointersOnly, jsonOut)
 
