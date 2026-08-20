@@ -33,7 +33,9 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
+	"testing"
 )
 
 var (
@@ -103,10 +105,72 @@ func DataDir() (string, error) {
 	}
 	base := dataBase()
 	dir := filepath.Join(base, name)
+	// BEFORE MkdirAll, deliberately. A guard that refuses the path after creating
+	// the directory has already done the thing it exists to prevent.
+	guardTestIsolation(dir)
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return "", err
 	}
 	return dir, nil
+}
+
+// guardTestIsolation stops a test binary writing into the developer's real data
+// directory. It panics; that is the point.
+//
+// Issue #121: `go test` wrote note_access events into the real experiments.db.
+// 156 of 227 note_get events in the live log were fixture ids — `does-not-exist`,
+// `concept-alpha`, `no-such-id` — arriving 52 in a minute, which is `task check`,
+// not a person reading notes. Every measurement taken off that log was partly a
+// measurement of the test suite.
+//
+// A guard for this already existed and worked, in internal/experiment. It covered
+// one package, so `go test ./cmd/...` went straight past it. Replicating it per
+// package is the same forgettable convention that let the shipped hook scripts rot
+// away from their working copies. DataDir is the choke point every caller reaches
+// experiments.db through, so one condition here covers the packages that exist and
+// the ones nobody has written yet.
+//
+// Why panic rather than return an error: cmd/root.go's write path does
+//
+//	log.Debug().Err(expErr).Msg("Experiment DB unavailable")
+//
+// so an error would stop the corruption and tell no one — the highest-traffic
+// caller would swallow it at debug level. A guard the caller can silence is not a
+// guard. A panic cannot be debug-logged away, and testing.Testing() makes this
+// branch unreachable outside a test binary, so it can never fire for a user.
+//
+// It checks where the path RESOLVES, not whether XDG_DATA_HOME is set: the
+// variable can be set and still point at the real directory, and "the env var is
+// non-empty" proves nothing about isolation.
+func guardTestIsolation(dir string) {
+	if !testing.Testing() {
+		return
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return
+	}
+	for _, realBase := range []string{
+		filepath.Join(home, "Library", "Application Support"),
+		filepath.Join(home, ".local", "share"),
+		filepath.Join(home, "AppData", "Roaming"),
+	} {
+		if !strings.HasPrefix(abs, realBase) {
+			continue
+		}
+		panic(fmt.Sprintf(
+			"vaultmind test isolation (issue #121): this test would write to your real data "+
+				"directory at %s.\n"+
+				"Test runs there are recorded as agent behaviour and corrupt every measurement "+
+				"taken from the usage log.\n"+
+				"Fix: run `task test` (which sets XDG_DATA_HOME for you), or set it yourself:\n"+
+				"    export XDG_DATA_HOME=$(mktemp -d)\n"+
+				"In a single test: t.Setenv(\"XDG_DATA_HOME\", t.TempDir())", abs))
+	}
 }
 
 // DataFile returns the path to a data file.

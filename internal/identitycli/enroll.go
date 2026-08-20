@@ -307,14 +307,25 @@ func confirmFingerprint(errOut io.Writer, in io.Reader, fp string, assumeYes boo
 // readLine reads a single line (up to the first '\n') from in.
 func readLine(in io.Reader) (string, error) {
 	var sb strings.Builder
-	buf := make([]byte, 1)
+	// One byte at a time on purpose: this reads interactive prompts off a shared
+	// stdin, so a bufio.Reader would buffer past the newline and swallow whatever
+	// the next prompt was going to read.
+	//
+	// Sliced by n rather than indexed. gosec's G602 fired on buf[0] and kept
+	// firing after the buffer became a fixed-size array, which it should have
+	// been able to prove — but arguing with the analyzer is not the interesting
+	// part. Working in terms of buf[:n] removes the index expression altogether
+	// and is the more correct loop anyway: the old form read buf[0] whenever
+	// n > 0, which silently assumed n == 1 rather than using what Read reported.
+	var buf [1]byte
 	for {
-		n, err := in.Read(buf)
+		n, err := in.Read(buf[:])
 		if n > 0 {
-			if buf[0] == '\n' {
+			if i := bytes.IndexByte(buf[:n], '\n'); i >= 0 {
+				sb.Write(buf[:i])
 				return sb.String(), nil
 			}
-			sb.WriteByte(buf[0])
+			sb.Write(buf[:n])
 		}
 		if err != nil {
 			return sb.String(), err
