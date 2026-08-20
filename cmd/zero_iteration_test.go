@@ -29,9 +29,9 @@ import (
 //	asserting range loops in the suite ............. 335
 //	minus loops over a non-empty composite literal . 208   table tests; cannot be empty
 //	minus loops with a length or emptiness guard ...  46
-//	minus loops in functions that assert elsewhere .  44
+//	minus loops in functions that assert elsewhere .  49
 //	                                                 ---
-//	remaining                                        37
+//	remaining                                        32
 //
 // Without the second narrowing it flagged 235 of 335 — 70% of the suite, which
 // is a rule nobody can act on. Without the fourth it flagged tests that still
@@ -40,6 +40,11 @@ import (
 // "Asserts elsewhere" excludes NoError/NotNil and friends on purpose. Those
 // establish that the loop *can* run; they are not the behaviour under test.
 // Counting them as substance is precisely what let the original defect through.
+// It INCLUDES assertions inside a loop that cannot be empty — those are
+// guaranteed to run. Five sites were misfiled as hollow before that clause
+// existed, TestCommandCatalog_HiddenAliasesExcluded among them: every one of
+// its assertions is inside some loop, but its second loop is over a literal
+// list and fails if the first found nothing.
 //
 // The rule earned itself on its first run: it flagged TestSearchFTS_FilterByTag,
 // which asserted only that each result carried a non-empty ID — true of every
@@ -108,9 +113,10 @@ type site struct{ file, fn string }
 //
 // Worth attention first, because these range over the system's own output and
 // so would pass silently if it produced nothing: catalog_test.go over
-// c.Commands(), related_test.go over result.Related, contextpack_test.go over
+// cat.Groups, related_test.go over result.Related, contextpack_test.go over
 // result.Context. fts_filter_test.go was in this group until it was fixed —
-// and it was genuinely broken, not merely at risk.
+// and it was genuinely broken, not merely at risk, which is the reason to
+// treat the rest of this list as a queue rather than a settled state.
 var grandfathered = map[site]bool{}
 
 func init() {
@@ -119,20 +125,16 @@ func init() {
 		{"bank_rate_test.go", "bankVault"},
 		{"catalog_test.go", "TestBuild_CommandsSortedByPathWithinGroup"},
 		{"catalog_test.go", "TestBuild_OmitsGroupWithNoCommands"},
-		{"catalog_test.go", "TestCommandCatalog_HiddenAliasesExcluded"},
 		{"catalog_test.go", "TestCommandCatalog_WhenComposedIntoLong"},
 		{"checks_test.go", "TestFilterTestOutput"},
-		{"completion_test.go", "TestCompletionCommandExecution"},
 		{"config_namespace_test.go", "parseConfigPrefixes"},
 		{"console_handler_test.go", "TestConsoleHandler"},
 		{"context_header_invariant_test.go", "atoi"},
 		{"contextpack_excerpt_test.go", "TestContextPack_ExcerptCapsItemsThatWouldOtherwiseFit"},
 		{"contextpack_test.go", "TestContextPack_BodyBackfillConsistency"},
 		{"contextpack_test.go", "TestContextPack_EdgePriority_ExplicitEmbed"},
-		{"crosslang_fixture_test.go", "TestCrossLanguageFixture_MessageCasesLoadThenRejectAtMessage"},
 		{"doctor_heal_test.go", "TestTopLevelLint_HiddenFromRootListing"},
 		{"doctor_summary_test.go", "TestVaultParent_HiddenFromRootListing"},
-		{"doctor_test.go", "TestFormatResults"},
 		{"edges_test.go", "TestLinksOut_FilterByEdgeType"},
 		{"executor_test.go", "TestBuildCategories_CheckMetadata"},
 		{"heads_test.go", "TestL2Normalize_ZeroVector"},
@@ -151,7 +153,6 @@ func init() {
 		{"scanner_test.go", "TestScan_ExcludesPatterns"},
 		{"status_nilguard_test.go", "TestCollectTypeBreakdown_NilStatusesNormalisedToEmpty"},
 		{"strict_verify_fixture_test.go", "TestStrictVerify_CrossLangFixture"},
-		{"summary_test.go", "TestPrintFinalSummary"},
 	} {
 		grandfathered[s] = true
 	}
@@ -221,17 +222,27 @@ func bodyAsserts(body *ast.BlockStmt) bool {
 }
 
 // assertsOutsideAnyRange reports whether the function makes a SUBSTANTIVE
-// assertion outside every range loop — one that is not merely establishing that
-// the loop can run.
+// assertion that is guaranteed to run — one that is not merely establishing
+// that a loop can run, and not sitting inside a loop that might not.
+//
+// "Guaranteed to run" includes assertions inside a loop that CANNOT be empty.
+// TestCommandCatalog_HiddenAliasesExcluded walks the command tree asserting as
+// it goes, then loops over a literal list of known aliases asserting each was
+// found. Every assertion is inside some range, so a rule that only looked for
+// assertions lexically outside all loops called it hollow — wrongly. The second
+// loop is over a non-empty literal; it always runs, and it fails if the walk
+// found nothing.
 func assertsOutsideAnyRange(body *ast.BlockStmt) bool {
 	insideRange := map[ast.Node]bool{}
 	ast.Inspect(body, func(n ast.Node) bool {
-		if rng, ok := n.(*ast.RangeStmt); ok {
-			ast.Inspect(rng.Body, func(m ast.Node) bool {
-				insideRange[m] = true
-				return true
-			})
+		rng, ok := n.(*ast.RangeStmt)
+		if !ok || cannotBeEmpty(body, rng) {
+			return true
 		}
+		ast.Inspect(rng.Body, func(m ast.Node) bool {
+			insideRange[m] = true
+			return true
+		})
 		return true
 	})
 
