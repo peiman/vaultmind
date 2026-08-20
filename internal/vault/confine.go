@@ -32,8 +32,31 @@ var ErrEscapesVault = errors.New("path escapes vault")
 // problem; reject those at the point they are configured, not here.
 //
 // The vault root itself is allowed: some callers resolve "." to mean the root.
+//
+// vaultRoot is resolved to an absolute path FIRST. The containment test is a
+// string-prefix comparison, and between two relative paths that comparison is
+// simply wrong: filepath.Join collapses the leading "./" the prefix depends on.
+//
+//	ResolveInside(".", ".vaultmind/index.db")
+//	  cleanVault = "."
+//	  cleanAbs   = ".vaultmind/index.db"        <- Join dropped the "./"
+//	  HasPrefix(".vaultmind/index.db", "./")    <- false, so: refused
+//
+// A path plainly inside the vault read as an escape. Live effect: every command
+// failed when the vault was named as `.`, while OMITTING the flag — which means
+// the same directory — worked, because that path reaches here already absolute.
+//
+// This is not a loosening. Resolving first makes the prefix test meaningful
+// rather than accidental, and `..` traversal out of a relative root was refused
+// before and still is (see TestResolveInside_RelativeRoot). It also makes the
+// function keep the promise in its own first line, which said "absolute" while
+// returning a relative path for a relative root — and every caller names the
+// result absPath or dbPath.
 func ResolveInside(vaultRoot, rel string) (string, error) {
-	cleanVault := filepath.Clean(vaultRoot)
+	cleanVault, err := filepath.Abs(vaultRoot)
+	if err != nil {
+		return "", fmt.Errorf("resolving vault root %q: %w", vaultRoot, err)
+	}
 	cleanAbs := filepath.Clean(filepath.Join(cleanVault, rel))
 
 	if cleanAbs != cleanVault && !strings.HasPrefix(cleanAbs, cleanVault+string(filepath.Separator)) {

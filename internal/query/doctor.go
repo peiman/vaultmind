@@ -332,7 +332,11 @@ func Doctor(db *index.DB, vaultPath string, reg *schema.Registry) (*DoctorResult
 			case RuleMissingRequired:
 				result.Issues.MissingRequiredFields++
 			case RuleBrokenReference:
-				result.Issues.BrokenReferences++
+				// Sum the REFERENCES, not the notes carrying them. This was a
+				// bare ++, so a vault with 3 broken refs across 2 notes printed
+				// "Broken references: 2" — a true number under the wrong label,
+				// and nothing in the output let a reader notice the gap.
+				result.Issues.BrokenReferences += len(issue.BrokenRefs)
 			}
 		}
 	}
