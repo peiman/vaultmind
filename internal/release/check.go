@@ -102,7 +102,13 @@ func isReleaseVersion(v string) bool {
 func isNewer(current, latest string) bool {
 	c := splitVersion(current)
 	l := splitVersion(latest)
-	for i := range 3 {
+	// Range the array being indexed rather than the literal 3. Both give exactly
+	// three iterations — splitVersion returns [3]int, so the bound was already in
+	// the type — but gosec does not model Go 1.22's range-over-int as bounding the
+	// index and reported G602 here. Ranging l makes the index valid by
+	// construction instead of by an argument the analyzer cannot follow, which is
+	// a better answer than a #nosec that suppresses the question.
+	for i := range l {
 		switch {
 		case l[i] > c[i]:
 			return true
