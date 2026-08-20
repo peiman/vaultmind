@@ -132,7 +132,8 @@ tasks:
           trap 'rm -rf "$XDG_DATA_HOME"' EXIT
           task ckeletin:check -- --category=environment,quality,architecture,security,dependencies \
             && task ckeletin:test:coverage:project \
-            && task test:baseline
+            && task test:baseline \
+            && task check:validate-test
 
   test:baseline:
     desc: Run the golden-query retrieval baseline (fails if metrics drop beyond tolerance)
@@ -179,6 +180,39 @@ tasks:
     cmds:
       - bash .claude/scripts/test-hook.sh
 
+  validate:test:
+    desc: Prove a test is load-bearing — break the code it guards and require it to go red (mutation testing).
+    summary: |
+      A green test is not evidence until you have seen it go red. Session 07
+      shipped two tests that could not fail (both asserting `> 0` against a
+      fixture where the broken and the fixed implementation give the same
+      answer), and the two bugs underneath them survived every green run.
+
+      Usage — --from/--to are LITERAL strings, not regexes:
+
+        task validate:test -- --file internal/query/doctor.go \
+          --from 'result.Issues.BrokenReferences += len(issue.BrokenRefs)' \
+          --to   'result.Issues.BrokenReferences++' \
+          --test TestDoctor_CountsReferencesNotNotes
+
+      Exit 0 means the test failed under mutation and is doing its job. Exit 1
+      means it stayed green and is decorative. Exit 2 means the run proved
+      nothing — the --from string was not found, or --run matched no test —
+      which is a distinct outcome precisely because on a terminal it looks
+      identical to success.
+
+      The source is restored from a byte copy the script takes itself, and the
+      restore is verified by checksum. Do not hand-roll this with
+      `git checkout --`: that restores from HEAD, not from your working tree,
+      and on 2026-08-19 that difference destroyed an hour of uncommitted work.
+    cmds:
+      - bash .claude/scripts/mutation-check.sh {{.CLI_ARGS}}
+
+  check:validate-test:
+    desc: Test the validate:test mutation checker itself against a throwaway Go module
+    cmds:
+      - bash .claude/scripts/test-mutation-check.sh
+
   check:fast:
     desc: Run fast quality checks (XDG_DATA_HOME isolated — issue #17)
     cmds:
@@ -189,6 +223,11 @@ tasks:
           export XDG_DATA_HOME=$(mktemp -d -t vm-check-fast.XXXXXX)
           trap 'rm -rf "$XDG_DATA_HOME"' EXIT
           task ckeletin:check:fast
+      # PR CI runs `task check:fast`, not `task check`. A gate wired only into
+      # the full run is not enforced on the path where changes actually arrive
+      # — it is a gate you have to remember, which is the kind this one exists
+      # to replace. 1.2s.
+      - task: check:validate-test
 
   check:deps:
     desc: Run all dependency checks
