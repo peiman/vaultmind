@@ -3,6 +3,7 @@ package query
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/schema"
@@ -34,6 +35,12 @@ type ValidateIssue struct {
 	Message  string `json:"message"`
 	Field    string `json:"field,omitempty"`
 	Value    string `json:"value,omitempty"`
+	// BrokenRefs carries the reference ids that did not resolve, for
+	// RuleBrokenReference. It exists so a caller can group by TARGET rather than
+	// by source file: eight broken references across two vaults turned out to be
+	// one missing note referenced four times plus four unrelated problems, and
+	// the per-file view made that look like eight separate things.
+	BrokenRefs []string `json:"broken_refs,omitempty"`
 }
 
 // Validate runs all frontmatter validation rules against the indexed notes.
@@ -113,12 +120,14 @@ func Validate(db *index.DB, reg *schema.Registry) (*ValidateResult, error) {
 		}
 
 		// Rule: broken_reference (check explicit_relation edges)
-		brokenRefs, refErr := countBrokenRefs(db, n.id)
-		if refErr == nil && brokenRefs > 0 {
+		brokenRefs, refErr := listBrokenRefs(db, n.id)
+		if refErr == nil && len(brokenRefs) > 0 {
 			result.Issues = append(result.Issues, ValidateIssue{
 				Path: n.path, ID: n.id, Severity: "warning",
-				Rule:    RuleBrokenReference,
-				Message: fmt.Sprintf("%d frontmatter references do not resolve to existing notes", brokenRefs),
+				Rule: RuleBrokenReference,
+				Message: fmt.Sprintf("frontmatter references do not resolve: %s",
+					strings.Join(brokenRefs, ", ")),
+				BrokenRefs: brokenRefs,
 			})
 			noteHasIssue = true
 		}
@@ -171,13 +180,39 @@ func fieldValue(n noteInfo, field string, db *index.DB, reg *schema.Registry) st
 	return ""
 }
 
-func countBrokenRefs(db *index.DB, noteID string) (int, error) {
-	var count int
-	err := db.QueryRow(`
-		SELECT COUNT(*) FROM links
+// listBrokenRefs returns the reference ids that do not resolve — not a count.
+//
+// It used to SELECT COUNT(*), and the caller rendered "N frontmatter references
+// do not resolve": the part the reader already knows (something is wrong)
+// without the part they need (which one). The query had every id in hand and
+// aggregated them away before printing.
+//
+// Measured cost: eight broken references across two vaults had to be
+// reconstructed by hand against the index before they could be fixed. They were
+// five different problems needing five different remedies — one missing note
+// referenced four times, one id missing its `source-` prefix, two pointing into
+// a different vault, two never written, and one auto-memory filename pasted into
+// a vault's related_ids. No count distinguishes those.
+func listBrokenRefs(db *index.DB, noteID string) ([]string, error) {
+	rows, err := db.Query(`
+		SELECT dst_raw FROM links
 		WHERE src_note_id = ? AND edge_type = 'explicit_relation'
-		AND dst_raw NOT IN (SELECT id FROM notes)`,
+		AND dst_raw NOT IN (SELECT id FROM notes)
+		ORDER BY dst_raw`,
 		noteID,
-	).Scan(&count)
-	return count, err
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var refs []string
+	for rows.Next() {
+		var ref string
+		if err := rows.Scan(&ref); err != nil {
+			return nil, err
+		}
+		refs = append(refs, ref)
+	}
+	return refs, rows.Err()
 }
