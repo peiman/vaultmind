@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-08-21
+
+> **Upgrading.** Index migrations apply automatically on first run; no re-index and no
+> `--embed` are required (note bodies have been stored since the baseline schema).
+> One thing to check by hand: **the context header format changed** — `N items` is now
+> `9 notes, 9 delivered as excerpts (982 tok)`. Anything that parses that line needs
+> updating.
+
 ### Added
 
 - **`ask --excerpt N` — deliver the passage that matters when the whole note will
@@ -83,6 +91,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nothing at all.
 
 ### Fixed
+
+- **`--vault .` works on every command.** `vaultmind doctor --vault .` failed with
+  `path escapes vault` while omitting the flag — which names the same directory —
+  succeeded; the same held for `frontmatter validate`, `index`, `search`, and
+  `note get`, and for `--vault ./`. The confinement check compares paths as strings,
+  and between two *relative* paths that comparison is wrong: `filepath.Join` collapses
+  the leading `./` the prefix test depends on, so a path plainly inside the vault read
+  as an escape. Resolving the vault root to absolute first makes the prefix test
+  meaningful rather than accidental.
+
+  This is not a loosening of containment, and the tests say so rather than the commit
+  message: every escape case — `..` out of the root, a prefix-sharing sibling
+  (`mine-backup` vs `mine`), dot-dot chains — is re-run through a relative root and
+  still refused. Those cases passed before the fix as well, which is the point.
+  Containment was never the broken part; the gap was that every existing test used an
+  absolute root.
+
+- **Frontmatter references that do not resolve are named, with the fix.** `doctor`
+  reports the note, the reference that failed, and the form that would work —
+  `arcs/the-falcon-watches-from-outside-the-mesh.md: [[reference-keeper-of-the-realm]]
+  → [[keeper-of-the-realm|reference-keeper-of-the-realm]]` — and `frontmatter validate`
+  raises `broken_reference` with the unresolved ids listed. A wikilink that resolves to
+  nothing is a memory the graph cannot traverse, and it used to be invisible.
+
+- **The usage log no longer credits a command that delivered nothing.** `ask` computed
+  its own answer to "was a body delivered" from whether the assembled pack held text —
+  but the pack is *built* under `--pointers-only` and withheld at render, so every
+  access recorded a delivery for a command that handed over nothing. The two ledgers,
+  whose shared comment claimed they answered from a single value "instead of two
+  disagreeing heuristics", disagreed on the first command run against them.
+
+  Not hypothetical: `load-persona.sh` deliberately keeps `--pointers-only` on its
+  second query, so every session start credited that fan-out to `vaultmind self` as
+  engagement — precisely the hook pollution migration 007 was built to exclude,
+  readmitted through the branch migration 008 added. The output mode now travels with
+  the request, because that is what decides whether text reached the caller.
+
+- **`doctor` can report an index that has stopped describing the disk.** Three checks
+  could not fail: `index_status` was the constant string `current`, assigned in two
+  constructors and never revisited (`StatusResult.IndexStale` was declared and never
+  written); content-drift detection `continue`d on any read error, so a deleted file
+  was invisible — in a test named `DeletedFileSilent`; and the duplicate-id check ran
+  `GROUP BY id HAVING COUNT(*) > 1` against a column declared `TEXT NOT NULL UNIQUE`,
+  structurally zero forever. A constant success signal that automation branches on is
+  worse than a missing check.
+
+  Patching them separately would have produced three more checks whose failure modes
+  nobody reasoned about together, so they are now one question — does the index still
+  describe what is on disk? — asked once and answered in every way it can be false:
+  drifted, orphaned, unindexed, duplicate-on-disk. Two files claiming one id is a disk
+  question rather than a database one (the constraint forbids the second row), so the
+  disk is walked once and each file read once, with the content hash and the
+  frontmatter id both coming from that read. A duplicate *loser* is reported as a
+  duplicate rather than as "unindexed", because the latter carries the remedy "run
+  index", which would skip it again for the same reason.
 
 - **`vaultmind self` asks whether an access DELIVERED, instead of guessing from
   who fired it** (migration 008 adds `note_accesses.body_delivered`).
@@ -852,7 +915,8 @@ The initial public tag, retracted in favor of [0.1.3]. It shipped without the
 maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; do
 not install.
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/peiman/vaultmind/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/peiman/vaultmind/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/peiman/vaultmind/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/peiman/vaultmind/compare/v0.4.0...v0.4.1
