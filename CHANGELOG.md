@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`vaultmind hooks record <event>` — evidence that a prompting hook fired.**
+  The read-path hooks leave a trail; every recall writes a row. The PreCompact
+  write-path prompt left nothing, so a week ending with no notes written could not
+  distinguish "the prompt fired and was ignored" from "the prompt never fired" — a
+  discipline problem and a wiring problem produced identical evidence, and only one
+  of them is fixable by trying harder.
+
+  The event name is an allowlist, not free text: everything written here is later
+  read as evidence about agent behaviour, and a general recorder would let any
+  script or typo mint rows under an existing event name. A denominator, not a
+  score — firing is not success, writing notes is.
+
+### Changed
+
+- **`hooks status` reports event *wiring*, and exits non-zero when a canonical
+  event is unwired.** It compared script contents only, so a project could hold
+  every canonical script byte-identical and still run none of them. That is the
+  same "an absence renders as nothing" failure this command was built to end,
+  one layer up from where it ended it.
+
+  Found by an adopter: three read-side hooks wired, `capture-episode.sh` present
+  on disk and already responsible for 13 captured episodes, and `SessionEnd`
+  absent from settings. Every content check passed while the write half was off.
+  The same project ran `--pointers-only` for a whole release cycle behind this
+  blind spot.
+
+  Output now carries `N wired, M unwired` and names each unwired event with its
+  script, because "the event is off" and "the script is missing" have different
+  fixes. **This changes the exit code**: a project with matching scripts but
+  missing wiring used to pass and now fails. That is the point — but if you gate
+  CI on `hooks status`, expect it to start failing where it was silently wrong.
+
 ### Fixed
 
 - **The configuration reference documented the wrong tool.** `docs/configuration.md`

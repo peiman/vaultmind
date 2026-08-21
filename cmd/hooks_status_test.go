@@ -22,6 +22,32 @@ func projectWithScripts(t *testing.T, install func(scriptsDir string)) string {
 	return dir
 }
 
+// wireAllCanonicalEvents writes a settings.json that runs every canonical
+// script on its canonical event.
+//
+// Fixtures used to install scripts and stop there, and asserted that a project
+// matching canonical byte-for-byte was a clean check. That assumption is the one
+// an adopter disproved: they held the scripts, wired three of the events, and
+// the write half never ran — every content comparison passed. Scripts on disk
+// are not hooks; wired scripts are. A fixture that skips the wiring is testing a
+// state `hooks install` never produces.
+func wireAllCanonicalEvents(t *testing.T, projectDir string) {
+	t.Helper()
+	byEvent := map[string][]map[string]any{}
+	for _, e := range hooks.CanonicalEventScripts() {
+		byEvent[e.Event] = append(byEvent[e.Event], map[string]any{
+			"hooks": []map[string]any{{
+				"type":    "command",
+				"command": "$CLAUDE_PROJECT_DIR/.claude/scripts/" + e.Script,
+			}},
+		})
+	}
+	body, err := json.Marshal(map[string]any{"hooks": byEvent})
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(
+		filepath.Join(projectDir, ".claude", "settings.json"), body, 0o600))
+}
+
 func writeCanonical(t *testing.T, scriptsDir string, names ...string) {
 	t.Helper()
 	for _, n := range names {
@@ -49,9 +75,10 @@ func TestHooksStatus_ExitsZeroWhenFullyInSync(t *testing.T) {
 	dir := projectWithScripts(t, func(scripts string) {
 		writeCanonical(t, scripts, hookscripts.Names()...)
 	})
+	wireAllCanonicalEvents(t, dir)
 
 	out, _, err := runRootCmd(t, "hooks", "status", dir)
-	require.NoError(t, err, "a project matching canonical exactly is a clean check")
+	require.NoError(t, err, "canonical scripts AND canonical wiring is a clean check")
 	assert.Contains(t, out.String(), "0 drifted, 0 missing")
 }
 
@@ -86,6 +113,7 @@ func TestHooksStatus_JSONCarriesEveryScriptState(t *testing.T) {
 	dir := projectWithScripts(t, func(scripts string) {
 		writeCanonical(t, scripts, hookscripts.Names()...)
 	})
+	wireAllCanonicalEvents(t, dir)
 
 	out, _, err := runRootCmd(t, "hooks", "status", dir, "--json")
 	require.NoError(t, err)

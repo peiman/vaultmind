@@ -45,7 +45,13 @@ func runHooksStatus(cmd *cobra.Command, args []string) error {
 	// Non-zero when anything is drifted or missing. A status command that always
 	// exits 0 cannot gate anything, and this one exists precisely so drift stops
 	// depending on somebody reading a line.
-	if _, drifted, missing := report.Counts(); drifted+missing > 0 {
+	_, drifted, missing := report.Counts()
+	// An unwired canonical event gates too. Contents and wiring are independent
+	// failures: a project can hold every script byte-identical and still run
+	// none of them, and that absence renders as nothing — the exact shape this
+	// command was built to end, one layer up from where it ended it.
+	_, unwired := report.EventCounts()
+	if drifted+missing+unwired > 0 {
 		return cmdutil.ErrAlreadyWritten
 	}
 	return nil
@@ -64,6 +70,23 @@ func renderHooksStatus(w io.Writer, report hooks.StatusReport) error {
 	if _, err := fmt.Fprintf(w, "Hook scripts in %s: %d in sync, %d drifted, %d missing\n",
 		report.ProjectDir, inSync, drifted, missing); err != nil {
 		return err
+	}
+
+	if wired, unwired := report.EventCounts(); len(report.Events) > 0 {
+		if _, err := fmt.Fprintf(w, "Hook events: %d wired, %d unwired\n", wired, unwired); err != nil {
+			return err
+		}
+		for _, e := range report.Events {
+			if e.State == hooks.EventWired {
+				continue
+			}
+			// Name the event AND the script: "SessionEnd is off" and "the
+			// script is missing" have different fixes, and a project can have
+			// the script sitting right there unrun.
+			if _, err := fmt.Fprintf(w, "  unwired   %s -> %s\n", e.Event, e.Script); err != nil {
+				return err
+			}
+		}
 	}
 
 	// Name every script that is not in sync. A count alone cannot be acted on,

@@ -42,6 +42,10 @@ type StatusReport struct {
 	ProjectDir string         `json:"project_dir"`
 	Installed  bool           `json:"installed"`
 	Scripts    []ScriptStatus `json:"scripts"`
+	// Events reports whether each canonical event is wired in settings.json.
+	// Script contents and event wiring are independent failures: a project can
+	// hold every script byte-identical and still run none of them.
+	Events []EventStatus `json:"events"`
 }
 
 // Counts returns how many scripts are in each state — the summary line.
@@ -64,6 +68,7 @@ func (r StatusReport) Counts() (inSync, drifted, missing int) {
 // doctor consumes.
 func Status(projectDir string) (StatusReport, error) {
 	report := StatusReport{ProjectDir: projectDir}
+	report.Events = eventWiring(projectDir)
 	scriptsDir := filepath.Join(projectDir, ".claude", "scripts")
 	if _, err := os.Stat(scriptsDir); err == nil {
 		report.Installed = true
