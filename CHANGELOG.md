@@ -43,6 +43,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The update notice no longer tells BGE-M3 users to downgrade themselves.** cgo cannot
+  travel through the Go module proxy, so `go install` can only ever produce the pure-Go
+  MiniLM binary. The notice printed that command to everyone — including users whose
+  retrieval tier `doctor` reports as `ort+cpu` two lines above. Running it raises the
+  version number and silently drops the sparse and ColBERT lanes: same tool, worse recall,
+  no error and no warning.
+
+  An adopter caught it by reading the notice on a live ORT install and asking whether it
+  was safe. It was not. The notice now branches on the embedding backend — exactly as the
+  MiniLM remedy already did for the same reason — and offers the ORT archive or a source
+  rebuild, saying plainly why `go install` is not on the list. A pure-Go build still gets
+  `go install` first, which costs it nothing.
+
+- **A cached "you are on the latest" no longer outlives the day it was taken.** The two
+  answers do not age the same way: "v0.8.0 is available" stays true however long it sits,
+  because nothing untags a release, while "you are current" stops being true the instant
+  someone tags. Both shared one 24-hour TTL.
+
+  Measured, not hypothesised: a cache written at 08:46:02 said `latest=v0.6.0`, and
+  v0.7.0 was tagged at 08:49:34 — three and a half minutes later. `doctor` would have
+  gone on reporting "current" until the next morning, a silent staleness window inside
+  the feature whose only purpose is ending silent staleness. Negative answers now expire
+  after an hour; the 24-hour bound still applies to both. The cost is at most one extra
+  request per hour per machine, for a version number.
+
 - **The configuration reference documented the wrong tool.** `docs/configuration.md`
   and `docs/config-template.yaml` were still the inherited ckeletin-go scaffold pages:
   they named the env-var prefix `CKELETIN_GO_` and the config path

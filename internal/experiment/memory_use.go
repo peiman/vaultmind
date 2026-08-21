@@ -90,6 +90,38 @@ const hookCallerPattern = "vaultmind-%hook"
 // "neighbors" is excluded for the same reason: a note pulled in as a graph
 // neighbour was surfaced, not read.
 
+// memoryUseSQL is a named constant rather than an inline string so a test can
+// EXPLAIN QUERY PLAN it. The MATERIALIZED hint below is load-bearing and
+// invisible to any correctness test — a wall-clock assertion would be the only
+// other guard, and on a shared machine a wall-clock assertion is a flaky test
+// waiting to be deleted. The plan is deterministic; the clock is not.
+const memoryUseSQL = `
+		WITH inj AS (
+			SELECT e.timestamp AS t,
+			       json_extract(r.value, '$.note_id') AS note_id,
+			       COALESCE(json_extract(e.event_data, '$.body_delivered'), 0) AS body_delivered
+			FROM events e
+			JOIN sessions s ON s.session_id = e.session_id,
+			     json_each(json_extract(e.event_data, '$.variants.hybrid.results')) r
+			WHERE s.caller LIKE ?
+			  AND e.timestamp > datetime('now', ?)
+		),
+		acc AS MATERIALIZED (
+			SELECT timestamp AS t, json_extract(event_data, '$.note_id') AS note_id
+			FROM events
+			WHERE event_type = 'note_access'
+			  AND json_extract(event_data, '$.source') = ?
+			  AND timestamp > datetime('now', ?)
+		)
+		SELECT COUNT(*),
+		       SUM(CASE WHEN EXISTS (
+		             SELECT 1 FROM acc a
+		             WHERE a.note_id = inj.note_id
+		               AND datetime(a.t) BETWEEN datetime(inj.t) AND datetime(inj.t, ?)
+		           ) THEN 1 ELSE 0 END),
+		       SUM(CASE WHEN inj.body_delivered THEN 1 ELSE 0 END)
+		FROM inj`
+
 // MemoryUseSince computes the meter over the last windowDays.
 //
 // Both sides of the window comparison go through datetime(). Events are stored
@@ -110,32 +142,27 @@ func (d *DB) MemoryUseSince(windowDays int) (*MemoryUse, error) {
 	// One statement rather than a scan in Go: the injection set is the
 	// cross-product of events and their result rows, which is 5,900 rows over a
 	// week here and grows with use. SQLite does the join; we carry the totals.
-	row := d.db.QueryRow(`
-		WITH inj AS (
-			SELECT e.timestamp AS t,
-			       json_extract(r.value, '$.note_id') AS note_id,
-			       COALESCE(json_extract(e.event_data, '$.body_delivered'), 0) AS body_delivered
-			FROM events e
-			JOIN sessions s ON s.session_id = e.session_id,
-			     json_each(json_extract(e.event_data, '$.variants.hybrid.results')) r
-			WHERE s.caller LIKE ?
-			  AND e.timestamp > datetime('now', ?)
-		),
-		acc AS (
-			SELECT timestamp AS t, json_extract(event_data, '$.note_id') AS note_id
-			FROM events
-			WHERE event_type = 'note_access'
-			  AND json_extract(event_data, '$.source') = ?
-			  AND timestamp > datetime('now', ?)
-		)
-		SELECT COUNT(*),
-		       SUM(CASE WHEN EXISTS (
-		             SELECT 1 FROM acc a
-		             WHERE a.note_id = inj.note_id
-		               AND datetime(a.t) BETWEEN datetime(inj.t) AND datetime(inj.t, ?)
-		           ) THEN 1 ELSE 0 END),
-		       SUM(CASE WHEN inj.body_delivered THEN 1 ELSE 0 END)
-		FROM inj`,
+	//
+	// `acc` is MATERIALIZED, and that keyword is the whole difference between a
+	// health command and an unusable one. The EXISTS below is CORRELATED — it
+	// references inj.note_id — so without the hint SQLite re-evaluates `acc` once
+	// per outer row, and `acc` json_extract's over every note_access event in the
+	// window. Six thousand injections times the whole access log.
+	//
+	// Measured on a live log, in C SQLite (the pure-Go driver here is slower):
+	//
+	//	as-is           188.73s  -> 6505 | 44
+	//	MATERIALIZED      0.068s -> 6535 | 44   (same answer)
+	//
+	// End to end that was `doctor` taking 207s on a 64-note vault, 224s on a
+	// 7-note one and 296s on 415 notes: a cost tracking the EVENT LOG rather than
+	// the vault, so it grew with use for every adopter. The original comment above
+	// defended the join and never mentioned the correlated subquery — it reasoned
+	// about the half it was thinking about.
+	//
+	// Pinned by TestMemoryUseSince_DoesNotDegradeQuadratically.
+	row := d.db.QueryRow(memoryUseSQL,
+
 		hookCallerPattern, since, string(AccessSourceRead), since, window)
 
 	// SUM over zero rows is NULL, so these are nullable even though COUNT is not.
@@ -158,9 +185,11 @@ func (d *DB) MemoryUseSince(windowDays int) (*MemoryUse, error) {
 	return out, nil
 }
 
-// memoryUsePerCaller is the same measurement split by hook.
-func (d *DB) memoryUsePerCaller(since, window string) ([]CallerUse, error) {
-	rows, err := d.db.Query(`
+// memoryUsePerCallerSQL — named for the same reason as memoryUseSQL: the
+// MATERIALIZED hint is invisible to correctness tests and is asserted on the
+// query plan instead. doctor calls BOTH, so fixing one and not the other would
+// have halved a five-minute command and looked like a fix.
+const memoryUsePerCallerSQL = `
 		WITH inj AS (
 			SELECT s.caller AS caller, e.timestamp AS t,
 			       json_extract(r.value, '$.note_id') AS note_id
@@ -170,7 +199,7 @@ func (d *DB) memoryUsePerCaller(since, window string) ([]CallerUse, error) {
 			WHERE s.caller LIKE ?
 			  AND e.timestamp > datetime('now', ?)
 		),
-		acc AS (
+		acc AS MATERIALIZED (
 			SELECT timestamp AS t, json_extract(event_data, '$.note_id') AS note_id
 			FROM events
 			WHERE event_type = 'note_access'
@@ -183,7 +212,16 @@ func (d *DB) memoryUsePerCaller(since, window string) ([]CallerUse, error) {
 		             WHERE a.note_id = inj.note_id
 		               AND datetime(a.t) BETWEEN datetime(inj.t) AND datetime(inj.t, ?)
 		           ) THEN 1 ELSE 0 END)
-		FROM inj GROUP BY caller ORDER BY COUNT(*) DESC`,
+		FROM inj GROUP BY caller ORDER BY COUNT(*) DESC`
+
+// memoryUsePerCaller is the same measurement split by hook.
+// memoryUsePerCaller carries the same MATERIALIZED hint as MemoryUseSince, for
+// the same reason and at the same cost if removed: its EXISTS is correlated on
+// inj.note_id, so an unmaterialised acc is re-scanned per outer row. doctor calls
+// BOTH, so the two compounded into the same wall-clock stall. Fixing one and not
+// the other would have halved a five-minute command and looked like a fix.
+func (d *DB) memoryUsePerCaller(since, window string) ([]CallerUse, error) {
+	rows, err := d.db.Query(memoryUsePerCallerSQL,
 		hookCallerPattern, since, string(AccessSourceRead), since, window)
 	if err != nil {
 		return nil, fmt.Errorf("computing per-caller memory use: %w", err)
