@@ -126,6 +126,12 @@ This is the load-bearing skill. Each arc, in order:
   from the transcript, not from memory.** Don't fabricate a moment that didn't happen
   — a vault of invented arcs is worse than no vault.
 
+The **Principle** section is load-bearing beyond readability: when a context pack cannot
+fit a whole note, `ask --excerpt N` delivers that section in preference to the note's
+opening. An arc with a clear Principle heading gets its *rule* injected; an arc without
+one gets its story setup. Structure your arcs well and retrieval hands the agent the
+lesson instead of the anecdote.
+
 The full discipline ships as `principles/how-to-write-arcs.md` in every `init`'d vault.
 Read Ada's arcs (`examples/ada-vault/arcs/`) to see the shape.
 

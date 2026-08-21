@@ -4,7 +4,9 @@
 
 If you're an agent integrating VaultMind into your workflow (via SessionStart hook or explicit CLI calls), read this end-to-end. If you're a human reviewing agent usage, the same material applies — agents and humans share the same CLI surface.
 
-**Getting the binary.** Three install paths, each yielding a retrieval tier: (a) `go install github.com/peiman/vaultmind@latest` → pure-Go **MiniLM**, every platform, no deps; (b) the **prebuilt ORT archive** (`vaultmind_<version>_<os>_<arch>_ort.tar.gz` from the [release](https://github.com/peiman/vaultmind/releases), extract, run) → full **BGE-M3** 4-way hybrid on darwin-arm64/linux-amd64, no build; (c) from source (`git clone` + `task setup:ort` + `task build`) → full hybrid, any platform. To **update** an existing install, repeat your path (`@latest` / re-download the archive / `git pull && task build`). Confirm with `vaultmind version`; `vaultmind doctor` reports your retrieval tier and warns if degraded.
+**Getting the binary.** Three install paths, each yielding a retrieval tier: (a) `go install github.com/peiman/vaultmind@latest` → pure-Go **MiniLM**, every platform, no deps; (b) the **prebuilt ORT archive** (`vaultmind_<version>_<os>_<arch>_ort.tar.gz` from the [release](https://github.com/peiman/vaultmind/releases), extract, run) → full **BGE-M3** 4-way hybrid on darwin-arm64/linux-amd64, no build; (c) from source (`git clone` + `task setup:ort` + `task build`) → full hybrid, any platform. To **update** an existing install, repeat your path (`@latest` / re-download the archive / `git pull && task build`). Confirm with `vaultmind version`; `vaultmind doctor` reports your retrieval tier and warns if degraded. `vaultmind doctor` also asks the Go module proxy once a day whether a newer release exists and prints a line if so — it sends nothing about you or your vault; `VAULTMIND_NO_UPDATE_CHECK=1` opts out.
+
+**Upgrading to v0.7.0.** Index migrations apply automatically on first run — **no re-index and no `--embed`** (note bodies have been stored since the baseline schema). One thing to check by hand: the context header format changed from `N items`, so anything parsing that line needs updating. See [Reading the context header](#reading-the-context-header).
 
 ## 1. The mental model
 
@@ -44,6 +46,47 @@ Output format (JSON):
 ```
 
 **`retrieval_mode`** tells you which lane ran. If it's `"keyword"`, the vault has no embeddings — your paraphrase queries will miss. Run `vaultmind index --embed --model minilm --vault <path>` to fix.
+
+#### `--excerpt N` — get the passage that matters when the whole note will not fit
+
+Body inclusion is otherwise all-or-nothing: a note one token over the remaining budget
+contributes **nothing**, while the pack still counts it. On a vault whose median note is
+larger than your budget — which is most real vaults, and every hook budget — that is the
+common case, not the edge case.
+
+```bash
+vaultmind ask "spreading activation" --vault <path> --budget 4000 --excerpt 120
+```
+
+With `--excerpt N` such a note contributes at most N tokens instead of zero. It prefers
+the note's **Principle** section where one exists, falling back to opening prose. That
+default is deliberate: arcs are written trigger → push → deeper sight → principle, so the
+opening is story setup and the decision rule sits several sections down. Injecting "the
+first paragraph" hands you the anecdote and withholds the lesson.
+
+Off by default (`0`). If you are wiring a hook with a tight budget, set it — otherwise a
+small budget yields items with no content.
+
+#### Reading the context header
+
+The header states what actually arrived, in numbers you can recount from the output
+below it:
+
+```
+Context from: identity-who-i-am — 9 notes, 9 delivered as excerpts (968 tok)
+Context from: concept-arc — 5 notes, 3 delivered in full, 2 titles only (95 tok)
+```
+
+`notes` counts every block that renders, including the target. An excerpt counts as
+delivered *and* says it is an excerpt.
+
+> **Changed in v0.7.0.** This replaces the old `N items` / `used/budget` form. If you
+> have a hook or script parsing that line, update it.
+
+A weak top hit in a tight, well-curated vault now delivers its body. Low contrast between
+hits is a property of the vault — its notes are all about one subject — not evidence that
+the top hit is wrong. Genuinely irrelevant hits still land at or below the noise floor as
+`no_match` and stay suppressed.
 
 ### `vaultmind search <query>` — ranked hits only
 

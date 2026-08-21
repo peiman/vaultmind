@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The configuration reference documented the wrong tool.** `docs/configuration.md`
+  and `docs/config-template.yaml` were still the inherited ckeletin-go scaffold pages:
+  they named the env-var prefix `CKELETIN_GO_` and the config path
+  `~/.ckeletin-go.yaml`, neither of which VaultMind reads. Anyone configuring VaultMind
+  from that page was setting variables nothing consumed.
+
+  Both files are *generated* from the config registry, and the generator has existed
+  and been wired into `task generate:docs` the whole time — it had simply not been run
+  since the scaffold was replaced, and nothing checks. Regenerating them corrects 2,475
+  lines. The missing gate, not the stale output, is the real defect; a generator nobody
+  runs is worth what no generator is worth.
+
+### Documentation
+
+- **The agent-facing guide documents delivery.** `--excerpt N`, why it prefers a note's
+  **Principle** section, and how to read the new context header (with the v0.7.0 format
+  change called out for anything parsing that line) are now in `docs/AGENT_USAGE.md`;
+  v0.7.0 shipped the feature with no mention of it in any document an adopter reads
+  first. The upgrade note — migrations automatic, no re-index, no `--embed` — sits with
+  the install instructions.
+
+- **`docs/building-an-identity-vault.md` explains why the Principle section is
+  load-bearing.** It is not only a readability convention: it is the passage `--excerpt`
+  delivers when a note will not fit, so an arc written without one gets its story setup
+  injected instead of its rule.
+
 ## [0.7.0] — 2026-08-21
 
 > **Upgrading.** Index migrations apply automatically on first run; no re-index and no
