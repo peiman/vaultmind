@@ -66,6 +66,17 @@ vaultmind ask "what did Ada learn about scope?" --vault examples/ada-vault
 - **Index** — a derived SQLite index: full-text (FTS5), dense + sparse + ColBERT embeddings (BGE-M3), and a link/alias knowledge graph. Rebuilt with `vaultmind index`; never hand-edited.
 - **Retrieval** — Reciprocal Rank Fusion over the lanes, with calibrated top-hit confidence and optional **activation-weighted reranking** (notes accessed more often become more retrievable).
 - **Context packs** — `vaultmind ask` assembles ranked results into a token-budgeted block ready to drop into an agent's context.
+- **Delivery** — the pack carries note *text*, not just titles. A note larger than the remaining budget would otherwise contribute **nothing** while still being counted, which on a vault whose median note exceeds a hook's budget is every query rather than an edge case:
+
+  ```bash
+  vaultmind ask "spreading activation" --vault <path> --budget 4000 --excerpt 120
+  ```
+
+  `--excerpt N` caps each note at N tokens instead of dropping it, preferring the note's **Principle** section where it has one — arcs run trigger → push → deeper sight → principle, so the opening is story setup and the rule sits several sections down. Injecting "the first paragraph" hands an agent the anecdote and withholds the lesson. Off by default (`0`); set it when wiring a hook with a tight budget.
+
+  A weak-but-correct top hit in a tight, well-curated vault delivers its body too. Low contrast between hits is a property of a *focused* vault, not evidence the top hit is wrong. Genuinely off-topic hits still land at or below the noise floor and stay suppressed.
+
+  The context header states what actually arrived, in numbers you can recount from the output below it — `9 notes, 9 delivered as excerpts (968 tok)`. **Changed in 0.7.0** from the old `N items` form: if you parse that line, update it.
 
 Everything is `--json`-able for programmatic use; every command returns a stable envelope.
 
@@ -77,7 +88,7 @@ VaultMind can wire into Claude Code — or any agent that supports SessionStart 
 vaultmind hooks install <project-dir>
 ```
 
-This installs hook scripts that load identity + current context at session start, surface relevant pointers per turn, and capture each session as an episode for later distillation. The scripts are embedded in the binary and written into `<project-dir>/.claude/scripts/` (idempotent). See **[docs/AGENT_USAGE.md](docs/AGENT_USAGE.md)** for the day-to-day agent workflow, and **[docs/building-an-identity-vault.md](docs/building-an-identity-vault.md)** for how to grow an agent's identity from scratch — the arc method, and why an identity vault is **personal** and usually shouldn't be committed to a shared repo.
+This installs hook scripts that load identity + current context at session start, surface relevant pointers per turn, and capture each session as an episode for later distillation. Check them with `vaultmind hooks status <project-dir>`, which reports both halves — whether each script matches the canonical copy, and whether each canonical event is actually **wired** in `settings.json`. A project can hold every script byte-identical and still run none of them; an unwired event is reported by name and fails the check. The scripts are embedded in the binary and written into `<project-dir>/.claude/scripts/` (idempotent). See **[docs/AGENT_USAGE.md](docs/AGENT_USAGE.md)** for the day-to-day agent workflow, and **[docs/building-an-identity-vault.md](docs/building-an-identity-vault.md)** for how to grow an agent's identity from scratch — the arc method, and why an identity vault is **personal** and usually shouldn't be committed to a shared repo.
 
 **Cold start — seed from your existing sessions.** A new identity vault is empty, but you've probably worked with an agent for months. Point `episode capture` at a *directory* of past Claude Code transcripts to batch-capture them into episodes (recursive; empty/non-transcript files skipped), then surface candidate arcs — so the vault starts warm, not blank:
 

@@ -258,6 +258,56 @@ vaultmind experiment trace --session <session-id>
 vaultmind experiment trace --note <note-id>
 ```
 
+### Are the hooks actually running?
+
+Scripts on disk are not hooks; *wired* scripts are. These are two independent failures
+and `hooks status` reports both:
+
+```bash
+vaultmind hooks status <project-dir>
+```
+
+```
+Hook scripts in .: 11 in sync, 0 drifted, 0 missing
+Hook events: 6 wired, 1 unwired
+  unwired   SessionEnd -> capture-episode.sh
+```
+
+- **drifted / missing** — the script's *contents* differ from the canonical copy, or it
+  is absent. Fix: `vaultmind hooks install <dir> --force`.
+- **unwired** — the binary wires this event and your `settings.json` does not, so the
+  script never runs no matter how correct it is. Fix: `vaultmind hooks install <dir> --merge`.
+
+The distinction is not academic. A project held every canonical script byte-identical,
+with `capture-episode.sh` already responsible for 13 captured episodes, and `SessionEnd`
+absent from its settings — every content check passed while the write half was switched
+off. An event wired to *another tool's* script counts as unwired too: that is not your
+hook running.
+
+> **Changed in 0.7.1 — exit code.** `hooks status` now exits non-zero on unwired events
+> as well as drifted/missing ones. If you gate CI on it, expect it to start failing where
+> it was previously silent about a real problem.
+
+### Recording that a prompting hook fired
+
+Most hooks *query* — they leave a row in the usage log by doing their job. Some hooks
+*prompt*: `precompact-preserve.sh` asks you to write down what you learned before
+compaction destroys it. A prompt leaves no trace, so "no notes were written this week"
+and "the prompt never appeared" produce identical evidence — and only one of those is
+fixable by trying harder.
+
+```bash
+vaultmind hooks record write_prompt --vault <path>
+```
+
+The canonical PreCompact hook already calls this; you only need it when writing your own
+prompting hook. The event name is an allowlist, not free text — everything written here
+is later read as evidence about agent behaviour, so adding a name is a reviewed change
+rather than a runtime string.
+
+It is a **denominator, not a score.** Firing is not success; writing notes is. It exists
+so that a zero can be interpreted instead of guessed at.
+
 Session trace shows caller attribution (e.g. `vaultmind-persona-hook` for the SessionStart hook vs `cli` for direct calls; the value comes from `VAULTMIND_CALLER`), operator (user@host), and every retrieval in chronological order. Use when you want to understand "why was this note surfaced, in what context?"
 
 ## 6. Best practices for agents
