@@ -324,6 +324,11 @@ var commandCatalog = map[string]catalogEntry{
 		when:  "you want to know whether a project's hook scripts still match the ones this binary ships — before an update overwrites a local change, or after one that should have installed something.",
 		short: "Compare a project's installed hook scripts against the canonical ones",
 	},
+	"vaultmind hooks record": {
+		group: groupLifecycle,
+		when:  "a hook that PROMPTS rather than queries needs to leave evidence that it fired, so \"nothing was written\" can be told apart from \"the prompt never appeared\".",
+		short: "Record that a hook fired, so a zero can be told apart from a no-show",
+	},
 
 	// ── Setup & introspection ────────────────────────────────────────────
 	"vaultmind config": {

@@ -133,6 +133,8 @@ const (
 	KeyAppHooksinstallMerge                  = "app.hooksinstall.merge"                   // Additively merge the hook stanza into the project's settings file (never clob...
 	KeyAppHooksinstallLocal                  = "app.hooksinstall.local"                   // With --merge, target .claude/settings.local.json (gitignored, personal) inste...
 	KeyAppHooksinstallDryrun                 = "app.hooksinstall.dryrun"                  // With --merge, print the merged result without writing it (preview/diff).
+	KeyAppHooksrecordJson                    = "app.hooksrecord.json"                     // Output in JSON format
+	KeyAppHooksrecordVault                   = "app.hooksrecord.vault"                    // Path to vault root
 	KeyAppHooksstatusJson                    = "app.hooksstatus.json"                     // Output in JSON format
 	KeyAppHooksuninstallJson                 = "app.hooksuninstall.json"                  // Output in JSON format
 	KeyAppHooksuninstallLocal                = "app.hooksuninstall.local"                 // Target .claude/settings.local.json instead of .claude/settings.json.

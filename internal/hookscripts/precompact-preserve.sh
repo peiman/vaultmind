@@ -168,6 +168,19 @@ ${COMMITS}
 Then re-index the vault holding the desk so the entry is retrievable."
 fi
 
+# Record that the prompt was SHOWN. Without this row, a window that ends with no
+# notes banked cannot tell "the prompt fired and was ignored" apart from "the
+# prompt never fired" — a discipline problem and a wiring problem produce
+# identical evidence, and only one of them is fixable by trying harder. The
+# read-path hooks already leave a trail; this one left nothing.
+#
+# A denominator, not a score: firing is not success, banking is. Best-effort and
+# silent — a hook must never fail the compaction it is attached to in order to
+# record that it happened.
+if command -v vaultmind >/dev/null 2>&1; then
+  vaultmind hooks record write_prompt --vault "$IDENTITY_VAULT" >/dev/null 2>&1 || true
+fi
+
 python3 -c "
 import json, sys
 print(json.dumps({'continue': True, 'suppressOutput': False, 'systemMessage': sys.argv[1]}))

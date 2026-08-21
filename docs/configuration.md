@@ -143,6 +143,8 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.hooksinstall.merge` | bool | `false` | `VAULTMIND_APP_HOOKSINSTALL_MERGE` | Additively merge the hook stanza into the project's settings file (never clobbers existing hooks) instead of only printing it. |
 | `app.hooksinstall.local` | bool | `false` | `VAULTMIND_APP_HOOKSINSTALL_LOCAL` | With --merge, target .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared). |
 | `app.hooksinstall.dryrun` | bool | `false` | `VAULTMIND_APP_HOOKSINSTALL_DRYRUN` | With --merge, print the merged result without writing it (preview/diff). |
+| `app.hooksrecord.json` | bool | `false` | `VAULTMIND_APP_HOOKSRECORD_JSON` | Output in JSON format |
+| `app.hooksrecord.vault` | string | `.` | `VAULTMIND_APP_HOOKSRECORD_VAULT` | Path to vault root |
 | `app.hooksstatus.json` | bool | `false` | `VAULTMIND_APP_HOOKSSTATUS_JSON` | Output in JSON format |
 | `app.hooksuninstall.json` | bool | `false` | `VAULTMIND_APP_HOOKSUNINSTALL_JSON` | Output in JSON format |
 | `app.hooksuninstall.local` | bool | `false` | `VAULTMIND_APP_HOOKSUNINSTALL_LOCAL` | Target .claude/settings.local.json instead of .claude/settings.json. |
@@ -630,6 +632,13 @@ app:
 
     # With --merge, print the merged result without writing it (preview/diff).
     dryrun: false
+
+  hooksrecord:
+    # Output in JSON format
+    json: false
+
+    # Path to vault root
+    vault: .
 
   hooksstatus:
     # Output in JSON format
@@ -1452,6 +1461,12 @@ export VAULTMIND_APP_HOOKSINSTALL_LOCAL=false
 
 # With --merge, print the merged result without writing it (preview/diff).
 export VAULTMIND_APP_HOOKSINSTALL_DRYRUN=false
+
+# Output in JSON format
+export VAULTMIND_APP_HOOKSRECORD_JSON=false
+
+# Path to vault root
+export VAULTMIND_APP_HOOKSRECORD_VAULT=.
 
 # Output in JSON format
 export VAULTMIND_APP_HOOKSSTATUS_JSON=false

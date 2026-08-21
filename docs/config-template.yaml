@@ -362,6 +362,13 @@ app:
     # With --merge, print the merged result without writing it (preview/diff).
     dryrun: false
 
+  hooksrecord:
+    # Output in JSON format
+    json: false
+
+    # Path to vault root
+    vault: .
+
   hooksstatus:
     # Output in JSON format
     json: false
