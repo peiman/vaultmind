@@ -133,7 +133,8 @@ tasks:
           task ckeletin:check -- --category=environment,quality,architecture,security,dependencies \
             && task ckeletin:test:coverage:project \
             && task test:baseline \
-            && task check:validate-test
+            && task check:validate-test \
+            && task check:docs-drift
 
   test:baseline:
     desc: Run the golden-query retrieval baseline (fails if metrics drop beyond tolerance)
@@ -679,30 +680,32 @@ tasks:
     silent: true
 
   check:docs-drift:
-    desc: "Fail if a generated document no longer matches the registry it is generated from. NOT in `task check` — blocked on generator determinism, see below."
-    # BLOCKED, and this is the finding that matters more than the gate.
+    desc: Fail if a generated document no longer matches the registry it is generated from. Runs as part of `task check`.
+    # Why this exists: the generators were wired up and then nobody ran them.
+    # docs/configuration.md sat in main for months still documenting the
+    # ckeletin-go scaffold — CKELETIN_GO_* env vars and ~/.ckeletin-go.yaml,
+    # neither of which VaultMind reads — so every adopter configuring from that
+    # page set variables nothing consumed. Regenerating corrected 2,475 lines.
+    # A generator nobody runs is worth what no generator is worth; the missing
+    # gate was the defect, not the stale output.
     #
-    # `docs config` emits its keys in map-iteration order. Two consecutive runs
-    # of the SAME binary differ by 850 lines — identical content, shuffled. So
-    # regenerating always produced an enormous meaningless diff, which is very
-    # likely why nobody kept these files in sync: the honest act looked like
-    # vandalism. docs/configuration.md sat in main for months still documenting
-    # the ckeletin-go scaffold (CKELETIN_GO_* env vars, ~/.ckeletin-go.yaml —
-    # neither of which VaultMind reads), so every adopter configuring from that
-    # page set variables nothing consumed.
-    #
-    # This task is therefore correct in design and cannot be switched on. Wiring
-    # it into `task check` today would fail every run for a reason unrelated to
-    # anyone's change — a red light nobody can act on, which is how gates get
-    # deleted. Sort the generator's output first, then add this to the `check`
-    # chain in the same commit that makes it able to pass.
-    #
-    # Kept here, unwired and runnable by hand, rather than deleted: the escalation
-    # is one line in `check:` once the generator is deterministic.
+    # This gate could not exist until the generator was deterministic. `docs
+    # config` ranged over maps, so two consecutive runs of the SAME binary
+    # differed by 850 lines — identical content, shuffled — and regenerating
+    # always produced an enormous meaningless diff. That is very likely why the
+    # files were never kept in sync: the honest act looked like vandalism.
+    # Fixed in internal/docs (sortedGroupKeys), pinned by
+    # TestGenerateYAMLContent_Deterministic.
     #
     # Generates into a temp dir and diffs, so a failing check never mutates the
     # working tree — the failure tells you to run `task generate:docs`, and
     # regeneration stays an explicit act.
+    #
+    # silent: the standing habit for auditing a check run is `grep '\[FAIL\]'`
+    # on the log, because the completion exit code has lied before. Echoing this
+    # script body puts two literal [FAIL] strings in every green log and breaks
+    # that grep permanently. A check must not corrupt the signal used to read it.
+    silent: true
     deps: [build]
     cmds:
       - cmd: |

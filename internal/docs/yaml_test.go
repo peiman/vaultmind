@@ -156,3 +156,40 @@ func TestGenerateYAMLDocs_EmptyRegistry(t *testing.T) {
 	trimmed := strings.TrimSpace(output)
 	assert.Empty(t, trimmed, "Expected empty output for empty registry, got: %q", output)
 }
+
+// TestGenerateYAMLContent_Deterministic pins the ordering of generated output.
+//
+// generateYAMLContent grouped options into maps and then ranged over those maps
+// directly, so Go's randomized map iteration reordered whole sections on every
+// run. Two consecutive generations from one binary differed by 850 lines —
+// identical content, shuffled. That made the checked-in docs/config-template.yaml
+// and docs/configuration.md impossible to keep in sync: regenerating always
+// produced an enormous meaningless diff, so the honest act looked like vandalism
+// and the files drifted until they documented the upstream scaffold instead of
+// this tool.
+//
+// A drift gate cannot exist until this holds, which is why the assertion is on
+// byte-equality across runs rather than on any particular key order.
+func TestGenerateYAMLContent_Deterministic(t *testing.T) {
+	registry := []config.ConfigOption{
+		{Key: "zeta.b.two", Type: "string", DefaultValue: "2", Description: "z b two"},
+		{Key: "alpha.one", Type: "string", DefaultValue: "1", Description: "a one"},
+		{Key: "mid.nested.deep", Type: "bool", DefaultValue: false, Description: "m deep"},
+		{Key: "zeta.a.one", Type: "int", DefaultValue: 1, Description: "z a one"},
+		{Key: "alpha.two", Type: "string", DefaultValue: "2", Description: "a two"},
+		{Key: "mid.other.deep", Type: "bool", DefaultValue: true, Description: "m other"},
+		{Key: "bare", Type: "string", DefaultValue: "x", Description: "no group"},
+	}
+
+	var first bytes.Buffer
+	require.NoError(t, generateYAMLContent(&first, registry))
+
+	// Many runs, because map iteration order is random per-range: a single
+	// repeat can coincidentally match even when ordering is unstable.
+	for i := 0; i < 50; i++ {
+		var next bytes.Buffer
+		require.NoError(t, generateYAMLContent(&next, registry))
+		require.Equal(t, first.String(), next.String(),
+			"generation %d differed from the first — output is not deterministic", i)
+	}
+}

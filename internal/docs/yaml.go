@@ -5,10 +5,23 @@ package docs
 import (
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 )
+
+// sortedGroupKeys returns a map's keys in a stable order, so generated output
+// is byte-identical across runs. Generated documentation that reshuffles on
+// every regeneration cannot be diffed, and therefore cannot be gated.
+func sortedGroupKeys(m map[string][]config.ConfigOption) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
 
 // Function type for YAML content generation, used for testing
 type yamlContentGenerator func(w io.Writer, registry []config.ConfigOption) error
@@ -40,8 +53,14 @@ func generateYAMLContent(w io.Writer, registry []config.ConfigOption) error {
 		}
 	}
 
-	// Generate YAML
-	for topLevel, options := range groups {
+	// Generate YAML.
+	//
+	// Iterate group keys in sorted order rather than ranging the map: Go
+	// randomizes map iteration, so ranging here reordered whole sections on
+	// every run, which is what made the generated docs impossible to keep in
+	// sync. See TestGenerateYAMLContent_Deterministic.
+	for _, topLevel := range sortedGroupKeys(groups) {
+		options := groups[topLevel]
 		if topLevel != "" {
 			fmt.Fprintf(w, "%s:\n", topLevel)
 		}
@@ -75,8 +94,9 @@ func generateYAMLContent(w io.Writer, registry []config.ConfigOption) error {
 			fmt.Fprintf(w, "  %s: %s\n\n", key, opt.ExampleValueString())
 		}
 
-		// Process nested groups
-		for nestedKey, nestedOpts := range nestedGroups {
+		// Process nested groups — sorted, for the same reason as above.
+		for _, nestedKey := range sortedGroupKeys(nestedGroups) {
+			nestedOpts := nestedGroups[nestedKey]
 			fmt.Fprintf(w, "  %s:\n", nestedKey)
 			for _, opt := range nestedOpts {
 				// Extract the part after the second dot
