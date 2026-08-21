@@ -678,3 +678,56 @@ tasks:
       - task: generate:docs:commands
     silent: true
 
+  check:docs-drift:
+    desc: "Fail if a generated document no longer matches the registry it is generated from. NOT in `task check` — blocked on generator determinism, see below."
+    # BLOCKED, and this is the finding that matters more than the gate.
+    #
+    # `docs config` emits its keys in map-iteration order. Two consecutive runs
+    # of the SAME binary differ by 850 lines — identical content, shuffled. So
+    # regenerating always produced an enormous meaningless diff, which is very
+    # likely why nobody kept these files in sync: the honest act looked like
+    # vandalism. docs/configuration.md sat in main for months still documenting
+    # the ckeletin-go scaffold (CKELETIN_GO_* env vars, ~/.ckeletin-go.yaml —
+    # neither of which VaultMind reads), so every adopter configuring from that
+    # page set variables nothing consumed.
+    #
+    # This task is therefore correct in design and cannot be switched on. Wiring
+    # it into `task check` today would fail every run for a reason unrelated to
+    # anyone's change — a red light nobody can act on, which is how gates get
+    # deleted. Sort the generator's output first, then add this to the `check`
+    # chain in the same commit that makes it able to pass.
+    #
+    # Kept here, unwired and runnable by hand, rather than deleted: the escalation
+    # is one line in `check:` once the generator is deterministic.
+    #
+    # Generates into a temp dir and diffs, so a failing check never mutates the
+    # working tree — the failure tells you to run `task generate:docs`, and
+    # regeneration stays an explicit act.
+    deps: [build]
+    cmds:
+      - cmd: |
+          tmp=$(mktemp -d -t vm-docsdrift.XXXXXX)
+          trap 'rm -rf "$tmp"' EXIT
+          ./{{.BINARY_NAME}} docs config --output="$tmp/configuration.md"
+          ./{{.BINARY_NAME}} docs config --format=yaml --output="$tmp/config-template.yaml"
+          ./{{.BINARY_NAME}} docs commands --output="$tmp/COMMANDS.md"
+          status=0
+          for pair in "docs/configuration.md|$tmp/configuration.md" \
+                      "docs/config-template.yaml|$tmp/config-template.yaml" \
+                      "internal/onboard/COMMANDS.md|$tmp/COMMANDS.md"; do
+            tracked="${pair%%|*}"
+            fresh="${pair##*|}"
+            if [ ! -f "$tracked" ]; then
+              echo "[FAIL] $tracked is missing — regenerate with: task generate:docs"
+              status=1
+            elif ! diff -q "$tracked" "$fresh" >/dev/null 2>&1; then
+              echo "[FAIL] $tracked is stale — regenerate with: task generate:docs"
+              diff -u "$tracked" "$fresh" | head -20
+              status=1
+            fi
+          done
+          if [ "$status" -eq 0 ]; then
+            echo "✅ generated docs match their source of truth"
+          fi
+          exit "$status"
+
