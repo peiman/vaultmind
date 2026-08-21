@@ -30,7 +30,25 @@ const DisableEnv = "VAULTMIND_NO_UPDATE_CHECK"
 
 // cacheTTL bounds how often the network is touched. A day is well inside the
 // useful window for "a release happened" and keeps repeated doctor runs local.
+// It is the outer bound for BOTH answers; negativeCacheTTL tightens one of them.
 const cacheTTL = 24 * time.Hour
+
+// negativeCacheTTL is how long "you are on the latest" may be believed.
+//
+// The two answers do not age the same way. "v0.7.0 is available" stays true
+// however long it sits — nothing untags a release. "You are current" stops being
+// true the instant someone tags, and a cache cannot know that happened.
+//
+// Under one shared 24h TTL that asymmetry bites exactly when the feature matters
+// most. Measured on 2026-08-21: the cache was written at 08:46:02 with
+// latest=v0.6.0; v0.7.0 was tagged at 08:49:34, three and a half minutes later.
+// doctor would have reported "current" until the next morning — a silent
+// staleness window inside the feature that exists to end silent staleness.
+//
+// An hour costs at most one extra proxy request per hour per machine: a GET for
+// a version number, the same request `go install …@latest` makes. Cheaper than
+// being wrong for a day about the one question this code is asked.
+const negativeCacheTTL = 1 * time.Hour
 
 // httpTimeout keeps a hung proxy from holding up a health command. On timeout
 // the check is skipped, not failed — doctor's job is the vault, not the network.
@@ -196,10 +214,20 @@ func readCache(cacheDir string) (Info, bool) {
 	if err := json.Unmarshal(body, &info); err != nil {
 		return Info{}, false
 	}
-	if time.Since(info.CheckedAt) > cacheTTL {
+	if time.Since(info.CheckedAt) > cacheAgeLimit(info.Newer) {
 		return Info{}, false
 	}
 	return info, true
+}
+
+// cacheAgeLimit picks the TTL for a cached answer by what kind of answer it is.
+// A positive answer stays true until it is acted on; a negative one is only as
+// good as the moment it was taken. See negativeCacheTTL.
+func cacheAgeLimit(newer bool) time.Duration {
+	if newer {
+		return cacheTTL
+	}
+	return negativeCacheTTL
 }
 
 func writeCache(cacheDir string, info Info) {

@@ -6,19 +6,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestIsReleaseVersion_AcceptsGitDescribeBuilds pins who gets told about a release.
+// TestIsReleaseVersion_AcceptsGitDescribeBuilds pins who gets told about a
+// release — and records a hypothesis that was WRONG, so nobody re-derives it.
 //
-// Check bailed on anything that was not an exact release tag, on the reasoning
-// that someone running their own build knows what they are running. That holds
-// for an untagged scratch build; it does not hold for `git clone && task build`,
-// which is one of the three install paths the README documents and the one an
-// adopter following it lands on. Those builds carry a git-describe version like
-// v0.6.0-13-g2965b23 — a real base tag plus distance — and splitVersion already
-// truncates at the first '-', so the comparison was always possible. Only the
-// gate was wrong.
+// When doctor stayed silent on a v0.6.0-13-g2965b23 build while v0.7.0 was
+// already tagged, I concluded that isReleaseVersion rejected git-describe
+// versions and that source-built adopters were therefore never notified. I wrote
+// this test to prove it. It passed unchanged: isReleaseVersion only requires a
+// leading "v" followed by a digit, so it accepts these builds already, and
+// splitVersion truncates at the first '-' so the comparison always worked.
 //
-// Concretely: with v0.7.0 released and v0.6.0-13-g2965b23 installed, doctor said
-// nothing at all.
+// The real cause was the cache — see TestReadCache_NegativeAnswersExpireSooner.
+//
+// These assertions stay as regression pins for behaviour that is correct today
+// and easy to break while "tightening" version parsing. They are not evidence of
+// a fix, and writing the test first is the only reason a fix for a bug that did
+// not exist was never shipped.
 func TestIsReleaseVersion_AcceptsGitDescribeBuilds(t *testing.T) {
 	told := []string{
 		"v0.7.0",
