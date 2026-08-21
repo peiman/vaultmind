@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/embedding"
 	"github.com/peiman/vaultmind/internal/release"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -48,7 +49,7 @@ func TestRenderUpdateNotice_NamesVersionsUpgradeAndOptOut(t *testing.T) {
 	var buf bytes.Buffer
 	require.NoError(t, renderUpdateNotice(&buf, release.Info{
 		Current: "v0.4.1", Latest: "v0.5.0", Newer: true,
-	}))
+	}, embedding.BackendNameGo))
 
 	text := buf.String()
 	assert.Contains(t, text, "v0.5.0 is available")
@@ -61,7 +62,7 @@ func TestRenderUpdateNotice_CurrentVersionSaysNothing(t *testing.T) {
 	var buf bytes.Buffer
 	require.NoError(t, renderUpdateNotice(&buf, release.Info{
 		Current: "v0.5.0", Latest: "v0.5.0", Newer: false,
-	}))
+	}, embedding.BackendNameGo))
 	assert.Empty(t, buf.String(), "being up to date is not news")
 }
 
@@ -69,6 +70,6 @@ func TestRenderUpdateNotice_CurrentVersionSaysNothing(t *testing.T) {
 func TestRenderUpdateNotice_PropagatesWriteError(t *testing.T) {
 	err := renderUpdateNotice(&failAfterNWriter{ok: 0}, release.Info{
 		Current: "v0.4.1", Latest: "v0.5.0", Newer: true,
-	})
+	}, embedding.BackendNameGo)
 	require.Error(t, err)
 }

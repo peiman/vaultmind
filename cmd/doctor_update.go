@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io"
 	"runtime/debug"
+	"strings"
 
+	"github.com/peiman/vaultmind/internal/embedding"
 	"github.com/peiman/vaultmind/internal/release"
 	"github.com/peiman/vaultmind/internal/xdg"
 )
@@ -41,20 +43,39 @@ func writeUpdateNotice(w io.Writer, currentVersion string) error {
 	if !ok {
 		return nil
 	}
-	return renderUpdateNotice(w, info)
+	return renderUpdateNotice(w, info, embedding.BackendName())
 }
 
 // renderUpdateNotice is the printing half, split from the deciding half so the
 // notice itself is testable without a network stub reaching into another
 // package. Silent when there is nothing to say.
-func renderUpdateNotice(w io.Writer, info release.Info) error {
+//
+// The upgrade path is branched on the backend, for the same reason minilmRemedy
+// branches: cgo cannot travel through the Go module proxy, so `go install` can
+// only ever produce the pure-Go MiniLM binary. Printing it to an ORT user —
+// whose retrieval tier this same command reports two lines above — tells them to
+// raise their version number and silently drop the sparse and ColBERT lanes.
+// Nothing errors, nothing warns; recall just gets quietly worse. An adopter
+// found this by reading the notice on a live ORT install and asking whether it
+// was safe. It was not.
+func renderUpdateNotice(w io.Writer, info release.Info, backend string) error {
 	if !info.Newer {
 		return nil
 	}
+	upgrade := fmt.Sprintf(
+		"  go install github.com/peiman/vaultmind@%s   (or download the ORT archive from the release)",
+		info.Latest)
+	if backend == embedding.BackendNameORT {
+		upgrade = fmt.Sprintf(
+			"  This build runs the full BGE-M3 hybrid. Keep it — `go install` cannot "+
+				"(cgo does not\n"+
+				"  travel through the module proxy) and would drop you to MiniLM at the same version.\n"+
+				"    • download  vaultmind_%s_<os>_<arch>_ort.tar.gz  from the release, or\n"+
+				"    • from source:  git pull && task build",
+			strings.TrimPrefix(info.Latest, "v"))
+	}
 	_, err := fmt.Fprintf(w,
-		"⬆ VaultMind %s is available (running %s)\n"+
-			"  go install github.com/peiman/vaultmind@%s   (or download the ORT archive from the release)\n"+
-			"  silence this: %s=1\n",
-		info.Latest, info.Current, info.Latest, release.DisableEnv)
+		"⬆ VaultMind %s is available (running %s)\n%s\n  silence this: %s=1\n",
+		info.Latest, info.Current, upgrade, release.DisableEnv)
 	return err
 }
