@@ -669,6 +669,11 @@ tasks:
       - echo "Generating command reference..."
       - ./{{.BINARY_NAME}} docs commands --output=internal/onboard/COMMANDS.md
       - echo "Command reference saved to internal/onboard/COMMANDS.md"
+      # AGENT_USAGE.md is hand-written prose that EMBEDS the catalog between
+      # VAULTMIND:GENERATED markers, so this replaces only that region. Prose
+      # that restates flag semantics drifts from the Cobra tree that owns them.
+      - ./{{.BINARY_NAME}} docs commands --output=docs/AGENT_USAGE.md
+      - echo "Command region refreshed in docs/AGENT_USAGE.md"
     deps: [build]
 
   generate:docs:
@@ -714,10 +719,16 @@ tasks:
           ./{{.BINARY_NAME}} docs config --output="$tmp/configuration.md"
           ./{{.BINARY_NAME}} docs config --format=yaml --output="$tmp/config-template.yaml"
           ./{{.BINARY_NAME}} docs commands --output="$tmp/COMMANDS.md"
+          # AGENT_USAGE.md embeds the catalog in a marked region inside prose, so
+          # it is checked by injecting into a COPY and diffing — never the tracked
+          # file, which must stay untouched by a check.
+          cp docs/AGENT_USAGE.md "$tmp/AGENT_USAGE.md"
+          ./{{.BINARY_NAME}} docs commands --output="$tmp/AGENT_USAGE.md"
           status=0
           for pair in "docs/configuration.md|$tmp/configuration.md" \
                       "docs/config-template.yaml|$tmp/config-template.yaml" \
-                      "internal/onboard/COMMANDS.md|$tmp/COMMANDS.md"; do
+                      "internal/onboard/COMMANDS.md|$tmp/COMMANDS.md" \
+                      "docs/AGENT_USAGE.md|$tmp/AGENT_USAGE.md"; do
             tracked="${pair%%|*}"
             fresh="${pair##*|}"
             if [ ! -f "$tracked" ]; then

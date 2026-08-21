@@ -267,6 +267,9 @@ Configuration can be provided in multiple ways, in order of precedence:
 ### YAML Configuration File (config.yaml)
 
 ```yaml
+  # Top-level experiment definitions map
+  experiments: map[]
+
 app:
   # Logging level for the application (trace, debug, info, warn, error, fatal, panic). Used as console level if app.log.console_level is not set.
   log_level: debug
@@ -289,6 +292,16 @@ app:
 
     # Stage and commit all changes
     commit: false
+
+  arc:
+    # Path to vault root
+    candidates.vault: .
+
+    # Output in JSON format
+    candidates.json: false
+
+    # Vault holding the existing arcs to compare proposals against (default: the scanned vault). Set this when the desk and the arcs live in different vaults
+    candidates.arcs_vault: 
 
   ask:
     # Path to vault root
@@ -340,6 +353,13 @@ app:
     # Show duration for each check in the output
     timing: false
 
+  dataviewlint:
+    # Path to vault root
+    vault: .
+
+    # Output in JSON format
+    json: false
+
   dataviewrender:
     # Path to vault root
     vault: .
@@ -362,37 +382,54 @@ app:
     # Section key to render
     section_key: 
 
-  memoryneighbors:
+  docs:
+    # Output format for documentation (markdown, yaml)
+    output_format: yaml
+
+    # Output file for documentation (defaults to stdout)
+    output_file: /path/to/output.md
+
+  docs_commands:
+    # Output file for the command reference (defaults to stdout)
+    output: internal/onboard/COMMANDS.md
+
+  doctor:
     # Path to vault root
     vault: .
 
     # Output in JSON format
     json: false
 
-    # Maximum traversal depth
-    depth: 1
+    # Print summary counts only (suppress per-link details)
+    summary: false
 
-    # Minimum edge confidence (low, medium, high)
-    min_confidence: high
+    # Diagnose every vault discovered under --root (multi-vault health)
+    all: false
 
-    # Maximum nodes to return
-    max_nodes: 50
+    # Root directory to discover vaults under when --all is set
+    root: .
 
-  notecreate:
+    # Pin the Contract-B network root pubkey (base64) for authenticated mesh health; overrides the enroll-persisted anchor
+    mesh_root_pubkey: 
+
+    # Verify an offline Contract-B signed-registry file instead of fetching from the local daemon
+    mesh_registry: 
+
+    # Override the agent slug used to resolve your binding in the mesh registry (default: agents.yaml)
+    mesh_slug: 
+
+    # Override the wake-watcher heartbeat file path used for mesh watcher-liveness
+    mesh_heartbeat: 
+
+  doctorheal:
     # Path to vault root
     vault: .
 
     # Output in JSON format
     json: false
 
-    # Note type (required)
-    type: 
-
-    # Body text (overrides template body)
-    body: 
-
-    # Stage and commit
-    commit: false
+    # Preview repairs without writing (default applies)
+    dry_run: false
 
   doctorhealwikilinks:
     # Path to vault root
@@ -403,81 +440,6 @@ app:
 
     # Preview repairs without writing (default applies)
     dry_run: false
-
-  export:
-    # Output file path (empty = stdout)
-    output: 
-
-    # Override telemetry tier (off|anonymous|full); empty = use experiments.telemetry from config
-    tier: 
-
-    # Emit a federated-aggregator-shaped rollup (vault fingerprint + features + variant stats) instead of raw events
-    rollup: false
-
-    # Vault path (required when --rollup is set; reads index DB and fingerprint)
-    vault: .
-
-    # Print a human-readable summary instead of writing the JSON payload (useful for auditing before sharing)
-    preview: false
-
-  identityinvite:
-    # Network ROOT public key (base64-std of the 32-byte ed25519 key; required)
-    root_pubkey: 
-
-    # Relay base URL, e.g. https://chat.acme.com (required)
-    relay: 
-
-  identitysignregistry:
-    # Read registry JSON from this file instead of stdin
-    file: 
-
-    # Signer socket path (default: XDG state dir)
-    signer_socket: 
-
-  identitysigner:
-    # Sealed signer key path (default: XDG data dir)
-    signer_key: 
-
-    # Signer socket path (default: XDG state dir)
-    signer_socket: 
-
-  resolve:
-    # Path to the vault root directory
-    vault: .
-
-    # Output in JSON format
-    json: false
-
-  self:
-    # Path to vault root
-    vault: .
-
-    # Max rows per section (recent/hot/stale)
-    limit: 10
-
-  arc:
-    # Path to vault root
-    candidates.vault: .
-
-    # Output in JSON format
-    candidates.json: false
-
-    # Vault holding the existing arcs to compare proposals against (default: the scanned vault). Set this when the desk and the arcs live in different vaults
-    candidates.arcs_vault: 
-
-  docs_commands:
-    # Output file for the command reference (defaults to stdout)
-    output: internal/onboard/COMMANDS.md
-
-  experimentreport:
-    # Experiment name to report on
-    experiment: 
-
-    # Output in JSON format
-    json: false
-
-    # K value for Hit@K metric
-    k: 10
 
   experimentcompare:
     # Restrict to a single session ID
@@ -501,6 +463,49 @@ app:
     # Output in JSON format
     json: false
 
+  experimentreport:
+    # Experiment name to report on
+    experiment: 
+
+    # Output in JSON format
+    json: false
+
+    # K value for Hit@K metric
+    k: 10
+
+  experimentsummary:
+    # Output in JSON format
+    json: false
+
+    # Number of top-recalled notes to show
+    top: 10
+
+  experimenttrace:
+    # Session ID to trace
+    session: 
+
+    # Note ID to trace across sessions
+    note: 
+
+    # Output in JSON format
+    json: false
+
+  export:
+    # Output file path (empty = stdout)
+    output: 
+
+    # Override telemetry tier (off|anonymous|full); empty = use experiments.telemetry from config
+    tier: 
+
+    # Emit a federated-aggregator-shaped rollup (vault fingerprint + features + variant stats) instead of raw events
+    rollup: false
+
+    # Vault path (required when --rollup is set; reads index DB and fingerprint)
+    vault: .
+
+    # Print a human-readable summary instead of writing the JSON payload (useful for auditing before sharing)
+    preview: false
+
   frontmatter:
     # Path to vault root
     vault: .
@@ -510,6 +515,57 @@ app:
 
     # Validate raw .md files on disk instead of the indexed database
     live: false
+
+  frontmatterfix:
+    # Path to vault root
+    vault: .
+
+    # Output in JSON format
+    json: false
+
+    # Apply changes (default: dry-run)
+    apply: false
+
+  frontmattermerge:
+    # Path to vault root
+    vault: .
+
+    # Output in JSON format
+    json: false
+
+    # Preview changes without writing
+    dry_run: false
+
+    # Show unified diff
+    diff: false
+
+    # Stage and commit after mutation
+    commit: false
+
+    # Allow keys not in type schema
+    allow_extra: false
+
+    # YAML file with fields to merge
+    file: 
+
+  frontmatternormalize:
+    # Path to vault root
+    vault: .
+
+    # Output in JSON format
+    json: false
+
+    # Preview changes without writing
+    dry_run: false
+
+    # Show unified diff
+    diff: false
+
+    # Stage and commit after mutation
+    commit: false
+
+    # Force all datetimes to date-only
+    strip_time: false
 
   frontmatterset:
     # Path to vault root
@@ -530,7 +586,7 @@ app:
     # Allow keys not in type schema
     allow_extra: false
 
-  frontmatternormalize:
+  frontmatterunset:
     # Path to vault root
     vault: .
 
@@ -546,8 +602,48 @@ app:
     # Stage and commit after mutation
     commit: false
 
-    # Force all datetimes to date-only
-    strip_time: false
+  gitstatus:
+    # Path to vault root
+    vault: .
+
+    # Output in JSON format
+    json: false
+
+  hooksinstall:
+    # Overwrite existing hook scripts (default: refuse)
+    force: false
+
+    # Output in JSON format
+    json: false
+
+    # Comma-separated subset of canonical scripts to install (default: all). Unknown names rejected at lint time.
+    only: 
+
+    # Vault path to bake into the printed settings.json stanza via VAULTMIND_VAULT (default: the built-in vaultmind-identity convention).
+    vault: 
+
+    # Additively merge the hook stanza into the project's settings file (never clobbers existing hooks) instead of only printing it.
+    merge: false
+
+    # With --merge, target .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared).
+    local: false
+
+    # With --merge, print the merged result without writing it (preview/diff).
+    dryrun: false
+
+  hooksstatus:
+    # Output in JSON format
+    json: false
+
+  hooksuninstall:
+    # Output in JSON format
+    json: false
+
+    # Target .claude/settings.local.json instead of .claude/settings.json.
+    local: false
+
+    # Also delete the installed hook scripts under .claude/scripts/ (default: leave them).
+    removescripts: false
 
   identityenroll:
     # Network invite: a vmenroll1: token or enroll URL (required)
@@ -574,16 +670,42 @@ app:
     # Skip the out-of-band fingerprint confirmation prompt
     yes: false
 
-  dataviewlint:
-    # Path to vault root
-    vault: .
+  identityenrolladd:
+    # Signed enrollment-request JSON file (stdin when empty or "-")
+    request: 
 
-    # Output in JSON format
-    json: false
+    # Current registry file: unsigned wireRegistry OR signed envelope (absent => fresh)
+    registry: 
+
+    # Base64-std root ed25519 pubkey (required for a signed-envelope --registry; derives the network)
+    root_pubkey: 
+
+    # Admin network id (vmnet1:…); alternative to --root-pubkey (>=1 required; both must agree)
+    network_id: 
+
+    # Registry+binding issuance window in seconds (default 31536000 = one year)
+    validity_seconds: 
+
+    # Comma-separated authorized origin daemon ids for the new binding (default none)
+    origin_daemon: 
 
   identityinit:
     # Sealed signer key path (default: XDG data dir)
     signer_key: 
+
+  identityinvite:
+    # Network ROOT public key (base64-std of the 32-byte ed25519 key; required)
+    root_pubkey: 
+
+    # Relay base URL, e.g. https://chat.acme.com (required)
+    relay: 
+
+  identitysign:
+    # Read entry JSON from this file instead of stdin
+    file: 
+
+    # Signer socket path (default: XDG state dir)
+    signer_socket: 
 
   identitysignenrollment:
     # Read enrollment request JSON from this file instead of stdin
@@ -601,6 +723,20 @@ app:
 
     # Signer public key (base64) stamped as the from_pubkey hint; not signed
     from_pubkey: 
+
+  identitysigner:
+    # Sealed signer key path (default: XDG data dir)
+    signer_key: 
+
+    # Signer socket path (default: XDG state dir)
+    signer_socket: 
+
+  identitysignregistry:
+    # Read registry JSON from this file instead of stdin
+    file: 
+
+    # Signer socket path (default: XDG state dir)
+    signer_socket: 
 
   index:
     # Path to the vault root directory
@@ -621,6 +757,25 @@ app:
     # Allow BGE-M3 indexing on the pure-Go backend (hours for medium vaults)
     allow_slow_backend: true
 
+  init:
+    # Print the concise agent-onboarding quick-start and exit (no vault created); add --full for the whole guide
+    print_instructions: false
+
+    # With --print-instructions, print the full agent-onboarding guide instead of the concise quick-start
+    full: false
+
+    # After scaffolding, install the Claude Code hook scripts into the current project and merge the wiring into .claude/settings.json (baked to the new vault). Never clobbers existing hooks.
+    wire_hooks: false
+
+    # With --wire-hooks, merge into .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared).
+    local: false
+
+    # With --wire-hooks, print the would-be settings merge without writing it (preview).
+    dry_run: false
+
+    # With --wire-hooks, the project to wire hooks into (where .claude/ lives). Defaults to the current directory; set it when the vault and the project root differ.
+    project_dir: 
+
   links:
     # Path to vault root
     vault: .
@@ -631,7 +786,7 @@ app:
     # Filter by edge type
     edge_type: 
 
-  memoryrecall:
+  linksneighbors:
     # Path to vault root
     vault: .
 
@@ -642,29 +797,20 @@ app:
     depth: 1
 
     # Minimum edge confidence (low, medium, high)
-    min_confidence: high
+    min_confidence: low
 
     # Maximum nodes to return
-    max_nodes: 50
+    max_nodes: 200
 
-  memorycontextpack:
+  lintfixlinks:
     # Path to vault root
     vault: .
 
     # Output in JSON format
     json: false
 
-    # Token budget
-    budget: 4096
-
-    # BFS traversal depth (1 = direct neighbors only)
-    depth: 1
-
-    # Max context items (0 = unlimited)
-    max_items: 0
-
-    # Slim frontmatter (type, title, status only)
-    slim: false
+    # Apply fixes (default is dry-run)
+    fix: false
 
   log:
     # Console log level (trace, debug, info, warn, error, fatal, panic). If empty, uses app.log_level.
@@ -703,31 +849,24 @@ app:
     # Number of messages to log thereafter per second
     sampling_thereafter: 100
 
-  hooksinstall:
-    # Overwrite existing hook scripts (default: refuse)
-    force: false
+  memorycontextpack:
+    # Path to vault root
+    vault: .
 
     # Output in JSON format
     json: false
 
-    # Comma-separated subset of canonical scripts to install (default: all). Unknown names rejected at lint time.
-    only: 
+    # Token budget
+    budget: 4096
 
-    # Vault path to bake into the printed settings.json stanza via VAULTMIND_VAULT (default: the built-in vaultmind-identity convention).
-    vault: 
+    # BFS traversal depth (1 = direct neighbors only)
+    depth: 1
 
-    # Additively merge the hook stanza into the project's settings file (never clobbers existing hooks) instead of only printing it.
-    merge: false
+    # Max context items (0 = unlimited)
+    max_items: 0
 
-    # With --merge, target .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared).
-    local: false
-
-    # With --merge, print the merged result without writing it (preview/diff).
-    dryrun: false
-
-  hooksstatus:
-    # Output in JSON format
-    json: false
+    # Slim frontmatter (type, title, status only)
+    slim: false
 
   memorylinks:
     # Path to vault root
@@ -748,55 +887,21 @@ app:
     # Show both inbound and outbound edges (default)
     both: false
 
-  ping:
-    # Default message to display for the ping command
-    output_message: Hello World!
-
-    # Text color for ping command output (white, red, green, blue, cyan, yellow, magenta)
-    output_color: green
-
-    # Enable interactive UI for the ping command
-    ui: true
-
-  vaultstatus:
+  memoryneighbors:
     # Path to vault root
     vault: .
 
     # Output in JSON format
     json: false
 
-  frontmatterunset:
-    # Path to vault root
-    vault: .
+    # Maximum traversal depth
+    depth: 1
 
-    # Output in JSON format
-    json: false
+    # Minimum edge confidence (low, medium, high)
+    min_confidence: high
 
-    # Preview changes without writing
-    dry_run: false
-
-    # Show unified diff
-    diff: false
-
-    # Stage and commit after mutation
-    commit: false
-
-  gitstatus:
-    # Path to vault root
-    vault: .
-
-    # Output in JSON format
-    json: false
-
-  memoryrelated:
-    # Path to vault root
-    vault: .
-
-    # Output in JSON format
-    json: false
-
-    # Filter mode (explicit, inferred, mixed)
-    mode: mixed
+    # Maximum nodes to return
+    max_nodes: 50
 
   memorypack:
     # Path to vault root
@@ -820,178 +925,7 @@ app:
     # Slim frontmatter (type, title, status only)
     slim: false
 
-  search:
-    # Path to vault root
-    vault: .
-
-    # Output in JSON format
-    json: false
-
-    # Maximum results to return
-    limit: 20
-
-    # Skip first N results
-    offset: 0
-
-    # Filter by note type
-    type: 
-
-    # Filter by tag
-    tag: 
-
-    # Search mode: keyword, semantic, or hybrid
-    mode: keyword
-
-  identityenrolladd:
-    # Signed enrollment-request JSON file (stdin when empty or "-")
-    request: 
-
-    # Current registry file: unsigned wireRegistry OR signed envelope (absent => fresh)
-    registry: 
-
-    # Base64-std root ed25519 pubkey (required for a signed-envelope --registry; derives the network)
-    root_pubkey: 
-
-    # Admin network id (vmnet1:…); alternative to --root-pubkey (>=1 required; both must agree)
-    network_id: 
-
-    # Registry+binding issuance window in seconds (default 31536000 = one year)
-    validity_seconds: 
-
-    # Comma-separated authorized origin daemon ids for the new binding (default none)
-    origin_daemon: 
-
-  doctor:
-    # Path to vault root
-    vault: .
-
-    # Output in JSON format
-    json: false
-
-    # Print summary counts only (suppress per-link details)
-    summary: false
-
-    # Diagnose every vault discovered under --root (multi-vault health)
-    all: false
-
-    # Root directory to discover vaults under when --all is set
-    root: .
-
-    # Pin the Contract-B network root pubkey (base64) for authenticated mesh health; overrides the enroll-persisted anchor
-    mesh_root_pubkey: 
-
-    # Verify an offline Contract-B signed-registry file instead of fetching from the local daemon
-    mesh_registry: 
-
-    # Override the agent slug used to resolve your binding in the mesh registry (default: agents.yaml)
-    mesh_slug: 
-
-    # Override the wake-watcher heartbeat file path used for mesh watcher-liveness
-    mesh_heartbeat: 
-
-  experimentsummary:
-    # Output in JSON format
-    json: false
-
-    # Number of top-recalled notes to show
-    top: 10
-
-  experimenttrace:
-    # Session ID to trace
-    session: 
-
-    # Note ID to trace across sessions
-    note: 
-
-    # Output in JSON format
-    json: false
-
-  frontmatterfix:
-    # Path to vault root
-    vault: .
-
-    # Output in JSON format
-    json: false
-
-    # Apply changes (default: dry-run)
-    apply: false
-
-  frontmattermerge:
-    # Path to vault root
-    vault: .
-
-    # Output in JSON format
-    json: false
-
-    # Preview changes without writing
-    dry_run: false
-
-    # Show unified diff
-    diff: false
-
-    # Stage and commit after mutation
-    commit: false
-
-    # Allow keys not in type schema
-    allow_extra: false
-
-    # YAML file with fields to merge
-    file: 
-
-  hooksuninstall:
-    # Output in JSON format
-    json: false
-
-    # Target .claude/settings.local.json instead of .claude/settings.json.
-    local: false
-
-    # Also delete the installed hook scripts under .claude/scripts/ (default: leave them).
-    removescripts: false
-
-  identitysign:
-    # Read entry JSON from this file instead of stdin
-    file: 
-
-    # Signer socket path (default: XDG state dir)
-    signer_socket: 
-
-  docs:
-    # Output format for documentation (markdown, yaml)
-    output_format: yaml
-
-    # Output file for documentation (defaults to stdout)
-    output_file: /path/to/output.md
-
-  doctorheal:
-    # Path to vault root
-    vault: .
-
-    # Output in JSON format
-    json: false
-
-    # Preview repairs without writing (default applies)
-    dry_run: false
-
-  init:
-    # Print the concise agent-onboarding quick-start and exit (no vault created); add --full for the whole guide
-    print_instructions: false
-
-    # With --print-instructions, print the full agent-onboarding guide instead of the concise quick-start
-    full: false
-
-    # After scaffolding, install the Claude Code hook scripts into the current project and merge the wiring into .claude/settings.json (baked to the new vault). Never clobbers existing hooks.
-    wire_hooks: false
-
-    # With --wire-hooks, merge into .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared).
-    local: false
-
-    # With --wire-hooks, print the would-be settings merge without writing it (preview).
-    dry_run: false
-
-    # With --wire-hooks, the project to wire hooks into (where .claude/ lives). Defaults to the current directory; set it when the vault and the project root differ.
-    project_dir: 
-
-  linksneighbors:
+  memoryrecall:
     # Path to vault root
     vault: .
 
@@ -1002,20 +936,20 @@ app:
     depth: 1
 
     # Minimum edge confidence (low, medium, high)
-    min_confidence: low
+    min_confidence: high
 
     # Maximum nodes to return
-    max_nodes: 200
+    max_nodes: 50
 
-  lintfixlinks:
+  memoryrelated:
     # Path to vault root
     vault: .
 
     # Output in JSON format
     json: false
 
-    # Apply fixes (default is dry-run)
-    fix: false
+    # Filter mode (explicit, inferred, mixed)
+    mode: mixed
 
   memorysummarize:
     # Path to vault root
@@ -1043,6 +977,39 @@ app:
     # Omit body, headings, blocks
     frontmatter_only: false
 
+  notecreate:
+    # Path to vault root
+    vault: .
+
+    # Output in JSON format
+    json: false
+
+    # Note type (required)
+    type: 
+
+    # Body text (overrides template body)
+    body: 
+
+    # Stage and commit
+    commit: false
+
+  ping:
+    # Default message to display for the ping command
+    output_message: Hello World!
+
+    # Text color for ping command output (white, red, green, blue, cyan, yellow, magenta)
+    output_color: green
+
+    # Enable interactive UI for the ping command
+    ui: true
+
+  resolve:
+    # Path to the vault root directory
+    vault: .
+
+    # Output in JSON format
+    json: false
+
   schema:
     # Path to vault root
     vault: .
@@ -1050,8 +1017,41 @@ app:
     # Output in JSON format
     json: false
 
-  # Top-level experiment definitions map
-  experiments: map[]
+  search:
+    # Path to vault root
+    vault: .
+
+    # Output in JSON format
+    json: false
+
+    # Maximum results to return
+    limit: 20
+
+    # Skip first N results
+    offset: 0
+
+    # Filter by note type
+    type: 
+
+    # Filter by tag
+    tag: 
+
+    # Search mode: keyword, semantic, or hybrid
+    mode: keyword
+
+  self:
+    # Path to vault root
+    vault: .
+
+    # Max rows per section (recent/hot/stale)
+    limit: 10
+
+  vaultstatus:
+    # Path to vault root
+    vault: .
+
+    # Output in JSON format
+    json: false
 
 experiments:
   # What export may emit — anonymous (strips vault paths, query text, note ids, result paths, caller_meta) | full | off (nothing is written locally either)
