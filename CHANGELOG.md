@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] — 2026-08-21
+
+> **Upgrading.** Nothing to migrate. If `doctor` or session start felt slow, that is
+> what this release fixes. One behaviour change to know about: `hooks status` now exits
+> non-zero when a canonical event is unwired, so a project with matching scripts but
+> missing wiring fails where it used to pass.
+
 ### Added
 
 - **`vaultmind hooks record <event>` — evidence that a prompting hook fired.**
@@ -42,6 +49,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CI on `hooks status`, expect it to start failing where it was silently wrong.
 
 ### Fixed
+
+- **`doctor` no longer takes minutes.** It was quadratic in *usage* — and it runs in the
+  SessionStart hook, so every adopter paid it every session, worsening as their log grew.
+
+  | vault | notes | before | after |
+  |---|---|---|---|
+  | 7 notes | 7 | 224s | **0.57s** |
+  | 64 notes | 64 | 207s | **1.47s** |
+  | 415 notes | 415 | 296s | **1.01s** |
+
+  The cost tracked the event log rather than the vault, which is why the smallest vault
+  was the slowest: its run simply happened later, with more events behind it.
+
+  Profiling named the caller — `collectMemoryUse` → `MemoryUseSince`. The `EXISTS` in
+  that query is correlated on `inj.note_id`, and the CTE it tests against `json_extract`s
+  over every `note_access` event in the window, so SQLite re-evaluated the whole JSON
+  scan once per outer row: ~6,500 injections × the entire access log.
+  `memoryUsePerCaller` carried the identical query and `doctor` calls both, so they
+  compounded — fixing one alone would have halved a five-minute command and looked like
+  a fix. Materialising the CTE takes the SQL from 188.73s to 0.068s on a live log, with
+  an identical answer.
+
+  Both queries are now named constants so the guard asserts the **query plan** rather
+  than a stopwatch: a timing test that reddens under machine load is a test somebody
+  deletes.
 
 - **The update notice no longer tells BGE-M3 users to downgrade themselves.** cgo cannot
   travel through the Go module proxy, so `go install` can only ever produce the pure-Go
@@ -1002,7 +1034,8 @@ The initial public tag, retracted in favor of [0.1.3]. It shipped without the
 maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; do
 not install.
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/peiman/vaultmind/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/peiman/vaultmind/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/peiman/vaultmind/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/peiman/vaultmind/compare/v0.4.1...v0.5.0
