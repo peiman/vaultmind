@@ -109,3 +109,28 @@ func TestIdentityPaths_NoSlugRefusesLoudly(t *testing.T) {
 	require.Error(t, err, "no resolvable slug must be a hard error")
 	require.Contains(t, err.Error(), "slug")
 }
+
+// TestIdentityPaths_RegistryDefaultsWithoutEnv closes the gap the first arming
+// attempt hit: with AGENT_CHAT_REGISTRY unset, the resolver looked at "" and
+// refused — in a shell where the registry sat exactly where meshpaths says it
+// lives. "An env var is a thing you can forget" was this feature's own design
+// argument, and the first version built the forgettable half anyway. The env
+// stays as an override; the default is the mesh dir's agents.yaml.
+func TestIdentityPaths_RegistryDefaultsWithoutEnv(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	meshDir := t.TempDir()
+	t.Setenv("VAULTMIND_MESH_DIR", meshDir)
+	project := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(meshDir, "agents.yaml"), []byte(
+		"agents:\n  - slug: \"mira\"\n    project_path: \""+project+"\"\n"), 0o600))
+	t.Setenv("AGENT_CHAT_REGISTRY", "") // deliberately unset
+	t.Setenv("AGENT_CHAT_PROJECT_PATH", project)
+
+	var out bytes.Buffer
+	c := identityPathsCmd
+	c.SetOut(&out)
+	c.SetErr(&out)
+	require.NoError(t, runIdentityPaths(c, nil),
+		"the registry at its default location must resolve without any env")
+	require.Contains(t, out.String(), "VM_MESH_SLUG='mira'")
+}

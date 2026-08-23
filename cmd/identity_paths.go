@@ -46,7 +46,7 @@ func resolveMeshIdentity() (meshIdentity, error) {
 			"identity paths: no agent slug resolvable — checked registry %q against project %q; "+
 				"a watcher must not arm without an identity (set AGENT_CHAT_REGISTRY / AGENT_CHAT_PROJECT_PATH, "+
 				"or add this project to agents.yaml)",
-			os.Getenv(envAgentRegistry), projectPath())
+			registryPath(), projectPath())
 	}
 	p, err := meshpaths.For(slug)
 	if err != nil {
@@ -56,9 +56,9 @@ func resolveMeshIdentity() (meshIdentity, error) {
 	if daemon == "" {
 		daemon = defaultDaemonURL
 	}
-	src := os.Getenv(envAgentRegistry)
-	if src == "" {
-		src = "agents.yaml (AGENT_CHAT_REGISTRY unset)"
+	src := registryPath()
+	if os.Getenv(envAgentRegistry) == "" {
+		src += " (default; AGENT_CHAT_REGISTRY unset)"
 	}
 	return meshIdentity{
 		Slug:       slug,

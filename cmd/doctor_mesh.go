@@ -221,7 +221,22 @@ func resolveSlug(slugFlag string) string {
 		// chat wire principal. Strip it so an explicit --mesh-slug resolves.
 		return strings.TrimPrefix(slugFlag, "agent:")
 	}
-	return slugFromAgentsYAML(os.Getenv(envAgentRegistry), projectPath())
+	return slugFromAgentsYAML(registryPath(), projectPath())
+}
+
+// registryPath returns AGENT_CHAT_REGISTRY when set, else the mesh dir's
+// agents.yaml via meshpaths — the same file chat-mcp writes. The env stays as
+// an override; requiring it made slug resolution fail in any shell that had
+// not exported it, which is every shell except the MCP server's. An env var
+// is a thing you can forget; a default is not.
+func registryPath() string {
+	if p := os.Getenv(envAgentRegistry); p != "" {
+		return p
+	}
+	if dir, err := meshpaths.Dir(); err == nil {
+		return filepath.Join(dir, meshpaths.RegistryFilename)
+	}
+	return ""
 }
 
 // projectPath returns AGENT_CHAT_PROJECT_PATH, falling back to the working dir.
