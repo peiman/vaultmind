@@ -15,8 +15,8 @@ import (
 	"github.com/peiman/vaultmind/internal/identity/doctorclient"
 	"github.com/peiman/vaultmind/internal/identity/registry"
 	"github.com/peiman/vaultmind/internal/identity/signer"
+	"github.com/peiman/vaultmind/internal/meshpaths"
 	"github.com/peiman/vaultmind/internal/query"
-	"github.com/peiman/vaultmind/internal/xdg"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -32,29 +32,29 @@ const (
 	envAgentRegistry = "AGENT_CHAT_REGISTRY"
 	// envProjectPath is the project-path env var used to resolve the agent slug.
 	envProjectPath = "AGENT_CHAT_PROJECT_PATH"
-	// heartbeatFilename is the default wake-watcher heartbeat file (XDG config).
-	heartbeatFilename = "mesh-watch.heartbeat"
 )
 
 // Mesh-section human labels (SSOT — no inline literals in the writer).
 const (
-	meshSectionHeader     = "Mesh identity (Contract-B):"
-	meshKeyCustodyLabel   = "  key custody: "
-	meshKeyPresentYes     = "present"
-	meshKeyPresentNo      = "absent"
-	meshKeyModeBad        = " (mode NOT 0600)"
-	meshKeySizeBad        = " (unexpected size)"
-	meshSignerLabel       = "  signer: "
-	meshSignerUp          = "running"
-	meshSignerDown        = "not running (OK if on-demand)"
-	meshAuthLabel         = "  authentication: "
-	meshDaemonLabel       = "  daemon: "
-	meshDaemonReachable   = "HTTP reachable"
-	meshDaemonUnreachable = "unreachable"
-	meshHeartbeatLabel    = "  watcher heartbeat: "
-	meshHeartbeatFresh    = "fresh"
-	meshHeartbeatAbsent   = "not found (wake-on-idle not confirmed)"
-	meshWarnPrefix        = "  ⚠ "
+	meshSectionHeader       = "Mesh identity (Contract-B):"
+	meshKeyCustodyLabel     = "  key custody: "
+	meshKeyPresentYes       = "present"
+	meshKeyPresentNo        = "absent"
+	meshKeyModeBad          = " (mode NOT 0600)"
+	meshKeySizeBad          = " (unexpected size)"
+	meshSignerLabel         = "  signer: "
+	meshSignerUp            = "running"
+	meshSignerDown          = "not running (OK if on-demand)"
+	meshAuthLabel           = "  authentication: "
+	meshDaemonLabel         = "  daemon: "
+	meshDaemonReachable     = "HTTP reachable"
+	meshDaemonUnreachable   = "unreachable"
+	meshHeartbeatLabel      = "  watcher heartbeat: "
+	meshHeartbeatFresh      = "fresh"
+	meshHeartbeatAbsent     = "absent — the watcher has not run (arm it, or ignore if you are not on the mesh)"
+	meshHeartbeatStale      = "STALE — the watcher may be present-but-dead"
+	meshHeartbeatUnresolved = "UNRESOLVED — no agent slug; watcher liveness is UNKNOWN, not OK"
+	meshWarnPrefix          = "  ⚠ "
 )
 
 // meshDoctorErrParse prefixes a --mesh-root-pubkey decode/validate failure.
@@ -93,22 +93,42 @@ func populateMeshIdentity(cmd *cobra.Command, result *query.DoctorResult) error 
 func resolveMeshInput(cmd *cobra.Command) (query.MeshDoctorInput, bool, error) {
 	keyPath, _ := defaultSignerKeyPath()
 	sockPath, _ := defaultSignerSocketPath()
+
+	// Slug FIRST: the default heartbeat path is derived from it. It used to be
+	// resolved thirty lines below the heartbeat block, so the default could
+	// never be per-agent — one reason three watchers each invented their own
+	// heartbeat filename.
+	slugFlag := getConfigValueWithFlags[string](cmd, "mesh-slug", config.KeyAppDoctorMeshSlug)
+	slug := resolveSlug(slugFlag)
+
 	heartbeatPath := getConfigValueWithFlags[string](cmd, "mesh-heartbeat", config.KeyAppDoctorMeshHeartbeat)
-	if heartbeatPath == "" {
-		heartbeatPath, _ = xdgHeartbeatPath()
+	var lastwakePath, lastarmPath string
+	if p, err := meshpaths.For(slug); err == nil {
+		// One derivation, shared with `identity paths` and therefore with the
+		// watcher script itself: the checker and the writer cannot disagree
+		// about where the state lives, because neither derives it alone.
+		if heartbeatPath == "" {
+			heartbeatPath = p.Heartbeat
+		}
+		lastwakePath = p.Lastwake
+		lastarmPath = p.Lastarm
 	}
+	// err ⇒ no slug ⇒ heartbeatPath stays "" unless the flag set it, and
+	// checkHeartbeat reports UNRESOLVED — the truthful state — rather than a
+	// filesystem verdict about a path nobody derived.
 
 	in := query.MeshDoctorInput{
 		KeyPath:       keyPath,
 		SocketPath:    sockPath,
 		HeartbeatPath: heartbeatPath,
+		LastwakePath:  lastwakePath,
+		LastarmPath:   lastarmPath,
 		Now:           time.Now(),
 		Signer:        &signer.Client{SocketPath: sockPath},
 	}
 
 	rootFlag := getConfigValueWithFlags[string](cmd, "mesh-root-pubkey", config.KeyAppDoctorMeshRootPubkey)
 	registryFlag := getConfigValueWithFlags[string](cmd, "mesh-registry", config.KeyAppDoctorMeshRegistry)
-	slugFlag := getConfigValueWithFlags[string](cmd, "mesh-slug", config.KeyAppDoctorMeshSlug)
 
 	anchorPresent, err := applyPinAndNetwork(&in, rootFlag)
 	if err != nil {
@@ -120,7 +140,7 @@ func resolveMeshInput(cmd *cobra.Command) (query.MeshDoctorInput, bool, error) {
 		return query.MeshDoctorInput{}, false, err
 	}
 
-	in.Slug = resolveSlug(slugFlag)
+	in.Slug = slug
 
 	daemon := newDoctorDaemonClient()
 	in.Daemon = daemon
@@ -290,12 +310,6 @@ func keyFileExists(keyPath string) bool {
 	return err == nil
 }
 
-// xdgHeartbeatPath returns the default wake-watcher heartbeat path under XDG
-// config (~/.config/vaultmind/mesh-watch.heartbeat).
-func xdgHeartbeatPath() (string, error) {
-	return xdg.ConfigFile(heartbeatFilename)
-}
-
 // writeMeshIdentity renders the mesh-identity section to w. It is conditionally
 // present (nil ⇒ nothing printed), mirroring writeEmbeddingStatus's gate. Every
 // section warning is printed; the authenticated verdict reuses the section
@@ -361,15 +375,26 @@ func writeMeshDaemon(w io.Writer, mi *query.DoctorMeshIdentity) error {
 	if _, err := fmt.Fprintln(w, meshDaemonLabel+daemon); err != nil {
 		return err
 	}
-	switch {
-	case mi.WatcherHeartbeatFresh:
-		_, err := fmt.Fprintln(w, meshHeartbeatLabel+meshHeartbeatFresh)
-		return err
-	case mi.WatcherHeartbeatAge == 0:
-		// ABSENT (never found): an INFO line, not a ⚠ warning — most members
-		// have never run the watcher. Stale (Age>0) is surfaced as a warning
-		// by writeMeshWarnings, so no info line is printed for it here.
-		_, err := fmt.Fprintln(w, meshHeartbeatLabel+meshHeartbeatAbsent)
+	// One line, ALWAYS, and it always names the resolved path. The old switch
+	// printed nothing at all on stale, and no state ever disclosed WHERE the
+	// check had looked — which is precisely how a checker reading a directory
+	// nothing writes to stayed invisible for months. A verdict about a file
+	// whose location is undisclosed cannot be audited by anyone.
+	var line string
+	switch mi.WatcherHeartbeatState {
+	case query.HeartbeatFresh:
+		line = fmt.Sprintf("%s%s (%ds) — %s", meshHeartbeatLabel, meshHeartbeatFresh,
+			mi.WatcherHeartbeatAge, mi.WatcherHeartbeatPath)
+	case query.HeartbeatStale:
+		line = fmt.Sprintf("%s%s (%ds) — %s", meshHeartbeatLabel, meshHeartbeatStale,
+			mi.WatcherHeartbeatAge, mi.WatcherHeartbeatPath)
+	case query.HeartbeatAbsent:
+		line = fmt.Sprintf("%s%s — %s", meshHeartbeatLabel, meshHeartbeatAbsent,
+			mi.WatcherHeartbeatPath)
+	default: // unresolved, and any state this renderer does not know
+		line = meshHeartbeatLabel + meshHeartbeatUnresolved
+	}
+	if _, err := fmt.Fprintln(w, line); err != nil {
 		return err
 	}
 	return nil

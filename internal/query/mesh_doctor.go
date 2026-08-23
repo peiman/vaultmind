@@ -91,6 +91,24 @@ const (
 	WarnMeshNoRegistry     = "no registry available to verify (daemon unreachable and no --mesh-registry given)"
 	WarnMeshEnforcementOff = "message-signature enforcement is NOT YET active (advisory mode is a no-op today)"
 	WarnMeshHeartbeatStale = "wake-watcher heartbeat is stale — the watcher may be present-but-dead"
+	// WarnMeshHeartbeatUnresolved: the check could not run. Rendering silence
+	// (or a filesystem verdict) here is how a seven-day-dead watcher reported
+	// "not found" — the checker had no path and never looked.
+	WarnMeshHeartbeatUnresolved = "watcher heartbeat path is UNRESOLVED (no agent slug) — watcher liveness is UNKNOWN, not OK"
+	// WarnMeshWatcherNotRearmed: lastwake is newer than lastarm. The watcher
+	// fired, the session was re-invoked, and nobody armed a successor — every
+	// message since is landing in silence. This is the one check that fires on
+	// the real 2026-08-16 death.
+	WarnMeshWatcherNotRearmed = "the watcher woke and was never re-armed — you are not being woken for messages"
+)
+
+// Heartbeat states. Three distinct non-green diagnoses with three different
+// fixes; collapsing any two is how the last one hid.
+const (
+	HeartbeatUnresolved = "unresolved" // no path — the check could not run
+	HeartbeatAbsent     = "absent"     // path known; no file (watcher never armed)
+	HeartbeatStale      = "stale"      // file present; mtime outside the window
+	HeartbeatFresh      = "fresh"
 )
 
 // MeshSigner is the keyless signing seam: doctor asks the SIGNER (over the UDS)
@@ -126,6 +144,9 @@ type MeshDoctorInput struct {
 	// Tier-3 reachability.
 	Daemon        MeshDaemonClient
 	HeartbeatPath string
+	// LastwakePath / LastarmPath feed the re-arm check; either empty disables it.
+	LastwakePath string
+	LastarmPath  string
 
 	// Clock seam.
 	Now time.Time
@@ -155,6 +176,15 @@ type DoctorMeshIdentity struct {
 	EnforcementActive     bool   `json:"enforcement_active"` // always false today
 	WatcherHeartbeatFresh bool   `json:"watcher_heartbeat_fresh"`
 	WatcherHeartbeatAge   int    `json:"watcher_heartbeat_age_secs"`
+	// WatcherHeartbeatState is one of the Heartbeat* constants. Fresh==true iff
+	// State=="fresh" (both kept for back-compat readers of the JSON).
+	WatcherHeartbeatState string `json:"watcher_heartbeat_state"`
+	// WatcherHeartbeatPath is WHERE the check looked. Always carried: a verdict
+	// about a file whose location is undisclosed cannot be audited, and an
+	// undisclosed path is exactly how a wrong directory stayed wrong for months.
+	WatcherHeartbeatPath string `json:"watcher_heartbeat_path,omitempty"`
+	// WatcherRearmed is false when lastwake postdates lastarm (see checkRearm).
+	WatcherRearmed bool `json:"watcher_rearmed"`
 
 	// Warnings each also drive an envelope.AddWarning in the cmd layer.
 	Warnings []string `json:"warnings,omitempty"`
@@ -243,6 +273,7 @@ func signerReachable(socketPath string) bool {
 // caller supplied an offline registry or the daemon is unreachable/plaintext.
 func evaluateTier3(ctx context.Context, mi *DoctorMeshIdentity, in MeshDoctorInput) []byte {
 	checkHeartbeat(mi, in.HeartbeatPath, in.Now)
+	checkRearm(mi, in.LastwakePath, in.LastarmPath)
 
 	if in.Daemon == nil {
 		return nil
@@ -275,31 +306,83 @@ func evaluateTier3(ctx context.Context, mi *DoctorMeshIdentity, in MeshDoctorInp
 	return nil
 }
 
-// checkHeartbeat reads the watcher heartbeat file's mtime and sets freshness —
-// FRESHNESS, not a process check. Absent ⇒ not confirmed; stale ⇒ warning.
+// checkHeartbeat reads the watcher heartbeat file's mtime and sets one of four
+// states — FRESHNESS, not a process check.
+//
+//	unresolved  no path: the check COULD NOT RUN, and that is a warning — a
+//	            check that cannot run is not a pass. This used to return
+//	            silently, and the renderer printed a filesystem verdict
+//	            ("not found") for a lookup that never touched the filesystem.
+//	absent      path known, no file: INFO, not a warning — most members have
+//	            never armed a watcher, and absence must not trip
+//	            `jq '.status=="warning"'`.
+//	stale       present but old — the watcher may be present-but-dead. Warning.
+//	fresh       written within heartbeatStaleAfter.
+//
+// Stat, not Lstat: a heartbeat reached through a symlink should report the
+// TARGET's mtime — the link's own mtime is noise that reads permanently stale.
+// There is no security rationale for refusing symlinks here, unlike the
+// key-custody check where that refusal is the point.
 func checkHeartbeat(mi *DoctorMeshIdentity, heartbeatPath string, now time.Time) {
+	mi.WatcherHeartbeatPath = heartbeatPath
 	if heartbeatPath == "" {
+		mi.WatcherHeartbeatState = HeartbeatUnresolved
+		mi.addWarning(WarnMeshHeartbeatUnresolved)
 		return
 	}
-	info, err := os.Lstat(heartbeatPath)
+	info, err := os.Stat(heartbeatPath)
 	if err != nil {
-		// ABSENT is INFO, not a warning: most members have never run the watcher,
-		// so an absent heartbeat must not inflate the warning count or trip
-		// `jq '.status=="warning"'`. WatcherHeartbeatFresh=false + Age==0 is the
-		// signal; the human writer renders the "not found" note. Only STALE
-		// (present-but-dead) is a warning.
+		mi.WatcherHeartbeatState = HeartbeatAbsent
 		return
 	}
 	age := now.Sub(info.ModTime())
 	if age < 0 {
-		age = 0
+		// A FUTURE mtime is a liar — clock skew or a hand-written file — not a
+		// healthy watcher. The old clamp rendered it fresh: the most trusted
+		// state granted on the least trustworthy evidence.
+		mi.WatcherHeartbeatAge = 0
+		mi.WatcherHeartbeatState = HeartbeatStale
+		mi.addWarning(WarnMeshHeartbeatStale)
+		return
 	}
 	mi.WatcherHeartbeatAge = int(age.Seconds())
 	if age <= heartbeatStaleAfter {
+		mi.WatcherHeartbeatState = HeartbeatFresh
 		mi.WatcherHeartbeatFresh = true
 		return
 	}
+	mi.WatcherHeartbeatState = HeartbeatStale
 	mi.addWarning(WarnMeshHeartbeatStale)
+}
+
+// checkRearm compares the watcher's lastwake and lastarm stamps.
+//
+// LASTWAKE records DETECTION — the watcher saw a message and exited so the
+// harness could re-invoke the session. Only a subsequent arm records that
+// anyone actually came back. wake newer than arm means the wake happened and
+// no successor was armed: from that moment every message lands in silence,
+// and the heartbeat says nothing because the watcher is GONE, not dead.
+//
+// Verified against the live files before this was written: the 2026-08-16
+// death shows lastwake 23:29:22 with no later arm. This is the one check that
+// fires on that incident.
+//
+// Either file absent ⇒ the pair cannot testify; stay silent (the heartbeat
+// states carry the never-armed and unresolved diagnoses).
+func checkRearm(mi *DoctorMeshIdentity, lastwakePath, lastarmPath string) {
+	mi.WatcherRearmed = true // default: nothing testifies against it
+	if lastwakePath == "" || lastarmPath == "" {
+		return
+	}
+	wake, werr := os.Stat(lastwakePath)
+	arm, aerr := os.Stat(lastarmPath)
+	if werr != nil || aerr != nil {
+		return
+	}
+	if wake.ModTime().After(arm.ModTime()) {
+		mi.WatcherRearmed = false
+		mi.addWarning(WarnMeshWatcherNotRearmed)
+	}
 }
 
 // evaluateTier2 runs the authenticity check. registryBytes is the daemon-fetched

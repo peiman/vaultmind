@@ -225,25 +225,70 @@ func TestWriteMeshIdentity_DaemonReachableAndHeartbeatFresh(t *testing.T) {
 		DaemonReachable:       true,
 		DaemonMode:            query.DaemonModePlaintext,
 		WatcherHeartbeatFresh: true,
+		WatcherHeartbeatState: query.HeartbeatFresh,
+		WatcherHeartbeatPath:  "/tmp/hb/mesh-watch-mira.heartbeat",
 	}
 	require.NoError(t, writeMeshIdentity(&buf, mi, false))
 	s := buf.String()
 	require.Contains(t, s, meshDaemonReachable)
 	require.Contains(t, s, query.DaemonModePlaintext)
 	require.Contains(t, s, meshHeartbeatFresh)
+	require.Contains(t, s, "/tmp/hb/mesh-watch-mira.heartbeat",
+		"every heartbeat verdict must disclose WHERE it looked — an undisclosed path is how a wrong directory stayed wrong for months")
 }
 
-func TestWriteMeshIdentity_DaemonUnreachableNoHeartbeatLine(t *testing.T) {
+// Renamed from ...DaemonUnreachableNoHeartbeatLine: the old name claimed no
+// heartbeat line was printed while the code printed one, and the only assertion
+// was that the word "fresh" was absent. Every state now renders exactly one
+// line; unreachability of the daemon does not silence the watcher check.
+func TestWriteMeshIdentity_DaemonUnreachableStillReportsHeartbeatState(t *testing.T) {
 	var buf bytes.Buffer
 	mi := &query.DoctorMeshIdentity{
 		Status:                query.StatusMeshSelfConsistentUnpinned,
 		DaemonReachable:       false,
-		WatcherHeartbeatFresh: false,
+		WatcherHeartbeatState: query.HeartbeatAbsent,
+		WatcherHeartbeatPath:  "/tmp/hb/mesh-watch-mira.heartbeat",
 	}
 	require.NoError(t, writeMeshIdentity(&buf, mi, false))
 	s := buf.String()
 	require.Contains(t, s, meshDaemonUnreachable)
 	require.NotContains(t, s, meshHeartbeatFresh)
+	require.Contains(t, s, meshHeartbeatAbsent, "absent is a named state, not silence")
+	require.Contains(t, s, "/tmp/hb/mesh-watch-mira.heartbeat")
+}
+
+// TestWriteMeshIdentity_StalePrintsALine — the old switch printed NOTHING on
+// stale, leaving the warning section as the only trace. The line must exist,
+// carry the age, and carry the path.
+func TestWriteMeshIdentity_StalePrintsALine(t *testing.T) {
+	var buf bytes.Buffer
+	mi := &query.DoctorMeshIdentity{
+		Status:                query.StatusMeshSelfConsistentUnpinned,
+		WatcherHeartbeatState: query.HeartbeatStale,
+		WatcherHeartbeatAge:   604800,
+		WatcherHeartbeatPath:  "/tmp/hb/mesh-watch-mira.heartbeat",
+	}
+	require.NoError(t, writeMeshIdentity(&buf, mi, false))
+	s := buf.String()
+	require.Contains(t, s, meshHeartbeatStale)
+	require.Contains(t, s, "604800")
+	require.Contains(t, s, "/tmp/hb/mesh-watch-mira.heartbeat")
+}
+
+// TestWriteMeshIdentity_UnresolvedIsNotAFilesystemVerdict — the deleted string
+// "not found" asserted a filesystem fact for a lookup that never ran. The
+// unresolved render must say UNKNOWN, and must not claim absence.
+func TestWriteMeshIdentity_UnresolvedIsNotAFilesystemVerdict(t *testing.T) {
+	var buf bytes.Buffer
+	mi := &query.DoctorMeshIdentity{
+		Status:                query.StatusMeshSelfConsistentUnpinned,
+		WatcherHeartbeatState: query.HeartbeatUnresolved,
+	}
+	require.NoError(t, writeMeshIdentity(&buf, mi, false))
+	s := buf.String()
+	require.Contains(t, s, meshHeartbeatUnresolved)
+	require.NotContains(t, s, "not found")
+	require.NotContains(t, s, meshHeartbeatAbsent)
 }
 
 func TestWriteMeshIdentity_KeyAbsentAndSignerUp(t *testing.T) {

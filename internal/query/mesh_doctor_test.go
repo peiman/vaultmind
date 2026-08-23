@@ -480,6 +480,10 @@ func TestMeshDoctor_Tier3_HeartbeatStale(t *testing.T) {
 	require.NotEmpty(t, mi.Warnings)
 }
 
+// Rewritten 2026-08-23: the previous version encoded the absent/unresolved
+// conflation AS THE SPEC — it asserted Age==0 and no heartbeat warning, which
+// passes identically whether the path was checked and empty or never checked at
+// all. The state field is what distinguishes them now.
 func TestMeshDoctor_Tier3_HeartbeatAbsent(t *testing.T) {
 	now := time.Now()
 	dir := t.TempDir()
@@ -492,6 +496,8 @@ func TestMeshDoctor_Tier3_HeartbeatAbsent(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, mi.WatcherHeartbeatFresh)
 	require.Zero(t, mi.WatcherHeartbeatAge, "an absent heartbeat has no age")
+	require.Equal(t, HeartbeatAbsent, mi.WatcherHeartbeatState,
+		"absent — checked and missing — must be distinguishable from unresolved (never checked)")
 	// ABSENT is INFO, not a warning — it must not inflate the warning count for
 	// the many members who have never run the watcher. Only STALE warns.
 	for _, w := range mi.Warnings {
