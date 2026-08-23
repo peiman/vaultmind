@@ -90,6 +90,9 @@ components:
       - internal/config/commands/**
       - internal/ui/**
       - internal/xdg/**
+      # meshpaths: the SSOT for mesh wake-watcher state paths. Pure path
+      # derivation over internal/xdg — same layer, no business logic.
+      - internal/meshpaths/**
       # VaultMind infrastructure (shared services used by business logic):
       - internal/vault/**
       - internal/parser/**
