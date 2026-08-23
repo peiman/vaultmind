@@ -438,6 +438,10 @@ app:
     # Relay base URL, e.g. https://chat.acme.com (required)
     relay: 
 
+  identitypaths:
+    # Output in JSON format
+    json: false
+
   identitysign:
     # Read entry JSON from this file instead of stdin
     file: 

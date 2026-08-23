@@ -379,7 +379,7 @@ markers; `task check` fails if it drifts from the catalog. Everything outside th
 hand-written and stays.
 
 <!-- VAULTMIND:GENERATED:commands:START -->
-<!-- checksum:463005270c38dec89065dd9f1c2807458ce8f8eead22f1061e7f97ba3a71d10e -->
+<!-- checksum:d973388b4914c87324510aeb2dba067a6defea5f0bcf3568ccef21ec3d7caaed -->
 # VaultMind Commands
 
 Every user-facing command, grouped by intent, with its when-to-use trigger.
@@ -445,6 +445,7 @@ Generated from the command tree — do not edit by hand (run `task generate:docs
 | `vaultmind identity enroll-add` | Admin-add a member's enrollment request to the trust-root registry, emitting the unsigned registry | you are an admin and want to add a member's signed enrollment request to the trust-root registry, emitting the updated unsigned registry for the root signer. |
 | `vaultmind identity init` | Mint an agent keypair and seal the private key to the signer | you are setting up an agent and need to mint its ed25519 keypair and seal the private key to the signer. |
 | `vaultmind identity invite` | Emit an UNSIGNED network invite carrying the trust anchor (Contract-B) | you are an admin and want to emit a network invite (the trust anchor plus relay, with an out-of-band fingerprint) for a member to enroll against. |
+| `vaultmind identity paths` | Emit this agent's resolved mesh identity and state paths | a hook or watcher script needs this agent's resolved mesh identity and state paths — eval the output instead of hardcoding a slug, daemon URL, or heartbeat path. |
 | `vaultmind identity sign` | Validate, canonicalize, and sign an entry via the keyless signer | you have a Contract-B entry to sign and want it validated, canonicalized, and signed by the keyless signer. |
 | `vaultmind identity sign-enrollment` | Self-sign an agent enrollment request via the keyless signer (Contract-B) | you are enrolling an agent and need to self-sign its enrollment request (proof-of-possession) before an admin adds the binding to the trust-root registry. |
 | `vaultmind identity sign-envelope` | Sign a chat message envelope via the keyless signer (Contract-B slice 5) | you have a chat MESSAGE envelope to sign so a receiving daemon can verify the signature and the signer's registry binding. |

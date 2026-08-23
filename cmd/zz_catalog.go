@@ -324,6 +324,11 @@ var commandCatalog = map[string]catalogEntry{
 		when:  "you want to know whether a project's hook scripts still match the ones this binary ships — before an update overwrites a local change, or after one that should have installed something.",
 		short: "Compare a project's installed hook scripts against the canonical ones",
 	},
+	"vaultmind identity paths": {
+		group: groupLifecycle,
+		when:  "a hook or watcher script needs this agent's resolved mesh identity and state paths — eval the output instead of hardcoding a slug, daemon URL, or heartbeat path.",
+		short: "Emit this agent's resolved mesh identity and state paths",
+	},
 	"vaultmind hooks record": {
 		group: groupLifecycle,
 		when:  "a hook that PROMPTS rather than queries needs to leave evidence that it fired, so \"nothing was written\" can be told apart from \"the prompt never appeared\".",

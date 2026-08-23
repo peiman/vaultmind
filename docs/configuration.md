@@ -166,6 +166,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.identityinit.signer_key` | string | `` | `VAULTMIND_APP_IDENTITYINIT_SIGNER_KEY` | Sealed signer key path (default: XDG data dir) |
 | `app.identityinvite.root_pubkey` | string | `` | `VAULTMIND_APP_IDENTITYINVITE_ROOT_PUBKEY` | Network ROOT public key (base64-std of the 32-byte ed25519 key; required) |
 | `app.identityinvite.relay` | string | `` | `VAULTMIND_APP_IDENTITYINVITE_RELAY` | Relay base URL, e.g. https://chat.acme.com (required) |
+| `app.identitypaths.json` | bool | `false` | `VAULTMIND_APP_IDENTITYPATHS_JSON` | Output in JSON format |
 | `app.identitysign.file` | string | `` | `VAULTMIND_APP_IDENTITYSIGN_FILE` | Read entry JSON from this file instead of stdin |
 | `app.identitysign.signer_socket` | string | `` | `VAULTMIND_APP_IDENTITYSIGN_SIGNER_SOCKET` | Signer socket path (default: XDG state dir) |
 | `app.identitysignenrollment.file` | string | `` | `VAULTMIND_APP_IDENTITYSIGNENROLLMENT_FILE` | Read enrollment request JSON from this file instead of stdin |
@@ -708,6 +709,10 @@ app:
 
     # Relay base URL, e.g. https://chat.acme.com (required)
     relay: 
+
+  identitypaths:
+    # Output in JSON format
+    json: false
 
   identitysign:
     # Read entry JSON from this file instead of stdin
@@ -1530,6 +1535,9 @@ export VAULTMIND_APP_IDENTITYINVITE_ROOT_PUBKEY=
 
 # Relay base URL, e.g. https://chat.acme.com (required)
 export VAULTMIND_APP_IDENTITYINVITE_RELAY=
+
+# Output in JSON format
+export VAULTMIND_APP_IDENTITYPATHS_JSON=false
 
 # Read entry JSON from this file instead of stdin
 export VAULTMIND_APP_IDENTITYSIGN_FILE=
