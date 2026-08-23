@@ -52,9 +52,23 @@ func resolveMeshIdentity() (meshIdentity, error) {
 	if err != nil {
 		return meshIdentity{}, fmt.Errorf("identity paths: %w", err)
 	}
+	// The daemon address is identity data, resolved like the slug: explicit env
+	// override, else the registry (per-agent daemon_url, else top-level), else
+	// REFUSE. There is deliberately no default: a fossil pre-migration daemon on
+	// this machine answers the old loopback port with weeks-stale data, and a
+	// watcher armed against it would heartbeat fresh while deaf to the real
+	// mesh — provably alive by every check, watching nothing. A default port is
+	// where a fossil lives. (workhorse, first canonical adoption, 2026-08-23.)
 	daemon := os.Getenv(envDaemonURL)
 	if daemon == "" {
-		daemon = defaultDaemonURL
+		daemon = daemonFromAgentsYAML(registryPath(), projectPath())
+	}
+	if daemon == "" {
+		return meshIdentity{}, fmt.Errorf(
+			"identity paths: no chat-daemon address — the registry %q carries no daemon_url for this "+
+				"agent and AGENT_CHAT_DAEMON_URL is unset; a watcher must not arm against a guessed "+
+				"port (add daemon_url to agents.yaml)",
+			registryPath())
 	}
 	src := registryPath()
 	if os.Getenv(envAgentRegistry) == "" {

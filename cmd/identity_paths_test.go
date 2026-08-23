@@ -19,7 +19,7 @@ func writePathsRegistry(t *testing.T, slug, project string) {
 	dir := t.TempDir()
 	reg := filepath.Join(dir, "agents.yaml")
 	require.NoError(t, os.WriteFile(reg, []byte(
-		"agents:\n  - slug: \""+slug+"\"\n    project_path: \""+project+"\"\n"), 0o600))
+		"agents:\n  - slug: \""+slug+"\"\n    project_path: \""+project+"\"\n    daemon_url: \"http://reg.example:8080\"\n"), 0o600))
 	t.Setenv("AGENT_CHAT_REGISTRY", reg)
 	t.Setenv("AGENT_CHAT_PROJECT_PATH", project)
 }
@@ -88,7 +88,10 @@ func TestIdentityPaths_JSONCarriesTheSameFacts(t *testing.T) {
 	require.Equal(t, "agent:workhorse", env.Result.Self)
 	require.Equal(t, meshDir, env.Result.Dir)
 	require.Equal(t, "mesh-watch-workhorse.lastarm", filepath.Base(env.Result.Lastarm))
-	require.NotEmpty(t, env.Result.DaemonURL, "daemon URL must fall back to the default, never empty")
+	// Changed 2026-08-23: there IS no default any more — a fossil daemon on the
+	// old loopback port is why. The URL must come from the registry here.
+	require.Equal(t, "http://reg.example:8080", env.Result.DaemonURL,
+		"the daemon address is identity data from the registry, never a guessed port")
 }
 
 // TestIdentityPaths_NoSlugRefusesLoudly — the watcher's bootstrap treats a
@@ -122,7 +125,7 @@ func TestIdentityPaths_RegistryDefaultsWithoutEnv(t *testing.T) {
 	t.Setenv("VAULTMIND_MESH_DIR", meshDir)
 	project := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(meshDir, "agents.yaml"), []byte(
-		"agents:\n  - slug: \"mira\"\n    project_path: \""+project+"\"\n"), 0o600))
+		"agents:\n  - slug: \"mira\"\n    project_path: \""+project+"\"\n    daemon_url: \"http://reg.example:8080\"\n"), 0o600))
 	t.Setenv("AGENT_CHAT_REGISTRY", "") // deliberately unset
 	t.Setenv("AGENT_CHAT_PROJECT_PATH", project)
 
@@ -133,4 +136,68 @@ func TestIdentityPaths_RegistryDefaultsWithoutEnv(t *testing.T) {
 	require.NoError(t, runIdentityPaths(c, nil),
 		"the registry at its default location must resolve without any env")
 	require.Contains(t, out.String(), "VM_MESH_SLUG='mira'")
+}
+
+// TestIdentityPaths_DaemonIsIdentityData pins workhorse's second adoption
+// finding. A fossil pre-migration daemon answered on the loopback default with
+// two-week-old data; had it spoken the current dialect, a watcher would have
+// armed against it, heartbeated fresh, and been deaf to the real mesh while
+// every liveness check read healthy. Presence of a daemon is not identity of a
+// daemon — so the address is identity data, resolved like the slug:
+// env override > per-agent daemon_url > top-level daemon_url > REFUSE.
+// There is no default: a default port is exactly where a fossil lives.
+func TestIdentityPaths_DaemonIsIdentityData(t *testing.T) {
+	setupReg := func(t *testing.T, yaml string) string {
+		t.Helper()
+		project := t.TempDir()
+		meshDir := t.TempDir()
+		t.Setenv("XDG_DATA_HOME", t.TempDir())
+		t.Setenv("VAULTMIND_MESH_DIR", meshDir)
+		t.Setenv("AGENT_CHAT_REGISTRY", "")
+		t.Setenv("AGENT_CHAT_PROJECT_PATH", project)
+		require.NoError(t, os.WriteFile(filepath.Join(meshDir, "agents.yaml"),
+			[]byte(strings.ReplaceAll(yaml, "PROJECT", project)), 0o600))
+		return project
+	}
+	run := func(t *testing.T) (string, error) {
+		t.Helper()
+		var out bytes.Buffer
+		c := identityPathsCmd
+		c.SetOut(&out)
+		c.SetErr(&out)
+		err := runIdentityPaths(c, nil)
+		return out.String(), err
+	}
+
+	t.Run("per-agent daemon_url resolves without env", func(t *testing.T) {
+		setupReg(t, "agents:\n  - slug: \"mira\"\n    project_path: \"PROJECT\"\n    daemon_url: \"http://hub.example:8080\"\n")
+		t.Setenv("AGENT_CHAT_DAEMON_URL", "")
+		out, err := run(t)
+		require.NoError(t, err)
+		require.Contains(t, out, "VM_MESH_DAEMON='http://hub.example:8080'")
+	})
+
+	t.Run("top-level daemon_url covers agents without their own", func(t *testing.T) {
+		setupReg(t, "daemon_url: \"http://fleet.example:8080\"\nagents:\n  - slug: \"mira\"\n    project_path: \"PROJECT\"\n")
+		t.Setenv("AGENT_CHAT_DAEMON_URL", "")
+		out, err := run(t)
+		require.NoError(t, err)
+		require.Contains(t, out, "VM_MESH_DAEMON='http://fleet.example:8080'")
+	})
+
+	t.Run("env stays the explicit override", func(t *testing.T) {
+		setupReg(t, "daemon_url: \"http://fleet.example:8080\"\nagents:\n  - slug: \"mira\"\n    project_path: \"PROJECT\"\n")
+		t.Setenv("AGENT_CHAT_DAEMON_URL", "http://override.example:9")
+		out, err := run(t)
+		require.NoError(t, err)
+		require.Contains(t, out, "VM_MESH_DAEMON='http://override.example:9'")
+	})
+
+	t.Run("no daemon anywhere REFUSES — a default port is where a fossil lives", func(t *testing.T) {
+		setupReg(t, "agents:\n  - slug: \"mira\"\n    project_path: \"PROJECT\"\n")
+		t.Setenv("AGENT_CHAT_DAEMON_URL", "")
+		_, err := run(t)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "daemon")
+	})
 }

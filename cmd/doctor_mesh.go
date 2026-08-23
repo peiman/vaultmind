@@ -239,6 +239,33 @@ func registryPath() string {
 	return ""
 }
 
+// daemonFromAgentsYAML resolves the chat-daemon address for projectDir from the
+// registry: the matching agent's daemon_url, else the top-level daemon_url,
+// else "". Same file, same match, same trust tier as slugFromAgentsYAML.
+func daemonFromAgentsYAML(registryPath, projectDir string) string {
+	if registryPath == "" || projectDir == "" {
+		return ""
+	}
+	// Same operator-controlled path as slugFromAgentsYAML above.
+	// #nosec G304 G703
+	// nosemgrep: go-path-traversal
+	raw, err := os.ReadFile(registryPath)
+	if err != nil {
+		return ""
+	}
+	var ay agentsYAML
+	if err := yaml.Unmarshal(raw, &ay); err != nil {
+		return ""
+	}
+	want := filepath.Clean(projectDir)
+	for _, a := range ay.Agents {
+		if filepath.Clean(a.ProjectPath) == want && a.DaemonURL != "" {
+			return a.DaemonURL
+		}
+	}
+	return ay.DaemonURL
+}
+
 // projectPath returns AGENT_CHAT_PROJECT_PATH, falling back to the working dir.
 func projectPath() string {
 	if p := os.Getenv(envProjectPath); p != "" {
@@ -253,9 +280,17 @@ func projectPath() string {
 // agentsYAML is the minimal shape of the chat-mcp agents.yaml the slug resolver
 // reads: a list of {slug, project_path}. Other fields are ignored.
 type agentsYAML struct {
-	Agents []struct {
+	// DaemonURL (top-level) is the fleet's chat-daemon address. Per-agent
+	// DaemonURL overrides it. The address is IDENTITY DATA, not configuration:
+	// a fossil pre-migration daemon on this machine still answers the old
+	// loopback port with weeks-stale data, and anything defaulting there gets a
+	// convincing, dead mesh — provably alive by every liveness check, deaf to
+	// the fleet. (workhorse, first canonical adoption, 2026-08-23.)
+	DaemonURL string `yaml:"daemon_url"`
+	Agents    []struct {
 		Slug        string `yaml:"slug"`
 		ProjectPath string `yaml:"project_path"`
+		DaemonURL   string `yaml:"daemon_url"`
 	} `yaml:"agents"`
 }
 
