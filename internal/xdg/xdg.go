@@ -6,8 +6,10 @@
 //   - Cache:  $XDG_CACHE_HOME or ~/.cache
 //   - State:  $XDG_STATE_HOME or ~/.local/state
 //
-// On macOS, it uses Apple conventions:
-//   - Config: ~/Library/Application Support
+// On macOS, it uses Apple conventions for data/cache/state, but ~/.config for
+// config — see configBase for why, and NativeConfigDir for the Apple location
+// that the explicit --config-path-mode native still resolves to:
+//   - Config: $XDG_CONFIG_HOME or ~/.config
 //   - Data:   ~/Library/Application Support
 //   - Cache:  ~/Library/Caches
 //   - State:  ~/Library/Application Support
@@ -230,17 +232,73 @@ func StateFile(filename string) (string, error) {
 	return filepath.Join(dir, filename), nil
 }
 
+// NativeConfigDir returns the OS-native config directory — on darwin
+// ~/Library/Application Support/<app>, elsewhere the same as ConfigDir.
+//
+// This exists ONLY for the explicit `--config-path-mode native|both` option.
+// ConfigDir is the default and follows ~/.config on darwin (see configBase for
+// why). Collapsing the two would have silently removed a mode a user can ask
+// for by name, so the mode keeps its own resolver rather than the default
+// keeping the wrong path.
+func NativeConfigDir() (string, error) {
+	name, err := getAppName()
+	if err != nil {
+		return "", err
+	}
+	base := nativeConfigBase()
+	dir := filepath.Join(base, name)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return "", err
+	}
+	return dir, nil
+}
+
+// nativeConfigBase is the platform's own convention, unmodified. Only
+// NativeConfigDir uses it.
+func nativeConfigBase() string {
+	if osName == "darwin" {
+		return filepath.Join(homeDir(), "Library", "Application Support")
+	}
+	return configBase()
+}
+
 // configBase returns the base config directory.
+//
+// macOS uses ~/.config, NOT ~/Library/Application Support. That is deliberate
+// and it is a correction, not a preference:
+//
+//   - The codebase already disagreed with itself. cmd/root.go resolves the user
+//     config dir with its own resolveXDGConfigDir(), returning ~/.config/<app>
+//     on every platform — and that is the DEFAULT search mode. So config was
+//     read from ~/.config while this helper pointed elsewhere, and any caller
+//     reaching for it got a directory the rest of the tool does not use.
+//   - It broke a real check, silently. cmd/doctor_mesh.go asked ConfigFile()
+//     for the wake-watcher heartbeat while every watcher script writes
+//     ${XDG_CONFIG_HOME:-$HOME/.config}/vaultmind. Verified 2026-08-23: zero
+//     heartbeat files in the Library path, two in ~/.config. On darwin the
+//     check could never see the file, so a watcher seven days dead reported
+//     "not found (wake-on-idle not confirmed)" — a verdict about the watcher
+//     that actually meant the checker had looked somewhere nothing writes.
+//   - A peer tool settles it. chat-mcp writes agents.yaml to
+//     ~/.config/vaultmind on macOS. Agreeing with what is already on disk beats
+//     agreeing with a platform convention meant for application data.
+//
+// Note the consequence for cmd/root.go's ConfigPathInfo: XDGDir and NativeDir
+// now resolve identically on darwin, so --config-path-mode native/both are
+// degenerate there. That is honest — there was only ever one config directory
+// in use — but it makes the flag's macOS behaviour worth revisiting separately.
+//
+// Windows keeps %AppData%: there is no ~/.config idiom there, so none of the
+// reasoning above carries. Data, state and cache are unaffected — they have
+// their own base functions and keep their platform-native locations.
 func configBase() string {
 	switch osName {
-	case "darwin":
-		return filepath.Join(homeDir(), "Library", "Application Support")
 	case "windows":
 		if dir := os.Getenv("AppData"); dir != "" {
 			return dir
 		}
 		return filepath.Join(homeDir(), "AppData", "Roaming")
-	default: // Linux and other Unix
+	default: // Linux, macOS, and other Unix
 		if dir := os.Getenv("XDG_CONFIG_HOME"); dir != "" {
 			return dir
 		}

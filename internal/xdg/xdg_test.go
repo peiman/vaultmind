@@ -351,8 +351,15 @@ func TestConfigBase_Darwin(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("darwin-specific test")
 	}
-	base := configBase()
-	assert.Contains(t, base, filepath.Join("Library", "Application Support"))
+	// configBase follows ~/.config on darwin now; the Apple location survives
+	// only behind NativeConfigDir, for the explicit --config-path-mode native.
+	// See configBase's comment for the heartbeat check the old path was
+	// silently breaking.
+	t.Setenv("XDG_CONFIG_HOME", "")
+	assert.Contains(t, configBase(), filepath.Join(".config"))
+
+	assert.Contains(t, nativeConfigBase(), filepath.Join("Library", "Application Support"),
+		"the native mode must still resolve to Apple's location")
 }
 
 func TestDataBase_Darwin(t *testing.T) {
@@ -398,8 +405,10 @@ func TestBasePathsUseHomeDir(t *testing.T) {
 	// Verify all base functions incorporate the home directory
 	t.Setenv("HOME", "/test/home")
 	// Clear XDG_DATA_HOME so dataBase() falls through to the HOME-relative
-	// default on every platform (not the cross-platform override).
+	// default on every platform (not the cross-platform override). Same for
+	// XDG_CONFIG_HOME, which configBase now honours on darwin as well.
 	t.Setenv("XDG_DATA_HOME", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	config := configBase()
 	data := dataBase()
@@ -408,7 +417,11 @@ func TestBasePathsUseHomeDir(t *testing.T) {
 
 	switch runtime.GOOS {
 	case "darwin":
-		assert.Equal(t, "/test/home/Library/Application Support", config)
+		// config alone follows ~/.config on darwin — see configBase's comment.
+		// The other three stay platform-native, and asserting that here is the
+		// point: this change must not relocate the experiments DB, the model
+		// cache, or the signer socket.
+		assert.Equal(t, "/test/home/.config", config)
 		assert.Equal(t, "/test/home/Library/Application Support", data)
 		assert.Equal(t, "/test/home/Library/Caches", cache)
 		assert.Equal(t, "/test/home/Library/Application Support", state)
@@ -532,8 +545,18 @@ func TestBasePaths_Darwin(t *testing.T) {
 	t.Setenv("HOME", "/Users/testuser")
 	// Clear XDG_DATA_HOME so dataBase() falls through to the darwin default.
 	t.Setenv("XDG_DATA_HOME", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
 
-	assert.Equal(t, "/Users/testuser/Library/Application Support", configBase())
+	// CONFIG diverges from the other three on darwin, deliberately. It follows
+	// ~/.config because that is where this tool's config already lives (see
+	// cmd/root.go resolveXDGConfigDir — the default mode) and where a peer tool,
+	// chat-mcp, writes agents.yaml on macOS. configBase's comment records the
+	// heartbeat check this divergence was silently breaking.
+	assert.Equal(t, "/Users/testuser/.config", configBase())
+
+	// Data, cache and state are UNCHANGED and stay platform-native. Asserted
+	// here rather than assumed: the config move must not drag the experiments
+	// DB, the model cache, or the signer socket along with it.
 	assert.Equal(t, "/Users/testuser/Library/Application Support", dataBase())
 	assert.Equal(t, "/Users/testuser/Library/Caches", cacheBase())
 	assert.Equal(t, "/Users/testuser/Library/Application Support", stateBase())

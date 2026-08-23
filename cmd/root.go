@@ -109,7 +109,7 @@ type ConfigPathInfo struct {
 
 func ConfigPaths() ConfigPathInfo {
 	xdgDir := resolveXDGConfigDir()
-	nativeDir, _ := xdg.ConfigDir()
+	nativeDir, _ := xdg.NativeConfigDir()
 
 	mode := resolveConfigPathMode()
 	paths := ConfigPathInfo{
