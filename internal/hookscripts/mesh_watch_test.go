@@ -32,7 +32,7 @@ func TestMeshWatch_CarriesNoIdentityLiterals(t *testing.T) {
 	require.NotContains(t, s, ".config/vaultmind", "no derived state path — VM_MESH_* only")
 	require.NotContains(t, s, "mesh-watch-wh", "no ancestor's per-agent filename")
 
-	require.Contains(t, s, `eval "$PATHS_OUT"`, "identity must come from the binary")
+	require.Contains(t, s, `grep '^VM_MESH_'`, "identity must come from the binary, filtered before eval")
 	require.Contains(t, s, "refusing to arm", "no identity ⇒ no arm, loudly")
 }
 
@@ -166,4 +166,48 @@ func TestMeshWatchDetector_Behaviour(t *testing.T) {
 		_, rc := runDetector(t, detectorEnv(t, nil), `this is not json`)
 		require.NotZero(t, rc, "a parse failure must escalate; an ancestor's guard was one integer wide")
 	})
+}
+
+// TestMeshWatch_EvalsOnlyVMLines pins the fix for the injection surface
+// workhorse hit on their first arm of the canonical script: `identity paths`
+// stdout carried a JSON log line (their console-log config routed info to
+// stdout), eval executed it, and bash reported `level:info: command not found`.
+// Harmless that time; eval of unfiltered output means any stdout line with
+// shell metacharacters runs as code in the watcher's context.
+//
+// The contract: the script evals ONLY lines matching ^VM_MESH_. A binary that
+// keeps its stdout clean is good hygiene; a script that does not trust it is
+// the actual guard.
+func TestMeshWatch_EvalsOnlyVMLines(t *testing.T) {
+	body, ok := Get("mesh-watch.sh")
+	require.True(t, ok)
+	s := string(body)
+
+	require.NotContains(t, s, `eval "$PATHS_OUT"`,
+		"raw eval of the bootstrap output is the injection surface")
+	require.Contains(t, s, `grep '^VM_MESH_'`,
+		"only the VM_MESH_ assignment lines may reach eval")
+
+	// Behavioural half: run the actual bootstrap fragment with a poisoned
+	// identity-paths stand-in and prove the poison line never executes.
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "injected")
+	fake := filepath.Join(dir, "vaultmind")
+	require.NoError(t, os.WriteFile(fake, []byte(
+		"#!/bin/bash\n"+
+			"echo '{\"level\":\"info\",\"message\":\"nag\"}'\n"+ // the log-line case
+			"echo 'touch "+marker+"'\n"+ // the actual injection case
+			"echo \"VM_MESH_SLUG='mira'\"\n"), 0o755))
+
+	start := strings.Index(s, `PATHS_OUT=`)
+	require.Positive(t, start)
+	end := strings.Index(s[start:], "\n\n")
+	require.Positive(t, end)
+	bootstrap := s[start : start+end]
+
+	out, err := exec.Command("bash", "-c",
+		"PATH="+dir+":$PATH\n"+bootstrap+"\nprintf '%s' \"$VM_MESH_SLUG\"").CombinedOutput()
+	require.NoError(t, err, "bootstrap must succeed on poisoned-but-parseable output: %s", out)
+	require.Equal(t, "mira", string(out), "the VM_ line must still be applied")
+	require.NoFileExists(t, marker, "the injected command must never execute")
 }

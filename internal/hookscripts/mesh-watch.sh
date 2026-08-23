@@ -45,7 +45,17 @@ PATHS_OUT="$(vaultmind identity paths 2>&1)" || {
   printf 'mesh-watch: refusing to arm without a resolved identity.\n' >&2
   exit 2
 }
-eval "$PATHS_OUT"
+# Eval ONLY the VM_MESH_ assignment lines. The binary's stdout is supposed to
+# be eval-clean, but "supposed to" is not a guard: workhorse's first arm had a
+# JSON log line land in PATHS_OUT and bash EXECUTED it (`level:info: command
+# not found`). Eval of unfiltered output is an injection surface — any stray
+# stdout line with shell metacharacters runs as code here. Filtering makes the
+# binary's cleanliness unnecessary to trust.
+eval "$(printf '%s\n' "$PATHS_OUT" | grep '^VM_MESH_')"
+if [[ -z "${VM_MESH_SLUG:-}" ]]; then
+  printf 'mesh-watch: bootstrap produced no VM_MESH_ assignments — refusing to arm.\n' >&2
+  exit 2
+fi
 
 WAIT_SECS="${MESH_WAIT_SECS:-28}"              # per-call long-poll window (<=30s: proxy timeout headroom)
 MAX_WALL_SECS="${MESH_WATCH_MAX_WALL_SECS:-18000}"   # ~5h quiet-heartbeat ceiling
