@@ -55,20 +55,25 @@ file**, because:
 
 ## OPEN design fork — surface before deploy
 
-**There is no keyless `vaultmind identity sign-registry` CLI yet.** Registry
-signing is library-only: `registry.SignRegistry(rootPriv, reg)` takes the **raw
-root private key** in-process — it does NOT go through the keyless UDS custody
-signer the way `identity sign` / `identity sign-envelope` do. For dev-interim
-staging that is acceptable (a one-off generator reads the 0600 root key). For
-live-enablement, decide:
+**RESOLVED — option A was built** (`cmd/identity_sign_registry.go`): keyless
+`vaultmind identity sign-registry` reads an unsigned registry (stdin or
+`--file`), enforces the epoch gate, JCS-canonicalizes, signs via the custody
+UDS signer, and prints the distribution envelope. This section previously
+described the fork as open after the CLI existed — doc lag, corrected
+2026-08-29.
 
-- **(A) build `identity sign-registry`** — keyless, signs the JCS-canonical
-  registry bytes via the custody signer (the signer's `Sign(canonicalBytes)` is
-  exactly the right seam), parallel to `sign-envelope`. "Build once," keeps the
-  root key out of process. Recommended.
-- **(B) keep the dev-interim direct-key generator** for now and defer the CLI.
-
-This is a Peiman call at live-enablement time, not now.
+**Live-enablement record (2026-08-28/29):** Peiman gave the go and ran the
+root signer himself (dev-interim custody; the CLI stayed keyless). Signed:
+epoch 2, mira + workhorse bindings @ key_epoch 1, 30-day window
+(1787952703→1790544703), `authorized_origin_daemons: ["daemon:soozani-mesh"]`
+per workhorse's proposal (the field is schema-ahead-of-enforcement — nothing
+stamps or consumes it yet; when origin enforcement lands, an UNSTAMPED message
+against a non-empty list must fail CLOSED, decided then, named now).
+Workhorse's Door-1 call: **single-uid-peercred** for dev-interim, residual on
+the record: any same-uid process can request signatures from a live signer
+until the dedicated-uid tier. Envelope verified against the pinned ROOT
+pubkey before handoff; deploy + advisory-verify in progress; the
+`contractb_verify` flip remains Peiman's explicit trigger, last.
 
 ## Regenerate procedure (deploy time)
 
