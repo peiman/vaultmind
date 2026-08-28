@@ -108,8 +108,35 @@ fi
 # POINTERS is empty and the [ -z "$POINTERS" ] gate below injects silence
 # instead of irrelevant pointers. It also skips the access fan-out, so
 # off-domain prompts don't reinforce the notes they happened to surface.
+# A3 query-style rewrite (2026-08-28): connective retrieval phrases carry no
+# ranking signal and measurably depress it — probed raw-vs-rewritten against a
+# frozen set, "can you find our notes about spreading activation" ranked the
+# right note 3rd while the stripped query ranks it 1st (Δz +2.59). META-ONLY
+# by measurement: the variant that also stripped interrogative frames caused
+# the probe's only rank regressions, so frames stay. Stripping that leaves
+# fewer than 2 words falls back to the raw prompt, as does any python failure.
+# Probe + decision record: docs/reviews/a3-query-rewrite/ (private repo).
+QUERY=$(VM_RAW_PROMPT="$PROMPT" python3 - <<'PYEOF' 2>/dev/null
+import os
+import re
+
+q = os.environ.get("VM_RAW_PROMPT", "").strip()
+meta = re.compile(
+    r"\b(?:information\s+about|records?\s+of|(?:our|my|the)\s+notes?\s+(?:about|on)"
+    r"|notes?\s+(?:about|on)|anything\s+about|please|again|can\s+you\s+find"
+    r"|find\s+(?:me|our|my)|search\s+for|look\s+up|show\s+me"
+    r"|tell\s+me\s+(?:more\s+about|about)|give\s+me|remind\s+me\s+(?:about|of))\b",
+    re.IGNORECASE,
+)
+s = meta.sub(" ", q).rstrip("?!. ")
+s = re.sub(r"\s+", " ", s).strip()
+print(s if len(s.split()) >= 2 else q)
+PYEOF
+)
+[ -z "$QUERY" ] && QUERY="$PROMPT"
+
 ASK_ERR=$(mktemp -t vaultmind-userprompt-err.XXXXXX)
-POINTERS=$(VAULTMIND_CALLER=vaultmind-userprompt-hook $TIMEOUT_CMD "$VAULTMIND" ask "$PROMPT" \
+POINTERS=$(VAULTMIND_CALLER=vaultmind-userprompt-hook $TIMEOUT_CMD "$VAULTMIND" ask "$QUERY" \
   --vault "$VAULT_PATH" \
   --max-items 3 \
   --budget 1500 \
