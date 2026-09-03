@@ -95,7 +95,7 @@ require (
 	github.com/yalue/onnxruntime_go v1.30.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/crypto v0.55.0 // indirect
+	golang.org/x/crypto v0.56.0 // indirect
 	golang.org/x/exp v0.0.0-20260718201538-764159d718ef // indirect
 	golang.org/x/image v0.45.0 // indirect
 	golang.org/x/net v0.57.0 // indirect
