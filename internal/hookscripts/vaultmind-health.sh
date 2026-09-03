@@ -100,4 +100,16 @@ else
   # minimal and honest rather than guessing the tier.
   echo "📚 VaultMind vault detected ($VAULT). Try: vaultmind ask \"<question>\" --vault \"$VAULT\""
 fi
+
+# Stale-index relay (dabir's layer-2 incident, 2026-09-03): a note corrected on
+# disk while the index kept serving the OLD text for hours. Doctor detects that
+# state ("Stale index: N …") but this hook — the surface an agent actually
+# reads at session start — never relayed it. A tier line saying "active, full
+# recall" while recall is serving superseded content is the health hook
+# laundering the one defect that makes recall lie. Relay it on every tier.
+STALE_LINE="$(printf '%s' "$DOCTOR" | grep -o "Stale index: [0-9][0-9]* note(s) changed since last index pass")"
+if [ "$DOCTOR_RC" -eq 0 ] && [ -n "$STALE_LINE" ]; then
+  echo "⚠ ${STALE_LINE} — recall is serving the OLD text for those notes."
+  echo "   Refresh: vaultmind index --vault \"$VAULT\" && vaultmind index --embed --vault \"$VAULT\""
+fi
 exit 0
