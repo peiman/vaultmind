@@ -53,6 +53,13 @@ type AskEventParams struct {
 	// the "error" field so failed retrievals are distinguishable from
 	// zero-hit successes.
 	RetrievalErr error
+	// RelevanceZ is the top hit's band-normalized relevance when the noise
+	// floor was applied; nil when it was never measured. A pointer because
+	// z == 0 is a real measurement (the top hit sat exactly on the floor)
+	// and must stay distinguishable from absence — a window criterion on
+	// median z was once committed and then found uncomputable because this
+	// value lived only in the CLI output, never in the event.
+	RelevanceZ *float64
 }
 
 // BuildAskEventData composes the event_data payload for an ask event.
@@ -73,6 +80,9 @@ func BuildAskEventData(p AskEventParams) map[string]any {
 	data["body_delivered"] = p.BodyDelivered
 	if p.SuppressedReason != "" {
 		data["suppressed_reason"] = p.SuppressedReason
+	}
+	if p.RelevanceZ != nil {
+		data["relevance_z"] = *p.RelevanceZ
 	}
 	if p.ActivationOn {
 		data["primary_variant"] = p.PrimaryVariant

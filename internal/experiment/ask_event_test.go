@@ -83,3 +83,27 @@ func TestBuildAskEventData_ShadowVariantCollisionIsOverwrittenDeterministically(
 	variants := got["variants"].(map[string]any)
 	assert.Equal(t, shadowPayload, variants["hybrid"])
 }
+
+// The A3 window read (2026-09-05) committed a criterion against median
+// relevance_z on hook asks and then could not compute it: the ask event
+// never carried z. The pointer keeps unset distinguishable from a true 0.0 —
+// a z of exactly zero is a real measurement (top hit ON the floor), not
+// absence, and conflating them would quietly bias any median toward zero.
+
+func TestBuildAskEventData_RelevanceZPresentWhenMeasured(t *testing.T) {
+	z := -0.42
+	data := experiment.BuildAskEventData(experiment.AskEventParams{RetrievalMode: "hybrid", RelevanceZ: &z})
+	require.Equal(t, -0.42, data["relevance_z"])
+}
+
+func TestBuildAskEventData_RelevanceZAbsentWhenNotMeasured(t *testing.T) {
+	data := experiment.BuildAskEventData(experiment.AskEventParams{RetrievalMode: "hybrid"})
+	_, present := data["relevance_z"]
+	require.False(t, present, "an unmeasured z must be absent, not zero — absence and on-the-floor are different facts")
+}
+
+func TestBuildAskEventData_RelevanceZZeroIsARealValue(t *testing.T) {
+	z := 0.0
+	data := experiment.BuildAskEventData(experiment.AskEventParams{RetrievalMode: "hybrid", RelevanceZ: &z})
+	require.Equal(t, 0.0, data["relevance_z"], "z==0 means the top hit sat exactly on the floor; it must be recorded")
+}

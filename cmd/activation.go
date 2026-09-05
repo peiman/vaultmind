@@ -85,6 +85,12 @@ func logAskExperiment(cmd *cobra.Command, queryText, vaultPath, retrievalMode st
 	// it. Without this the log cannot separate "surfaced and ignored" from
 	// "never handed over", and those have opposite fixes.
 	params.BodyDelivered, params.SuppressedReason = result.BodyDecision(pointersOnly)
+	// z travels only when it was measured (NoiseFloorApplied); a copied local
+	// keeps the pointer off the loop-reused result struct.
+	if result != nil && result.NoiseFloorApplied {
+		z := result.RelevanceZ
+		params.RelevanceZ = &z
+	}
 	if result != nil {
 		if actDef, ok := loadExperimentDefs()["activation"]; ok && actDef.Enabled && result.Context != nil {
 			params.ActivationOn = true
