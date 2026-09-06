@@ -102,6 +102,12 @@ const (
 	// operator does not have — two warnings in one section, one saying you
 	// have no pin and the other blaming it.
 	WarnMeshSelfConsistencyFailed = "the registry did NOT verify against the daemon-advertised root — it is not even self-consistent (bad signature, stale, or rolled back)"
+	// WarnMeshRegistryAging: older than doctor's conservative default, with no
+	// declared hub bound to check against. Deliberately advisory: doctor cannot
+	// know when the hub refuses unless the operator declares its bound, and a
+	// present-tense "sends are refused" that is false most days trains people
+	// to filter the one day it is true.
+	WarnMeshRegistryAging = "the registry is older than doctor's conservative 24h default and the hub's bound is NOT declared — declare registry_max_staleness_secs in agents.yaml so this can be judged"
 	// WarnMeshRegistryStale: the registry verifies against its root but is
 	// older than the freshness bound. Named separately from Unverifiable
 	// because the fix is different (re-sign and redeploy, not investigate a
@@ -161,6 +167,10 @@ type MeshDoctorInput struct {
 	PinnedRootPub ed25519.PublicKey // nil ⇒ UNPINNED path (never green)
 	NetworkID     string
 	RegistryBytes []byte // offline registry override (--mesh-registry); else fetched
+	// MaxStaleness is the DECLARED hub bound. Zero means undeclared, in which
+	// case doctor falls back to its conservative default and says so rather
+	// than asserting a refusal date it cannot know.
+	MaxStaleness time.Duration
 	// RegistryUnread carries a DECLARED registry path that could not be read,
 	// so the cmd layer's failure reaches the section instead of vanishing.
 	RegistryUnread string
@@ -298,8 +308,16 @@ func checkRegistryFreshness(mi *DoctorMeshIdentity, in MeshDoctorInput, regBytes
 		mi.addWarning(unverifiableWarning(in))
 		return
 	}
+	// The DECLARED bound decides the refusal verdict; the hardcoded default is
+	// only ever an early-warning heuristic and must be worded as one.
+	if in.MaxStaleness > 0 {
+		if registry.IsStaleAt(validFrom, validUntil, now, in.MaxStaleness) {
+			mi.addWarning(WarnMeshRegistryStale)
+		}
+		return
+	}
 	if registry.IsStaleAt(validFrom, validUntil, now, doctorMaxStaleness) {
-		mi.addWarning(WarnMeshRegistryStale)
+		mi.addWarning(WarnMeshRegistryAging)
 	}
 }
 

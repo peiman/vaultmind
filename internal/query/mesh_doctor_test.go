@@ -94,6 +94,31 @@ func buildSignedRegistry(t *testing.T, rootPub ed25519.PublicKey, rootPriv ed255
 	return raw, registry.NetworkID(rootPub)
 }
 
+// buildSignedRegistryWindow is buildSignedRegistry with an explicit validity
+// window. The default helper expires 24h after signing, so any test probing a
+// LONGER staleness bound hits expiry first and never reaches the bound it
+// claims to test — a fixture that cannot reach the line under test.
+func buildSignedRegistryWindow(t *testing.T, rootPub ed25519.PublicKey, rootPriv ed25519.PrivateKey, slug string, memberPub ed25519.PublicKey, from, until time.Time) ([]byte, string) {
+	t.Helper()
+	pk, err := registry.NewPublicKey(memberPub)
+	require.NoError(t, err)
+	reg := registry.Registry{
+		Epoch:      1,
+		ValidFrom:  from.Unix(),
+		ValidUntil: until.Unix(),
+		Agents: []registry.AgentBinding{{
+			Slug: slug, DisplayName: "Member", PubKey: pk, KeyEpoch: 1,
+			ValidFrom: from.Unix(), ValidUntil: until.Unix(),
+			AuthorizedOriginDaemons: []string{"daemon:local"},
+		}},
+	}
+	env, err := registry.SignRegistry(rootPriv, reg)
+	require.NoError(t, err)
+	raw, err := registry.MarshalDistribution(env)
+	require.NoError(t, err)
+	return raw, registry.NetworkID(rootPub)
+}
+
 func writeKeyFile(t *testing.T, path string, mode os.FileMode, size int) {
 	t.Helper()
 	require.NoError(t, os.WriteFile(path, make([]byte, size), 0o600))
@@ -665,8 +690,10 @@ func TestMeshDoctor_StaleRegistryWarnsWithNoDaemonAndNoPin(t *testing.T) {
 		RegistryBytes: raw,
 		Slug:          "agent:mira",
 		Now:           signed.Add(23*time.Hour + 30*time.Minute),
-		Signer:        &stubSigner{priv: memberPriv},
-		Daemon:        nil, // no daemon at all — the live shape for a remote hub
+		// Declares the hub bound, so the REFUSAL verdict is the one under test.
+		MaxStaleness: 24 * time.Hour,
+		Signer:       &stubSigner{priv: memberPriv},
+		Daemon:       nil, // no daemon at all — the live shape for a remote hub
 	})
 	require.NoError(t, err)
 	require.Contains(t, mi.Warnings, WarnMeshRegistryStale,
@@ -715,7 +742,9 @@ func TestMeshDoctor_StaleRegistryWarnsEvenWhenTheDaemonIsReachable(t *testing.T)
 		RegistryBytes: raw, // declared via agents.yaml — the normal case now
 		Slug:          "agent:mira",
 		Now:           signed.Add(23*time.Hour + 30*time.Minute),
-		Signer:        &stubSigner{priv: memberPriv},
+		// Declares the hub bound, so the REFUSAL verdict is the one under test.
+		MaxStaleness: 24 * time.Hour,
+		Signer:       &stubSigner{priv: memberPriv},
 		// Reachable, serves NO root: exactly a fossil daemon's shape.
 		Daemon: &stubDaemon{whoamiOK: true, rootErr: errors.New("no well-known root")},
 	})
@@ -786,10 +815,12 @@ func TestMeshDoctor_UnreadableDeclaredPathStillChecksTheRegistryInPlay(t *testin
 	raw, _ := buildSignedRegistry(t, rootPub, rootPriv, "agent:mira", memberPub, signed)
 
 	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{
-		KeyPath:        filepath.Join(t.TempDir(), "k.key"),
-		SocketPath:     filepath.Join(t.TempDir(), "missing.sock"),
-		Slug:           "agent:mira",
-		Now:            signed.Add(23*time.Hour + 30*time.Minute),
+		KeyPath:    filepath.Join(t.TempDir(), "k.key"),
+		SocketPath: filepath.Join(t.TempDir(), "missing.sock"),
+		Slug:       "agent:mira",
+		Now:        signed.Add(23*time.Hour + 30*time.Minute),
+		// Declares the hub bound, so the REFUSAL verdict is the one under test.
+		MaxStaleness:   24 * time.Hour,
 		Signer:         &stubSigner{priv: memberPriv},
 		RegistryUnread: "/declared/but/absent.json",
 		// Serves a registry but NO root: evaluateUnpinned therefore cannot
@@ -827,4 +858,76 @@ func TestMeshDoctor_EnvelopeWrappingGarbageIsNotSilent(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, mi.Warnings, WarnMeshSelfConsistencyFailed,
 		"a well-formed envelope around a corrupt body must still be reported")
+}
+
+// LIVE-OBSERVED (2026-09-06, and predicted by review): doctor asserted "signed
+// SENDS will be refused" from a HARDCODED 24h bound while the hub's declared
+// bound is 30 days — sends worked fine and the wake line said "28 more days".
+// A present-tense claim that is false on 29 days of 30 is filtered within a
+// week, and then the one day it is true reads identically to the 29 it wasn't.
+// That is worse than the silence it replaced, because silence doesn't train
+// you to ignore it.
+
+func TestMeshDoctor_DeclaredBoundDecidesTheRefusalVerdict(t *testing.T) {
+	signed := time.Unix(1_700_000_000, 0)
+	rootPub, rootPriv := lowEntropyKey(t, "doctor-root-declared-bound")
+	memberPub, memberPriv := lowEntropyKey(t, "doctor-member-declared-bound")
+	raw, _ := buildSignedRegistryWindow(t, rootPub, rootPriv, "agent:mira", memberPub,
+		signed, signed.Add(365*24*time.Hour))
+
+	// Two days old against a declared 30-day hub bound: sends work.
+	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{
+		KeyPath:       filepath.Join(t.TempDir(), "k.key"),
+		SocketPath:    filepath.Join(t.TempDir(), "missing.sock"),
+		Slug:          "agent:mira",
+		Now:           signed.Add(48 * time.Hour),
+		Signer:        &stubSigner{priv: memberPriv},
+		RegistryBytes: raw,
+		MaxStaleness:  30 * 24 * time.Hour,
+	})
+	require.NoError(t, err)
+	require.NotContains(t, mi.Warnings, WarnMeshRegistryStale,
+		"two days into a thirty-day bound is not past due; claiming sends are refused is false")
+}
+
+func TestMeshDoctor_DeclaredBoundStillCatchesGenuinelyPastDue(t *testing.T) {
+	signed := time.Unix(1_700_000_000, 0)
+	rootPub, rootPriv := lowEntropyKey(t, "doctor-root-past-declared")
+	memberPub, memberPriv := lowEntropyKey(t, "doctor-member-past-declared")
+	raw, _ := buildSignedRegistryWindow(t, rootPub, rootPriv, "agent:mira", memberPub,
+		signed, signed.Add(365*24*time.Hour))
+
+	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{
+		KeyPath:       filepath.Join(t.TempDir(), "k.key"),
+		SocketPath:    filepath.Join(t.TempDir(), "missing.sock"),
+		Slug:          "agent:mira",
+		Now:           signed.Add(31 * 24 * time.Hour),
+		Signer:        &stubSigner{priv: memberPriv},
+		RegistryBytes: raw,
+		MaxStaleness:  30 * 24 * time.Hour,
+	})
+	require.NoError(t, err)
+	require.Contains(t, mi.Warnings, WarnMeshRegistryStale)
+}
+
+// With no declared bound doctor cannot know when the hub refuses, so it must
+// not claim to. The conservative default becomes an ADVISORY, worded as one.
+func TestMeshDoctor_UndeclaredBoundWarnsAdvisoryNotRefusal(t *testing.T) {
+	signed := time.Unix(1_700_000_000, 0)
+	rootPub, rootPriv := lowEntropyKey(t, "doctor-root-advisory")
+	memberPub, memberPriv := lowEntropyKey(t, "doctor-member-advisory")
+	raw, _ := buildSignedRegistry(t, rootPub, rootPriv, "agent:mira", memberPub, signed)
+
+	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{
+		KeyPath:       filepath.Join(t.TempDir(), "k.key"),
+		SocketPath:    filepath.Join(t.TempDir(), "missing.sock"),
+		Slug:          "agent:mira",
+		Now:           signed.Add(48 * time.Hour),
+		Signer:        &stubSigner{priv: memberPriv},
+		RegistryBytes: raw,
+	})
+	require.NoError(t, err)
+	require.Contains(t, mi.Warnings, WarnMeshRegistryAging,
+		"no declared bound means the refusal date is unknown; say that instead of asserting it")
+	require.NotContains(t, mi.Warnings, WarnMeshRegistryStale)
 }

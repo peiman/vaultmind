@@ -139,6 +139,11 @@ func resolveMeshInput(cmd *cobra.Command) (query.MeshDoctorInput, bool, error) {
 	}
 
 	in.Slug = slug
+	// The hub's own bound, when the operator declared it. Without it doctor
+	// cannot know when sends start failing and must not claim to.
+	if secs := registryMaxStalenessFromAgentsYAML(registryPath(), projectPath()); secs > 0 {
+		in.MaxStaleness = time.Duration(secs) * time.Second
+	}
 
 	daemon := newDoctorDaemonClient()
 	in.Daemon = daemon
