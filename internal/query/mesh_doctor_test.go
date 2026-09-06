@@ -581,3 +581,68 @@ func TestMeshDoctor_SelfVerifyUsesIdentityPrimitive(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, ok)
 }
+
+// 2026-09-06 incident: the hub's Contract-B registry aged past its 30-day
+// max_staleness and every signed SEND on the mesh was refused for ~21 hours
+// while reads, long-poll, and the wake-watcher kept working. Doctor ran green
+// throughout. Cause: evaluateUnpinned computed VerifyAndLoad — with a bound
+// STRICTER than the hub's — and then discarded the error, so on the unpinned
+// path (the common one; a pin needs enroll) staleness produced no signal at
+// all. The check existed, ran, and threw its answer away.
+//
+// Doctor's bound is 24h against the hub's 30 days, so a working version of
+// this check warns roughly four weeks before the mute, not a day after it.
+
+func TestMeshDoctor_UnpinnedStaleRegistryIsLoud(t *testing.T) {
+	signed := time.Unix(1_700_000_000, 0)
+	rootPub, rootPriv := lowEntropyKey(t, "doctor-root-seed-stale")
+	memberPub, memberPriv := lowEntropyKey(t, "doctor-member-seed-stale")
+	raw, nid := buildSignedRegistry(t, rootPub, rootPriv, "agent:mira", memberPub, signed)
+
+	// Read 23h30m later. buildSignedRegistry backdates valid_from by an hour,
+	// so age is 24h30m — past doctor's 24h bound — while valid_until (signed
+	// +24h) has NOT yet passed. That isolates STALENESS from expiry, which is
+	// the live shape: the registry that muted the mesh claimed validity into
+	// 2027 and was refused purely on age.
+	now := signed.Add(23*time.Hour + 30*time.Minute)
+
+	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{
+		KeyPath:       filepath.Join(t.TempDir(), "k.key"),
+		SocketPath:    filepath.Join(t.TempDir(), "missing.sock"),
+		RegistryBytes: raw,
+		Slug:          "agent:mira",
+		Now:           now,
+		Signer:        &stubSigner{priv: memberPriv},
+		Daemon: &stubDaemon{
+			root:      doctorclient.WellKnownRoot{RootPubKey: b64(rootPub), NetworkID: nid},
+			directory: raw,
+			whoamiOK:  true,
+		},
+	})
+	require.NoError(t, err)
+	require.Contains(t, mi.Warnings, WarnMeshRegistryStale,
+		"a stale registry must be named; silence here is what let the mesh go mute for a day")
+}
+
+func TestMeshDoctor_UnpinnedFreshRegistryIsNotFlaggedStale(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	rootPub, rootPriv := lowEntropyKey(t, "doctor-root-seed-fresh")
+	memberPub, memberPriv := lowEntropyKey(t, "doctor-member-seed-fresh")
+	raw, nid := buildSignedRegistry(t, rootPub, rootPriv, "agent:mira", memberPub, now)
+
+	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{
+		KeyPath:       filepath.Join(t.TempDir(), "k.key"),
+		SocketPath:    filepath.Join(t.TempDir(), "missing.sock"),
+		RegistryBytes: raw,
+		Slug:          "agent:mira",
+		Now:           now,
+		Signer:        &stubSigner{priv: memberPriv},
+		Daemon: &stubDaemon{
+			root:      doctorclient.WellKnownRoot{RootPubKey: b64(rootPub), NetworkID: nid},
+			directory: raw,
+			whoamiOK:  true,
+		},
+	})
+	require.NoError(t, err)
+	require.NotContains(t, mi.Warnings, WarnMeshRegistryStale)
+}

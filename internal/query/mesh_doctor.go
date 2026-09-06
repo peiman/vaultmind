@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"net"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/peiman/vaultmind/internal/identity"
@@ -91,6 +92,14 @@ const (
 	WarnMeshNoRegistry     = "no registry available to verify (daemon unreachable and no --mesh-registry given)"
 	WarnMeshEnforcementOff = "message-signature enforcement is NOT YET active (advisory mode is a no-op today)"
 	WarnMeshHeartbeatStale = "wake-watcher heartbeat is stale — the watcher may be present-but-dead"
+	// WarnMeshRegistryStale: the registry verifies against its root but is
+	// older than the freshness bound. Named separately from Unverifiable
+	// because the fix is different (re-sign and redeploy, not investigate a
+	// bad signature) and because the SYMPTOM is invisible from inside: reads,
+	// long-poll and the wake-watcher keep working while every signed send is
+	// refused. That is how the 2026-09-06 mesh-wide mute stayed unnoticed for
+	// a day with every liveness check green.
+	WarnMeshRegistryStale = "the registry is past its freshness bound — signed SENDS will be refused while reads keep working; re-sign and redeploy it"
 	// WarnMeshHeartbeatUnresolved: the check could not run. Rendering silence
 	// (or a filesystem verdict) here is how a seven-day-dead watcher reported
 	// "not found" — the checker had no path and never looked.
@@ -424,10 +433,20 @@ func evaluateUnpinned(ctx context.Context, mi *DoctorMeshIdentity, in MeshDoctor
 	// by the daemon's own advertised root. It authenticates NOTHING (a malicious
 	// daemon serves a matched {evil_root, evil_registry}). Authenticated remains
 	// false; we record NetworkID for display only.
-	if _, _, verr := registry.VerifyAndLoad(advertised, mustParse(regBytes), 0, in.Now, doctorMaxStaleness); verr == nil {
+	// The verdict is USED, not just computed. Discarding verr here made a stale
+	// registry indistinguishable from a fresh one on the unpinned path — which
+	// is the common path, since a pin requires enroll — and that silence is
+	// what let a mesh-wide send mute run for a day behind green checks.
+	_, _, verr := registry.VerifyAndLoad(advertised, mustParse(regBytes), 0, in.Now, doctorMaxStaleness)
+	switch {
+	case verr == nil:
 		if mi.NetworkID == "" {
 			mi.NetworkID = root.NetworkID
 		}
+	case strings.Contains(verr.Error(), registry.ErrStale):
+		mi.addWarning(WarnMeshRegistryStale)
+	default:
+		mi.addWarning(WarnMeshUnverifiable)
 	}
 }
 
