@@ -3,10 +3,13 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strconv"
+	"time"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/config/commands"
+	"github.com/peiman/vaultmind/internal/identity/registry"
 	"github.com/peiman/vaultmind/internal/meshpaths"
 	"github.com/spf13/cobra"
 )
@@ -106,6 +109,8 @@ func runIdentityPaths(cmd *cobra.Command, _ []string) error {
 		return cmdutil.WriteJSON(cmd.OutOrStdout(), "identity paths", id, "", "")
 	}
 
+	regFile, regDays := registryFreshness(time.Now())
+
 	// Shell form. Every value single-quoted: paths may carry spaces (the mesh
 	// dir historically lived under "Application Support") and quoting only the
 	// ones that look like they need it is how an eval breaks two months later.
@@ -123,12 +128,64 @@ func runIdentityPaths(cmd *cobra.Command, _ []string) error {
 		{"VM_MESH_LISTEN", id.Listen},
 		{"VM_MESH_REGISTRY", id.Registry},
 		{"VM_MESH_DAEMON", id.DaemonURL},
+		{"VM_MESH_REGISTRY_FILE", regFile},
+		{"VM_MESH_REGISTRY_DAYS_LEFT", regDays},
 	} {
 		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s=%s\n", kv[0], shellSingleQuote(kv[1])); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// registryDaysLeft reports whole days until the registry crosses the DECLARED
+// hub freshness bound, and whether a bound was declared at all.
+//
+// Rounds DOWN so the number never overpromises: "2 days" must not mean "2 days
+// and 23 hours" to one reader and "47 hours" to the clock. Goes negative once
+// past due — an already-refused registry reading as 0 would look like "today",
+// which is exactly the state that muted the mesh for a day.
+func registryDaysLeft(validFrom, maxStalenessSecs int64, now time.Time) (int, bool) {
+	if maxStalenessSecs <= 0 {
+		return 0, false
+	}
+	remaining := (validFrom + maxStalenessSecs) - now.Unix()
+	days := remaining / 86400
+	if remaining < 0 && remaining%86400 != 0 {
+		days-- // floor toward past-due rather than truncating toward zero
+	}
+	return int(days), true
+}
+
+// registryFreshness reads the deployed registry file and returns its
+// countdown fields for the shell emitter: the file path, and days-left when a
+// bound is declared. Every failure is quiet and yields empty values — a
+// watcher must still arm when the countdown cannot be computed.
+func registryFreshness(now time.Time) (file, daysLeft string) {
+	file = registryFileFromAgentsYAML(registryPath(), projectPath())
+	if file == "" {
+		return "", ""
+	}
+	// Operator-declared path, same trust class as the other registry fields.
+	// #nosec G304 G703
+	// nosemgrep: go-path-traversal
+	raw, err := os.ReadFile(file)
+	if err != nil {
+		return file, ""
+	}
+	env, err := registry.ParseDistribution(raw)
+	if err != nil {
+		return file, ""
+	}
+	validFrom, _, err := registry.Freshness(env)
+	if err != nil {
+		return file, ""
+	}
+	days, known := registryDaysLeft(validFrom, registryMaxStalenessFromAgentsYAML(registryPath()), now)
+	if !known {
+		return file, ""
+	}
+	return file, strconv.Itoa(days)
 }
 
 // shellSingleQuote wraps s for a shell eval, escaping embedded single quotes

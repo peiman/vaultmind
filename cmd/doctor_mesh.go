@@ -343,6 +343,26 @@ func registryFileFromAgentsYAML(registryPath, projectDir string) string {
 	return ay.RegistryPath
 }
 
+// registryMaxStalenessFromAgentsYAML reads the declared hub freshness bound in
+// seconds, or 0 when undeclared (⇒ no countdown, stated as unknown).
+func registryMaxStalenessFromAgentsYAML(registryPath string) int64 {
+	if registryPath == "" {
+		return 0
+	}
+	// Same operator-controlled path as the sibling resolvers above.
+	// #nosec G304 G703
+	// nosemgrep: go-path-traversal
+	raw, err := os.ReadFile(registryPath)
+	if err != nil {
+		return 0
+	}
+	var ay agentsYAML
+	if err := yaml.Unmarshal(raw, &ay); err != nil {
+		return 0
+	}
+	return ay.RegistryMaxStalenessSecs
+}
+
 // projectPath returns AGENT_CHAT_PROJECT_PATH, falling back to the working dir.
 func projectPath() string {
 	if p := os.Getenv(envProjectPath); p != "" {
@@ -371,11 +391,21 @@ type agentsYAML struct {
 	// check work at all on a fleet whose daemon is remote — doctor's daemon
 	// probe is loopback-pinned by design, so it can never fetch that registry.
 	RegistryPath string `yaml:"registry_path"`
-	Agents       []struct {
+	// RegistryMaxStalenessSecs mirrors the DAEMON's max_staleness_secs. It is
+	// declared, never guessed: the countdown shown to an agent is only honest
+	// if it counts against the bound the hub actually enforces, and a plausible
+	// default would produce a confident wrong date someone plans around.
+	RegistryMaxStalenessSecs int64 `yaml:"registry_max_staleness_secs"`
+	Agents                   []struct {
 		Slug         string `yaml:"slug"`
 		ProjectPath  string `yaml:"project_path"`
 		DaemonURL    string `yaml:"daemon_url"`
 		RegistryPath string `yaml:"registry_path"`
+		// RegistryMaxStalenessSecs mirrors the DAEMON's max_staleness_secs. It is
+		// declared, never guessed: the countdown shown to an agent is only honest
+		// if it counts against the bound the hub actually enforces, and a plausible
+		// default would produce a confident wrong date someone plans around.
+		RegistryMaxStalenessSecs int64 `yaml:"registry_max_staleness_secs"`
 	} `yaml:"agents"`
 }
 

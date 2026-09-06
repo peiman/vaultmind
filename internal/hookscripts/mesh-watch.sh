@@ -57,6 +57,29 @@ if [[ -z "${VM_MESH_SLUG:-}" ]]; then
   exit 2
 fi
 
+# ── Registry countdown — carried into every wake, because a freshness warning
+# only in `doctor` is a warning nobody reads. On 2026-09-06 the trust registry
+# aged past the hub's max_staleness and EVERY signed send was refused for ~21
+# hours while reads, long-poll and this watcher all stayed green: the mute is
+# invisible from inside, so the number has to ride the message the agent
+# provably reads at the moment it is about to use chat.
+#
+# Empty when no bound is declared in agents.yaml (registry_max_staleness_secs).
+# An undeclared bound yields NO countdown rather than a guessed one — a
+# confident wrong date is worse than none, because someone plans around it.
+registry_countdown() {
+  [ -n "${VM_MESH_REGISTRY_DAYS_LEFT:-}" ] || return 0
+  if [ "$VM_MESH_REGISTRY_DAYS_LEFT" -le 0 ] 2>/dev/null; then
+    printf ' REGISTRY STALE (%s day(s) past the hub bound) — your signed SENDS are being REFUSED while reads still work; re-sign and redeploy the registry.' \
+      "$VM_MESH_REGISTRY_DAYS_LEFT"
+  elif [ "$VM_MESH_REGISTRY_DAYS_LEFT" -le 7 ] 2>/dev/null; then
+    printf ' REGISTRY EXPIRES IN %s DAY(S) — re-sign and redeploy before sends start failing.' \
+      "$VM_MESH_REGISTRY_DAYS_LEFT"
+  else
+    printf ' [registry fresh for %s more day(s)]' "$VM_MESH_REGISTRY_DAYS_LEFT"
+  fi
+}
+
 WAIT_SECS="${MESH_WAIT_SECS:-28}"              # per-call long-poll window (<=30s: proxy timeout headroom)
 MAX_WALL_SECS="${MESH_WATCH_MAX_WALL_SECS:-18000}"   # ~5h quiet-heartbeat ceiling
 STREAM_STALE_SECS=$(( 2 * (WAIT_SECS + 10) ))  # a stream silent past two full poll cycles is wedged
@@ -284,7 +307,7 @@ wait_loop() {
       # watcher has PROVEN a message exists, so an empty chat_drain after this
       # wake means the subscription is dead, not that nothing arrived.
       # (Observed live 2026-08-12: real wake, drain [], subscriber_count 0.)
-      echo "WAKE: new ${room} message from ${hit%%|*} (ts ${ts}). Drain the chat (rooms + DMs), respond, then RE-ARM mesh-watch. IF THE DRAIN COMES BACK EMPTY do NOT conclude there is nothing — this message provably exists; re-subscribe and read ${room} with since=${recover} to recover it." > "$sig"
+      echo "WAKE: new ${room} message from ${hit%%|*} (ts ${ts}). Drain the chat (rooms + DMs), respond, then RE-ARM mesh-watch. IF THE DRAIN COMES BACK EMPTY do NOT conclude there is nothing — this message provably exists; re-subscribe and read ${room} with since=${recover} to recover it.$(registry_countdown)" > "$sig"
       return 0
     fi
 
@@ -345,5 +368,5 @@ for ((i=0; i<NSTREAMS; i++)); do
 done
 
 if [[ -f "$VM_MESH_DISARM" ]]; then echo "DISARMED (sentinel present) — not re-arming."; exit 0; fi
-echo "RE-ARM: no relevant message within ~${MAX_WALL_SECS}s (quiet heartbeat) — re-launch mesh-watch.sh."
+echo "RE-ARM: no relevant message within ~${MAX_WALL_SECS}s (quiet heartbeat) — re-launch mesh-watch.sh.$(registry_countdown)"
 exit 0

@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"time"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -200,4 +202,38 @@ func TestIdentityPaths_DaemonIsIdentityData(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "daemon")
 	})
+}
+
+// The countdown exists because a warning only in `doctor` is a warning nobody
+// reads: on 2026-09-06 the registry aged out and the mesh refused every signed
+// send for ~21 hours. `identity paths` is what the watcher and the per-turn nag
+// already evaluate, so putting the number here shows it wherever chat is used,
+// at zero extra cost.
+
+func TestRegistryDaysLeft_CountsAgainstTheDeclaredBound(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	// Signed 25 days ago against a 30-day hub bound ⇒ 5 days of send-life left.
+	got, known := registryDaysLeft(now.Add(-25*24*time.Hour).Unix(), 30*24*60*60, now)
+	require.True(t, known)
+	require.Equal(t, 5, got)
+}
+
+func TestRegistryDaysLeft_UnknownWithoutADeclaredBound(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	_, known := registryDaysLeft(now.Unix(), 0, now)
+	require.False(t, known, "no declared bound ⇒ no countdown, never an invented one")
+}
+
+func TestRegistryDaysLeft_GoesNegativeOnceStale(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	got, known := registryDaysLeft(now.Add(-31*24*time.Hour).Unix(), 30*24*60*60, now)
+	require.True(t, known)
+	require.Negative(t, got, "already-refused must read as past due, not as zero")
+}
+
+func TestRegistryDaysLeft_RoundsDownSoItNeverOverpromises(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	// 5 days and 23 hours remaining reads as 5, not 6.
+	got, _ := registryDaysLeft(now.Add(-24*24*time.Hour-time.Hour).Unix(), 30*24*60*60, now)
+	require.Equal(t, 5, got)
 }

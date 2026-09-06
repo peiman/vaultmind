@@ -211,3 +211,76 @@ func TestMeshWatch_EvalsOnlyVMLines(t *testing.T) {
 	require.Equal(t, "mira", string(out), "the VM_ line must still be applied")
 	require.NoFileExists(t, marker, "the injected command must never execute")
 }
+
+// The registry countdown must ride the WAKE line. A freshness warning that
+// lives only in `doctor` is a warning nobody reads: on 2026-09-06 the registry
+// aged past the hub's bound and every signed send was refused for ~21 hours
+// while reads, the watcher and every check stayed green. The wake line is the
+// one message an agent provably reads at the moment it is about to use chat.
+
+func TestMeshWatch_WakeLineCarriesTheRegistryCountdown(t *testing.T) {
+	body, ok := Get("mesh-watch.sh")
+	require.True(t, ok)
+	s := string(body)
+	require.Contains(t, s, "VM_MESH_REGISTRY_DAYS_LEFT",
+		"the wake path must surface the countdown the emitter now provides")
+}
+
+func TestMeshWatch_CountdownIsOmittedWhenUnknown(t *testing.T) {
+	body, ok := Get("mesh-watch.sh")
+	require.True(t, ok)
+	s := string(body)
+	// Guarded, not interpolated blindly: with no declared bound the variable is
+	// empty and the wake line must not grow a dangling "registry fresh for  days".
+	require.Contains(t, s, `[ -n "${VM_MESH_REGISTRY_DAYS_LEFT:-}" ]`,
+		"an unknown countdown must be omitted, never rendered blank")
+}
+
+// runCountdown extracts registry_countdown() from the embedded script and runs
+// it through bash with a given VM_MESH_REGISTRY_DAYS_LEFT. Behaviour, not text:
+// a string assertion would pass a function that never fires.
+func runCountdown(t *testing.T, daysLeft string) string {
+	t.Helper()
+	body, ok := Get("mesh-watch.sh")
+	require.True(t, ok)
+	s := string(body)
+
+	start := strings.Index(s, "registry_countdown() {")
+	require.Positive(t, start, "registry_countdown must exist to be tested")
+	end := strings.Index(s[start:], "\n}\n")
+	require.Positive(t, end, "unterminated function")
+	fn := s[start : start+end+3]
+
+	script := "set -u\n" + fn + "\nregistry_countdown\n"
+	cmd := exec.Command("bash", "-c", script)
+	cmd.Env = append(os.Environ(), "VM_MESH_REGISTRY_DAYS_LEFT="+daysLeft)
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, "countdown must never fail the wake line: %s", out)
+	return string(out)
+}
+
+func TestMeshWatchCountdown_HealthyIsQuietButInformative(t *testing.T) {
+	out := runCountdown(t, "23")
+	require.Contains(t, out, "23 more day(s)")
+	require.NotContains(t, out, "EXPIRES")
+}
+
+func TestMeshWatchCountdown_WarnsInsideTheLastWeek(t *testing.T) {
+	require.Contains(t, runCountdown(t, "5"), "EXPIRES IN 5 DAY(S)")
+}
+
+func TestMeshWatchCountdown_PastDueNamesTheConsequence(t *testing.T) {
+	out := runCountdown(t, "-2")
+	require.Contains(t, out, "REGISTRY STALE")
+	require.Contains(t, out, "SENDS", "the symptom is invisible from inside; the line must say sends are refused")
+}
+
+func TestMeshWatchCountdown_UnknownEmitsNothing(t *testing.T) {
+	require.Empty(t, runCountdown(t, ""),
+		"no declared bound ⇒ no countdown, and no dangling text in the wake line")
+}
+
+func TestMeshWatchCountdown_NonNumericDegradesToInformational(t *testing.T) {
+	// A malformed value must not abort the wake line under `set -u`/pipefail.
+	require.NotPanics(t, func() { runCountdown(t, "garbage") })
+}

@@ -533,3 +533,25 @@ func TestRegistryFileFromAgentsYAML_UnsetIsEmpty(t *testing.T) {
 	require.Empty(t, registryFileFromAgentsYAML(reg, dir),
 		"no declared path means none — doctor must not guess where a trust root lives")
 }
+
+// A countdown is only honest if it counts against the bound the HUB actually
+// enforces. That number lives in the daemon's config, so the operator declares
+// it here; guessing 30 days would produce a confident, wrong countdown — worse
+// than none, because someone would plan around it.
+
+func TestRegistryMaxStaleness_DeclaredIsRead(t *testing.T) {
+	dir := t.TempDir()
+	reg := filepath.Join(dir, "agents.yaml")
+	require.NoError(t, os.WriteFile(reg, []byte("registry_max_staleness_secs: 2592000\n"), 0o600))
+
+	require.Equal(t, int64(2592000), registryMaxStalenessFromAgentsYAML(reg))
+}
+
+func TestRegistryMaxStaleness_UndeclaredIsZeroNotAGuess(t *testing.T) {
+	dir := t.TempDir()
+	reg := filepath.Join(dir, "agents.yaml")
+	require.NoError(t, os.WriteFile(reg, []byte("daemon_url: http://x:1\n"), 0o600))
+
+	require.Zero(t, registryMaxStalenessFromAgentsYAML(reg),
+		"no declared bound means no countdown; a guessed bound is a confident wrong number")
+}
