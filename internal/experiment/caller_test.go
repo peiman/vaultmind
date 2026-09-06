@@ -116,3 +116,18 @@ func TestUserSessionID_HeuristicStillAppliesWithoutAnExplicitID(t *testing.T) {
 	require.Equal(t, fc.UserSessionID, sc.UserSessionID,
 		"plain CLI use has no better signal; the time heuristic must survive")
 }
+
+// MUTATION-REVIEW FINDING: dropping the `explicit != ""` guard survived every
+// test — and grouping every session under the empty string is WORSE than the
+// heuristic it replaced, because it silently merges unrelated conversations
+// into one ledger.
+func TestUserSessionID_EmptyExplicitIDFallsBackToTheHeuristic(t *testing.T) {
+	db := openTestDB(t)
+	meta := map[string]any{"user": "u", "host": "h", experiment.MetaUserSessionID: ""}
+
+	sid, err := db.StartSessionWithCaller("", "cli", meta)
+	require.NoError(t, err)
+	got, err := db.GetSessionCaller(sid)
+	require.NoError(t, err)
+	require.NotEmpty(t, got.UserSessionID, "an empty id must never become the grouping key")
+}

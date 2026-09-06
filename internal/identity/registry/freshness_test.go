@@ -48,3 +48,41 @@ func TestFreshness_ReadsWindowWithoutAnyRootKey(t *testing.T) {
 	require.Equal(t, now.Unix(), vf)
 	require.Equal(t, now.Add(time.Hour).Unix(), vu)
 }
+
+// MUTATION-REVIEW FINDING: the doc comment promises "a local prediction and the
+// daemon's verdict cannot disagree about the boundary", and nothing checked it —
+// `>` → `>=` on valid_until survived. The premise of the whole helper is that it
+// PREDICTS VerifyAndLoad; that agreement is now the test.
+func TestIsStaleAt_AgreesWithVerifyAndLoadAcrossTheBoundaries(t *testing.T) {
+	rootPub, rootPriv := fixedEd25519(t, 0x5a)
+	base := time.Unix(1_700_000_000, 0)
+	maxStaleness := 24 * time.Hour
+
+	// valid_until INSIDE the staleness bound, deliberately: with valid_until at
+	// 48h and maxStaleness at 24h the age check always bites first, so the
+	// valid_until boundary is never actually exercised — a fixture that cannot
+	// reach the line it claims to guard (mutation-verified: `>` → `>=` survived
+	// that shape).
+	reg := Registry{Epoch: 1, ValidFrom: base.Unix(), ValidUntil: base.Add(12 * time.Hour).Unix()}
+	env, err := SignRegistry(rootPriv, reg)
+	require.NoError(t, err)
+
+	for _, now := range []time.Time{
+		base.Add(-time.Second),               // before valid_from
+		base,                                 // exactly valid_from
+		base.Add(12 * time.Hour),             // EXACTLY valid_until (inside the age bound, so this boundary is reachable)
+		base.Add(12*time.Hour + time.Second), // one tick past valid_until
+		base.Add(maxStaleness),               // exactly at the staleness bound
+		base.Add(maxStaleness + time.Second), // one tick past it
+	} {
+		vf, vu, ferr := Freshness(env)
+		require.NoError(t, ferr)
+		predicted := IsStaleAt(vf, vu, now, maxStaleness)
+
+		_, _, verr := VerifyAndLoad(rootPub, env, 0, now, maxStaleness)
+		authoritative := verr != nil
+
+		require.Equal(t, authoritative, predicted,
+			"local prediction and the daemon's verdict must agree at %s", now.UTC())
+	}
+}

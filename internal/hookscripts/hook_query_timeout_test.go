@@ -148,25 +148,56 @@ func TestRecallHook_BoundDoesNotClipAFastQuery(t *testing.T) {
 	assert.Contains(t, out, "some-note")
 }
 
-// The harness puts the real conversation id in every hook payload; both query
-// hooks must forward it so the session row records the CONVERSATION rather
-// than a 30-minute timing guess. Without it a subagent's tool call and its
-// parent's collapse into one working session, and anything keyed on that id
-// (cross-turn dedup first) withholds bodies from the participant with no
-// context at all.
+// MUTATION-REVIEW FINDING (2026-09-06): the two tests that lived here asserted
+// only that the string "VAULTMIND_USER_SESSION_ID" appears in a shell script.
+// Verified by mutation: they pass if the hook forwards a hardcoded constant,
+// and they pass if it reads the wrong JSON key (`sessionId`). One of them
+// looked "killed" only because a script-drift test noticed the edit — an
+// incidental kill that vanishes if both copies are mutated together.
+//
+// Behaviour, then. A stub binary echoes the env var it received, so the test
+// asserts the id the BINARY sees, not the text of the script that sends it.
 
-func TestRecallHook_ForwardsTheHarnessSessionID(t *testing.T) {
-	require.Contains(t, hookScriptBody(t, "vault-recall.sh"), "VAULTMIND_USER_SESSION_ID",
-		"the recall hook must pass the harness session id to the binary")
+// envEchoStub answers `ask` by printing one env var's value, so a test can
+// assert what the hook actually forwarded.
+func envEchoStub(varName string) string {
+	return "#!/bin/bash\nif [ \"$1\" = ask ]; then printf '%s\\n' \"$" + varName + "\"; fi\nexit 0\n"
 }
 
-func TestReachHook_ForwardsTheHarnessSessionID(t *testing.T) {
-	require.Contains(t, hookScriptBody(t, "vault-reach.sh"), "VAULTMIND_USER_SESSION_ID")
-}
-
-func hookScriptBody(t *testing.T, name string) string {
-	t.Helper()
-	b, err := os.ReadFile(name)
+func TestRecallHook_ForwardsTheRealSessionIDFromThePayload(t *testing.T) {
+	h := newHookEnv(t, envEchoStub("VAULTMIND_USER_SESSION_ID"))
+	stdin, err := json.Marshal(map[string]string{
+		"prompt":     "what do I know about spreading activation in memory systems",
+		"session_id": "conv-abc-123",
+	})
 	require.NoError(t, err)
-	return string(b)
+
+	out, _ := runHookScript(t, "vault-recall.sh", h.env(false), string(stdin))
+	require.Contains(t, out, "conv-abc-123",
+		"the harness id must reach the binary — a hardcoded constant or the wrong JSON key must not pass")
+}
+
+func TestReachHook_ForwardsTheRealSessionIDFromThePayload(t *testing.T) {
+	h := newHookEnv(t, envEchoStub("VAULTMIND_USER_SESSION_ID"))
+	stdin, err := json.Marshal(map[string]any{
+		"session_id": "conv-xyz-789",
+		"tool_input": map[string]string{"command": "git commit -m wip"},
+	})
+	require.NoError(t, err)
+
+	out, _ := runHookScript(t, "vault-reach.sh", h.env(false), string(stdin))
+	require.Contains(t, out, "conv-xyz-789")
+}
+
+// A payload with no session_id must degrade to the heuristic, not forward a
+// literal empty string that groups every session under "".
+func TestReachHook_NoSessionIDInPayloadForwardsNothingHarmful(t *testing.T) {
+	h := newHookEnv(t, envEchoStub("VAULTMIND_USER_SESSION_ID"))
+	stdin, err := json.Marshal(map[string]any{
+		"tool_input": map[string]string{"command": "git commit -m wip"},
+	})
+	require.NoError(t, err)
+
+	out, _ := runHookScript(t, "vault-reach.sh", h.env(false), string(stdin))
+	require.NotContains(t, out, "conv-", "no id in the payload means no id forwarded")
 }
