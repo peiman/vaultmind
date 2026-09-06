@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/base64"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -689,4 +690,85 @@ func TestMeshDoctor_FreshRegistryOfflineIsQuiet(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotContains(t, mi.Warnings, WarnMeshRegistryStale)
+}
+
+// REVIEW FINDING (both reviewers, independently, 2026-09-06): the freshness
+// check was dead on the exact configuration it was written for. evaluateTier3
+// returns nil on its SUCCESS path when an offline registry was supplied — and
+// since the declared agents.yaml registry_path made that the normal case, a
+// reachable daemon silently disabled the check. The existing "IsLoud" test
+// passed because its daemon served a matching root, so the warning came from
+// evaluateUnpinned's switch, never from checkRegistryFreshness.
+//
+// A fossil loopback daemon answers whoami and serves no root — so the path
+// that let the fossil hide the mute was also the path that disabled its alarm.
+
+func TestMeshDoctor_StaleRegistryWarnsEvenWhenTheDaemonIsReachable(t *testing.T) {
+	signed := time.Unix(1_700_000_000, 0)
+	rootPub, rootPriv := lowEntropyKey(t, "doctor-root-reachable-stale")
+	memberPub, memberPriv := lowEntropyKey(t, "doctor-member-reachable-stale")
+	raw, _ := buildSignedRegistry(t, rootPub, rootPriv, "agent:mira", memberPub, signed)
+
+	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{
+		KeyPath:       filepath.Join(t.TempDir(), "k.key"),
+		SocketPath:    filepath.Join(t.TempDir(), "missing.sock"),
+		RegistryBytes: raw, // declared via agents.yaml — the normal case now
+		Slug:          "agent:mira",
+		Now:           signed.Add(23*time.Hour + 30*time.Minute),
+		Signer:        &stubSigner{priv: memberPriv},
+		// Reachable, serves NO root: exactly a fossil daemon's shape.
+		Daemon: &stubDaemon{whoamiOK: true, rootErr: errors.New("no well-known root")},
+	})
+	require.NoError(t, err)
+	require.Contains(t, mi.Warnings, WarnMeshRegistryStale,
+		"a reachable daemon must not disable the freshness check on the operator's declared registry")
+}
+
+// REVIEW FINDING (silent-failure-hunter, 2026-09-06): "the fix is disabled by
+// default and undetectable when disabled." Freshness only runs when the
+// operator declares registry_path in agents.yaml; undeclared cascaded to
+// silence at six layers and produced output byte-identical to the day before
+// the mute. A declared-but-MISSING path was equally silent — same operator
+// typo, opposite handling from --mesh-registry, and the silent branch is the
+// one every new instruction steers people to.
+//
+// The precedent is two functions away: WarnMeshHeartbeatUnresolved exists
+// because a check that cannot run is not a pass.
+
+func TestMeshDoctor_UndeclaredRegistryReportsFreshnessUnchecked(t *testing.T) {
+	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{
+		KeyPath:    filepath.Join(t.TempDir(), "k.key"),
+		SocketPath: filepath.Join(t.TempDir(), "missing.sock"),
+		Slug:       "agent:mira",
+		Now:        time.Unix(1_700_000_000, 0),
+	})
+	require.NoError(t, err)
+	require.Contains(t, mi.Warnings, WarnMeshFreshnessUnchecked,
+		"no registry to read means freshness is UNKNOWN — silence here reads as healthy")
+}
+
+func TestMeshDoctor_DeclaredButUnreadableRegistryIsLoud(t *testing.T) {
+	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{
+		KeyPath:        filepath.Join(t.TempDir(), "k.key"),
+		SocketPath:     filepath.Join(t.TempDir(), "missing.sock"),
+		Slug:           "agent:mira",
+		Now:            time.Unix(1_700_000_000, 0),
+		RegistryUnread: "/declared/but/absent/registry.json",
+	})
+	require.NoError(t, err)
+	require.Contains(t, mi.Warnings, WarnMeshRegistryUnreadable,
+		"a declared path that cannot be read is a config error, not an absence of opinion")
+}
+
+func TestMeshDoctor_CorruptRegistryIsNotSwallowed(t *testing.T) {
+	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{
+		KeyPath:       filepath.Join(t.TempDir(), "k.key"),
+		SocketPath:    filepath.Join(t.TempDir(), "missing.sock"),
+		Slug:          "agent:mira",
+		Now:           time.Unix(1_700_000_000, 0),
+		RegistryBytes: []byte(`{"registry":"not-base64!!","root_sig":"x"}`),
+	})
+	require.NoError(t, err)
+	require.Contains(t, mi.Warnings, WarnMeshUnverifiable,
+		"a truncated scp or interrupted re-sign must not read as a healthy mesh")
 }

@@ -145,11 +145,23 @@ func runIdentityPaths(cmd *cobra.Command, _ []string) error {
 // and 23 hours" to one reader and "47 hours" to the clock. Goes negative once
 // past due — an already-refused registry reading as 0 would look like "today",
 // which is exactly the state that muted the mesh for a day.
-func registryDaysLeft(validFrom, maxStalenessSecs int64, now time.Time) (int, bool) {
+func registryDaysLeft(validFrom, validUntil, maxStalenessSecs int64, now time.Time) (int, bool) {
 	if maxStalenessSecs <= 0 {
 		return 0, false
 	}
-	remaining := (validFrom + maxStalenessSecs) - now.Unix()
+	// VerifyAndLoad refuses on THREE conditions; a countdown that models one of
+	// them is a confident wrong date. The nearer of (validFrom+maxStaleness)
+	// and validUntil decides, and a not-yet-valid registry is past due NOW
+	// rather than enjoying extra life — the same rule registry.IsStaleAt
+	// applies, kept in step with it deliberately.
+	deadline := validFrom + maxStalenessSecs
+	if validUntil > 0 && validUntil < deadline {
+		deadline = validUntil
+	}
+	remaining := deadline - now.Unix()
+	if validFrom > now.Unix() && remaining > 0 {
+		remaining = -remaining // refused right now; never read as more days left
+	}
 	days := remaining / 86400
 	if remaining < 0 && remaining%86400 != 0 {
 		days-- // floor toward past-due rather than truncating toward zero
@@ -177,11 +189,12 @@ func registryFreshness(now time.Time) (file, daysLeft string) {
 	if err != nil {
 		return file, ""
 	}
-	validFrom, _, err := registry.Freshness(env)
+	validFrom, validUntil, err := registry.Freshness(env)
 	if err != nil {
 		return file, ""
 	}
-	days, known := registryDaysLeft(validFrom, registryMaxStalenessFromAgentsYAML(registryPath()), now)
+	days, known := registryDaysLeft(validFrom, validUntil,
+		registryMaxStalenessFromAgentsYAML(registryPath(), projectPath()), now)
 	if !known {
 		return file, ""
 	}

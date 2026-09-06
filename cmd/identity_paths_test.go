@@ -213,20 +213,20 @@ func TestIdentityPaths_DaemonIsIdentityData(t *testing.T) {
 func TestRegistryDaysLeft_CountsAgainstTheDeclaredBound(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	// Signed 25 days ago against a 30-day hub bound ⇒ 5 days of send-life left.
-	got, known := registryDaysLeft(now.Add(-25*24*time.Hour).Unix(), 30*24*60*60, now)
+	got, known := registryDaysLeft(now.Add(-25*24*time.Hour).Unix(), now.Add(3650*24*time.Hour).Unix(), 30*24*60*60, now)
 	require.True(t, known)
 	require.Equal(t, 5, got)
 }
 
 func TestRegistryDaysLeft_UnknownWithoutADeclaredBound(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
-	_, known := registryDaysLeft(now.Unix(), 0, now)
+	_, known := registryDaysLeft(now.Unix(), now.Add(3650*24*time.Hour).Unix(), 0, now)
 	require.False(t, known, "no declared bound ⇒ no countdown, never an invented one")
 }
 
 func TestRegistryDaysLeft_GoesNegativeOnceStale(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
-	got, known := registryDaysLeft(now.Add(-31*24*time.Hour).Unix(), 30*24*60*60, now)
+	got, known := registryDaysLeft(now.Add(-31*24*time.Hour).Unix(), now.Add(3650*24*time.Hour).Unix(), 30*24*60*60, now)
 	require.True(t, known)
 	require.Negative(t, got, "already-refused must read as past due, not as zero")
 }
@@ -234,6 +234,37 @@ func TestRegistryDaysLeft_GoesNegativeOnceStale(t *testing.T) {
 func TestRegistryDaysLeft_RoundsDownSoItNeverOverpromises(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	// 5 days and 23 hours remaining reads as 5, not 6.
-	got, _ := registryDaysLeft(now.Add(-24*24*time.Hour-time.Hour).Unix(), 30*24*60*60, now)
+	got, _ := registryDaysLeft(now.Add(-24*24*time.Hour-time.Hour).Unix(), now.Add(3650*24*time.Hour).Unix(), 30*24*60*60, now)
+	require.Equal(t, 5, got)
+}
+
+// REVIEW FINDINGS (2026-09-06): the countdown modelled ONE of VerifyAndLoad's
+// three refusal conditions. It counted validFrom+maxStaleness and discarded
+// valid_until entirely, so a registry expiring in 48 hours reported "29 more
+// days"; and it had no future-validFrom guard, so a clock-skewed signer made
+// the number GROW while the daemon refused the registry outright. Both are the
+// confident-wrong-date this feature exists to avoid — and IsStaleAt, written in
+// the same commit, already handled both. The countdown just didn't call it.
+
+func TestRegistryDaysLeft_ValidUntilCanBeTheBindingConstraint(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	// Signed today, 30-day hub bound, but valid_until is 2 days out.
+	got, known := registryDaysLeft(now.Unix(), now.Add(48*time.Hour).Unix(), 30*24*60*60, now)
+	require.True(t, known)
+	require.Equal(t, 2, got, "the nearer of the two bounds decides; sends fail in 2 days, not 30")
+}
+
+func TestRegistryDaysLeft_FutureValidFromIsPastDueNotExtraLife(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	got, known := registryDaysLeft(now.Add(time.Hour).Unix(), now.Add(72*time.Hour).Unix(), 30*24*60*60, now)
+	require.True(t, known)
+	require.Negative(t, got,
+		"a not-yet-valid registry is refused NOW; the countdown must not read as more days left")
+}
+
+func TestRegistryDaysLeft_StalenessStillBindsWhenItIsTheNearerBound(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	got, known := registryDaysLeft(now.Add(-25*24*time.Hour).Unix(), now.Add(365*24*time.Hour).Unix(), 30*24*60*60, now)
+	require.True(t, known)
 	require.Equal(t, 5, got)
 }

@@ -280,7 +280,35 @@ func TestMeshWatchCountdown_UnknownEmitsNothing(t *testing.T) {
 		"no declared bound ⇒ no countdown, and no dangling text in the wake line")
 }
 
-func TestMeshWatchCountdown_NonNumericDegradesToInformational(t *testing.T) {
-	// A malformed value must not abort the wake line under `set -u`/pipefail.
-	require.NotPanics(t, func() { runCountdown(t, "garbage") })
+// REVIEW FINDING (2026-09-06): the previous version of this test asserted only
+// require.NotPanics — vacuous in Go, since the helper already require.NoError's
+// and shelling out cannot panic. It would have passed against ANY output,
+// including the one the code actually produced: "[registry fresh for garbage
+// more day(s)]". An unparseable value fell into the REASSURING branch, which is
+// calling corruption healthy — the failure class this whole feature treats.
+func TestMeshWatchCountdown_MalformedValueIsLoudNotReassuring(t *testing.T) {
+	for _, bad := range []string{"garbage", "1e3", "  ", "12x"} {
+		out := runCountdown(t, bad)
+		require.NotContains(t, out, "fresh for",
+			"a value that is not a number must never render as freshness (input %q)", bad)
+		require.Contains(t, out, "UNAVAILABLE",
+			"unknown must read as unknown (input %q)", bad)
+	}
+}
+
+// Days-left floors, so 0 means "up to 24 hours of send-life LEFT" — still
+// working. Claiming sends are refused on that day is a false present-tense
+// alarm whose remedy is an offline-root ceremony; the suite previously jumped
+// from 5 straight to -2 and never covered the boundary.
+func TestMeshWatchCountdown_ZeroIsTheLastGoodDayNotPastDue(t *testing.T) {
+	out := runCountdown(t, "0")
+	require.NotContains(t, out, "REFUSED", "0 days left is still valid; sends are not being refused yet")
+	require.Contains(t, out, "EXPIRES")
+}
+
+func TestMeshWatchCountdown_PastDueReadsWithoutADoubleNegative(t *testing.T) {
+	out := runCountdown(t, "-2")
+	require.Contains(t, out, "REGISTRY STALE")
+	require.NotContains(t, out, "-2 day(s) past", "the sign is already carried by the word past")
+	require.Contains(t, out, "2 day(s) past")
 }

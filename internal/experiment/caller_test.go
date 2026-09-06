@@ -3,6 +3,8 @@ package experiment_test
 import (
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/experiment"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -71,25 +73,31 @@ func TestUserSessionID_ExplicitIDWinsOverTheHeuristic(t *testing.T) {
 	require.Equal(t, "conv-real-1", got.UserSessionID)
 }
 
-func TestUserSessionID_TwoConversationsStaySeparateEvenBackToBack(t *testing.T) {
+func TestUserSessionID_ExplicitIDsDefeatTheProximityCollapse(t *testing.T) {
 	db := openTestDB(t)
-	base := map[string]any{"user": "u", "host": "h"}
+	plain := map[string]any{"user": "u", "host": "h"}
 
-	parentMeta := map[string]any{"user": "u", "host": "h", "user_session_id": "conv-parent"}
-	subMeta := map[string]any{"user": "u", "host": "h", "user_session_id": "conv-subagent"}
+	// FIRST establish the hazard rather than assuming it: two back-to-back
+	// sessions with no explicit id collapse into ONE working session. That is
+	// the collapse a subagent's tool call would suffer against its parent's.
+	a, err := db.StartSessionWithCaller("", "vaultmind-reach-hook", plain)
+	require.NoError(t, err)
+	b, err := db.StartSessionWithCaller("", "vaultmind-reach-hook", plain)
+	require.NoError(t, err)
+	ac, err := db.GetSessionCaller(a)
+	require.NoError(t, err)
+	bc, err := db.GetSessionCaller(b)
+	require.NoError(t, err)
+	require.Equal(t, ac.UserSessionID, bc.UserSessionID,
+		"precondition: without an explicit id the heuristic merges them — this is the hazard")
 
-	p, err := db.StartSessionWithCaller("", "vaultmind-reach-hook", parentMeta)
+	// THEN show the explicit id is what separates them.
+	c, err := db.StartSessionWithCaller("", "vaultmind-reach-hook",
+		map[string]any{"user": "u", "host": "h", experiment.MetaUserSessionID: "conv-other"})
 	require.NoError(t, err)
-	s, err := db.StartSessionWithCaller("", "vaultmind-reach-hook", subMeta)
+	cc, err := db.GetSessionCaller(c)
 	require.NoError(t, err)
-
-	pc, err := db.GetSessionCaller(p)
-	require.NoError(t, err)
-	sc, err := db.GetSessionCaller(s)
-	require.NoError(t, err)
-	require.NotEqual(t, pc.UserSessionID, sc.UserSessionID,
-		"same caller, same host, back to back — only the supplied id can keep a subagent out of its parent's ledger")
-	_ = base
+	require.NotEqual(t, ac.UserSessionID, cc.UserSessionID)
 }
 
 func TestUserSessionID_HeuristicStillAppliesWithoutAnExplicitID(t *testing.T) {

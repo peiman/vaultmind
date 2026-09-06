@@ -236,25 +236,23 @@ func applyOfflineRegistry(in *query.MeshDoctorInput, registryFlag string) (bool,
 	if registryFlag == "" {
 		return false, nil
 	}
-	if declared {
-		// A declared path that has gone missing is a real finding, but it must
-		// not turn `doctor` into an error — the rest of the report still has
-		// value. Absent file ⇒ no offline registry, same as none declared.
-		if _, statErr := os.Stat(registryFlag); statErr != nil {
-			// KNOWN GAP, named rather than hidden: a declared path that has
-			// gone missing currently degrades to "no offline registry" and
-			// says nothing. Surfacing it needs a warning channel from this
-			// layer into the mesh section; until then the declared-but-absent
-			// case is quiet, which is the disease this whole change treats.
-			return false, nil //nolint:nilerr // a missing declared file must not turn doctor into an error
-		}
-	}
-	// registryFlag is an operator-supplied path (explicit --mesh-registry flag),
-	// not attacker-controlled input — same trust class as the vault path.
+	// registryFlag is an operator-supplied path (an explicit --mesh-registry
+	// flag, or registry_path from the operator's own agents.yaml), not
+	// attacker-controlled input — same trust class as the vault path.
 	// #nosec G304
 	// nosemgrep: go-path-traversal
 	raw, err := os.ReadFile(registryFlag)
 	if err != nil {
+		if declared {
+			// A DECLARED path that cannot be read is a config error and must
+			// reach the section. It used to degrade to "no offline registry",
+			// which is indistinguishable from never declaring one — the same
+			// operator typo handled loudly via the flag and silently here,
+			// with the silent branch being the one the docs steer people to.
+			// The warning channel this needed already existed.
+			in.RegistryUnread = registryFlag
+			return false, nil //nolint:nilerr // reported as a warning, not an abort: doctor must still render
+		}
 		return false, fmt.Errorf("%s: %w", meshDoctorErrRegistry, err)
 	}
 	in.RegistryBytes = raw
@@ -345,7 +343,7 @@ func registryFileFromAgentsYAML(registryPath, projectDir string) string {
 
 // registryMaxStalenessFromAgentsYAML reads the declared hub freshness bound in
 // seconds, or 0 when undeclared (⇒ no countdown, stated as unknown).
-func registryMaxStalenessFromAgentsYAML(registryPath string) int64 {
+func registryMaxStalenessFromAgentsYAML(registryPath, projectDir string) int64 {
 	if registryPath == "" {
 		return 0
 	}
@@ -359,6 +357,16 @@ func registryMaxStalenessFromAgentsYAML(registryPath string) int64 {
 	var ay agentsYAML
 	if err := yaml.Unmarshal(raw, &ay); err != nil {
 		return 0
+	}
+	// Per-agent first, exactly like registry_path and daemon_url. Shipping a
+	// per-agent field the resolver never read meant an operator who declared
+	// the bound in the natural place — beside their own registry_path — got
+	// silence and no error.
+	want := filepath.Clean(projectDir)
+	for _, a := range ay.Agents {
+		if filepath.Clean(a.ProjectPath) == want && a.RegistryMaxStalenessSecs > 0 {
+			return a.RegistryMaxStalenessSecs
+		}
 	}
 	return ay.RegistryMaxStalenessSecs
 }

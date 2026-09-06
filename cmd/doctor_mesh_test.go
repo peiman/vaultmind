@@ -544,7 +544,7 @@ func TestRegistryMaxStaleness_DeclaredIsRead(t *testing.T) {
 	reg := filepath.Join(dir, "agents.yaml")
 	require.NoError(t, os.WriteFile(reg, []byte("registry_max_staleness_secs: 2592000\n"), 0o600))
 
-	require.Equal(t, int64(2592000), registryMaxStalenessFromAgentsYAML(reg))
+	require.Equal(t, int64(2592000), registryMaxStalenessFromAgentsYAML(reg, dir))
 }
 
 func TestRegistryMaxStaleness_UndeclaredIsZeroNotAGuess(t *testing.T) {
@@ -552,6 +552,19 @@ func TestRegistryMaxStaleness_UndeclaredIsZeroNotAGuess(t *testing.T) {
 	reg := filepath.Join(dir, "agents.yaml")
 	require.NoError(t, os.WriteFile(reg, []byte("daemon_url: http://x:1\n"), 0o600))
 
-	require.Zero(t, registryMaxStalenessFromAgentsYAML(reg),
+	require.Zero(t, registryMaxStalenessFromAgentsYAML(reg, dir),
 		"no declared bound means no countdown; a guessed bound is a confident wrong number")
+}
+
+// The per-agent bound was declared and documented but never read — an operator
+// setting it beside their own registry_path got silence and no error.
+func TestRegistryMaxStaleness_PerAgentBeatsTopLevel(t *testing.T) {
+	dir := t.TempDir()
+	reg := filepath.Join(dir, "agents.yaml")
+	body := "registry_max_staleness_secs: 2592000\nagents:\n  - slug: agent:mira\n    project_path: " + dir +
+		"\n    registry_max_staleness_secs: 86400\n"
+	require.NoError(t, os.WriteFile(reg, []byte(body), 0o600))
+
+	require.Equal(t, int64(86400), registryMaxStalenessFromAgentsYAML(reg, dir),
+		"the agent's own declared bound must win, exactly like registry_path and daemon_url")
 }

@@ -99,7 +99,21 @@ const (
 	// long-poll and the wake-watcher keep working while every signed send is
 	// refused. That is how the 2026-09-06 mesh-wide mute stayed unnoticed for
 	// a day with every liveness check green.
-	WarnMeshRegistryStale = "the registry is past its freshness bound — signed SENDS will be refused while reads keep working; re-sign and redeploy it"
+	// WarnMeshFreshnessUnchecked: no registry was available to read, so the
+	// freshness question was never asked. Named because "disabled" and
+	// "healthy" printed identically — the same reasoning that produced
+	// WarnMeshHeartbeatUnresolved: a check that cannot run is not a pass.
+	WarnMeshFreshnessUnchecked = "registry freshness UNCHECKED — no registry to read (declare registry_path in agents.yaml); staleness is UNKNOWN, not OK"
+	// WarnMeshRegistryUnreadable: a path WAS declared and could not be read.
+	// A typo'd or rotated registry_path is a config error; degrading it to
+	// silence gives the same output as never having declared one.
+	WarnMeshRegistryUnreadable = "the declared registry file could not be read — check registry_path in agents.yaml"
+	// WarnMeshSelfConsistencyFailed is the UNPINNED twin of Unverifiable. The
+	// pinned wording blames "your pinned root", which on this path the
+	// operator does not have — two warnings in one section, one saying you
+	// have no pin and the other blaming it.
+	WarnMeshSelfConsistencyFailed = "the registry did NOT verify against the daemon-advertised root — it is not even self-consistent (bad signature, stale, or rolled back)"
+	WarnMeshRegistryStale         = "the registry is past its freshness bound — signed SENDS will be refused while reads keep working; re-sign and redeploy it"
 	// WarnMeshHeartbeatUnresolved: the check could not run. Rendering silence
 	// (or a filesystem verdict) here is how a seven-day-dead watcher reported
 	// "not found" — the checker had no path and never looked.
@@ -147,8 +161,11 @@ type MeshDoctorInput struct {
 	PinnedRootPub ed25519.PublicKey // nil ⇒ UNPINNED path (never green)
 	NetworkID     string
 	RegistryBytes []byte // offline registry override (--mesh-registry); else fetched
-	Slug          string
-	Signer        MeshSigner // keyless proof-of-possession
+	// RegistryUnread carries a DECLARED registry path that could not be read,
+	// so the cmd layer's failure reaches the section instead of vanishing.
+	RegistryUnread string
+	Slug           string
+	Signer         MeshSigner // keyless proof-of-possession
 
 	// Tier-3 reachability.
 	Daemon        MeshDaemonClient
@@ -233,8 +250,10 @@ func BuildMeshIdentity(ctx context.Context, in MeshDoctorInput) (*DoctorMeshIden
 
 	// Freshness LAST and unconditionally: it is the one registry question that
 	// needs neither a pin nor a reachable daemon, so it must not sit inside
-	// either path's early returns.
-	checkRegistryFreshness(mi, registryBytes, in.Now)
+	// either path's early returns — nor downstream of a function that returns
+	// nil on its success path, which is how this check spent its first hours
+	// doing nothing at all.
+	checkRegistryFreshness(mi, in, registryBytes, in.Now)
 
 	return mi, nil
 }
@@ -248,13 +267,22 @@ func BuildMeshIdentity(ctx context.Context, in MeshDoctorInput) (*DoctorMeshIden
 // doctor's loopback-pinned probe can never reach — and the mesh went mute for
 // a day behind checks that all reported green. Warnings dedupe by string, so
 // the pinned/unpinned paths naming the same condition is harmless.
-func checkRegistryFreshness(mi *DoctorMeshIdentity, regBytes []byte, now time.Time) {
+func checkRegistryFreshness(mi *DoctorMeshIdentity, in MeshDoctorInput, regBytes []byte, now time.Time) {
+	if in.RegistryUnread != "" {
+		mi.addWarning(WarnMeshRegistryUnreadable)
+		return
+	}
 	if len(regBytes) == 0 {
+		mi.addWarning(WarnMeshFreshnessUnchecked)
 		return
 	}
 	env, err := registry.ParseDistribution(regBytes)
 	if err != nil {
-		return // unparseable is Unverifiable's business, not freshness's
+		// Unparseable used to defer to "Unverifiable's business" — but on the
+		// unpinned path that handler returns before it can speak, so a
+		// truncated scp or an interrupted re-sign vanished entirely.
+		mi.addWarning(WarnMeshUnverifiable)
+		return
 	}
 	validFrom, validUntil, err := registry.Freshness(env)
 	if err != nil {
@@ -343,12 +371,18 @@ func evaluateTier3(ctx context.Context, mi *DoctorMeshIdentity, in MeshDoctorInp
 	}
 
 	// Reuse a daemon-served registry for tier-2 when no offline registry given.
+	// Returning the OPERATOR'S bytes rather than nil in the else-branch is the
+	// point: a reachable daemon used to hand nil downstream whenever an offline
+	// registry existed, which silently disabled the freshness check on exactly
+	// the configuration it was written for — a fossil loopback daemon answers
+	// whoami, serves no root, and thereby switched off its own alarm.
 	if len(in.RegistryBytes) == 0 {
 		if dir, derr := in.Daemon.FetchDirectory(ctx); derr == nil {
 			return dir
 		}
+		return nil
 	}
-	return nil
+	return in.RegistryBytes
 }
 
 // checkHeartbeat reads the watcher heartbeat file's mtime and sets one of four
@@ -482,7 +516,7 @@ func evaluateUnpinned(ctx context.Context, mi *DoctorMeshIdentity, in MeshDoctor
 	case strings.Contains(verr.Error(), registry.ErrStale):
 		mi.addWarning(WarnMeshRegistryStale)
 	default:
-		mi.addWarning(WarnMeshUnverifiable)
+		mi.addWarning(WarnMeshSelfConsistencyFailed)
 	}
 }
 
