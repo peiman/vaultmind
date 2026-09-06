@@ -503,3 +503,33 @@ func TestResolveMeshInput_NoSignalsStillOmitsTheSection(t *testing.T) {
 func TestResolveMeshInput_DaemonRemainsASignal(t *testing.T) {
 	require.True(t, meshSignalPresent(meshSignals{daemonReachable: true}))
 }
+
+// Reading the registry file is only useful if doctor knows where it is without
+// being told each time. Same ladder as slug and daemon_url: per-agent entry,
+// then top-level, then nothing (never a guessed path).
+
+func TestRegistryFileFromAgentsYAML_PerAgentBeatsTopLevel(t *testing.T) {
+	dir := t.TempDir()
+	reg := filepath.Join(dir, "agents.yaml")
+	body := "registry_path: /top/registry.json\nagents:\n  - slug: agent:mira\n    project_path: " + dir + "\n    registry_path: /mine/registry.json\n"
+	require.NoError(t, os.WriteFile(reg, []byte(body), 0o600))
+
+	require.Equal(t, "/mine/registry.json", registryFileFromAgentsYAML(reg, dir))
+}
+
+func TestRegistryFileFromAgentsYAML_FallsBackToTopLevel(t *testing.T) {
+	dir := t.TempDir()
+	reg := filepath.Join(dir, "agents.yaml")
+	require.NoError(t, os.WriteFile(reg, []byte("registry_path: /top/registry.json\n"), 0o600))
+
+	require.Equal(t, "/top/registry.json", registryFileFromAgentsYAML(reg, dir))
+}
+
+func TestRegistryFileFromAgentsYAML_UnsetIsEmpty(t *testing.T) {
+	dir := t.TempDir()
+	reg := filepath.Join(dir, "agents.yaml")
+	require.NoError(t, os.WriteFile(reg, []byte("daemon_url: http://x:1\n"), 0o600))
+
+	require.Empty(t, registryFileFromAgentsYAML(reg, dir),
+		"no declared path means none — doctor must not guess where a trust root lives")
+}

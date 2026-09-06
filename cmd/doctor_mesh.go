@@ -224,8 +224,30 @@ func applyPinAndNetwork(in *query.MeshDoctorInput, rootFlag string) (bool, error
 // applyOfflineRegistry reads a --mesh-registry file into the input when given.
 // A passed-but-unreadable file is a hard error (the operator named a file).
 func applyOfflineRegistry(in *query.MeshDoctorInput, registryFlag string) (bool, error) {
+	// An explicit flag wins; otherwise fall back to the DEPLOYED registry the
+	// operator declared in agents.yaml. Without this fallback the freshness
+	// check only ran when someone remembered to pass --mesh-registry, i.e.
+	// never during the day the mesh was mute.
+	declared := false
+	if registryFlag == "" {
+		registryFlag = registryFileFromAgentsYAML(registryPath(), projectPath())
+		declared = registryFlag != ""
+	}
 	if registryFlag == "" {
 		return false, nil
+	}
+	if declared {
+		// A declared path that has gone missing is a real finding, but it must
+		// not turn `doctor` into an error — the rest of the report still has
+		// value. Absent file ⇒ no offline registry, same as none declared.
+		if _, statErr := os.Stat(registryFlag); statErr != nil {
+			// KNOWN GAP, named rather than hidden: a declared path that has
+			// gone missing currently degrades to "no offline registry" and
+			// says nothing. Surfacing it needs a warning channel from this
+			// layer into the mesh section; until then the declared-but-absent
+			// case is quiet, which is the disease this whole change treats.
+			return false, nil //nolint:nilerr // a missing declared file must not turn doctor into an error
+		}
 	}
 	// registryFlag is an operator-supplied path (explicit --mesh-registry flag),
 	// not attacker-controlled input — same trust class as the vault path.
@@ -293,6 +315,34 @@ func daemonFromAgentsYAML(registryPath, projectDir string) string {
 	return ay.DaemonURL
 }
 
+// registryFileFromAgentsYAML resolves the deployed registry file for projectDir:
+// the matching agent's registry_path, else the top-level registry_path, else ""
+// (never a guessed location). Same file, same match, same trust tier as
+// slugFromAgentsYAML and daemonFromAgentsYAML.
+func registryFileFromAgentsYAML(registryPath, projectDir string) string {
+	if registryPath == "" || projectDir == "" {
+		return ""
+	}
+	// Same operator-controlled path as the sibling resolvers above.
+	// #nosec G304 G703
+	// nosemgrep: go-path-traversal
+	raw, err := os.ReadFile(registryPath)
+	if err != nil {
+		return ""
+	}
+	var ay agentsYAML
+	if err := yaml.Unmarshal(raw, &ay); err != nil {
+		return ""
+	}
+	want := filepath.Clean(projectDir)
+	for _, a := range ay.Agents {
+		if filepath.Clean(a.ProjectPath) == want && a.RegistryPath != "" {
+			return a.RegistryPath
+		}
+	}
+	return ay.RegistryPath
+}
+
 // projectPath returns AGENT_CHAT_PROJECT_PATH, falling back to the working dir.
 func projectPath() string {
 	if p := os.Getenv(envProjectPath); p != "" {
@@ -314,10 +364,18 @@ type agentsYAML struct {
 	// convincing, dead mesh — provably alive by every liveness check, deaf to
 	// the fleet. (workhorse, first canonical adoption, 2026-08-23.)
 	DaemonURL string `yaml:"daemon_url"`
-	Agents    []struct {
-		Slug        string `yaml:"slug"`
-		ProjectPath string `yaml:"project_path"`
-		DaemonURL   string `yaml:"daemon_url"`
+	// RegistryPath (top-level) is where the DEPLOYED signed registry lives on
+	// this machine. Per-agent RegistryPath overrides it. Declared rather than
+	// guessed for the same reason as DaemonURL: a guessed path is how a fossil
+	// artifact gets believed. Reading the file is what makes the freshness
+	// check work at all on a fleet whose daemon is remote — doctor's daemon
+	// probe is loopback-pinned by design, so it can never fetch that registry.
+	RegistryPath string `yaml:"registry_path"`
+	Agents       []struct {
+		Slug         string `yaml:"slug"`
+		ProjectPath  string `yaml:"project_path"`
+		DaemonURL    string `yaml:"daemon_url"`
+		RegistryPath string `yaml:"registry_path"`
 	} `yaml:"agents"`
 }
 

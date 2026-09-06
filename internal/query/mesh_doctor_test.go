@@ -646,3 +646,47 @@ func TestMeshDoctor_UnpinnedFreshRegistryIsNotFlaggedStale(t *testing.T) {
 	require.NoError(t, err)
 	require.NotContains(t, mi.Warnings, WarnMeshRegistryStale)
 }
+
+// Offline freshness: the check must answer from the FILE, with no daemon and
+// no pin. That is the whole point — doctor's daemon probe is loopback-pinned
+// by design and this fleet's daemon is remote, so a check that needs the
+// daemon is a check that never runs here.
+
+func TestMeshDoctor_StaleRegistryWarnsWithNoDaemonAndNoPin(t *testing.T) {
+	signed := time.Unix(1_700_000_000, 0)
+	rootPub, rootPriv := lowEntropyKey(t, "doctor-root-offline-stale")
+	memberPub, memberPriv := lowEntropyKey(t, "doctor-member-offline-stale")
+	raw, _ := buildSignedRegistry(t, rootPub, rootPriv, "agent:mira", memberPub, signed)
+
+	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{
+		KeyPath:       filepath.Join(t.TempDir(), "k.key"),
+		SocketPath:    filepath.Join(t.TempDir(), "missing.sock"),
+		RegistryBytes: raw,
+		Slug:          "agent:mira",
+		Now:           signed.Add(23*time.Hour + 30*time.Minute),
+		Signer:        &stubSigner{priv: memberPriv},
+		Daemon:        nil, // no daemon at all — the live shape for a remote hub
+	})
+	require.NoError(t, err)
+	require.Contains(t, mi.Warnings, WarnMeshRegistryStale,
+		"freshness is a property of the bytes; it must not depend on a daemon being reachable")
+}
+
+func TestMeshDoctor_FreshRegistryOfflineIsQuiet(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	rootPub, rootPriv := lowEntropyKey(t, "doctor-root-offline-fresh")
+	memberPub, memberPriv := lowEntropyKey(t, "doctor-member-offline-fresh")
+	raw, _ := buildSignedRegistry(t, rootPub, rootPriv, "agent:mira", memberPub, now)
+
+	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{
+		KeyPath:       filepath.Join(t.TempDir(), "k.key"),
+		SocketPath:    filepath.Join(t.TempDir(), "missing.sock"),
+		RegistryBytes: raw,
+		Slug:          "agent:mira",
+		Now:           now,
+		Signer:        &stubSigner{priv: memberPriv},
+		Daemon:        nil,
+	})
+	require.NoError(t, err)
+	require.NotContains(t, mi.Warnings, WarnMeshRegistryStale)
+}

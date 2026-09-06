@@ -231,7 +231,38 @@ func BuildMeshIdentity(ctx context.Context, in MeshDoctorInput) (*DoctorMeshIden
 	// Tier 2 — authenticity.
 	evaluateTier2(ctx, mi, in, registryBytes)
 
+	// Freshness LAST and unconditionally: it is the one registry question that
+	// needs neither a pin nor a reachable daemon, so it must not sit inside
+	// either path's early returns.
+	checkRegistryFreshness(mi, registryBytes, in.Now)
+
 	return mi, nil
+}
+
+// checkRegistryFreshness warns when the registry is past the freshness bound,
+// reading the window straight out of the bytes.
+//
+// Signature verification needs a root key and (unpinned) a reachable daemon;
+// the clock needs neither. Keeping them together made the staleness question
+// unanswerable on exactly the deployment that needed it — a remote hub, where
+// doctor's loopback-pinned probe can never reach — and the mesh went mute for
+// a day behind checks that all reported green. Warnings dedupe by string, so
+// the pinned/unpinned paths naming the same condition is harmless.
+func checkRegistryFreshness(mi *DoctorMeshIdentity, regBytes []byte, now time.Time) {
+	if len(regBytes) == 0 {
+		return
+	}
+	env, err := registry.ParseDistribution(regBytes)
+	if err != nil {
+		return // unparseable is Unverifiable's business, not freshness's
+	}
+	validFrom, validUntil, err := registry.Freshness(env)
+	if err != nil {
+		return
+	}
+	if registry.IsStaleAt(validFrom, validUntil, now, doctorMaxStaleness) {
+		mi.addWarning(WarnMeshRegistryStale)
+	}
 }
 
 // checkKeyCustody fills tier-1 booleans from an Lstat of the key path — STAT
@@ -284,13 +315,18 @@ func evaluateTier3(ctx context.Context, mi *DoctorMeshIdentity, in MeshDoctorInp
 	checkHeartbeat(mi, in.HeartbeatPath, in.Now)
 	checkRearm(mi, in.LastwakePath, in.LastarmPath)
 
+	// An OFFLINE registry the operator handed us stands on its own. Returning
+	// nil here discarded it the moment no daemon answered, which is the normal
+	// state for a fleet whose daemon is remote (doctor's probe is loopback-
+	// pinned by design) — so every registry check silently did nothing on the
+	// deployments that most needed them.
 	if in.Daemon == nil {
-		return nil
+		return in.RegistryBytes
 	}
 	reachable, _, _ := in.Daemon.Whoami(ctx)
 	mi.DaemonReachable = reachable
 	if !reachable {
-		return nil
+		return in.RegistryBytes
 	}
 
 	// Factual served mode from the well-known root presence (200 vs 404).
