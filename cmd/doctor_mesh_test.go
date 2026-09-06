@@ -445,3 +445,61 @@ func buildCmdSignedRegistry(t *testing.T, rootPub ed25519.PublicKey, rootPriv ed
 	require.NoError(t, err)
 	return raw, registry.NetworkID(rootPub)
 }
+
+// 2026-09-06: doctor probed a HARDCODED loopback default while the fleet's
+// daemon address already lived in agents.yaml — the same ladder this file
+// resolves for `identity paths`. After the pre-migration loopback daemon was
+// retired, doctor's probe hit a dead port, reported "daemon: unreachable", and
+// silently skipped every registry check that depends on the daemon-advertised
+// root. That is why doctor stayed green for a day while the whole mesh's
+// signed sends were refused for a stale registry.
+//
+// A guessed address is worse than none: before the retirement the same default
+// would have verified a FOSSIL daemon's stale registry and called it healthy.
+
+func TestDoctorDaemonURL_PrefersRegistryOverLoopbackDefault(t *testing.T) {
+	dir := t.TempDir()
+	reg := filepath.Join(dir, "agents.yaml")
+	require.NoError(t, os.WriteFile(reg, []byte("daemon_url: \"http://100.64.22.69:8080\"\nagents:\n  - slug: agent:mira\n    project_path: "+dir+"\n"), 0o600))
+
+	got := resolveDoctorDaemonURL("", reg, dir)
+	require.Equal(t, "http://100.64.22.69:8080", got,
+		"the registry's daemon_url must win over any built-in default")
+}
+
+func TestDoctorDaemonURL_EnvOverridesRegistry(t *testing.T) {
+	dir := t.TempDir()
+	reg := filepath.Join(dir, "agents.yaml")
+	require.NoError(t, os.WriteFile(reg, []byte("daemon_url: \"http://registry:8080\"\n"), 0o600))
+
+	require.Equal(t, "http://explicit:9999", resolveDoctorDaemonURL("http://explicit:9999", reg, dir))
+}
+
+func TestDoctorDaemonURL_UnresolvedIsEmptyNotAGuess(t *testing.T) {
+	dir := t.TempDir()
+	require.Empty(t, resolveDoctorDaemonURL("", filepath.Join(dir, "absent.yaml"), dir),
+		"with no address anywhere, doctor must report UNRESOLVED — probing a guessed port is how a fossil daemon gets believed")
+}
+
+// The whole mesh section was suppressed unless a mesh "signal" existed, and
+// daemon-reachability was the signal that carried this deployment. When the
+// pre-migration loopback daemon was retired, the section — heartbeat line,
+// warnings, everything — silently disappeared for an agent that IS on the
+// mesh, because the fleet's real daemon is remote and doctorclient is
+// loopback-pinned by design. The mesh then went mute for a day with doctor
+// printing nothing about it. A resolved slug means the operator is on the
+// mesh; that alone must keep the section visible.
+
+func TestResolveMeshInput_SlugAloneKeepsTheSectionVisible(t *testing.T) {
+	require.True(t, meshSignalPresent(meshSignals{slug: "agent:mira"}),
+		"a resolved slug is a mesh identity; suppressing the section hides the heartbeat too")
+}
+
+func TestResolveMeshInput_NoSignalsStillOmitsTheSection(t *testing.T) {
+	require.False(t, meshSignalPresent(meshSignals{}),
+		"a machine with no mesh identity at all should not grow a mesh section")
+}
+
+func TestResolveMeshInput_DaemonRemainsASignal(t *testing.T) {
+	require.True(t, meshSignalPresent(meshSignals{daemonReachable: true}))
+}

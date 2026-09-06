@@ -26,8 +26,6 @@ import (
 const (
 	// envDaemonURL is the chat-daemon base URL env var (loopback-pinned client).
 	envDaemonURL = "AGENT_CHAT_DAEMON_URL"
-	// defaultDaemonURL is the agent-chat daemon's default loopback HTTP endpoint.
-	defaultDaemonURL = "http://127.0.0.1:7850"
 	// envAgentRegistry is the agents.yaml path env var.
 	envAgentRegistry = "AGENT_CHAT_REGISTRY"
 	// envProjectPath is the project-path env var used to resolve the agent slug.
@@ -146,11 +144,40 @@ func resolveMeshInput(cmd *cobra.Command) (query.MeshDoctorInput, bool, error) {
 	in.Daemon = daemon
 	daemonReachable := daemon != nil && daemonIsReachable(cmd.Context(), daemon)
 
-	keyPresent := keyFileExists(keyPath)
-	flagPassed := rootFlag != "" || registryFlag != "" || slugFlag != "" ||
-		cmd.Flags().Changed("mesh-heartbeat")
-	present := keyPresent || anchorPresent || registryPresent || flagPassed || daemonReachable
-	return in, present, nil
+	sig := meshSignals{
+		keyPresent:      keyFileExists(keyPath),
+		anchorPresent:   anchorPresent,
+		registryPresent: registryPresent,
+		flagPassed: rootFlag != "" || registryFlag != "" || slugFlag != "" ||
+			cmd.Flags().Changed("mesh-heartbeat"),
+		daemonReachable: daemonReachable,
+		slug:            slug,
+	}
+	return in, meshSignalPresent(sig), nil
+}
+
+// meshSignals are the facts that mean "this operator is on the mesh", and so
+// the doctor section must be rendered rather than omitted.
+type meshSignals struct {
+	keyPresent      bool
+	anchorPresent   bool
+	registryPresent bool
+	flagPassed      bool
+	daemonReachable bool
+	slug            string
+}
+
+// meshSignalPresent reports whether to render the mesh section.
+//
+// slug is in the list because omitting it cost a day of silence: this fleet's
+// daemon is REMOTE and doctorclient is loopback-pinned by design, so
+// daemonReachable is permanently false here. It was true only while a
+// pre-migration loopback fossil answered; retiring that fossil deleted the
+// whole section — heartbeat, warnings and all — for an agent demonstrably on
+// the mesh. A resolved slug is a mesh identity on its own.
+func meshSignalPresent(s meshSignals) bool {
+	return s.keyPresent || s.anchorPresent || s.registryPresent ||
+		s.flagPassed || s.daemonReachable || s.slug != ""
 }
 
 // applyPinAndNetwork sets the pinned root + network id from --mesh-root-pubkey
@@ -328,13 +355,30 @@ func slugFromAgentsYAML(registryPath, projectDir string) string {
 	return ""
 }
 
-// newDoctorDaemonClient builds the loopback-pinned read-only daemon client from
-// the daemon URL env (default loopback). A construction failure (bad URL) yields
+// resolveDoctorDaemonURL resolves the chat-daemon address the same way
+// `identity paths` does: explicit env override, else the registry's per-agent
+// or top-level daemon_url, else "" — never a guessed default.
+//
+// The address is IDENTITY DATA. A built-in loopback default silently attached
+// doctor to whatever answered on that port: first a pre-migration FOSSIL
+// serving a two-week-old mesh, then — once that was retired — nothing at all,
+// which doctor reported as "daemon: unreachable" while quietly skipping every
+// registry check that needs the daemon-advertised root. Empty means UNRESOLVED
+// and is reported as such; it does not mean loopback.
+func resolveDoctorDaemonURL(envURL, registryPath, projectDir string) string {
+	if envURL != "" {
+		return envURL
+	}
+	return daemonFromAgentsYAML(registryPath, projectDir)
+}
+
+// newDoctorDaemonClient builds the read-only daemon client from the resolved
+// address. An unresolved address or a construction failure (bad URL) yields
 // nil — tier-3 then reports the daemon unreachable rather than erroring doctor.
 func newDoctorDaemonClient() query.MeshDaemonClient {
-	url := os.Getenv(envDaemonURL)
+	url := resolveDoctorDaemonURL(os.Getenv(envDaemonURL), registryPath(), projectPath())
 	if url == "" {
-		url = defaultDaemonURL
+		return nil
 	}
 	c, err := doctorclient.New(url)
 	if err != nil {
