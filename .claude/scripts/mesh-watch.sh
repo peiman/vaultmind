@@ -73,12 +73,25 @@ registry_countdown() {
   # value, so an unvalidated version fell through to the else-branch and
   # rendered "[registry fresh for garbage more day(s)]" — corruption reported
   # as health, which is the exact class this countdown exists to end.
-  case "$VM_MESH_REGISTRY_DAYS_LEFT" in
-    ''|*[!0-9-]*|*-*[!0-9]*|-)
+  # Strip ONE leading sign, then demand digits only. The previous pattern
+  # admitted interior and trailing '-' ("5-3", "0-"), and a bignum bash cannot
+  # compare — all of which fell through to the reassuring branch.
+  # Width-bounded as well as digits-only: a value can be all digits and still
+  # be uncomparable to bash ("-999999999999999999999"), and an uncomparable
+  # value used to land in the reassuring branch. No real countdown needs more
+  # than 9 digits.
+  _vm_days_abs="${VM_MESH_REGISTRY_DAYS_LEFT#-}"
+  case "$_vm_days_abs" in
+    ''|*[!0-9]*)
       printf ' [registry countdown UNAVAILABLE: %s — cannot tell you when sends start failing]' \
         "$VM_MESH_REGISTRY_DAYS_LEFT"
       return 0 ;;
   esac
+  if [ "${#_vm_days_abs}" -gt 9 ]; then
+    printf ' [registry countdown UNAVAILABLE: %s — cannot tell you when sends start failing]' \
+      "$VM_MESH_REGISTRY_DAYS_LEFT"
+    return 0
+  fi
   if [ "$VM_MESH_REGISTRY_DAYS_LEFT" -lt 0 ]; then
     # Strictly less than zero. Days-left FLOORS, so 0 means up to 24 hours of
     # send-life remaining — announcing "SENDS REFUSED" on that day is a false

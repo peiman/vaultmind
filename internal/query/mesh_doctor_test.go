@@ -769,6 +769,62 @@ func TestMeshDoctor_CorruptRegistryIsNotSwallowed(t *testing.T) {
 		RegistryBytes: []byte(`{"registry":"not-base64!!","root_sig":"x"}`),
 	})
 	require.NoError(t, err)
-	require.Contains(t, mi.Warnings, WarnMeshUnverifiable,
-		"a truncated scp or interrupted re-sign must not read as a healthy mesh")
+	require.Contains(t, mi.Warnings, WarnMeshSelfConsistencyFailed,
+		"a truncated scp or interrupted re-sign must not read as a healthy mesh — and with no pin, the warning must not blame one")
+}
+
+// VERIFICATION-REVIEW FINDING (2026-09-06): the repair for the previous review
+// reintroduced the disease it fixed. checkRegistryFreshness warned about an
+// unreadable DECLARED path and then RETURNED — so when the daemon was reachable
+// and serving a registry, the bytes actually in play were never checked. An
+// early return that disables a check on a path where a registry exists is
+// exactly the shape of the original bug, one function over.
+func TestMeshDoctor_UnreadableDeclaredPathStillChecksTheRegistryInPlay(t *testing.T) {
+	signed := time.Unix(1_700_000_000, 0)
+	rootPub, rootPriv := lowEntropyKey(t, "doctor-root-unread-plus-daemon")
+	memberPub, memberPriv := lowEntropyKey(t, "doctor-member-unread-plus-daemon")
+	raw, _ := buildSignedRegistry(t, rootPub, rootPriv, "agent:mira", memberPub, signed)
+
+	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{
+		KeyPath:        filepath.Join(t.TempDir(), "k.key"),
+		SocketPath:     filepath.Join(t.TempDir(), "missing.sock"),
+		Slug:           "agent:mira",
+		Now:            signed.Add(23*time.Hour + 30*time.Minute),
+		Signer:         &stubSigner{priv: memberPriv},
+		RegistryUnread: "/declared/but/absent.json",
+		// Serves a registry but NO root: evaluateUnpinned therefore cannot
+		// produce a stale verdict, so the only possible source of the warning
+		// is checkRegistryFreshness — without that, the test would pass for
+		// the wrong reason (verified: it did).
+		Daemon: &stubDaemon{
+			whoamiOK:  true,
+			rootErr:   errors.New("no well-known root"),
+			directory: raw,
+		},
+	})
+	require.NoError(t, err)
+	require.Contains(t, mi.Warnings, WarnMeshRegistryUnreadable)
+	require.Contains(t, mi.Warnings, WarnMeshRegistryStale,
+		"the unreadable declared path must not disable freshness on the registry actually in use")
+}
+
+// The Freshness error branch was left silent by the previous repair, which
+// fixed only the ParseDistribution branch beside it. ParseDistribution is
+// structural — it base64-decodes and never checks the body is JSON — so a
+// valid envelope wrapping garbage reached this branch and vanished.
+func TestMeshDoctor_EnvelopeWrappingGarbageIsNotSilent(t *testing.T) {
+	body := base64.StdEncoding.EncodeToString([]byte("this is not json at all"))
+	sig := base64.StdEncoding.EncodeToString(make([]byte, 64))
+	env := []byte(`{"registry":"` + body + `","root_sig":"` + sig + `","root_key_epoch":0}`)
+
+	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{
+		KeyPath:       filepath.Join(t.TempDir(), "k.key"),
+		SocketPath:    filepath.Join(t.TempDir(), "missing.sock"),
+		Slug:          "agent:mira",
+		Now:           time.Unix(1_700_000_000, 0),
+		RegistryBytes: env,
+	})
+	require.NoError(t, err)
+	require.Contains(t, mi.Warnings, WarnMeshSelfConsistencyFailed,
+		"a well-formed envelope around a corrupt body must still be reported")
 }

@@ -154,13 +154,21 @@ func registryDaysLeft(validFrom, validUntil, maxStalenessSecs int64, now time.Ti
 	// and validUntil decides, and a not-yet-valid registry is past due NOW
 	// rather than enjoying extra life — the same rule registry.IsStaleAt
 	// applies, kept in step with it deliberately.
+	// validUntil is NOT guarded on > 0: registry.IsStaleAt and VerifyAndLoad
+	// both treat an absent valid_until as already past, and a countdown that
+	// exempts it disagrees with the verdict doctor prints from the same bytes.
 	deadline := validFrom + maxStalenessSecs
-	if validUntil > 0 && validUntil < deadline {
+	if validUntil < deadline {
 		deadline = validUntil
 	}
 	remaining := deadline - now.Unix()
-	if validFrom > now.Unix() && remaining > 0 {
-		remaining = -remaining // refused right now; never read as more days left
+	if validFrom > now.Unix() {
+		// Not yet valid: refused RIGHT NOW, but the distance past due is the
+		// skew itself, not the whole remaining window. Negating the window
+		// turned one second of clock skew into "31 days past the hub bound",
+		// prescribing a root-signing ceremony when the remedy is NTP.
+		skew := validFrom - now.Unix()
+		remaining = -skew
 	}
 	days := remaining / 86400
 	if remaining < 0 && remaining%86400 != 0 {

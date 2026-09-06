@@ -268,3 +268,26 @@ func TestRegistryDaysLeft_StalenessStillBindsWhenItIsTheNearerBound(t *testing.T
 	require.True(t, known)
 	require.Equal(t, 5, got)
 }
+
+// VERIFICATION-REVIEW FINDINGS (2026-09-06):
+//   - one SECOND of clock skew reported as "31 day(s) past the hub bound",
+//     prescribing an offline-root signing ceremony when the remedy is NTP;
+//   - a body with no valid_until made doctor say STALE while the wake line said
+//     "fresh for 29 more days" — the two halves of one repair disagreeing.
+func TestRegistryDaysLeft_ClockSkewIsNotReportedAsAMonthPastDue(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	got, known := registryDaysLeft(now.Add(time.Second).Unix(), now.Add(72*time.Hour).Unix(), 30*24*60*60, now)
+	require.True(t, known)
+	require.Negative(t, got, "not-yet-valid is refused now")
+	require.GreaterOrEqual(t, got, -1, "one second of skew must not read as a month of staleness")
+}
+
+func TestRegistryDaysLeft_MissingValidUntilAgreesWithIsStaleAt(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	validFrom := now.Add(-time.Hour).Unix()
+	got, known := registryDaysLeft(validFrom, 0, 30*24*60*60, now)
+	require.True(t, known)
+	// IsStaleAt treats validUntil==0 as "already past"; the countdown must not
+	// disagree with the verdict doctor prints from the same fact.
+	require.Negative(t, got, "an absent valid_until is stale to IsStaleAt; the countdown must say the same")
+}

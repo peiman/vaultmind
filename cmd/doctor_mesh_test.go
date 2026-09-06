@@ -568,3 +568,12 @@ func TestRegistryMaxStaleness_PerAgentBeatsTopLevel(t *testing.T) {
 	require.Equal(t, int64(86400), registryMaxStalenessFromAgentsYAML(reg, dir),
 		"the agent's own declared bound must win, exactly like registry_path and daemon_url")
 }
+
+// VERIFICATION-REVIEW FINDING: applyOfflineRegistry set RegistryUnread and
+// returned registryPresent=false, so with no key, no anchor, no flag and an
+// unreachable daemon the whole section was omitted — the new warning computed
+// and thrown away. Declaring a registry_path IS a mesh signal.
+func TestMeshSignals_UnreadableDeclaredRegistryKeepsTheSectionVisible(t *testing.T) {
+	require.True(t, meshSignalPresent(meshSignals{registryUnread: true}),
+		"a declared-but-unreadable registry must render, or its warning goes nowhere")
+}

@@ -10,8 +10,12 @@
 //     elsewhere in the vaultmind repo. The local repo's hook config
 //     points at `internal/hookscripts/<name>.sh` directly; the
 //     binary embeds the same files via `//go:embed`. Drift between
-//     a "disk version" and an "embedded version" is structurally
-//     impossible because there is no second disk version.
+//     a "disk version" and an "embedded version" is caught by
+//     TestDogfoodHooksMatchEmbedded. It used to be described as
+//     structurally impossible ("there is no second disk version");
+//     that stopped being true when this repo began installing its
+//     own hooks into .claude/scripts/, so the guarantee is now a
+//     test that fails, not an absence that cannot drift.
 //
 //   - **Drift-detect across consumers.** Other projects that run
 //     `vaultmind hooks install` get COPIES written to their own

@@ -312,3 +312,15 @@ func TestMeshWatchCountdown_PastDueReadsWithoutADoubleNegative(t *testing.T) {
 	require.NotContains(t, out, "-2 day(s) past", "the sign is already carried by the word past")
 	require.Contains(t, out, "2 day(s) past")
 }
+
+// VERIFICATION-REVIEW FINDING: the numeric guard admitted any value with an
+// interior or trailing '-', so "5-3" and a bignum "-999999999999999999999"
+// both fell through to the REASSURING branch — the last one a past-due value
+// rendered as fresh, verbatim the failure the guard was added to stop.
+func TestMeshWatchCountdown_RejectsMalformedNumericShapes(t *testing.T) {
+	for _, bad := range []string{"5-", "5-3", "0-", "-999999999999999999999", "--3", "-"} {
+		out := runCountdown(t, bad)
+		require.NotContains(t, out, "fresh for",
+			"a value bash cannot compare must never render as freshness (input %q)", bad)
+	}
+}

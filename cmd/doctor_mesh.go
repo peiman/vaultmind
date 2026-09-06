@@ -152,6 +152,7 @@ func resolveMeshInput(cmd *cobra.Command) (query.MeshDoctorInput, bool, error) {
 			cmd.Flags().Changed("mesh-heartbeat"),
 		daemonReachable: daemonReachable,
 		slug:            slug,
+		registryUnread:  in.RegistryUnread != "",
 	}
 	return in, meshSignalPresent(sig), nil
 }
@@ -165,6 +166,10 @@ type meshSignals struct {
 	flagPassed      bool
 	daemonReachable bool
 	slug            string
+	// registryUnread: a registry_path was DECLARED and could not be read. That
+	// is a mesh signal — the operator is plainly on the mesh — and without it
+	// the section was omitted and the warning discarded.
+	registryUnread bool
 }
 
 // meshSignalPresent reports whether to render the mesh section.
@@ -177,7 +182,7 @@ type meshSignals struct {
 // the mesh. A resolved slug is a mesh identity on its own.
 func meshSignalPresent(s meshSignals) bool {
 	return s.keyPresent || s.anchorPresent || s.registryPresent ||
-		s.flagPassed || s.daemonReachable || s.slug != ""
+		s.flagPassed || s.daemonReachable || s.slug != "" || s.registryUnread
 }
 
 // applyPinAndNetwork sets the pinned root + network id from --mesh-root-pubkey

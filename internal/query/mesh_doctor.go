@@ -83,15 +83,25 @@ const (
 // Warning strings (SSOT) — each drives both the human Warnings slice and an
 // envelope.AddWarning in the cmd layer.
 const (
-	WarnMeshKeyMode        = "identity key file is not 0600 (custody mode is wrong)"
-	WarnMeshKeySize        = "identity key file is not the expected ed25519 private-key size"
-	WarnMeshUnpinned       = "registry self-consistent (daemon-advertised root), NOT authenticated — enroll persists a pin, or pass --mesh-root-pubkey"
-	WarnMeshNotEnrolled    = "your slug is not in the network registry yet (enroll-add pending?)"
-	WarnMeshKeyMismatch    = "your binding exists but the running signer does not hold its key (wrong signer/key?)"
-	WarnMeshUnverifiable   = "the network registry did not verify against your pinned root (bad signature, stale, or rolled back)"
-	WarnMeshNoRegistry     = "no registry available to verify (daemon unreachable and no --mesh-registry given)"
-	WarnMeshEnforcementOff = "message-signature enforcement is NOT YET active (advisory mode is a no-op today)"
-	WarnMeshHeartbeatStale = "wake-watcher heartbeat is stale — the watcher may be present-but-dead"
+	WarnMeshKeyMode            = "identity key file is not 0600 (custody mode is wrong)"
+	WarnMeshKeySize            = "identity key file is not the expected ed25519 private-key size"
+	WarnMeshUnpinned           = "registry self-consistent (daemon-advertised root), NOT authenticated — enroll persists a pin, or pass --mesh-root-pubkey"
+	WarnMeshNotEnrolled        = "your slug is not in the network registry yet (enroll-add pending?)"
+	WarnMeshKeyMismatch        = "your binding exists but the running signer does not hold its key (wrong signer/key?)"
+	WarnMeshUnverifiable       = "the network registry did not verify against your pinned root (bad signature, stale, or rolled back)"
+	WarnMeshNoRegistry         = "no registry available to verify (daemon unreachable and no --mesh-registry given)"
+	WarnMeshEnforcementOff     = "message-signature enforcement is NOT YET active (advisory mode is a no-op today)"
+	WarnMeshHeartbeatStale     = "wake-watcher heartbeat is stale — the watcher may be present-but-dead"
+	WarnMeshFreshnessUnchecked = "registry freshness UNCHECKED — no registry to read (declare registry_path in agents.yaml); staleness is UNKNOWN, not OK"
+	// WarnMeshRegistryUnreadable: a path WAS declared and could not be read.
+	// A typo'd or rotated registry_path is a config error; degrading it to
+	// silence gives the same output as never having declared one.
+	WarnMeshRegistryUnreadable = "the declared registry file could not be read — check registry_path in agents.yaml"
+	// WarnMeshSelfConsistencyFailed is the UNPINNED twin of Unverifiable. The
+	// pinned wording blames "your pinned root", which on this path the
+	// operator does not have — two warnings in one section, one saying you
+	// have no pin and the other blaming it.
+	WarnMeshSelfConsistencyFailed = "the registry did NOT verify against the daemon-advertised root — it is not even self-consistent (bad signature, stale, or rolled back)"
 	// WarnMeshRegistryStale: the registry verifies against its root but is
 	// older than the freshness bound. Named separately from Unverifiable
 	// because the fix is different (re-sign and redeploy, not investigate a
@@ -103,17 +113,7 @@ const (
 	// freshness question was never asked. Named because "disabled" and
 	// "healthy" printed identically — the same reasoning that produced
 	// WarnMeshHeartbeatUnresolved: a check that cannot run is not a pass.
-	WarnMeshFreshnessUnchecked = "registry freshness UNCHECKED — no registry to read (declare registry_path in agents.yaml); staleness is UNKNOWN, not OK"
-	// WarnMeshRegistryUnreadable: a path WAS declared and could not be read.
-	// A typo'd or rotated registry_path is a config error; degrading it to
-	// silence gives the same output as never having declared one.
-	WarnMeshRegistryUnreadable = "the declared registry file could not be read — check registry_path in agents.yaml"
-	// WarnMeshSelfConsistencyFailed is the UNPINNED twin of Unverifiable. The
-	// pinned wording blames "your pinned root", which on this path the
-	// operator does not have — two warnings in one section, one saying you
-	// have no pin and the other blaming it.
-	WarnMeshSelfConsistencyFailed = "the registry did NOT verify against the daemon-advertised root — it is not even self-consistent (bad signature, stale, or rolled back)"
-	WarnMeshRegistryStale         = "the registry is past its freshness bound — signed SENDS will be refused while reads keep working; re-sign and redeploy it"
+	WarnMeshRegistryStale = "the registry is past its freshness bound — signed SENDS will be refused while reads keep working; re-sign and redeploy it"
 	// WarnMeshHeartbeatUnresolved: the check could not run. Rendering silence
 	// (or a filesystem verdict) here is how a seven-day-dead watcher reported
 	// "not found" — the checker had no path and never looked.
@@ -268,29 +268,50 @@ func BuildMeshIdentity(ctx context.Context, in MeshDoctorInput) (*DoctorMeshIden
 // a day behind checks that all reported green. Warnings dedupe by string, so
 // the pinned/unpinned paths naming the same condition is harmless.
 func checkRegistryFreshness(mi *DoctorMeshIdentity, in MeshDoctorInput, regBytes []byte, now time.Time) {
+	// A declared path that could not be read is reported and then we CARRY ON:
+	// returning here disabled the check on the registry actually in play when a
+	// daemon was serving one — an early return switching off a check on a path
+	// where a registry exists, which is the original defect wearing a new hat.
 	if in.RegistryUnread != "" {
 		mi.addWarning(WarnMeshRegistryUnreadable)
-		return
 	}
 	if len(regBytes) == 0 {
-		mi.addWarning(WarnMeshFreshnessUnchecked)
+		if in.RegistryUnread == "" {
+			// Only when nothing was declared. With an unreadable declared path
+			// the operator already has a specific, more useful warning; adding
+			// "no registry to read" alongside it counts one fact twice.
+			mi.addWarning(WarnMeshFreshnessUnchecked)
+		}
 		return
 	}
 	env, err := registry.ParseDistribution(regBytes)
 	if err != nil {
-		// Unparseable used to defer to "Unverifiable's business" — but on the
-		// unpinned path that handler returns before it can speak, so a
-		// truncated scp or an interrupted re-sign vanished entirely.
-		mi.addWarning(WarnMeshUnverifiable)
+		mi.addWarning(unverifiableWarning(in))
 		return
 	}
 	validFrom, validUntil, err := registry.Freshness(env)
 	if err != nil {
+		// ParseDistribution is STRUCTURAL — it base64-decodes the body and
+		// never checks it is JSON — so a valid envelope wrapping garbage lands
+		// here. The previous repair fixed the branch beside this one and left
+		// this one mute.
+		mi.addWarning(unverifiableWarning(in))
 		return
 	}
 	if registry.IsStaleAt(validFrom, validUntil, now, doctorMaxStaleness) {
 		mi.addWarning(WarnMeshRegistryStale)
 	}
+}
+
+// unverifiableWarning picks wording the operator can act on: blaming "your
+// pinned root" when there is no pin sends them to fix something they do not
+// have. The unpinned constant was added for exactly this and then not used
+// here, which made it cosmetic.
+func unverifiableWarning(in MeshDoctorInput) string {
+	if len(in.PinnedRootPub) == 0 {
+		return WarnMeshSelfConsistencyFailed
+	}
+	return WarnMeshUnverifiable
 }
 
 // checkKeyCustody fills tier-1 booleans from an Lstat of the key path — STAT
