@@ -23,6 +23,9 @@
 # Read prompt from stdin JSON
 HOOK_INPUT=$(cat)
 PROMPT=$(echo "$HOOK_INPUT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('prompt',''))" 2>/dev/null || echo "")
+# The harness's real conversation id — see vault-reach.sh for why a timing
+# heuristic is not good enough to key anything on.
+HOOK_SESSION_ID=$(echo "$HOOK_INPUT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('session_id','') or '')" 2>/dev/null || echo "")
 
 # Single-word / command-style messages aren't worth a vault query. The
 # threshold is rough — favors silence over noise. Real topical questions
@@ -136,7 +139,7 @@ PYEOF
 [ -z "$QUERY" ] && QUERY="$PROMPT"
 
 ASK_ERR=$(mktemp -t vaultmind-userprompt-err.XXXXXX)
-POINTERS=$(VAULTMIND_CALLER=vaultmind-userprompt-hook $TIMEOUT_CMD "$VAULTMIND" ask "$QUERY" \
+POINTERS=$(VAULTMIND_CALLER=vaultmind-userprompt-hook VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" $TIMEOUT_CMD "$VAULTMIND" ask "$QUERY" \
   --vault "$VAULT_PATH" \
   --max-items 3 \
   --budget 1500 \

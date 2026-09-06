@@ -51,3 +51,17 @@ func TestDetectCaller_MetaOmitsMissingFields(t *testing.T) {
 	_, hasPD := meta["claude_project_dir"]
 	assert.False(t, hasPD, "empty CLAUDE_PROJECT_DIR should not appear in meta")
 }
+
+func TestDetectCaller_CarriesTheHarnessSessionIDWhenPresent(t *testing.T) {
+	t.Setenv("VAULTMIND_USER_SESSION_ID", "conv-from-harness")
+	_, meta := DetectCaller()
+	require.Equal(t, "conv-from-harness", meta[MetaUserSessionID],
+		"the real conversation id must reach the session row, not be re-derived from timing")
+}
+
+func TestDetectCaller_OmitsTheKeyWhenUnset(t *testing.T) {
+	t.Setenv("VAULTMIND_USER_SESSION_ID", "")
+	_, meta := DetectCaller()
+	_, present := meta[MetaUserSessionID]
+	require.False(t, present, "absent means fall back to the heuristic, not group under an empty string")
+}

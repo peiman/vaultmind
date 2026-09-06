@@ -17,7 +17,7 @@ import (
 // so we can later answer "whose laptop" and "which project context" without
 // having to encode them into the caller label itself.
 func DetectCaller() (string, map[string]any) {
-	caller := os.Getenv("VAULTMIND_CALLER")
+	caller := os.Getenv(EnvCaller)
 	if caller == "" {
 		if os.Getenv("CLAUDE_PROJECT_DIR") != "" {
 			caller = "claude-code"
@@ -35,6 +35,12 @@ func DetectCaller() (string, map[string]any) {
 	}
 	if projectDir := os.Getenv("CLAUDE_PROJECT_DIR"); projectDir != "" {
 		meta["claude_project_dir"] = projectDir
+	}
+	// The harness's REAL conversation id, when a hook forwards it. Absent ⇒ the
+	// 30-minute time heuristic, which cannot separate a subagent from its
+	// parent (identical caller, user and host, seconds apart).
+	if sid := os.Getenv(EnvUserSessionID); sid != "" {
+		meta[MetaUserSessionID] = sid
 	}
 	return caller, meta
 }

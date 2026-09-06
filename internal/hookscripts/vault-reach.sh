@@ -41,6 +41,19 @@ try:
 except Exception:
     print('')" 2>/dev/null || echo "")
 
+# The harness's REAL conversation id. Forwarded so the session row records the
+# conversation instead of a 30-minute timing guess that cannot separate a
+# SUBAGENT's tool call from its parent's — identical caller, user and host,
+# seconds apart. Anything keyed on that id (cross-turn dedup first) would then
+# withhold bodies from a subagent, which has no SessionStart, no identity load
+# and no context at all: the participant that needs the full text most.
+HOOK_SESSION_ID=$(printf '%s' "$HOOK_INPUT" | python3 -c \
+  "import json,sys
+try:
+    print(json.load(sys.stdin).get('session_id', '') or '')
+except Exception:
+    print('')" 2>/dev/null || echo "")
+
 [ -z "$CMD" ] && exit 0
 
 VAULT_PATH="${VAULTMIND_VAULT:-${CLAUDE_PROJECT_DIR:-$PWD}/vaultmind-identity}"
@@ -97,7 +110,7 @@ fi
 # Same relevance floor as vault-recall.sh: --quiet-on-no-match means an
 # off-domain reach prints nothing rather than pointing at whatever ranked least
 # badly. max-items 2 because this fires mid-task, where attention is scarcest.
-POINTERS=$(VAULTMIND_CALLER=vaultmind-reach-hook $TIMEOUT_CMD "$VAULTMIND" ask "$QUERY" \
+POINTERS=$(VAULTMIND_CALLER=vaultmind-reach-hook VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" $TIMEOUT_CMD "$VAULTMIND" ask "$QUERY" \
   --vault "$VAULT_PATH" \
   --max-items 2 \
   --budget 900 \

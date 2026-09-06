@@ -15,6 +15,18 @@ import (
 // cli queries stay in separate groupings even when close in time.
 const UserSessionThreshold = 30 * time.Minute
 
+// EnvCaller names the invoking agent; EnvUserSessionID carries the harness's
+// real conversation id into the session row.
+const (
+	EnvCaller        = "VAULTMIND_CALLER"
+	EnvUserSessionID = "VAULTMIND_USER_SESSION_ID"
+)
+
+// MetaUserSessionID is the caller-meta key carrying the harness's REAL
+// conversation id. Present ⇒ used verbatim; absent ⇒ the time heuristic. Named
+// once here so the hook, the detector and the resolver cannot disagree.
+const MetaUserSessionID = "user_session_id"
+
 // SessionCaller describes the invoking agent for a session. Caller is a short
 // label ("companion-persona-hook", "claude-code", "cli", or empty if the
 // session pre-dates attribution). Meta is a flexible JSON blob — project_dir,
@@ -70,6 +82,17 @@ func (d *DB) StartSessionWithCaller(vaultPath, caller string, meta map[string]an
 // caller or missing user/host still produce a grouping, but one that only
 // matches other similarly-attributed sessions.
 func (d *DB) resolveUserSessionID(caller string, meta map[string]any, now time.Time) string {
+	// An EXPLICIT id wins. The harness knows the real conversation and puts it
+	// in every hook payload; the heuristic below cannot tell a subagent's tool
+	// call from its parent's — same caller, same user, same host, seconds
+	// apart — so it collapses them into one "working session". Anything keyed
+	// on that (cross-turn dedup above all) would withhold bodies from a
+	// subagent, which starts with NO SessionStart, no identity load and no
+	// context: the participant that needs the full text most.
+	if explicit, _ := meta[MetaUserSessionID].(string); explicit != "" {
+		return explicit
+	}
+
 	user, _ := meta["user"].(string)
 	host, _ := meta["host"].(string)
 

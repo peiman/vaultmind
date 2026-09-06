@@ -147,3 +147,26 @@ func TestRecallHook_BoundDoesNotClipAFastQuery(t *testing.T) {
 
 	assert.Contains(t, out, "some-note")
 }
+
+// The harness puts the real conversation id in every hook payload; both query
+// hooks must forward it so the session row records the CONVERSATION rather
+// than a 30-minute timing guess. Without it a subagent's tool call and its
+// parent's collapse into one working session, and anything keyed on that id
+// (cross-turn dedup first) withholds bodies from the participant with no
+// context at all.
+
+func TestRecallHook_ForwardsTheHarnessSessionID(t *testing.T) {
+	require.Contains(t, hookScriptBody(t, "vault-recall.sh"), "VAULTMIND_USER_SESSION_ID",
+		"the recall hook must pass the harness session id to the binary")
+}
+
+func TestReachHook_ForwardsTheHarnessSessionID(t *testing.T) {
+	require.Contains(t, hookScriptBody(t, "vault-reach.sh"), "VAULTMIND_USER_SESSION_ID")
+}
+
+func hookScriptBody(t *testing.T, name string) string {
+	t.Helper()
+	b, err := os.ReadFile(name)
+	require.NoError(t, err)
+	return string(b)
+}
