@@ -18,7 +18,7 @@ A pure-Go binary: full-text + MiniLM dense retrieval (2 lanes). Ideal for trying
 
 **Full 4-way hybrid — BGE-M3 (recommended for real use):**
 
-Download the self-contained ORT archive for your platform (`darwin-arm64`, `linux-amd64`) from the [releases page](https://github.com/peiman/vaultmind/releases) — `vaultmind_<version>_<os>_<arch>_ort.tar.gz` — extract, and run. The official `libonnxruntime` is bundled (found automatically next to the binary), so there's nothing else to install — **no compiler required.**
+Download the self-contained ORT archive for your platform (`darwin-arm64`, `linux-amd64`) from the [releases page](https://github.com/peiman/vaultmind/releases) — `vaultmind_<version>_<os>_<arch>_ort.tar.gz` — extract, and run. The official `libonnxruntime` is bundled (found automatically next to the binary), so there's nothing else to install — **no compiler required.** Upgrading an existing install? Extract elsewhere and `mv` the new binary into place rather than copying over the old one — on macOS, overwriting a binary in place can trip a codesigning SIGKILL (the kernel caches the signature hash per inode).
 
 > **Which one?** For a **small vault or a slow machine, MiniLM is genuinely fine** — its dense lane covers a small corpus well, and its lighter query encoder keeps per-prompt latency low (that cost lands on *every* recall). Reach for **BGE-M3 when your vault is large and varied** and recall quality matters most. Note: `go install` is the *only* path that can't produce BGE-M3 (cgo can't travel through it) — so if your setup uses `go install`, you're on MiniLM by design; the prebuilt archive above is the no-compile way to the full hybrid.
 
