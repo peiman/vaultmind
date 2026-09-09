@@ -233,6 +233,14 @@ func resetFlagsRecursive(cmd *cobra.Command) {
 	reset := func(f *pflag.Flag) {
 		_ = f.Value.Set(f.DefValue)
 		f.Changed = false
+		// A flag that remembers its occurrences must forget them here: this
+		// helper exists to simulate a FRESH PROCESS, and a real one has parsed
+		// nothing yet. Order matters — clearing BEFORE the reset above would
+		// record the default assignment as a user-supplied occurrence, which
+		// made a single --vault look like a repeat.
+		if rv, ok := f.Value.(*repeatedFlagValue); ok {
+			rv.Reset()
+		}
 	}
 	cmd.Flags().VisitAll(reset)
 	cmd.PersistentFlags().VisitAll(reset)

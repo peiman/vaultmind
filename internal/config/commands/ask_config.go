@@ -27,6 +27,21 @@ CHOOSE A RENDERING MODE BY INTENT
       Each hit shows per-lane RRF math (dense / sparse / colbert / fts).
       For investigating ranking decisions, not for answering content questions.
 
+SEARCH SEVERAL VAULTS AT ONCE
+
+  vaultmind ask "X" --vaults ~/identity,~/desk,~/research
+      One query, every vault, one ranked answer. Each vault judges relevance
+      against ITS OWN noise floor, so a 12-note desk and a 400-note research
+      vault are compared fairly; results merge by rank (cross-vault RRF), and
+      every hit is tagged with the vault it came from.
+
+      Use when your memory is not one vault — an identity vault plus a working
+      desk plus a reference corpus is the normal shape, and the note you need
+      is often not in the one you happened to point at.
+
+      Note: --vault takes ONE path. Repeating it (--vault A --vault B) is an
+      error, because it used to silently keep B and answer from it alone.
+
 ANTI-PATTERN — AVOID
 
   vaultmind ask "X" --budget 3000 | tail -20

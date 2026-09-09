@@ -85,3 +85,39 @@ func TestAskRead_UnderFederationStillReportsWhatWasSearched(t *testing.T) {
 	assert.Contains(t, out.String(), "federated:",
 		"--read must still say how many vaults were searched and which one delivered")
 }
+
+// THE ORIGINAL TRAP, which shipping --vaults did not close.
+//
+// `--vault A --vault B` is a plain string flag: pflag overwrites, so A
+// vanishes and the command answers confidently from B alone. That is the
+// defect that motivated federated search, and after building the escape
+// hatch the hole was still open — the next person to try the obvious thing
+// would get the same silent wrong answer. Building the alternative is not
+// the same as closing the trap.
+func TestAsk_RepeatedVaultFlagIsAnErrorPointingAtVaults(t *testing.T) {
+	alpha := buildNamedTestVault(t, "alpha-vault", map[string]string{
+		"a1.md": "---\nid: a-one\ntype: concept\ntitle: quokka alpha\n---\nquokka.\n",
+	})
+	beta := buildNamedTestVault(t, "beta-vault", map[string]string{
+		"b1.md": "---\nid: b-one\ntype: concept\ntitle: quokka beta\n---\nquokka.\n",
+	})
+
+	_, _, err := runRootCmd(t, "ask", "quokka", "--vault", alpha, "--vault", beta)
+
+	require.Error(t, err, "passing --vault twice must not silently use the last one")
+	assert.Contains(t, err.Error(), "--vaults", "the error must name the flag that does what they meant")
+	assert.Contains(t, err.Error(), alpha, "it must name the path that would have been dropped")
+	assert.Contains(t, err.Error(), beta)
+}
+
+// One --vault is the overwhelmingly common case and must be untouched.
+func TestAsk_SingleVaultFlagIsUnaffectedByTheRepeatCheck(t *testing.T) {
+	alpha := buildNamedTestVault(t, "alpha-vault", map[string]string{
+		"a1.md": "---\nid: a-one\ntype: concept\ntitle: quokka alpha\n---\nquokka.\n",
+	})
+
+	out, _, err := runRootCmd(t, "ask", "quokka", "--vault", alpha)
+
+	require.NoError(t, err)
+	assert.Contains(t, out.String(), "a-one")
+}

@@ -23,6 +23,10 @@ var askCmd = MustNewCommand(commands.AskMetadata, runAsk)
 
 func init() {
 	MustAddToRoot(askCmd)
+	// --vault takes ONE vault and pflag overwrites on repeat, so `--vault A
+	// --vault B` used to search B alone and report "nothing relevant" without
+	// ever opening A. Tracking the occurrences is what lets runAsk say so.
+	trackRepeats(askCmd, "vault")
 }
 
 // retrievalModeLabel reports the retriever kind for event logging. Ask uses an
@@ -94,6 +98,9 @@ func writeZeroHitDiagnostics(w io.Writer, db *index.DB, queryText, mode string, 
 func runAsk(cmd *cobra.Command, args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: vaultmind ask <query>")
+	}
+	if given := repeatedValues(cmd, "vault"); len(given) > 1 {
+		return errRepeatedVaultFlag(given)
 	}
 	vaultPath := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppAskVault)
 

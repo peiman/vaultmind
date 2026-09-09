@@ -379,7 +379,7 @@ markers; `task check` fails if it drifts from the catalog. Everything outside th
 hand-written and stays.
 
 <!-- VAULTMIND:GENERATED:commands:START -->
-<!-- checksum:d973388b4914c87324510aeb2dba067a6defea5f0bcf3568ccef21ec3d7caaed -->
+<!-- checksum:582fc61037351745f48f80ad503044a325c9527701dc104f08d616ffb2ae8f45 -->
 # VaultMind Commands
 
 Every user-facing command, grouped by intent, with its when-to-use trigger.
@@ -389,7 +389,7 @@ Generated from the command tree — do not edit by hand (run `task generate:docs
 
 | Command | What | When to use |
 |---------|------|-------------|
-| `vaultmind ask` | Compound search + context-pack: answer 'what do I know about X?' | you want to answer "what do I know about X?" — search plus packed context in one step. |
+| `vaultmind ask` | Compound search + context-pack: answer 'what do I know about X?' | you want to answer "what do I know about X?" — search plus packed context in one step; add --vaults a,b,c when your memory spans several vaults. |
 | `vaultmind memory` | Traverse the note graph and assemble context for agents | you need the low-level graph primitives behind ask: links, neighbors, related, pack, summarize. |
 | `vaultmind memory links` | List a note's directed wikilink edges (outbound, inbound, or both) | you want a note's directed wikilink edges — outbound, inbound, or both. |
 | `vaultmind memory neighbors` | Traverse the graph from a note (BFS) and return enriched neighbors | you want the enriched graph around a note via depth-limited BFS, with full frontmatter. |

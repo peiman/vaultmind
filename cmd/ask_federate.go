@@ -70,11 +70,15 @@ func requireRealVaults(paths []string) error {
 	if len(bad) == 0 {
 		return nil
 	}
+	subject, verb := "paths that are not vaults", "them"
+	if len(bad) == 1 {
+		subject, verb = "path that is not a vault", "it"
+	}
 	return fmt.Errorf(
-		"--vaults lists %d path(s) that are not vaults: %s\n"+
-			"  Federation will not create them: a mistyped path would be silently counted as searched.\n"+
+		"--vaults lists %d %s: %s\n"+
+			"  Federation will not create %s: a mistyped path would be silently counted as searched.\n"+
 			"  Create one with:  vaultmind init <path>",
-		len(bad), strings.Join(bad, ", "))
+		len(bad), subject, strings.Join(bad, ", "), verb)
 }
 
 // vaultDisplayName is the directory name, which is what an operator recognises

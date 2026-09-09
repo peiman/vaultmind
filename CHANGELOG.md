@@ -7,6 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`vaultmind ask <query> --vaults a,b,c` — federated search across several vaults.**
+  An agent's memory is usually not one vault: an identity vault, a working
+  desk, and a reference corpus is the normal shape, and the note you need is
+  often not in the one you happened to point at. Measured on a real three-vault
+  setup, a pre-committed four-probe coverage set went from **1 of 4 to 3 of 4**,
+  and two of the three original misses were notes that had been *written down* —
+  reachable in the desk at z=+1.81 and z=+3.08, unreachable from where the work
+  happened.
+
+  Results merge by **cross-vault RRF — ranks, not scores.** Each vault
+  calibrates its own noise floor against its own corpus, so a 0.02 in a 12-note
+  desk and a 0.02 in a 415-note research vault are not the same number; ranks
+  survive that comparison and scores do not. Each vault then gates on **its own**
+  floor, so a vault whose calibration says "nothing here" contributes nothing —
+  unless every vault says it, which is a finding rather than an empty result.
+  Every hit is tagged with the vault it came from, and the header reports how
+  many vaults were searched, which had nothing, and which one is delivering.
+
+  Delivery stays single-vault by design: the merge picks an owner and that
+  vault's own pipeline packs the body, applies its own floor, and records the
+  access — so there is no merged pseudo-vault whose calibration belongs to
+  nobody, and reinforcement lands in the vault the note actually lives in.
+
+- **`VAULTMIND_VAULTS` in the recall and reach hooks.** Set it to a
+  comma-separated list and the per-prompt hooks federate. Unset, both hooks make
+  byte-identical calls to today's: additive by construction, so no adopter
+  changes behaviour on upgrade.
+
+### Fixed
+
+- **`--vault A --vault B` silently searched only B.** `--vault` takes one path
+  and pflag overwrites on repeat, so the command answered "nothing relevant"
+  from B alone without ever opening A — a confident wrong answer, and the defect
+  that motivated federation in the first place. Repeating `--vault` is now an
+  error that names both paths and points at `--vaults`.
+
+- **A hook whose query failed was indistinguishable from an empty vault.** A
+  bounded query that got killed injected nothing and exited 0, so "your notes
+  were consulted and had nothing" and "your notes were never consulted" looked
+  identical from inside the turn. A non-zero status now prints one line saying
+  so; a genuine no-match stays quiet. `vault-reach.sh` never captured the exit
+  status at all and now does.
+
+- **Hook query bound raised to 25s** (from 15s in recall, 10s in reach) and
+  defined once per script instead of twice inline. Measured on BGE-M3/ORT: 3.1s
+  for one vault, 5.6s for two, 10.5s for three — the old bounds left a federated
+  query one slow machine away from being killed.
+
+- **A mistyped path in `--vaults` silently created a vault there** and then
+  reported the directory as searched. Naming a single vault may still create it;
+  a list may not, because the other vaults answer and the typo disappears into a
+  header claiming full coverage.
+
+- **`ask --read N` under `--vaults` read a different note than the menu showed.**
+  It indexed into the delivering vault's own hits while the agent had been shown
+  the cross-vault ranking, so rank N named two different notes. The shown
+  ranking is now the list `--read` indexes into, and bodies are fetched — and
+  accesses recorded — in the vault that owns them.
+
+- **`--vaults` with a single path** failed with `no vault found: "."` instead of
+  searching that vault.
+
+- **A federated query searched every vault twice**, once for hits and once for
+  the relevance verdict, doubling the cost of every federated query.
+
+
 ## [0.7.1] — 2026-08-21
 
 > **Upgrading.** Nothing to migrate. If `doctor` or session start felt slow, that is

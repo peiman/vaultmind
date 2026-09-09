@@ -68,7 +68,7 @@ var commandCatalog = map[string]catalogEntry{
 	// ── Retrieval & memory ───────────────────────────────────────────────
 	"vaultmind ask": {
 		group: groupRetrieval,
-		when:  "you want to answer \"what do I know about X?\" — search plus packed context in one step.",
+		when:  "you want to answer \"what do I know about X?\" — search plus packed context in one step; add --vaults a,b,c when your memory spans several vaults.",
 	},
 	"vaultmind search": {
 		group: groupRetrieval,
