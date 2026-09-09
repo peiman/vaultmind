@@ -23,6 +23,7 @@ func runHooksInstall(cmd *cobra.Command, args []string) error {
 		force:      getConfigValueWithFlags[bool](cmd, "force", config.KeyAppHooksinstallForce),
 		jsonOut:    getConfigValueWithFlags[bool](cmd, "json", config.KeyAppHooksinstallJson),
 		only:       getConfigValueWithFlags[string](cmd, "only", config.KeyAppHooksinstallOnly),
+		profile:    getConfigValueWithFlags[string](cmd, "profile", config.KeyAppHooksinstallProfile),
 		vault:      getConfigValueWithFlags[string](cmd, "vault", config.KeyAppHooksinstallVault),
 		merge:      getConfigValueWithFlags[bool](cmd, "merge", config.KeyAppHooksinstallMerge),
 		local:      getConfigValueWithFlags[bool](cmd, "local", config.KeyAppHooksinstallLocal),

@@ -144,7 +144,27 @@ func buildHooksObject(chs []canonicalHook) (hooksObject, error) {
 }
 
 func SettingsStanza(vaultPath string) (string, error) {
-	obj, err := buildHooksObject(canonicalHooks(vaultPath))
+	return SettingsStanzaForProfile(ProfileFull, vaultPath)
+}
+
+// SettingsStanzaForProfile renders only the hooks the declared profile runs,
+// so a knowledge vault is not wired for a persona it does not have.
+func SettingsStanzaForProfile(p Profile, vaultPath string) (string, error) {
+	allowed := map[string]bool{}
+	for _, n := range ScriptsForProfile(p) {
+		allowed[n] = true
+	}
+	hooks := make([]canonicalHook, 0, len(allowed))
+	for _, ch := range canonicalHooks(vaultPath) {
+		if allowed[ch.Script] {
+			hooks = append(hooks, ch)
+		}
+	}
+	return renderStanza(hooks)
+}
+
+func renderStanza(hooks []canonicalHook) (string, error) {
+	obj, err := buildHooksObject(hooks)
 	if err != nil {
 		return "", err
 	}

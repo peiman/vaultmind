@@ -20,6 +20,7 @@ type hooksInstallParams struct {
 	force      bool
 	jsonOut    bool
 	only       string
+	profile    string
 	vault      string
 	merge      bool
 	local      bool
@@ -72,11 +73,20 @@ func runHooksInstallCore(cmd *cobra.Command, p hooksInstallParams) error {
 	// Install scripts and (with --merge) wire settings via the shared
 	// provisioning engine — the same path init --wire-hooks uses. A script
 	// conflict gates the merge inside Provision (never wire unresolved scripts).
+	// An unrecognised profile is rejected BEFORE anything is written: silently
+	// treating a typo as "full" would install a persona loader into a vault
+	// that has no persona and then call it healthy.
+	profile, perr := hooks.ParseProfile(strings.TrimSpace(p.profile))
+	if perr != nil {
+		return perr
+	}
+
 	prov, retErr := hooks.Provision(hooks.InstallConfig{
 		ProjectDir: p.projectDir,
 		Force:      p.force,
 		Only:       onlyList,
 		VaultPath:  strings.TrimSpace(p.vault),
+		Profile:    profile,
 	}, p.merge, p.local, p.dryRun)
 	res, mergeRes := prov.Install, prov.Merge
 

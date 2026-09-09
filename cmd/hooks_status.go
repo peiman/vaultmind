@@ -67,8 +67,11 @@ func renderHooksStatus(w io.Writer, report hooks.StatusReport) error {
 		return err
 	}
 
-	if _, err := fmt.Fprintf(w, "Hook scripts in %s: %d in sync, %d drifted, %d missing\n",
-		report.ProjectDir, inSync, drifted, missing); err != nil {
+	// Name the profile in the header: "healthy" means healthy FOR A PROFILE,
+	// and a reader who thinks they installed the full set deserves to see
+	// which narrower contract they are actually being graded against.
+	if _, err := fmt.Fprintf(w, "Hook scripts in %s [profile: %s]: %d in sync, %d drifted, %d missing\n",
+		report.ProjectDir, report.Profile, inSync, drifted, missing); err != nil {
 		return err
 	}
 

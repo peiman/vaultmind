@@ -45,6 +45,13 @@ type InstallConfig struct {
 	// vaultmind-identity default. It does not affect which scripts get
 	// written — only the wiring snippet (issue #41.6).
 	VaultPath string
+	// Profile is the capability profile to install and DECLARE. Empty means
+	// ProfileFull, so every existing caller is unaffected. Declaring it is the
+	// point: without a record of what the adopter chose, `hooks status` has
+	// nothing to judge against and goes back to grading every project on the
+	// binary's whole inventory — which reported deliberate omissions as
+	// defects on every run.
+	Profile Profile
 }
 
 // InstallResult is the JSON-serializable output of Install.
@@ -84,6 +91,16 @@ func Install(cfg InstallConfig) (*InstallResult, error) {
 	if err != nil {
 		return nil, err
 	}
+	profile := cfg.Profile
+	if profile == "" {
+		profile = ProfileFull
+	}
+	if len(cfg.Only) == 0 {
+		// An explicit --only wins: the operator named exact scripts. Otherwise
+		// the profile decides, so `install --profile knowledge` does not write
+		// a persona loader the adopter will never wire.
+		names = ScriptsForProfile(profile)
+	}
 	scriptsDir := filepath.Join(cfg.ProjectDir, ".claude", "scripts")
 	res := &InstallResult{
 		ProjectDir: cfg.ProjectDir,
@@ -95,6 +112,9 @@ func Install(cfg InstallConfig) (*InstallResult, error) {
 	// refresh.
 	if err := os.MkdirAll(scriptsDir, 0o750); err != nil {
 		return nil, fmt.Errorf("creating %s: %w", scriptsDir, err)
+	}
+	if err := WriteDeclaredProfile(cfg.ProjectDir, profile); err != nil {
+		return nil, err
 	}
 
 	for _, name := range names {

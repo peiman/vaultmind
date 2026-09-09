@@ -138,6 +138,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.gitstatus.json` | bool | `false` | `VAULTMIND_APP_GITSTATUS_JSON` | Output in JSON format |
 | `app.hooksinstall.force` | bool | `false` | `VAULTMIND_APP_HOOKSINSTALL_FORCE` | Overwrite existing hook scripts (default: refuse) |
 | `app.hooksinstall.json` | bool | `false` | `VAULTMIND_APP_HOOKSINSTALL_JSON` | Output in JSON format |
+| `app.hooksinstall.profile` | string | `` | `VAULTMIND_APP_HOOKSINSTALL_PROFILE` | Capability profile to declare and install: full (default), knowledge, or persona. Recorded in .claude/vaultmind-profile so `hooks status` judges what you chose, not everything the binary ships. |
 | `app.hooksinstall.only` | string | `` | `VAULTMIND_APP_HOOKSINSTALL_ONLY` | Comma-separated subset of canonical scripts to install (default: all). Unknown names rejected at lint time. |
 | `app.hooksinstall.vault` | string | `` | `VAULTMIND_APP_HOOKSINSTALL_VAULT` | Vault path to bake into the printed settings.json stanza via VAULTMIND_VAULT (default: the built-in vaultmind-identity convention). |
 | `app.hooksinstall.merge` | bool | `false` | `VAULTMIND_APP_HOOKSINSTALL_MERGE` | Additively merge the hook stanza into the project's settings file (never clobbers existing hooks) instead of only printing it. |
@@ -618,6 +619,9 @@ app:
 
     # Output in JSON format
     json: false
+
+    # Capability profile to declare and install: full (default), knowledge, or persona. Recorded in .claude/vaultmind-profile so `hooks status` judges what you chose, not everything the binary ships.
+    profile: 
 
     # Comma-separated subset of canonical scripts to install (default: all). Unknown names rejected at lint time.
     only: 
@@ -1451,6 +1455,9 @@ export VAULTMIND_APP_HOOKSINSTALL_FORCE=false
 
 # Output in JSON format
 export VAULTMIND_APP_HOOKSINSTALL_JSON=false
+
+# Capability profile to declare and install: full (default), knowledge, or persona. Recorded in .claude/vaultmind-profile so `hooks status` judges what you chose, not everything the binary ships.
+export VAULTMIND_APP_HOOKSINSTALL_PROFILE=
 
 # Comma-separated subset of canonical scripts to install (default: all). Unknown names rejected at lint time.
 export VAULTMIND_APP_HOOKSINSTALL_ONLY=

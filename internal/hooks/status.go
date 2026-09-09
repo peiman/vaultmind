@@ -46,6 +46,10 @@ type StatusReport struct {
 	// Script contents and event wiring are independent failures: a project can
 	// hold every script byte-identical and still run none of them.
 	Events []EventStatus `json:"events"`
+	// Profile is the DECLARED capability profile this report judged against.
+	// Emitted so a reader can tell "healthy" from "healthy for a narrower
+	// profile than you thought you installed".
+	Profile Profile `json:"profile"`
 }
 
 // Counts returns how many scripts are in each state — the summary line.
@@ -68,7 +72,16 @@ func (r StatusReport) Counts() (inSync, drifted, missing int) {
 // doctor consumes.
 func Status(projectDir string) (StatusReport, error) {
 	report := StatusReport{ProjectDir: projectDir}
-	report.Events = eventWiring(projectDir)
+	// The DECLARED profile decides what counts as missing or unwired. Judging
+	// every adopter against the binary's full inventory reported deliberate
+	// omissions as defects on every run — and a report wrong every time is one
+	// nobody reads on the run where it is right.
+	profile, err := DeclaredProfile(projectDir)
+	if err != nil {
+		return StatusReport{}, err
+	}
+	report.Profile = profile
+	report.Events = eventWiringForProfile(projectDir, profile)
 	scriptsDir := filepath.Join(projectDir, ".claude", "scripts")
 	if _, err := os.Stat(scriptsDir); err == nil {
 		report.Installed = true
@@ -76,7 +89,7 @@ func Status(projectDir string) (StatusReport, error) {
 		return StatusReport{}, fmt.Errorf("reading %s: %w", scriptsDir, err)
 	}
 
-	for _, name := range hookscripts.Names() {
+	for _, name := range ScriptsForProfile(profile) {
 		canonical, ok := hookscripts.Get(name)
 		if !ok {
 			continue

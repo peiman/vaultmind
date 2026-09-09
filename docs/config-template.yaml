@@ -347,6 +347,9 @@ app:
     # Output in JSON format
     json: false
 
+    # Capability profile to declare and install: full (default), knowledge, or persona. Recorded in .claude/vaultmind-profile so `hooks status` judges what you chose, not everything the binary ships.
+    profile: 
+
     # Comma-separated subset of canonical scripts to install (default: all). Unknown names rejected at lint time.
     only: 
 

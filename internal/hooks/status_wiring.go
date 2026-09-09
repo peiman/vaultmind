@@ -34,7 +34,7 @@ type EventStatus struct {
 // exactly what happened to an adopter whose SessionEnd was absent while
 // capture-episode.sh sat on disk having already produced 13 episodes. Every
 // content check passed; the write half was off.
-func eventWiring(projectDir string) []EventStatus {
+func eventWiringForProfile(projectDir string, p Profile) []EventStatus {
 	raw, err := readSettingsFile(filepath.Join(projectDir, ".claude", "settings.json"))
 	if err != nil || len(raw) == 0 {
 		raw = nil
@@ -69,9 +69,12 @@ func eventWiring(projectDir string) []EventStatus {
 
 	// vaultPath is only used to build command strings for install; wiring
 	// detection does not depend on it, so an empty value is correct here.
-	canonical := canonicalHooks("")
-	out := make([]EventStatus, 0, len(canonical))
-	for _, c := range canonical {
+	// Only the events this profile actually runs. A knowledge vault has no
+	// persona to load and no episode to capture; reporting those as "unwired"
+	// is reporting a choice as a defect.
+	expected := EventScriptsForProfile(p)
+	out := make([]EventStatus, 0, len(expected))
+	for _, c := range expected {
 		state := EventUnwired
 		if wired(c.Event, c.Script) {
 			state = EventWired

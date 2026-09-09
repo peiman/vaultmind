@@ -105,13 +105,14 @@ EXAMPLES
   vaultmind hooks install --vault ./my-knowledge --merge --local       # wire personal settings.local.json instead`,
 	ConfigPrefix: "app.hooksinstall",
 	FlagOverrides: map[string]string{
-		"app.hooksinstall.force":  "force",
-		"app.hooksinstall.json":   "json",
-		"app.hooksinstall.only":   "only",
-		"app.hooksinstall.vault":  "vault",
-		"app.hooksinstall.merge":  "merge",
-		"app.hooksinstall.local":  "local",
-		"app.hooksinstall.dryrun": "dry-run",
+		"app.hooksinstall.force":   "force",
+		"app.hooksinstall.json":    "json",
+		"app.hooksinstall.only":    "only",
+		"app.hooksinstall.profile": "profile",
+		"app.hooksinstall.vault":   "vault",
+		"app.hooksinstall.merge":   "merge",
+		"app.hooksinstall.local":   "local",
+		"app.hooksinstall.dryrun":  "dry-run",
 	},
 }
 
@@ -131,6 +132,12 @@ func HooksInstallOptions() []config.ConfigOption {
 			DefaultValue: false,
 			Description:  "Output in JSON format",
 			Type:         "bool",
+		},
+		{
+			Key:          "app.hooksinstall.profile",
+			DefaultValue: "",
+			Description:  "Capability profile to declare and install: full (default), knowledge, or persona. Recorded in .claude/vaultmind-profile so `hooks status` judges what you chose, not everything the binary ships.",
+			Type:         "string",
 		},
 		{
 			Key:          "app.hooksinstall.only",
