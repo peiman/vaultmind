@@ -30,7 +30,7 @@ import (
 // context around the top hit." Round-2 inter-agent review surfaced the
 // missing third workflow shape between probe (--pointers-only) and
 // full context-pack — this is it.
-func runAskRead(cmd *cobra.Command, queryStr, readArg string, ret query.AutoRetrieverResult, vdb *cmdutil.VaultDB) error {
+func runAskRead(cmd *cobra.Command, queryStr, readArg string, ret query.AutoRetrieverResult, vdb *cmdutil.VaultDB, fed federatedRead) error {
 	hits, err := query.AskHits(cmd.Context(), ret.Retriever,
 		queryStr,
 		getConfigValueWithFlags[int](cmd, "search-limit", config.KeyAppAskSearchLimit),
@@ -38,11 +38,29 @@ func runAskRead(cmd *cobra.Command, queryStr, readArg string, ret query.AutoRetr
 	if err != nil {
 		return fmt.Errorf("ask --read: %w", err)
 	}
+	// Under federation the menu the agent was shown IS the cross-vault
+	// ranking, so that is the list --read must index into. Re-searching the
+	// owning vault here made rank N mean two different notes: the menu said
+	// one thing and --read delivered another, from another vault, silently.
+	if len(fed.hits) > 0 {
+		hits = fed.asAskResult(queryStr, hits.RetrievalMode)
+	}
 	chosen, err := resolveAskReadTarget(hits.TopHits, readArg)
 	if err != nil {
 		return err
 	}
-	note, err := vdb.DB.QueryFullNote(chosen.ID)
+	// The chosen note may live in a vault other than the one that delivered
+	// the top hit, so its body and its access record belong to ITS vault.
+	readDB := vdb.DB
+	if ownerPath, ok := fed.vaultPathFor(chosen.ID); ok && ownerPath != fed.ownerPath {
+		owned, openErr := cmdutil.OpenVaultDB(ownerPath)
+		if openErr != nil {
+			return fmt.Errorf("ask --read: opening vault %s for %q: %w", ownerPath, chosen.ID, openErr)
+		}
+		defer owned.Close()
+		readDB = owned.DB
+	}
+	note, err := readDB.QueryFullNote(chosen.ID)
 	if err != nil {
 		return fmt.Errorf("ask --read: querying %q: %w", chosen.ID, err)
 	}
@@ -65,7 +83,7 @@ func runAskRead(cmd *cobra.Command, queryStr, readArg string, ret query.AutoRetr
 	// legacy caller='agent' fallback. That fallback exists for rows written
 	// before delivery was tracked, not for new ones. --read renders the body a
 	// few lines below, so true is the measured answer, not an assumption.
-	if recErr := index.RecordNoteAccessDelivered(vdb.DB, note.ID, index.CallerAgent, true); recErr != nil {
+	if recErr := index.RecordNoteAccessDelivered(readDB, note.ID, index.CallerAgent, true); recErr != nil {
 		log.Debug().Err(recErr).Str("note_id", note.ID).Msg("recording ask --read access failed (non-fatal)")
 	}
 	// --read + --explain compose: the menu shows per-lane RRF math
@@ -108,3 +126,52 @@ func resolveAskReadTarget(hits []retrieval.ScoredResult, arg string) (*retrieval
 // until a real consumer asks; meanwhile fail loudly rather than emit a
 // confusing partial envelope.
 var errAskReadJSONNotYetSupported = errors.New("ask --read does not yet support --json output; use either --json (no --read) for the menu or omit --json for the inline-body view")
+
+// federatedRead carries the cross-vault ranking into the --read path.
+//
+// It exists because --read used to re-search the owning vault and index into
+// THAT list while the agent had been shown the federated one, so rank N named
+// two different notes. Passing the shown ranking explicitly makes the menu and
+// the read target the same list by construction rather than by coincidence.
+type federatedRead struct {
+	hits   []query.FederatedHit
+	vaults []query.FederatedVaultStatus
+	// paths are the vaults searched, used to map a hit's display name back to
+	// the directory its body must be read from.
+	paths []string
+	// ownerPath is the vault already open for delivery; a hit owned by that
+	// vault needs no second handle.
+	ownerPath string
+}
+
+// asAskResult presents the cross-vault ranking as the menu, carrying the
+// federation block so --read still reports what was searched.
+func (f federatedRead) asAskResult(queryStr, retrievalMode string) *query.AskResult {
+	top := make([]retrieval.ScoredResult, 0, len(f.hits))
+	for _, h := range f.hits {
+		top = append(top, h.ScoredResult)
+	}
+	return &query.AskResult{
+		Query:           queryStr,
+		TopHits:         top,
+		RetrievalMode:   retrievalMode,
+		Federated:       f.hits,
+		FederatedVaults: f.vaults,
+	}
+}
+
+// vaultPathFor returns the directory owning a note id in the merged ranking.
+func (f federatedRead) vaultPathFor(id string) (string, bool) {
+	for _, h := range f.hits {
+		if h.ID != id {
+			continue
+		}
+		for _, p := range f.paths {
+			if vaultDisplayName(p) == h.Vault {
+				return p, true
+			}
+		}
+		return "", false
+	}
+	return "", false
+}

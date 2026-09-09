@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/peiman/vaultmind/internal/embedding"
 	"github.com/peiman/vaultmind/internal/index"
+	"github.com/peiman/vaultmind/internal/noisefloor"
 	"github.com/peiman/vaultmind/internal/retrieval"
+	"github.com/rs/zerolog/log"
 )
 
 // Federated retrieval — one query, many vaults, one ranked answer.
@@ -96,8 +99,13 @@ func mergeByRRFWithRelevance(perVault map[string][]retrieval.ScoredResult, k int
 			a.hit.Ranks[vault] = rank
 			// The owning vault is the one it ranked highest in — the vault with
 			// the strongest claim, and the one whose body/access/plasticity the
-			// delivery path will use.
-			if rank < a.bestRank {
+			// delivery path will use. On a RANK TIE the more relevant vault
+			// wins, which is the same rule that breaks ordering ties: ownership
+			// decides where reinforcement lands, so letting it fall to whichever
+			// vault happened to be visited last would move plasticity into a
+			// vault chosen by iteration order.
+			tiedButMoreRelevant := rank == a.bestRank && relevance[vault] > relevance[a.hit.Vault]
+			if rank < a.bestRank || tiedButMoreRelevant {
 				a.bestRank = rank
 				a.hit.Vault = vault
 				a.hit.ScoredResult = h
@@ -152,6 +160,64 @@ func gateByOwnFloor(perVault map[string][]retrieval.ScoredResult, verdicts map[s
 		return perVault
 	}
 	return kept
+}
+
+// FloorResolver supplies a vault's calibrated noise floor and dispersion for
+// a given embedding dimensionality. Taken as a function because the
+// calibration lives in the experiment DB, which is the caller's concern.
+type FloorResolver func(dims int) (floor, sigma float64)
+
+// SearchAndJudge searches a vault ONCE and judges its top hit against that
+// vault's own noise floor.
+//
+// The single search is the point. The first federation searched every vault
+// twice — once for the hits, once again inside the verdict pass — and the two
+// call sites each read as reasonable in isolation. Measured across three
+// vaults that doubling cost 6.7 seconds, taking a federated query to 15.9s
+// and past the recall hook's 15s timeout: the hook was killed and injected
+// nothing, silently, exit 0. The feature worked at the CLI and was dead in
+// the one place it was built to help.
+//
+// Returns an empty verdict when the vault has no embedder. Unmeasured is not
+// no_match: the gate keeps such a vault rather than reading a missing
+// measurement as evidence of irrelevance.
+func SearchAndJudge(
+	ctx context.Context,
+	ret retrieval.Retriever,
+	emb embedding.Embedder,
+	db *index.DB,
+	floors FloorResolver,
+	queryText string,
+	limit int,
+) (hits []retrieval.ScoredResult, verdict string, relevanceZ float64, err error) {
+	res, err := AskHits(ctx, ret, queryText, limit)
+	if err != nil {
+		return nil, "", 0, err
+	}
+	if res == nil || len(res.TopHits) == 0 {
+		return nil, "", 0, nil
+	}
+	hits = res.TopHits
+
+	if emb == nil {
+		return hits, "", 0, nil
+	}
+	sims, simErr := NoteSimilarities(ctx, queryText, emb, db)
+	if simErr != nil || sims == nil {
+		// Unmeasured, not irrelevant. A similarity failure means this vault
+		// cannot be judged; the gate keeps it, and the header reports it as
+		// unmeasured rather than pretending it had nothing.
+		log.Debug().Err(simErr).Msg("federated: no similarities; vault reported unmeasured")
+		return hits, "", 0, nil
+	}
+	topCosine, ok := sims[hits[0].ID]
+	if !ok {
+		log.Debug().Str("id", hits[0].ID).Msg("federated: top hit has no embedding; vault reported unmeasured")
+		return hits, "", 0, nil
+	}
+	floor, sigma := floors(emb.Dims())
+	z, label := noisefloor.Relevance(topCosine, floor, sigma, noisefloor.DefaultNoiseFloor(emb.Dims()))
+	return hits, label, z, nil
 }
 
 // FederatedVaultStatus records what happened to one vault in a federated

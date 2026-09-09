@@ -286,3 +286,96 @@ func TestMergeFederated_TakesCollectedResultsNotLiveRetrievers(t *testing.T) {
 	require.Equal(t, "the-answer", merged[0].ID)
 	require.Equal(t, "desk", merged[0].Vault)
 }
+
+// MergeFederated must GATE, not merely be able to.
+//
+// Review mutation M8 unwired gateByOwnFloor from MergeFederated and every test
+// stayed green: the gate had thorough unit tests and nothing asserted the
+// public entry point actually calls it. That is the third time tonight the
+// same shape appeared — a correct unit whose caller throws the answer away —
+// so this test goes through MergeFederated deliberately.
+func TestMergeFederated_ActuallyAppliesTheGate(t *testing.T) {
+	perVault := map[string][]retrieval.ScoredResult{
+		"identity": {hit("irrelevant-but-rank-1", 0.02)},
+		"desk":     {hit("the-answer", 0.015)},
+	}
+	verdicts := map[string]string{
+		"identity": ConfidenceNoMatch,
+		"desk":     ConfidenceModerate,
+	}
+
+	merged := MergeFederated(perVault, verdicts, map[string]float64{"identity": -1.25, "desk": 0.93})
+
+	require.NotEmpty(t, merged)
+	require.Equal(t, "the-answer", merged[0].ID,
+		"a vault its own floor calls no_match must not win on rank alone")
+	for _, h := range merged {
+		require.NotEqual(t, "identity", h.Vault,
+			"the gated vault must contribute nothing through the public entry point")
+	}
+}
+
+// An unmeasured vault is kept even when another vault IS measured and gated.
+//
+// The original version of this test had identity=no_match and keyword=unmeasured
+// and nothing else. Mutating the gate to also drop unmeasured emptied `kept`,
+// which tripped the all-no_match escape hatch and returned everything — so the
+// assertion passed while the rule it guards was gone. A third, relevant vault
+// keeps `kept` non-empty so the escape hatch cannot mask the mutation.
+func TestGateByOwnFloor_UnmeasuredVaultIsKeptEvenWhenAnotherVaultSurvives(t *testing.T) {
+	in := map[string][]retrieval.ScoredResult{
+		"identity": {hit("a", 0.02)},
+		"keyword":  {hit("b", 0.01)},
+		"desk":     {hit("c", 0.03)},
+	}
+	verdicts := map[string]string{
+		"identity": ConfidenceNoMatch,
+		"desk":     ConfidenceModerate,
+		// "keyword" has NO entry: unmeasured, because it has no embedder.
+	}
+
+	kept := gateByOwnFloor(in, verdicts)
+
+	require.Contains(t, kept, "desk", "the measured, relevant vault survives")
+	require.NotContains(t, kept, "identity", "the measured, irrelevant vault is dropped")
+	require.Contains(t, kept, "keyword",
+		"unmeasured is not irrelevant — an absent measurement must not be read as evidence")
+}
+
+// When a note ties at the same rank in two vaults, the MORE RELEVANT vault
+// owns it — the same rule that breaks ordering ties.
+//
+// Ownership is not cosmetic: the owner delivers the body, records the access,
+// and receives the plasticity update. Review mutation M6 (`<` to `<=`) handed
+// ownership to whichever vault happened to be iterated last and no test
+// noticed, which would have quietly moved reinforcement into the wrong vault.
+func TestMergeByRRF_TiedOwnershipGoesToTheMoreRelevantVault(t *testing.T) {
+	// BOTH orderings, deliberately. The first version of this test gave the
+	// higher relevance to the vault that was also visited LAST, so "relevance
+	// decides" and "last one wins" produced the same answer and the mutation
+	// survived. A tie-break test has to include the case where the winner is
+	// visited FIRST, or it is only asserting iteration order.
+	for _, tc := range []struct {
+		name      string
+		relevance map[string]float64
+		wantOwner string
+	}{
+		{"more relevant vault sorts first", map[string]float64{"alpha": 2.50, "beta": 0.10}, "alpha"},
+		{"more relevant vault sorts last", map[string]float64{"alpha": 0.10, "beta": 2.50}, "beta"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			perVault := map[string][]retrieval.ScoredResult{
+				"alpha": {hit("shared-note", 0.02)},
+				"beta":  {hit("shared-note", 0.02)},
+			}
+
+			merged := mergeByRRFWithRelevance(perVault, defaultRRFK, tc.relevance)
+
+			require.Len(t, merged, 1, "the same note in two vaults is one hit, amplified")
+			require.Equal(t, tc.wantOwner, merged[0].Vault,
+				"a rank tie is decided by relevance, not by which vault was visited last")
+			require.Equal(t, map[string]int{"alpha": 1, "beta": 1}, merged[0].Ranks,
+				"both vaults' ranks are still recorded, so an amplified hit can show its work")
+		})
+	}
+}

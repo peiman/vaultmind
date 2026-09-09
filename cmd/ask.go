@@ -109,6 +109,13 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	}
 	var federated []query.FederatedHit
 	var federatedVaults []query.FederatedVaultStatus
+	// A single --vaults entry is just a single-vault search — but it still has
+	// to BE one. Federation used to engage only at len>1, so one path fell
+	// through to the unset --vault and died with `no vault found: "."`. The
+	// parser was right and the caller discarded its answer.
+	if len(vaultPaths) == 1 {
+		vaultPath = vaultPaths[0]
+	}
 	if len(vaultPaths) > 1 {
 		hits, statuses, owner, ferr := federateAndPickOwner(cmd, args[0], vaultPaths, searchLimitForFederation)
 		if ferr != nil {
@@ -137,7 +144,12 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	// mis-attribution that would happen if Ask packed context around
 	// the top hit when the agent intended to read a different rank.
 	if readArg := getConfigValueWithFlags[string](cmd, "read", config.KeyAppAskRead); readArg != "" {
-		return runAskRead(cmd, args[0], readArg, ret, vdb)
+		return runAskRead(cmd, args[0], readArg, ret, vdb, federatedRead{
+			hits:      federated,
+			vaults:    federatedVaults,
+			paths:     vaultPaths,
+			ownerPath: vaultPath,
+		})
 	}
 
 	activationScores := computeActivationScores(cmd.Context(), nil, delta)
