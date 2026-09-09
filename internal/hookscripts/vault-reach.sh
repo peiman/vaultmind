@@ -100,11 +100,16 @@ mkdir -p "$LOG_DIR" 2>/dev/null
 # `"matched":true,"injected":false` — the same line it writes when the vault
 # genuinely had nothing to say. Silent because a binary was missing, recorded as
 # silent by choice. Resolve the binary; run unbounded when there is none.
+# One definition for the bound, so the default and the message that reports it
+# cannot drift. Raised from 10: measured 2026-09-09 on BGE-M3/ORT, a federated
+# query costs 5.6s across two vaults and 10.5s across three, so the old bound
+# guaranteed a kill the moment this hook federated.
+HOOK_QUERY_TIMEOUT="${VAULTMIND_HOOK_QUERY_TIMEOUT:-25}"
 TIMEOUT_CMD=""
 if command -v timeout >/dev/null 2>&1; then
-  TIMEOUT_CMD="timeout ${VAULTMIND_HOOK_QUERY_TIMEOUT:-10}"
+  TIMEOUT_CMD="timeout $HOOK_QUERY_TIMEOUT"
 elif command -v gtimeout >/dev/null 2>&1; then
-  TIMEOUT_CMD="gtimeout ${VAULTMIND_HOOK_QUERY_TIMEOUT:-10}"
+  TIMEOUT_CMD="gtimeout $HOOK_QUERY_TIMEOUT"
 fi
 
 # Same relevance floor as vault-recall.sh: --quiet-on-no-match means an
@@ -130,10 +135,28 @@ POINTERS=$(VAULTMIND_CALLER=vaultmind-reach-hook VAULTMIND_USER_SESSION_ID="$HOO
   --budget 900 \
   --quiet-on-no-match \
   --excerpt 80 2>/dev/null)
+ASK_STATUS=$?
 
 TS=$(date +%Y%m%dT%H%M%S)
+# A FAILED reach says so; an EMPTY one does not.
+#
+# This hook did not capture the exit status at all, so a killed query and a
+# vault with nothing to say wrote the same log line — "matched":true,
+# "injected":false — which is verbatim the failure class described at the top
+# of this file. It was closed for the missing-`timeout`-binary case and left
+# open for the timed-out one.
+if [ "$ASK_STATUS" != "0" ]; then
+  if [ "$ASK_STATUS" = "124" ]; then
+    echo "VAULT — reach timed out after ${HOOK_QUERY_TIMEOUT}s; your notes were NOT consulted for this file."
+  else
+    echo "VAULT — reach failed (exit $ASK_STATUS); your notes were NOT consulted for this file."
+  fi
+  printf '{"timestamp":"%s","matched":true,"injected":false,"ask_status":%d}\n' "$TS" "$ASK_STATUS" \
+    >> "$LOG_DIR/${TS}-reach.jsonl" 2>/dev/null
+  exit 0
+fi
 if [ -z "$POINTERS" ]; then
-  printf '{"timestamp":"%s","matched":true,"injected":false}\n' "$TS" \
+  printf '{"timestamp":"%s","matched":true,"injected":false,"ask_status":0}\n' "$TS" \
     >> "$LOG_DIR/${TS}-reach.jsonl" 2>/dev/null
   exit 0
 fi

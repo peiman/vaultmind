@@ -89,17 +89,24 @@ TIMESTAMP=$(date +%Y%m%dT%H%M%S)
 # Bound the query. Claude Code kills a UserPromptSubmit hook at its own budget
 # and DISCARDS the output, so an unbounded query on a loaded machine spends the
 # whole budget and injects nothing — the turn pays and gets nothing back.
-# Better to give up early and stay silent: pointers are a courtesy, and this
-# hook is fail-open by design.
+# Giving up early is right; giving up SILENTLY is not (see the status check
+# below).
+#
+# The bound must clear the real workload with margin. Measured 2026-09-09 on
+# BGE-M3/ORT: one vault 3.1s, two 5.6s, three 10.5s — so the old 15 left a
+# federated query one slow machine away from being killed, which is exactly
+# what happened. One definition, used everywhere, so the default and the
+# message it appears in cannot drift apart.
 #
 # macOS doesn't ship `timeout` — same fallback chain vault-track-read.sh uses:
 # `timeout`, then `gtimeout` (coreutils via brew), then an unbounded call.
 # VAULTMIND_HOOK_QUERY_TIMEOUT tunes it for a large vault or a slow machine.
+HOOK_QUERY_TIMEOUT="${VAULTMIND_HOOK_QUERY_TIMEOUT:-25}"
 TIMEOUT_CMD=""
 if command -v timeout >/dev/null 2>&1; then
-  TIMEOUT_CMD="timeout ${VAULTMIND_HOOK_QUERY_TIMEOUT:-15}"
+  TIMEOUT_CMD="timeout $HOOK_QUERY_TIMEOUT"
 elif command -v gtimeout >/dev/null 2>&1; then
-  TIMEOUT_CMD="gtimeout ${VAULTMIND_HOOK_QUERY_TIMEOUT:-15}"
+  TIMEOUT_CMD="gtimeout $HOOK_QUERY_TIMEOUT"
 fi
 
 # Pointers-only ask, low max-items to keep noise bounded. VAULTMIND_CALLER
@@ -162,8 +169,26 @@ POINTERS=$(VAULTMIND_CALLER=vaultmind-userprompt-hook VAULTMIND_USER_SESSION_ID=
 ASK_STATUS=$?
 
 if [ "$ASK_STATUS" != "0" ] || [ -z "$POINTERS" ]; then
-  # Log the failure to the sidecar but don't surface it to the agent — a
-  # broken vault recall shouldn't block the user's message.
+  # A FAILED query says so; an EMPTY one does not.
+  #
+  # These two were conflated and the cost was measured: with three vaults the
+  # federated query took 15.9s against the old 15s bound, so the hook was
+  # killed and injected nothing while exiting 0. From inside the turn, "your
+  # memory was consulted and had nothing" and "your memory was never
+  # consulted" were the same shape. Not blocking the user's message is right;
+  # being invisible is not, and one line is not a block.
+  #
+  # A genuine no-match — status 0, empty output under --quiet-on-no-match —
+  # stays quiet. That is the common case, and announcing it every turn would
+  # be noise that trains the reader to skip the line that matters.
+  if [ "$ASK_STATUS" != "0" ]; then
+    if [ "$ASK_STATUS" = "124" ]; then
+      echo "VAULT — recall timed out after ${HOOK_QUERY_TIMEOUT}s; your notes were NOT consulted this turn."
+    else
+      echo "VAULT — recall failed (exit $ASK_STATUS); your notes were NOT consulted this turn."
+    fi
+  fi
+  # Log to the sidecar too, so the failure is diagnosable after the fact.
   printf '{"timestamp":"%s","prompt_len":%d,"ask_status":%d,"injection":false,"error":%s}\n' \
     "$TIMESTAMP" "${#PROMPT}" "$ASK_STATUS" "$(cat "$ASK_ERR" | python3 -c "import json,sys; print(json.dumps(sys.stdin.read()))" 2>/dev/null || echo '""')" \
     > "$LOG_DIR/${TIMESTAMP}-skip.json" 2>/dev/null

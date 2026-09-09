@@ -202,17 +202,17 @@ func SearchAndJudge(
 	if emb == nil {
 		return hits, "", 0, nil
 	}
-	sims, simErr := NoteSimilarities(ctx, queryText, emb, db)
-	if simErr != nil || sims == nil {
-		// Unmeasured, not irrelevant. A similarity failure means this vault
-		// cannot be judged; the gate keeps it, and the header reports it as
-		// unmeasured rather than pretending it had nothing.
-		log.Debug().Err(simErr).Msg("federated: no similarities; vault reported unmeasured")
-		return hits, "", 0, nil
-	}
-	topCosine, ok := sims[hits[0].ID]
-	if !ok {
-		log.Debug().Str("id", hits[0].ID).Msg("federated: top hit has no embedding; vault reported unmeasured")
+	// ONE embedding, not the whole corpus. The verdict needs exactly the top
+	// hit's cosine, and computing it via NoteSimilarities loaded and scored
+	// every note in the vault to read a single entry — O(N) work for an O(1)
+	// need, paid per vault on every federated query. On the 415-note research
+	// vault that scan was most of the per-vault cost.
+	topCosine, ok, simErr := topHitCosine(ctx, queryText, hits[0].ID, emb, db)
+	if simErr != nil || !ok {
+		// Unmeasured, not irrelevant. The vault cannot be judged; the gate
+		// keeps it, and the header says unmeasured rather than pretending it
+		// had nothing.
+		log.Debug().Err(simErr).Str("id", hits[0].ID).Msg("federated: top hit not measurable; vault reported unmeasured")
 		return hits, "", 0, nil
 	}
 	floor, sigma := floors(emb.Dims())
@@ -306,4 +306,22 @@ func relevanceByVault(sources []VaultSource) map[string]float64 {
 		out[s.Name] = s.RelevanceZ
 	}
 	return out
+}
+
+// topHitCosine returns the cosine between the query and ONE note, reporting
+// ok=false when that note has no stored embedding — which is unmeasured, not
+// a similarity of zero.
+func topHitCosine(ctx context.Context, queryText, noteID string, emb embedding.Embedder, db *index.DB) (float64, bool, error) {
+	queryVec, err := emb.Embed(ctx, queryText)
+	if err != nil {
+		return 0, false, err
+	}
+	noteVec, err := index.LoadEmbedding(db, noteID)
+	if err != nil {
+		return 0, false, err
+	}
+	if len(noteVec) == 0 {
+		return 0, false, nil
+	}
+	return CosineSimilarity(queryVec, noteVec), true, nil
 }

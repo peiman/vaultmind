@@ -122,7 +122,17 @@ func TestReachHook_StillInjectsWhenTimeoutBinaryIsPresent(t *testing.T) {
 	assert.Contains(t, out, "some-note", "bounding the query must not change the fast path")
 }
 
-func TestRecallHook_SlowQueryDegradesToSilenceInsteadOfStalling(t *testing.T) {
+// A timeout must be VISIBLE, not silent.
+//
+// This test used to assert the output was empty. Its real intent — stated in
+// its own message — was "no PARTIAL pointers", and that still holds; but
+// silence was the wrong way to get it. Measured 2026-09-09: with three vaults
+// the federated query took 15.9s against a 15s bound, so the hook was killed
+// and injected nothing while exiting 0. Nothing in the turn distinguished
+// "your memory was consulted and had nothing" from "your memory was never
+// consulted". One line costs nothing and is the difference between a bounded
+// query and an invisible one.
+func TestRecallHook_SlowQueryReportsTheTimeoutInsteadOfVanishing(t *testing.T) {
 	if _, err := exec.LookPath("timeout"); err != nil {
 		t.Skip("no timeout binary; the bound cannot be enforced on this machine")
 	}
@@ -133,10 +143,49 @@ func TestRecallHook_SlowQueryDegradesToSilenceInsteadOfStalling(t *testing.T) {
 	env := append(h.env(true), "VAULTMIND_HOOK_QUERY_TIMEOUT=1")
 	out, elapsed := runHookScript(t, "vault-recall.sh", env, string(payload))
 
-	assert.Empty(t, out, "a query that outran its bound must inject nothing, not partial pointers")
+	assert.NotContains(t, out, "some-note",
+		"a query that outran its bound must not inject partial pointers")
+	assert.Contains(t, out, "recall timed out",
+		"a bounded query that was killed must say so; silence is indistinguishable from an empty vault")
 	assert.Less(t, elapsed, 15*time.Second,
 		"recall must return on its own bound; unbounded it runs until the harness kills it at 30s "+
 			"and discards the output")
+}
+
+// A genuine no-match stays QUIET. The visible-timeout rule above must not turn
+// every uneventful turn into noise: --quiet-on-no-match exists because most
+// prompts have nothing to recall, and that is not a failure.
+func TestRecallHook_GenuineNoMatchStaysSilent(t *testing.T) {
+	// Exits 0 with no output, exactly as --quiet-on-no-match does.
+	h := newHookEnv(t, "#!/bin/bash\nexit 0\n")
+	payload, err := json.Marshal(map[string]string{"prompt": "what did we decide about retries?", "session_id": "test"})
+	require.NoError(t, err)
+
+	out, _ := runHookScript(t, "vault-recall.sh", h.env(true), string(payload))
+
+	assert.Empty(t, strings.TrimSpace(out),
+		"nothing to recall is the common case and must not announce itself")
+}
+
+// The reach hook had the same silence, one level worse: it never captured the
+// exit status at all, so a killed query and an empty vault produced the same
+// log line — `"matched":true,"injected":false` — which is verbatim the failure
+// this file's own header describes. That was fixed for the missing-`timeout`-
+// binary case and left open for the timed-out case.
+func TestReachHook_SlowQueryReportsTheTimeoutInsteadOfVanishing(t *testing.T) {
+	if _, err := exec.LookPath("timeout"); err != nil {
+		t.Skip("no timeout binary; the bound cannot be enforced on this machine")
+	}
+	h := newHookEnv(t, slowStub)
+	// reach fires on the allowlisted Bash commands, not on reads.
+	payload := `{"tool_name":"Bash","tool_input":{"command":"git commit -m x"}}`
+
+	env := append(h.env(true), "VAULTMIND_HOOK_QUERY_TIMEOUT=1")
+	out, elapsed := runHookScript(t, "vault-reach.sh", env, payload)
+
+	assert.Contains(t, out, "reach timed out",
+		"a bounded reach that was killed must say so; silence reads as an empty vault")
+	assert.Less(t, elapsed, 15*time.Second, "reach must return on its own bound")
 }
 
 func TestRecallHook_BoundDoesNotClipAFastQuery(t *testing.T) {
