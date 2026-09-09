@@ -110,8 +110,22 @@ fi
 # Same relevance floor as vault-recall.sh: --quiet-on-no-match means an
 # off-domain reach prints nothing rather than pointing at whatever ranked least
 # badly. max-items 2 because this fires mid-task, where attention is scarcest.
+# FEDERATION. An agent's memory is not one vault: mine is three, this hook
+# searched one, and two findings from a single working week sat in the desk —
+# retrievable there at z=+1.81 and z=+3.08 — unreachable from where the work
+# happens. VAULTMIND_VAULTS (comma-separated paths) searches them together;
+# results merge by cross-vault RRF, each vault judges relevance against its OWN
+# noise floor, and the winning vault delivers the body.
+#
+# Unset ⇒ exactly today's single-vault call. Additive by construction: no
+# existing adopter changes behaviour on upgrade.
+VAULT_ARGS=(--vault "$VAULT_PATH")
+if [ -n "${VAULTMIND_VAULTS:-}" ]; then
+  VAULT_ARGS=(--vaults "$VAULTMIND_VAULTS")
+fi
+
 POINTERS=$(VAULTMIND_CALLER=vaultmind-reach-hook VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" $TIMEOUT_CMD "$VAULTMIND" ask "$QUERY" \
-  --vault "$VAULT_PATH" \
+  "${VAULT_ARGS[@]}" \
   --max-items 2 \
   --budget 900 \
   --quiet-on-no-match \

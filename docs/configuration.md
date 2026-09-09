@@ -40,6 +40,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.arc.candidates.json` | bool | `false` | `VAULTMIND_APP_ARC_CANDIDATES_JSON` | Output in JSON format |
 | `app.arc.candidates.arcs_vault` | string | `` | `VAULTMIND_APP_ARC_CANDIDATES_ARCS_VAULT` | Vault holding the existing arcs to compare proposals against (default: the scanned vault). Set this when the desk and the arcs live in different vaults |
 | `app.ask.vault` | string | `.` | `VAULTMIND_APP_ASK_VAULT` | Path to vault root |
+| `app.ask.vaults` | string | `` | `VAULTMIND_APP_ASK_VAULTS` | Comma-separated vault paths to search TOGETHER (federated). Merged by cross-vault RRF — ranks, not scores, because each vault calibrates its own noise floor. Every hit is tagged with the vault it came from. |
 | `app.ask.json` | bool | `false` | `VAULTMIND_APP_ASK_JSON` | Output in JSON format |
 | `app.ask.budget` | int | `4000` | `VAULTMIND_APP_ASK_BUDGET` | Token budget for context-pack |
 | `app.ask.max_items` | int | `8` | `VAULTMIND_APP_ASK_MAX_ITEMS` | Max context items |
@@ -310,6 +311,9 @@ app:
   ask:
     # Path to vault root
     vault: .
+
+    # Comma-separated vault paths to search TOGETHER (federated). Merged by cross-vault RRF — ranks, not scores, because each vault calibrates its own noise floor. Every hit is tagged with the vault it came from.
+    vaults: 
 
     # Output in JSON format
     json: false
@@ -1161,6 +1165,9 @@ export VAULTMIND_APP_ARC_CANDIDATES_ARCS_VAULT=
 
 # Path to vault root
 export VAULTMIND_APP_ASK_VAULT=.
+
+# Comma-separated vault paths to search TOGETHER (federated). Merged by cross-vault RRF — ranks, not scores, because each vault calibrates its own noise floor. Every hit is tagged with the vault it came from.
+export VAULTMIND_APP_ASK_VAULTS=
 
 # Output in JSON format
 export VAULTMIND_APP_ASK_JSON=false

@@ -119,6 +119,18 @@ type AskResult struct {
 	// to support. Zero means "not measured" and preserves the original
 	// behaviour for any caller that doesn't populate it.
 	VaultNoteCount int `json:"vault_note_count,omitempty"`
+	// Federated, when non-empty, is the cross-vault merged ranking. TopHits
+	// stays the OWNING vault's own list: the two answer different questions
+	// ("what did this vault rank?" vs "what did the federation rank?") and
+	// collapsing them would hide which vault's floor produced the verdict.
+	Federated []FederatedHit `json:"federated,omitempty"`
+	// Vault names the vault that delivered the body, set only under
+	// federation. Without it "here is a note" gives no way to answer "from
+	// where?", which is the first question a three-vault agent asks.
+	Vault string `json:"vault,omitempty"`
+	// FederatedVaults reports every vault that was SEARCHED and what its own
+	// floor said, so a reader can tell an empty vault from an unsearched one.
+	FederatedVaults []FederatedVaultStatus `json:"federated_vaults,omitempty"`
 }
 
 // tooSmallToJudge reports whether the vault holds too few notes for the

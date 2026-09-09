@@ -45,6 +45,7 @@ OUTPUT INCLUDES
 	ConfigPrefix: "app.ask",
 	FlagOverrides: map[string]string{
 		"app.ask.vault":            "vault",
+		"app.ask.vaults":           "vaults",
 		"app.ask.json":             "json",
 		"app.ask.budget":           "budget",
 		"app.ask.max_items":        "max-items",
@@ -62,6 +63,7 @@ OUTPUT INCLUDES
 func AskOptions() []config.ConfigOption {
 	return []config.ConfigOption{
 		{Key: "app.ask.vault", DefaultValue: ".", Description: "Path to vault root", Type: "string"},
+		{Key: "app.ask.vaults", DefaultValue: "", Description: "Comma-separated vault paths to search TOGETHER (federated). Merged by cross-vault RRF — ranks, not scores, because each vault calibrates its own noise floor. Every hit is tagged with the vault it came from.", Type: "string"},
 		{Key: "app.ask.json", DefaultValue: false, Description: "Output in JSON format", Type: "bool"},
 		{Key: "app.ask.budget", DefaultValue: 4000, Description: "Token budget for context-pack", Type: "int"},
 		{Key: "app.ask.max_items", DefaultValue: 8, Description: "Max context items", Type: "int"},

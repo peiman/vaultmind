@@ -96,6 +96,27 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("usage: vaultmind ask <query>")
 	}
 	vaultPath := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppAskVault)
+
+	// FEDERATION. With --vaults, search them all and let the merge choose which
+	// vault delivers. Everything below is unchanged: the winner's own pipeline
+	// packs the body, applies ITS noise floor and records the access, so there
+	// is no merged pseudo-vault whose calibration belongs to nobody.
+	searchLimitForFederation := getConfigValueWithFlags[int](cmd, "search-limit", config.KeyAppAskSearchLimit)
+	vaultPaths, verr := resolveAskVaultPaths(vaultPath,
+		getConfigValueWithFlags[string](cmd, "vaults", config.KeyAppAskVaults))
+	if verr != nil {
+		return verr
+	}
+	var federated []query.FederatedHit
+	var federatedVaults []query.FederatedVaultStatus
+	if len(vaultPaths) > 1 {
+		hits, statuses, owner, ferr := federateAndPickOwner(cmd, args[0], vaultPaths, searchLimitForFederation)
+		if ferr != nil {
+			return ferr
+		}
+		federated, federatedVaults, vaultPath = hits, statuses, owner
+	}
+
 	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, "ask")
 	if err != nil {
 		return err
@@ -166,6 +187,11 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	mode := retrievalModeLabel(ret)
 	if result != nil {
 		result.RetrievalMode = mode
+		if len(federated) > 0 {
+			result.Federated = federated
+			result.FederatedVaults = federatedVaults
+			result.Vault = vaultDisplayName(vaultPath)
+		}
 	}
 
 	// Recall floor: nothing relevant (honest noise-floor no_match) and the

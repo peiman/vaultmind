@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/peiman/vaultmind/internal/hookscripts"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -200,4 +201,56 @@ func TestReachHook_NoSessionIDInPayloadForwardsNothingHarmful(t *testing.T) {
 
 	out, _ := runHookScript(t, "vault-reach.sh", h.env(false), string(stdin))
 	require.NotContains(t, out, "conv-", "no id in the payload means no id forwarded")
+}
+
+// Federation only matters if the HOOKS use it. The measured 1-of-4 coverage
+// failure was not a CLI limitation — it was that vault-recall.sh and
+// vault-reach.sh each searched exactly one vault, so two findings sat in the
+// desk, retrievable there, unreachable from where the agent works.
+//
+// VAULTMIND_VAULTS is additive: unset ⇒ today's single-vault behaviour, so no
+// existing adopter changes.
+
+func TestRecallHook_FederatesWhenVaultsListIsSet(t *testing.T) {
+	body := hookScriptBody(t, "vault-recall.sh")
+	require.Contains(t, body, "VAULTMIND_VAULTS",
+		"the recall hook must be able to search more than the one vault it was born with")
+	require.Contains(t, body, "--vaults",
+		"and must pass the list to the binary, not just read the variable")
+}
+
+func TestReachHook_FederatesWhenVaultsListIsSet(t *testing.T) {
+	body := hookScriptBody(t, "vault-reach.sh")
+	require.Contains(t, body, "VAULTMIND_VAULTS")
+	require.Contains(t, body, "--vaults")
+}
+
+// Behavioural, not textual: with the variable unset the hook must call the
+// binary WITHOUT --vaults, or every existing single-vault adopter silently
+// changes behaviour on upgrade.
+func TestRecallHook_UnsetVaultsListKeepsTheSingleVaultCall(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "argv.log")
+	h := newHookEnv(t, argvRecordingStub(logPath))
+	stdin, err := json.Marshal(map[string]string{
+		"prompt":     "what do I know about spreading activation in memory systems",
+		"session_id": "conv-1",
+	})
+	require.NoError(t, err)
+
+	runHookScript(t, "vault-recall.sh", h.env(false), string(stdin))
+
+	raw, err := os.ReadFile(logPath) //nolint:gosec // temp path owned by this test
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), "--vaults",
+		"no VAULTMIND_VAULTS ⇒ no federation flag ⇒ unchanged behaviour")
+}
+
+// hookScriptBody returns the EMBEDDED script — the copy that actually ships —
+// rather than whatever sits in the working directory, so a test cannot pass
+// against a local edit that never reaches an adopter.
+func hookScriptBody(t *testing.T, name string) string {
+	t.Helper()
+	body, ok := hookscripts.Get(name)
+	require.True(t, ok, "embedded script %s must exist", name)
+	return string(body)
 }

@@ -214,8 +214,7 @@ func writeAskHeader(w io.Writer, result *AskResult, explain, bodyDelivered bool)
 			header += fmt.Sprintf(
 				"  [relevance: not yet measurable — %d notes is below the %d needed to calibrate this vault; showing the top hit anyway]",
 				result.VaultNoteCount, noisefloor.MinCalibNotes)
-			_, err := fmt.Fprintln(w, header)
-			return err
+			return emitAskHeader(w, header, result)
 		}
 		switch result.TopHitConfidence {
 		case ConfidenceNoMatch:
@@ -242,8 +241,7 @@ func writeAskHeader(w io.Writer, result *AskResult, explain, bodyDelivered bool)
 				result.TopHitCosine, result.NoiseFloor, result.NoiseFloorSigma,
 				result.TopHitCosine, result.NoiseFloor, result.NoiseFloorSigma, result.RelevanceZ)
 		}
-		_, err := fmt.Fprintln(w, header)
-		return err
+		return emitAskHeader(w, header, result)
 	}
 	if result.TopHitConfidence != "" {
 		// RRF-gap fallback (keyword-only mode). Tiers that auto-degrade to
@@ -260,8 +258,7 @@ func writeAskHeader(w io.Writer, result *AskResult, explain, bodyDelivered bool)
 			header += fmt.Sprintf("  [top-hit confidence: %s]", result.TopHitConfidence)
 		}
 	}
-	_, err := fmt.Fprintln(w, header)
-	return err
+	return emitAskHeader(w, header, result)
 }
 
 // zGloss renders a signed z as a magnitude + direction relative to the noise
@@ -638,3 +635,84 @@ func writeLaneBreakdown(w io.Writer, components map[string]float64) error {
 	_, err := fmt.Fprintf(w, "  mean of %d\n", len(lanes))
 	return err
 }
+
+// emitAskHeader is the ONE place a header reaches the writer. writeAskHeader
+// has three early returns (small-vault, noise-floor, RRF-gap) and the
+// federation block was appended after only one of them — so on the live path
+// it silently vanished. A single emit point makes "some return forgot it"
+// structurally impossible rather than a thing to remember.
+func emitAskHeader(w io.Writer, header string, result *AskResult) error {
+	if len(result.Federated) > 0 {
+		header += "\n" + strings.TrimRight(formatFederationBlock(result), "\n")
+	}
+	_, err := fmt.Fprintln(w, header)
+	return err
+}
+
+// formatFederationBlock renders what was searched, what each vault's own floor
+// said, and the merged ranking. Named vaults with nothing are listed too: an
+// empty vault and an unsearched one look identical otherwise, and only one of
+// them means "go write this down".
+func formatFederationBlock(result *AskResult) string {
+	var b strings.Builder
+	searched := len(result.FederatedVaults)
+	if searched == 0 {
+		searched = countFederatedVaults(result.Federated)
+	}
+	fmt.Fprintf(&b, "  [federated: %d %s searched; delivering from %s]\n",
+		searched, pluralVaults(searched), result.Vault)
+	for _, v := range result.FederatedVaults {
+		if v.Contributed {
+			continue
+		}
+		fmt.Fprintf(&b, "    %-22s nothing above its own floor (%s)\n", v.Name, verdictOrUnmeasured(v.Verdict))
+	}
+	b.WriteString(formatFederatedRanking(result.Federated))
+	return b.String()
+}
+
+func pluralVaults(n int) string {
+	if n == 1 {
+		return "vault"
+	}
+	return "vaults"
+}
+
+func verdictOrUnmeasured(v string) string {
+	if v == "" {
+		return "unmeasured — no embedder, so kept in the merge"
+	}
+	return v
+}
+
+// countFederatedVaults counts distinct vaults represented in a merged ranking.
+func countFederatedVaults(hits []FederatedHit) int {
+	seen := map[string]bool{}
+	for _, h := range hits {
+		seen[h.Vault] = true
+	}
+	return len(seen)
+}
+
+// formatFederatedRanking renders the cross-vault ranking with origin tags. A
+// note that surfaced in more than one vault shows every rank it earned, so an
+// amplified hit can show its work rather than just appearing inexplicably high.
+func formatFederatedRanking(hits []FederatedHit) string {
+	var b strings.Builder
+	b.WriteString("  cross-vault ranking:\n")
+	for i, h := range hits {
+		if i >= maxFederatedShown {
+			fmt.Fprintf(&b, "    … %d more\n", len(hits)-maxFederatedShown)
+			break
+		}
+		fmt.Fprintf(&b, "    %d. [%s] %-40s %s\n", i+1, h.Vault, h.ID, h.Title)
+		if len(h.Ranks) > 1 {
+			fmt.Fprintf(&b, "       (also ranked in %d vaults — amplified by cross-vault RRF)\n", len(h.Ranks))
+		}
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// maxFederatedShown bounds the cross-vault block. The point is orientation,
+// not a full dump: an unbounded list would push the actual answer off screen.
+const maxFederatedShown = 6

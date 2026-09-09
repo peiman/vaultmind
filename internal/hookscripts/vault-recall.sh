@@ -138,9 +138,23 @@ PYEOF
 )
 [ -z "$QUERY" ] && QUERY="$PROMPT"
 
+# FEDERATION. An agent's memory is not one vault: mine is three, this hook
+# searched one, and two findings from a single working week sat in the desk —
+# retrievable there at z=+1.81 and z=+3.08 — unreachable from where the work
+# happens. VAULTMIND_VAULTS (comma-separated paths) searches them together;
+# results merge by cross-vault RRF, each vault judges relevance against its OWN
+# noise floor, and the winning vault delivers the body.
+#
+# Unset ⇒ exactly today's single-vault call. Additive by construction: no
+# existing adopter changes behaviour on upgrade.
+VAULT_ARGS=(--vault "$VAULT_PATH")
+if [ -n "${VAULTMIND_VAULTS:-}" ]; then
+  VAULT_ARGS=(--vaults "$VAULTMIND_VAULTS")
+fi
+
 ASK_ERR=$(mktemp -t vaultmind-userprompt-err.XXXXXX)
 POINTERS=$(VAULTMIND_CALLER=vaultmind-userprompt-hook VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" $TIMEOUT_CMD "$VAULTMIND" ask "$QUERY" \
-  --vault "$VAULT_PATH" \
+  "${VAULT_ARGS[@]}" \
   --max-items 3 \
   --budget 1500 \
   --quiet-on-no-match \

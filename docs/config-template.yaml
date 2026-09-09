@@ -38,6 +38,9 @@ app:
     # Path to vault root
     vault: .
 
+    # Comma-separated vault paths to search TOGETHER (federated). Merged by cross-vault RRF — ranks, not scores, because each vault calibrates its own noise floor. Every hit is tagged with the vault it came from.
+    vaults: 
+
     # Output in JSON format
     json: false
 

@@ -30,6 +30,7 @@ const (
 	KeyAppArcCandidatesJson                  = "app.arc.candidates.json"                  // Output in JSON format
 	KeyAppArcCandidatesArcsVault             = "app.arc.candidates.arcs_vault"            // Vault holding the existing arcs to compare proposals against (default: the sc...
 	KeyAppAskVault                           = "app.ask.vault"                            // Path to vault root
+	KeyAppAskVaults                          = "app.ask.vaults"                           // Comma-separated vault paths to search TOGETHER (federated). Merged by cross-v...
 	KeyAppAskJson                            = "app.ask.json"                             // Output in JSON format
 	KeyAppAskBudget                          = "app.ask.budget"                           // Token budget for context-pack
 	KeyAppAskMaxItems                        = "app.ask.max_items"                        // Max context items
