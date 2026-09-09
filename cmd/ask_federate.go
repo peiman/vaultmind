@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -9,6 +8,7 @@ import (
 	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/noisefloor"
 	"github.com/peiman/vaultmind/internal/query"
+	"github.com/peiman/vaultmind/internal/retrieval"
 	"github.com/spf13/cobra"
 )
 
@@ -62,63 +62,45 @@ func vaultDisplayName(path string) string {
 // quietly drops a vault answers "nothing relevant" while not having looked,
 // which is the failure this whole feature exists to end.
 func federateAndPickOwner(cmd *cobra.Command, queryText string, paths []string, searchLimit int) ([]query.FederatedHit, []query.FederatedVaultStatus, string, error) {
-	sources := make([]query.VaultSource, 0, len(paths))
+	perVault := make(map[string][]retrieval.ScoredResult, len(paths))
+	verdicts := make(map[string]string, len(paths))
+	relevance := make(map[string]float64, len(paths))
 	byName := make(map[string]string, len(paths))
+	names := make([]string, 0, len(paths))
 
-	// One cleanup for all handles rather than a defer per iteration: a
-	// deferred close inside a loop holds every vault's DB open until the
-	// function returns, which is harmless at three vaults and a leak at thirty.
-	var closers []func()
-	defer func() {
-		for i := len(closers) - 1; i >= 0; i-- {
-			closers[i]()
-		}
-	}()
-
+	// ONE VAULT AT A TIME, opened and released before the next.
+	//
+	// The ORT/hugot embedder allows a single session per process. Holding all
+	// vaults open at once gave the first one the embedder and silently dropped
+	// the rest to KEYWORD search — while reporting them as "unmeasured, no
+	// embedder", so a vault with a full BGE-M3 index looked like one without.
+	// Found only by running the real ORT binary; the earlier measurement was
+	// taken on a test build with no such limit and described a binary nobody
+	// runs.
 	for _, p := range paths {
-		vdb, err := cmdutil.OpenVaultDB(p)
-		if err != nil {
-			return nil, nil, "", fmt.Errorf("federated ask: opening vault %s: %w", p, err)
-		}
-		closers = append(closers, vdb.Close)
-
-		ret := query.BuildAutoRetrieverFull(vdb.DB)
-		closers = append(closers, ret.Cleanup)
-
 		name := vaultDisplayName(p)
 		byName[name] = p
+		names = append(names, name)
 
-		// Each vault judges its OWN relevance against its OWN floor. Without
-		// this the merge is relevance-blind: every vault's rank-1 earns equal
-		// credit, so a vault holding nothing relevant still wins with its best
-		// irrelevant note (observed live: a z=-1.25 no_match note outranking
-		// the desk entry that answered the question).
-		verdict, z := vaultOwnVerdict(cmd, p, queryText, ret, vdb, searchLimit)
-		sources = append(sources, query.VaultSource{
-			Name: name, Retriever: ret.Retriever, Verdict: verdict, RelevanceZ: z,
-		})
+		hits, verdict, z, err := searchOneVault(cmd, p, queryText, searchLimit)
+		if err != nil {
+			return nil, nil, "", fmt.Errorf("federated ask: vault %s: %w", p, err)
+		}
+		perVault[name] = hits
+		verdicts[name] = verdict
+		relevance[name] = z
 	}
 
-	merged, err := query.FederatedSearch(context.WithoutCancel(cmd.Context()), sources, queryText, searchLimit)
-	if err != nil {
-		// Partial failures come back WITH results; surface the error either way
-		// rather than presenting a partial search as a complete one.
-		if len(merged) == 0 {
-			return nil, nil, "", err
-		}
-		if _, werr := fmt.Fprintf(cmd.ErrOrStderr(), "warning: %v\n", err); werr != nil {
-			return nil, nil, "", werr
-		}
-	}
-	// Status for EVERY vault searched, contributing or not.
+	merged := query.MergeFederated(perVault, verdicts, relevance)
+
 	contributed := map[string]bool{}
 	for _, h := range merged {
 		contributed[h.Vault] = true
 	}
-	statuses := make([]query.FederatedVaultStatus, 0, len(sources))
-	for _, src := range sources {
+	statuses := make([]query.FederatedVaultStatus, 0, len(names))
+	for _, n := range names {
 		statuses = append(statuses, query.FederatedVaultStatus{
-			Name: src.Name, Verdict: src.Verdict, Contributed: contributed[src.Name],
+			Name: n, Verdict: verdicts[n], Contributed: contributed[n],
 		})
 	}
 
@@ -132,6 +114,30 @@ func federateAndPickOwner(cmd *cobra.Command, queryText string, paths []string, 
 		return nil, nil, "", fmt.Errorf("federated ask: merged top hit names unknown vault %q", merged[0].Vault)
 	}
 	return merged, statuses, owner, nil
+}
+
+// searchOneVault opens a vault, searches it, computes its OWN relevance
+// verdict, and closes everything before returning — so the next vault can
+// claim the single available embedder session.
+func searchOneVault(cmd *cobra.Command, vaultPath, queryText string, searchLimit int) ([]retrieval.ScoredResult, string, float64, error) {
+	vdb, err := cmdutil.OpenVaultDB(vaultPath)
+	if err != nil {
+		return nil, "", 0, err
+	}
+	defer vdb.Close()
+
+	ret := query.BuildAutoRetrieverFull(vdb.DB)
+	defer ret.Cleanup()
+
+	res, err := query.AskHits(cmd.Context(), ret.Retriever, queryText, searchLimit)
+	if err != nil {
+		return nil, "", 0, err
+	}
+	verdict, z := vaultOwnVerdict(cmd, vaultPath, queryText, ret, vdb, searchLimit)
+	if res == nil {
+		return nil, verdict, z, nil
+	}
+	return res.TopHits, verdict, z, nil
 }
 
 // vaultOwnVerdict computes one vault's top-hit confidence using that vault's

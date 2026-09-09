@@ -184,6 +184,19 @@ type VaultSource struct {
 	RelevanceZ float64
 }
 
+// MergeFederated fuses per-vault results that the CALLER has already
+// collected, gating by each vault's own verdict and breaking rank ties on
+// relevance.
+//
+// Taking collected results rather than live retrievers is not a style choice:
+// the ORT/hugot embedder allows ONE session per process, so a federation that
+// holds every vault open at once leaves all but the first on keyword search —
+// silently, while reporting those vaults as "unmeasured". The caller searches
+// one vault at a time and releases each embedder before opening the next.
+func MergeFederated(perVault map[string][]retrieval.ScoredResult, verdicts map[string]string, relevance map[string]float64) []FederatedHit {
+	return mergeByRRFWithRelevance(gateByOwnFloor(perVault, verdicts), defaultRRFK, relevance)
+}
+
 // FederatedSearch fans a query out across sources and returns one merged
 // ranked list. A source that ERRORS is reported, never silently skipped: a
 // federation that quietly drops a vault answers "nothing relevant" while

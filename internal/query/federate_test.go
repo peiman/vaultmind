@@ -261,3 +261,28 @@ func TestFormatAsk_FederationHeaderReportsSearchedAndContributing(t *testing.T) 
 		"a searched-but-empty vault must be named, or 'we looked and found nothing there' is indistinguishable from 'we never looked'")
 	require.Contains(t, out, "nothing above its own floor")
 }
+
+// LIVE FINDING on the real ORT binary (2026-09-09): hugot allows exactly ONE
+// embedder session per process. Federation opened every vault at once, so the
+// first vault took the embedder and the rest silently fell back to KEYWORD
+// search — reporting "unmeasured, no embedder" for vaults that have full
+// BGE-M3 indexes. Worse, my earlier measurement was taken on a non-ORT test
+// build where that limit does not exist, so the numbers described a binary
+// nobody runs.
+//
+// The merge therefore takes COLLECTED results, not live retrievers: the caller
+// searches one vault at a time and releases each embedder before opening the
+// next.
+func TestMergeFederated_TakesCollectedResultsNotLiveRetrievers(t *testing.T) {
+	merged := MergeFederated(
+		map[string][]retrieval.ScoredResult{
+			"identity": {hit("irrelevant", 0.02)},
+			"desk":     {hit("the-answer", 0.02)},
+		},
+		map[string]string{"identity": ConfidenceNoMatch, "desk": ConfidenceModerate},
+		map[string]float64{"identity": -1.25, "desk": 1.05},
+	)
+	require.NotEmpty(t, merged)
+	require.Equal(t, "the-answer", merged[0].ID)
+	require.Equal(t, "desk", merged[0].Vault)
+}
