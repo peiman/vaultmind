@@ -421,6 +421,7 @@ jobs:
       contents: write # Need write access to create releases
       packages: read # For package access if needed
       id-token: write # For keyless cosign signing via OIDC
+      attestations: write # SLSA build provenance for the artifacts this job produces
 
     steps:
       - name: Checkout Code
@@ -468,6 +469,50 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
 
+      # SLSA build provenance, generated HERE rather than in a workflow that
+      # reacts to the release being published.
+      #
+      # A separate `slsa-provenance.yml` used to own this. It triggered on
+      # `release: [created]` and NEVER RAN — not once, for any release — because
+      # goreleaser above creates the release with the default GITHUB_TOKEN, and
+      # GitHub deliberately suppresses workflow-triggering events from that
+      # token. Every release we shipped carried zero attestations while the repo
+      # looked like it produced them. Attesting in the job that builds the
+      # artifacts removes the trigger entirely; there is nothing left to fire.
+      - name: Attest build provenance (goreleaser artifacts)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # v4.2.2
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt
+
+      # Prove the attestation exists, in the run that made it.
+      #
+      # The whole defect was a provenance step that produced nothing and said
+      # nothing. A generation step with no verification would be the same shape
+      # again: green pipeline, no attestation, discovered months later by an
+      # adopter. Retried because the attestation API is eventually consistent;
+      # a final failure is a real failure and must break the release.
+      - name: Verify the attestation is actually queryable
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          SUBJECT="$(ls dist/checksums.txt)"
+          for attempt in 1 2 3 4 5 6; do
+            if gh attestation verify "$SUBJECT" --repo "$GITHUB_REPOSITORY"; then
+              echo "provenance verified for $SUBJECT on attempt $attempt"
+              exit 0
+            fi
+            echo "attestation not queryable yet (attempt $attempt/6); waiting 10s"
+            sleep 10
+          done
+          echo "::error::attestation generated but NOT verifiable — this is the silent-provenance defect recurring (see issue #142)"
+          exit 1
+
       - name: Scan release artifacts for vulnerabilities
         if: startsWith(github.ref, 'refs/tags/')
         uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2  # v7.4.0
@@ -498,6 +543,7 @@ jobs:
     permissions:
       contents: write # upload release assets
       id-token: write # keyless cosign signing via OIDC
+      attestations: write # SLSA build provenance for the ORT archive built here
     env:
       ORT_VERSION: '1.25.0' # official Microsoft ONNX Runtime to bundle (dlopen'd at runtime)
     strategy:
@@ -637,6 +683,17 @@ jobs:
           cosign sign-blob --bundle "${{ steps.bundle.outputs.archive }}.sigstore.json" \
             "${{ steps.bundle.outputs.archive }}" --yes
 
+      # The ORT archives were the assets MOST likely to be missed even if the
+      # old provenance workflow had fired: it downloaded release assets at
+      # event time, and these upload minutes later as additional assets. On
+      # v0.7.1 the goreleaser files landed at 13:50:42 and these at 13:54:16.
+      # Attesting here, in the job that built the archive, removes that race
+      # the same way it removes the trigger problem.
+      - name: Attest build provenance (ORT archive)
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # v4.2.2
+        with:
+          subject-path: ${{ steps.bundle.outputs.archive }}
+
       - name: Upload to the release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -648,3 +705,19 @@ jobs:
             "${{ steps.bundle.outputs.archive }}" \
             "${{ steps.bundle.outputs.archive }}.sigstore.json" \
             --clobber
+
+      - name: Verify the ORT attestation is actually queryable
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6; do
+            if gh attestation verify "${{ steps.bundle.outputs.archive }}" --repo "$GITHUB_REPOSITORY"; then
+              echo "provenance verified on attempt $attempt"
+              exit 0
+            fi
+            echo "attestation not queryable yet (attempt $attempt/6); waiting 10s"
+            sleep 10
+          done
+          echo "::error::ORT archive attested but NOT verifiable — see issue #142"
+          exit 1
