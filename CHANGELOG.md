@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+> **Upgrading.** This release changes behaviour in ways a configured adopter
+> will notice. The short version: **re-run `vaultmind hooks install --force`**,
+> and **declare a `daemon_url` if you use the mesh**. In detail:
+>
+> 1. **Re-run `vaultmind hooks install --force`.** A new script (`mesh-watch.sh`)
+>    ships, and several fixes live inside scripts you already have. Plain
+>    `hooks install` skips files that exist, so installed copies stay on the old
+>    versions. Until you do, `vaultmind hooks status` reports `1 missing` and
+>    **exits non-zero** — which will fail CI that gates on it.
+> 2. **The built-in `http://127.0.0.1:7850` daemon address is gone.** Both
+>    `doctor` and `identity paths` now resolve `AGENT_CHAT_DAEMON_URL`, else
+>    `daemon_url` in `agents.yaml` (per-agent, else top-level), else they fail
+>    rather than guess. Setups that worked on the default now error, and
+>    `mesh-watch.sh` exits 2 instead of arming. A guessed address is how an
+>    agent ends up talking confidently to the wrong daemon.
+> 3. **macOS config moved to `${XDG_CONFIG_HOME:-~/.config}/vaultmind`** from
+>    `~/Library/Application Support/vaultmind`, and `XDG_CONFIG_HOME` is now
+>    honoured on darwin. Data, cache and state (experiments.db, model cache,
+>    signer socket) are unchanged, and `--config-path-mode native` still
+>    resolves to the Apple path.
+> 4. **`doctor` warns where it used to be silent.** Several checks that
+>    discarded their verdict now report it, so `doctor --json` can return
+>    `status: warning` on a setup that was previously quiet. **The exit code is
+>    still 0** — if you gate CI on `.status == "ok"`, gate on the exit code or
+>    on specific warning text instead.
+> 5. **Parsers of `doctor` and `hooks status` output will break.** The string
+>    `not found (wake-on-idle not confirmed)` no longer exists; heartbeat lines
+>    now carry an age and a path; and the `hooks status` header gained
+>    `[profile: <name>]`.
+> 6. **The watcher heartbeat file is per-agent**: `mesh-watch-<slug>.heartbeat`
+>    rather than `mesh-watch.heartbeat`.
+> 7. **Declare `registry_max_staleness_secs` in `agents.yaml`** if you run a
+>    mesh. Undeclared, `doctor` no longer claims sends will be refused from its
+>    own 24h default — it emits a softer "bound is NOT declared" warning
+>    instead. If you alarm on the old text, match the new wording too.
+
 ### Added
 
 - **`vaultmind ask <query> --vaults a,b,c` — federated search across several vaults.**
@@ -36,6 +72,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   comma-separated list and the per-prompt hooks federate. Unset, both hooks make
   byte-identical calls to today's: additive by construction, so no adopter
   changes behaviour on upgrade.
+
+- **`vaultmind hooks install --profile full|knowledge|persona` — capability profiles.**
+  A knowledge vault has no persona to reconstruct, and `hooks status` used to
+  tell it that `load-persona.sh` and `capture-episode.sh` were missing — grading
+  every adopter against the full persona setup regardless of what they wanted.
+  The profile is now declared (`.claude/vaultmind-profile`), never inferred, and
+  both the script check and the wiring check grade against it. `knowledge`
+  installs exactly four scripts. Also settable via `app.hooksinstall.profile` /
+  `VAULTMIND_APP_HOOKSINSTALL_PROFILE`; an unrecognised value is rejected before
+  anything is written. `hooks status --json` gains a `profile` field.
+
+- **`vaultmind identity paths` — resolved mesh identity, emitted for shells.**
+  `eval "$(vaultmind identity paths)"` exports the 13 `VM_MESH_*` values a
+  watcher needs (slug, dir, heartbeat, pid, lastwake, lastarm, disarm, log,
+  listen, registry, daemon). `--json` emits the same facts in the standard
+  envelope. It fails loudly when no agent slug resolves, rather than deriving
+  paths from an empty identity.
+
+- **`mesh-watch.sh` — the canonical mesh wake-watcher, one script for any agent.**
+  Installed by `hooks install` and tracked by `hooks status`. It is deliberately
+  **not wired to a hook event** — you launch it yourself. It refuses to arm
+  (exit 2) rather than arm against nothing: no resolvable identity, a failed
+  self-test, no rooms, or an unreachable daemon at baseline all stop it.
+  Transport failures back off 2s→60s and give up loudly after 10 consecutive
+  failures. Tunable via `MESH_WAIT_SECS` (28) and `MESH_WATCH_MAX_WALL_SECS`
+  (18000); kill switch by touching the disarm file.
+
+- **Registry staleness countdown on every wake.** `identity paths` emits
+  `VM_MESH_REGISTRY_FILE` and `VM_MESH_REGISTRY_DAYS_LEFT`, and the watcher
+  appends the countdown to both WAKE and quiet RE-ARM lines: `[registry fresh
+  for N more day(s)]`, escalating to `REGISTRY EXPIRES IN N DAY(S)` at 7 or
+  fewer and `REGISTRY STALE … your signed SENDS are being REFUSED` past the
+  bound. Requires `registry_max_staleness_secs` to be declared — undeclared
+  means no countdown rather than a guessed one.
+
+- **`doctor` checks registry freshness from the file, not from the daemon.**
+  `agents.yaml` gains `registry_path` (per-agent, overriding top-level), and
+  `doctor` reads it directly — no flag, no pin, no reachable daemon required,
+  so the tier-2 authenticity checks now run offline.
+
+- **`relevance_z` on ask events.** The experiment ledger records the top hit's
+  band-normalised relevance when the noise floor was applied, and **omits the
+  key entirely** when it was not — so `relevance_z: 0.0` unambiguously means
+  "sat exactly on the floor" rather than "unknown".
+
+### Changed
+
+- **No default chat-daemon address.** `doctor` and `identity paths` resolve
+  `AGENT_CHAT_DAEMON_URL`, then `agents.yaml`, then fail. Previously both fell
+  back to `http://127.0.0.1:7850`. A fossil daemon answering that port served
+  weeks-stale data to a watcher that armed cleanly against it — a default that
+  is usually right is worse than no default, because being wrong is silent.
+  `doctor` also now renders its mesh section whenever a slug resolves, rather
+  than only on a key/anchor/registry/reachable-daemon signal, so agents on a
+  remote hub stop losing their heartbeat line entirely.
+
+- **`VAULTMIND_USER_SESSION_ID` is honoured verbatim**, and the shipped hooks
+  forward the harness's `session_id` into it. Hook-recorded sessions now group
+  per conversation instead of per 30-minute activity burst. Plain CLI use is
+  unchanged (the heuristic still applies when the variable is unset). Ledger
+  analysis by `user_session_id` should treat data either side of this as
+  incomparable.
+
+- **`vault-recall.sh` queries the topic, not the phrasing.** Retrieval-meta
+  wrappers (`can you find`, `our notes about`, `show me`, `please`, …) are
+  stripped before the `ask` call, so "can you find our notes about spreading
+  activation" is queried as "spreading activation". Interrogative frames
+  ("why is…", "how do I…") are kept deliberately. Falls back to the raw prompt
+  if the strip leaves fewer than two words or python3 is unavailable.
+
+- **macOS config lives in `~/.config/vaultmind`** (see Upgrading, item 3).
 
 ### Fixed
 
@@ -74,6 +181,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A federated query searched every vault twice**, once for hits and once for
   the relevance verdict, doubling the cost of every federated query.
 
+- **`doctor` could not tell a dead wake-watcher from an absent one.** The
+  heartbeat check now reports four explicit states — fresh, STALE
+  (present-but-dead), absent, and UNRESOLVED (no slug ⇒ liveness is *unknown*,
+  not OK) — always on exactly one line, always naming the path it read. A
+  future mtime now reads STALE instead of being clamped to fresh, symlinks
+  report the target's mtime, and a new warning fires when the watcher woke and
+  was never re-armed: *you are not being woken for messages*.
+
+- **`doctor` claimed sends would be refused from its own default.** When
+  `registry_max_staleness_secs` is declared, that bound decides the verdict;
+  when it is not, doctor says so instead of judging against a hardcoded 24h. A
+  2-day-old registry under a declared 30-day bound is now silent, where it
+  previously warned.
+
+- **A registry-staleness verdict was computed and then discarded** on the
+  unpinned path (the default, since pinning requires enroll), so a past-bound
+  registry produced no warning at all.
+
+- **Seven defects an independent review found in the same day's work**,
+  including: freshness never checked when the daemon *was* reachable; a
+  declared-but-unreadable registry swallowed; `registry_max_staleness_secs`
+  parsed and ignored; a countdown that reported 29 days for a registry
+  expiring in 48h; and a watcher guard that read `5-3` and 12-digit numbers as
+  *fresh*.
+
+- **The repair for a silence was itself silent** — second instance in one day.
+  A declared-but-unreadable `registry_path` with no key and no daemon skipped
+  the whole mesh section and discarded the warning with it; a valid envelope
+  wrapping garbage failed freshness with no output; one second of clock skew
+  printed as "31 day(s) past the hub bound".
+
+- **`AGENT_CHAT_REGISTRY` unset meant refusing to work.** The registry path now
+  defaults to `<mesh dir>/agents.yaml`, so `identity paths` and `doctor` work in
+  a plain shell rather than only inside the MCP server's environment.
+
+- **A session could open with "✓ VaultMind active" while recall served stale
+  text.** The health hook now relays doctor's stale-index warning on every tier,
+  with the refresh command.
+
+### Security
+
+- **The watcher's bootstrap was an injection surface.** `mesh-watch.sh` evaluated
+  raw `vaultmind identity paths` output; a stray stdout line containing shell
+  metacharacters would have executed in the watcher's context. It now filters to
+  `^VM_MESH_` before `eval`, and refuses to arm if nothing survives the filter.
+
+- **`golang.org/x/crypto` bumped to v0.56.0**, clearing GO-2026-6354 /
+  GO-2026-6355 (x/crypto/ssh channel-deadlock DoS). No interface change.
 
 ## [0.7.1] — 2026-08-21
 
