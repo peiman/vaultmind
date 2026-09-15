@@ -120,3 +120,38 @@ func TestRecite_RequiresAType(t *testing.T) {
 	_, err := memory.Recite(db, memory.ReciteConfig{})
 	require.Error(t, err, "reciting with no type would silently enumerate nothing")
 }
+
+// The budget boundary is EXACT: a layer that fits precisely must arrive whole.
+//
+// Found by gremlins, not by me. I hand-picked two mutations for recite.go and
+// both were caught; automated mutation then killed `>` -> `>=` and the negation
+// at the same line and nothing failed. An off-by-one here means the last arc
+// silently becomes "omitted" on a budget that exactly fits it — the identity
+// layer quietly losing its tail, which is the defect this file exists to
+// prevent.
+func TestRecite_ABudgetThatExactlyFitsDeliversEverything(t *testing.T) {
+	db := buildTestDB(t)
+
+	full, err := memory.Recite(db, memory.ReciteConfig{Type: "concept", ExcerptTokens: 20})
+	require.NoError(t, err)
+	require.NotEmpty(t, full.Items)
+	require.False(t, full.Truncated(), "precondition: unbounded must deliver the whole layer")
+
+	// Exactly the tokens the layer needs — not one more.
+	exact, err := memory.Recite(db, memory.ReciteConfig{
+		Type: "concept", ExcerptTokens: 20, Budget: full.Tokens,
+	})
+	require.NoError(t, err)
+
+	assert.False(t, exact.Truncated(),
+		"a budget equal to the layer's cost must fit it — `>` must not be `>=`")
+	assert.Len(t, exact.Items, len(full.Items))
+
+	// And one token short must drop exactly the tail, still reported.
+	short, err := memory.Recite(db, memory.ReciteConfig{
+		Type: "concept", ExcerptTokens: 20, Budget: full.Tokens - 1,
+	})
+	require.NoError(t, err)
+	assert.True(t, short.Truncated(), "one token short must not silently fit")
+	assert.Equal(t, 1, short.Omitted, "exactly the last note should fall out, not more")
+}
