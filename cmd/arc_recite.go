@@ -10,6 +10,7 @@ import (
 	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/config/commands"
 	"github.com/peiman/vaultmind/internal/envelope"
+	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/memory"
 	"github.com/spf13/cobra"
 )
@@ -39,6 +40,22 @@ func runArcRecite(cmd *cobra.Command, _ []string) error {
 	})
 	if err != nil {
 		return err
+	}
+
+	// Record the read. Every item here had its body delivered, so leaving no
+	// trace would make `arc recite` exactly the untracked bulk path that issue
+	// #53 exists to replace — 27 bodies reaching the agent and a ledger that
+	// says nothing happened.
+	//
+	// AccessSourceRecite is deliberately NOT an activation signal: it fires for
+	// the whole layer every session, so boosting on it would add the same
+	// constant to every arc and flatten the ranking it feeds. Honest in the
+	// ledger, inert in the scorer. Best-effort — telemetry never fails a read.
+	if session := experiment.FromContext(cmd.Context()); session != nil {
+		session.SetVaultPath(vaultPath)
+		for _, it := range result.Items {
+			_, _ = session.LogNoteAccessEvent(it.ID, experiment.AccessSourceRecite, it.Excerpt != "")
+		}
 	}
 
 	if getConfigValueWithFlags[bool](cmd, "json", config.KeyAppArcReciteJson) {

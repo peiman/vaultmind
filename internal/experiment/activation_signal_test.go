@@ -148,3 +148,37 @@ func TestActivationSignalFrom_TellsAbsentFromFalse(t *testing.T) {
 		})
 	}
 }
+
+// Reciting the arc layer is a READ, and it is NOT an activation signal.
+//
+// `arc recite` delivers every arc every session. Recording that is right — the
+// bodies genuinely reached the agent, and a tracked bulk path is the point of
+// issue #53, which exists because the untracked `cat arcs/*.md` bypass kept
+// winning.
+//
+// Letting it BOOST is wrong. Uniform reinforcement of all 27 arcs on every
+// session start adds the same constant to each, which is precisely the
+// information activation exists to carry: spreading activation says THESE
+// notes matter now, and a signal that fires for everything says nothing. So
+// the row is honest in the ledger and inert in the scorer.
+func TestIsActivationSignal_ReciteIsRecordedButNeverBoosts(t *testing.T) {
+	if IsActivationSignal(AccessSourceRecite, delivered()) {
+		t.Error("a delivered recitation must NOT boost — it fires for every arc every session, so counting it flattens activation into a constant")
+	}
+	if IsActivationSignal(AccessSourceRecite, withheld()) {
+		t.Error("an undelivered recitation must not boost either")
+	}
+	if IsActivationSignal(AccessSourceRecite, unrecorded()) {
+		t.Error("a pre-field recitation row must not boost")
+	}
+}
+
+// The exclusion is narrow — deliberate reads must keep boosting.
+func TestIsActivationSignal_DeliberateReadsStillBoost(t *testing.T) {
+	if !IsActivationSignal(AccessSourceRead, delivered()) {
+		t.Error("note get is the most deliberate signal there is and must be unaffected")
+	}
+	if !IsActivationSignal(AccessSourceAsk, delivered()) {
+		t.Error("a delivered ask top hit must still boost")
+	}
+}

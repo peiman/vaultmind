@@ -36,6 +36,16 @@ const (
 	// people's logs, and pre-trusting it would let a future recall path reopen
 	// the phantom loop the moment someone rewires it.
 	AccessSourceRecall AccessSource = "recall"
+
+	// AccessSourceRecite is written by `arc recite`: the WHOLE layer of a type,
+	// delivered unconditionally at session start.
+	//
+	// It is recorded because the bodies genuinely reach the agent, and a
+	// tracked bulk-read path is the point of issue #53 — the untracked
+	// `cat arcs/*.md` bypass kept winning precisely because no tracked
+	// equivalent existed. A read that leaves no trace is how the ledger came to
+	// disagree with reality in the first place.
+	AccessSourceRecite AccessSource = "recite"
 )
 
 // IsActivationSignal reports whether a note_access event is evidence that the
@@ -94,6 +104,20 @@ func IsActivationSignal(source AccessSource, bodyDelivered *bool) bool {
 		// The scorer reads the whole history with no time window, so these cannot
 		// age out on their own.
 		return bodyDelivered != nil && *bodyDelivered
+	case AccessSourceRecite:
+		// NEVER a boost, even though the body was delivered.
+		//
+		// Recitation fires for EVERY note of the layer on EVERY session start.
+		// Counting it adds the same constant to all of them, which destroys the
+		// only thing activation carries: spreading activation exists to say
+		// THESE notes matter now, and a signal that fires for everything says
+		// nothing at all.
+		//
+		// Stated explicitly rather than left to the default below, because the
+		// default would make this correct by accident — and the next person to
+		// see a delivered body in this switch would reasonably "fix" it into
+		// the branch above.
+		return false
 	default:
 		return false
 	}
