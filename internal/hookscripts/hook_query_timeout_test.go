@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -358,4 +359,36 @@ func TestRecallHook_UnfederatedFooterStillNamesTheSingleVault(t *testing.T) {
 	out, _ := runHookScript(t, "vault-recall.sh", h.env(true), string(payload))
 
 	assert.Contains(t, out, "--vault "+h.projectDir+"/vaultmind-identity")
+}
+
+// The two scripts that bound a VAULT QUERY must agree on the default.
+//
+// Issue #105 asked to "consolidate the bound to one". Two of the three scripts
+// it named bound the same thing — a vault query — and the third
+// (vault-track-read.sh) bounds a SQLite point-lookup at 3s, which is a
+// different operation with a different reason and must NOT be folded in.
+//
+// The two that DO share a concern cannot share code: they are standalone
+// scripts, installed independently into .claude/scripts/, with nothing to
+// source. So the achievable guarantee is not one definition but one VALUE,
+// enforced — change the default in one script and this fails.
+func TestHookScripts_QueryBoundDefaultsAgree(t *testing.T) {
+	re := regexp.MustCompile(`HOOK_QUERY_TIMEOUT="\$\{VAULTMIND_HOOK_QUERY_TIMEOUT:-(\d+)\}"`)
+
+	defaults := map[string]string{}
+	for _, name := range []string{"vault-recall.sh", "vault-reach.sh"} {
+		body, ok := hookscripts.All()[name]
+		require.True(t, ok, "script %s must be embedded", name)
+		m := re.FindStringSubmatch(string(body))
+		require.Len(t, m, 2,
+			"%s must declare its query bound ONCE as HOOK_QUERY_TIMEOUT with a default; "+
+				"an inline `timeout 25` is how the two drifted apart in the first place", name)
+		defaults[name] = m[1]
+		require.Equal(t, 1, strings.Count(string(body), "VAULTMIND_HOOK_QUERY_TIMEOUT:-"),
+			"%s must define the default exactly once", name)
+	}
+
+	assert.Equal(t, defaults["vault-recall.sh"], defaults["vault-reach.sh"],
+		"both hooks bound the same operation — a federated vault query — so a default "+
+			"changed in one and not the other silently gives two different timeouts")
 }

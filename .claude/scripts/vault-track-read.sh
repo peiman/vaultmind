@@ -120,11 +120,16 @@ TIMESTAMP=$(date +%Y%m%dT%H%M%S)
 # then to a no-timeout call as a last resort. Output discarded (the
 # agent gets the body from Read itself); only exit status + first
 # line matter for resolution detection.
+# One definition, used by both branches. Deliberately NOT the query bound the
+# other two hooks use: this bounds a SQLite point-lookup, not a vault query, so
+# folding them together would tie a 3s lookup to a 25s search. Issue #105 asked
+# to consolidate all three; two of them share a concern and this one does not.
+NOTE_GET_TIMEOUT="${VAULTMIND_NOTE_GET_TIMEOUT:-3}"
 TIMEOUT_CMD=""
 if command -v timeout >/dev/null 2>&1; then
-  TIMEOUT_CMD="timeout 3"
+  TIMEOUT_CMD="timeout $NOTE_GET_TIMEOUT"
 elif command -v gtimeout >/dev/null 2>&1; then
-  TIMEOUT_CMD="gtimeout 3"
+  TIMEOUT_CMD="gtimeout $NOTE_GET_TIMEOUT"
 fi
 NOTE_OUTPUT=$(VAULTMIND_CALLER=vaultmind-preread-track $TIMEOUT_CMD "$VAULTMIND" note get "$REL_PATH" --vault "$VAULT_ROOT" 2>/dev/null)
 NOTE_STATUS=$?
