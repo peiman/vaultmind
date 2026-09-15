@@ -22,7 +22,8 @@ Be respectful, professional, and constructive in all interactions. This project 
 
 ### Prerequisites
 
-- Go 1.24 or later
+- Go 1.27.1 to build (see `.go-version`; the minimum to *install* the tool is
+  whatever `go.mod` declares, currently 1.26.6)
 - Git
 - A GitHub account
 

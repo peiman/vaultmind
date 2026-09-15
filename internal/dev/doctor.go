@@ -13,6 +13,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+
+	goversion "go/version"
 	"strings"
 	"time"
 
@@ -267,13 +269,13 @@ func (d *Doctor) checkGoVersion() {
 	}
 
 	version := matches[1]
-	// Check if version is 1.25+
-	if version < "1.25" {
+	floor := goModFloor()
+	if !goVersionMeetsFloor(version, floor) {
 		d.checks = append(d.checks, HealthCheck{
 			Name:    "Go version",
 			Status:  CheckWarning,
-			Message: fmt.Sprintf("Go %s found, but 1.25+ recommended", version),
-			Details: "Project requires Go 1.25 or higher",
+			Message: fmt.Sprintf("Go %s found, but %s+ is required", version, floor),
+			Details: fmt.Sprintf("go.mod declares a minimum of %s", floor),
 		})
 		return
 	}
@@ -452,4 +454,39 @@ func (d *Doctor) checkDependencies() {
 		Message: "All dependencies verified and in sync",
 		Details: strings.TrimSpace(string(output)),
 	})
+}
+
+// goVersionFloorFallback is used only when go.mod cannot be read — running
+// outside the project tree, say. It is a fallback, not a source of truth:
+// go.mod is.
+const goVersionFloorFallback = "1.26"
+
+// goModFloor reads the language minimum from go.mod, which is where it is
+// actually declared.
+//
+// The floor used to be the literal "1.25", hardcoded here — a THIRD source of
+// truth after go.mod and .go-version, and by the time it was found it was two
+// minors stale and told contributors the project needed 1.25 while go.mod
+// required 1.26.6.
+func goModFloor() string {
+	data, err := os.ReadFile("go.mod")
+	if err != nil {
+		return goVersionFloorFallback
+	}
+	m := regexp.MustCompile(`(?m)^go (\d+\.\d+)`).FindStringSubmatch(string(data))
+	if len(m) < 2 {
+		return goVersionFloorFallback
+	}
+	return m[1]
+}
+
+// goVersionMeetsFloor reports whether a Go version satisfies a minimum,
+// comparing NUMERICALLY.
+//
+// The original was `version < "1.25"` — a lexicographic compare on a
+// "major.minor" string. Correct for everything anyone runs today and wrong the
+// moment a minor reaches three digits, because "1.100" sorts below "1.25".
+// go/version handles the ordering properly; there is no reason to hand-roll it.
+func goVersionMeetsFloor(version, floor string) bool {
+	return goversion.Compare("go"+version, "go"+floor) >= 0
 }
