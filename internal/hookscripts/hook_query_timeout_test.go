@@ -303,3 +303,59 @@ func hookScriptBody(t *testing.T, name string) string {
 	require.True(t, ok, "embedded script %s must exist", name)
 	return string(body)
 }
+
+// A federated hook must point at the vault the note CAME FROM.
+//
+// Both hooks build their "full note: vaultmind note get <id> --vault X" footer
+// from VAULT_PATH, which under federation is just the first vault. Measured
+// live: the reach hook delivered journal-2026-06-04-the-re-sealing from
+// vaultmind-mine and told me to fetch it from vaultmind-identity, where
+// `note get` answers "No note found". Dead-end advice, on every turn, and
+// introduced by the federation work itself.
+//
+// `note get` takes only --vault, so the footer has to name the owning vault's
+// PATH — which means mapping the display name in "delivering from <name>" back
+// through VAULTMIND_VAULTS.
+const federatedOwnerStub = "#!/bin/bash\n" +
+	"if [ \"$1\" = ask ]; then\n" +
+	"  echo '  [federated: 2 vaults searched; delivering from beta-vault]'\n" +
+	"  echo '  0.42  some-note   A Note'\n" +
+	"  echo 'Context from: some-note — 1 note, 1 delivered as excerpt (10 tok)'\n" +
+	"fi\nexit 0\n"
+
+func TestRecallHook_FooterNamesTheVaultTheNoteCameFrom(t *testing.T) {
+	h := newHookEnv(t, federatedOwnerStub)
+	payload, err := json.Marshal(map[string]string{"prompt": "what did we decide about retries?", "session_id": "test"})
+	require.NoError(t, err)
+
+	env := append(h.env(true), "VAULTMIND_VAULTS=/vaults/alpha-vault,/vaults/beta-vault")
+	out, _ := runHookScript(t, "vault-recall.sh", env, string(payload))
+
+	assert.Contains(t, out, "--vault /vaults/beta-vault",
+		"the footer must name the vault that delivered the note")
+	assert.NotContains(t, out, "--vault "+h.projectDir+"/vaultmind-identity",
+		"pointing at the primary vault sends the reader to a note that is not there")
+}
+
+func TestReachHook_FooterNamesTheVaultTheNoteCameFrom(t *testing.T) {
+	h := newHookEnv(t, federatedOwnerStub)
+	payload := `{"tool_name":"Bash","tool_input":{"command":"git commit -m x"}}`
+
+	env := append(h.env(true), "VAULTMIND_VAULTS=/vaults/alpha-vault,/vaults/beta-vault")
+	out, _ := runHookScript(t, "vault-reach.sh", env, payload)
+
+	assert.Contains(t, out, "--vault /vaults/beta-vault",
+		"the footer must name the vault that delivered the note")
+}
+
+// Unfederated, the footer is unchanged — the fix must not disturb the single
+// vault case, which is every adopter who has not set VAULTMIND_VAULTS.
+func TestRecallHook_UnfederatedFooterStillNamesTheSingleVault(t *testing.T) {
+	h := newHookEnv(t, fastStub)
+	payload, err := json.Marshal(map[string]string{"prompt": "what did we decide about retries?", "session_id": "test"})
+	require.NoError(t, err)
+
+	out, _ := runHookScript(t, "vault-recall.sh", h.env(true), string(payload))
+
+	assert.Contains(t, out, "--vault "+h.projectDir+"/vaultmind-identity")
+}

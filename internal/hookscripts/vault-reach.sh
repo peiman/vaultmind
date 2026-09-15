@@ -161,6 +161,32 @@ if [ -z "$POINTERS" ]; then
   exit 0
 fi
 
+# The footer must name the vault the note CAME FROM, not the primary one.
+#
+# Under federation the delivering vault is whichever one owned the top hit, and
+# `note get` takes only --vault. Pointing at VAULT_PATH sent the reader to a
+# vault the note is not in: measured live, the reach hook delivered a
+# vaultmind-mine journal and told me to fetch it from vaultmind-identity, where
+# `note get` answers "No note found". Dead-end advice introduced by the
+# federation work itself.
+#
+# `ask` already names the owner by directory basename ("delivering from X"), so
+# map that back through VAULTMIND_VAULTS. Unfederated, or if the line is absent
+# or unmatched, this returns VAULT_PATH and the single-vault behaviour is
+# byte-identical.
+resolve_delivering_vault() {
+  local pointers="$1" owner path
+  [ -z "${VAULTMIND_VAULTS:-}" ] && { printf '%s' "$VAULT_PATH"; return; }
+  owner=$(printf '%s' "$pointers" | sed -n 's/.*delivering from \([A-Za-z0-9._-]*\).*/\1/p' | head -1)
+  [ -z "$owner" ] && { printf '%s' "$VAULT_PATH"; return; }
+  while IFS= read -r path; do
+    [ -z "$path" ] && continue
+    if [ "$(basename "$path")" = "$owner" ]; then printf '%s' "$path"; return; fi
+  done <<< "$(printf '%s' "$VAULTMIND_VAULTS" | tr ',' '\n')"
+  printf '%s' "$VAULT_PATH"
+}
+DELIVERING_VAULT=$(resolve_delivering_vault "$POINTERS")
+
 printf '{"timestamp":"%s","matched":true,"injected":true,"chars":%d}\n' "$TS" "${#POINTERS}" \
   >> "$LOG_DIR/${TS}-reach.jsonl" 2>/dev/null
 
@@ -185,4 +211,4 @@ print(json.dumps({
         ),
     }
 }))
-" "$VAULT_PATH" <<< "$POINTERS"
+" "$DELIVERING_VAULT" <<< "$POINTERS"
