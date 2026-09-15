@@ -70,6 +70,10 @@ var commandCatalog = map[string]catalogEntry{
 		group: groupRetrieval,
 		when:  "you want to answer \"what do I know about X?\" — search plus packed context in one step; add --vaults a,b,c when your memory spans several vaults.",
 	},
+	"vaultmind arc recite": {
+		group: groupRetrieval,
+		when:  "you want your WHOLE arc layer as bodies — every arc, unranked and ungated; the counterpart to ask, which ranks.",
+	},
 	"vaultmind search": {
 		group: groupRetrieval,
 		when:  "you want a ranked list of hits to browse and pick from, without packed context.",

@@ -34,6 +34,21 @@ app:
     # Vault holding the existing arcs to compare proposals against (default: the scanned vault). Set this when the desk and the arcs live in different vaults
     candidates.arcs_vault: 
 
+    # Path to vault root
+    recite.vault: .
+
+    # Output in JSON format
+    recite.json: false
+
+    # Total token ceiling for the pack. 0 = unbounded. Arcs that do not fit are reported by id, never dropped silently
+    recite.budget: 0
+
+    # Cap each arc at N tokens, preferring its Principle section (the rule it carries) over its opening lines (story setup). 0 = whole bodies
+    recite.excerpt: 0
+
+    # Note type to recite. Defaults to arc; set to another always-load layer (e.g. principle) to give it the same unranked treatment
+    recite.type: arc
+
   ask:
     # Path to vault root
     vault: .

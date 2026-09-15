@@ -117,6 +117,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   key entirely** when it was not — so `relevance_z: 0.0` unambiguously means
   "sat exactly on the floor" rather than "unknown".
 
+- **`vaultmind arc recite` — the whole arc layer, as bodies, unranked (issue #47).**
+  The identity vault's promise is that an agent reconstructs itself from its
+  arcs before the first message. The SessionStart hook implemented that with
+  `ask "who am I"` — retrieval. Measured on a real 27-arc vault it delivered
+  **3 arcs, the same 3 on every run**: selection was semantic similarity to
+  that literal string, which is uncorrelated with whatever the session is
+  about, so 89% of the layer was not occasionally missed but *permanently*
+  dark.
+
+  `arc recite` enumerates instead of ranking: every note of a type, sorted by
+  id so runs are comparable, excerpted to its Principle section (the rule)
+  rather than its opening lines (the story setup). All 27 arcs cost **1,902
+  tokens** against a 3,000 budget; whole bodies would be 29,231. Anything that
+  does not fit is reported by count and by id — a bulk loader that silently
+  drops its tail is the same defect wearing different clothes.
+
+  The SessionStart hook now injects it, framed imperatively, and the arc pass
+  is best-effort: if it fails the identity block still loads.
+
 ### Changed
 
 - **No default chat-daemon address.** `doctor` and `identity paths` resolve

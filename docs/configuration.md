@@ -39,6 +39,11 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.arc.candidates.vault` | string | `.` | `VAULTMIND_APP_ARC_CANDIDATES_VAULT` | Path to vault root |
 | `app.arc.candidates.json` | bool | `false` | `VAULTMIND_APP_ARC_CANDIDATES_JSON` | Output in JSON format |
 | `app.arc.candidates.arcs_vault` | string | `` | `VAULTMIND_APP_ARC_CANDIDATES_ARCS_VAULT` | Vault holding the existing arcs to compare proposals against (default: the scanned vault). Set this when the desk and the arcs live in different vaults |
+| `app.arc.recite.vault` | string | `.` | `VAULTMIND_APP_ARC_RECITE_VAULT` | Path to vault root |
+| `app.arc.recite.json` | bool | `false` | `VAULTMIND_APP_ARC_RECITE_JSON` | Output in JSON format |
+| `app.arc.recite.budget` | int | `0` | `VAULTMIND_APP_ARC_RECITE_BUDGET` | Total token ceiling for the pack. 0 = unbounded. Arcs that do not fit are reported by id, never dropped silently |
+| `app.arc.recite.excerpt` | int | `0` | `VAULTMIND_APP_ARC_RECITE_EXCERPT` | Cap each arc at N tokens, preferring its Principle section (the rule it carries) over its opening lines (story setup). 0 = whole bodies |
+| `app.arc.recite.type` | string | `arc` | `VAULTMIND_APP_ARC_RECITE_TYPE` | Note type to recite. Defaults to arc; set to another always-load layer (e.g. principle) to give it the same unranked treatment |
 | `app.ask.vault` | string | `.` | `VAULTMIND_APP_ASK_VAULT` | Path to vault root |
 | `app.ask.vaults` | string | `` | `VAULTMIND_APP_ASK_VAULTS` | Comma-separated vault paths to search TOGETHER (federated). Merged by cross-vault RRF — ranks, not scores, because each vault calibrates its own noise floor. Every hit is tagged with the vault it came from. |
 | `app.ask.json` | bool | `false` | `VAULTMIND_APP_ASK_JSON` | Output in JSON format |
@@ -307,6 +312,21 @@ app:
 
     # Vault holding the existing arcs to compare proposals against (default: the scanned vault). Set this when the desk and the arcs live in different vaults
     candidates.arcs_vault: 
+
+    # Path to vault root
+    recite.vault: .
+
+    # Output in JSON format
+    recite.json: false
+
+    # Total token ceiling for the pack. 0 = unbounded. Arcs that do not fit are reported by id, never dropped silently
+    recite.budget: 0
+
+    # Cap each arc at N tokens, preferring its Principle section (the rule it carries) over its opening lines (story setup). 0 = whole bodies
+    recite.excerpt: 0
+
+    # Note type to recite. Defaults to arc; set to another always-load layer (e.g. principle) to give it the same unranked treatment
+    recite.type: arc
 
   ask:
     # Path to vault root
@@ -1162,6 +1182,21 @@ export VAULTMIND_APP_ARC_CANDIDATES_JSON=false
 
 # Vault holding the existing arcs to compare proposals against (default: the scanned vault). Set this when the desk and the arcs live in different vaults
 export VAULTMIND_APP_ARC_CANDIDATES_ARCS_VAULT=
+
+# Path to vault root
+export VAULTMIND_APP_ARC_RECITE_VAULT=.
+
+# Output in JSON format
+export VAULTMIND_APP_ARC_RECITE_JSON=false
+
+# Total token ceiling for the pack. 0 = unbounded. Arcs that do not fit are reported by id, never dropped silently
+export VAULTMIND_APP_ARC_RECITE_BUDGET=0
+
+# Cap each arc at N tokens, preferring its Principle section (the rule it carries) over its opening lines (story setup). 0 = whole bodies
+export VAULTMIND_APP_ARC_RECITE_EXCERPT=0
+
+# Note type to recite. Defaults to arc; set to another always-load layer (e.g. principle) to give it the same unranked treatment
+export VAULTMIND_APP_ARC_RECITE_TYPE=arc
 
 # Path to vault root
 export VAULTMIND_APP_ASK_VAULT=.

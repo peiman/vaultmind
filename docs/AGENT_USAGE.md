@@ -379,7 +379,7 @@ markers; `task check` fails if it drifts from the catalog. Everything outside th
 hand-written and stays.
 
 <!-- VAULTMIND:GENERATED:commands:START -->
-<!-- checksum:582fc61037351745f48f80ad503044a325c9527701dc104f08d616ffb2ae8f45 -->
+<!-- checksum:9a1734111eab4b76eb490149db0a5218db3d34a05866d5393fb86f7c7f676a75 -->
 # VaultMind Commands
 
 Every user-facing command, grouped by intent, with its when-to-use trigger.
@@ -389,6 +389,7 @@ Generated from the command tree — do not edit by hand (run `task generate:docs
 
 | Command | What | When to use |
 |---------|------|-------------|
+| `vaultmind arc recite` | Load every arc as a body — the whole identity layer, unranked and ungated | you want your WHOLE arc layer as bodies — every arc, unranked and ungated; the counterpart to ask, which ranks. |
 | `vaultmind ask` | Compound search + context-pack: answer 'what do I know about X?' | you want to answer "what do I know about X?" — search plus packed context in one step; add --vaults a,b,c when your memory spans several vaults. |
 | `vaultmind memory` | Traverse the note graph and assemble context for agents | you need the low-level graph primitives behind ask: links, neighbors, related, pack, summarize. |
 | `vaultmind memory links` | List a note's directed wikilink edges (outbound, inbound, or both) | you want a note's directed wikilink edges — outbound, inbound, or both. |

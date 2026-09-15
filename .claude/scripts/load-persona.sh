@@ -110,6 +110,22 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
   # choice about forcing an explicit read, not an oversight.
   IDENTITY=$(VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" ask "who am I" --vault "$VAULT_PATH" --max-items 8 --budget 6000 --excerpt 300 2>"$ASK_ERR")
   IDENTITY_STATUS=$?
+
+  # THE ARC LAYER, ENUMERATED — not retrieved (issue #47).
+  #
+  # `ask "who am I"` ranks. Measured on this 27-arc vault it delivered THREE
+  # arcs, the same three on every run, because selection was similarity to that
+  # literal string — which is uncorrelated with whatever the session is about.
+  # 89% of the arc layer was not occasionally missed, it was permanently dark.
+  #
+  # `arc recite` enumerates instead: every arc, sorted by id, excerpted to its
+  # Principle section (the rule) rather than its opening lines (the story
+  # setup). Measured cost for all 27: 1,902 tokens against a 3,000 budget —
+  # whole bodies would be 29,231, which is why this is excerpted rather than
+  # simply unbounded. Anything that does not fit is named, not dropped.
+  #
+  # Best-effort: a failure here leaves the identity block above intact.
+  ARCS=$(VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" arc recite --vault "$VAULT_PATH" --budget "${VAULTMIND_ARC_BUDGET:-3000}" --excerpt "${VAULTMIND_ARC_EXCERPT:-120}" 2>>"$ASK_ERR")
   CONTEXT=$(VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" ask "what matters most right now" --vault "$VAULT_PATH" --max-items 5 --budget 2000 --pointers-only 2>>"$ASK_ERR")
 
   # Self-state injection — surface the agent's own activation state
@@ -149,6 +165,10 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
     echo ""
     echo "$IDENTITY"
     echo ""
+    if [ -n "$ARCS" ]; then
+      echo "$ARCS"
+      echo ""
+    fi
     echo "CURRENT CONTEXT:"
     echo ""
     echo "$CONTEXT"

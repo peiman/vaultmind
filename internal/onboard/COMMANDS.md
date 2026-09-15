@@ -7,6 +7,7 @@ Generated from the command tree — do not edit by hand (run `task generate:docs
 
 | Command | What | When to use |
 |---------|------|-------------|
+| `vaultmind arc recite` | Load every arc as a body — the whole identity layer, unranked and ungated | you want your WHOLE arc layer as bodies — every arc, unranked and ungated; the counterpart to ask, which ranks. |
 | `vaultmind ask` | Compound search + context-pack: answer 'what do I know about X?' | you want to answer "what do I know about X?" — search plus packed context in one step; add --vaults a,b,c when your memory spans several vaults. |
 | `vaultmind memory` | Traverse the note graph and assemble context for agents | you need the low-level graph primitives behind ask: links, neighbors, related, pack, summarize. |
 | `vaultmind memory links` | List a note's directed wikilink edges (outbound, inbound, or both) | you want a note's directed wikilink edges — outbound, inbound, or both. |
