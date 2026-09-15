@@ -19,14 +19,36 @@ func TestRelated_Mixed(t *testing.T) {
 	assert.Greater(t, len(result.Related), 0)
 }
 
+// Explicit mode returns ONLY high-confidence relations — and must be seen to
+// EXCLUDE something, or the assertion is decoration (issue #134).
+//
+// The old version used input "proj-vaultmind", for which explicit, inferred and
+// mixed all collapse to the same single high-confidence note. Deleting the
+// filter outright (`keep = e.confidence == "high"` -> `keep = true`) left the
+// result identical and the test green: it asserted a property the fixture
+// guaranteed regardless of the code.
+//
+// "concept-spreading-activation" is the input where the filter is observable —
+// mixed returns 4 relations, two of them medium, so an unfiltered explicit mode
+// yields medium items and the Equal assertion fails. Measured, not assumed.
 func TestRelated_ExplicitOnly(t *testing.T) {
 	db := buildTestDB(t)
 	resolver := graph.NewResolver(db)
-	result, err := memory.Related(resolver, db, memory.RelatedConfig{Input: "proj-vaultmind", Mode: "explicit"})
+
+	explicit, err := memory.Related(resolver, db,
+		memory.RelatedConfig{Input: "concept-spreading-activation", Mode: "explicit"})
 	require.NoError(t, err)
-	for _, r := range result.Related {
-		assert.Equal(t, "high", r.Confidence)
+	mixed, err := memory.Related(resolver, db,
+		memory.RelatedConfig{Input: "concept-spreading-activation", Mode: "mixed"})
+	require.NoError(t, err)
+
+	require.NotEmpty(t, explicit.Related,
+		"an empty result would make every assertion below vacuously true")
+	for _, r := range explicit.Related {
+		assert.Equal(t, "high", r.Confidence, "explicit mode must return only high-confidence relations")
 	}
+	assert.Less(t, len(explicit.Related), len(mixed.Related),
+		"explicit must EXCLUDE relations that mixed keeps — equal counts mean the filter did nothing")
 }
 
 func TestRelated_InferredOnly(t *testing.T) {
