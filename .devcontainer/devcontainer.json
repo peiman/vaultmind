@@ -1,6 +1,6 @@
 {
   "name": "ckeletin-go",
-  "image": "mcr.microsoft.com/devcontainers/go:1-1.26",
+  "image": "mcr.microsoft.com/devcontainers/go:1-1.27",
   "postCreateCommand": "go install github.com/go-task/task/v3/cmd/task@latest && task setup",
   "customizations": {
     "vscode": {

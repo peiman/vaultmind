@@ -11,7 +11,7 @@ It's a single Go binary. Point it at a vault of Markdown files with Obsidian-com
 **Quick — MiniLM, every platform:**
 
 ```bash
-go install github.com/peiman/vaultmind@latest   # requires Go >= 1.26.4
+go install github.com/peiman/vaultmind@latest   # requires Go >= 1.26.6
 ```
 
 A pure-Go binary: full-text + MiniLM dense retrieval (2 lanes). Ideal for trying VaultMind — it does **not** include BGE-M3's sparse + ColBERT lanes.

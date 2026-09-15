@@ -220,6 +220,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   text.** The health hook now relays doctor's stale-index warning on every tier,
   with the refresh command.
 
+### Changed
+
+- **Built with Go 1.27.1** (was 1.26.6). `.go-version` is the single source of
+  truth — CI, the devcontainer image and the toolchain check all follow it.
+  **The minimum Go for `go install` is deliberately unchanged** (`go.mod` still
+  declares 1.26.6): the build toolchain moving up should not force every adopter
+  to upgrade. golangci-lint moves to v2.13.2 with it, because v2.12.2 cannot
+  analyse Go 1.27 at all — its typechecker rejects the newer export data and
+  fails on `import "math"`.
+
 ### Security
 
 - **The watcher's bootstrap was an injection surface.** `mesh-watch.sh` evaluated

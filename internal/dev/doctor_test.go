@@ -456,7 +456,8 @@ func TestCheckGoVersionFromProjectRoot(t *testing.T) {
 	results := doctor.GetResults()
 	assert.Len(t, results, 1)
 	assert.Equal(t, "Go version", results[0].Name)
-	// With Go 1.26, this should pass
+	// Passes on whatever toolchain is running, as long as it satisfies
+	// .go-version — naming a release here dates the comment, not the test.
 	assert.Equal(t, CheckPassed, results[0].Status,
 		"Go version check should pass with current Go")
 	assert.Contains(t, results[0].Message, "meets requirements")

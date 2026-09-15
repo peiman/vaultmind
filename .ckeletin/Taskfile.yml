@@ -39,7 +39,14 @@ vars:
   TOOL_GOIMPORTS_VERSION: v0.28.0
   TOOL_GOVULNCHECK_VERSION: latest
   TOOL_GOTESTSUM_VERSION: latest
-  TOOL_GOLANGCI_LINT_VERSION: v2.12.2
+  # PROJECT DEVIATION from the ckeletin scaffold default (v2.12.2), which
+  # cannot analyse Go 1.27: its bundled typechecker rejects the newer export
+  # data ("export data version 4 is greater than maximum supported version
+  # 2") and fails on `import "math"`. Verified against Go 1.27.1: v2.13.2
+  # reports 0 issues. Set here rather than in the root Taskfile because
+  # include-level vars do NOT override an included taskfile's own vars —
+  # tested, and the override silently had no effect.
+  TOOL_GOLANGCI_LINT_VERSION: v2.13.2
   TOOL_LEFTHOOK_VERSION: v1.7.18
   TOOL_GO_MOD_OUTDATED_VERSION: latest
   TOOL_GO_LICENSES_VERSION: v2.0.1
