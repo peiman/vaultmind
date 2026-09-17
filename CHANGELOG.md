@@ -216,6 +216,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   strongest edge, ranked by the existing `edgePriority` so "stronger" has one
   definition.
 
+- **Embedding batches wasted ~8x compute on padding (issue #70).** The runtime
+  pads every input in a batch out to the longest one, so one long note dragged
+  its seven neighbours up to full length. Batches are now grouped by *padded
+  cost* — sorted by length, capped by `batchLen x longest` — which solos an
+  outlier automatically. Measured on a real 67-note vault: **1,254,610 ->
+  574,249 char-slots, a 54% reduction**. The count cap is unchanged; it is the
+  memory bound, not a throughput knob.
+
 ### Fixed
 
 - **`--vault A --vault B` silently searched only B.** `--vault` takes one path

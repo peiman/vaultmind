@@ -933,17 +933,23 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 	if isFull {
 		batchSize = 8
 	}
-	for i := 0; i < len(pending); i += batchSize {
-		end := i + batchSize
-		if end > len(pending) {
-			end = len(pending)
+	// Group by PADDED cost, not by position. The runtime pads every input in a
+	// batch out to the longest one, so a single long note used to drag its
+	// neighbours up to full length — 8x the work for the same output (#70).
+	// See planEmbedBatches: the count cap is still the memory bound, the cost
+	// budget is the throughput bound.
+	lengths := make([]int, len(pending))
+	for i, nt := range pending {
+		lengths[i] = len(nt.body)
+	}
+	for _, idxs := range planEmbedBatches(lengths, batchSize, batchSize*embedPaddedBudgetPerSlot) {
+		batch := make([]noteText, len(idxs))
+		texts := make([]string, len(idxs))
+		for j, idx := range idxs {
+			batch[j] = pending[idx]
+			texts[j] = pending[idx].body
 		}
-		batch := pending[i:end]
-
-		texts := make([]string, len(batch))
-		for j, nt := range batch {
-			texts[j] = nt.body
-		}
+		i := idxs[0] // for log context: where this batch started in the input
 		if isFull {
 			// BGE-M3 path: store dense + sparse + ColBERT
 			fullOutputs, embedErr := fullEmbedder.EmbedFullBatch(ctx, texts)
