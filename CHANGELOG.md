@@ -202,6 +202,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   embeddings are cached by note content, so a change to the embedding pipeline
   does not invalidate them.
 
+- **A human-authored link could be reported — and ranked — as a machine guess
+  (issue #145).** Edge `confidence` records *provenance*, not certainty: high
+  means a person wrote the link, medium that VaultMind inferred it, low that an
+  agent wrote it back unreviewed. Dedup kept whichever edge the database
+  returned first, so a relationship typed into frontmatter could surface as
+  `alias_mention/medium`.
+
+  It was not only cosmetic. The same first-wins dedup set the context-pack
+  priority that decides what survives a tight budget, so a note the target
+  explicitly links to could be dropped in favour of one that merely mentions it
+  — on the `ask` path the SessionStart hook uses. Both sites now keep the
+  strongest edge, ranked by the existing `edgePriority` so "stronger" has one
+  definition.
+
 ### Fixed
 
 - **`--vault A --vault B` silently searched only B.** `--vault` takes one path

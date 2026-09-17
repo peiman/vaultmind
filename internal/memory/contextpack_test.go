@@ -357,3 +357,38 @@ func TestContextPack_MaxItemsZero_BackwardCompat(t *testing.T) {
 	assert.Equal(t, len(resultNoField.Context), len(resultDefault.Context),
 		"MaxItems=0 should preserve existing behavior")
 }
+
+// The context pack must rank a note by its STRONGEST edge.
+//
+// collectEdgeCandidates deduped on first occurrence, so a note the target
+// explicitly links to could enter the pack at the priority of a weaker inferred
+// edge — and priority decides what survives a tight budget. Issue #145's own
+// scope section claimed context-pack ordering was unaffected; that was wrong,
+// and this is the assertion that says so.
+//
+// concept-act-r is reachable from concept-spreading-activation by an
+// alias_mention (medium) AND by an explicit_link, with explicit_relation in the
+// target's own frontmatter. It must be ranked as explicit.
+func TestContextPack_RanksANoteByItsStrongestEdge(t *testing.T) {
+	db := buildTestDB(t)
+	resolver := graph.NewResolver(db)
+
+	got, err := memory.ContextPack(resolver, db, memory.ContextPackConfig{
+		Input: "concept-spreading-activation", Budget: 4000, MaxItems: 20,
+	})
+	require.NoError(t, err)
+
+	var found *memory.ContextItem
+	for i := range got.Context {
+		if got.Context[i].ID == "concept-act-r" {
+			found = &got.Context[i]
+			break
+		}
+	}
+	require.NotNil(t, found, "precondition: concept-act-r must be in the pack")
+
+	assert.Contains(t, []string{"explicit_relation", "explicit_link", "explicit_embed"}, found.EdgeType,
+		"a note the target explicitly links to must enter the pack by that edge, "+
+			"not by whichever weaker edge the database returned first — priority "+
+			"decides what survives a tight budget")
+}

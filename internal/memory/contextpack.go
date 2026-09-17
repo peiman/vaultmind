@@ -448,8 +448,11 @@ func packTargetContent(full *index.FullNote, budget, excerptTokens int, result *
 // collectEdgeCandidates queries outbound and inbound resolved edges for targetID
 // and returns deduplicated candidates ranked by edgePriority.
 func collectEdgeCandidates(db *index.DB, targetID string) ([]contextCandidate, error) {
-	seen := make(map[string]bool)
-	seen[targetID] = true // exclude the target itself
+	// noteID -> index in candidates. -1 marks the target itself, which is
+	// excluded: a sentinel rather than a second map, so "already placed" and
+	// "never eligible" stay one lookup.
+	seen := make(map[string]int)
+	seen[targetID] = -1 // exclude the target itself
 
 	var candidates []contextCandidate
 
@@ -469,11 +472,8 @@ func collectEdgeCandidates(db *index.DB, targetID string) ([]contextCandidate, e
 		if scanErr := outRows.Scan(&c.noteID, &c.edgeType, &c.confidence); scanErr != nil {
 			return nil, fmt.Errorf("scanning outbound edge: %w", scanErr)
 		}
-		if !seen[c.noteID] {
-			seen[c.noteID] = true
-			c.priority = edgePriority(c.edgeType, c.confidence)
-			candidates = append(candidates, c)
-		}
+		c.priority = edgePriority(c.edgeType, c.confidence)
+		candidates = keepStrongest(candidates, seen, c)
 	}
 	if err := outRows.Err(); err != nil {
 		return nil, fmt.Errorf("iterating outbound edges: %w", err)
@@ -495,11 +495,8 @@ func collectEdgeCandidates(db *index.DB, targetID string) ([]contextCandidate, e
 		if scanErr := inRows.Scan(&c.noteID, &c.edgeType, &c.confidence); scanErr != nil {
 			return nil, fmt.Errorf("scanning inbound edge: %w", scanErr)
 		}
-		if !seen[c.noteID] {
-			seen[c.noteID] = true
-			c.priority = edgePriority(c.edgeType, c.confidence)
-			candidates = append(candidates, c)
-		}
+		c.priority = edgePriority(c.edgeType, c.confidence)
+		candidates = keepStrongest(candidates, seen, c)
 	}
 	if err := inRows.Err(); err != nil {
 		return nil, fmt.Errorf("iterating inbound edges: %w", err)
@@ -580,4 +577,30 @@ func enrichAndSortCandidates(loader func(string) (*index.FullNote, error), candi
 	})
 
 	return nil
+}
+
+// keepStrongest records a candidate, replacing an existing entry for the same
+// note when the new edge ranks better.
+//
+// This used to keep whichever edge appeared FIRST, which made a note's pack
+// priority an accident of row order. Priority decides what survives a tight
+// budget, so a note the target explicitly links to could be dropped in favour
+// of one that merely happens to mention it. Measured on the fixture:
+// concept-act-r entered as alias_mention despite an explicit_link and an
+// explicit_relation in the target's own frontmatter.
+//
+// `seen` maps noteID to its index in candidates.
+func keepStrongest(candidates []contextCandidate, seen map[string]int, c contextCandidate) []contextCandidate {
+	i, ok := seen[c.noteID]
+	if ok && i < 0 {
+		return candidates // the target itself
+	}
+	if !ok {
+		seen[c.noteID] = len(candidates)
+		return append(candidates, c)
+	}
+	if c.priority < candidates[i].priority {
+		candidates[i] = c
+	}
+	return candidates
 }

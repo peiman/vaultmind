@@ -105,3 +105,44 @@ func TestRelated_UnresolvableInput(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, result)
 }
+
+// A note reachable by BOTH a human-authored edge and an inferred one must be
+// reported by its STRONGEST edge, not by whichever the database returned first.
+//
+// `confidence` is provenance, not certainty (decision-confidence-as-provenance):
+// high = a human wrote the link, medium = VaultMind inferred it, low = an agent
+// wrote it back unreviewed. Dedup marked `seen` on first occurrence, so a
+// relationship a person typed into frontmatter could be reported as a machine
+// guess purely because SQLite returned the inferred edge first.
+//
+// Measured on the fixture before the fix: `mixed` returned concept-act-r as
+// alias_mention/medium while `explicit` found the same note at
+// explicit_link/high — the same relationship, two different provenances,
+// decided by row order.
+func TestRelated_MixedReportsTheStrongestEdgeNotTheFirst(t *testing.T) {
+	db := buildTestDB(t)
+	resolver := graph.NewResolver(db)
+
+	mixed, err := memory.Related(resolver, db,
+		memory.RelatedConfig{Input: "concept-spreading-activation", Mode: "mixed"})
+	require.NoError(t, err)
+	explicit, err := memory.Related(resolver, db,
+		memory.RelatedConfig{Input: "concept-spreading-activation", Mode: "explicit"})
+	require.NoError(t, err)
+
+	// Every note explicit mode calls high must also be high in mixed mode.
+	// Explicit is a strict subset, so mixed cannot know LESS about provenance.
+	highInExplicit := map[string]bool{}
+	for _, r := range explicit.Related {
+		highInExplicit[r.ID] = true
+	}
+	require.NotEmpty(t, highInExplicit, "precondition: explicit mode must return something")
+
+	for _, r := range mixed.Related {
+		if highInExplicit[r.ID] {
+			assert.Equal(t, "high", r.Confidence,
+				"%s has a human-authored edge that explicit mode finds; mixed mode must not "+
+					"report it as machine-inferred just because another edge sorted first", r.ID)
+		}
+	}
+}

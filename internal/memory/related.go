@@ -101,7 +101,21 @@ func Related(resolver *graph.Resolver, db *index.DB, cfg RelatedConfig) (*Relate
 		return nil, fmt.Errorf("iterating inbound edges: %w", err)
 	}
 
-	// Step 4: Filter by mode and deduplicate by note ID (keep first occurrence).
+	// Step 4: Filter by mode, then keep the STRONGEST edge per note.
+	//
+	// This used to keep the first occurrence, which made the reported provenance
+	// an accident of row order. `confidence` is not certainty — it records HOW
+	// the edge was established (decision-confidence-as-provenance): high means a
+	// human wrote the link, medium that VaultMind inferred it, low that an agent
+	// wrote it back unreviewed. So first-wins could report a relationship a
+	// person typed into frontmatter as a machine guess, and did: on the fixture,
+	// `mixed` returned concept-act-r as alias_mention/medium while `explicit`
+	// found the same note at explicit_link/high.
+	//
+	// Ranked by edgePriority, the same function the context pack already orders
+	// by — one definition of "stronger", so the two cannot disagree about which
+	// edge represents a note.
+	edges = strongestEdgePerNote(edges)
 	seen := make(map[string]bool)
 	result := &RelatedResult{
 		TargetID: targetID,
@@ -156,4 +170,25 @@ func Related(resolver *graph.Resolver, db *index.DB, cfg RelatedConfig) (*Relate
 	}
 
 	return result, nil
+}
+
+// strongestEdgePerNote keeps, for each note, the edge with the best
+// edgePriority — explicit_relation, then explicit_link/embed, then medium, then
+// low — preserving the original order of first appearance so output stays
+// deterministic.
+func strongestEdgePerNote(edges []relatedEdge) []relatedEdge {
+	best := make(map[string]int, len(edges)) // noteID -> index into out
+	out := make([]relatedEdge, 0, len(edges))
+	for _, e := range edges {
+		i, seen := best[e.noteID]
+		if !seen {
+			best[e.noteID] = len(out)
+			out = append(out, e)
+			continue
+		}
+		if edgePriority(e.edgeType, e.confidence) < edgePriority(out[i].edgeType, out[i].confidence) {
+			out[i] = e
+		}
+	}
+	return out
 }
