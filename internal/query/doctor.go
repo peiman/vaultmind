@@ -64,6 +64,11 @@ type DoctorResult struct {
 	// the daemon is reachable). Populated by the cmd layer (paths come from xdg +
 	// flags + env). nil ⇒ no mesh substrate, the section is omitted entirely.
 	MeshIdentity *DoctorMeshIdentity `json:"mesh_identity,omitempty"`
+
+	// Backup is the "does this vault exist anywhere but this disk" section.
+	// Populated by the cmd layer, same arrangement as MeshIdentity. A vault is
+	// the one artifact here that cannot be rebuilt, so this is health.
+	Backup *DoctorBackup `json:"backup,omitempty"`
 }
 
 // DoctorMemoryUse is the memory-usage rollup doctor prints. Populated by the

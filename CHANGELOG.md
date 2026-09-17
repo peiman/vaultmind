@@ -136,6 +136,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The SessionStart hook now injects it, framed imperatively, and the arc pass
   is best-effort: if it fails the identity block still loads.
 
+- **`doctor` now reports whether a vault exists anywhere but this disk.**
+  A vault is the one artifact here that cannot be rebuilt — the index
+  regenerates, the binary reinstalls, the arcs do not. This repo's own vault
+  was found **42 commits and 28 days** from its remote, not because backup was
+  never set up but because the local clone had no `origin` while carrying an
+  unrelated remote from a scaffold. Everything looked normal.
+
+  So the check asks the question that actually failed: does the current branch
+  have an **upstream**, and how far ahead of it are we? "A remote exists" would
+  have answered yes. Four states — `no_repo`, `no_upstream`, `behind`,
+  `current` — reported on every run, including the healthy one, because a check
+  that is silent when things are fine is indistinguishable from one that has
+  stopped running. `behind` warns only past 3 days, so ordinary working state
+  stays quiet, and the age comes from the **oldest** unpushed commit since a
+  count alone hides how much is at risk.
+
 ### Changed
 
 - **No default chat-daemon address.** `doctor` and `identity paths` resolve

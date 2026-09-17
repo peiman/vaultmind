@@ -8,6 +8,9 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/internal/cmdutil"
@@ -200,6 +203,14 @@ func diagnoseVault(cmd *cobra.Command, vaultPath string) (*query.DoctorResult, s
 	if err := populateMeshIdentity(cmd, result); err != nil {
 		return nil, "", err
 	}
+	// Backup health. Best-effort: a vault outside git, or a git error, must not
+	// fail the whole diagnosis — but "could not tell" is reported by the check
+	// itself rather than swallowed here.
+	if backup, err := query.CheckBackup(vaultPath, time.Now()); err != nil {
+		log.Debug().Err(err).Str("vault", vaultPath).Msg("backup check failed")
+	} else {
+		result.Backup = backup
+	}
 	return result, vdb.GetIndexHash(), nil
 }
 
@@ -361,6 +372,9 @@ func writeDoctorHuman(w io.Writer, result *query.DoctorResult, summaryOnly bool)
 	// Contract-B mesh-identity section (conditionally present, like
 	// writeEmbeddingStatus — nil ⇒ nothing printed).
 	if err := writeMeshIdentity(w, result.MeshIdentity, summaryOnly); err != nil {
+		return err
+	}
+	if err := writeBackupStatus(w, result.Backup); err != nil {
 		return err
 	}
 	// Errors/warnings rollup — the cold-start bottom line. Counts come from
@@ -728,4 +742,31 @@ func short(hash string) string {
 		return hash[:8]
 	}
 	return hash
+}
+
+// writeBackupStatus prints the one line that says whether this vault exists
+// anywhere but this disk.
+//
+// It prints on EVERY state, including the healthy one. The failure it guards
+// against is a remote that quietly stops receiving, and a check that is silent
+// when things are fine is indistinguishable from one that has stopped running
+// — which is precisely how 42 commits sat on a single laptop for 28 days.
+func writeBackupStatus(w io.Writer, b *query.DoctorBackup) error {
+	if b == nil {
+		return nil
+	}
+	var line string
+	switch b.State {
+	case query.BackupStateNoRepo:
+		line = "Backup:      NOT VERSIONED — this vault is not in a git repository"
+	case query.BackupStateNoUpstream:
+		line = "Backup:      NO REMOTE — every commit exists only on this machine"
+	case query.BackupStateBehind:
+		line = fmt.Sprintf("Backup:      %d unpushed (oldest %dd) — %s",
+			b.Unpushed, b.OldestUnpushedDays, b.Upstream)
+	default:
+		line = fmt.Sprintf("Backup:      current — %s", b.Upstream)
+	}
+	_, err := fmt.Fprintf(w, "%s\n", line)
+	return err
 }
