@@ -11,6 +11,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// charsPerTokenBound mirrors the package constant the pre-cut uses. Tests
+// assert the BOUND is proportional to the token budget, not that it equals a
+// particular historical value.
+const charsPerTokenBound = 4
+
 const testModelName = "sentence-transformers/all-MiniLM-L6-v2"
 const testModelDims = 384
 
@@ -81,7 +86,7 @@ func TestTruncateForEmbedding(t *testing.T) {
 		name      string
 		text      string
 		maxTokens int
-		wantLen   int // 0 means check <= maxTokens * approxCharsPerToken
+		wantLen   int // 0 means check <= maxTokens * charsPerTokenBound
 	}{
 		{
 			name:      "short text unchanged",
@@ -112,9 +117,9 @@ func TestTruncateForEmbedding(t *testing.T) {
 				assert.Empty(t, result)
 				return
 			}
-			maxChars := tt.maxTokens * 2 // approxCharsPerToken — see hugot.go
+			maxChars := tt.maxTokens * charsPerTokenBound
 			assert.LessOrEqual(t, len(result), maxChars,
-				"result should be at most maxTokens*approxCharsPerToken chars")
+				"the pre-cut must stay proportional to the token budget")
 			if len(tt.text) <= maxChars {
 				assert.Equal(t, tt.text, result, "short text should be unchanged")
 			}
@@ -123,34 +128,12 @@ func TestTruncateForEmbedding(t *testing.T) {
 }
 
 func TestTruncateForEmbedding_BreaksAtSpace(t *testing.T) {
-	// 20 tokens * 2 chars = 40 char limit
 	text := strings.Repeat("abcdefgh ", 20) // 180 chars, 9 chars per word+space
 	result := embedding.TruncateForEmbedding(text, 20)
-	assert.LessOrEqual(t, len(result), 40)
+	assert.LessOrEqual(t, len(result), 20*charsPerTokenBound)
 	// Should not end mid-word
 	assert.NotContains(t, result[len(result)-5:], "abcde",
 		"should break at space, not mid-word")
-}
-
-// TestTruncateForEmbedding_DenseContentFitsModelMax pins the empirical
-// floor for chars/token. The original 3-chars/token ratio failed on
-// dense / code-heavy / non-English content: 30/126 notes in companion-vault
-// tokenized to >512 tokens and the BGE-M3 ONNX runtime rejected the batch
-// with axis-1 mismatch ([N 547 384] vs [1 512 384]). 2 is the empirically
-// safer floor until chunk-and-pool (vaultmind#30) ships.
-//
-// If a future change bumps approxCharsPerToken back up, reproduce the
-// overflow on a dense code-heavy ~2000-char note before reverting.
-func TestTruncateForEmbedding_DenseContentFitsModelMax(t *testing.T) {
-	// Punctuation and short identifiers tokenize at ~2 chars/token —
-	// representative of the failure class. ~7400 chars; with the old
-	// 3:1 ratio this would truncate to 1536 chars, which still tokenizes
-	// to >512 tokens. With 2:1 it caps at 1024 chars and stays under
-	// the model limit for content of this density.
-	text := strings.Repeat("if x := 1; x > 0 { fmt.Println(\"k\") }\n", 200)
-	result := embedding.TruncateForEmbedding(text, 512)
-	assert.LessOrEqual(t, len(result), 512*2,
-		"truncation must use chars/token=2 to keep dense content under the 512-token model limit")
 }
 
 // cosine computes cosine similarity between two vectors.
@@ -176,4 +159,43 @@ func sqrt(x float64) float64 {
 		z = (z + x/z) / 2
 	}
 	return z
+}
+
+// The char pre-cut must not discard text the tokenizer would have accepted.
+//
+// It was 2 chars/token — chosen when it was the ONLY safeguard against an
+// oversized tensor reaching ORT. It is not any more: clampTokenizer bounds the
+// tokenizer itself (bgem3.go), and fitTextsWithinTokenLimit measures ACTUAL
+// tokens and shrinks only what is still over. The cheap estimate is now an
+// optimization in front of two accurate mechanisms.
+//
+// At 2, English prose (3-4 chars/token in practice) lost roughly half its tail
+// before anything counted a token. Measured on the operator's own 67-note
+// identity vault: 6 notes truncated, one of them — the note its memory file
+// says to read FIRST — only 52% semantically searchable, with the loss
+// invisible to every metric.
+func TestTruncateForEmbedding_KeepsProseThatFitsTheTokenBudget(t *testing.T) {
+	// 1,200 chars of prose. At ~3.5 chars/token that is ~343 tokens: comfortably
+	// inside a 512-token budget, so NOTHING should be cut.
+	prose := strings.Repeat("the quick brown fox jumps over the lazy dog ", 28) // 44 chars * 28
+	require.Greater(t, len(prose), 1100)
+	require.Less(t, len(prose), 1300)
+
+	got := embedding.TruncateForEmbedding(prose, 512)
+
+	require.Equal(t, prose, got,
+		"prose that fits the token budget must reach the tokenizer whole; "+
+			"a 2-chars/token estimate would cut it at 1024 chars and lose the tail")
+}
+
+// Genuinely oversized text is still cut — the estimate remains a real bound,
+// just a less pessimistic one.
+func TestTruncateForEmbedding_StillBoundsGenuinelyLongText(t *testing.T) {
+	long := strings.Repeat("x", 100_000)
+
+	got := embedding.TruncateForEmbedding(long, 512)
+
+	require.Less(t, len(got), len(long), "an oversized input must still be bounded")
+	require.LessOrEqual(t, len(got), 512*4+64,
+		"the bound must stay proportional to the token budget, not unbounded")
 }

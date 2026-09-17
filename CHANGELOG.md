@@ -179,6 +179,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **macOS config lives in `~/.config/vaultmind`** (see Upgrading, item 3).
 
+- **Long notes lost half their tail before embedding (issue #69).** The
+  character pre-cut ran at 2 chars/token — correct when it was the only thing
+  stopping an oversized tensor from hanging the ONNX forward pass, and obsolete
+  since `clampTokenizer` began bounding the tokenizer itself and
+  `fitTextsWithinTokenLimit` began measuring real token counts. English prose
+  runs 3-4 chars/token, so roughly half of every long note was discarded before
+  anything counted a token — and invisibly, because keyword search still matched
+  the full body while semantic search saw only the head.
+
+  Measured on a real 67-note identity vault, curated notes only:
+
+  | note | was searchable | now |
+  |---|---|---|
+  | `reference-current-context` | 32% | 65% |
+  | `reference-keeper-of-the-realm` | 39% | 78% |
+  | `reference-agent-network-org-pki` | 49% | **98%** |
+  | `reference-onboarding-ax-design` | 59% | **100%** |
+  | three more | 85-93% | **100%** |
+
+  **Existing vaults need `vaultmind index --full --embed` to benefit** —
+  embeddings are cached by note content, so a change to the embedding pipeline
+  does not invalidate them.
+
 ### Fixed
 
 - **`--vault A --vault B` silently searched only B.** `--vault` takes one path

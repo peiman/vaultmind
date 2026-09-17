@@ -17,18 +17,29 @@ type HugotEmbedder struct {
 	maxTokens int
 }
 
-// approxCharsPerToken is the empirical floor for chars-per-token across
-// the content the indexer actually sees. Transformer subword tokenizers
-// average 3-4 chars/token on English prose, but dense / code-heavy /
-// non-English content tokenizes much denser — companion-vault hit
-// ~2 chars/token on 30/126 notes, producing >512 tokens after the
-// "conservative" 3-chars/token truncation and triggering ONNX axis-1
-// mismatch in the BGE-M3 path ([N 547 384] vs [1 512 384]).
+// approxCharsPerToken bounds the cheap pre-cut in front of the accurate ones.
 //
-// 2 is the safer floor until chunk-and-pool (vaultmind#30) ships.
-// Costs more tail-loss on shorter notes (head-only embedding for content
-// >maxTokens*2 chars) but unblocks dense-content embedding today.
-const approxCharsPerToken = 2
+// It was 2, chosen when this estimate was the ONLY thing standing between an
+// oversized note and a hung ORT forward pass: dense / code-heavy / non-English
+// content tokenizes near 2 chars/token, and a companion vault hit that on
+// 30/126 notes.
+//
+// It is no longer the only safeguard, and has not been since #39.
+// clampTokenizer bounds the tokenizer itself, so no input can reach the model
+// oversized by any path, and fitTextsWithinTokenLimit measures ACTUAL token
+// counts and shrinks only what is still over. Two accurate mechanisms sit
+// behind this estimate; its job is to save work, not to guarantee safety.
+//
+// At 2 it was costing real retrieval. English prose runs 3-4 chars/token, so
+// roughly half of every long note's tail was discarded before anything counted
+// a token — and the loss is invisible, because FTS still matches the full body
+// while semantic search sees only the head. Measured on a real 67-note identity
+// vault: 6 notes truncated, one of them 52% searchable, and that one is the
+// note its own memory file says to read FIRST.
+//
+// 4 is the English-prose rate. Denser content simply reaches the accurate loop,
+// which is what that loop is for.
+const approxCharsPerToken = 4
 
 // TruncateForEmbedding truncates text to fit within the model's token limit.
 // Uses a character-based approximation (2 chars/token, empirically derived).

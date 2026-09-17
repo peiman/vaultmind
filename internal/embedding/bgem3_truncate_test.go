@@ -188,3 +188,40 @@ func TestPreprocessWithinTokenLimit_CapsDenseInput(t *testing.T) {
 	assert.LessOrEqual(t, len(mixed.Input[0].TokenIDs), e.maxTokens, "short input stays within cap")
 	assert.LessOrEqual(t, len(mixed.Input[1].TokenIDs), e.maxTokens, "dense input is capped")
 }
+
+// Dense content is still bounded — by the mechanism that guarantees it now.
+//
+// The old assertion lived on the char pre-cut, which was right when that
+// estimate was the only safeguard (#39: a companion vault hit ~2 chars/token on
+// 30/126 notes and wedged the ORT forward pass). Since then clampTokenizer
+// bounds the tokenizer itself and this loop measures real token counts. Holding
+// the old invariant at the old layer would force the estimate to stay
+// pessimistic forever — and that pessimism was costing prose its tail on every
+// long note.
+//
+// So the guarantee is tested where it lives.
+func TestFitTextsWithinTokenLimit_BoundsDenseContent(t *testing.T) {
+	dense := strings.Repeat("if x := 1; x > 0 { fmt.Println(\"k\") }\n", 200)
+
+	// Stand-in tokenizer at the dense rate the incident measured: 2 chars/token.
+	countTokens := func(texts []string) ([]int, error) {
+		out := make([]int, len(texts))
+		for i, t := range texts {
+			out[i] = len(t) / 2
+		}
+		return out, nil
+	}
+
+	got, err := fitTextsWithinTokenLimit([]string{dense}, 512, countTokens)
+	if err != nil {
+		t.Fatalf("fitTextsWithinTokenLimit: %v", err)
+	}
+	counts, err := countTokens(got)
+	if err != nil {
+		t.Fatalf("countTokens: %v", err)
+	}
+	if counts[0] > 512 {
+		t.Errorf("dense content reached the model at %d tokens, over the 512 limit — "+
+			"the guarantee moved to this loop, it did not disappear", counts[0])
+	}
+}
