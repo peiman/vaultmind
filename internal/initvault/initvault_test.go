@@ -205,3 +205,27 @@ func TestInit_NonNoteFilesAreNotMutated(t *testing.T) {
 	assert.False(t, strings.HasPrefix(string(cfg), "---\ncreated:"),
 		"config.yaml must not get note-style created: injection at the top")
 }
+
+// The scaffold must register every type the docs tell people to use.
+//
+// `journal` is "the desk" in the docs and in `arc candidates`, which scans
+// journal notes as raw material for arc distillation — but the type was never
+// in the scaffold, so `note create --type journal` was refused on a fresh
+// vault and every hand-written entry validated as unknown_type forever. The
+// tool contradicted its own README.
+//
+// Asserted against the types the CLI documents rather than a hardcoded list,
+// so adding a documented type without registering it fails here.
+func TestScaffold_RegistersEveryDocumentedNoteType(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "vault")
+	_, err := initvault.Init(dir)
+	require.NoError(t, err)
+
+	cfg, err := vault.LoadConfig(dir)
+	require.NoError(t, err)
+
+	for _, want := range []string{"identity", "principle", "arc", "reference", "concept", "source", "decision", "journal"} {
+		_, ok := cfg.Types[want]
+		assert.True(t, ok, "a fresh vault must register %q — the docs tell agents to use it", want)
+	}
+}

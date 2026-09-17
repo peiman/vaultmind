@@ -59,6 +59,17 @@ types:
     required: [title, url]
     optional: [aliases, tags, related_ids]
     statuses: []
+  # The desk. `arc candidates` scans these as raw material to distill into arcs,
+  # and the docs have called them "the desk" since that command shipped — but
+  # the type was never registered, so `note create --type journal` was refused
+  # and every hand-written entry validated as unknown_type forever.
+  #
+  # `distilled_to` marks an entry whose lesson has become an arc; `arc
+  # candidates` skips those rather than proposing them again.
+  journal:
+    required: [title]
+    optional: [aliases, tags, related_ids, source_ids, date, owner, author, distilled_to]
+    statuses: []
   decision:
     required: [title, status]
     optional: [related_ids, source_ids, tags]

@@ -224,6 +224,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   574,249 char-slots, a 54% reduction**. The count cap is unchanged; it is the
   memory bound, not a throughput knob.
 
+- **A fresh vault refused the `journal` type the docs tell you to use
+  (issue #137, first half).** `journal` is "the desk" — raw entries
+  `arc candidates` scans as material for arc distillation — but it was never in
+  the scaffold, so `note create --type journal` was rejected and every
+  hand-written entry validated as `unknown_type` forever. The tool contradicted
+  its own README. Registered, with `distilled_to` among its optional fields so
+  a finished entry can point at the arc it became.
+
 ### Fixed
 
 - **`--vault A --vault B` silently searched only B.** `--vault` takes one path
