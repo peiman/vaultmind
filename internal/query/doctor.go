@@ -69,6 +69,11 @@ type DoctorResult struct {
 	// Populated by the cmd layer, same arrangement as MeshIdentity. A vault is
 	// the one artifact here that cannot be rebuilt, so this is health.
 	Backup *DoctorBackup `json:"backup,omitempty"`
+
+	// BadCitations are source_ids edges pointing at types the vault declares
+	// non-authoritative — evidence that is not allowed to be evidence. Empty
+	// unless the vault opted in by declaring a type non-authoritative.
+	BadCitations []BadCitation `json:"bad_citations,omitempty"`
 }
 
 // DoctorMemoryUse is the memory-usage rollup doctor prints. Populated by the

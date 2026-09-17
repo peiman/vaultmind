@@ -211,6 +211,14 @@ func diagnoseVault(cmd *cobra.Command, vaultPath string) (*query.DoctorResult, s
 	} else {
 		result.Backup = backup
 	}
+	// Citation trust: source_ids pointing at types the vault declares
+	// non-authoritative. Silent unless the vault opted in. Best-effort — a
+	// query failure must not fail the whole diagnosis.
+	if bad, err := query.FindNonAuthoritativeCitations(vdb.DB, vdb.Config); err != nil {
+		log.Debug().Err(err).Msg("citation check failed")
+	} else {
+		result.BadCitations = bad
+	}
 	return result, vdb.GetIndexHash(), nil
 }
 
@@ -375,6 +383,9 @@ func writeDoctorHuman(w io.Writer, result *query.DoctorResult, summaryOnly bool)
 		return err
 	}
 	if err := writeBackupStatus(w, result.Backup); err != nil {
+		return err
+	}
+	if err := writeBadCitations(w, result.BadCitations); err != nil {
 		return err
 	}
 	// Errors/warnings rollup — the cold-start bottom line. Counts come from
@@ -769,4 +780,24 @@ func writeBackupStatus(w io.Writer, b *query.DoctorBackup) error {
 	}
 	_, err := fmt.Fprintf(w, "%s\n", line)
 	return err
+}
+
+// writeBadCitations names every citation that is not allowed to be evidence.
+//
+// Both notes, every time. "3 bad citations" tells you a number; it does not
+// tell you which claim in your vault is resting on something nobody reviewed.
+func writeBadCitations(w io.Writer, bad []query.BadCitation) error {
+	if len(bad) == 0 {
+		return nil
+	}
+	if _, err := fmt.Fprintf(w, "Citations:   %d citing non-authoritative types\n", len(bad)); err != nil {
+		return err
+	}
+	for _, c := range bad {
+		if _, err := fmt.Fprintf(w, "  ⚠ %s cites %s (type %q — raw material, not a source)\n",
+			c.NoteID, c.SourceID, c.SourceType); err != nil {
+			return err
+		}
+	}
+	return nil
 }

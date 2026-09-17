@@ -70,6 +70,12 @@ types:
     required: [title]
     optional: [aliases, tags, related_ids, source_ids, date, owner, author, distilled_to]
     statuses: []
+    # Raw material, not evidence. A desk entry is a thought caught mid-session;
+    # citing one through source_ids makes a note LOOK sourced while resting on
+    # something nobody reviewed. Distil it into an arc or reference and cite
+    # that instead. Relating to a journal (related_ids) stays fine — only
+    # claiming it as evidence is refused.
+    authoritative: false
   decision:
     required: [title, status]
     optional: [related_ids, source_ids, tags]

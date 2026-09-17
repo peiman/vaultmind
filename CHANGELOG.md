@@ -43,6 +43,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 >    own 24h default — it emits a softer "bound is NOT declared" warning
 >    instead. If you alarm on the old text, match the new wording too.
 
+- **Note types can declare they are not citable as evidence (issue #137).**
+  `source_ids` is documented as citations, and validation only checked that the
+  cited note *exists* — so a curated arc could cite an unreviewed scratch
+  journal as its source and the vault reported healthy. The citation looked
+  rigorous and carried no weight.
+
+  A type may now say `authoritative: false`. `doctor` then names every
+  `source_ids` edge pointing at it — both notes, not a count. The scaffold marks
+  `journal` non-authoritative: a desk entry is raw material, and the fix is to
+  distil it into a reviewed note and cite that. Relating to a journal
+  (`related_ids`) stays fine; only claiming it as evidence is flagged.
+
+  **Opt-in by construction.** An undeclared type is citable, so existing vaults
+  see no new warnings and do no extra work.
+
 ### Added
 
 - **`vaultmind ask <query> --vaults a,b,c` — federated search across several vaults.**

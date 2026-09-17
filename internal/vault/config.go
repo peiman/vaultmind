@@ -51,6 +51,30 @@ type TypeDef struct {
 	Optional []string `yaml:"optional" json:"optional"`
 	Statuses []string `yaml:"statuses" json:"statuses"`
 	Template string   `yaml:"template" json:"template"`
+
+	// Authoritative says whether notes of this type may be CITED as evidence
+	// via source_ids.
+	//
+	// Validation only ever checked that a cited note EXISTS, so a curated arc
+	// could cite an unreviewed scratch journal as its source and the vault
+	// reported perfectly healthy. The citation looked rigorous and was not
+	// (issue #137).
+	//
+	// A POINTER so absent means "not declared", which resolves to true: every
+	// vault predating this field keeps working unchanged, and a type only stops
+	// being citable when someone says so. Declared, never inferred — the same
+	// rule capability profiles follow.
+	Authoritative *bool `yaml:"authoritative,omitempty" json:"authoritative,omitempty"`
+}
+
+// IsAuthoritative reports whether a type may be cited as evidence.
+// An undeclared type is authoritative, so existing vaults are unaffected.
+func (c *Config) IsAuthoritative(typeName string) bool {
+	td, ok := c.Types[typeName]
+	if !ok {
+		return true // unknown types are someone else's problem to report
+	}
+	return td.Authoritative == nil || *td.Authoritative
 }
 
 // GitPolicyConfig holds git policy overrides.
