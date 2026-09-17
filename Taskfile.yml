@@ -682,6 +682,10 @@ tasks:
       - task: generate:docs:config
       - task: generate:config:template
       - task: generate:docs:commands
+      # The drift gate names THIS task as the fix, so it has to actually fix
+      # everything the gate checks. config.schema.json was gated without being
+      # regenerated here, the instruction would have been a dead end.
+      - task: generate:config:schema
     silent: true
 
   check:docs-drift:
@@ -724,11 +728,20 @@ tasks:
           # file, which must stay untouched by a check.
           cp docs/AGENT_USAGE.md "$tmp/AGENT_USAGE.md"
           ./{{.BINARY_NAME}} docs commands --output="$tmp/AGENT_USAGE.md"
+          # config.schema.json is the machine-readable contract outside tooling
+          # validates against, and it was the one generated artifact NOT gated —
+          # which is exactly why it drifted 82 lines while every gated file
+          # stayed current. Its generator hardcodes the output filename in the
+          # cwd and has no --output flag, so it is built once and run INSIDE the
+          # temp dir rather than being pointed at one.
+          go build -o "$tmp/gen-config-schema" .ckeletin/scripts/generate-config-schema.go
+          (cd "$tmp" && ./gen-config-schema >/dev/null)
           status=0
           for pair in "docs/configuration.md|$tmp/configuration.md" \
                       "docs/config-template.yaml|$tmp/config-template.yaml" \
                       "internal/onboard/COMMANDS.md|$tmp/COMMANDS.md" \
-                      "docs/AGENT_USAGE.md|$tmp/AGENT_USAGE.md"; do
+                      "docs/AGENT_USAGE.md|$tmp/AGENT_USAGE.md" \
+                      "config.schema.json|$tmp/config.schema.json"; do
             tracked="${pair%%|*}"
             fresh="${pair##*|}"
             if [ ! -f "$tracked" ]; then

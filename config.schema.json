@@ -55,6 +55,36 @@
                 }
               },
               "type": "object"
+            },
+            "recite": {
+              "properties": {
+                "budget": {
+                  "default": 0,
+                  "description": "Total token ceiling for the pack. 0 = unbounded. Arcs that do not fit are reported by id, never dropped silently",
+                  "type": "integer"
+                },
+                "excerpt": {
+                  "default": 0,
+                  "description": "Cap each arc at N tokens, preferring its Principle section (the rule it carries) over its opening lines (story setup). 0 = whole bodies",
+                  "type": "integer"
+                },
+                "json": {
+                  "default": false,
+                  "description": "Output in JSON format",
+                  "type": "boolean"
+                },
+                "type": {
+                  "default": "arc",
+                  "description": "Note type to recite. Defaults to arc; set to another always-load layer (e.g. principle) to give it the same unranked treatment",
+                  "type": "string"
+                },
+                "vault": {
+                  "default": ".",
+                  "description": "Path to vault root",
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "type": "object"
@@ -64,6 +94,11 @@
             "budget": {
               "default": 4000,
               "description": "Token budget for context-pack",
+              "type": "integer"
+            },
+            "excerpt": {
+              "default": 0,
+              "description": "Cap each note's contribution at N tokens, preferring its decision-bearing passage — the Principle section where a note has one (an arc's rule lives there; its opening is story setup), else the opening prose. Applies to the target note and every context item. 0 = off, which also means an over-budget note contributes no text at all while the pack still counts it, so a tight budget yields items with no content",
               "type": "integer"
             },
             "explain": {
@@ -109,6 +144,11 @@
             "vault": {
               "default": ".",
               "description": "Path to vault root",
+              "type": "string"
+            },
+            "vaults": {
+              "default": "",
+              "description": "Comma-separated vault paths to search TOGETHER (federated). Merged by cross-vault RRF — ranks, not scores, because each vault calibrates its own noise floor. Every hit is tagged with the vault it came from.",
               "type": "string"
             }
           },
@@ -690,9 +730,29 @@
               "description": "Comma-separated subset of canonical scripts to install (default: all). Unknown names rejected at lint time.",
               "type": "string"
             },
+            "profile": {
+              "default": "",
+              "description": "Capability profile to declare and install: full (default), knowledge, or persona. Recorded in .claude/vaultmind-profile so `hooks status` judges what you chose, not everything the binary ships.",
+              "type": "string"
+            },
             "vault": {
               "default": "",
               "description": "Vault path to bake into the printed settings.json stanza via VAULTMIND_VAULT (default: the built-in vaultmind-identity convention).",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "hooksrecord": {
+          "properties": {
+            "json": {
+              "default": false,
+              "description": "Output in JSON format",
+              "type": "boolean"
+            },
+            "vault": {
+              "default": ".",
+              "description": "Path to vault root",
               "type": "string"
             }
           },
@@ -829,6 +889,16 @@
               "default": "",
               "description": "Network ROOT public key (base64-std of the 32-byte ed25519 key; required)",
               "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "identitypaths": {
+          "properties": {
+            "json": {
+              "default": false,
+              "description": "Output in JSON format",
+              "type": "boolean"
             }
           },
           "type": "object"
@@ -1290,6 +1360,11 @@
             "depth": {
               "default": 1,
               "description": "BFS traversal depth (1 = direct neighbors only)",
+              "type": "integer"
+            },
+            "excerpt": {
+              "default": 0,
+              "description": "Cap each note's contribution at N tokens, preferring its decision-bearing passage — the Principle section where a note has one, else its opening prose. 0 = off, which also means a note larger than the remaining budget contributes no text at all while the pack still counts it",
               "type": "integer"
             },
             "json": {
