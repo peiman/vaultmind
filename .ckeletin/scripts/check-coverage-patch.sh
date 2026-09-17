@@ -30,6 +30,39 @@ else
     changed_files=$(git diff --cached --name-only --diff-filter=AM | grep '\.go$' | grep -v '_test\.go$' | grep -v '^scripts/' | grep -v '^\.ckeletin/scripts/' | grep -v '^internal/testutil/' | grep -v '/demo/' | grep -v '_tui\.go$' || true)
 fi
 
+# REFUSE A PROFILE OLDER THAN THE CODE IT WOULD GRADE.
+#
+# The file-exists check above asks a different question. A profile from an
+# earlier run parses fine and simply has no entries for lines that did not
+# exist when it was written — so a brand-new function with zero tests yields
+# "No measurable statements in changed files" and this gate exits 0. Verified
+# on a real repro: an exported function with a branch and no test passed
+# cleanly against a 3.5-hour-old profile.
+#
+# Scoped to the CHANGED files rather than every tracked .go file, so an
+# unrelated regenerated file cannot make the gate refuse work it would grade
+# correctly.
+#
+# Fail closed. A coverage gate that cannot tell "covered" from "never
+# measured" is worse than no gate, because it is trusted.
+#
+# LIMIT, stated because it is a proxy: mtime catches the real case — a profile
+# from an earlier run — but a file touched without re-running tests would pass
+# this and still be content-stale. It is the cheap 90%, not a proof.
+for go_file in $changed_files; do
+    if [ -f "$go_file" ] && [ "$go_file" -nt "$COVERAGE_FILE" ]; then
+        echo "❌ Coverage profile is older than the code it would grade"
+        echo "   profile: $COVERAGE_FILE"
+        echo "   newer:   $go_file"
+        echo ""
+        echo "   A stale profile has no entries for new lines, so untested code"
+        echo "   reads as 'nothing to measure' and this gate passes it."
+        echo ""
+        echo "   Regenerate first:  task test:coverage"
+        exit 1
+    fi
+done
+
 if [ -z "$changed_files" ]; then
     echo "ℹ️  No Go files changed - patch coverage check skipped"
     exit 0

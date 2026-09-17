@@ -29,6 +29,45 @@ if [ ! -f "$COVERAGE_FILE" ]; then
     exit 1
 fi
 
+# REFUSE A PROFILE OLDER THAN THE CODE IT GRADES.
+#
+# Same defect as check-coverage-patch.sh, one scope wider: this script grades
+# the WHOLE project, so it reads every package's numbers out of a file that may
+# predate the code. A package added since the profile was written is simply
+# absent, and absent reads as "not found in coverage" rather than as untested.
+#
+# This script grades everything, so the check is against every tracked .go
+# file rather than a changed set.
+#
+# LIMIT, stated because it is a proxy: mtime catches the real case — a profile
+# from an earlier run — but a file touched without re-running tests would pass
+# this and still be content-stale. It is the cheap 90%, not a proof.
+# Compared one file at a time with -nt rather than `xargs ls -t | head -1`.
+# That idiom is wrong at this repo's size: xargs splits ~500 paths across
+# several `ls` invocations, each sorts its OWN batch, and head -1 returns the
+# newest of the FIRST batch — not the newest overall. It produced a false
+# refusal on a freshly generated profile the first time this guard ran.
+newest_go=""
+while IFS= read -r go_file; do
+    [ -z "$go_file" ] && continue
+    [ -f "$go_file" ] || continue
+    if [ -z "$newest_go" ] || [ "$go_file" -nt "$newest_go" ]; then
+        newest_go="$go_file"
+    fi
+done <<< "$(git ls-files '*.go' 2>/dev/null)"
+
+if [ -n "$newest_go" ] && [ "$newest_go" -nt "$COVERAGE_FILE" ]; then
+    echo "❌ Coverage profile is older than the code it grades"
+    echo "   profile: $COVERAGE_FILE"
+    echo "   newer:   $newest_go"
+    echo ""
+    echo "   Numbers from a stale profile describe code that may no longer exist,"
+    echo "   and omit code that does."
+    echo ""
+    echo "   Regenerate first:  task test:coverage"
+    exit 1
+fi
+
 # Calculate coverage ourselves, excluding TUI and demo code
 # Format: file:line.col,line.col numStatements numHits
 #
