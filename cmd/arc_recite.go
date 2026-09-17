@@ -54,7 +54,7 @@ func runArcRecite(cmd *cobra.Command, _ []string) error {
 	if session := experiment.FromContext(cmd.Context()); session != nil {
 		session.SetVaultPath(vaultPath)
 		for _, it := range result.Items {
-			_, _ = session.LogNoteAccessEvent(it.ID, experiment.AccessSourceRecite, it.Excerpt != "")
+			_, _ = session.LogNoteAccessEventAs(it.ID, experiment.AccessSourceRecite, it.Excerpt != "", experiment.CallerRecite)
 		}
 	}
 

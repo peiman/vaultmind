@@ -98,15 +98,38 @@ func (s *Session) LogContextPackEvent(data map[string]any) (string, error) {
 // when the body was withheld, and the activation scorer then counted those as
 // retrievals. See IsActivationSignal for the loop that produced.
 func (s *Session) LogNoteAccessEvent(noteID string, source AccessSource, bodyDelivered bool) (string, error) {
+	return s.LogNoteAccessEventAs(noteID, source, bodyDelivered, "")
+}
+
+// CallerRecite tags accesses written by `arc recite` — the whole-layer read.
+//
+// It lives on the LEDGER event, not on a vault-local access row. `self` selects
+// on body_delivered rather than caller (migration 008 retired the caller proxy
+// once hooks began delivering real bodies), so a vault-local recite row would
+// appear in the hot list however it was tagged — and 27 arcs on every session
+// start would bury the deliberate reads the view exists to show. Tagging the
+// ledger row keeps recitations filterable at no cost to `self`.
+const CallerRecite = "vaultmind-recite"
+
+// LogNoteAccessEventAs is LogNoteAccessEvent with an explicit caller tag.
+//
+// An empty caller writes NO caller key at all, rather than an empty string:
+// absence and "" are different facts, and a reader that cannot tell them apart
+// is how a missing field becomes a confident zero.
+func (s *Session) LogNoteAccessEventAs(noteID string, source AccessSource, bodyDelivered bool, caller string) (string, error) {
+	data := map[string]any{
+		"note_id":        noteID,
+		"source":         string(source),
+		"body_delivered": bodyDelivered,
+	}
+	if caller != "" {
+		data["caller"] = caller
+	}
 	eventID, err := s.DB.LogEvent(Event{
 		SessionID: s.ID,
 		Type:      EventNoteAccess,
 		VaultPath: s.VaultPath,
-		Data: map[string]any{
-			"note_id":        noteID,
-			"source":         string(source),
-			"body_delivered": bodyDelivered,
-		},
+		Data:      data,
 	})
 	if err != nil {
 		return "", err
