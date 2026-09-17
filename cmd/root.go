@@ -585,6 +585,22 @@ func setupCommandConfig(cmd *cobra.Command) {
 func getConfigValueWithFlags[T any](cmd *cobra.Command, flagName string, viperKey string) T {
 	var value T
 
+	// BRIDGE the global --output-format to the per-command --json flag.
+	//
+	// --output-format is advertised in every command's help and was obeyed by
+	// almost none of them: `doctor --json` returned an envelope while
+	// `doctor --output-format json` printed prose and exited 0. A script asking
+	// for JSON through the documented flag got text with no way to detect it.
+	//
+	// One place, because 37 of the 38 JSON call sites already read the flag
+	// here. Scoped to "json" alone: it grants JSON, never revokes it, so an
+	// explicit --json still wins and no other flag is touched.
+	if flagName == "json" && output.IsJSONMode() {
+		if jsonOn, ok := any(true).(T); ok {
+			return jsonOn
+		}
+	}
+
 	// Get the value from viper first (this will be from config file or env var)
 	if v := viper.Get(viperKey); v != nil {
 		if typedValue, ok := v.(T); ok {
