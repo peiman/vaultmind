@@ -646,8 +646,42 @@ func TestMeshDoctor_UnpinnedStaleRegistryIsLoud(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
-	require.Contains(t, mi.Warnings, WarnMeshRegistryStale,
+	// No hub bound is declared here, so doctor cannot know sends are refused and
+	// must not say so (9c54e12) — but it must still NAME the age. This test
+	// used to demand the refusal wording, and passed only because the signature
+	// check misused the 24h default: the same misuse that, on 2026-09-22,
+	// reported a valid 17-day-old registry as a bad signature.
+	require.Contains(t, mi.Warnings, WarnMeshRegistryAging,
 		"a stale registry must be named; silence here is what let the mesh go mute for a day")
+	require.NotContains(t, mi.Warnings, WarnMeshSelfConsistencyFailed,
+		"age is not a signature failure")
+}
+
+// The same incident with the hub's bound DECLARED, which is the live config:
+// then the refusal claim is true and must be made.
+func TestMeshDoctor_UnpinnedPastDeclaredBoundIsLoud(t *testing.T) {
+	signed := time.Unix(1_700_000_000, 0)
+	rootPub, rootPriv := lowEntropyKey(t, "doctor-root-seed-declared-loud")
+	memberPub, memberPriv := lowEntropyKey(t, "doctor-member-seed-declared-loud")
+	raw, nid := buildSignedRegistryWindow(t, rootPub, rootPriv, "agent:mira", memberPub,
+		signed, signed.Add(365*24*time.Hour))
+
+	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{
+		KeyPath:       filepath.Join(t.TempDir(), "k.key"),
+		SocketPath:    filepath.Join(t.TempDir(), "missing.sock"),
+		RegistryBytes: raw,
+		Slug:          "agent:mira",
+		Now:           signed.Add(31 * 24 * time.Hour),
+		Signer:        &stubSigner{priv: memberPriv},
+		MaxStaleness:  30 * 24 * time.Hour,
+		Daemon: &stubDaemon{
+			root:      doctorclient.WellKnownRoot{RootPubKey: b64(rootPub), NetworkID: nid},
+			directory: raw,
+			whoamiOK:  true,
+		},
+	})
+	require.NoError(t, err)
+	require.Contains(t, mi.Warnings, WarnMeshRegistryStale)
 }
 
 func TestMeshDoctor_UnpinnedFreshRegistryIsNotFlaggedStale(t *testing.T) {

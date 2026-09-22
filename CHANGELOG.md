@@ -249,6 +249,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`doctor` no longer reports a valid mesh registry as a bad signature because
+  it is more than a day old.** The signature checks still used doctor's 24-hour
+  early-warning bound, so a correctly signed registry 17 days into the hub's
+  30-day window read as "did not verify ... (bad signature, stale, or rolled
+  back)" — and, unpinned, as "signed SENDS will be refused" while sends were
+  landing. Signature and age are now judged separately: the signature checks
+  ask only whether the root signed it (and the registry's own `valid_until`),
+  and age is reported once, against the declared hub bound.
+
 - **`--vault A --vault B` silently searched only B.** `--vault` takes one path
   and pflag overwrites on repeat, so the command answered "nothing relevant"
   from B alone without ever opening A — a confident wrong answer, and the defect

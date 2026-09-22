@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"io/fs"
+	"math"
 	"net"
 	"os"
 	"strings"
@@ -70,6 +71,13 @@ const (
 	// doctorMaxStaleness bounds how stale a verified registry may be before
 	// doctor treats it as unverifiable (a stale registry may hide a revocation).
 	doctorMaxStaleness = 24 * time.Hour
+	// signatureAgeBound is what the SIGNATURE checks pass to VerifyAndLoad: no
+	// age limit beyond the registry's own valid_until. Age is judged in exactly
+	// one place, checkRegistryFreshness, against the declared hub bound. Passing
+	// doctorMaxStaleness here reported every registry older than a day as
+	// "bad signature" (live, 2026-09-22) — the verdict an operator answers by
+	// hunting for tampering or re-pinning a root on a healthy mesh.
+	signatureAgeBound = time.Duration(math.MaxInt64)
 	// selfVerifyNonceBytes is the random-challenge length for proof-of-possession.
 	selfVerifyNonceBytes = 32
 	// selfVerifyDomainTag domain-separates the proof-of-possession challenge so a
@@ -546,7 +554,7 @@ func evaluateUnpinned(ctx context.Context, mi *DoctorMeshIdentity, in MeshDoctor
 	// registry indistinguishable from a fresh one on the unpinned path — which
 	// is the common path, since a pin requires enroll — and that silence is
 	// what let a mesh-wide send mute run for a day behind green checks.
-	_, _, verr := registry.VerifyAndLoad(advertised, mustParse(regBytes), 0, in.Now, doctorMaxStaleness)
+	_, _, verr := registry.VerifyAndLoad(advertised, mustParse(regBytes), 0, in.Now, signatureAgeBound)
 	switch {
 	case verr == nil:
 		if mi.NetworkID == "" {
@@ -574,7 +582,7 @@ func evaluatePinned(mi *DoctorMeshIdentity, in MeshDoctorInput, regBytes []byte)
 		mi.addWarning(WarnMeshUnverifiable)
 		return
 	}
-	reg, _, err := registry.VerifyAndLoad(in.PinnedRootPub, env, 0, in.Now, doctorMaxStaleness)
+	reg, _, err := registry.VerifyAndLoad(in.PinnedRootPub, env, 0, in.Now, signatureAgeBound)
 	if err != nil {
 		mi.Status = StatusMeshUnverifiable
 		mi.addWarning(WarnMeshUnverifiable)
