@@ -249,6 +249,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`doctor` says so when the registry file is not a registry.** Passing
+  `agents.yaml` (the roster) as `--mesh-registry` — an easy mix-up, since
+  agents.yaml is where the registry's path is declared — was reported as "bad
+  signature, stale, or rolled back", and without a pin as both
+  "self-consistent" and "not even self-consistent" at once. Unparseable bytes
+  (the roster, a truncated copy, a corrupt file) are now named as that, with
+  where to find the real file.
+
 - **`doctor` no longer reports a valid mesh registry as a bad signature because
   it is more than a day old.** The signature checks still used doctor's 24-hour
   early-warning bound, so a correctly signed registry 17 days into the hub's

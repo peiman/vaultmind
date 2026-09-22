@@ -832,8 +832,12 @@ func TestMeshDoctor_CorruptRegistryIsNotSwallowed(t *testing.T) {
 		RegistryBytes: []byte(`{"registry":"not-base64!!","root_sig":"x"}`),
 	})
 	require.NoError(t, err)
-	require.Contains(t, mi.Warnings, WarnMeshSelfConsistencyFailed,
-		"a truncated scp or interrupted re-sign must not read as a healthy mesh — and with no pin, the warning must not blame one")
+	// Unparseable bytes are named as unparseable — not as a signature failure,
+	// which is a claim about bytes that were never a signature to check.
+	require.Contains(t, mi.Warnings, WarnMeshRegistryNotSigned,
+		"a truncated scp or interrupted re-sign must not read as a healthy mesh")
+	require.NotContains(t, mi.Warnings, WarnMeshUnverifiable,
+		"with no pin, the warning must not blame one")
 }
 
 // VERIFICATION-REVIEW FINDING (2026-09-06): the repair for the previous review

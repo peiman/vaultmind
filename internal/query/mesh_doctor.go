@@ -91,12 +91,18 @@ const (
 // Warning strings (SSOT) — each drives both the human Warnings slice and an
 // envelope.AddWarning in the cmd layer.
 const (
-	WarnMeshKeyMode            = "identity key file is not 0600 (custody mode is wrong)"
-	WarnMeshKeySize            = "identity key file is not the expected ed25519 private-key size"
-	WarnMeshUnpinned           = "registry self-consistent (daemon-advertised root), NOT authenticated — enroll persists a pin, or pass --mesh-root-pubkey"
-	WarnMeshNotEnrolled        = "your slug is not in the network registry yet (enroll-add pending?)"
-	WarnMeshKeyMismatch        = "your binding exists but the running signer does not hold its key (wrong signer/key?)"
-	WarnMeshUnverifiable       = "the network registry did not verify against your pinned root (bad signature, stale, or rolled back)"
+	WarnMeshKeyMode      = "identity key file is not 0600 (custody mode is wrong)"
+	WarnMeshKeySize      = "identity key file is not the expected ed25519 private-key size"
+	WarnMeshUnpinned     = "registry self-consistent (daemon-advertised root), NOT authenticated — enroll persists a pin, or pass --mesh-root-pubkey"
+	WarnMeshNotEnrolled  = "your slug is not in the network registry yet (enroll-add pending?)"
+	WarnMeshKeyMismatch  = "your binding exists but the running signer does not hold its key (wrong signer/key?)"
+	WarnMeshUnverifiable = "the network registry did not verify against your pinned root (bad signature, stale, or rolled back)"
+	// WarnMeshRegistryNotSigned: the bytes are not a signed-registry envelope
+	// at all. Live 2026-09-22: agents.yaml (the roster) passed as the registry
+	// was reported as a bad signature, which sends the reader hunting tampering.
+	WarnMeshRegistryNotSigned = "the registry file is not a readable signed registry (truncated, corrupt, or not a registry at all — " +
+		"agents.yaml is the roster, not the registry); point --mesh-registry at the file its registry_path names, " +
+		"or fetch <daemon_url>/.well-known/vaultmind-directory"
 	WarnMeshNoRegistry         = "no registry available to verify (daemon unreachable and no --mesh-registry given)"
 	WarnMeshEnforcementOff     = "message-signature enforcement is NOT YET active (advisory mode is a no-op today)"
 	WarnMeshHeartbeatStale     = "wake-watcher heartbeat is stale — the watcher may be present-but-dead"
@@ -304,7 +310,7 @@ func checkRegistryFreshness(mi *DoctorMeshIdentity, in MeshDoctorInput, regBytes
 	}
 	env, err := registry.ParseDistribution(regBytes)
 	if err != nil {
-		mi.addWarning(unverifiableWarning(in))
+		mi.addWarning(WarnMeshRegistryNotSigned)
 		return
 	}
 	validFrom, validUntil, err := registry.Freshness(env)
@@ -554,7 +560,15 @@ func evaluateUnpinned(ctx context.Context, mi *DoctorMeshIdentity, in MeshDoctor
 	// registry indistinguishable from a fresh one on the unpinned path — which
 	// is the common path, since a pin requires enroll — and that silence is
 	// what let a mesh-wide send mute run for a day behind green checks.
-	_, _, verr := registry.VerifyAndLoad(advertised, mustParse(regBytes), 0, in.Now, signatureAgeBound)
+	// Bytes that are not an envelope at all get named as such, not run through
+	// VerifyAndLoad as an empty envelope — that reported a roster file as
+	// "not even self-consistent (bad signature ...)" beside "self-consistent".
+	env, err := registry.ParseDistribution(regBytes)
+	if err != nil {
+		mi.addWarning(WarnMeshRegistryNotSigned)
+		return
+	}
+	_, _, verr := registry.VerifyAndLoad(advertised, env, 0, in.Now, signatureAgeBound)
 	switch {
 	case verr == nil:
 		if mi.NetworkID == "" {
@@ -579,7 +593,7 @@ func evaluatePinned(mi *DoctorMeshIdentity, in MeshDoctorInput, regBytes []byte)
 	env, err := registry.ParseDistribution(regBytes)
 	if err != nil {
 		mi.Status = StatusMeshUnverifiable
-		mi.addWarning(WarnMeshUnverifiable)
+		mi.addWarning(WarnMeshRegistryNotSigned)
 		return
 	}
 	reg, _, err := registry.VerifyAndLoad(in.PinnedRootPub, env, 0, in.Now, signatureAgeBound)
@@ -638,18 +652,6 @@ func buildSelfVerifyChallenge(nonce []byte) identity.CanonicalBytes {
 	tagged = append(tagged, []byte(selfVerifyDomainTag)...)
 	tagged = append(tagged, nonce...)
 	return identity.CanonicalBytesFromTrusted(tagged)
-}
-
-// mustParse parses regBytes, returning a zero envelope on failure (the caller's
-// VerifyAndLoad then rejects it — fail closed). Used only on the unpinned
-// self-consistency path where a parse failure simply yields "no self-consistency
-// shown".
-func mustParse(regBytes []byte) registry.SignedRegistry {
-	env, err := registry.ParseDistribution(regBytes)
-	if err != nil {
-		return registry.SignedRegistry{}
-	}
-	return env
 }
 
 // HasSignal reports whether any mesh signal exists, so the cmd layer can decide
