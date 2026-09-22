@@ -60,6 +60,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`doctor` warns in the last week before the mesh registry lapses.** With the
+  hub's bound declared, doctor now says how many days are left once fewer than
+  seven remain — before the hub starts dropping signed posts, not after. The
+  30-day window stays deliberately short; the reminder is what makes that safe.
+
 - **`vaultmind identity signer install` — the signer now survives logouts,
   reboots and crashes (macOS).** The signer was a foreground process nothing
   restarted: when it died, every signed send failed "signer unreachable" until

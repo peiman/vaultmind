@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"io/fs"
 	"math"
 	"net"
@@ -71,6 +72,10 @@ const (
 	// doctorMaxStaleness bounds how stale a verified registry may be before
 	// doctor treats it as unverifiable (a stale registry may hide a revocation).
 	doctorMaxStaleness = 24 * time.Hour
+	// registryDueSoon is how far ahead of the declared lapse doctor starts
+	// saying so. The 30-day window is kept deliberately short, so the reminder
+	// has to come early enough to act — and late enough not to be daily noise.
+	registryDueSoon = 7 * 24 * time.Hour
 	// signatureAgeBound is what the SIGNATURE checks pass to VerifyAndLoad: no
 	// age limit beyond the registry's own valid_until. Age is judged in exactly
 	// one place, checkRegistryFreshness, against the declared hub bound. Passing
@@ -100,7 +105,10 @@ const (
 	// WarnMeshRegistryNotSigned: the bytes are not a signed-registry envelope
 	// at all. Live 2026-09-22: agents.yaml (the roster) passed as the registry
 	// was reported as a bad signature, which sends the reader hunting tampering.
-	WarnMeshRegistryNotSigned = "the registry file is not a readable signed registry (truncated, corrupt, or not a registry at all — " +
+	// WarnMeshRegistryDueSoonFmt: inside the last week before the DECLARED
+	// hub bound. When it lapses the hub drops signed posts; it does not queue.
+	WarnMeshRegistryDueSoonFmt = "the registry has %d day(s) left before the hub starts dropping signed posts — re-sign and deploy it now"
+	WarnMeshRegistryNotSigned  = "the registry file is not a readable signed registry (truncated, corrupt, or not a registry at all — " +
 		"agents.yaml is the roster, not the registry); point --mesh-registry at the file its registry_path names, " +
 		"or fetch <daemon_url>/.well-known/vaultmind-directory"
 	WarnMeshNoRegistry         = "no registry available to verify (daemon unreachable and no --mesh-registry given)"
@@ -327,6 +335,10 @@ func checkRegistryFreshness(mi *DoctorMeshIdentity, in MeshDoctorInput, regBytes
 	if in.MaxStaleness > 0 {
 		if registry.IsStaleAt(validFrom, validUntil, now, in.MaxStaleness) {
 			mi.addWarning(WarnMeshRegistryStale)
+			return
+		}
+		if left := time.Unix(validFrom, 0).Add(in.MaxStaleness).Sub(now); left <= registryDueSoon {
+			mi.addWarning(fmt.Sprintf(WarnMeshRegistryDueSoonFmt, int(left/(24*time.Hour))))
 		}
 		return
 	}
