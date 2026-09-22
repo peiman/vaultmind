@@ -43,6 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 >    own 24h default — it emits a softer "bound is NOT declared" warning
 >    instead. If you alarm on the old text, match the new wording too.
 
+### Added
+
 - **Note types can declare they are not citable as evidence (issue #137).**
   `source_ids` is documented as citations, and validation only checked that the
   cited note *exists* — so a curated arc could cite an unreviewed scratch
@@ -57,8 +59,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   **Opt-in by construction.** An undeclared type is citable, so existing vaults
   see no new warnings and do no extra work.
-
-### Added
 
 - **`doctor` warns in the last week before the mesh registry lapses.** With the
   hub's bound declared, doctor now says how many days are left once fewer than
