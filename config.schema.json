@@ -968,6 +968,31 @@
           },
           "type": "object"
         },
+        "identitysignerinstall": {
+          "properties": {
+            "name": {
+              "default": "",
+              "description": "Job name suffix (default: the key file's name without extension)",
+              "type": "string"
+            },
+            "print": {
+              "default": false,
+              "description": "Print the LaunchAgent plist and exit without writing or loading anything",
+              "type": "boolean"
+            },
+            "signer_key": {
+              "default": "",
+              "description": "Sealed signer key path (default: XDG data dir, per --config-path-mode)",
+              "type": "string"
+            },
+            "signer_socket": {
+              "default": "",
+              "description": "Signer socket path (default: XDG state dir, per --config-path-mode)",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
         "identitysignregistry": {
           "properties": {
             "file": {

@@ -14,8 +14,9 @@ DEV-INTERIM posture). The private key NEVER leaves this process; the sign-*
 CLIs are KEYLESS and reach it only over the socket.
 
 This is a long-running process: it serves until it receives SIGINT/SIGTERM,
-then removes the socket and exits. Background it (or wire it under launchd)
-yourself. It FAILS CLOSED: a missing/unreadable key, a bind failure, or an
+then removes the socket and exits. Nothing restarts it if it dies: run
+` + "`vaultmind identity signer install`" + ` to put it under launchd (starts at login,
+restarts on exit). It FAILS CLOSED: a missing/unreadable key, a bind failure, or an
 empty uid allowlist refuses to start with a non-zero exit and prints nothing
 sensitive.
 

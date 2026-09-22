@@ -175,6 +175,10 @@ const (
 	KeyAppIdentitysignregistrySignerSocket   = "app.identitysignregistry.signer_socket"   // Signer socket path (default: XDG state dir)
 	KeyAppIdentitysignerSignerKey            = "app.identitysigner.signer_key"            // Sealed signer key path (default: XDG data dir)
 	KeyAppIdentitysignerSignerSocket         = "app.identitysigner.signer_socket"         // Signer socket path (default: XDG state dir)
+	KeyAppIdentitysignerinstallSignerKey     = "app.identitysignerinstall.signer_key"     // Sealed signer key path (default: XDG data dir, per --config-path-mode)
+	KeyAppIdentitysignerinstallSignerSocket  = "app.identitysignerinstall.signer_socket"  // Signer socket path (default: XDG state dir, per --config-path-mode)
+	KeyAppIdentitysignerinstallName          = "app.identitysignerinstall.name"           // Job name suffix (default: the key file's name without extension)
+	KeyAppIdentitysignerinstallPrint         = "app.identitysignerinstall.print"          // Print the LaunchAgent plist and exit without writing or loading anything
 	KeyAppIndexVault                         = "app.index.vault"                          // Path to the vault root directory
 	KeyAppIndexJson                          = "app.index.json"                           // Output in JSON format
 	KeyAppIndexFull                          = "app.index.full"                           // Force full rebuild instead of incremental index

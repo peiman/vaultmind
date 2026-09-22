@@ -60,6 +60,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`vaultmind identity signer install` — the signer now survives logouts,
+  reboots and crashes (macOS).** The signer was a foreground process nothing
+  restarted: when it died, every signed send failed "signer unreachable" until
+  someone noticed. This writes a LaunchAgent (start at login, restart on exit)
+  that launches exactly the signer your flags and `--config-path-mode` describe,
+  with every path pinned absolute. `--print` shows the job without installing
+  anything, for review before it touches someone's machine. It refuses while a
+  hand-started signer already holds the socket — otherwise launchd would
+  crash-loop against it and look like a running service.
+
 - **`vaultmind ask <query> --vaults a,b,c` — federated search across several vaults.**
   An agent's memory is usually not one vault: an identity vault, a working
   desk, and a reference corpus is the normal shape, and the note you need is

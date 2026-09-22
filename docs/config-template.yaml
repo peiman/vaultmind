@@ -494,6 +494,19 @@ app:
     # Signer socket path (default: XDG state dir)
     signer_socket: 
 
+  identitysignerinstall:
+    # Sealed signer key path (default: XDG data dir, per --config-path-mode)
+    signer_key: 
+
+    # Signer socket path (default: XDG state dir, per --config-path-mode)
+    signer_socket: 
+
+    # Job name suffix (default: the key file's name without extension)
+    name: 
+
+    # Print the LaunchAgent plist and exit without writing or loading anything
+    print: false
+
   identitysignregistry:
     # Read registry JSON from this file instead of stdin
     file: 

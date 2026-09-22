@@ -379,7 +379,7 @@ markers; `task check` fails if it drifts from the catalog. Everything outside th
 hand-written and stays.
 
 <!-- VAULTMIND:GENERATED:commands:START -->
-<!-- checksum:9a1734111eab4b76eb490149db0a5218db3d34a05866d5393fb86f7c7f676a75 -->
+<!-- checksum:7aa3b79721d15166de5a5cb5d86ca72909a0eaa9a84960e60f61503fdff540a4 -->
 # VaultMind Commands
 
 Every user-facing command, grouped by intent, with its when-to-use trigger.
@@ -452,6 +452,7 @@ Generated from the command tree — do not edit by hand (run `task generate:docs
 | `vaultmind identity sign-envelope` | Sign a chat message envelope via the keyless signer (Contract-B slice 5) | you have a chat MESSAGE envelope to sign so a receiving daemon can verify the signature and the signer's registry binding. |
 | `vaultmind identity sign-registry` | Sign a trust-root registry via the keyless signer (Contract-B) | you have a trust-root registry to sign so consumers can verify the root signature, anti-rollback epoch, and freshness at load. |
 | `vaultmind identity signer` | Run the keyless custody signer daemon (Contract-B) | you need to RUN the keyless custody signer daemon so the sign-* commands have a process to connect to. |
+| `vaultmind identity signer install` | Run the signer under launchd: start at login, restart if it dies (macOS) | your signer must survive logouts, reboots, and crashes — without it a dead signer fails every signed send until someone notices. |
 | `vaultmind init` | Scaffold a fresh persona-shaped vault, ready for you and your agent | you are starting fresh and need to scaffold a new persona-shaped vault. |
 
 ## Setup & introspection:

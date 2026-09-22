@@ -185,6 +185,10 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.identitysignregistry.signer_socket` | string | `` | `VAULTMIND_APP_IDENTITYSIGNREGISTRY_SIGNER_SOCKET` | Signer socket path (default: XDG state dir) |
 | `app.identitysigner.signer_key` | string | `` | `VAULTMIND_APP_IDENTITYSIGNER_SIGNER_KEY` | Sealed signer key path (default: XDG data dir) |
 | `app.identitysigner.signer_socket` | string | `` | `VAULTMIND_APP_IDENTITYSIGNER_SIGNER_SOCKET` | Signer socket path (default: XDG state dir) |
+| `app.identitysignerinstall.signer_key` | string | `` | `VAULTMIND_APP_IDENTITYSIGNERINSTALL_SIGNER_KEY` | Sealed signer key path (default: XDG data dir, per --config-path-mode) |
+| `app.identitysignerinstall.signer_socket` | string | `` | `VAULTMIND_APP_IDENTITYSIGNERINSTALL_SIGNER_SOCKET` | Signer socket path (default: XDG state dir, per --config-path-mode) |
+| `app.identitysignerinstall.name` | string | `` | `VAULTMIND_APP_IDENTITYSIGNERINSTALL_NAME` | Job name suffix (default: the key file's name without extension) |
+| `app.identitysignerinstall.print` | bool | `false` | `VAULTMIND_APP_IDENTITYSIGNERINSTALL_PRINT` | Print the LaunchAgent plist and exit without writing or loading anything |
 | `app.index.vault` | string | `.` | `VAULTMIND_APP_INDEX_VAULT` | Path to the vault root directory |
 | `app.index.json` | bool | `false` | `VAULTMIND_APP_INDEX_JSON` | Output in JSON format |
 | `app.index.full` | bool | `false` | `VAULTMIND_APP_INDEX_FULL` | Force full rebuild instead of incremental index |
@@ -772,6 +776,19 @@ app:
 
     # Signer socket path (default: XDG state dir)
     signer_socket: 
+
+  identitysignerinstall:
+    # Sealed signer key path (default: XDG data dir, per --config-path-mode)
+    signer_key: 
+
+    # Signer socket path (default: XDG state dir, per --config-path-mode)
+    signer_socket: 
+
+    # Job name suffix (default: the key file's name without extension)
+    name: 
+
+    # Print the LaunchAgent plist and exit without writing or loading anything
+    print: false
 
   identitysignregistry:
     # Read registry JSON from this file instead of stdin
@@ -1620,6 +1637,18 @@ export VAULTMIND_APP_IDENTITYSIGNER_SIGNER_KEY=
 
 # Signer socket path (default: XDG state dir)
 export VAULTMIND_APP_IDENTITYSIGNER_SIGNER_SOCKET=
+
+# Sealed signer key path (default: XDG data dir, per --config-path-mode)
+export VAULTMIND_APP_IDENTITYSIGNERINSTALL_SIGNER_KEY=
+
+# Signer socket path (default: XDG state dir, per --config-path-mode)
+export VAULTMIND_APP_IDENTITYSIGNERINSTALL_SIGNER_SOCKET=
+
+# Job name suffix (default: the key file's name without extension)
+export VAULTMIND_APP_IDENTITYSIGNERINSTALL_NAME=
+
+# Print the LaunchAgent plist and exit without writing or loading anything
+export VAULTMIND_APP_IDENTITYSIGNERINSTALL_PRINT=false
 
 # Path to the vault root directory
 export VAULTMIND_APP_INDEX_VAULT=./my-vault

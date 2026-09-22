@@ -308,6 +308,11 @@ var commandCatalog = map[string]catalogEntry{
 		when:  "you need to RUN the keyless custody signer daemon so the sign-* commands have a process to connect to.",
 		short: "Run the keyless custody signer daemon (Contract-B)",
 	},
+	"vaultmind identity signer install": {
+		group: groupLifecycle,
+		when:  "your signer must survive logouts, reboots, and crashes — without it a dead signer fails every signed send until someone notices.",
+		short: "Run the signer under launchd: start at login, restart if it dies (macOS)",
+	},
 	"vaultmind hooks": {
 		group: groupLifecycle,
 		when:  "you need to install, remove, or check VaultMind's Claude Code hook scripts.",
