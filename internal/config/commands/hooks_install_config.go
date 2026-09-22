@@ -119,7 +119,8 @@ EXAMPLES
   vaultmind hooks install --vault ./my-knowledge --merge --dry-run     # preview the merge without writing
   vaultmind hooks install --vault ./my-knowledge --merge               # write scripts AND wire settings.json
   vaultmind hooks install --vault ./my-knowledge --merge --local       # wire personal settings.local.json instead
-  vaultmind hooks install --agent codex --merge                        # wire Codex CLI (.codex/hooks.json) instead of Claude Code`,
+  vaultmind hooks install --agent codex --merge                        # wire Codex CLI (.codex/hooks.json) instead of Claude Code
+  vaultmind hooks install --vaults ./identity,./desk --merge           # recall searches both vaults; persona loads ./identity`,
 	ConfigPrefix: "app.hooksinstall",
 	FlagOverrides: map[string]string{
 		"app.hooksinstall.force":   "force",
@@ -131,6 +132,7 @@ EXAMPLES
 		"app.hooksinstall.local":   "local",
 		"app.hooksinstall.dryrun":  "dry-run",
 		"app.hooksinstall.agent":   "agent",
+		"app.hooksinstall.vaults":  "vaults",
 	},
 }
 
@@ -180,6 +182,12 @@ func HooksInstallOptions() []config.ConfigOption {
 			DefaultValue: false,
 			Description:  "With --merge, target .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared).",
 			Type:         "bool",
+		},
+		{
+			Key:          "app.hooksinstall.vaults",
+			DefaultValue: "",
+			Description:  "Comma-separated vaults to search TOGETHER (federated recall): wired into the recall and decision-time hooks. The persona still loads one vault — --vault, else the first listed.",
+			Type:         "string",
 		},
 		{
 			Key:          "app.hooksinstall.agent",

@@ -45,12 +45,18 @@ type MergeFileResult struct {
 // nothing (idempotent). Any malformed existing settings surfaces as an error
 // before any write, so a user's file is never corrupted.
 func MergeIntoSettings(projectDir, vaultPath string, local, dryRun bool) (*MergeFileResult, error) {
+	return MergeIntoSettingsFor(projectDir, vaultPath, nil, local, dryRun)
+}
+
+// MergeIntoSettingsFor is MergeIntoSettings with an optional federation: the
+// searching hooks are wired to every vault in vaults.
+func MergeIntoSettingsFor(projectDir, vaultPath string, vaults []string, local, dryRun bool) (*MergeFileResult, error) {
 	path := settingsFilePath(projectDir, local)
 	existing, err := readSettingsFile(path)
 	if err != nil {
 		return nil, err
 	}
-	merged, changed, err := MergeStanza(existing, vaultPath)
+	merged, changed, err := mergeHooks(existing, canonicalHooksFor(vaultPath, vaults))
 	if err != nil {
 		return nil, fmt.Errorf("merging into %s: %w", path, err)
 	}

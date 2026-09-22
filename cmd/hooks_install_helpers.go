@@ -27,6 +27,7 @@ type hooksInstallParams struct {
 	local      bool
 	dryRun     bool
 	agent      string
+	vaults     string
 }
 
 // Agents `hooks install` can wire.
@@ -95,6 +96,10 @@ func runHooksInstallCore(cmd *cobra.Command, p hooksInstallParams) error {
 		return perr
 	}
 
+	vaults, verr := parseHookVaults(p.vaults)
+	if verr != nil {
+		return verr
+	}
 	agent := strings.TrimSpace(p.agent)
 	if agent == "" {
 		agent = hooksAgentClaude
@@ -106,7 +111,7 @@ func runHooksInstallCore(cmd *cobra.Command, p hooksInstallParams) error {
 		if p.local {
 			return fmt.Errorf("--local is a Claude Code settings option; Codex reads .codex/hooks.json")
 		}
-		return runHooksInstallCodex(cmd, p, onlyList, profile)
+		return runHooksInstallCodex(cmd, p, onlyList, profile, vaults)
 	}
 
 	prov, retErr := hooks.Provision(hooks.InstallConfig{
@@ -114,6 +119,7 @@ func runHooksInstallCore(cmd *cobra.Command, p hooksInstallParams) error {
 		Force:      p.force,
 		Only:       onlyList,
 		VaultPath:  strings.TrimSpace(p.vault),
+		Vaults:     vaults,
 		Profile:    profile,
 	}, p.merge, p.local, p.dryRun)
 	res, mergeRes := prov.Install, prov.Merge
@@ -209,7 +215,7 @@ func writeMergeOutcome(w io.Writer, mergeRes *hooks.MergeFileResult) {
 // runHooksInstallCodex installs the same scripts, then wires Codex instead of
 // Claude Code. Scripts first and only then the wiring, with a conflict gating
 // the merge — the same order Provision enforces for Claude Code.
-func runHooksInstallCodex(cmd *cobra.Command, p hooksInstallParams, only []string, profile hooks.Profile) error {
+func runHooksInstallCodex(cmd *cobra.Command, p hooksInstallParams, only []string, profile hooks.Profile, vaults []string) error {
 	projectDir, err := filepath.Abs(p.projectDir)
 	if err != nil {
 		return fmt.Errorf("resolving project dir: %w", err)
@@ -220,6 +226,7 @@ func runHooksInstallCodex(cmd *cobra.Command, p hooksInstallParams, only []strin
 		Force:      p.force,
 		Only:       only,
 		VaultPath:  vault,
+		Vaults:     vaults,
 		Profile:    profile,
 	}, false, false, false)
 	res := prov.Install
@@ -227,8 +234,8 @@ func runHooksInstallCodex(cmd *cobra.Command, p hooksInstallParams, only []strin
 	var mergeRes *hooks.MergeFileResult
 	if retErr == nil && res != nil {
 		if p.merge {
-			mergeRes, retErr = hooks.MergeIntoCodexHooks(projectDir, vault, profile, p.dryRun)
-		} else if stanza, serr := hooks.CodexHooksStanza(projectDir, vault, profile); serr == nil {
+			mergeRes, retErr = hooks.MergeIntoCodexHooksFor(projectDir, vault, vaults, profile, p.dryRun)
+		} else if stanza, serr := hooks.CodexHooksStanzaFor(projectDir, vault, vaults, profile); serr == nil {
 			res.SettingsStanza = stanza
 		}
 	}
@@ -265,4 +272,29 @@ func writeHooksInstallCodexHuman(w io.Writer, res *hooks.InstallResult, mergeRes
 		_, _ = fmt.Fprintf(w, "\nOr paste this yourself:\n\n%s\n", stanza)
 	}
 	_, _ = io.WriteString(w, codexTrustNotice)
+}
+
+// parseHookVaults turns --vaults into absolute paths. Hooks run from wherever
+// the agent is, so a relative vault would resolve against the wrong directory;
+// a list of one is not a federation and is rejected rather than silently
+// accepted as one.
+func parseHookVaults(raw string) ([]string, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	var out []string
+	for _, v := range strings.Split(raw, ",") {
+		if v = strings.TrimSpace(v); v == "" {
+			continue
+		}
+		abs, err := filepath.Abs(v)
+		if err != nil {
+			return nil, fmt.Errorf("--vaults: resolving %q: %w", v, err)
+		}
+		out = append(out, abs)
+	}
+	if len(out) < 2 {
+		return nil, fmt.Errorf("--vaults needs at least two vaults to search together; for one, use --vault")
+	}
+	return out, nil
 }

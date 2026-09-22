@@ -29,5 +29,6 @@ func runHooksInstall(cmd *cobra.Command, args []string) error {
 		local:      getConfigValueWithFlags[bool](cmd, "local", config.KeyAppHooksinstallLocal),
 		dryRun:     getConfigValueWithFlags[bool](cmd, "dry-run", config.KeyAppHooksinstallDryrun),
 		agent:      getConfigValueWithFlags[string](cmd, "agent", config.KeyAppHooksinstallAgent),
+		vaults:     getConfigValueWithFlags[string](cmd, "vaults", config.KeyAppHooksinstallVaults),
 	})
 }

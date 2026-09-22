@@ -744,6 +744,11 @@
               "default": "",
               "description": "Vault path to bake into the printed settings.json stanza via VAULTMIND_VAULT (default: the built-in vaultmind-identity convention).",
               "type": "string"
+            },
+            "vaults": {
+              "default": "",
+              "description": "Comma-separated vaults to search TOGETHER (federated recall): wired into the recall and decision-time hooks. The persona still loads one vault — --vault, else the first listed.",
+              "type": "string"
             }
           },
           "type": "object"

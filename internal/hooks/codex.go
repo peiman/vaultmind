@@ -42,7 +42,7 @@ var codexScripts = map[string]bool{
 // codexHooks derives Codex's wiring from the canonical hooks (one source of
 // truth for events, matchers and scripts), filtered to what works under Codex
 // and to the profile.
-func codexHooks(projectDir, vaultPath string, p Profile) []canonicalHook {
+func codexHooks(projectDir, vaultPath string, vaults []string, p Profile) []canonicalHook {
 	allowed := map[string]bool{}
 	for _, n := range ScriptsForProfile(p) {
 		allowed[n] = true
@@ -50,7 +50,7 @@ func codexHooks(projectDir, vaultPath string, p Profile) []canonicalHook {
 	noLimit := 0
 	prefix := "export CLAUDE_PROJECT_DIR=" + singleQuote(projectDir) + "; "
 	var out []canonicalHook
-	for _, ch := range canonicalHooks(vaultPath) {
+	for _, ch := range canonicalHooksFor(vaultPath, vaults) {
 		if !codexScripts[ch.Script] || !allowed[ch.Script] {
 			continue
 		}
@@ -68,7 +68,12 @@ func codexHooks(projectDir, vaultPath string, p Profile) []canonicalHook {
 
 // CodexHooksStanza renders .codex/hooks.json for projectDir.
 func CodexHooksStanza(projectDir, vaultPath string, p Profile) (string, error) {
-	return renderStanza(codexHooks(projectDir, vaultPath, p))
+	return CodexHooksStanzaFor(projectDir, vaultPath, nil, p)
+}
+
+// CodexHooksStanzaFor is CodexHooksStanza with an optional federation.
+func CodexHooksStanzaFor(projectDir, vaultPath string, vaults []string, p Profile) (string, error) {
+	return renderStanza(codexHooks(projectDir, vaultPath, vaults, p))
 }
 
 // CodexHooksPath is where the Codex wiring for projectDir lives.
@@ -80,12 +85,17 @@ func CodexHooksPath(projectDir string) string {
 // <projectDir>/.codex/hooks.json — the same rules as the Claude Code merge:
 // existing hooks preserved, re-runs change nothing, malformed files refused.
 func MergeIntoCodexHooks(projectDir, vaultPath string, p Profile, dryRun bool) (*MergeFileResult, error) {
+	return MergeIntoCodexHooksFor(projectDir, vaultPath, nil, p, dryRun)
+}
+
+// MergeIntoCodexHooksFor is MergeIntoCodexHooks with an optional federation.
+func MergeIntoCodexHooksFor(projectDir, vaultPath string, vaults []string, p Profile, dryRun bool) (*MergeFileResult, error) {
 	path := CodexHooksPath(projectDir)
 	existing, err := readSettingsFile(path)
 	if err != nil {
 		return nil, err
 	}
-	merged, changed, err := mergeHooks(existing, codexHooks(projectDir, vaultPath, p))
+	merged, changed, err := mergeHooks(existing, codexHooks(projectDir, vaultPath, vaults, p))
 	if err != nil {
 		return nil, fmt.Errorf("merging into %s: %w", path, err)
 	}

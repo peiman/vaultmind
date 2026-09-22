@@ -65,6 +65,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   seven remain — before the hub starts dropping signed posts, not after. The
   30-day window stays deliberately short; the reminder is what makes that safe.
 
+- **`hooks install --vaults a,b` — federated recall is now installable.** The
+  scripts could always search several vaults (`VAULTMIND_VAULTS`), but no
+  install path could turn it on; the one federated project had hand-edited its
+  settings. `--vaults` wires the searching hooks (per-prompt recall and
+  decision-time reach) to every listed vault, for Claude Code and Codex alike.
+  The persona still loads one vault — `--vault`, else the first listed —
+  because the self is not a federation. Verified under Codex: with
+  `--vaults identity,desk` it recalled a desk entry that the single-vault
+  install, asked the same question, correctly reported it did not have.
+
 - **Codex CLI support: `vaultmind hooks install --agent codex`.** The same
   scripts, wired into `.codex/hooks.json`: identity at session start, the
   health check, recall on every prompt, and vault context before consequential

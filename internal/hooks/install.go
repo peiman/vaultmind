@@ -45,6 +45,11 @@ type InstallConfig struct {
 	// vaultmind-identity default. It does not affect which scripts get
 	// written — only the wiring snippet (issue #41.6).
 	VaultPath string
+	// Vaults, when set, federates the SEARCHING hooks (recall, decision-time
+	// reach) across every listed vault via VAULTMIND_VAULTS. The persona loader
+	// still reads one vault: VaultPath, else the first listed. Empty = today's
+	// single-vault wiring, byte for byte.
+	Vaults []string
 	// Profile is the capability profile to install and DECLARE. Empty means
 	// ProfileFull, so every existing caller is unaffected. Declaring it is the
 	// point: without a record of what the adopter chose, `hooks status` has
@@ -162,7 +167,7 @@ func Install(cfg InstallConfig) (*InstallResult, error) {
 	// from the onboarding doc (issue #41). Baked with VaultPath when given.
 	// A render failure must not fail the install (scripts are already
 	// written); leave the field empty and let the human output note it.
-	if stanza, stanzaErr := SettingsStanza(cfg.VaultPath); stanzaErr == nil {
+	if stanza, stanzaErr := renderStanza(canonicalHooksFor(cfg.VaultPath, cfg.Vaults)); stanzaErr == nil {
 		res.SettingsStanza = stanza
 	}
 

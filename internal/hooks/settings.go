@@ -74,8 +74,29 @@ type canonicalHook struct {
 // merge path) build from this slice, so the matcher values and event→script
 // mapping are defined exactly once (manifesto principle 7 — SSOT).
 func canonicalHooks(vaultPath string) []canonicalHook {
+	return canonicalHooksFor(vaultPath, nil)
+}
+
+// federatedScripts are the hooks that SEARCH, and so take the whole vault list.
+// The persona loader is not among them: the self is one vault, not a federation.
+var federatedScripts = map[string]bool{
+	hookUserPromptSubmitScript: true,
+	hookReachScript:            true,
+}
+
+// canonicalHooksFor is canonicalHooks with an optional federation. With vaults
+// set, the searching hooks get VAULTMIND_VAULTS; the primary vault (vaultPath,
+// else the first listed) stays VAULTMIND_VAULT for everything else.
+func canonicalHooksFor(vaultPath string, vaults []string) []canonicalHook {
+	if vaultPath == "" && len(vaults) > 0 {
+		vaultPath = vaults[0]
+	}
 	cmd := func(script string) hookCommand {
-		return hookCommand{Type: "command", Command: hookCommandString(script, vaultPath)}
+		c := hookCommandString(script, vaultPath)
+		if len(vaults) > 0 && federatedScripts[script] {
+			c = "VAULTMIND_VAULTS=" + singleQuote(strings.Join(vaults, ",")) + " " + c
+		}
+		return hookCommand{Type: "command", Command: c}
 	}
 	return []canonicalHook{
 		{Event: "SessionStart", Script: hookSessionStartScript, Group: hookGroup{Matcher: "startup", Hooks: []hookCommand{cmd(hookSessionStartScript)}}},
