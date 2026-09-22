@@ -65,6 +65,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   seven remain — before the hub starts dropping signed posts, not after. The
   30-day window stays deliberately short; the reminder is what makes that safe.
 
+- **Codex CLI support: `vaultmind hooks install --agent codex`.** The same
+  scripts, wired into `.codex/hooks.json`: identity at session start, the
+  health check, recall on every prompt, and vault context before consequential
+  commands. Verified end to end on Codex 0.156 against a real identity vault:
+  a fresh project, one install command, and Codex answered as the agent the
+  vault describes and quoted recalled notes. Codex sets no
+  `CLAUDE_PROJECT_DIR`, so the project path is exported into every command.
+  Codex skips hooks **silently** until you trust the project and approve the
+  hooks once with `/hooks`; the install says so every time. Not wired for
+  Codex yet: episode capture (it would read the wrong transcript and record
+  another session as this one), read-tracking, and the pre-compaction prompt.
+
 - **`vaultmind identity signer install` — the signer now survives logouts,
   reboots and crashes (macOS).** The signer was a foreground process nothing
   restarted: when it died, every signed send failed "signer unreachable" until

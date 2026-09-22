@@ -700,6 +700,11 @@
         },
         "hooksinstall": {
           "properties": {
+            "agent": {
+              "default": "claude",
+              "description": "Agent to wire: claude (default; .claude/settings.json) or codex (.codex/hooks.json). Codex gets identity, recall and decision-time hooks; episode capture is not wired for Codex yet.",
+              "type": "string"
+            },
             "dryrun": {
               "default": false,
               "description": "With --merge, print the merged result without writing it (preview/diff).",

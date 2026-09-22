@@ -380,6 +380,9 @@ app:
     # With --merge, target .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared).
     local: false
 
+    # Agent to wire: claude (default; .claude/settings.json) or codex (.codex/hooks.json). Codex gets identity, recall and decision-time hooks; episode capture is not wired for Codex yet.
+    agent: claude
+
     # With --merge, print the merged result without writing it (preview/diff).
     dryrun: false
 

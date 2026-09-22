@@ -22,6 +22,22 @@ var HooksInstallMetadata = config.CommandMetadata{
 The scripts are embedded in the vaultmind binary; this command
 copies them out for use by Claude Code's hook system.
 
+CODEX (--agent codex)
+
+  Wires the same scripts into Codex CLI through <project-dir>/.codex/hooks.json:
+  identity at session start, the health check, recall on every prompt, and vault
+  context before consequential commands. The project path is baked into each
+  command, because Codex sets no CLAUDE_PROJECT_DIR.
+
+  Two one-time steps Codex requires, and skips SILENTLY without:
+    1. trust the project (Codex asks when you first open it), and
+    2. approve the hooks: run /hooks inside Codex and trust them.
+  Until both are done Codex starts with no memory and says nothing about it.
+
+  Not wired for Codex yet: episode capture (it would read the wrong transcript
+  and record another session as this one), read-tracking (Codex has no Read
+  tool), and the pre-compaction prompt (Codex cannot add context there).
+
 PROJECT-DIR
 
   Directory of the project to install hooks into. Defaults to the
@@ -102,7 +118,8 @@ EXAMPLES
   vaultmind hooks install --vault ./my-knowledge                       # print a stanza wired to a specific vault
   vaultmind hooks install --vault ./my-knowledge --merge --dry-run     # preview the merge without writing
   vaultmind hooks install --vault ./my-knowledge --merge               # write scripts AND wire settings.json
-  vaultmind hooks install --vault ./my-knowledge --merge --local       # wire personal settings.local.json instead`,
+  vaultmind hooks install --vault ./my-knowledge --merge --local       # wire personal settings.local.json instead
+  vaultmind hooks install --agent codex --merge                        # wire Codex CLI (.codex/hooks.json) instead of Claude Code`,
 	ConfigPrefix: "app.hooksinstall",
 	FlagOverrides: map[string]string{
 		"app.hooksinstall.force":   "force",
@@ -113,6 +130,7 @@ EXAMPLES
 		"app.hooksinstall.merge":   "merge",
 		"app.hooksinstall.local":   "local",
 		"app.hooksinstall.dryrun":  "dry-run",
+		"app.hooksinstall.agent":   "agent",
 	},
 }
 
@@ -162,6 +180,12 @@ func HooksInstallOptions() []config.ConfigOption {
 			DefaultValue: false,
 			Description:  "With --merge, target .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared).",
 			Type:         "bool",
+		},
+		{
+			Key:          "app.hooksinstall.agent",
+			DefaultValue: "claude",
+			Description:  "Agent to wire: claude (default; .claude/settings.json) or codex (.codex/hooks.json). Codex gets identity, recall and decision-time hooks; episode capture is not wired for Codex yet.",
+			Type:         "string",
 		},
 		{
 			Key:          "app.hooksinstall.dryrun",

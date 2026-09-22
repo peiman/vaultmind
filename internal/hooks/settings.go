@@ -34,6 +34,10 @@ const (
 type hookCommand struct {
 	Type    string `json:"type"`
 	Command string `json:"command"`
+	// AdditionalContextLimit is Codex-only (nil for Claude Code, so its stanza
+	// is unchanged). Codex moves context over ~2500 tokens to a file unless
+	// told otherwise; 0 means never.
+	AdditionalContextLimit *int `json:"additionalContextLimit,omitempty"`
 }
 
 type hookGroup struct {
@@ -44,11 +48,11 @@ type hookGroup struct {
 // hooksObject uses explicit fields (not a map) so json.MarshalIndent emits
 // the events in lifecycle order rather than alphabetical map-key order.
 type hooksObject struct {
-	SessionStart     []hookGroup `json:"SessionStart"`
-	UserPromptSubmit []hookGroup `json:"UserPromptSubmit"`
-	PreToolUse       []hookGroup `json:"PreToolUse"`
-	PreCompact       []hookGroup `json:"PreCompact"`
-	SessionEnd       []hookGroup `json:"SessionEnd"`
+	SessionStart     []hookGroup `json:"SessionStart,omitempty"`
+	UserPromptSubmit []hookGroup `json:"UserPromptSubmit,omitempty"`
+	PreToolUse       []hookGroup `json:"PreToolUse,omitempty"`
+	PreCompact       []hookGroup `json:"PreCompact,omitempty"`
+	SessionEnd       []hookGroup `json:"SessionEnd,omitempty"`
 }
 
 type settingsStanza struct {

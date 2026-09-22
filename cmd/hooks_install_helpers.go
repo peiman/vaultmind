@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/peiman/vaultmind/internal/envelope"
@@ -25,7 +26,20 @@ type hooksInstallParams struct {
 	merge      bool
 	local      bool
 	dryRun     bool
+	agent      string
 }
+
+// Agents `hooks install` can wire.
+const (
+	hooksAgentClaude = "claude"
+	hooksAgentCodex  = "codex"
+
+	codexTrustNotice = "\n⚠ Codex runs these hooks ONLY after two one-time approvals, and skips them silently until then:\n" +
+		"  1. trust this project when Codex asks, and\n" +
+		"  2. run /hooks inside Codex and trust the VaultMind hooks.\n" +
+		"  Until both are done, Codex starts with no memory and does not say so.\n" +
+		"  Not wired for Codex yet: episode capture, read-tracking, the pre-compaction prompt.\n"
+)
 
 // hooksInstallPayload is the JSON shape for an install run. InstallResult is
 // embedded so its fields stay at the top level (backward-compatible with the
@@ -79,6 +93,20 @@ func runHooksInstallCore(cmd *cobra.Command, p hooksInstallParams) error {
 	profile, perr := hooks.ParseProfile(strings.TrimSpace(p.profile))
 	if perr != nil {
 		return perr
+	}
+
+	agent := strings.TrimSpace(p.agent)
+	if agent == "" {
+		agent = hooksAgentClaude
+	}
+	if agent != hooksAgentClaude && agent != hooksAgentCodex {
+		return fmt.Errorf("--agent %q: must be %q or %q", agent, hooksAgentClaude, hooksAgentCodex)
+	}
+	if agent == hooksAgentCodex {
+		if p.local {
+			return fmt.Errorf("--local is a Claude Code settings option; Codex reads .codex/hooks.json")
+		}
+		return runHooksInstallCodex(cmd, p, onlyList, profile)
 	}
 
 	prov, retErr := hooks.Provision(hooks.InstallConfig{
@@ -176,4 +204,65 @@ func writeMergeOutcome(w io.Writer, mergeRes *hooks.MergeFileResult) {
 	default:
 		_, _ = fmt.Fprintf(w, "\n· %s already wired — no changes.\n", mergeRes.SettingsPath)
 	}
+}
+
+// runHooksInstallCodex installs the same scripts, then wires Codex instead of
+// Claude Code. Scripts first and only then the wiring, with a conflict gating
+// the merge — the same order Provision enforces for Claude Code.
+func runHooksInstallCodex(cmd *cobra.Command, p hooksInstallParams, only []string, profile hooks.Profile) error {
+	projectDir, err := filepath.Abs(p.projectDir)
+	if err != nil {
+		return fmt.Errorf("resolving project dir: %w", err)
+	}
+	vault := strings.TrimSpace(p.vault)
+	prov, retErr := hooks.Provision(hooks.InstallConfig{
+		ProjectDir: projectDir,
+		Force:      p.force,
+		Only:       only,
+		VaultPath:  vault,
+		Profile:    profile,
+	}, false, false, false)
+	res := prov.Install
+
+	var mergeRes *hooks.MergeFileResult
+	if retErr == nil && res != nil {
+		if p.merge {
+			mergeRes, retErr = hooks.MergeIntoCodexHooks(projectDir, vault, profile, p.dryRun)
+		} else if stanza, serr := hooks.CodexHooksStanza(projectDir, vault, profile); serr == nil {
+			res.SettingsStanza = stanza
+		}
+	}
+
+	w := cmd.OutOrStdout()
+	if p.jsonOut {
+		payload := &hooksInstallPayload{InstallResult: res, Merge: mergeRes}
+		env := envelope.OK("hooks install", payload)
+		if retErr != nil {
+			env.Status = "error"
+			env.Errors = append(env.Errors, envelope.Issue{Code: hooksInstallErrorCode(res), Message: retErr.Error()})
+		}
+		_ = json.NewEncoder(w).Encode(env)
+		return retErr
+	}
+	writeHooksInstallCodexHuman(w, res, mergeRes)
+	return retErr
+}
+
+// writeHooksInstallCodexHuman is the Codex variant of the human summary: the
+// wiring target is .codex/hooks.json, and the silent-skip trust rule is said
+// every time, because it is the one failure the operator cannot see.
+func writeHooksInstallCodexHuman(w io.Writer, res *hooks.InstallResult, mergeRes *hooks.MergeFileResult) {
+	if res == nil {
+		return
+	}
+	stanza := res.SettingsStanza
+	res.SettingsStanza = "" // the Claude Code paste instructions do not apply
+	writeHooksInstallHuman(w, res, mergeRes)
+	if mergeRes == nil && stanza != "" {
+		_, _ = fmt.Fprintf(w, "\nNext: wire these into .codex/hooks.json.\n")
+		_, _ = fmt.Fprintf(w, "  vaultmind hooks install --agent codex --merge --dry-run   preview, write nothing\n")
+		_, _ = fmt.Fprintf(w, "  vaultmind hooks install --agent codex --merge             apply it (additive)\n")
+		_, _ = fmt.Fprintf(w, "\nOr paste this yourself:\n\n%s\n", stanza)
+	}
+	_, _ = io.WriteString(w, codexTrustNotice)
 }

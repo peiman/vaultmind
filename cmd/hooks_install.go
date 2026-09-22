@@ -28,5 +28,6 @@ func runHooksInstall(cmd *cobra.Command, args []string) error {
 		merge:      getConfigValueWithFlags[bool](cmd, "merge", config.KeyAppHooksinstallMerge),
 		local:      getConfigValueWithFlags[bool](cmd, "local", config.KeyAppHooksinstallLocal),
 		dryRun:     getConfigValueWithFlags[bool](cmd, "dry-run", config.KeyAppHooksinstallDryrun),
+		agent:      getConfigValueWithFlags[string](cmd, "agent", config.KeyAppHooksinstallAgent),
 	})
 }

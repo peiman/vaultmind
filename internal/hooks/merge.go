@@ -25,6 +25,13 @@ import (
 // JSON returns an error and nil output, so a caller never writes a corrupted
 // file over a user's settings.
 func MergeStanza(existing []byte, vaultPath string) ([]byte, bool, error) {
+	return mergeHooks(existing, canonicalHooks(vaultPath))
+}
+
+// mergeHooks is the merge engine MergeStanza and the Codex merge share: same
+// additive, dedup-by-script, never-clobber rules for whichever hook set the
+// agent runs.
+func mergeHooks(existing []byte, hooksToAdd []canonicalHook) ([]byte, bool, error) {
 	top, err := parseOrderedObject(existing)
 	if err != nil {
 		return nil, false, fmt.Errorf("parsing settings: %w", err)
@@ -39,7 +46,7 @@ func MergeStanza(existing []byte, vaultPath string) ([]byte, bool, error) {
 	}
 
 	changed := false
-	for _, ch := range canonicalHooks(vaultPath) {
+	for _, ch := range hooksToAdd {
 		var arr []json.RawMessage
 		if raw, ok := hooksObj.get(ch.Event); ok {
 			if err := json.Unmarshal(raw, &arr); err != nil {
