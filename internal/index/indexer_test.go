@@ -16,7 +16,7 @@ import (
 // Pre-2026-05-01 this was the live `vaultmind-vault` (~400 notes, ~40s
 // rebuild). Tests that depend on shape — specific note IDs, FTS queries,
 // alias/tag wiring — work identically against the fixture; the live vault
-// is exercised by `task check:bootstrap` and `task check:retrieval`.
+// is exercised by `task check:bootstrap`.
 const testVaultPath = "../../test/fixtures/testvault"
 
 func TestRebuild_IndexesAllNotes(t *testing.T) {

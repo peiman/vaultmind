@@ -101,10 +101,6 @@ WHEN YOU WANT TO ...
                                                 (auto-injected at session start)
 
   Verify vault integrity
-    task check:citations                       CrossRef + arxiv title-match gate
-                                                (run after vault edits)
-    task check:retrieval                       Hit@5 / MRR floors per vault
-                                                (run after content waves or ranking changes)
     %[1]s doctor [--summary]               vault health overview
 
 ──────────────────────────────────────────────────────────────────────────────
