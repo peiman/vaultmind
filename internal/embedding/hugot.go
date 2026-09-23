@@ -6,6 +6,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/knights-analytics/hugot"
+	"github.com/knights-analytics/hugot/backends"
 	"github.com/knights-analytics/hugot/pipelines"
 )
 
@@ -168,13 +169,21 @@ func (e *HugotEmbedder) Embed(ctx context.Context, text string) ([]float32, erro
 
 // EmbedBatch produces embedding vectors for multiple texts.
 // Texts exceeding the model's token limit are truncated automatically.
+//
+// The limit is enforced on the ACTUAL token count, not only the char estimate.
+// #69 relaxed that estimate to 4 chars/token believing an exact guard stood
+// behind it — true for BGE-M3, false here. Citation-dense notes tokenize near
+// 2 chars/token, so up to ~1100 tokens reached a 512-position model and failed
+// their whole batch (stranger test, 2026-09-23: 28 of 60 notes unembedded).
+// fitTextsWithinTokenLimit is the same measured loop BGE-M3 uses; it costs one
+// extra tokenization and nothing when every text already fits.
 func (e *HugotEmbedder) EmbedBatch(_ context.Context, texts []string) ([][]float32, error) {
 	if e.maxTokens > 0 {
-		truncated := make([]string, len(texts))
-		for i, t := range texts {
-			truncated[i] = TruncateForEmbedding(t, e.maxTokens)
+		fitted, err := fitTextsWithinTokenLimit(texts, e.maxTokens, e.tokenCounts)
+		if err != nil {
+			return nil, fmt.Errorf("fitting texts to %d tokens: %w", e.maxTokens, err)
 		}
-		texts = truncated
+		texts = fitted
 	}
 	result, err := e.pipeline.RunPipeline(texts)
 	if err != nil {
@@ -183,6 +192,20 @@ func (e *HugotEmbedder) EmbedBatch(_ context.Context, texts []string) ([][]float
 	embeddings := make([][]float32, len(result.Embeddings))
 	copy(embeddings, result.Embeddings)
 	return embeddings, nil
+}
+
+// tokenCounts returns each text's real token count from a throwaway batch.
+func (e *HugotEmbedder) tokenCounts(texts []string) ([]int, error) {
+	batch := backends.NewBatch(len(texts))
+	defer func() { _ = batch.Destroy() }()
+	if err := e.pipeline.Preprocess(batch, texts); err != nil {
+		return nil, fmt.Errorf("preprocessing: %w", err)
+	}
+	counts := make([]int, len(texts))
+	for i := range texts {
+		counts[i] = len(batch.Input[i].TokenIDs)
+	}
+	return counts, nil
 }
 
 // Dims returns the dimensionality of the embedding vectors.

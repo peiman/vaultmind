@@ -195,12 +195,31 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 	}
 	combined := index.IndexAndEmbedResult{Index: result, Embed: embedResult}
 	if jsonOut {
-		env := envelope.OK("index", combined)
-		env.Meta.VaultPath = vaultPath
-		return json.NewEncoder(cmd.OutOrStdout()).Encode(env)
+		return json.NewEncoder(cmd.OutOrStdout()).Encode(indexEnvelope(combined, vaultPath))
 	}
 
 	return formatIndexResult(combined, effectiveModel, cmd.OutOrStdout())
+}
+
+// warnCodeEmbedErrors marks notes that failed to embed. They stay in full-text
+// search but are invisible to semantic search.
+const warnCodeEmbedErrors = "embed_errors"
+
+// embedErrorsMsgFmt is shared by the JSON warning and the human line, so the
+// two say the same thing.
+const embedErrorsMsgFmt = "%d note(s) have no embedding and are invisible to semantic search " +
+	"(full-text search still finds them) — rerun with --log-level debug for the cause"
+
+// indexEnvelope builds the --json result. A run in which notes failed to embed
+// is a WARNING: it used to report status "ok" with the count buried in
+// result.embed.errors (stranger test, 2026-09-23: 28 of 60 notes).
+func indexEnvelope(r index.IndexAndEmbedResult, vaultPath string) *envelope.Envelope {
+	env := envelope.OK("index", r)
+	env.Meta.VaultPath = vaultPath
+	if r.Embed != nil && r.Embed.Errors > 0 {
+		env.AddWarning(warnCodeEmbedErrors, fmt.Sprintf(embedErrorsMsgFmt, r.Embed.Errors), "embed.errors")
+	}
+	return env
 }
 
 func formatIndexResult(r index.IndexAndEmbedResult, model string, w io.Writer) error {
@@ -279,6 +298,11 @@ func formatIndexResult(r index.IndexAndEmbedResult, model string, w io.Writer) e
 		if _, err := fmt.Fprintf(w, "Embedded %d notes (%d skipped, %d errors) [model: %s]\n",
 			r.Embed.Embedded, r.Embed.Skipped, r.Embed.Errors, model); err != nil {
 			return err
+		}
+		if r.Embed.Errors > 0 {
+			if _, err := fmt.Fprintf(w, "⚠ "+embedErrorsMsgFmt+"\n", r.Embed.Errors); err != nil {
+				return err
+			}
 		}
 		if model == embedding.ModelMiniLM {
 			// `go install` (and onboarding scripts that wrap it) silently land on

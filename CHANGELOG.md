@@ -316,6 +316,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Long or citation-dense notes failed to embed on MiniLM builds**, and the
+  failure was reported as success. A regression from the #69 fix earlier in
+  this cycle: it relaxed the character pre-cut on the premise that an exact
+  token count stood behind it — true for BGE-M3, not for MiniLM, where that
+  estimate was the only guard. Dense notes (DOIs, arXiv ids, URLs) reached the
+  512-token model at up to ~1100 tokens and failed their whole batch: 28 of 60
+  research notes had no embedding on a `go install` build. MiniLM now counts
+  real tokens and shrinks what is over, the same loop BGE-M3 uses. And a run in
+  which notes fail to embed now says so — `index --json` reports
+  `status: warning` with an `embed_errors` warning instead of `ok`, and the
+  human output explains that those notes are invisible to semantic search.
+  **If you ran `index --embed` on a MiniLM build of an unreleased commit, run it
+  again** — notes that failed then are embedded now.
+
 - **On a new MiniLM vault, every answer was labelled "strong".** Following the
   README Quickstart on a `go install` build, `ask "what did we decide about
   retries?"` on the six-note scaffold returned template notes labelled
