@@ -224,7 +224,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Dependencies updated:** goose 3.28.0, testify 1.12.1, x/sync 0.23.0,
-  x/sys 0.48.0, x/text 0.42.0, modernc.org/sqlite 1.57.0, plus four CI action
+  x/sys 0.48.0, x/text 0.42.0, modernc.org/sqlite 1.59.0, plus four CI action
   bumps. Verified against three real vaults (491 notes: migrations, full BGE-M3
   embeddings, federated search). `hugot` is held at 0.7.0 — see Upgrading #10.
 
