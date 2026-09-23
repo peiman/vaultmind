@@ -125,11 +125,40 @@ sum_of() {
 # the restored file is compared against.
 ORIG_SUM="$(sum_of "$FILE")"
 
+# Isolate the XDG data dir for the runs unless the caller already did. This
+# repo's suites refuse to touch real user data and PANIC without it — and a
+# test that panics fails with or without the mutation.
+MC_XDG_TMP=""
+if [ -z "${XDG_DATA_HOME:-}" ]; then
+    MC_XDG_TMP="$(mktemp -d)"
+    export XDG_DATA_HOME="$MC_XDG_TMP"
+fi
+
+# BASELINE. A test that already fails proves nothing by failing under the
+# mutation. Live 2026-09-23: a doctor test panicked on a missing XDG_DATA_HOME
+# and this script reported the mutation "load-bearing" — for a line no test
+# covered. Run the test unmutated first; it has to pass before a red run means
+# anything.
+set +e
+BASELINE_OUTPUT=$(go test -count=1 -tags "$TAGS" -run "$TEST" "$PKG" 2>&1)
+BASELINE_STATUS=$?
+set -e
+if [ "$BASELINE_STATUS" -ne 0 ]; then
+    [ -n "$MC_XDG_TMP" ] && rm -rf "$MC_XDG_TMP"
+    printf '%s\n' "[mutation-check] THE TEST FAILS WITHOUT THE MUTATION — this run proves nothing." "" \
+        "  test: $TEST in $PKG" "" \
+        "  Failing under the mutation cannot show the test is load-bearing when it" \
+        "  fails on unmodified code too. Fix the test run first. Its output:" "" \
+        "$BASELINE_OUTPUT" >&2
+    exit 2
+fi
+
 cp -p "$FILE" "$BACKUP"
 COUNT_FILE="$(mktemp)"
 
 restore() {
     rm -f "$COUNT_FILE"
+    [ -n "${MC_XDG_TMP:-}" ] && rm -rf "$MC_XDG_TMP"
     if [ -e "$BACKUP" ]; then
         mv "$BACKUP" "$FILE"
     fi

@@ -50,7 +50,10 @@ EOF
 cat > "$FIXTURE/calc_test.go" <<'EOF'
 package mutfixture
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
 func TestDoubleExact(t *testing.T) {
 	if got := Double(3); got != 6 {
@@ -61,6 +64,24 @@ func TestDoubleExact(t *testing.T) {
 func TestDoublePositive(t *testing.T) {
 	if got := Double(3); got <= 0 {
 		t.Fatalf("Double(3) = %d, want positive", got)
+	}
+}
+
+// TestBrokenEnvironment fails no matter what the code does — the shape of a
+// test that panics on a missing XDG_DATA_HOME. Failing under mutation proves
+// nothing when it also fails without one.
+func TestBrokenEnvironment(t *testing.T) {
+	t.Fatal("fails regardless of the code under test")
+}
+
+// TestNeedsIsolatedXDG is load-bearing, but only runs cleanly with
+// XDG_DATA_HOME set — as this repo's own test suites require.
+func TestNeedsIsolatedXDG(t *testing.T) {
+	if os.Getenv("XDG_DATA_HOME") == "" {
+		t.Fatal("XDG_DATA_HOME must be set")
+	}
+	if got := Double(3); got != 6 {
+		t.Fatalf("Double(3) = %d, want 6", got)
 	}
 }
 EOF
@@ -135,6 +156,28 @@ expect "a mutation that does not compile proves nothing" 2 \
     --file calc.go --from "return n * 2" --to "return n *" \
     --test "TestDoubleExact" --pkg . --tags ""
 expect_says "and says so, rather than blaming the test name" "DID NOT COMPILE"
+
+# LIVE (2026-09-23): a doctor test panicked without XDG_DATA_HOME, so it failed
+# with or without the mutation — and the script called that "load-bearing".
+expect "a test that fails WITHOUT the mutation proves nothing" 2 \
+    --file calc.go --from "return n * 2" --to "return n * 3" \
+    --test "TestBrokenEnvironment" --pkg . --tags ""
+expect_says "and says the test was already failing" "FAILS WITHOUT THE MUTATION"
+
+# Without XDG_DATA_HOME this fixture fails with AND without the mutation, so
+# without isolation the baseline guard reports "proves nothing" (2); only a
+# script that isolates XDG_DATA_HOME itself gets the real verdict (0). The
+# subshell reports its own failure through its exit status — FAILURES inside it
+# is a copy.
+set +e
+( unset XDG_DATA_HOME; F0=$FAILURES
+  expect "XDG_DATA_HOME is isolated for the run when unset" 0 \
+    --file calc.go --from "return n * 2" --to "return n * 3" \
+    --test "TestNeedsIsolatedXDG" --pkg . --tags ""
+  [ "$FAILURES" -eq "$F0" ] )
+XDG_SUB=$?
+set -e
+[ "$XDG_SUB" -eq 0 ] || FAILURES=$((FAILURES + 1))
 
 expect "an absolute --file resolves its own package" 0 \
     --file "$SOURCE" --from "return n * 2" --to "return n * 3" \
