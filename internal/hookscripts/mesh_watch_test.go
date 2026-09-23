@@ -372,3 +372,46 @@ func TestMeshWatchCountdown_RejectsMalformedNumericShapes(t *testing.T) {
 			"a value bash cannot compare must never render as freshness (input %q)", bad)
 	}
 }
+
+// Member machines had no local copy of the registry (dabir, 2026-09-22), so
+// there was nothing to count down from. The countdown now FETCHES first — the
+// hub's copy, verified by `identity fetch-registry` — then reads the number, so
+// a re-sign reaches every watcher's next wake without anyone copying a file.
+func TestMeshWatchCountdown_FetchesTheRegistryBeforeCounting(t *testing.T) {
+	calls := filepath.Join(t.TempDir(), "calls")
+	out := runCountdownFn(t, countdownFn(t), "3",
+		`echo "$*" >> '`+calls+`'`+"\n"+
+			`[ "$2" = paths ] && echo "VM_MESH_REGISTRY_DAYS_LEFT='29'"`+"\nexit 0")
+	require.Contains(t, out, "29 more day(s)")
+	got, err := os.ReadFile(calls)
+	require.NoError(t, err)
+	require.Equal(t, "identity fetch-registry\nidentity paths\n", string(got),
+		"fetch first, then count: the other order prints the pre-fetch number")
+}
+
+// A fetch that fails is SAID, in the line the agent reads — a silent failure
+// here is how a machine keeps counting down from a registry the hub replaced.
+// It never blocks the wake.
+func TestMeshWatchCountdown_AFailedFetchIsSaidNotSwallowed(t *testing.T) {
+	out := runCountdownFn(t, countdownFn(t), "29",
+		`if [ "$2" = fetch-registry ]; then echo '{"level":"info"}' >&2; echo 'Error: no pinned root key: pass --root-pubkey' >&2; exit 1; fi`+"\n"+
+			`echo "VM_MESH_REGISTRY_DAYS_LEFT='29'"`)
+	require.Contains(t, out, "registry fetch failed: no pinned root key: pass --root-pubkey")
+	require.NotContains(t, out, "level", "the error line, not the log noise")
+	require.Contains(t, out, "29 more day(s)", "the countdown still runs from the local copy")
+}
+
+// With no local registry there is no countdown — and that is exactly the
+// machine where the fetch failing matters most.
+func TestMeshWatchCountdown_AFailedFetchIsSaidEvenWithNoCountdown(t *testing.T) {
+	out := runCountdownFn(t, countdownFn(t), "",
+		`if [ "$2" = fetch-registry ]; then echo 'Error: no hub address' >&2; exit 1; fi`+"\n"+
+			`echo "VM_MESH_REGISTRY_DAYS_LEFT=''"`)
+	require.Contains(t, out, "registry fetch failed: no hub address")
+}
+
+func TestMeshWatchCountdown_AFailedFetchWithNoOutputStillSaysSo(t *testing.T) {
+	out := runCountdownFn(t, countdownFn(t), "",
+		`[ "$2" = fetch-registry ] && exit 1`+"\n"+`echo "VM_MESH_REGISTRY_DAYS_LEFT=''"`)
+	require.Contains(t, out, "registry fetch failed: (no output)")
+}

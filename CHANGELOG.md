@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`vaultmind identity fetch-registry` keeps each machine's copy of the mesh's
+  signed registry current.** Until now a member machine only had the registry
+  if someone copied the file there, so on most machines `doctor` had nothing
+  to check and the watcher had nothing to count down from. The command
+  downloads what the hub serves, **verifies it against the pinned root key**
+  (and refuses to run without one), refuses an older epoch than the copy
+  already on disk, and replaces the file atomically; the same epoch writes
+  nothing. Hub address and file location come from `agents.yaml`
+  (`daemon_url`, `registry_path`), or from flags. The pin comes from
+  `--root-pubkey`, its config key `app.identityfetchregistry.root_pubkey`, or
+  the anchor `identity enroll` saved. Members who joined before enroll existed
+  have no anchor, so set the config key once.
+
+- **The mesh watcher fetches the registry at every wake**, before it prints
+  the countdown, so a re-signed registry reaches each machine on its next
+  wake, and the "N days left" figure is computed from the registry the hub is
+  serving now. If the fetch fails, the wake line says so and why (for example,
+  "no pinned root key"), and the wake still happens. Run `vaultmind hooks
+  install --force` to pick up the new watcher.
+
 ### Changed
 
 - **MiniLM now has a measured relevance baseline** (0.20 noise floor, 0.15

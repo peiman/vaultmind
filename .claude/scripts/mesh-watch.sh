@@ -75,6 +75,19 @@ registry_countdown() {
   # assignment is taken and it is never eval'd (the bootstrap's injection lesson).
   # If the re-read fails the arm-time number is still the best information, but
   # it is LABELLED as old: an unlabelled stale number is the defect itself.
+  #
+  # FETCH FIRST. Member machines had no local copy of the registry (dabir,
+  # 2026-09-22), so there was nothing to count down from, and a re-sign only
+  # reached a machine if someone copied the file. `identity fetch-registry`
+  # takes the hub's copy, verified against the pinned root and never older than
+  # the local one. A failure is SAID in the wake line — a silent one is how a
+  # machine keeps counting from a registry the hub has replaced — and never
+  # blocks the wake. Only the command's own "Error:" line is shown, not its logs.
+  if ! _vm_fetch="$(vaultmind identity fetch-registry 2>&1)"; then
+    _vm_fetch_err="$(printf '%s\n' "$_vm_fetch" | grep '^Error: ' | tail -n 1)"
+    _vm_fetch_err="${_vm_fetch_err#Error: }"
+    printf ' [registry fetch failed: %s]' "${_vm_fetch_err:-(no output)}"
+  fi
   _vm_days_note=""
   if _vm_now="$(vaultmind identity paths 2>/dev/null)"; then
     _vm_now="$(printf '%s\n' "$_vm_now" | grep '^VM_MESH_REGISTRY_DAYS_LEFT=' | head -n 1)"
