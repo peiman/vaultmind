@@ -74,12 +74,23 @@ func resolveNoiseFloor(ctx context.Context, vaultPath string, dims int) (noiseFl
 	return noiseFloor, noisefloor.ClampSigma(sigma), lowContrast
 }
 
+// warnCodeEmbedderDown marks a keyword-only answer from a vault whose
+// embeddings exist but whose model would not load.
+const warnCodeEmbedderDown = "embedder_unavailable"
+
+const embedderDownMsgFmt = "semantic search is down, results are keyword-only: the vault has embeddings " +
+	"but the embedding model failed to load (%v); run vaultmind doctor"
+
 // writeZeroHitDiagnostics emits user-facing hints when ask returns no hits.
 // Non-fatal: a database error fetching titles is logged at debug and the
 // function proceeds. The keyword-only hint always fires first when
 // applicable; the title-suggestions block follows when matches exist.
-func writeZeroHitDiagnostics(w io.Writer, db *index.DB, queryText, mode string, hitCount int) {
-	query.WriteKeywordOnlyHint(w, mode, hitCount)
+func writeZeroHitDiagnostics(w io.Writer, db *index.DB, queryText, mode string, hitCount int, embedderDown bool) {
+	// With the embedder down the vault HAS embeddings; the keyword-only hint
+	// would claim it doesn't and prescribe a re-embed that fails the same way.
+	if !embedderDown {
+		query.WriteKeywordOnlyHint(w, mode, hitCount)
+	}
 	if hitCount > 0 {
 		return
 	}
@@ -137,7 +148,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	}
 	defer vdb.Close()
 
-	ret := query.BuildAutoRetrieverFull(vdb.DB)
+	ret := query.BuildAutoRetrieverFull(cmd.Context(), vdb.DB)
 	defer ret.Cleanup()
 
 	resolver := graph.NewResolver(vdb.DB)
@@ -252,13 +263,18 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		case getConfigValueWithFlags[bool](cmd, "explain", config.KeyAppAskExplain):
 			formatter = query.FormatAskExplain
 		}
+		// Before the results, so the reader knows what kind of results these are.
+		query.WriteEmbedderDownNotice(cmd.OutOrStdout(), ret.EmbedderErr)
 		if err := formatter(result, cmd.OutOrStdout()); err != nil {
 			return err
 		}
-		writeZeroHitDiagnostics(cmd.OutOrStdout(), vdb.DB, args[0], mode, len(result.TopHits))
+		writeZeroHitDiagnostics(cmd.OutOrStdout(), vdb.DB, args[0], mode, len(result.TopHits), ret.EmbedderErr != nil)
 		return nil
 	}
 	env := envelope.OK("ask", result)
+	if ret.EmbedderErr != nil {
+		env.AddWarning(warnCodeEmbedderDown, fmt.Sprintf(embedderDownMsgFmt, ret.EmbedderErr), "")
+	}
 	env.Meta.VaultPath = vaultPath
 	env.Meta.IndexHash = vdb.GetIndexHash()
 	return json.NewEncoder(cmd.OutOrStdout()).Encode(env)

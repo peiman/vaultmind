@@ -2,14 +2,18 @@
 
 package embedding
 
-import "github.com/knights-analytics/hugot"
+import (
+	"context"
+
+	"github.com/knights-analytics/hugot"
+)
 
 // newBGEM3Session creates a pure Go hugot session for BGE-M3.
 // This file is compiled when building WITHOUT -tags ORT.
 // Warning: pure Go backend is very slow for BGE-M3 indexing (hours for 130 notes).
 // It is acceptable for query-time embedding of short texts (~1s).
-func newBGEM3Session() (*hugot.Session, error) {
-	return hugot.NewGoSession()
+func newBGEM3Session(ctx context.Context) (*hugot.Session, error) {
+	return hugot.NewGoSession(ctx)
 }
 
 // BackendName identifies which hugot backend the binary was built against.
@@ -22,3 +26,7 @@ func BackendName() string { return BackendNameGo }
 // need to special-case build tags. Pure-Go has no GPU path; "go-cpu"
 // names the slow path explicitly.
 func Acceleration() string { return "go-cpu" }
+
+// CheckRuntime is a no-op on the pure-Go build: there is no native runtime to
+// be the wrong version. See the ORT build's CheckRuntime.
+func CheckRuntime(context.Context) error { return nil }

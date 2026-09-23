@@ -47,7 +47,7 @@ func calibrateVaultNoiseFloor(ctx context.Context, vaultPath, dbPath, model stri
 	}
 	defer func() { _ = db.Close() }()
 
-	ret := query.BuildAutoRetrieverFull(db)
+	ret := query.BuildAutoRetrieverFull(ctx, db)
 	defer ret.Cleanup()
 	if ret.Embedder == nil {
 		return fmt.Errorf("no embedder available for calibration (keyword-only vault)")

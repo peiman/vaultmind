@@ -30,3 +30,21 @@ func WriteKeywordOnlyHint(w io.Writer, retrievalMode string, hitCount int) bool 
 	_, _ = fmt.Fprintln(w, "  vaultmind index --embed --vault <vault>")
 	return true
 }
+
+// WriteEmbedderDownNotice says, in the output the agent reads, that semantic
+// search is down and why — when the vault HAS embeddings but the model would
+// not load. Reports whether it wrote anything.
+//
+// It exists because the fallback used to be silent apart from a log line, and
+// the only visible text was the keyword-only hint claiming the vault had no
+// embeddings and prescribing a re-embed — which fails for the same reason
+// (live, 2026-09-23: a stale ONNX runtime next to the binary).
+func WriteEmbedderDownNotice(w io.Writer, err error) bool {
+	if err == nil {
+		return false
+	}
+	_, _ = fmt.Fprintf(w, "⚠ Semantic search is DOWN — keyword-only results. This vault has embeddings, "+
+		"but the embedding model failed to load: %v\n", err)
+	_, _ = fmt.Fprintln(w, "  Run `vaultmind doctor` to see which runtime was loaded and how to fix it.")
+	return true
+}

@@ -88,12 +88,35 @@ body
 	defer db.Close()
 
 	var buf bytes.Buffer
-	writeZeroHitDiagnostics(&buf, db, "judgment gap", "keyword", 0)
+	writeZeroHitDiagnostics(&buf, db, "judgment gap", "keyword", 0, false)
 	out := buf.String()
 	assert.Contains(t, out, "no embeddings", "keyword-only hint should name the cause")
 	// Title suggestions should also fire because hitCount is 0 and there is
 	// a nearby title.
 	assert.Contains(t, out, "Judgment Gap", "fuzzy title match should suggest a close title")
+}
+
+// With the embedder DOWN the vault has embeddings: the hint that says it has
+// none, and prescribes a re-embed that would fail the same way, must not print
+// (live, 2026-09-23). Title suggestions still help and still appear.
+func TestWriteZeroHitDiagnostics_EmbedderDownDoesNotClaimNoEmbeddings(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "gap.md"),
+		[]byte("---\nid: arc-gap\ntype: arc\ntitle: The Judgment Gap\n---\nbody\n"), 0o600))
+	cfg, err := vault.LoadConfig(dir)
+	require.NoError(t, err)
+	dbPath := filepath.Join(dir, cfg.Index.DBPath)
+	require.NoError(t, os.MkdirAll(filepath.Dir(dbPath), 0o755))
+	_, err = index.NewIndexer(dir, dbPath, cfg).Rebuild()
+	require.NoError(t, err)
+	db, err := index.Open(dbPath)
+	require.NoError(t, err)
+	defer db.Close()
+
+	var buf bytes.Buffer
+	writeZeroHitDiagnostics(&buf, db, "judgment gap", "keyword", 0, true)
+	assert.NotContains(t, buf.String(), "no embeddings")
+	assert.NotContains(t, buf.String(), "index --embed")
 }
 
 // With a non-zero hit count, writeZeroHitDiagnostics should not print title
@@ -112,7 +135,7 @@ func TestWriteZeroHitDiagnostics_SilentWhenHitsNonZero(t *testing.T) {
 	defer db.Close()
 
 	var buf bytes.Buffer
-	writeZeroHitDiagnostics(&buf, db, "q", "hybrid", 3)
+	writeZeroHitDiagnostics(&buf, db, "q", "hybrid", 3, false)
 	assert.Empty(t, buf.String(), "non-zero hits + hybrid must produce no hint")
 }
 

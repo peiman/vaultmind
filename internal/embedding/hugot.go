@@ -3,11 +3,15 @@ package embedding
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/knights-analytics/hugot"
 	"github.com/knights-analytics/hugot/backends"
 	"github.com/knights-analytics/hugot/pipelines"
+	"github.com/knights-analytics/hugot/util/fileutil"
 )
 
 // HugotEmbedder wraps the hugot library to produce embeddings using ONNX models.
@@ -113,8 +117,8 @@ type HugotConfig struct {
 
 // NewHugotEmbedder creates an embedder using hugot with the Go backend.
 // For ORT backend (faster, supports larger models), build with -tags ORT.
-func NewHugotEmbedder(cfg HugotConfig) (*HugotEmbedder, error) {
-	session, err := hugot.NewGoSession()
+func NewHugotEmbedder(ctx context.Context, cfg HugotConfig) (*HugotEmbedder, error) {
+	session, err := hugot.NewGoSession(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("creating hugot session: %w", err)
 	}
@@ -132,7 +136,18 @@ func NewHugotEmbedder(cfg HugotConfig) (*HugotEmbedder, error) {
 		if cfg.OnnxFilePath != "" {
 			opts.OnnxFilePath = cfg.OnnxFilePath
 		}
-		modelPath, err = hugot.DownloadModel(cfg.ModelName, cacheDir, opts)
+		// hugot 0.7.8 resolves files through a filesystem bound to the context;
+		// a bare context fails with "no filesystem bound to context". nil binds
+		// the OS filesystem, which is what sessions default to (#148).
+		dlCtx := fileutil.WithFileSystem(ctx, nil)
+		// hugot 0.7.8 copies each downloaded file into <cacheDir>/<model>/ but
+		// its OS filesystem adapter does not create that directory, so every
+		// FIRST download failed with "open .../config.json: no such file or
+		// directory" — the fresh-install path exactly (#148). Create it first.
+		if err := os.MkdirAll(hugotModelDir(cacheDir, cfg.ModelName), 0o750); err != nil {
+			return nil, fmt.Errorf("creating model directory: %w", err)
+		}
+		modelPath, err = hugot.DownloadModel(dlCtx, cfg.ModelName, cacheDir, opts)
 		if err != nil {
 			return nil, fmt.Errorf("downloading model %q: %w", cfg.ModelName, err)
 		}
@@ -177,7 +192,7 @@ func (e *HugotEmbedder) Embed(ctx context.Context, text string) ([]float32, erro
 // their whole batch (stranger test, 2026-09-23: 28 of 60 notes unembedded).
 // fitTextsWithinTokenLimit is the same measured loop BGE-M3 uses; it costs one
 // extra tokenization and nothing when every text already fits.
-func (e *HugotEmbedder) EmbedBatch(_ context.Context, texts []string) ([][]float32, error) {
+func (e *HugotEmbedder) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
 	if e.maxTokens > 0 {
 		fitted, err := fitTextsWithinTokenLimit(texts, e.maxTokens, e.tokenCounts)
 		if err != nil {
@@ -185,7 +200,7 @@ func (e *HugotEmbedder) EmbedBatch(_ context.Context, texts []string) ([][]float
 		}
 		texts = fitted
 	}
-	result, err := e.pipeline.RunPipeline(texts)
+	result, err := e.pipeline.RunPipeline(ctx, texts)
 	if err != nil {
 		return nil, fmt.Errorf("running embedding pipeline: %w", err)
 	}
@@ -198,7 +213,7 @@ func (e *HugotEmbedder) EmbedBatch(_ context.Context, texts []string) ([][]float
 func (e *HugotEmbedder) tokenCounts(texts []string) ([]int, error) {
 	batch := backends.NewBatch(len(texts))
 	defer func() { _ = batch.Destroy() }()
-	if err := e.pipeline.Preprocess(batch, texts); err != nil {
+	if err := preprocessFor(e.pipeline)(batch, texts); err != nil {
 		return nil, fmt.Errorf("preprocessing: %w", err)
 	}
 	counts := make([]int, len(texts))
@@ -219,4 +234,11 @@ func (e *HugotEmbedder) Close() error {
 		return e.session.Destroy()
 	}
 	return nil
+}
+
+// hugotModelDir mirrors where hugot.DownloadModel places a model: the name
+// before any ":" revision suffix, with "/" replaced by "_", under cacheDir.
+func hugotModelDir(cacheDir, modelName string) string {
+	name, _, _ := strings.Cut(modelName, ":")
+	return filepath.Join(cacheDir, strings.ReplaceAll(name, "/", "_"))
 }

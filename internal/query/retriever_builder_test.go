@@ -1,6 +1,7 @@
 package query_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -13,7 +14,7 @@ import (
 
 func TestBuildRetriever_Keyword(t *testing.T) {
 	db := buildRetrieverTestDB(t)
-	ret, cleanup, err := query.BuildRetriever("keyword", db)
+	ret, cleanup, err := query.BuildRetriever(context.Background(), "keyword", db)
 	require.NoError(t, err)
 	assert.Nil(t, cleanup, "keyword mode needs no cleanup")
 	assert.IsType(t, &query.FTSRetriever{}, ret)
@@ -21,7 +22,7 @@ func TestBuildRetriever_Keyword(t *testing.T) {
 
 func TestBuildRetriever_EmptyModeDefaultsToKeyword(t *testing.T) {
 	db := buildRetrieverTestDB(t)
-	ret, cleanup, err := query.BuildRetriever("", db)
+	ret, cleanup, err := query.BuildRetriever(context.Background(), "", db)
 	require.NoError(t, err)
 	assert.Nil(t, cleanup)
 	assert.IsType(t, &query.FTSRetriever{}, ret)
@@ -29,7 +30,7 @@ func TestBuildRetriever_EmptyModeDefaultsToKeyword(t *testing.T) {
 
 func TestBuildRetriever_UnknownMode(t *testing.T) {
 	db := buildRetrieverTestDB(t)
-	_, _, err := query.BuildRetriever("bogus", db)
+	_, _, err := query.BuildRetriever(context.Background(), "bogus", db)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown search mode")
 	assert.Contains(t, err.Error(), "bogus")
@@ -37,14 +38,14 @@ func TestBuildRetriever_UnknownMode(t *testing.T) {
 
 func TestBuildRetriever_SemanticNoEmbeddings(t *testing.T) {
 	db := buildRetrieverTestDB(t)
-	_, _, err := query.BuildRetriever("semantic", db)
+	_, _, err := query.BuildRetriever(context.Background(), "semantic", db)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no embeddings found")
 }
 
 func TestBuildRetriever_HybridNoEmbeddings(t *testing.T) {
 	db := buildRetrieverTestDB(t)
-	_, _, err := query.BuildRetriever("hybrid", db)
+	_, _, err := query.BuildRetriever(context.Background(), "hybrid", db)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no embeddings found")
 }
@@ -88,7 +89,7 @@ func TestBuildRetriever_SemanticWithEmbeddings(t *testing.T) {
 	}
 	done := make(chan buildResult, 1)
 	go func() {
-		r, c, e := query.BuildRetriever("semantic", db)
+		r, c, e := query.BuildRetriever(context.Background(), "semantic", db)
 		done <- buildResult{r, c, e}
 	}()
 

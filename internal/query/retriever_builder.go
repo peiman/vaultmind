@@ -1,6 +1,7 @@
 package query
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/peiman/vaultmind/internal/embedding"
@@ -12,7 +13,7 @@ import (
 
 // BuildRetriever creates the appropriate retriever for the given search mode.
 // Returns a cleanup function that must be deferred if non-nil.
-func BuildRetriever(mode string, db *index.DB) (retrieval.Retriever, func(), error) {
+func BuildRetriever(ctx context.Context, mode string, db *index.DB) (retrieval.Retriever, func(), error) {
 	switch mode {
 	case "keyword", "":
 		return &FTSRetriever{DB: db}, nil, nil
@@ -20,7 +21,7 @@ func BuildRetriever(mode string, db *index.DB) (retrieval.Retriever, func(), err
 		if err := requireEmbeddings(db); err != nil {
 			return nil, nil, err
 		}
-		embedder, cleanup, err := detectEmbedderForDB(db)
+		embedder, cleanup, err := detectEmbedderForDB(ctx, db)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -29,7 +30,7 @@ func BuildRetriever(mode string, db *index.DB) (retrieval.Retriever, func(), err
 		if err := requireEmbeddings(db); err != nil {
 			return nil, nil, err
 		}
-		ret, _, cleanup, err := buildHybridRetriever(db)
+		ret, _, cleanup, err := buildHybridRetriever(ctx, db)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -57,18 +58,29 @@ type AutoRetrieverResult struct {
 	Retriever retrieval.Retriever
 	Embedder  embedding.Embedder // nil when keyword-only (no embeddings)
 	Cleanup   func()             // always non-nil; safe to defer unconditionally
+	// EmbedderErr is WHY the embedder did not load when the vault has
+	// embeddings but the model could not start (e.g. an ONNX runtime too old
+	// for the binary). nil when hybrid is up, or when the vault simply has no
+	// embeddings. Callers must say it out loud: the fallback is keyword-only,
+	// and it used to be reported as "this vault has no embeddings".
+	EmbedderErr error
 }
+
+// buildHybridRetrieverFn is buildHybridRetriever, swappable in tests so the
+// "embeddings exist but the model will not load" path can be exercised
+// without a broken runtime.
+var buildHybridRetrieverFn = buildHybridRetriever
 
 // BuildAutoRetriever returns a hybrid retriever if embeddings exist, otherwise keyword.
 // Embedder initialization failure falls back to keyword silently.
-func BuildAutoRetriever(db *index.DB) (retrieval.Retriever, func(), error) {
-	r := BuildAutoRetrieverFull(db)
+func BuildAutoRetriever(ctx context.Context, db *index.DB) (retrieval.Retriever, func(), error) {
+	r := BuildAutoRetrieverFull(ctx, db)
 	return r.Retriever, r.Cleanup, nil
 }
 
 // BuildAutoRetrieverFull is like BuildAutoRetriever but also exposes the embedder
 // for computing raw cosine similarities (spreading activation).
-func BuildAutoRetrieverFull(db *index.DB) AutoRetrieverResult {
+func BuildAutoRetrieverFull(ctx context.Context, db *index.DB) AutoRetrieverResult {
 	noop := func() {}
 
 	has, err := index.HasEmbeddings(db)
@@ -80,10 +92,10 @@ func BuildAutoRetrieverFull(db *index.DB) AutoRetrieverResult {
 		return AutoRetrieverResult{Retriever: &FTSRetriever{DB: db}, Cleanup: noop}
 	}
 
-	ret, embedder, cleanup, buildErr := buildHybridRetriever(db)
+	ret, embedder, cleanup, buildErr := buildHybridRetrieverFn(ctx, db)
 	if buildErr != nil {
 		log.Warn().Err(buildErr).Msg("failed to initialize embedder; falling back to keyword search")
-		return AutoRetrieverResult{Retriever: &FTSRetriever{DB: db}, Cleanup: noop}
+		return AutoRetrieverResult{Retriever: &FTSRetriever{DB: db}, Cleanup: noop, EmbedderErr: buildErr}
 	}
 	return AutoRetrieverResult{Retriever: ret, Embedder: embedder, Cleanup: cleanup}
 }
@@ -91,8 +103,8 @@ func BuildAutoRetrieverFull(db *index.DB) AutoRetrieverResult {
 // buildHybridRetriever constructs the hybrid retriever with all available
 // sub-retrievers and returns the embedder separately. Shared by
 // BuildRetriever("hybrid") and BuildAutoRetrieverFull to avoid duplication.
-func buildHybridRetriever(db *index.DB) (retrieval.Retriever, embedding.Embedder, func(), error) {
-	embedder, embedderCleanup, err := detectEmbedderForDB(db)
+func buildHybridRetriever(ctx context.Context, db *index.DB) (retrieval.Retriever, embedding.Embedder, func(), error) {
+	embedder, embedderCleanup, err := detectEmbedderForDB(ctx, db)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -149,8 +161,8 @@ func buildHybridRetriever(db *index.DB) (retrieval.Retriever, embedding.Embedder
 // update the threshold constants in internal/query/format.go, or the
 // strong/moderate/weak labels silently miscalibrate. See the priority-
 // order doc for the full step-4 ↔ step-5 coupling.
-func BuildAutoRetrieverWithActivation(db *index.DB, expDB *experiment.DB) AutoRetrieverResult {
-	res := BuildAutoRetrieverFull(db)
+func BuildAutoRetrieverWithActivation(ctx context.Context, db *index.DB, expDB *experiment.DB) AutoRetrieverResult {
+	res := BuildAutoRetrieverFull(ctx, db)
 	if expDB == nil {
 		return res
 	}
@@ -193,8 +205,8 @@ func BuildAutoRetrieverWithActivation(db *index.DB, expDB *experiment.DB) AutoRe
 // the α/β probe across {0.5/0.5, 0.7/0.3, 0.9/0.1, 0.95/0.05} — see
 // the activation-rerank design decision for the data and rationale.
 // Current defaults: α=0.9 / β=0.1.
-func BuildAutoRetrieverWithRerank(db *index.DB, expDB *experiment.DB, alpha, beta float64) AutoRetrieverResult {
-	res := BuildAutoRetrieverFull(db)
+func BuildAutoRetrieverWithRerank(ctx context.Context, db *index.DB, expDB *experiment.DB, alpha, beta float64) AutoRetrieverResult {
+	res := BuildAutoRetrieverFull(ctx, db)
 	if expDB == nil {
 		return res
 	}
@@ -216,8 +228,8 @@ func BuildAutoRetrieverWithRerank(db *index.DB, expDB *experiment.DB, alpha, bet
 	}
 }
 
-func newDefaultEmbedder() (*embedding.HugotEmbedder, error) {
-	embedder, err := embedding.NewHugotEmbedder(embedding.DefaultHugotConfig())
+func newDefaultEmbedder(ctx context.Context) (*embedding.HugotEmbedder, error) {
+	embedder, err := embedding.NewHugotEmbedder(ctx, embedding.DefaultHugotConfig())
 	if err != nil {
 		return nil, fmt.Errorf("creating embedder: %w", err)
 	}
@@ -233,7 +245,7 @@ func newDefaultEmbedder() (*embedding.HugotEmbedder, error) {
 // dense (dim mismatch, 384 vs 1024) until they're re-embedded. Loading
 // MiniLM on a mostly-BGE-M3 vault would lose sparse + colbert entirely AND
 // fail to match the BGE-M3 majority's dense rows. See vaultmind#32.
-func detectEmbedderForDB(db *index.DB) (embedding.Embedder, func(), error) {
+func detectEmbedderForDB(ctx context.Context, db *index.DB) (embedding.Embedder, func(), error) {
 	counts, err := index.DetectEmbeddingDimsCounts(db)
 	if err != nil {
 		// silent-failure-ok: dims detection falls back to MiniLM default,
@@ -241,7 +253,7 @@ func detectEmbedderForDB(db *index.DB) (embedding.Embedder, func(), error) {
 		// at all. The embedder init boundary fails loudly if the model
 		// can't load.
 		log.Debug().Err(err).Msg("failed to count embedding dims, falling back to MiniLM")
-		return newMiniLMEmbedder()
+		return newMiniLMEmbedder(ctx)
 	}
 	hasBGEM3 := false
 	hasMiniLM := false
@@ -257,20 +269,20 @@ func detectEmbedderForDB(db *index.DB) (embedding.Embedder, func(), error) {
 		log.Warn().Msg("vault is in mixed-model state (MiniLM + BGE-M3); loading BGE-M3 — run 'vaultmind index --full --embed --model bge-m3' to converge")
 	}
 	if hasBGEM3 {
-		bgem3, bgem3Err := embedding.NewBGEM3Embedder(embedding.BGEM3Config())
+		bgem3, bgem3Err := embedding.NewBGEM3Embedder(ctx, embedding.BGEM3Config())
 		if bgem3Err != nil {
 			return nil, nil, fmt.Errorf("creating BGE-M3 embedder: %w", bgem3Err)
 		}
 		return bgem3, func() { _ = bgem3.Close() }, nil
 	}
-	return newMiniLMEmbedder()
+	return newMiniLMEmbedder(ctx)
 }
 
 // newMiniLMEmbedder constructs the default MiniLM embedder with a uniform
 // cleanup signature. Extracted to keep the mixed-model branching in
 // detectEmbedderForDB readable.
-func newMiniLMEmbedder() (embedding.Embedder, func(), error) {
-	embedder, err := newDefaultEmbedder()
+func newMiniLMEmbedder(ctx context.Context) (embedding.Embedder, func(), error) {
+	embedder, err := newDefaultEmbedder(ctx)
 	if err != nil {
 		return nil, nil, err
 	}

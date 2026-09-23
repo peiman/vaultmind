@@ -116,6 +116,10 @@ func (m DoctorMemoryUse) ConsumedRate() float64 {
 // this silently compresses ranking: a partially-covered note at rank 1 in 2
 // lanes loses to a ubiquitous rank-3 note across 4 lanes. Dense-only vaults
 // (MiniLM) are never flagged — sparse/colbert don't apply to that model.
+// EmbeddingModelMixed is DoctorEmbeddings.Model for an index holding more than
+// one embedding model.
+const EmbeddingModelMixed = "mixed"
+
 type DoctorEmbeddings struct {
 	TotalNotes           int    `json:"total_notes"`
 	DenseCount           int    `json:"dense_count"`
@@ -130,6 +134,10 @@ type DoctorEmbeddings struct {
 	// this explicitly prevents the silent-failure shape where doctor reports
 	// "bge-m3" while half the rows are still MiniLM. See vaultmind#22.
 	MixedModel []DoctorModelBreakdown `json:"mixed_model,omitempty"`
+	// RuntimeError is set when the embeddings exist but the runtime that
+	// would load their model fails to start — semantic search is down while
+	// every count above looks healthy. Populated by the cmd layer.
+	RuntimeError string `json:"runtime_error,omitempty"`
 }
 
 // DoctorModelBreakdown is one entry in DoctorEmbeddings.MixedModel.
@@ -534,7 +542,7 @@ func collectEmbeddingStatus(db *index.DB, total int) (*DoctorEmbeddings, error) 
 		case 1:
 			emb.Model = modelNameForDims(counts[0].Dims)
 		default:
-			emb.Model = "mixed"
+			emb.Model = EmbeddingModelMixed
 			emb.MixedModel = make([]DoctorModelBreakdown, 0, len(counts))
 			for _, c := range counts {
 				emb.MixedModel = append(emb.MixedModel, DoctorModelBreakdown{

@@ -2,6 +2,7 @@ package query_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -469,7 +470,7 @@ func TestRunSearch_FindsNoteByBodyToken(t *testing.T) {
 // usable without a running model).
 func TestBuildAutoRetriever_FallsBackToKeywordWithoutEmbeddings(t *testing.T) {
 	db, _ := smallIndexedVault(t)
-	r := query.BuildAutoRetrieverFull(db)
+	r := query.BuildAutoRetrieverFull(context.Background(), db)
 	defer r.Cleanup()
 	assert.NotNil(t, r.Retriever)
 	assert.Nil(t, r.Embedder, "no embeddings in the small test vault → Embedder must be nil")
@@ -479,7 +480,7 @@ func TestBuildAutoRetriever_FallsBackToKeywordWithoutEmbeddings(t *testing.T) {
 // a non-nil retriever + safe-to-call cleanup.
 func TestBuildAutoRetriever_ReturnsNonNilRetrieverAndSafeCleanup(t *testing.T) {
 	db, _ := smallIndexedVault(t)
-	ret, cleanup, err := query.BuildAutoRetriever(db)
+	ret, cleanup, err := query.BuildAutoRetriever(context.Background(), db)
 	require.NoError(t, err)
 	assert.NotNil(t, ret)
 	require.NotNil(t, cleanup, "cleanup must always be non-nil (documented contract)")
@@ -489,7 +490,7 @@ func TestBuildAutoRetriever_ReturnsNonNilRetrieverAndSafeCleanup(t *testing.T) {
 // BuildRetriever: keyword mode is always valid (no embeddings needed).
 func TestBuildRetriever_KeywordModeDoesNotRequireEmbeddings(t *testing.T) {
 	db, _ := smallIndexedVault(t)
-	ret, cleanup, err := query.BuildRetriever("keyword", db)
+	ret, cleanup, err := query.BuildRetriever(context.Background(), "keyword", db)
 	require.NoError(t, err)
 	assert.NotNil(t, ret)
 	if cleanup != nil {
@@ -500,7 +501,7 @@ func TestBuildRetriever_KeywordModeDoesNotRequireEmbeddings(t *testing.T) {
 // BuildRetriever: empty string is treated as "keyword" (default path).
 func TestBuildRetriever_EmptyModeTreatedAsKeyword(t *testing.T) {
 	db, _ := smallIndexedVault(t)
-	ret, cleanup, err := query.BuildRetriever("", db)
+	ret, cleanup, err := query.BuildRetriever(context.Background(), "", db)
 	require.NoError(t, err)
 	assert.NotNil(t, ret)
 	if cleanup != nil {
@@ -512,7 +513,7 @@ func TestBuildRetriever_EmptyModeTreatedAsKeyword(t *testing.T) {
 // a clear message pointing at the remedy command.
 func TestBuildRetriever_SemanticWithoutEmbeddingsErrors(t *testing.T) {
 	db, _ := smallIndexedVault(t)
-	_, _, err := query.BuildRetriever("semantic", db)
+	_, _, err := query.BuildRetriever(context.Background(), "semantic", db)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no embeddings")
 }
@@ -521,7 +522,7 @@ func TestBuildRetriever_SemanticWithoutEmbeddingsErrors(t *testing.T) {
 // same way as semantic (both require dense vectors).
 func TestBuildRetriever_HybridWithoutEmbeddingsErrors(t *testing.T) {
 	db, _ := smallIndexedVault(t)
-	_, _, err := query.BuildRetriever("hybrid", db)
+	_, _, err := query.BuildRetriever(context.Background(), "hybrid", db)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no embeddings")
 }
@@ -530,7 +531,7 @@ func TestBuildRetriever_HybridWithoutEmbeddingsErrors(t *testing.T) {
 // valid options — a silent fallback would hide typos.
 func TestBuildRetriever_UnknownModeErrors(t *testing.T) {
 	db, _ := smallIndexedVault(t)
-	_, _, err := query.BuildRetriever("fuzzy", db)
+	_, _, err := query.BuildRetriever(context.Background(), "fuzzy", db)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "fuzzy")
 	assert.Contains(t, err.Error(), "keyword")

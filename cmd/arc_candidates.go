@@ -76,7 +76,7 @@ func runArcCandidates(cmd *cobra.Command, _ []string) error {
 	if strings.TrimSpace(arcsVault) == "" {
 		arcsVault = vaultPath
 	}
-	if finder, closeFn, ferr := openArcFinder(arcsVault); ferr == nil {
+	if finder, closeFn, ferr := openArcFinder(cmd.Context(), arcsVault); ferr == nil {
 		defer closeFn()
 		report = distill.AnnotateNearestArcs(cmd.Context(), report, finder, query.DefaultNearestArcs)
 	} else {
@@ -126,7 +126,7 @@ func (a arcFinderAdapter) NearestArcs(ctx context.Context, text string, limit in
 
 // openArcFinder opens the arcs vault and builds a finder over it, returning the
 // finder plus the closer for the resources it borrows.
-func openArcFinder(arcsVault string) (distill.ArcFinder, func(), error) {
+func openArcFinder(ctx context.Context, arcsVault string) (distill.ArcFinder, func(), error) {
 	// The GUARDED opener, not the raw one. cmdutil.OpenVaultDB CREATES
 	// .vaultmind/index.db under whatever path it is handed — the self-propagating
 	// mistake v0.3.0 fixed in the read path. Using it here reintroduced it: a
@@ -147,7 +147,7 @@ func openArcFinder(arcsVault string) (distill.ArcFinder, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	ret := query.BuildAutoRetrieverFull(vdb.DB)
+	ret := query.BuildAutoRetrieverFull(ctx, vdb.DB)
 	finder, err := query.NewArcFinder(vdb.DB, ret.Embedder)
 	if err != nil {
 		ret.Cleanup()

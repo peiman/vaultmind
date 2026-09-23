@@ -194,12 +194,12 @@ func TestBuildAutoRetrieverWithActivation_AppendsLaneWhenExpDBProvided(t *testin
 	idxDB, expDB, _ := buildActivationTestStack(t)
 
 	// nil expDB: behaves identically to BuildAutoRetrieverFull.
-	resWithoutExp := query.BuildAutoRetrieverWithActivation(idxDB, nil)
+	resWithoutExp := query.BuildAutoRetrieverWithActivation(context.Background(), idxDB, nil)
 	require.NotNil(t, resWithoutExp.Retriever)
 	defer resWithoutExp.Cleanup()
 
 	// non-nil expDB: activation lane appended (when retriever is hybrid).
-	resWithExp := query.BuildAutoRetrieverWithActivation(idxDB, expDB)
+	resWithExp := query.BuildAutoRetrieverWithActivation(context.Background(), idxDB, expDB)
 	require.NotNil(t, resWithExp.Retriever)
 	defer resWithExp.Cleanup()
 

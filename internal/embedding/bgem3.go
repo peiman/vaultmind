@@ -34,7 +34,7 @@ type BGEM3Embedder struct {
 }
 
 // NewBGEM3Embedder creates a BGE-M3 embedder with all three heads.
-func NewBGEM3Embedder(cfg HugotConfig) (*BGEM3Embedder, error) {
+func NewBGEM3Embedder(ctx context.Context, cfg HugotConfig) (*BGEM3Embedder, error) {
 	// Download all model files (ONNX + weights + tokenizer)
 	modelDir, err := DownloadBGEM3(cfg.CacheDir)
 	if err != nil {
@@ -42,7 +42,7 @@ func NewBGEM3Embedder(cfg HugotConfig) (*BGEM3Embedder, error) {
 	}
 
 	// Create hugot session (ORT if built with -tags ORT, pure Go otherwise)
-	session, err := newBGEM3Session()
+	session, err := newBGEM3Session(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("creating hugot session: %w", err)
 	}
@@ -98,7 +98,7 @@ func NewBGEM3Embedder(cfg HugotConfig) (*BGEM3Embedder, error) {
 		colbertB:   colbertB,
 		dims:       cfg.Dims,
 		maxTokens:  cfg.MaxTokens,
-		preprocess: pipeline.Preprocess,
+		preprocess: preprocessFor(pipeline),
 	}, nil
 }
 
@@ -149,7 +149,7 @@ func (e *BGEM3Embedder) EmbedFull(ctx context.Context, text string) (*BGEM3Outpu
 
 // EmbedFullBatch produces all three embedding types for multiple texts.
 // Bypasses hugot's Postprocess to access raw per-token hidden states.
-func (e *BGEM3Embedder) EmbedFullBatch(_ context.Context, texts []string) ([]*BGEM3Output, error) {
+func (e *BGEM3Embedder) EmbedFullBatch(ctx context.Context, texts []string) ([]*BGEM3Output, error) {
 	// Tokenize into a batch, GUARANTEEING no input exceeds the model's token limit
 	// before the (hang-prone) ONNX forward pass — see preprocessWithinTokenLimit
 	// (#39). Skip Postprocess (mean-pool) so the heads see raw per-token states.
@@ -159,7 +159,7 @@ func (e *BGEM3Embedder) EmbedFullBatch(_ context.Context, texts []string) ([]*BG
 	}
 	defer func() { _ = batch.Destroy() }()
 
-	if err := e.pipeline.Forward(batch); err != nil {
+	if err := forwardOn(ctx, e.pipeline, batch); err != nil {
 		return nil, fmt.Errorf("forward pass: %w", err)
 	}
 

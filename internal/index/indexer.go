@@ -166,8 +166,10 @@ func (idx *Indexer) RunEmbed(ctx context.Context, dbPath, model string, full boo
 		var used string
 		var lerr error
 		embedder, used, lerr = loadEmbedder(model, embedding.BackendName(),
-			func() (embedding.Embedder, error) { return embedding.NewBGEM3Embedder(embedding.BGEM3Config()) },
-			func() (embedding.Embedder, error) { return embedding.NewHugotEmbedder(embedding.DefaultHugotConfig()) },
+			func() (embedding.Embedder, error) { return embedding.NewBGEM3Embedder(ctx, embedding.BGEM3Config()) },
+			func() (embedding.Embedder, error) {
+				return embedding.NewHugotEmbedder(ctx, embedding.DefaultHugotConfig())
+			},
 		)
 		if lerr != nil {
 			return nil, fmt.Errorf("creating embedder: %w", lerr)

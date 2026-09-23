@@ -22,7 +22,7 @@ func TestBGEM3Embedder_EmbedFull(t *testing.T) {
 
 	t.Log("Creating BGE-M3 embedder...")
 	start := time.Now()
-	embedder, err := embedding.NewBGEM3Embedder(cfg)
+	embedder, err := embedding.NewBGEM3Embedder(context.Background(), cfg)
 	require.NoError(t, err, "should create BGE-M3 embedder")
 	defer func() { _ = embedder.Close() }()
 	t.Logf("Embedder created in %v", time.Since(start))
@@ -63,7 +63,7 @@ func TestBGEM3Embedder_Embed(t *testing.T) {
 	cfg.CacheDir = "/tmp/vaultmind-bgem3-test"
 	require.NoError(t, os.MkdirAll(cfg.CacheDir, 0o750))
 
-	embedder, err := embedding.NewBGEM3Embedder(cfg)
+	embedder, err := embedding.NewBGEM3Embedder(context.Background(), cfg)
 	require.NoError(t, err)
 	defer func() { _ = embedder.Close() }()
 

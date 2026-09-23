@@ -11,7 +11,7 @@
 # would not load on a clean machine.
 #
 # Usage:
-#   bundle-ort-release.sh --goos darwin --goarch arm64 --ort-version 1.25.0 \
+#   bundle-ort-release.sh --goos darwin --goarch arm64 --ort-version 1.29.1 \
 #       --binary ./vaultmind --version v0.1.1 --out dist
 #
 # Prints the produced archive path on stdout. All progress goes to stderr.

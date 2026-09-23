@@ -1,6 +1,7 @@
 package embedding
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
@@ -153,7 +154,7 @@ func TestPreprocessWithinTokenLimit_CapsDenseInput(t *testing.T) {
 	if os.Getenv("VAULTMIND_TEST_BGEM3") == "" {
 		t.Skip("set VAULTMIND_TEST_BGEM3=1 (loads the BGE-M3 model + tokenizer)")
 	}
-	e, err := NewBGEM3Embedder(BGEM3Config())
+	e, err := NewBGEM3Embedder(context.Background(), BGEM3Config())
 	require.NoError(t, err)
 	defer func() { _ = e.Close() }()
 
@@ -166,7 +167,7 @@ func TestPreprocessWithinTokenLimit_CapsDenseInput(t *testing.T) {
 	// isn't exercising the token-accurate loop (the actual fix).
 	pre := TruncateForEmbedding(dense, e.maxTokens)
 	rawBatch := backends.NewBatch(1)
-	require.NoError(t, e.pipeline.Preprocess(rawBatch, []string{pre}))
+	require.NoError(t, preprocessFor(e.pipeline)(rawBatch, []string{pre}))
 	rawN := len(rawBatch.Input[0].TokenIDs)
 	_ = rawBatch.Destroy()
 	require.Greaterf(t, rawN, e.maxTokens,

@@ -1,6 +1,7 @@
 package query
 
 import (
+	"context"
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/embedding"
@@ -48,7 +49,7 @@ func TestDetectEmbedderForDB_MixedStatePicksBGEM3(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	emb, cleanup, err := detectEmbedderForDB(db)
+	emb, cleanup, err := detectEmbedderForDB(context.Background(), db)
 	if err != nil {
 		// Embedder init can fail in environments without the model files
 		// (no ORT runtime, no model on disk). The branch under test happens

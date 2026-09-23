@@ -3,6 +3,7 @@
 package embedding
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -47,7 +48,7 @@ import (
 // what error message you get NOW, compare to the catalog above. If it
 // matches, the gap is still open. If it's different or works, the
 // upstream fix landed and you can flip the default.
-func newBGEM3Session() (*hugot.Session, error) {
+func newBGEM3Session(ctx context.Context) (*hugot.Session, error) {
 	var opts []options.WithOption
 	if libDir := detectORTLibDir(); libDir != "" {
 		opts = append(opts, options.WithOnnxLibraryPath(libDir))
@@ -62,7 +63,7 @@ func newBGEM3Session() (*hugot.Session, error) {
 			"ModelFormat":    "MLProgram",
 		}))
 	}
-	return hugot.NewORTSession(opts...)
+	return hugot.NewORTSession(ctx, opts...)
 }
 
 // shouldEnableCoreML reports whether the CoreML execution provider should
@@ -159,4 +160,19 @@ func resolveORTLibDir(ortLibDirEnv string, exeDirs []string, libName string, sys
 		}
 	}
 	return ""
+}
+
+// CheckRuntime starts the ONNX runtime this binary would use — without loading
+// a model — and shuts it down again. It is how doctor tells "embeddings exist"
+// from "semantic search works": a runtime too old for the binary (a stale
+// libonnxruntime next to it, found live 2026-09-23) fails here, while every
+// stored-embedding count still looks healthy.
+//
+// Call it only where no embedder is open: hugot allows one session per process.
+func CheckRuntime(ctx context.Context) error {
+	s, err := newBGEM3Session(ctx)
+	if err != nil {
+		return err
+	}
+	return s.Destroy()
 }

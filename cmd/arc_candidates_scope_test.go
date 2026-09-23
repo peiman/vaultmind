@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -67,7 +68,7 @@ func TestArcCandidates_JSONCarriesDeskEntries(t *testing.T) {
 // vault that can't be opened for arc comparison still yields the proposals,
 // with the reason recorded.
 func TestOpenArcFinder_MissingVaultErrors(t *testing.T) {
-	_, _, err := openArcFinder("/does/not/exist")
+	_, _, err := openArcFinder(context.Background(), "/does/not/exist")
 	require.Error(t, err)
 }
 

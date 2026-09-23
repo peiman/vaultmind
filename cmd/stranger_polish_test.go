@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -24,13 +23,9 @@ func TestVersionLine_OmitsUnknownParts(t *testing.T) {
 // init told a new user how to wire Claude Code and nothing about Codex.
 func TestInit_NextStepsMentionCodex(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "v")
-	var buf bytes.Buffer
-	RootCmd.SetOut(&buf)
-	RootCmd.SetErr(&buf)
-	RootCmd.SetArgs([]string{"init", dir})
-	t.Cleanup(func() { RootCmd.SetArgs([]string{}) })
-	require.NoError(t, RootCmd.Execute())
-	_, err := os.Stat(dir)
+	buf, _, err := runRootCmd(t, "init", dir)
+	require.NoError(t, err)
+	_, err = os.Stat(dir)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "--agent codex --merge")
 }

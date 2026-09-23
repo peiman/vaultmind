@@ -156,7 +156,13 @@ func Install(cfg InstallConfig) (*InstallResult, error) {
 		// 0o600 perms (companion project 2026-05-07 dogfood CRITICAL).
 		// gosec G306 is about data-file permissions; scripts are a
 		// separate category. The exec bit is intentional + load-bearing.
-		if err := os.WriteFile(dst, canonical, 0o700); err != nil { //nolint:gosec // G306: scripts with shebangs need exec bit; load-bearing per companion project 2026-05-07 CRITICAL
+		//
+		// Written by RENAME, never in place: bash reads a running script from
+		// its file as it goes, so rewriting mesh-watch.sh under an armed watcher
+		// sent it into the new bytes mid-line ("syntax error near unexpected
+		// token `done'", live 2026-09-23). A rename leaves the running process
+		// its old file and gives the next start the new one.
+		if err := atomicWriteFile(dst, canonical, 0o700); err != nil {
 			return res, fmt.Errorf("writing %s: %w", dst, err)
 		}
 		res.Written = append(res.Written, name)

@@ -30,7 +30,7 @@ func runSearch(cmd *cobra.Command, args []string) error {
 	}
 	defer vdb.Close()
 
-	retriever, cleanup, err := query.BuildRetriever(mode, vdb.DB)
+	retriever, cleanup, err := query.BuildRetriever(cmd.Context(), mode, vdb.DB)
 	if err != nil {
 		return err
 	}

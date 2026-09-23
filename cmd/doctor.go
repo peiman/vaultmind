@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -8,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -95,6 +97,13 @@ func writeEmbeddingStatus(w io.Writer, emb *query.DoctorEmbeddings) error {
 		emb.SparseCount, emb.TotalNotes,
 		emb.ColBERTCount, emb.TotalNotes); err != nil {
 		return err
+	}
+	if emb.RuntimeError != "" {
+		// The counts above are true and misleading: the model cannot load, so
+		// every ask is keyword-only. Said right under them, where it is read.
+		if _, err := fmt.Fprintf(w, embeddingRuntimeDownFmt, emb.RuntimeError); err != nil {
+			return err
+		}
 	}
 	if emb.Model == embedding.ModelMiniLM {
 		// First-class degraded-recall WARN. A MiniLM index runs 2-lane recall
@@ -193,7 +202,7 @@ func diagnoseVault(cmd *cobra.Command, vaultPath string) (*query.DoctorResult, s
 	}
 	defer vdb.Close()
 
-	result, err := populateDoctorResult(vdb, vaultPath)
+	result, err := populateDoctorResult(cmd.Context(), vdb, vaultPath)
 	if err != nil {
 		return nil, "", err
 	}
@@ -228,11 +237,12 @@ func diagnoseVault(cmd *cobra.Command, vaultPath string) (*query.DoctorResult, s
 // populating. Shared by the single-vault path (diagnoseVault) and the
 // multi-vault path (runDoctorAll) so the diagnosis is computed identically
 // (SSOT).
-func populateDoctorResult(vdb *cmdutil.VaultDB, vaultPath string) (*query.DoctorResult, error) {
+func populateDoctorResult(ctx context.Context, vdb *cmdutil.VaultDB, vaultPath string) (*query.DoctorResult, error) {
 	result, err := query.Doctor(vdb.DB, vaultPath, vdb.Reg)
 	if err != nil {
 		return nil, fmt.Errorf("running doctor: %w", err)
 	}
+	annotateEmbeddingRuntime(ctx, result.Embeddings, doctorBackend())
 
 	// Fold in the per-type breakdown + errors/warnings rollup that `vault
 	// status` used to produce. Populated here in cmd/ because the vault config
@@ -800,4 +810,41 @@ func writeBadCitations(w io.Writer, bad []query.BadCitation) error {
 		}
 	}
 	return nil
+}
+
+// embeddingRuntimeDownFmt is the doctor line for a runtime that will not start.
+// The session-start health hook matches "semantic search is DOWN".
+const embeddingRuntimeDownFmt = "⚠ semantic search is DOWN: the embedding runtime failed to start (%s). " +
+	"ask falls back to keyword-only. Usually an ONNX Runtime older than 1.29 next to the binary or on the " +
+	"library path — replace it with the one from the release archive.\n"
+
+// doctorBackend is embedding.BackendName, swappable in tests: they run on the
+// pure-Go build, where the runtime check is (correctly) skipped.
+var doctorBackend = embedding.BackendName
+
+// checkEmbeddingRuntime is embedding.CheckRuntime, swappable in tests.
+var checkEmbeddingRuntime = embedding.CheckRuntime
+
+// runtimeCheck memoises the check: the runtime is per process, and doctor
+// --all diagnoses many vaults in one. Starting and stopping ORT once per vault
+// would also press against hugot's one-session-per-process rule.
+var runtimeCheck struct {
+	sync.Once
+	err error
+}
+
+// annotateEmbeddingRuntime records on emb whether the embedding runtime starts.
+// Only for a BGE-M3 index on the ORT build: a MiniLM index or a pure-Go binary
+// has no native runtime to be the wrong version.
+func annotateEmbeddingRuntime(ctx context.Context, emb *query.DoctorEmbeddings, backend string) {
+	// "mixed" loads BGE-M3 too (detectEmbedderForDB prefers it), so it needs
+	// the runtime as much as a pure BGE-M3 index does.
+	loadsBGEM3 := emb != nil && (emb.Model == embedding.ModelBGEM3 || emb.Model == query.EmbeddingModelMixed)
+	if !loadsBGEM3 || !emb.SemanticReady || backend != embedding.BackendNameORT {
+		return
+	}
+	runtimeCheck.Do(func() { runtimeCheck.err = checkEmbeddingRuntime(ctx) })
+	if runtimeCheck.err != nil {
+		emb.RuntimeError = runtimeCheck.err.Error()
+	}
 }

@@ -182,3 +182,17 @@ func TestHealthHook_DetectsVaultmindIdentity(t *testing.T) {
 	assert.Contains(t, out, "vaultmind-identity")
 	assert.Contains(t, out, "not installed")
 }
+
+// LIVE-OBSERVED (2026-09-23): a stale ONNX runtime next to the binary made
+// every model load fail, and this hook said "full BGE-M3 hybrid recall" — the
+// embedding counts were all present. Doctor now reports the runtime; the hook
+// must lead with it and must NOT also claim full recall.
+func TestHealthHook_RuntimeDownBeatsFullRecall(t *testing.T) {
+	stub := stubVaultmind(t, "Embeddings: dense 50/50 (bge-m3), sparse 50/50, colbert 50/50\n"+
+		"⚠ semantic search is DOWN: the embedding runtime failed to start (Error setting ORT API base: 2). "+
+		"ask falls back to keyword-only.")
+	out, _ := runHealthHook(t, projectWithVault(t), stub)
+	assert.Contains(t, out, "semantic search is DOWN")
+	assert.Contains(t, out, "Error setting ORT API base: 2")
+	assert.NotContains(t, out, "full BGE-M3 hybrid", "a green line above a dead search is the defect")
+}

@@ -545,7 +545,7 @@ jobs:
       id-token: write # keyless cosign signing via OIDC
       attestations: write # SLSA build provenance for the ORT archive built here
     env:
-      ORT_VERSION: '1.25.0' # official Microsoft ONNX Runtime to bundle (dlopen'd at runtime)
+      ORT_VERSION: '1.29.1' # official Microsoft ONNX Runtime to bundle (dlopen'd at runtime). >= 1.29: onnxruntime_go 1.35 (via hugot 0.7.8) requests ORT API 29 (#148)
     strategy:
       fail-fast: false # one platform failing must not block the other
       matrix:
@@ -553,11 +553,11 @@ jobs:
           - os: macos-14
             goos: darwin
             goarch: arm64
-            ort_asset: onnxruntime-osx-arm64-1.25.0.tgz
+            ort_asset: onnxruntime-osx-arm64-1.29.1.tgz
           - os: ubuntu-latest
             goos: linux
             goarch: amd64
-            ort_asset: onnxruntime-linux-x64-1.25.0.tgz
+            ort_asset: onnxruntime-linux-x64-1.29.1.tgz
     steps:
       - name: Resolve the target tag
         id: target

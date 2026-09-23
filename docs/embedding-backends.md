@@ -53,7 +53,7 @@ Apple Silicon GPU in-process (CoreML)? → BLOCKED today (issue #34). Do not rel
 ### ORT in-process (CPU execution provider)
 
 - **What it is:** The intended **default fast indexing path** and the only out-of-box source of the full 4-way BGE-M3 hybrid. Compiled from `session_ort.go` (`//go:build cgo && ORT`), where `newBGEM3Session()` calls `hugot.NewORTSession(...)`. `BackendName()` returns `"ort"`, so `DefaultModel()` resolves to `"bge-m3"`.
-- **System deps:** `libonnxruntime.{dylib,so}` on the system (`brew install onnxruntime` on macOS; package/release on Linux) **plus** project-local `lib/libtokenizers.a` (downloaded by `setup-ort.sh`) **plus** a CGO toolchain (C compiler). Pinned stack: libonnxruntime 1.25.0, hugot v0.7.0, onnxruntime_go v1.30.1.
+- **System deps:** `libonnxruntime.{dylib,so}` on the system (`brew install onnxruntime` on macOS; package/release on Linux) **plus** project-local `lib/libtokenizers.a` (downloaded by `setup-ort.sh`) **plus** a CGO toolchain (C compiler). Pinned stack: libonnxruntime 1.29.1, hugot v0.7.8, onnxruntime_go v1.35.0. **libonnxruntime must be 1.29 or newer**: onnxruntime_go 1.35 requests ORT API 29, and an older runtime fails at startup with "The requested API version [29] is not available" (#148).
 - **Setup steps:**
   1. One-time deps: `task setup:ort` (downloads `libtokenizers.a`; requires `libonnxruntime` already present — install via `brew install onnxruntime` first).
   2. Build onto PATH: `task install` (auto-selects ORT when `lib/libtokenizers.a` exists) or throwaway `task build:ort` → `/tmp/vaultmind-ort`.

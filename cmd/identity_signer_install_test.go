@@ -21,14 +21,9 @@ func TestIdentitySignerInstall_PrintShowsTheJobAndTouchesNothing(t *testing.T) {
 	t.Setenv("HOME", home)
 	keyPath := filepath.Join(t.TempDir(), "dabir.key")
 
-	buf := new(bytes.Buffer)
-	RootCmd.SetOut(buf)
-	RootCmd.SetErr(buf)
-	RootCmd.SetArgs([]string{"identity", "signer", "install", "--print",
-		"--signer-key", keyPath, "--signer-socket", "/tmp/vm-s.sock"})
-	t.Cleanup(func() { RootCmd.SetArgs([]string{}) })
-
-	require.NoError(t, RootCmd.Execute())
+	buf, _, err := runRootCmd(t, "identity", "signer", "install", "--print",
+		"--signer-key", keyPath, "--signer-socket", "/tmp/vm-s.sock")
+	require.NoError(t, err)
 	out := buf.String()
 	assert.Contains(t, out, "<string>com.vaultmind.signer.dabir</string>",
 		"the job is named after the key so two signers get two jobs")
@@ -36,7 +31,7 @@ func TestIdentitySignerInstall_PrintShowsTheJobAndTouchesNothing(t *testing.T) {
 	assert.Contains(t, out, "<string>/tmp/vm-s.sock</string>")
 	assert.Contains(t, out, "<key>KeepAlive</key><true/>")
 
-	_, err := os.Stat(filepath.Join(home, "Library", "LaunchAgents"))
+	_, err = os.Stat(filepath.Join(home, "Library", "LaunchAgents"))
 	assert.True(t, os.IsNotExist(err), "--print must not write a job")
 }
 
@@ -44,13 +39,9 @@ func TestIdentitySignerInstall_PrintShowsTheJobAndTouchesNothing(t *testing.T) {
 // them against its own working directory.
 func TestResolveSignerServiceSpec_PinsAbsolutePaths(t *testing.T) {
 	t.Chdir(t.TempDir())
-	buf := new(bytes.Buffer)
-	RootCmd.SetOut(buf)
-	RootCmd.SetArgs([]string{"identity", "signer", "install", "--print",
-		"--signer-key", "rel.key", "--signer-socket", "rel.sock"})
-	t.Cleanup(func() { RootCmd.SetArgs([]string{}) })
-
-	require.NoError(t, RootCmd.Execute())
+	buf, _, err := runRootCmd(t, "identity", "signer", "install", "--print",
+		"--signer-key", "rel.key", "--signer-socket", "rel.sock")
+	require.NoError(t, err)
 	wd, err := os.Getwd()
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "<string>"+filepath.Join(wd, "rel.key")+"</string>")

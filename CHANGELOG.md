@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **BGE-M3 downloads now bundle ONNX Runtime 1.29.1** (was 1.25.0), and the
+  embedding libraries move to hugot 0.7.8 / onnxruntime_go 1.35 (#148). The
+  new binding requests ONNX Runtime API 29, which 1.25.0 does not have — so the
+  bundled runtime had to move with it, or every BGE-M3 download would have
+  failed at startup ("The requested API version [29] is not available").
+  **Building from source needs libonnxruntime 1.29 or newer**; `setup-ort.sh`
+  now checks the version and says so. Verified before merging: the rebuilt
+  download runs from a fresh home, and the same 16 questions across the
+  identity and research vaults return identical results (top-1 and top-5, and
+  similarity scores to five decimals) with embedding speed unchanged.
+
+### Fixed
+
+- **Reinstalling hooks could kill a running mesh watcher.** `hooks install
+  --force` rewrote scripts in place; bash reads a running script from its file
+  as it goes, so an armed `mesh-watch.sh` read into the new bytes mid-line and
+  died ("syntax error near unexpected token `done'"). Upgrading with a watcher
+  armed — which the 0.8.0 notes ask you to do — hit this. Scripts are now
+  replaced by rename: a running script finishes as the version it started as.
+- **When the embedding model will not load, VaultMind now says so.** A stale
+  ONNX Runtime next to the binary (found live after the runtime bump above) made
+  every model load fail. `ask` fell back to keyword search and printed "this
+  vault has no embeddings — run index --embed" for a vault with full embeddings;
+  `doctor` showed healthy counts; the session-start hook said "full BGE-M3
+  hybrid recall". Now `ask` leads with "Semantic search is DOWN — keyword-only
+  results" and the real error (also a JSON warning), `doctor` starts the
+  runtime (no model load, once per process) and reports it under the
+  embedding counts, and the hook leads with it. A healthy runtime changes
+  nothing — verified both ways on a real vault.
+
+- **A first-time model download failed on hugot 0.7.8** ("open …/config.json:
+  no such file or directory"): the new version copies into a model directory
+  it never creates. VaultMind creates it first. Caught by the real-model tests
+  before release; no released version was affected.
+
+
 ## [0.8.0] - 2026-09-23
 
 > **Upgrading.** This release changes behaviour in ways a configured adopter

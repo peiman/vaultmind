@@ -100,11 +100,8 @@ func TestHooksInstall_RelativeVaultIsWrittenAbsolute(t *testing.T) {
 			require.NoError(t, os.MkdirAll(filepath.Join(work, "my-vault"), 0o750))
 			require.NoError(t, os.MkdirAll(filepath.Join(work, "proj"), 0o750))
 
-			RootCmd.SetOut(new(bytes.Buffer))
-			RootCmd.SetErr(new(bytes.Buffer))
-			RootCmd.SetArgs([]string{"hooks", "install", "proj", "--vault", "./my-vault", "--agent", agent, "--merge"})
-			t.Cleanup(func() { RootCmd.SetArgs([]string{}) })
-			require.NoError(t, RootCmd.Execute())
+			_, _, err := runRootCmd(t, "hooks", "install", "proj", "--vault", "./my-vault", "--agent", agent, "--merge")
+			require.NoError(t, err)
 
 			file := filepath.Join(work, "proj", ".claude", "settings.json")
 			if agent == hooksAgentCodex {

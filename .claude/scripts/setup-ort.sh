@@ -38,6 +38,28 @@ FAILED=0
 echo "ORT build setup for $PROJECT_DIR"
 echo ""
 
+# Minimum ONNX Runtime: onnxruntime_go 1.35 (pinned via hugot 0.7.8) requests
+# ORT API 29, first shipped in ONNX Runtime 1.29. Keep in step with the bundled
+# ORT_VERSION in .github/workflows/ci.yml.
+ORT_MIN_VERSION="1.29.0"
+
+# ort_version_in prints the version of the versioned libonnxruntime in $1
+# (libonnxruntime.X.Y.Z.dylib or libonnxruntime.so.X.Y.Z), or nothing.
+ort_version_in() {
+  local f
+  for f in "$1"/libonnxruntime.*.dylib "$1"/libonnxruntime.so.*; do
+    [ -e "$f" ] || continue
+    f="${f##*/}"
+    f="${f#libonnxruntime.}"; f="${f#so.}"; f="${f%.dylib}"
+    case "$f" in [0-9]*.[0-9]*.[0-9]*) echo "$f"; return ;; esac
+  done
+}
+
+# version_lt succeeds when dotted version $1 < $2.
+version_lt() {
+  [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -t. -k1,1n -k2,2n -k3,3n | head -n1)" = "$1" ]
+}
+
 # --- Step 1: platform detection -------------------------------------------
 
 OS="$(uname -s)"
@@ -75,6 +97,21 @@ if [ -z "$ORT_LIB_DIR" ]; then
   FAILED=1
 else
   echo "$PASS $ORT_LIB_DIR/$DYLIB"
+  # The runtime must be new enough for the Go binding hugot pins. With an older
+  # one the build succeeds and every BGE-M3 session then fails at startup:
+  # "The requested API version [29] is not available ... ORT Version is:
+  # 1.25.0" (#148). Checked here, where it is still a setup problem.
+  ORT_FOUND_VERSION="$(ort_version_in "$ORT_LIB_DIR")"
+  if [ -z "$ORT_FOUND_VERSION" ]; then
+    echo "  ⚠ could not read the libonnxruntime version in $ORT_LIB_DIR — needs >= $ORT_MIN_VERSION"
+  elif version_lt "$ORT_FOUND_VERSION" "$ORT_MIN_VERSION"; then
+    echo "$FAIL libonnxruntime $ORT_FOUND_VERSION is too old — needs >= $ORT_MIN_VERSION"
+    echo "    upgrade with: brew upgrade onnxruntime  (macOS)"
+    echo "    or download from https://github.com/microsoft/onnxruntime/releases"
+    FAILED=1
+  else
+    echo "$PASS libonnxruntime $ORT_FOUND_VERSION (>= $ORT_MIN_VERSION)"
+  fi
 fi
 
 # --- Step 3: libtokenizers version from hugot's go.mod ---------------------

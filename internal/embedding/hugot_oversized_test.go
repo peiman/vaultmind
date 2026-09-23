@@ -28,7 +28,7 @@ func TestHugotEmbedder_DenseLongNoteStillEmbeds(t *testing.T) {
 	if os.Getenv("VAULTMIND_TEST_EMBEDDING") == "" {
 		t.Skip("skipping embedding test (set VAULTMIND_TEST_EMBEDDING=1 to run, downloads ~90MB model)")
 	}
-	embedder, err := embedding.NewHugotEmbedder(embedding.HugotConfig{
+	embedder, err := embedding.NewHugotEmbedder(context.Background(), embedding.HugotConfig{
 		ModelName:    testModelName,
 		CacheDir:     t.TempDir(),
 		Dims:         testModelDims,
@@ -52,4 +52,14 @@ func TestHugotEmbedder_DenseLongNoteStillEmbeds(t *testing.T) {
 	for i, v := range vecs {
 		require.Len(t, v, testModelDims, "text %d", i)
 	}
+}
+
+// hugot 0.7.8 copies downloads into <cache>/<model>/ without creating it, so
+// VaultMind creates it first (#148). It must be the SAME directory hugot uses,
+// or the first download still fails — including the ":revision" form.
+func TestHugotModelDir_MatchesHugotLayout(t *testing.T) {
+	require.Equal(t, "/c/sentence-transformers_all-MiniLM-L6-v2",
+		embedding.HugotModelDirForTest("/c", "sentence-transformers/all-MiniLM-L6-v2"))
+	require.Equal(t, "/c/BAAI_bge-m3",
+		embedding.HugotModelDirForTest("/c", "BAAI/bge-m3:main"))
 }

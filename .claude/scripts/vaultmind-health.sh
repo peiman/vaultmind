@@ -78,6 +78,13 @@ if [ "$DOCTOR_RC" -ne 0 ]; then
   echo "⚠ VaultMind vault detected ($VAULT) but \`vaultmind doctor\` failed (exit $DOCTOR_RC)."
   [ -n "$DOCTOR_ERR" ] && echo "   ${DOCTOR_ERR}"
   echo "   Re-run to debug: vaultmind doctor --vault \"$VAULT\""
+elif printf '%s' "$DOCTOR" | grep -q "semantic search is DOWN"; then
+  # Embeddings exist but the runtime that loads their model will not start, so
+  # every recall is keyword-only. Checked BEFORE the tier lines: the counts are
+  # all present, and "full BGE-M3 hybrid recall" above a dead search is exactly
+  # what this hook said on 2026-09-23.
+  echo "⚠ VaultMind vault detected ($VAULT) — but $(printf '%s' "$DOCTOR" | grep -o "semantic search is DOWN.*" | head -n 1)"
+  echo "   Details: vaultmind doctor --vault \"$VAULT\""
 elif printf '%s' "$DOCTOR" | grep -q "Embeddings: none"; then
   echo "📚 VaultMind vault detected ($VAULT) — index not built yet."
   echo "   Build it: vaultmind index --vault \"$VAULT\" && vaultmind index --embed --vault \"$VAULT\""

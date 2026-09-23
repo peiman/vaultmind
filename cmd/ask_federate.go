@@ -161,7 +161,7 @@ func searchOneVault(cmd *cobra.Command, vaultPath, queryText string, searchLimit
 	}
 	defer vdb.Close()
 
-	ret := query.BuildAutoRetrieverFull(vdb.DB)
+	ret := query.BuildAutoRetrieverFull(cmd.Context(), vdb.DB)
 	defer ret.Cleanup()
 
 	// ONE retrieval, then judge those same hits. Searching again for the

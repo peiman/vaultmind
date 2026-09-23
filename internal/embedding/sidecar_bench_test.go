@@ -57,7 +57,7 @@ func TestSidecar_VsInProcess_Throughput(t *testing.T) {
 
 	// === In-process baseline (CPU) ===
 	t.Log("--- in-process ORT+CPU ---")
-	inProc, err := embedding.NewBGEM3Embedder(embedding.BGEM3Config())
+	inProc, err := embedding.NewBGEM3Embedder(context.Background(), embedding.BGEM3Config())
 	require.NoError(t, err)
 	cpuStart := time.Now()
 	cpuOut, err := inProc.EmbedFullBatch(context.Background(), texts)

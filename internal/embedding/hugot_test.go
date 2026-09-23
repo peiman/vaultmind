@@ -25,7 +25,7 @@ func TestHugotEmbedder_Embed(t *testing.T) {
 	}
 
 	cacheDir := t.TempDir()
-	embedder, err := embedding.NewHugotEmbedder(embedding.HugotConfig{
+	embedder, err := embedding.NewHugotEmbedder(context.Background(), embedding.HugotConfig{
 		ModelName:    testModelName,
 		CacheDir:     cacheDir,
 		Dims:         testModelDims,
@@ -57,7 +57,7 @@ func TestHugotEmbedder_SimilarTextsCloser(t *testing.T) {
 	}
 
 	cacheDir := t.TempDir()
-	embedder, err := embedding.NewHugotEmbedder(embedding.HugotConfig{
+	embedder, err := embedding.NewHugotEmbedder(context.Background(), embedding.HugotConfig{
 		ModelName:    testModelName,
 		CacheDir:     cacheDir,
 		Dims:         testModelDims,

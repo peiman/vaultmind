@@ -44,7 +44,7 @@ func TestSidecar_NumericalEquivalence_VsInProcess(t *testing.T) {
 	}
 
 	// In-process baseline
-	inProc, err := embedding.NewBGEM3Embedder(embedding.BGEM3Config())
+	inProc, err := embedding.NewBGEM3Embedder(context.Background(), embedding.BGEM3Config())
 	require.NoError(t, err)
 	cpuOut, err := inProc.EmbedFullBatch(context.Background(), texts)
 	_ = inProc.Close()

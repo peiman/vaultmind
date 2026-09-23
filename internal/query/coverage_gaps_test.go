@@ -445,7 +445,7 @@ func TestBuildAutoRetrieverFull_DBErrorFallsBackToKeyword(t *testing.T) {
 	// Close the DB so HasEmbeddings fails.
 	require.NoError(t, db.Close())
 
-	r := query.BuildAutoRetrieverFull(db)
+	r := query.BuildAutoRetrieverFull(context.Background(), db)
 	// Must not panic; must return a non-nil retriever and safe cleanup.
 	assert.NotNil(t, r.Retriever, "fallback retriever must be non-nil even when HasEmbeddings errors")
 	assert.NotNil(t, r.Cleanup, "cleanup must always be non-nil")

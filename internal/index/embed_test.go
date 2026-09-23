@@ -29,7 +29,7 @@ func TestEmbedNotes(t *testing.T) {
 	_, err = idxr.Rebuild()
 	require.NoError(t, err)
 
-	embedder, err := embedding.NewHugotEmbedder(embedding.HugotConfig{
+	embedder, err := embedding.NewHugotEmbedder(context.Background(), embedding.HugotConfig{
 		ModelName:    "sentence-transformers/all-MiniLM-L6-v2",
 		CacheDir:     t.TempDir(),
 		Dims:         384,
@@ -75,7 +75,7 @@ func TestEmbedNotes_Incremental(t *testing.T) {
 	_, err = idxr.Rebuild()
 	require.NoError(t, err)
 
-	embedder, err := embedding.NewHugotEmbedder(embedding.HugotConfig{
+	embedder, err := embedding.NewHugotEmbedder(context.Background(), embedding.HugotConfig{
 		ModelName:    "sentence-transformers/all-MiniLM-L6-v2",
 		CacheDir:     t.TempDir(),
 		Dims:         384,
