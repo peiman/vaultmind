@@ -99,11 +99,21 @@ func Relevance(topCosine, noiseFloor, sigmaEff, embedderDefaultN float64) (z flo
 // (BGE-M3 = 1024, MiniLM = 384).
 //
 //   - 1024 (BGE-M3): 0.45, the probe-measured garbage ceiling.
-//   - 384  (MiniLM): 0.0 conservative — its floor hasn't been probe-measured,
-//     and 0.0 never produces a false no_match (it just can't flag garbage yet).
+//   - 384  (MiniLM): 0.20, measured 2026-09-23 by the same method: silence no
+//     genuine question, then reject what garbage you can. Four real vaults (13,
+//     16, 67, 409 notes), 36 genuine questions and the 8 calibration probes
+//     each. The effective cut-off is N − FloorSigmaMargin·σ, and MiniLM's σ
+//     (0.08–0.19 measured) is clamped to SigmaCeil 0.12, so it is 0.20 − 0.06 =
+//     0.14: 0.023 below the weakest genuine top hit anywhere (0.163). Garbage
+//     at or under 0.14 is rejected; two small-vault probes at 0.148/0.149 read
+//     "weak", not "no match". Measured per-vault N ranged 0.108–0.261. It shipped as a 0.0
+//     placeholder before, which labelled every small-vault hit "strong"
+//     (stranger test, same day). On large MiniLM vaults garbage can reach 0.26,
+//     above some genuine hits — no threshold separates those, which is why a
+//     vault of 30+ notes measures its own floor (and this only caps it).
 var embedderNoiseFloor = map[int]float64{
 	1024: 0.45,
-	384:  0.0,
+	384:  0.20,
 }
 
 // HasMeasuredDefault reports whether the shipped floor for this embedder was

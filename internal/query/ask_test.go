@@ -309,7 +309,7 @@ func TestAsk_SmallVaultStrongDependsOnAMeasuredDefault(t *testing.T) {
 	require.Less(t, r.VaultNoteCount, noisefloor.MinCalibNotes, "fixture must be a small vault")
 	assert.Contains(t, measured, "relevance: strong", "a measured default still supports a confident label")
 
-	unmeasured, _ := render(384) // MiniLM: placeholder default
+	unmeasured, _ := render(7) // a model with no measured default
 	assert.NotContains(t, unmeasured, "strong")
 	assert.Contains(t, unmeasured, "no measured default floor")
 }

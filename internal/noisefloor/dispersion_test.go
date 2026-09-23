@@ -15,8 +15,8 @@ import (
 func TestDefaultDispersion_PerEmbedderDims(t *testing.T) {
 	assert.InDelta(t, 0.073, noisefloor.DefaultDispersion(1024), 1e-9,
 		"BGE-M3 (1024) ships the probe-measured σ")
-	assert.InDelta(t, 0.0, noisefloor.DefaultDispersion(384), 1e-9,
-		"MiniLM (384) unmeasured → 0.0 (clamp lifts it)")
+	assert.InDelta(t, 0.15, noisefloor.DefaultDispersion(384), 1e-9,
+		"MiniLM (384) ships the median σ of four measured vaults (2026-09-23)")
 	assert.InDelta(t, 0.0, noisefloor.DefaultDispersion(999), 1e-9,
 		"unknown dims → 0.0")
 }

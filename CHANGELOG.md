@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **MiniLM now has a measured relevance baseline** (0.20 noise floor, 0.15
+  dispersion), replacing a 0.0 placeholder. Measured the same way BGE-M3's 0.45
+  was: four real vaults (13–409 notes), 36 genuine questions and the eight
+  off-topic calibration probes each; the default is set so no genuine question
+  is silenced (cut-off 0.14, weakest genuine hit 0.163) and garbage below it is
+  rejected. On small MiniLM vaults — the `go install` first run — confident
+  labels return where they are earned ("what is an arc" → strong) and an
+  off-topic question is a no-match instead of "strong" or "not yet
+  measurable". Vaults of 30+ notes still measure their own floor.
+
 - **BGE-M3 downloads now bundle ONNX Runtime 1.29.1** (was 1.25.0), and the
   embedding libraries move to hugot 0.7.8 / onnxruntime_go 1.35 (#148). The
   new binding requests ONNX Runtime API 29, which 1.25.0 does not have — so the

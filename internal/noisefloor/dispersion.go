@@ -36,11 +36,11 @@ const (
 //
 //   - 1024 (BGE-M3): 0.073, empirically stable across a tight 40-note vault and a
 //     loose 407-note vault (2026-05-31 probe).
-//   - 384 (MiniLM): 0.0 — unmeasured; ClampSigma lifts it to SigmaFloor so a
-//     cold-start MiniLM query never divides z by zero.
+//   - 384 (MiniLM): 0.15 — the median of four measured vaults (0.083, 0.135,
+//     0.161, 0.189; 2026-09-23, alongside the noise-floor measurement).
 var embedderDispersion = map[int]float64{
 	1024: 0.073,
-	384:  0.0,
+	384:  0.15,
 }
 
 // DefaultDispersion returns the shipped note-to-note σ for an embedder of the

@@ -161,23 +161,53 @@ func TestDefaultNoiseFloor_PerEmbedderDims(t *testing.T) {
 	// shipped per-embedder default so day-one queries calibrate immediately.
 	assert.InDelta(t, 0.45, noisefloor.DefaultNoiseFloor(1024), 1e-9,
 		"BGE-M3 (1024 dims) ships the probe-measured ~0.45")
-	assert.InDelta(t, 0.0, noisefloor.DefaultNoiseFloor(384), 1e-9,
-		"MiniLM (384 dims) ships conservative at 0.0 until measured")
+	assert.InDelta(t, 0.20, noisefloor.DefaultNoiseFloor(384), 1e-9,
+		"MiniLM (384 dims) ships the probe-validated ceiling measured 2026-09-23")
 	assert.InDelta(t, 0.0, noisefloor.DefaultNoiseFloor(999), 1e-9,
 		"unknown dims fall back to 0.0 (no false no_match)")
 }
 
-// Measured means probe-measured, not "has an entry": MiniLM's entry is a 0.0
-// placeholder, and treating it as a measurement labelled every small-vault hit
-// "strong" (stranger test, 2026-09-23).
+// Measured means probe-measured, not "has an entry". MiniLM's entry was a 0.0
+// placeholder until 2026-09-23, and treating it as a measurement labelled
+// every small-vault hit "strong" (stranger test). It is measured now.
 func TestHasMeasuredDefault(t *testing.T) {
 	if !noisefloor.HasMeasuredDefault(1024) {
 		t.Error("BGE-M3's floor was probe-measured")
 	}
-	if noisefloor.HasMeasuredDefault(384) {
-		t.Error("MiniLM's floor is an unmeasured placeholder")
+	if !noisefloor.HasMeasuredDefault(384) {
+		t.Error("MiniLM's floor was probe-measured 2026-09-23")
 	}
 	if noisefloor.HasMeasuredDefault(7) {
 		t.Error("an unknown model has no measured floor")
 	}
+}
+
+// The measured MiniLM default, checked against the measurement it came from
+// (2026-09-23; 36 genuine questions, 32 garbage, four real vaults). On a small
+// vault — the one that uses the default — no genuine question (weakest
+// anywhere 0.163) may be silenced, and garbage under the 0.14 cut-off is
+// rejected. Two corrections got here: the floor is N − 0.5σ, not N, and σ is
+// clamped to SigmaCeil (0.12) — at 0.22 the cut-off landed 0.003 below the
+// weakest genuine hit, which is not a margin.
+func TestMiniLMDefault_SeparatesTheMeasuredSmallVaultCases(t *testing.T) {
+	n, s := noisefloor.DefaultNoiseFloor(384), noisefloor.ClampSigma(noisefloor.DefaultDispersion(384))
+	for _, garbage := range []float64{0.123, 0.108, 0.089} {
+		_, label := noisefloor.Relevance(garbage, n, s, n)
+		assert.Equal(t, noisefloor.ConfidenceNoMatch, label, "garbage %.3f must be rejected", garbage)
+	}
+	for _, genuine := range []float64{0.163, 0.198, 0.199, 0.267} {
+		_, label := noisefloor.Relevance(genuine, n, s, n)
+		assert.NotEqual(t, noisefloor.ConfidenceNoMatch, label, "genuine %.3f must not be silenced", genuine)
+	}
+	// The stranger-test case: an off-topic question on a fresh vault.
+	_, label := noisefloor.Relevance(0.237, n, s, n)
+	assert.NotEqual(t, noisefloor.ConfidenceStrong, label, "0.237 on a six-note scaffold is not strong")
+}
+
+// The margin itself, so a later tweak to the default, the clamp or the margin
+// cannot quietly push the MiniLM cut-off up against real questions again.
+func TestMiniLMDefault_KeepsAMarginUnderTheWeakestGenuineHit(t *testing.T) {
+	cut := noisefloor.DefaultNoiseFloor(384) -
+		noisefloor.FloorSigmaMargin*noisefloor.ClampSigma(noisefloor.DefaultDispersion(384))
+	assert.LessOrEqual(t, cut, 0.163-0.02, "cut-off %.3f too close to the weakest measured genuine hit (0.163)", cut)
 }
