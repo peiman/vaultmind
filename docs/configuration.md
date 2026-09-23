@@ -172,6 +172,9 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.identityenroll.transport_endpoint` | string | `` | `VAULTMIND_APP_IDENTITYENROLL_TRANSPORT_ENDPOINT` | Optional reachable host:port (IPv6 bracketed); omitted when empty |
 | `app.identityenroll.signer_socket` | string | `` | `VAULTMIND_APP_IDENTITYENROLL_SIGNER_SOCKET` | Signer socket path (default: XDG state dir) |
 | `app.identityenroll.yes` | bool | `false` | `VAULTMIND_APP_IDENTITYENROLL_YES` | Skip the out-of-band fingerprint confirmation prompt |
+| `app.identityfetchregistry.hub` | string | `` | `VAULTMIND_APP_IDENTITYFETCHREGISTRY_HUB` | Hub base URL (default: AGENT_CHAT_DAEMON_URL, else agents.yaml daemon_url) |
+| `app.identityfetchregistry.registry_file` | string | `` | `VAULTMIND_APP_IDENTITYFETCHREGISTRY_REGISTRY_FILE` | Where to store the registry (default: agents.yaml registry_path) |
+| `app.identityfetchregistry.root_pubkey` | string | `` | `VAULTMIND_APP_IDENTITYFETCHREGISTRY_ROOT_PUBKEY` | Pinned root public key, base64 (default: the anchor identity enroll pinned) |
 | `app.identityinit.signer_key` | string | `` | `VAULTMIND_APP_IDENTITYINIT_SIGNER_KEY` | Sealed signer key path (default: XDG data dir) |
 | `app.identityinvite.root_pubkey` | string | `` | `VAULTMIND_APP_IDENTITYINVITE_ROOT_PUBKEY` | Network ROOT public key (base64-std of the 32-byte ed25519 key; required) |
 | `app.identityinvite.relay` | string | `` | `VAULTMIND_APP_IDENTITYINVITE_RELAY` | Relay base URL, e.g. https://chat.acme.com (required) |
@@ -738,6 +741,16 @@ app:
 
     # Comma-separated authorized origin daemon ids for the new binding (default none)
     origin_daemon: 
+
+  identityfetchregistry:
+    # Hub base URL (default: AGENT_CHAT_DAEMON_URL, else agents.yaml daemon_url)
+    hub: 
+
+    # Where to store the registry (default: agents.yaml registry_path)
+    registry_file: 
+
+    # Pinned root public key, base64 (default: the anchor identity enroll pinned)
+    root_pubkey: 
 
   identityinit:
     # Sealed signer key path (default: XDG data dir)
@@ -1606,6 +1619,15 @@ export VAULTMIND_APP_IDENTITYENROLL_SIGNER_SOCKET=
 
 # Skip the out-of-band fingerprint confirmation prompt
 export VAULTMIND_APP_IDENTITYENROLL_YES=false
+
+# Hub base URL (default: AGENT_CHAT_DAEMON_URL, else agents.yaml daemon_url)
+export VAULTMIND_APP_IDENTITYFETCHREGISTRY_HUB=
+
+# Where to store the registry (default: agents.yaml registry_path)
+export VAULTMIND_APP_IDENTITYFETCHREGISTRY_REGISTRY_FILE=
+
+# Pinned root public key, base64 (default: the anchor identity enroll pinned)
+export VAULTMIND_APP_IDENTITYFETCHREGISTRY_ROOT_PUBKEY=
 
 # Sealed signer key path (default: XDG data dir)
 export VAULTMIND_APP_IDENTITYINIT_SIGNER_KEY=

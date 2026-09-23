@@ -878,6 +878,26 @@
           },
           "type": "object"
         },
+        "identityfetchregistry": {
+          "properties": {
+            "hub": {
+              "default": "",
+              "description": "Hub base URL (default: AGENT_CHAT_DAEMON_URL, else agents.yaml daemon_url)",
+              "type": "string"
+            },
+            "registry_file": {
+              "default": "",
+              "description": "Where to store the registry (default: agents.yaml registry_path)",
+              "type": "string"
+            },
+            "root_pubkey": {
+              "default": "",
+              "description": "Pinned root public key, base64 (default: the anchor identity enroll pinned)",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
         "identityinit": {
           "properties": {
             "signer_key": {

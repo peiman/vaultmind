@@ -162,6 +162,9 @@ const (
 	KeyAppIdentityenrollTransportEndpoint    = "app.identityenroll.transport_endpoint"    // Optional reachable host:port (IPv6 bracketed); omitted when empty
 	KeyAppIdentityenrollSignerSocket         = "app.identityenroll.signer_socket"         // Signer socket path (default: XDG state dir)
 	KeyAppIdentityenrollYes                  = "app.identityenroll.yes"                   // Skip the out-of-band fingerprint confirmation prompt
+	KeyAppIdentityfetchregistryHub           = "app.identityfetchregistry.hub"            // Hub base URL (default: AGENT_CHAT_DAEMON_URL, else agents.yaml daemon_url)
+	KeyAppIdentityfetchregistryRegistryFile  = "app.identityfetchregistry.registry_file"  // Where to store the registry (default: agents.yaml registry_path)
+	KeyAppIdentityfetchregistryRootPubkey    = "app.identityfetchregistry.root_pubkey"    // Pinned root public key, base64 (default: the anchor identity enroll pinned)
 	KeyAppIdentityinitSignerKey              = "app.identityinit.signer_key"              // Sealed signer key path (default: XDG data dir)
 	KeyAppIdentityinviteRootPubkey           = "app.identityinvite.root_pubkey"           // Network ROOT public key (base64-std of the 32-byte ed25519 key; required)
 	KeyAppIdentityinviteRelay                = "app.identityinvite.relay"                 // Relay base URL, e.g. https://chat.acme.com (required)

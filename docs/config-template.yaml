@@ -454,6 +454,16 @@ app:
     # Comma-separated authorized origin daemon ids for the new binding (default none)
     origin_daemon: 
 
+  identityfetchregistry:
+    # Hub base URL (default: AGENT_CHAT_DAEMON_URL, else agents.yaml daemon_url)
+    hub: 
+
+    # Where to store the registry (default: agents.yaml registry_path)
+    registry_file: 
+
+    # Pinned root public key, base64 (default: the anchor identity enroll pinned)
+    root_pubkey: 
+
   identityinit:
     # Sealed signer key path (default: XDG data dir)
     signer_key: 

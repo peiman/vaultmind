@@ -379,7 +379,7 @@ markers; `task check` fails if it drifts from the catalog. Everything outside th
 hand-written and stays.
 
 <!-- VAULTMIND:GENERATED:commands:START -->
-<!-- checksum:7aa3b79721d15166de5a5cb5d86ca72909a0eaa9a84960e60f61503fdff540a4 -->
+<!-- checksum:e843038fc522e36a6cb6e17596eeba6f79d0612145c5c347a6d8df9fded6c24b -->
 # VaultMind Commands
 
 Every user-facing command, grouped by intent, with its when-to-use trigger.
@@ -444,6 +444,7 @@ Generated from the command tree — do not edit by hand (run `task generate:docs
 | `vaultmind identity` | Contract-B agent identity: keypair custody and signing | you need Contract-B agent identity: mint a keypair or sign an entry via the keyless signer. |
 | `vaultmind identity enroll` | Enroll into a Contract-B network from an invite, then self-sign the request | you are a member with an invite and want to enroll: cross-check the relay's root against the invite, confirm the fingerprint, and self-sign an enrollment request for your admin. |
 | `vaultmind identity enroll-add` | Admin-add a member's enrollment request to the trust-root registry, emitting the unsigned registry | you are an admin and want to add a member's signed enrollment request to the trust-root registry, emitting the updated unsigned registry for the root signer. |
+| `vaultmind identity fetch-registry` | Fetch the signed trust registry from the hub and keep the local copy current (Contract-B) | this machine needs a current copy of the mesh's signed registry — it downloads it from the hub, verifies it against the pinned root, and refuses older epochs. |
 | `vaultmind identity init` | Mint an agent keypair and seal the private key to the signer | you are setting up an agent and need to mint its ed25519 keypair and seal the private key to the signer. |
 | `vaultmind identity invite` | Emit an UNSIGNED network invite carrying the trust anchor (Contract-B) | you are an admin and want to emit a network invite (the trust anchor plus relay, with an out-of-band fingerprint) for a member to enroll against. |
 | `vaultmind identity paths` | Emit this agent's resolved mesh identity and state paths | a hook or watcher script needs this agent's resolved mesh identity and state paths — eval the output instead of hardcoding a slug, daemon URL, or heartbeat path. |
