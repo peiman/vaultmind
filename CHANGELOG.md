@@ -306,6 +306,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its own README. Registered, with `distilled_to` among its optional fields so
   a finished entry can point at the arc it became.
 
+- **Built with Go 1.27.1** (was 1.26.6). `.go-version` is the single source of
+  truth — CI, the devcontainer image and the toolchain check all follow it.
+  **The minimum Go for `go install` is deliberately unchanged** (`go.mod` still
+  declares 1.26.6): the build toolchain moving up should not force every adopter
+  to upgrade. golangci-lint moves to v2.13.2 with it, because v2.12.2 cannot
+  analyse Go 1.27 at all — its typechecker rejects the newer export data and
+  fails on `import "math"`.
+
 ### Fixed
 
 - **`doctor` says so when the registry file is not a registry.** Passing
@@ -399,16 +407,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   text.** The health hook now relays doctor's stale-index warning on every tier,
   with the refresh command.
 
-### Changed
-
-- **Built with Go 1.27.1** (was 1.26.6). `.go-version` is the single source of
-  truth — CI, the devcontainer image and the toolchain check all follow it.
-  **The minimum Go for `go install` is deliberately unchanged** (`go.mod` still
-  declares 1.26.6): the build toolchain moving up should not force every adopter
-  to upgrade. golangci-lint moves to v2.13.2 with it, because v2.12.2 cannot
-  analyse Go 1.27 at all — its typechecker rejects the newer export data and
-  fails on `import "math"`.
-
 ### Security
 
 - **The watcher's bootstrap was an injection surface.** `mesh-watch.sh` evaluated
@@ -419,7 +417,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`golang.org/x/crypto` bumped to v0.56.0**, clearing GO-2026-6354 /
   GO-2026-6355 (x/crypto/ssh channel-deadlock DoS). No interface change.
 
-## [0.7.1] — 2026-08-21
+## [0.7.1] - 2026-08-21
 
 > **Upgrading.** Nothing to migrate. If `doctor` or session start felt slow, that is
 > what this release fixes. One behaviour change to know about: `hooks status` now exits
@@ -459,6 +457,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fixes. **This changes the exit code**: a project with matching scripts but
   missing wiring used to pass and now fails. That is the point — but if you gate
   CI on `hooks status`, expect it to start failing where it was silently wrong.
+
+- **The agent-facing guide documents delivery.** `--excerpt N`, why it prefers a note's
+  **Principle** section, and how to read the new context header (with the v0.7.0 format
+  change called out for anything parsing that line) are now in `docs/AGENT_USAGE.md`;
+  v0.7.0 shipped the feature with no mention of it in any document an adopter reads
+  first. The upgrade note — migrations automatic, no re-index, no `--embed` — sits with
+  the install instructions.
+
+- **`docs/building-an-identity-vault.md` explains why the Principle section is
+  load-bearing.** It is not only a readability convention: it is the passage `--excerpt`
+  delivers when a note will not fit, so an arc written without one gets its story setup
+  injected instead of its rule.
 
 ### Fixed
 
@@ -524,21 +534,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lines. The missing gate, not the stale output, is the real defect; a generator nobody
   runs is worth what no generator is worth.
 
-### Documentation
-
-- **The agent-facing guide documents delivery.** `--excerpt N`, why it prefers a note's
-  **Principle** section, and how to read the new context header (with the v0.7.0 format
-  change called out for anything parsing that line) are now in `docs/AGENT_USAGE.md`;
-  v0.7.0 shipped the feature with no mention of it in any document an adopter reads
-  first. The upgrade note — migrations automatic, no re-index, no `--embed` — sits with
-  the install instructions.
-
-- **`docs/building-an-identity-vault.md` explains why the Principle section is
-  load-bearing.** It is not only a readability convention: it is the passage `--excerpt`
-  delivers when a note will not fit, so an arc written without one gets its story setup
-  injected instead of its rule.
-
-## [0.7.0] — 2026-08-21
+## [0.7.0] - 2026-08-21
 
 > **Upgrading.** Index migrations apply automatically on first run; no re-index and no
 > `--embed` are required (note bodies have been stored since the baseline schema).
@@ -620,6 +616,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   no history to weight, and redacting at write time would gut `experiment trace`. What was
   wrong was the copy, so the copy is what changed. `experiments.telemetry: off` still writes
   nothing at all.
+
+### Removed
+
+- **The first-run telemetry consent prompt**, which asked the wrong question. It offered
+  "[1] Anonymous usage statistics" and "[2] Full data sharing" for a feature that shares
+  nothing — a consent dialog for a transmission that does not happen. The README documents
+  the local log instead.
+
+  It was gated on `experiments.telemetry` being empty and the registry defaults it to
+  `anonymous`, so it never fired on a default install — but it was **not** dead code, and an
+  earlier draft of this entry said it was. A config file can still produce an empty value:
+  `telemetry: ""`, or a bare `experiments: off`, which viper reads as a non-map parent and
+  resolves the child to `""`. The v0.4.1 review said "which the default prevents, so *most*
+  installs never see it" and was right to say most.
 
 ### Fixed
 
@@ -783,21 +793,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   which SQLite's own `0644` file is briefly readable. An existing `0644` database is
   restricted on the next command.
 
-### Removed
-
-- **The first-run telemetry consent prompt**, which asked the wrong question. It offered
-  "[1] Anonymous usage statistics" and "[2] Full data sharing" for a feature that shares
-  nothing — a consent dialog for a transmission that does not happen. The README documents
-  the local log instead.
-
-  It was gated on `experiments.telemetry` being empty and the registry defaults it to
-  `anonymous`, so it never fired on a default install — but it was **not** dead code, and an
-  earlier draft of this entry said it was. A config file can still produce an empty value:
-  `telemetry: ""`, or a bare `experiments: off`, which viper reads as a non-map parent and
-  resolves the child to `""`. The v0.4.1 review said "which the default prevents, so *most*
-  installs never see it" and was right to say most.
-
-## [0.6.0] — 2026-08-17
+## [0.6.0] - 2026-08-17
 
 The v0.4.1 review's two remaining security findings are closed here. Both are the same gap: **write**
 targets were confined to the vault, **reads and opens** were not — so vault *content* and vault
@@ -843,6 +839,14 @@ below before upgrading. A patch number would say "safe to auto-upgrade", and thi
   fewer files than the vault holds is worse than a noisy one. Consumers parsing lint issues by rule
   name will see the new value.
 
+- **The update check is documented rather than defaulted away.** `README.md` gained a "The one
+  network call" section: `doctor` asks the Go module proxy once a day whether a newer VaultMind
+  exists, sends nothing about you or your vault, caches for 24 hours, times out in 3 seconds, and
+  is silenced by `VAULTMIND_NO_UPDATE_CHECK=1`. Making it opt-in instead would have left the notice
+  reaching only the people who already knew to look for it — the gap it exists to close.
+- **`docs/reviews/` keeps findings as written and stamps their outcome.** The v0.4.1 CLI review is
+  published unedited, with a resolution block naming the PR and commit that closed each High.
+
 ### Fixed
 
 - **Hook vault queries are bounded, and `timeout` is resolved rather than assumed.**
@@ -861,16 +865,6 @@ below before upgrading. A patch number would say "safe to auto-upgrade", and thi
   tree that does not exist. Reinstall with `vaultmind hooks install --force <project-dir>` to pick
   this up; `vaultmind hooks status` reports the drift either way.
 
-### Documentation
-
-- **The update check is documented rather than defaulted away.** `README.md` gained a "The one
-  network call" section: `doctor` asks the Go module proxy once a day whether a newer VaultMind
-  exists, sends nothing about you or your vault, caches for 24 hours, times out in 3 seconds, and
-  is silenced by `VAULTMIND_NO_UPDATE_CHECK=1`. Making it opt-in instead would have left the notice
-  reaching only the people who already knew to look for it — the gap it exists to close.
-- **`docs/reviews/` keeps findings as written and stamps their outcome.** The v0.4.1 CLI review is
-  published unedited, with a resolution block naming the PR and commit that closed each High.
-
 ### Security
 
 - **Confinement and "do not follow a link" are separate checks, and stay separate.** `notes.md ->
@@ -887,7 +881,7 @@ below before upgrading. A patch number would say "safe to auto-upgrade", and thi
 - **`Indexer.IndexFile` confines its own argument** instead of asserting, in a lint suppression,
   that its callers pass a vault-relative path.
 
-## [0.5.0] — 2026-08-16
+## [0.5.0] - 2026-08-16
 
 An external review of v0.4.1 found four high-severity defects. All four are fixed here, and every
 one of them was a silent failure: something the tool did wrong while reporting that it had
@@ -901,6 +895,12 @@ succeeded. Two were in code that earlier fixes had already touched without closi
 > lives. In 0.x that is a minor. The v0.4.2 tag stays because the Go module proxy caches versions
 > permanently and it cannot be unpublished — but v0.5.0 is the version to use, and the two are the
 > same fixes.
+
+> **Upgrading — the model cache moved.** If you run more than one version of the binary (a pinned hook, a second install), the **older** one
+> does not know the cache moved and will start re-downloading BGE-M3 into `~/.vaultmind/models`. If
+> you see an unexpected multi-GB download: upgrade the other binary, or point the old path at the new
+> one (`ln -s ~/Library/Caches/vaultmind/models ~/.vaultmind/models`), or delete the leftover
+> directory. Nothing is lost either way — the migrated weights are the ones in the platform cache.
 
 ### Changed
 
@@ -957,22 +957,14 @@ succeeded. Two were in code that earlier fixes had already touched without closi
 - **`Capture` returns no path when the write fails** — it previously handed back the filename it
   *would* have written.
 
-### Upgrade note — the model cache moved
-
-If you run more than one version of the binary (a pinned hook, a second install), the **older** one
-does not know the cache moved and will start re-downloading BGE-M3 into `~/.vaultmind/models`. If
-you see an unexpected multi-GB download: upgrade the other binary, or point the old path at the new
-one (`ln -s ~/Library/Caches/vaultmind/models ~/.vaultmind/models`), or delete the leftover
-directory. Nothing is lost either way — the migrated weights are the ones in the platform cache.
-
-
-## [0.4.1] — 2026-08-15
+## [0.4.1] - 2026-08-15
 
 Every fix here came out of a review pass over v0.4.0, and all but one is a defect in code or
 documentation v0.4.0 itself shipped. The decisive findings came from running the binary against
 real session histories rather than reading the diff.
 
 ### Fixed
+
 - **An unusable `--output-dir` is an error, not 179 junk transcripts.** Every write failure was
   recorded per-file as a skipped transcript, so pointing a bootstrap capture at a path blocked by a
   regular file (or read-only, or full) printed `Captured 0 … Skipped 179 file(s) (empty or not a
@@ -1005,9 +997,10 @@ real session histories rather than reading the diff.
   to a URL that already ends in `/releases/tag/<tag>`, producing a nested path that does not exist.
   It had been wrong for every release through v0.4.0 (whose notes were corrected by hand).
 
-## [0.4.0] — 2026-08-15
+## [0.4.0] - 2026-08-15
 
 ### Added
+
 - **`arc candidates` shows the existing arcs each proposal resembles, with cosine scores.** The
   2026-05-31 distillation review named de-duplication — not extraction — the biggest risk in this
   pipeline, having measured two independent miners mis-tagging the same candidate to two different
@@ -1026,6 +1019,7 @@ real session histories rather than reading the diff.
   its episodes, pointing at a desk vault reads its entries — no new flag.
 
 ### Fixed
+
 - **Subagent transcripts no longer overwrite the session they came from.** Claude Code nests
   subagent and workflow transcripts under each session directory and stamps them with the *parent*
   session's id, so every one of them derived the same episode filename as the real session — one
@@ -1079,9 +1073,10 @@ real session histories rather than reading the diff.
   but no phrase matches, the report printed "No candidate moments found" directly beneath the list
   it had just rendered.
 
-## [0.3.0] — 2026-08-13
+## [0.3.0] - 2026-08-13
 
 ### Added
+
 - **`episode capture --incremental` captures a session's transcript in bounded segments instead
   of re-rendering the whole thing on every call.** A long-lived session that never closes used to
   have its `SessionEnd` hook re-render the ENTIRE transcript into the same episode file every
@@ -1090,7 +1085,14 @@ real session histories rather than reading the diff.
   dir) and writes only the new content as its own small `-partNNNNNNNN` segment, so an
   ever-growing session produces several bounded files instead of one unbounded one. (#72)
 
+### Changed
+
+- Dependency bumps: `go-isatty`, `ckeletin-go`, `goose`, `golang.org/x/sync`, `golang.org/x/sys`,
+  `golang.org/x/text`, `modernc.org/sqlite`, and CI actions (`actions/checkout`,
+  `actions/setup-go`, `goreleaser/goreleaser-action`, `github/codeql-action`). (#75)
+
 ### Fixed
+
 - **Vault auto-discovery no longer silently selects your home directory.** When no `--vault` was
   given, the walk-up looked for a `.vaultmind/` from the working directory all the way to the
   filesystem root. A stray `.vaultmind/` at `$HOME` — the debris one errant `vaultmind index` run
@@ -1136,17 +1138,14 @@ real session histories rather than reading the diff.
   generic failure, so a broken SessionEnd hook is diagnosable from its own output. (#72)
 
 ### Security
+
 - Bump `github.com/go-git/go-git` to v5.19.2, clearing GHSA-hc8v-wwc9-vgxm. Reachable from the git
   policy checker and committer used by `note create --commit` and `apply`. (#73)
 
-### Changed
-- Dependency bumps: `go-isatty`, `ckeletin-go`, `goose`, `golang.org/x/sync`, `golang.org/x/sys`,
-  `golang.org/x/text`, `modernc.org/sqlite`, and CI actions (`actions/checkout`,
-  `actions/setup-go`, `goreleaser/goreleaser-action`, `github/codeql-action`). (#75)
-
-## [0.2.3] — 2026-07-28
+## [0.2.3] - 2026-07-28
 
 ### Fixed
+
 - **BGE-M3 embedding no longer hangs on a note that exceeds the model's token limit.** hugot
   defaults the tokenizer's hard truncation to the model's `max_position_embeddings` (8194 for
   BGE-M3), but XLM-RoBERTa derives position IDs with a `padding_idx+1` offset, so a sequence of
@@ -1158,9 +1157,20 @@ real session histories rather than reading the diff.
   pipeline construction, so no note can reach the model oversized regardless of the code path; the
   char/token pre-truncation becomes an optimization rather than the sole safeguard. (#39)
 
-## [0.2.2] — 2026-07-27
+## [0.2.2] - 2026-07-27
+
+### Changed
+
+- **`vaultmind index --full --embed` now purges and re-embeds every note.** Previously `--full`
+  rebuilt the content index but preserved existing embeddings, so it could not switch models and
+  left mixed vaults uncorrected. It now purges all embeddings and re-embeds the whole vault as the
+  requested model — which also **heals** an already-mixed vault. The purge runs only after the
+  embedder loads successfully, and a `--full` run that then fails to re-embed exits non-zero
+  rather than reporting success with an emptied index. A habitual `--full --embed` now pays the
+  full embedding cost each run; plain `--embed` remains the cheap incremental convergence path. (#67)
 
 ### Fixed
+
 - **BGE-M3 embedding no longer deadlocks partway through a vault (the "24/42 wedge").** The
   Python inference sidecar's stderr was captured but never drained during the batch loop, so a
   note past BGE-M3's 8192-token limit flooded stderr with tokenizer warnings, filled the OS
@@ -1174,22 +1184,15 @@ real session histories rather than reading the diff.
   **fails closed** with an actionable message pointing at `--full` and `doctor`, and an
   unrecognized `--model` token is rejected instead of silently coercing to minilm. (#67)
 
-### Changed
-- **`vaultmind index --full --embed` now purges and re-embeds every note.** Previously `--full`
-  rebuilt the content index but preserved existing embeddings, so it could not switch models and
-  left mixed vaults uncorrected. It now purges all embeddings and re-embeds the whole vault as the
-  requested model — which also **heals** an already-mixed vault. The purge runs only after the
-  embedder loads successfully, and a `--full` run that then fails to re-embed exits non-zero
-  rather than reporting success with an emptied index. A habitual `--full --embed` now pays the
-  full embedding cost each run; plain `--embed` remains the cheap incremental convergence path. (#67)
-
 ### Security
+
 - Bump `golang.org/x/text` to v0.39.0 to clear GO-2026-5970 (infinite loop on invalid input),
   reachable via Unicode normalization in the embedding and identity/envelope paths.
 
-## [0.2.1] — 2026-07-02
+## [0.2.1] - 2026-07-02
 
 ### Fixed
+
 - **Release artifacts now cross-compile for Windows.** The Contract-B custody signer's
   peer-credential check (`peerUID`, unix-only via `SO_PEERCRED`/`LOCAL_PEERCRED`) had no
   non-unix build target, so goreleaser's Windows build failed and v0.2.0 published as a Go
@@ -1198,9 +1201,10 @@ real session histories rather than reading the diff.
   cross-compiles; the `identity signer` daemon itself remains unix-only. v0.2.1 carries all of
   v0.2.0 plus this fix, and is the release to pull the ORT archives from.
 
-## [0.2.0] — 2026-07-02
+## [0.2.0] - 2026-07-02
 
 ### Added
+
 - **Contract-B agent identity — a full ed25519 trust-root subsystem under `vaultmind identity`.** The
   headline addition: forgery-proof agent identity for a multi-agent mesh, built in reviewed slices.
   - **Signing core + custody** — the JCS-canonical (RFC 8785) ed25519 signing core (small-order pubkey
@@ -1223,12 +1227,14 @@ real session histories rather than reading the diff.
   points at the guide.
 
 ### Changed
+
 - **ORT backend honesty.** On an ORT binary, a BGE-M3 load failure now **fails loud** (naming the
   remedy) instead of silently degrading to MiniLM; `version` and `doctor` report the active backend
   (`ort+cpu` / `ort+coreml` / `go-cpu`) and give backend-appropriate remedies; a symlink-on-PATH ORT
   install is now resolved instead of silently falling back.
 
 ### Fixed
+
 - **Indexing robustness** — cap BGE-M3 input by real token count so embedding never hangs; surface
   dropped notes and skip empty-body notes on embed; migrate `_path:`-form ids to frontmatter `id` on
   re-index with no silent data loss.
@@ -1238,13 +1244,15 @@ real session histories rather than reading the diff.
 - **`doctor heal`** rewrites id-form wikilinks that it flags as Obsidian-incompatible.
 
 ### Security
+
 - `golang.org/x/image` bumped to v0.43.0 (GO-2026-5061); routine CI action + dependency bumps.
 - Each Contract-B slice landed with red-team / PR-review hardening (signer socket-hijack + key-perms,
   registry re-attack suites, envelope int64 widening, custody coverage floor).
 
-## [0.1.11] — 2026-06-07
+## [0.1.11] - 2026-06-07
 
 ### Added
+
 - **`doctor heal` — repair lives under the health hub.** `vaultmind doctor heal` applies every
   auto-fixable repair `doctor` found (today: Obsidian-incompatible wikilinks); `doctor heal wikilinks`
   is the surgical form (the logic moved here from the removed `lint fix-links`). `heal` **applies by
@@ -1264,6 +1272,7 @@ real session histories rather than reading the diff.
   `COMMANDS.md` in sync.
 
 ### Changed
+
 - **Graph traversal is unified under `memory`.** `memory links <id> [--out|--in|--both]` (default
   `--both`; `--in` = backlinks) is a single direction-flagged command that absorbs the old
   `links out` / `links in`. `memory neighbors <id> [--depth N]` is the BFS neighborhood with full
@@ -1274,6 +1283,7 @@ real session histories rather than reading the diff.
   broken links now points at `vaultmind doctor heal wikilinks` (previously an unshipped helper script).
 
 ### Deprecated
+
 - The following invocations are now **hidden deprecated aliases** that print a one-line stderr notice
   and delegate to the new path. They will be removed in ~2 releases:
   - `links out` → `memory links --out`
@@ -1289,9 +1299,10 @@ real session histories rather than reading the diff.
 - The canonical repair verb is `heal`; `fix` is a permanent cobra alias (help shows "heal (fix)").
   `dataview lint` is a separate domain checker and is **not** affected.
 
-## [0.1.10] — 2026-06-05
+## [0.1.10] - 2026-06-05
 
 ### Added
+
 - **Concise quick-start for agent onboarding.** `vaultmind init --print-instructions` now prints a
   short, skimmable quick-start (install → `init` → `hooks install --vault` → the env-var routing
   table → `index --embed` → first `ask`) instead of the full 700-line guide an agent had to read in
@@ -1303,6 +1314,7 @@ real session histories rather than reading the diff.
   `VAULTMIND_VAULT`**, so existing single-var setups are unchanged.
 
 ### Changed
+
 - **`vaultmind init --print-instructions` now defaults to the quick-start, not the full guide.** Use
   `--full` for the previous whole-guide output. (Behavior change for anyone scripting around the old
   full dump.)
@@ -1310,9 +1322,10 @@ real session histories rather than reading the diff.
   memory/activation-state surface — hot/recent note titles), not a content `ask`; and `index --embed`
   is content-hash incremental (only new/changed notes embed), so per-note live indexing is cheap.
 
-## [0.1.9] — 2026-06-04
+## [0.1.9] - 2026-06-04
 
 ### Fixed
+
 - **Hook-drift detection no longer false-positives on comment-only differences.**
   `doctor`'s hook-drift check compared each installed hook script to the embedded
   canonical byte-for-byte, so a script that kept richer annotations than the shipped
@@ -1323,9 +1336,10 @@ real session histories rather than reading the diff.
   This matches the "only real edits are drift" doctrine already used for vault-note
   drift. Backed by a new heredoc- and quoting-aware `shellparse.StripCommentsAndBlanks`.
 
-## [0.1.8] — 2026-06-04
+## [0.1.8] - 2026-06-04
 
 ### Fixed
+
 - **`episodes/` is now excluded from indexing by default.** Captured session
   transcripts (the bootstrap target) are raw material for arc distillation, not
   retrieval targets — large (a transcript is ~30× the size of an arc) and redundant
@@ -1333,24 +1347,27 @@ real session histories rather than reading the diff.
   exclude `episodes`, so a bootstrapped vault doesn't embed megabytes of transcripts.
   (Existing vaults: add `- "episodes"` to your `.vaultmind/config.yaml` exclude list.)
 
-## [0.1.7] — 2026-06-04
+## [0.1.7] - 2026-06-04
 
 Re-release of 0.1.6 with prebuilt binaries. 0.1.6's release job failed the coverage
 gate before building artifacts, so 0.1.6 is `go install`-able but ships no prebuilt
 ORT archives; 0.1.7 supersedes it (0.1.6 is retracted in `go.mod`). Same features.
 
-### Fixed
-- Coverage floor: the `episode capture` command (single-file and directory paths)
-  had no cmd-level test, which dropped project coverage below the gate. Added one.
-
 ### Changed
+
 - README now surfaces the cold-start **bootstrap-from-transcripts** path and the
   example vault's concept cards, and notes the "Try it" commands assume a repo
   checkout (clarifying it for `go install` / prebuilt-archive users).
 
-## [0.1.6] — 2026-06-04
+### Fixed
+
+- Coverage floor: the `episode capture` command (single-file and directory paths)
+  had no cmd-level test, which dropped project coverage below the gate. Added one.
+
+## [0.1.6] - 2026-06-04
 
 ### Added
+
 - **Bootstrap an identity vault from existing transcripts.** `vaultmind episode
   capture` now accepts a **directory** — it recursively captures every `*.jsonl`
   transcript under it into episodes (empty/non-transcript files skipped), so you can
@@ -1365,6 +1382,7 @@ ORT archives; 0.1.7 supersedes it (0.1.6 is retracted in `go.mod`). Same feature
   demonstrates. Complements [docs/building-an-identity-vault.md](docs/building-an-identity-vault.md).
 
 ### Fixed
+
 - **`vault-track-read.sh` aborted with "unbound variable" under `set -u`.** The
   PreToolUse read-tracking hook referenced the *optional* `$VAULT_PATH_PATTERN` /
   `$VAULTMIND_VAULT` env vars bare; under `set -u` (which the script sets) an unset
@@ -1372,9 +1390,10 @@ ORT archives; 0.1.7 supersedes it (0.1.6 is retracted in `go.mod`). Same feature
   tracking silently didn't run). Guarded both with `${VAR:-}` defaults; added a
   regression test pinning it (field report 2026-06-04).
 
-## [0.1.5] — 2026-06-04
+## [0.1.5] - 2026-06-04
 
 ### Added
+
 - **New guide: [docs/building-an-identity-vault.md](docs/building-an-identity-vault.md).**
   How to *grow* an agent's identity vault — the arc method (identity is carried by
   transformation moments, not rules; you don't author it up front, it accretes from
@@ -1385,6 +1404,7 @@ ORT archives; 0.1.7 supersedes it (0.1.6 is retracted in `go.mod`). Same feature
   the personal-vs-shared choice during setup.
 
 ### Changed
+
 - **`index --embed` now names the MiniLM lane gap at embed time.** A pure-Go
   (`go install`) build silently lands on MiniLM (dense-only, 2 lanes). The embed
   output now adds a one-line note — dense-only + the **no-compile** upgrade to the
@@ -1396,15 +1416,16 @@ ORT archives; 0.1.7 supersedes it (0.1.6 is retracted in `go.mod`). Same feature
   and `go install` is the only path that can't produce BGE-M3 — so a `go install`-based
   setup is on MiniLM by design.
 
-## [0.1.4] — 2026-06-04
+## [0.1.4] - 2026-06-04
 
 ### Fixed
+
 - **`vaultmind version` on `go install` builds** — a `go install …@version` binary printed `version dev, commit , built at ` (empty commit/date) because ldflags aren't injected on that path, even though Go embeds the module version and VCS stamps. Both `version` and `--version` now fall back to `debug.ReadBuildInfo()` (module version + VCS revision/time). Release binaries built with ldflags are unchanged.
 - **Empty `vaultmind search` output on zero hits** — a text-mode search with no matches printed nothing and exited 0, indistinguishable from a broken command. It now names the empty result and points at `vaultmind ask` for paraphrase matching.
 - **Embed remedy hints no longer suggest a refused command** — the "no embeddings yet" hints (`doctor`'s none-state, keyword-only `ask`) recommended `index --embed --model bge-m3`, which the pure-Go binary `go install` yields *refuses*. They now suggest plain `vaultmind index --embed`, letting the backend pick its default model (bge-m3 on ORT, minilm on pure-Go). The bge-m3-specific modality-imbalance hint is ORT-only and unchanged.
 - **A vault's own `README.md` no longer pollutes retrieval** — vault scanning now excludes files by basename or vault-relative path (it previously filtered directories only), and `README.md` is excluded by default and in the `init` config template. The vault's meta README is no longer indexed as a blank-titled note surfacing in every query's results.
 
-## [0.1.3] — 2026-06-04
+## [0.1.3] - 2026-06-04
 
 First installable public release of the VaultMind CLI — a single-binary
 associative-memory engine for AI agents over Git-backed Markdown vaults.
@@ -1412,6 +1433,7 @@ Supersedes the retracted 0.1.0–0.1.2 versions (see Removed); `go install
 github.com/peiman/vaultmind@latest` resolves here.
 
 ### Added
+
 - Vault indexing: full-text (FTS5) + BGE-M3 dense/sparse/ColBERT embeddings + a
   link/alias knowledge graph, built with `vaultmind index`.
 - 4-way Reciprocal Rank Fusion hybrid retrieval with calibrated top-hit
@@ -1436,15 +1458,17 @@ github.com/peiman/vaultmind@latest` resolves here.
   > the record of what users were told is the point of a changelog.
 
 ### Removed
+
 - Retracted v0.1.0–v0.1.2 in `go.mod`: withdrawn versions on this module path that
   predate this release and are superseded by it.
 
-## [0.1.2] — withdrawn
+## [0.1.2] - 2026-06-04 [YANKED]
 
 The initial public tag, retracted in favor of [0.1.3]. It shipped without the
 `.claude/scripts/` reference hook scripts its own onboarding references, and carried
 maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; do
 not install.
+
 
 [Unreleased]: https://github.com/peiman/vaultmind/compare/v0.7.1...HEAD
 [0.7.1]: https://github.com/peiman/vaultmind/compare/v0.7.0...v0.7.1
