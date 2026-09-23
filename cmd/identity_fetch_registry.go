@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"crypto/ed25519"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -11,8 +9,6 @@ import (
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/internal/config/commands"
-	"github.com/peiman/vaultmind/internal/identity/anchor"
-	"github.com/peiman/vaultmind/internal/identity/registry"
 	"github.com/peiman/vaultmind/internal/identity/registryfetch"
 	"github.com/peiman/vaultmind/internal/identity/relayclient"
 	"github.com/spf13/cobra"
@@ -20,7 +16,8 @@ import (
 
 const (
 	fetchRegistryErrNoRoot  = "no pinned root key: pass --root-pubkey, set " + config.KeyAppIdentityfetchregistryRootPubkey + " in the vaultmind config, or pin the network with `vaultmind identity enroll` — a registry cannot be trusted without one"
-	fetchRegistryErrBadRoot = "--root-pubkey is not a valid base64 ed25519 public key"
+	fetchRegistryRootFlag   = "root-pubkey"
+	fetchRegistryErrBadRoot = "--" + fetchRegistryRootFlag + rootPinInvalidSuffix
 	fetchRegistryErrNoHub   = "no hub address: pass --hub, set " + envDaemonURL + ", or declare daemon_url in agents.yaml"
 	fetchRegistryErrNoPath  = "no registry path: pass --registry-file, or declare registry_path in agents.yaml"
 )
@@ -35,10 +32,17 @@ func init() {
 // runIdentityFetchRegistry resolves pin, hub, and path BEFORE touching the
 // network, so a misconfigured machine fails without fetching anything.
 func runIdentityFetchRegistry(cmd *cobra.Command, _ []string) error {
-	root, err := resolveFetchRegistryRoot(getConfigValueWithFlags[string](cmd, "root-pubkey", config.KeyAppIdentityfetchregistryRootPubkey))
+	// Only the flag itself is explicit here: the config pin is the shared
+	// resolver's second source, so doctor reads the very same one.
+	rootFlag, _ := cmd.Flags().GetString(fetchRegistryRootFlag)
+	pin, err := resolveRootPin(rootFlag, "--"+fetchRegistryRootFlag)
 	if err != nil {
 		return err
 	}
+	if pin.pub == nil {
+		return errors.New(fetchRegistryErrNoRoot)
+	}
+	root := pin.pub
 	agents, project := registryPath(), projectPath()
 	hub := getConfigValueWithFlags[string](cmd, "hub", config.KeyAppIdentityfetchregistryHub)
 	if hub == "" {
@@ -65,31 +69,6 @@ func runIdentityFetchRegistry(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	return writeFetchRegistryResult(cmd.OutOrStdout(), res, path, registryMaxStalenessFromAgentsYAML(agents, project), now)
-}
-
-// resolveFetchRegistryRoot returns the pin: the flag when given, else the first
-// anchor `identity enroll` persisted. No pin is an error, never a skip.
-func resolveFetchRegistryRoot(flag string) (ed25519.PublicKey, error) {
-	if flag == "" {
-		anchorPath, err := defaultNetworkAnchorPath()
-		if err != nil {
-			return nil, errors.New(fetchRegistryErrNoRoot)
-		}
-		anchors, err := anchor.Load(anchorPath)
-		if err != nil || len(anchors) == 0 {
-			return nil, errors.New(fetchRegistryErrNoRoot)
-		}
-		flag = anchors[0].RootPubKey
-	}
-	raw, err := base64.StdEncoding.DecodeString(flag)
-	if err != nil {
-		return nil, errors.New(fetchRegistryErrBadRoot)
-	}
-	pk, err := registry.NewPublicKey(raw)
-	if err != nil {
-		return nil, errors.New(fetchRegistryErrBadRoot)
-	}
-	return pk.Bytes(), nil
 }
 
 func writeFetchRegistryResult(w io.Writer, res registryfetch.Result, path string, maxStalenessSecs int64, now time.Time) error {

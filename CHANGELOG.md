@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`doctor` now reads the same pinned root key as `identity fetch-registry`**
+  (#151). A machine pinned through `app.identityfetchregistry.root_pubkey` —
+  the route 0.9.0 gave members who joined before `identity enroll` existed —
+  had its registry verified by the fetch, while `doctor` looked only at the
+  enroll anchor and reported the same registry "NOT authenticated". Both now
+  use one resolution: the command's own flag, then the config pin, then the
+  enroll anchor. A malformed config pin is now an error naming the key, not a
+  silent fall-back to a weaker source.
+- The command tests no longer read the developer's own vaultmind config. A
+  value set there could turn tests red on one machine and green on CI.
+
 ## [0.9.0] - 2026-09-23
 
 > **Upgrading.** Prebuilt downloads need nothing extra. **Building from source

@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"os"
@@ -11,9 +10,7 @@ import (
 	"time"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
-	"github.com/peiman/vaultmind/internal/identity/anchor"
 	"github.com/peiman/vaultmind/internal/identity/doctorclient"
-	"github.com/peiman/vaultmind/internal/identity/registry"
 	"github.com/peiman/vaultmind/internal/identity/signer"
 	"github.com/peiman/vaultmind/internal/meshpaths"
 	"github.com/peiman/vaultmind/internal/query"
@@ -55,8 +52,8 @@ const (
 	meshWarnPrefix          = "  ⚠ "
 )
 
-// meshDoctorErrParse prefixes a --mesh-root-pubkey decode/validate failure.
-const meshDoctorErrParse = "doctor: --mesh-root-pubkey is not a valid base64 ed25519 root pubkey"
+// meshRootPubkeyFlag names doctor's explicit pin flag in pin errors.
+const meshRootPubkeyFlag = "--mesh-root-pubkey"
 
 // meshDoctorErrRegistry prefixes a --mesh-registry read failure.
 const meshDoctorErrRegistry = "doctor: read --mesh-registry file"
@@ -190,45 +187,21 @@ func meshSignalPresent(s meshSignals) bool {
 		s.flagPassed || s.daemonReachable || s.slug != "" || s.registryUnread
 }
 
-// applyPinAndNetwork sets the pinned root + network id from --mesh-root-pubkey
-// when given, else auto-discovers the FIRST persisted anchor. It returns whether
-// an anchor was found (a mesh signal). An explicit --mesh-root-pubkey that does
-// not decode is a hard error (the operator asked for a specific pin).
+// applyPinAndNetwork sets the pinned root + network id from resolveRootPin —
+// the same resolution fetch-registry uses, so doctor and the fetch cannot
+// disagree about which root this machine trusts (#151). It returns whether a
+// pin source was declared (a mesh signal). A malformed --mesh-root-pubkey or
+// config pin is a hard error (the operator asked for a specific pin).
 func applyPinAndNetwork(in *query.MeshDoctorInput, rootFlag string) (bool, error) {
-	if rootFlag != "" {
-		raw, err := base64.StdEncoding.DecodeString(rootFlag)
-		if err != nil {
-			return false, fmt.Errorf("%s: %w", meshDoctorErrParse, err)
-		}
-		pk, err := registry.NewPublicKey(raw)
-		if err != nil {
-			return false, fmt.Errorf("%s: %w", meshDoctorErrParse, err)
-		}
-		in.PinnedRootPub = pk.Bytes()
-		in.NetworkID = registry.NetworkID(pk.Bytes())
-		return false, nil
-	}
-
-	anchorPath, err := defaultNetworkAnchorPath()
+	pin, err := resolveRootPin(rootFlag, meshRootPubkeyFlag)
 	if err != nil {
-		return false, nil //nolint:nilerr // anchor path unresolved ⇒ no pin, not fatal
+		return false, fmt.Errorf("doctor: %w", err)
 	}
-	anchors, err := anchor.Load(anchorPath)
-	if err != nil || len(anchors) == 0 {
-		return false, nil //nolint:nilerr // missing/corrupt anchor ⇒ unpinned path
+	if pin.pub != nil {
+		in.PinnedRootPub = pin.pub
+		in.NetworkID = pin.networkID
 	}
-	a := anchors[0]
-	raw, err := base64.StdEncoding.DecodeString(a.RootPubKey)
-	if err != nil {
-		return true, nil //nolint:nilerr // present-but-undecodable ⇒ stay unpinned
-	}
-	pk, err := registry.NewPublicKey(raw)
-	if err != nil {
-		return true, nil //nolint:nilerr // present-but-invalid ⇒ stay unpinned
-	}
-	in.PinnedRootPub = pk.Bytes()
-	in.NetworkID = a.NetworkID
-	return true, nil
+	return pin.declared, nil
 }
 
 // applyOfflineRegistry reads a --mesh-registry file into the input when given.

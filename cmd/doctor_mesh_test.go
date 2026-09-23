@@ -417,7 +417,7 @@ func TestDoctor_MeshBadRootPubkeyFlag(t *testing.T) {
 	_, _, err := runRootCmd(t, "doctor", "--vault", vault,
 		"--mesh-root-pubkey", "not-valid-base64!!!")
 	require.Error(t, err)
-	require.Contains(t, err.Error(), meshDoctorErrParse)
+	require.Contains(t, err.Error(), meshRootPubkeyFlag+rootPinInvalidSuffix)
 }
 
 // buildCmdSignedRegistry roots a one-binding registry for the cmd-layer tests.
