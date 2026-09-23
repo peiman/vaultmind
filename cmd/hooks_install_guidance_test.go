@@ -30,7 +30,7 @@ func TestHooksInstallHuman_OffersMergeBeforeTheJSONWall(t *testing.T) {
 		Written:        []string{"load-persona.sh"},
 		SettingsStanza: "{\n  \"hooks\": {}\n}",
 	}
-	writeHooksInstallHuman(&buf, res, nil)
+	writeHooksInstallHuman(&buf, res, nil, installGuidance{rerun: "vaultmind hooks install"})
 	out := buf.String()
 
 	mergeAt := strings.Index(out, "--merge")
@@ -58,7 +58,7 @@ func TestHooksInstallHuman_MergeOutcomeSuppressesStanza(t *testing.T) {
 	writeHooksInstallHuman(&buf, res, &hooks.MergeFileResult{
 		SettingsPath: "/tmp/proj/.claude/settings.json",
 		Changed:      true,
-	})
+	}, installGuidance{})
 	out := buf.String()
 
 	assert.NotContains(t, out, res.SettingsStanza)

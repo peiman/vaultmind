@@ -82,11 +82,22 @@ Everything is `--json`-able for programmatic use; every command returns a stable
 
 ## Agent integration (persona reconstruction)
 
-VaultMind can wire into Claude Code — or any agent that supports SessionStart hooks — so the agent reconstructs itself from its vault each session:
+VaultMind wires into **Claude Code** and **Codex CLI** so the agent reconstructs itself from its vault each session. Name the project and the vault, and let it write the wiring:
 
 ```bash
-vaultmind hooks install <project-dir>
+# Claude Code — writes <project-dir>/.claude/settings.json
+vaultmind hooks install <project-dir> --vault <your-vault> --merge
+
+# Codex CLI — writes <project-dir>/.codex/hooks.json
+vaultmind hooks install <project-dir> --vault <your-vault> --agent codex --merge
+
+# Recall across several vaults (identity + a desk, say); the persona loads the first
+vaultmind hooks install <project-dir> --vaults <identity-vault>,<desk-vault> --merge
 ```
+
+Add `--dry-run` to preview the change first. Without `--merge` the scripts are written and the wiring is printed for you to paste. Without `--vault`, the hooks look for `<project-dir>/vaultmind-identity`.
+
+**Codex needs two one-time approvals**, and skips the hooks silently until you give them: trust the project when Codex asks, then run `/hooks` inside Codex and trust the VaultMind hooks. Episode capture is not wired for Codex yet.
 
 This installs hook scripts that load identity + current context at session start, surface relevant pointers per turn, and capture each session as an episode for later distillation. Check them with `vaultmind hooks status <project-dir>`, which reports both halves — whether each script matches the canonical copy, and whether each canonical event is actually **wired** in `settings.json`. A project can hold every script byte-identical and still run none of them; an unwired event is reported by name and fails the check. The scripts are embedded in the binary and written into `<project-dir>/.claude/scripts/` (idempotent). See **[docs/AGENT_USAGE.md](docs/AGENT_USAGE.md)** for the day-to-day agent workflow, and **[docs/building-an-identity-vault.md](docs/building-an-identity-vault.md)** for how to grow an agent's identity from scratch — the arc method, and why an identity vault is **personal** and usually shouldn't be committed to a shared repo.
 

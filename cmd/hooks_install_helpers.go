@@ -139,7 +139,10 @@ func runHooksInstallCore(cmd *cobra.Command, p hooksInstallParams) error {
 		return retErr
 	}
 
-	writeHooksInstallHuman(w, res, mergeRes)
+	writeHooksInstallHuman(w, res, mergeRes, installGuidance{
+		rerun:        hooksInstallRerun(p, hooksAgentClaude, vaults),
+		missingVault: missingVaultWarning(p.projectDir, strings.TrimSpace(p.vault), vaults),
+	})
 	return retErr
 }
 
@@ -156,7 +159,7 @@ func hooksInstallErrorCode(res *hooks.InstallResult) string {
 // writeHooksInstallHuman renders the human-readable install summary, including
 // the optional settings-merge outcome. When a merge ran, the copy-paste stanza
 // is suppressed (the wiring is already done or previewed).
-func writeHooksInstallHuman(w io.Writer, res *hooks.InstallResult, mergeRes *hooks.MergeFileResult) {
+func writeHooksInstallHuman(w io.Writer, res *hooks.InstallResult, mergeRes *hooks.MergeFileResult, g installGuidance) {
 	if res == nil {
 		return
 	}
@@ -182,6 +185,9 @@ func writeHooksInstallHuman(w io.Writer, res *hooks.InstallResult, mergeRes *hoo
 		_, _ = fmt.Fprintf(w, "\nRe-run with --force to overwrite, or edit the conflicting files manually.\n")
 	}
 
+	if g.missingVault != "" {
+		_, _ = fmt.Fprintf(w, "\n%s\n", g.missingVault)
+	}
 	if mergeRes != nil {
 		writeMergeOutcome(w, mergeRes)
 		return // merge handles the wiring messaging; the paste stanza is redundant
@@ -194,8 +200,8 @@ func writeHooksInstallHuman(w io.Writer, res *hooks.InstallResult, mergeRes *hoo
 		// The preview flag goes in the same breath: the reason people paste by
 		// hand is not wanting a tool to edit settings.json unseen.
 		_, _ = fmt.Fprintf(w, "\nNext: wire these into .claude/settings.json.\n")
-		_, _ = fmt.Fprintf(w, "  vaultmind hooks install --merge --dry-run   preview the merged file, write nothing\n")
-		_, _ = fmt.Fprintf(w, "  vaultmind hooks install --merge             apply it (additive — existing hooks preserved)\n")
+		_, _ = fmt.Fprintf(w, "  %s --merge --dry-run   preview the merged file, write nothing\n", g.rerun)
+		_, _ = fmt.Fprintf(w, "  %s --merge             apply it (additive — existing hooks preserved)\n", g.rerun)
 		_, _ = fmt.Fprintf(w, "\nOr paste this yourself, merging under an existing \"hooks\" key if present:\n\n%s\n", res.SettingsStanza)
 	}
 }
@@ -251,24 +257,27 @@ func runHooksInstallCodex(cmd *cobra.Command, p hooksInstallParams, only []strin
 		_ = json.NewEncoder(w).Encode(env)
 		return retErr
 	}
-	writeHooksInstallCodexHuman(w, res, mergeRes)
+	writeHooksInstallCodexHuman(w, res, mergeRes, installGuidance{
+		rerun:        hooksInstallRerun(p, hooksAgentCodex, vaults),
+		missingVault: missingVaultWarning(projectDir, vault, vaults),
+	})
 	return retErr
 }
 
 // writeHooksInstallCodexHuman is the Codex variant of the human summary: the
 // wiring target is .codex/hooks.json, and the silent-skip trust rule is said
 // every time, because it is the one failure the operator cannot see.
-func writeHooksInstallCodexHuman(w io.Writer, res *hooks.InstallResult, mergeRes *hooks.MergeFileResult) {
+func writeHooksInstallCodexHuman(w io.Writer, res *hooks.InstallResult, mergeRes *hooks.MergeFileResult, g installGuidance) {
 	if res == nil {
 		return
 	}
 	stanza := res.SettingsStanza
 	res.SettingsStanza = "" // the Claude Code paste instructions do not apply
-	writeHooksInstallHuman(w, res, mergeRes)
+	writeHooksInstallHuman(w, res, mergeRes, g)
 	if mergeRes == nil && stanza != "" {
 		_, _ = fmt.Fprintf(w, "\nNext: wire these into .codex/hooks.json.\n")
-		_, _ = fmt.Fprintf(w, "  vaultmind hooks install --agent codex --merge --dry-run   preview, write nothing\n")
-		_, _ = fmt.Fprintf(w, "  vaultmind hooks install --agent codex --merge             apply it (additive)\n")
+		_, _ = fmt.Fprintf(w, "  %s --merge --dry-run   preview, write nothing\n", g.rerun)
+		_, _ = fmt.Fprintf(w, "  %s --merge             apply it (additive)\n", g.rerun)
 		_, _ = fmt.Fprintf(w, "\nOr paste this yourself:\n\n%s\n", stanza)
 	}
 	_, _ = io.WriteString(w, codexTrustNotice)
@@ -297,4 +306,70 @@ func parseHookVaults(raw string) ([]string, error) {
 		return nil, fmt.Errorf("--vaults needs at least two vaults to search together; for one, use --vault")
 	}
 	return out, nil
+}
+
+// installGuidance is what the human summary needs beyond the install result:
+// the command to suggest, and a warning about the vault the hooks will use.
+type installGuidance struct {
+	rerun        string
+	missingVault string
+}
+
+// hooksInstallRerun rebuilds the command the user ran, so a suggested next step
+// is that command plus one flag. The bare `vaultmind hooks install --merge` it
+// used to print dropped the project dir, and run from where the user stood it
+// wired a different directory (stranger test, 2026-09-23).
+func hooksInstallRerun(p hooksInstallParams, agent string, vaults []string) string {
+	parts := []string{"vaultmind hooks install"}
+	if d := strings.TrimSpace(p.projectDir); d != "" && d != "." {
+		parts = append(parts, shellWord(d))
+	}
+	if agent == hooksAgentCodex {
+		parts = append(parts, "--agent codex")
+	}
+	if v := strings.TrimSpace(p.vault); v != "" {
+		parts = append(parts, "--vault "+shellWord(v))
+	}
+	if len(vaults) > 0 {
+		parts = append(parts, "--vaults "+shellWord(strings.Join(vaults, ",")))
+	}
+	if pr := strings.TrimSpace(p.profile); pr != "" {
+		parts = append(parts, "--profile "+shellWord(pr))
+	}
+	return strings.Join(parts, " ")
+}
+
+// shellWord quotes s only when a shell would otherwise split or expand it.
+func shellWord(s string) string {
+	for _, r := range s {
+		if !shellSafe(r) {
+			return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+		}
+	}
+	return s
+}
+
+// shellSafe reports whether r needs no quoting in a POSIX shell word.
+func shellSafe(r rune) bool {
+	switch {
+	case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		return true
+	}
+	return strings.ContainsRune("/._-,:=~", r)
+}
+
+// missingVaultWarning says so when no vault was named and the default the
+// hooks fall back to (<project>/vaultmind-identity) does not exist. Following
+// the README, nothing asked for a vault: the hooks were wired to a folder that
+// was never there, and loaded nothing without a word.
+func missingVaultWarning(projectDir, vault string, vaults []string) string {
+	if vault != "" || len(vaults) > 0 {
+		return ""
+	}
+	def := filepath.Join(projectDir, "vaultmind-identity")
+	if _, err := os.Stat(def); err == nil {
+		return ""
+	}
+	return fmt.Sprintf("⚠ No --vault given, so these hooks will read %s — which does not exist.\n"+
+		"  Until it does they load nothing. Point them at your vault: add --vault <path-to-your-vault>.", def)
 }

@@ -316,6 +316,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`hooks install`'s suggested next step wired the wrong directory.** After
+  `vaultmind hooks install ./myproject` it suggested `vaultmind hooks install
+  --merge` — without `./myproject`. Run where the user stood, that wired the
+  current directory, and `hooks status ./myproject` read "0 wired, 7 unwired".
+  The suggestion is now the command you ran plus `--merge` (project, `--vault`,
+  `--vaults`, `--agent` and `--profile` kept). And with no `--vault` and no
+  `<project>/vaultmind-identity`, the install now says the hooks would load
+  nothing, before the wiring JSON rather than after it. The README's agent
+  section now shows `--vault`, `--merge`, `--agent codex` and `--vaults`.
+
 - **Long or citation-dense notes failed to embed on MiniLM builds**, and the
   failure was reported as success. A regression from the #69 fix earlier in
   this cycle: it relaxed the character pre-cut on the premise that an exact
