@@ -100,6 +100,11 @@ func runHooksInstallCore(cmd *cobra.Command, p hooksInstallParams) error {
 	if verr != nil {
 		return verr
 	}
+	// Pinned absolute for the same reason as --vaults: hooks run from the
+	// project, so a relative vault resolves against the wrong directory.
+	if p.vault, verr = resolveHookVault(p.vault); verr != nil {
+		return verr
+	}
 	agent := strings.TrimSpace(p.agent)
 	if agent == "" {
 		agent = hooksAgentClaude
@@ -363,7 +368,13 @@ func shellSafe(r rune) bool {
 // the README, nothing asked for a vault: the hooks were wired to a folder that
 // was never there, and loaded nothing without a word.
 func missingVaultWarning(projectDir, vault string, vaults []string) string {
-	if vault != "" || len(vaults) > 0 {
+	if vault != "" {
+		if _, err := os.Stat(vault); err != nil {
+			return fmt.Sprintf("⚠ --vault %s does not exist, so these hooks will load nothing until it does.", vault)
+		}
+		return ""
+	}
+	if len(vaults) > 0 {
 		return ""
 	}
 	def := filepath.Join(projectDir, "vaultmind-identity")
@@ -372,4 +383,19 @@ func missingVaultWarning(projectDir, vault string, vaults []string) string {
 	}
 	return fmt.Sprintf("⚠ No --vault given, so these hooks will read %s — which does not exist.\n"+
 		"  Until it does they load nothing. Point them at your vault: add --vault <path-to-your-vault>.", def)
+}
+
+// resolveHookVault pins --vault to an absolute path. Hooks run from the
+// project directory, so `--vault ./my-vault` typed from elsewhere used to
+// resolve to <project>/my-vault and load nothing (stranger test, 2026-09-23).
+func resolveHookVault(raw string) (string, error) {
+	v := strings.TrimSpace(raw)
+	if v == "" {
+		return "", nil
+	}
+	abs, err := filepath.Abs(v)
+	if err != nil {
+		return "", fmt.Errorf("--vault: resolving %q: %w", v, err)
+	}
+	return abs, nil
 }

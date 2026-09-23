@@ -52,7 +52,8 @@ func TestMissingVaultWarning(t *testing.T) {
 
 	require.NoError(t, os.Mkdir(filepath.Join(proj, "vaultmind-identity"), 0o750))
 	assert.Empty(t, missingVaultWarning(proj, "", nil), "the default exists: nothing to warn about")
-	assert.Empty(t, missingVaultWarning(t.TempDir(), "/v/id", nil), "an explicit vault is the user's choice")
+	existing := t.TempDir()
+	assert.Empty(t, missingVaultWarning(t.TempDir(), existing, nil), "an explicit vault that exists is the user's choice")
 	assert.Empty(t, missingVaultWarning(t.TempDir(), "", []string{"/a", "/b"}))
 }
 
@@ -64,4 +65,56 @@ func TestHooksInstallHuman_WarnsAboutAMissingVaultBeforeTheJSON(t *testing.T) {
 	w, j := strings.Index(out, "⚠ no vault"), strings.Index(out, "{\"hooks\"")
 	require.NotEqual(t, -1, w)
 	assert.Less(t, w, j, "a warning below 60 lines of JSON has already scrolled away")
+}
+
+// STRANGER TEST (2026-09-23), following the README: `hooks install ./proj2
+// --vault ./my-vault --agent codex --merge` baked VAULTMIND_VAULT='./my-vault'
+// into the hooks. Hooks run from the PROJECT, so that resolved to
+// proj2/my-vault — nonexistent — and the identity hook printed nothing.
+// --vaults was already made absolute; --vault never was.
+func TestResolveHookVault_PinsRelativePathsAbsolute(t *testing.T) {
+	got, err := resolveHookVault("./my-vault")
+	require.NoError(t, err)
+	want, _ := filepath.Abs("./my-vault")
+	assert.Equal(t, want, got)
+
+	got, err = resolveHookVault("  ")
+	require.NoError(t, err)
+	assert.Empty(t, got, "no flag stays no flag")
+}
+
+// A named vault that is not there is the same silent failure by another road.
+func TestMissingVaultWarning_NamedVaultThatDoesNotExist(t *testing.T) {
+	msg := missingVaultWarning(t.TempDir(), "/no/such/vault", nil)
+	require.NotEmpty(t, msg)
+	assert.Contains(t, msg, "/no/such/vault")
+}
+
+// Through the real command, not the helper: the generated file must carry the
+// absolute vault, for both agents.
+func TestHooksInstall_RelativeVaultIsWrittenAbsolute(t *testing.T) {
+	for _, agent := range []string{hooksAgentClaude, hooksAgentCodex} {
+		t.Run(agent, func(t *testing.T) {
+			work := t.TempDir()
+			t.Chdir(work)
+			require.NoError(t, os.MkdirAll(filepath.Join(work, "my-vault"), 0o750))
+			require.NoError(t, os.MkdirAll(filepath.Join(work, "proj"), 0o750))
+
+			RootCmd.SetOut(new(bytes.Buffer))
+			RootCmd.SetErr(new(bytes.Buffer))
+			RootCmd.SetArgs([]string{"hooks", "install", "proj", "--vault", "./my-vault", "--agent", agent, "--merge"})
+			t.Cleanup(func() { RootCmd.SetArgs([]string{}) })
+			require.NoError(t, RootCmd.Execute())
+
+			file := filepath.Join(work, "proj", ".claude", "settings.json")
+			if agent == hooksAgentCodex {
+				file = filepath.Join(work, "proj", ".codex", "hooks.json")
+			}
+			b, err := os.ReadFile(file)
+			require.NoError(t, err)
+			wd, _ := os.Getwd()
+			assert.Contains(t, string(b), "VAULTMIND_VAULT='"+filepath.Join(wd, "my-vault")+"'")
+			assert.NotContains(t, string(b), "'./my-vault'")
+		})
+	}
 }

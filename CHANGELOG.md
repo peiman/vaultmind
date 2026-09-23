@@ -316,6 +316,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A relative `--vault` wired hooks to a vault that isn't there.**
+  `hooks install ./proj --vault ./my-vault` wrote `VAULTMIND_VAULT='./my-vault'`
+  into the hooks — and hooks run from the *project*, so it resolved to
+  `proj/my-vault`. The identity hook then printed nothing, with no error, for
+  Claude Code and Codex alike. `--vault` is now made absolute at install time
+  (as `--vaults` already was), and a named vault that doesn't exist is
+  reported. If you installed with a relative `--vault`, re-run the install.
+
 - **`hooks install`'s suggested next step wired the wrong directory.** After
   `vaultmind hooks install ./myproject` it suggested `vaultmind hooks install
   --merge` — without `./myproject`. Run where the user stood, that wired the
