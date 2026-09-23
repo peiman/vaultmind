@@ -68,6 +68,22 @@ fi
 # An undeclared bound yields NO countdown rather than a guessed one — a
 # confident wrong date is worse than none, because someone plans around it.
 registry_countdown() {
+  # READ AT WAKE, NOT AT ARM. The value used to come only from the bootstrap
+  # eval when the watcher was armed, and was printed at wake — up to five hours
+  # later. On 2026-09-23 a wake line said "fresh for 12 more day(s)" hours after
+  # a re-sign had put a 30-day registry live. So re-read it now. Only the one
+  # assignment is taken and it is never eval'd (the bootstrap's injection lesson).
+  # If the re-read fails the arm-time number is still the best information, but
+  # it is LABELLED as old: an unlabelled stale number is the defect itself.
+  _vm_days_note=""
+  if _vm_now="$(vaultmind identity paths 2>/dev/null)"; then
+    _vm_now="$(printf '%s\n' "$_vm_now" | grep '^VM_MESH_REGISTRY_DAYS_LEFT=' | head -n 1)"
+    _vm_now="${_vm_now#VM_MESH_REGISTRY_DAYS_LEFT=}"
+    _vm_now="${_vm_now#\'}"
+    VM_MESH_REGISTRY_DAYS_LEFT="${_vm_now%\'}"
+  elif [ -n "${VM_MESH_REGISTRY_DAYS_LEFT:-}" ]; then
+    _vm_days_note=" (as of arm time — could not re-read it)"
+  fi
   [ -n "${VM_MESH_REGISTRY_DAYS_LEFT:-}" ] || return 0
   # VALIDATE FIRST. Both numeric comparisons below exit 2 on a non-numeric
   # value, so an unvalidated version fell through to the else-branch and
@@ -105,6 +121,7 @@ registry_countdown() {
   else
     printf ' [registry fresh for %s more day(s)]' "$VM_MESH_REGISTRY_DAYS_LEFT"
   fi
+  printf '%s' "$_vm_days_note"
 }
 
 WAIT_SECS="${MESH_WAIT_SECS:-28}"              # per-call long-poll window (<=30s: proxy timeout headroom)

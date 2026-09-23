@@ -251,12 +251,60 @@ func runCountdown(t *testing.T, daysLeft string) string {
 	require.Positive(t, end, "unterminated function")
 	fn := s[start : start+end+3]
 
+	return runCountdownFn(t, fn, daysLeft, "echo \"VM_MESH_REGISTRY_DAYS_LEFT='"+daysLeft+"'\"")
+}
+
+// runCountdownFn runs the countdown with the ARM-TIME value in the environment
+// and a fake `vaultmind` on PATH whose `identity paths` body is fakeBody — the
+// value as of NOW. The countdown re-reads at wake, so the fake decides.
+func runCountdownFn(t *testing.T, fn, armValue, fakeBody string) string {
+	t.Helper()
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "vaultmind"),
+		[]byte("#!/bin/sh\n"+fakeBody+"\n"), 0o755)) //nolint:gosec // G306: test fixture must be executable
+
 	script := "set -u\n" + fn + "\nregistry_countdown\n"
 	cmd := exec.Command("bash", "-c", script)
-	cmd.Env = append(os.Environ(), "VM_MESH_REGISTRY_DAYS_LEFT="+daysLeft)
+	cmd.Env = append(os.Environ(), "VM_MESH_REGISTRY_DAYS_LEFT="+armValue, "PATH="+dir+":"+os.Getenv("PATH"))
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, "countdown must never fail the wake line: %s", out)
 	return string(out)
+}
+
+func countdownFn(t *testing.T) string {
+	t.Helper()
+	body, ok := Get("mesh-watch.sh")
+	require.True(t, ok)
+	s := string(body)
+	start := strings.Index(s, "registry_countdown() {")
+	require.Positive(t, start)
+	end := strings.Index(s[start:], "\n}\n")
+	require.Positive(t, end)
+	return s[start : start+end+3]
+}
+
+// LIVE-OBSERVED (2026-09-23): a quiet-heartbeat line said "registry fresh for
+// 12 more day(s)" while the hub had been serving a fresh 30-day registry for
+// hours. The watcher computed the countdown when ARMED and printed it at WAKE,
+// five hours later, across a re-sign. The number is read again at wake.
+func TestMeshWatchCountdown_ReadsTheValueAtWakeNotAtArm(t *testing.T) {
+	out := runCountdownFn(t, countdownFn(t), "12", "echo \"VM_MESH_REGISTRY_DAYS_LEFT='29'\"")
+	require.Contains(t, out, "29 more day(s)", "the wake line must carry the value as of now")
+	require.NotContains(t, out, "12", "the arm-time value must not survive a successful re-read")
+}
+
+// If the re-read fails, the arm-time number is still the best information —
+// but it must SAY it is old. An unlabeled stale number is the defect itself.
+func TestMeshWatchCountdown_AFailedReReadLabelsTheOldValue(t *testing.T) {
+	out := runCountdownFn(t, countdownFn(t), "12", "exit 1")
+	require.Contains(t, out, "12 more day(s)")
+	require.Contains(t, out, "as of arm time")
+}
+
+// A bound that is no longer declared at wake yields no countdown, not the old one.
+func TestMeshWatchCountdown_AnUndeclaredBoundAtWakeEmitsNothing(t *testing.T) {
+	out := runCountdownFn(t, countdownFn(t), "12", "echo \"VM_MESH_SLUG='mira'\"")
+	require.Empty(t, out)
 }
 
 func TestMeshWatchCountdown_HealthyIsQuietButInformative(t *testing.T) {

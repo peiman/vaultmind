@@ -316,6 +316,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The wake line's registry countdown could be hours out of date.**
+  `mesh-watch.sh` read the countdown when armed and printed it at wake — up to
+  five hours later. Across a re-sign that read "registry fresh for 12 more
+  day(s)" while a fresh 30-day registry had been live for hours. The countdown
+  is now re-read at wake; if that fails, the old number is printed **labelled**
+  "as of arm time" rather than passed off as current. Re-run
+  `vaultmind hooks install --force` to pick it up.
+
 - **`doctor` says so when the registry file is not a registry.** Passing
   `agents.yaml` (the roster) as `--mesh-registry` — an easy mix-up, since
   agents.yaml is where the registry's path is declared — was reported as "bad
