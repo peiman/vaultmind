@@ -42,6 +42,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 >    mesh. Undeclared, `doctor` no longer claims sends will be refused from its
 >    own 24h default — it emits a softer "bound is NOT declared" warning
 >    instead. If you alarm on the old text, match the new wording too.
+> 8. **Mesh-registry warnings in `doctor` say something different now** — if
+>    you match on their text, update the match:
+>    - A valid registry older than a day is **no longer** reported as "did not
+>      verify ... (bad signature, stale, or rolled back)". That wording now
+>      means what it says. If you alarmed on it, you were alarming on age.
+>    - A file that is not a signed registry at all (e.g. `agents.yaml` passed
+>      as `--mesh-registry`, or a truncated copy) now reads "the registry file
+>      is not a readable signed registry" instead of the signature wording.
+>    - New: with `registry_max_staleness_secs` declared, `doctor` warns "the
+>      registry has N day(s) left" once fewer than seven remain.
+> 9. **The hook stanza no longer contains empty events.** `hooks install` used
+>    to print (and `--merge` write) events with no hooks as `null`; they are now
+>    left out. Existing settings files are not rewritten — this only changes
+>    fresh output. If a script diffs the stanza against a saved copy, refresh
+>    the copy.
+> 10. **Dependency: `hugot` stays on 0.7.0.** 0.7.8 changed the API the BGE-M3
+>    path relies on; the migration is tracked in #148. No action needed.
 
 ### Added
 
@@ -205,6 +222,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   count alone hides how much is at risk.
 
 ### Changed
+
+- **Dependencies updated:** goose 3.28.0, testify 1.12.1, x/sync 0.23.0,
+  x/sys 0.48.0, x/text 0.42.0, modernc.org/sqlite 1.57.0, plus four CI action
+  bumps. Verified against three real vaults (491 notes: migrations, full BGE-M3
+  embeddings, federated search). `hugot` is held at 0.7.0 — see Upgrading #10.
 
 - **No default chat-daemon address.** `doctor` and `identity paths` resolve
   `AGENT_CHAT_DAEMON_URL`, then `agents.yaml`, then fail. Previously both fell

@@ -36,6 +36,12 @@ updates:
     commit-message:
       prefix: "chore(deps)"
       include: "scope"
+    ignore:
+      # hugot 0.7.8 unexported Preprocess/Forward, which the BGE-M3 sparse +
+      # ColBERT path calls directly. Held until that migration lands (#148);
+      # remove this in the same PR. Without it the weekly grouped update fails
+      # to build and blocks every other Go update with it.
+      - dependency-name: "github.com/knights-analytics/hugot"
     # Group minor and patch updates together to reduce PR noise
     groups:
       go-dependencies:
