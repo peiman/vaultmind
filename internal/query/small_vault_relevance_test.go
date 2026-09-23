@@ -98,3 +98,34 @@ func TestFormatAsk_SmallVaultStrongHitUnaffected(t *testing.T) {
 
 	assert.Contains(t, header, "relevance: strong")
 }
+
+// STRANGER TEST (2026-09-23), the README's own Quickstart on a `go install`
+// build: `ask "what did we decide about retries?"` on the six-note scaffold
+// answered with template notes labelled "relevance: strong (z=+7.90)" — and so
+// did "banana bread recipe with walnuts". MiniLM's noise floor has never been
+// measured: it ships as N=0 with a clamped σ, so ANY positive cosine clears it
+// by several σ. On a vault too small to measure its own floor, a confident tier
+// from an unmeasured default is not "still information" — it is the default
+// talking. The small-vault exemption for confident tiers holds only where the
+// default floor was actually measured (BGE-M3).
+func TestFormatAsk_SmallVaultWithUnmeasuredModelDoesNotClaimStrong(t *testing.T) {
+	r := smallVaultResult(6, ConfidenceStrong, 7.9)
+	r.floorUnmeasured = true
+	var buf bytes.Buffer
+	require.NoError(t, FormatAsk(r, &buf))
+	header := strings.SplitN(buf.String(), "\n", 2)[0]
+
+	assert.NotContains(t, header, "strong", "an unmeasured default cannot make a hit 'strong'")
+	assert.Contains(t, header, "not yet measurable")
+	assert.Contains(t, header, "no measured default", "say WHY, or the user cannot act on it")
+}
+
+// Once the vault can measure its own floor, the model's missing default no
+// longer matters and the normal label returns.
+func TestFormatAsk_UnmeasuredModelAtCalibrationGateLabelsNormally(t *testing.T) {
+	r := smallVaultResult(noisefloor.MinCalibNotes, ConfidenceStrong, 3.1)
+	r.floorUnmeasured = true
+	var buf bytes.Buffer
+	require.NoError(t, FormatAsk(r, &buf))
+	assert.Contains(t, strings.SplitN(buf.String(), "\n", 2)[0], "relevance: strong")
+}

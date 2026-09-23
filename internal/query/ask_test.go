@@ -1,7 +1,9 @@
 package query_test
 
 import (
+	"bytes"
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/graph"
@@ -275,4 +277,39 @@ func TestAsk_WithEmbedder_NoActivationFunc(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.NotNil(t, result.Similarities, "similarities should still be computed even without ActivationFunc")
+}
+
+// End to end through Ask and FormatAsk: the flag must be SET by Ask from the
+// embedder, not only honoured by the formatter. Same query, same small vault,
+// same perfect-match cosine — the only difference is whether the model's
+// default floor was measured. (Stranger test, 2026-09-23: MiniLM's placeholder
+// floor labelled every small-vault hit "strong".)
+func TestAsk_SmallVaultStrongDependsOnAMeasuredDefault(t *testing.T) {
+	render := func(dims int) (string, *query.AskResult) {
+		db := buildRetrieverTestDB(t)
+		retriever := &query.FTSRetriever{DB: db}
+		hits, _, err := retriever.Search(context.Background(), "spreading activation", 5, 0, index.SearchFilters{})
+		require.NoError(t, err)
+		require.NotEmpty(t, hits)
+		require.NoError(t, index.StoreEmbedding(db, hits[0].ID, []float32{1, 0, 0}))
+		result, err := query.Ask(context.Background(), retriever, graph.NewResolver(db), db, query.AskConfig{
+			Query: "spreading activation", Budget: 4000, MaxItems: 5, SearchLimit: 5,
+			Embedder:      &mockEmbedder{vec: []float32{1, 0, 0}, dims: dims},
+			NoiseFloor:    noisefloor.DefaultNoiseFloor(dims),
+			HasNoiseFloor: true,
+		})
+		require.NoError(t, err)
+		var buf bytes.Buffer
+		require.NoError(t, query.FormatAsk(result, &buf))
+		return strings.SplitN(buf.String(), "\n", 2)[0], result
+	}
+
+	measured, r := render(1024) // BGE-M3: probe-measured default
+	require.Positive(t, r.VaultNoteCount)
+	require.Less(t, r.VaultNoteCount, noisefloor.MinCalibNotes, "fixture must be a small vault")
+	assert.Contains(t, measured, "relevance: strong", "a measured default still supports a confident label")
+
+	unmeasured, _ := render(384) // MiniLM: placeholder default
+	assert.NotContains(t, unmeasured, "strong")
+	assert.Contains(t, unmeasured, "no measured default floor")
 }

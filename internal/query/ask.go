@@ -119,6 +119,11 @@ type AskResult struct {
 	// to support. Zero means "not measured" and preserves the original
 	// behaviour for any caller that doesn't populate it.
 	VaultNoteCount int `json:"vault_note_count,omitempty"`
+	// floorUnmeasured is set when the embedder's shipped noise floor is a
+	// placeholder rather than a measurement (noisefloor.HasMeasuredDefault).
+	// Below the calibration gate the floor IS that default, so no tier derived
+	// from it — confident ones included — is a finding about this vault.
+	floorUnmeasured bool
 	// Federated, when non-empty, is the cross-vault merged ranking. TopHits
 	// stays the OWNING vault's own list: the two answer different questions
 	// ("what did this vault rank?" vs "what did the federation rank?") and
@@ -302,6 +307,7 @@ func Ask(ctx context.Context, retriever retrieval.Retriever, resolver *graph.Res
 			result.TopHitConfidence = label
 			result.NoiseFloorApplied = true
 			result.LowContrastVault = cfg.VaultLowContrast
+			result.floorUnmeasured = !noisefloor.HasMeasuredDefault(dims)
 			// Vault size decides whether the verdict just computed means
 			// anything (see AskResult.tooSmallToJudge). Best-effort: a count
 			// failure leaves 0 = "not measured", which keeps the original

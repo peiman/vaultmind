@@ -209,11 +209,18 @@ func writeAskHeader(w io.Writer, result *AskResult, explain, bodyDelivered bool)
 		// verdicts on the top hit when the real state is "not enough corpus to
 		// have an opinion". Confident tiers are left alone: clearing a
 		// conservative floor on a small vault is still information.
-		if result.tooSmallToJudge() &&
-			(result.TopHitConfidence == ConfidenceWeak || result.TopHitConfidence == ConfidenceNoMatch) {
+		// A confident tier on a small vault is left alone ONLY when the floor it
+		// cleared was measured. An unmeasured default (MiniLM's 0.0) makes every
+		// hit "strong", which is the default talking, not the vault.
+		if result.tooSmallToJudge() && (result.floorUnmeasured ||
+			result.TopHitConfidence == ConfidenceWeak || result.TopHitConfidence == ConfidenceNoMatch) {
+			why := ""
+			if result.floorUnmeasured {
+				why = ", and this embedding model has no measured default floor to judge against"
+			}
 			header += fmt.Sprintf(
-				"  [relevance: not yet measurable — %d notes is below the %d needed to calibrate this vault; showing the top hit anyway]",
-				result.VaultNoteCount, noisefloor.MinCalibNotes)
+				"  [relevance: not yet measurable — %d notes is below the %d needed to calibrate this vault%s; showing the top hit anyway]",
+				result.VaultNoteCount, noisefloor.MinCalibNotes, why)
 			return emitAskHeader(w, header, result)
 		}
 		switch result.TopHitConfidence {

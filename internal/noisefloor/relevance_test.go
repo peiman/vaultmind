@@ -166,3 +166,18 @@ func TestDefaultNoiseFloor_PerEmbedderDims(t *testing.T) {
 	assert.InDelta(t, 0.0, noisefloor.DefaultNoiseFloor(999), 1e-9,
 		"unknown dims fall back to 0.0 (no false no_match)")
 }
+
+// Measured means probe-measured, not "has an entry": MiniLM's entry is a 0.0
+// placeholder, and treating it as a measurement labelled every small-vault hit
+// "strong" (stranger test, 2026-09-23).
+func TestHasMeasuredDefault(t *testing.T) {
+	if !noisefloor.HasMeasuredDefault(1024) {
+		t.Error("BGE-M3's floor was probe-measured")
+	}
+	if noisefloor.HasMeasuredDefault(384) {
+		t.Error("MiniLM's floor is an unmeasured placeholder")
+	}
+	if noisefloor.HasMeasuredDefault(7) {
+		t.Error("an unknown model has no measured floor")
+	}
+}

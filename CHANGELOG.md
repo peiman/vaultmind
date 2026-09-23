@@ -316,6 +316,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **On a new MiniLM vault, every answer was labelled "strong".** Following the
+  README Quickstart on a `go install` build, `ask "what did we decide about
+  retries?"` on the six-note scaffold returned template notes labelled
+  `relevance: strong (z=+7.90)` — and so did "banana bread recipe with
+  walnuts". MiniLM's off-topic noise floor has never been measured; it ships
+  as a 0.0 placeholder, so any positive similarity cleared it by several σ.
+  Below the 30 notes a vault needs to measure its own floor, a model without a
+  measured default now reads `relevance: not yet measurable — … this embedding
+  model has no measured default floor …`. The answer is still shown; only the
+  unfounded confidence is gone. BGE-M3, whose default was measured, is
+  unchanged.
+
 - **The wake line's registry countdown could be hours out of date.**
   `mesh-watch.sh` read the countdown when armed and printed it at wake — up to
   five hours later. Across a re-sign that read "registry fresh for 12 more

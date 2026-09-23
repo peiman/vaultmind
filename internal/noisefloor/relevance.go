@@ -106,6 +106,15 @@ var embedderNoiseFloor = map[int]float64{
 	384:  0.0,
 }
 
+// HasMeasuredDefault reports whether the shipped floor for this embedder was
+// probe-measured. MiniLM's 0.0 is a placeholder, not a measurement: with it,
+// any positive cosine clears the floor by several σ, so on a vault too small
+// to measure its own floor every hit read "strong" — including "banana bread
+// recipe" against a vault about arcs (stranger test, 2026-09-23).
+func HasMeasuredDefault(dims int) bool {
+	return embedderNoiseFloor[dims] > 0
+}
+
 // DefaultNoiseFloor returns the shipped noise floor for an embedder of the
 // given dimensionality, or 0.0 for unknown dims (the safe choice: no false
 // "nothing relevant").
