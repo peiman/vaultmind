@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-23
+
+> **Upgrading.** Prebuilt downloads need nothing extra. **Building from source
+> with BGE-M3 now needs ONNX Runtime 1.29 or newer**; `setup-ort.sh` checks
+> this. **Mesh members:** set `app.identityfetchregistry.root_pubkey` in your
+> vaultmind config once if you joined before `identity enroll` existed, then
+> run `vaultmind hooks install --force` for the new watcher. Without the
+> pinned key, every wake line reports "registry fetch failed" and the wake
+> still happens.
+
 ### Added
 
 - **`vaultmind identity fetch-registry` keeps each machine's copy of the mesh's
@@ -1600,7 +1610,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/peiman/vaultmind/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/peiman/vaultmind/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/peiman/vaultmind/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/peiman/vaultmind/compare/v0.6.0...v0.7.0
