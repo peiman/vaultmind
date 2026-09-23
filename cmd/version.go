@@ -43,6 +43,21 @@ func buildVersionInfo(ldVersion, ldCommit, ldDate string, info *debug.BuildInfo,
 	return version, commit, date
 }
 
+// versionLine renders "version[, commit X][, built at Y]", leaving out what the
+// build does not know. A `go install` build carries no VCS stamp — its commit
+// is already in the pseudo-version — and printed "commit , built at " on the
+// first command a new user runs (stranger test, 2026-09-23).
+func versionLine(v, commit, date string) string {
+	out := v
+	if commit != "" {
+		out += ", commit " + commit
+	}
+	if date != "" {
+		out += ", built at " + date
+	}
+	return out
+}
+
 // versionCmd prints the build version, mirroring the global --version flag.
 // Added because `vaultmind version` previously errored with "unknown command"
 // while `--help` listed it under Setup — a first-impression papercut surfaced
@@ -61,8 +76,8 @@ var versionCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		info, ok := debug.ReadBuildInfo()
 		v, c, d := buildVersionInfo(Version, Commit, Date, info, ok)
-		_, err := fmt.Fprintf(cmd.OutOrStdout(), "%s version %s, commit %s, built at %s (backend: %s)\n",
-			binaryName, v, c, d, embedding.Acceleration())
+		_, err := fmt.Fprintf(cmd.OutOrStdout(), "%s version %s (backend: %s)\n",
+			binaryName, versionLine(v, c, d), embedding.Acceleration())
 		return err
 	},
 }

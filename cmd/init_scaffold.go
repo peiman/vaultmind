@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/peiman/vaultmind/internal/initvault"
 	"github.com/peiman/vaultmind/internal/telemetry"
@@ -40,7 +41,11 @@ func runInitScaffold(cmd *cobra.Command, path string, p initWireParams) error {
 	_, _ = fmt.Fprintf(w, "  .vaultmind/index.db*\n")
 	_, _ = fmt.Fprintf(w, "  !.vaultmind/config.yaml\n\n")
 	if !p.wireHooks {
-		_, _ = fmt.Fprintf(w, "To wire Claude Code now: re-run with --wire-hooks, or\n")
+		_, _ = fmt.Fprintf(w, "To wire Claude Code now: re-run with --wire-hooks.\n")
+		if abs, err := filepath.Abs(res.VaultPath); err == nil {
+			_, _ = fmt.Fprintf(w, "To wire Codex: vaultmind hooks install <project-dir> --vault %s --agent codex --merge\n", shellWord(abs))
+		}
+		_, _ = fmt.Fprintf(w, "Or ")
 		_, _ = fmt.Fprintf(w, "for agent-led setup (interview, project read, migration): vaultmind init --print-instructions\n")
 	}
 	return nil

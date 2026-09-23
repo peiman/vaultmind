@@ -316,6 +316,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **First-run polish from a clean-machine test.** `vaultmind version` on a
+  `go install` build printed `commit , built at` with both fields empty (module
+  builds carry no VCS stamp; the commit is already in the version). Unknown
+  parts are now left out. And `init` now shows how to wire Codex, with the
+  vault's real path, next to the Claude Code hint.
+
 - **A relative `--vault` wired hooks to a vault that isn't there.**
   `hooks install ./proj --vault ./my-vault` wrote `VAULTMIND_VAULT='./my-vault'`
   into the hooks — and hooks run from the *project*, so it resolved to
