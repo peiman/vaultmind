@@ -54,6 +54,10 @@ type StatusReport struct {
 	// .codex/hooks.json; nil when the project has none. Codex skips an
 	// unapproved hook silently, so this is the only place it shows.
 	Codex *CodexApproval `json:"codex,omitempty"`
+	// LeftoverClaudeScripts is set when a Codex project with no Claude Code
+	// wiring still has .claude/scripts — left by an install from before Codex
+	// scripts moved to .vaultmind/scripts. Reported, never deleted.
+	LeftoverClaudeScripts string `json:"leftover_claude_scripts,omitempty"`
 }
 
 // Counts returns how many scripts are in each state — the summary line.
@@ -93,10 +97,15 @@ func Status(projectDir string) (StatusReport, error) {
 			return StatusReport{}, err
 		}
 		report.Codex = &codex
-		// A Codex-only project is judged as one. Grading it on Claude Code
-		// wiring it never had failed status forever ("7 unwired") on the
-		// first real Codex install.
-		if wired, _ := report.EventCounts(); !report.Installed && wired == 0 {
+		// A Codex-only project — Codex hooks, no Claude Code wiring — is
+		// judged as one. Grading it on Claude Code wiring it never had failed
+		// status forever ("7 unwired") on the first real Codex install; any
+		// .claude/scripts there are an older install's leftovers.
+		if wired, _ := report.EventCounts(); wired == 0 {
+			if report.Installed {
+				report.LeftoverClaudeScripts = scriptsDir
+				report.Installed = false
+			}
 			report.Events = nil
 			return report, nil
 		}

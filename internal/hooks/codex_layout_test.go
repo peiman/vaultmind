@@ -137,3 +137,27 @@ func TestCodexHooks_SessionEndGetsTheMaximumTimeoutAndNoContextLimit(t *testing.
 	assert.NotContains(t, h, "additionalContextLimit")
 	assert.NotContains(t, f.Hooks["SessionStart"][0].Hooks[0], "timeout", "other events keep Codex's default")
 }
+
+// Upgrading from the old layout leaves .claude/scripts behind in a Codex-only
+// project. Without Claude Code wiring those files are leftovers: status must
+// not judge Claude Code events or script drift from them (found on the first
+// live upgrade, 2026-09-24), and says they can go. It does not delete them.
+func TestStatus_LeftoverClaudeScriptsInACodexProjectAreNotJudged(t *testing.T) {
+	dir := t.TempDir()
+	_, err := Install(InstallConfig{ProjectDir: dir}) // the old layout's leftovers
+	require.NoError(t, err)
+	_, err = Install(InstallConfig{ProjectDir: dir, Agent: AgentCodex})
+	require.NoError(t, err)
+	_, err = MergeIntoCodexHooks(dir, "", ProfileFull, false)
+	require.NoError(t, err)
+	t.Setenv("CODEX_HOME", t.TempDir())
+
+	report, err := Status(dir)
+	require.NoError(t, err)
+	_, unwired := report.EventCounts()
+	assert.Equal(t, 0, unwired)
+	assert.Empty(t, report.Scripts, "leftover Claude scripts are not graded")
+	assert.Equal(t, filepath.Join(dir, ".claude", "scripts"), report.LeftoverClaudeScripts)
+	_, err = os.Stat(filepath.Join(dir, ".claude", "scripts"))
+	require.NoError(t, err, "status reports; it never deletes")
+}

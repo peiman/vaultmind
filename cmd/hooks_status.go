@@ -70,7 +70,16 @@ func renderHooksStatus(w io.Writer, report hooks.StatusReport) error {
 	if !report.Installed {
 		if report.Codex != nil {
 			// A Codex-only project: its scripts live under .vaultmind/scripts.
-			return renderCodexApprovals(w, report)
+			if err := renderCodexApprovals(w, report); err != nil {
+				return err
+			}
+			if report.LeftoverClaudeScripts != "" {
+				_, err := fmt.Fprintf(w,
+					"\nLeftover from an older install, unused by Codex (safe to delete): %s\n",
+					report.LeftoverClaudeScripts)
+				return err
+			}
+			return nil
 		}
 		_, err := fmt.Fprintf(w,
 			"No hook scripts installed in %s\n  run: vaultmind hooks install %s --merge\n",
