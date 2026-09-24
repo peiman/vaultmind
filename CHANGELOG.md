@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **An agent's own reads now land in the same session as the hooks'
+  searches.** The recall hook logged its searches under the harness's session
+  id, while the agent's `note get` calls and the read-tracking hook got a
+  time-guessed id, and the two never matched (0 of 654 recall sessions on one
+  machine). So the usage log could not show "recall surfaced this note, then
+  the agent opened it", the one signal learning from use needs. VaultMind now
+  takes the id the harness gives the agent's shell (`CLAUDE_CODE_SESSION_ID`,
+  or `CODEX_SESSION_ID`) when no hook forwarded one, and every hook forwards
+  the id from its payload; a test fails on any hook call that does not.
+- **The README no longer says ranking learns from use.** It said notes you
+  open "become more retrievable". Replayed against 1,139 real searches followed
+  by a deliberate open, the usage-weighted ranking as built made recall worse
+  when fed everything logged, and was not significantly better when fed only
+  real choices, so it stays off. What recall does do is bring along the notes a
+  hit links to; the README now says that instead.
+
 ## [0.9.1] - 2026-09-24
 
 > **Upgrading, Codex users.** Your existing hooks keep working until you

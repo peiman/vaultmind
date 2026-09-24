@@ -2,7 +2,7 @@
 
 **Associative memory for AI agents — over Git-backed Markdown vaults.**
 
-AI agents start each session from zero: strong parametric knowledge, but no memory of what they did yesterday, what they decided, or what they're working toward. VaultMind turns a directory of Markdown notes into queryable, activation-weighted memory an agent can reconstruct itself from at the start of a session — and *continue* from, rather than start over.
+AI agents start each session from zero: strong parametric knowledge, but no memory of what they did yesterday, what they decided, or what they're working toward. VaultMind turns a directory of Markdown notes into queryable, linked memory an agent can reconstruct itself from at the start of a session — and *continue* from, rather than start over.
 
 It's a single Go binary. Point it at a vault of Markdown files with Obsidian-compatible frontmatter; it builds a derived index (full-text + dense + sparse + late-interaction embeddings), resolves `[[wikilinks]]` and aliases into a knowledge graph, and answers queries with ranked, token-budgeted context.
 
@@ -64,7 +64,7 @@ vaultmind ask "what did Ada learn about scope?" --vault examples/ada-vault
 
 - **Vault** — a directory of Markdown notes with Obsidian-compatible frontmatter, tracked in Git. You curate it; the agent reads it.
 - **Index** — a derived SQLite index: full-text (FTS5), dense + sparse + ColBERT embeddings (BGE-M3), and a link/alias knowledge graph. Rebuilt with `vaultmind index`; never hand-edited.
-- **Retrieval** — Reciprocal Rank Fusion over the lanes, with calibrated top-hit confidence and optional **activation-weighted reranking** (notes accessed more often become more retrievable).
+- **Retrieval** — Reciprocal Rank Fusion over the lanes, with calibrated top-hit confidence. A hit brings along the notes it links to (wikilinks, `related_ids`), so recalling one memory surfaces its neighbours. Ranking does **not** yet learn from use: usage-weighted ranking exists as an experiment, but replayed against real usage it did not improve recall, so it is not applied to results.
 - **Context packs** — `vaultmind ask` assembles ranked results into a token-budgeted block ready to drop into an agent's context.
 - **Delivery** — the pack carries note *text*, not just titles. A note larger than the remaining budget would otherwise contribute **nothing** while still being counted, which on a vault whose median note exceeds a hook's budget is every query rather than an edge case:
 
@@ -139,7 +139,7 @@ vaultmind arc candidates --vault ./agent-desk --arcs-vault ./agent-identity
 
 ## The local usage log
 
-VaultMind keeps a local SQLite log of retrieval events — which queries surfaced which notes — because that history is what powers activation-weighted reranking: notes you actually open become more retrievable. It is on by default, and it is worth knowing exactly what that means.
+VaultMind keeps a local SQLite log of retrieval events — which queries surfaced which notes, and which notes an agent then opened — as the raw material for learning from use. Today it is a record, not an input: it does not change what search returns. It is on by default, and it is worth knowing exactly what that means.
 
 **On your disk, by default:** the **full query text**, the vault path, the note ids returned, and caller metadata (`$USER`, hostname, `CLAUDE_PROJECT_DIR`). The file is created `0600` — together with the `-wal` and `-shm` sidecars SQLite writes beside it, which hold the same material — at
 
@@ -167,7 +167,7 @@ experiments:
 
 The nesting matters. A bare `experiments: off` does **not** work — it is read as an empty value and you get the `anonymous` default, which is the opposite of what you asked for. `VAULTMIND_EXPERIMENTS_TELEMETRY=off` works too, and `vaultmind config` prints what is currently in effect.
 
-The cost of `off` is activation-weighted reranking, which then has no history to weight.
+Turning it off loses that history; it changes nothing about today's search results.
 
 Sharing remains something you do on purpose: there is no automatic upload, and `export` only writes a file.
 

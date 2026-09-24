@@ -40,6 +40,9 @@
 set -uo pipefail
 
 HOOK_INPUT=$(cat)
+# The harness's conversation id, forwarded on every vaultmind call so this
+# hook's events share a session with the agent's own (see vault-recall.sh).
+HOOK_SESSION_ID=$(printf '%s' "$HOOK_INPUT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('session_id','') or '')" 2>/dev/null || echo "")
 
 TOOL_NAME=$(echo "$HOOK_INPUT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('tool_name',''))" 2>/dev/null || echo "")
 FILE_PATH=$(echo "$HOOK_INPUT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('tool_input',{}).get('file_path',''))" 2>/dev/null || echo "")
@@ -84,7 +87,7 @@ mkdir -p "$LOG_DIR" 2>/dev/null
 TIMESTAMP=$(date +%Y%m%dT%H%M%S)
 
 # Run `note get`. Capture stdout (the body) and exit status.
-NOTE_OUTPUT=$(VAULTMIND_CALLER=vaultmind-preread-block "$VAULTMIND" note get "$REL_PATH" --vault "$VAULT_ROOT" 2>/dev/null)
+NOTE_OUTPUT=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-preread-block "$VAULTMIND" note get "$REL_PATH" --vault "$VAULT_ROOT" 2>/dev/null)
 NOTE_STATUS=$?
 
 # Allow Read if note get fails — episode files, malformed frontmatter,

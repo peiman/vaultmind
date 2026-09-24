@@ -55,6 +55,9 @@
 set -uo pipefail
 
 HOOK_INPUT=$(cat)
+# The harness's conversation id, forwarded on every vaultmind call so this
+# hook's events share a session with the agent's own (see vault-recall.sh).
+HOOK_SESSION_ID=$(printf '%s' "$HOOK_INPUT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('session_id','') or '')" 2>/dev/null || echo "")
 
 TOOL_NAME=$(echo "$HOOK_INPUT" | python3 -c "import json,sys;print(json.load(sys.stdin).get('tool_name',''))" 2>/dev/null || echo "")
 
@@ -247,7 +250,7 @@ VAULTMIND="${VAULTMIND_BIN:-$(command -v vaultmind 2>/dev/null || echo /tmp/vaul
 GUIDANCE=""
 HIT_IDS=""
 if [ -x "$VAULTMIND" ] && [ -d "$VAULT_ROOT/.vaultmind" ]; then
-  RAW=$(VAULTMIND_CALLER=auto-rag-guard "$VAULTMIND" ask "$QUERY" --vault "$VAULT_ROOT" --max-items 2 --budget 1500 2>/dev/null || true)
+  RAW=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=auto-rag-guard "$VAULTMIND" ask "$QUERY" --vault "$VAULT_ROOT" --max-items 2 --budget 1500 2>/dev/null || true)
   # Extract hit ids from the "  0.NN  <id>  <title>" lines for logging.
   HIT_IDS=$(echo "$RAW" | grep -E '^[[:space:]]+[0-9]+\.[0-9]+[[:space:]]+[a-z]' | awk '{print $2}' | head -3 | tr '\n' ',' | sed 's/,$//')
   # The body for injection: strip the JSON debug lines that the binary

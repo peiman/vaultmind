@@ -4,6 +4,9 @@
 
 # Read session ID from stdin JSON (Claude Code passes it to hooks)
 HOOK_INPUT=$(cat)
+# The harness's conversation id, forwarded on every vaultmind call so this
+# hook's events share a session with the agent's own (see vault-recall.sh).
+HOOK_SESSION_ID=$(printf '%s' "$HOOK_INPUT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('session_id','') or '')" 2>/dev/null || echo "")
 SESSION_ID=$(echo "$HOOK_INPUT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('session_id','unknown'))" 2>/dev/null || echo "unknown")
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -108,7 +111,7 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
   # The "what matters most right now" query below deliberately KEEPS
   # --pointers-only — see the preload-trap reasoning above. That one is a design
   # choice about forcing an explicit read, not an oversight.
-  IDENTITY=$(VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" ask "who am I" --vault "$VAULT_PATH" --max-items 8 --budget 6000 --excerpt 300 2>"$ASK_ERR")
+  IDENTITY=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" ask "who am I" --vault "$VAULT_PATH" --max-items 8 --budget 6000 --excerpt 300 2>"$ASK_ERR")
   IDENTITY_STATUS=$?
 
   # THE ARC LAYER, ENUMERATED — not retrieved (issue #47).
@@ -125,8 +128,8 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
   # simply unbounded. Anything that does not fit is named, not dropped.
   #
   # Best-effort: a failure here leaves the identity block above intact.
-  ARCS=$(VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" arc recite --vault "$VAULT_PATH" --budget "${VAULTMIND_ARC_BUDGET:-3000}" --excerpt "${VAULTMIND_ARC_EXCERPT:-120}" 2>>"$ASK_ERR")
-  CONTEXT=$(VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" ask "what matters most right now" --vault "$VAULT_PATH" --max-items 5 --budget 2000 --pointers-only 2>>"$ASK_ERR")
+  ARCS=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" arc recite --vault "$VAULT_PATH" --budget "${VAULTMIND_ARC_BUDGET:-3000}" --excerpt "${VAULTMIND_ARC_EXCERPT:-120}" 2>>"$ASK_ERR")
+  CONTEXT=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" ask "what matters most right now" --vault "$VAULT_PATH" --max-items 5 --budget 2000 --pointers-only 2>>"$ASK_ERR")
 
   # Self-state injection — surface the agent's own activation state
   # (recent / hot / stale notes) without requiring an explicit query.
@@ -148,10 +151,10 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
   # not note bodies. So this block is cheap and ambient even on a large
   # research vault; it never preloads bodies the agent didn't query.
   RESEARCH_VAULT="${LOAD_PERSONA_RESEARCH_VAULT:-$PROJECT_DIR/vaultmind-vault}"
-  SELF_IDENTITY=$(VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" self --vault "$VAULT_PATH" --limit 5 2>>"$ASK_ERR" || true)
+  SELF_IDENTITY=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" self --vault "$VAULT_PATH" --limit 5 2>>"$ASK_ERR" || true)
   SELF_RESEARCH=""
   if [ -d "$RESEARCH_VAULT" ]; then
-    SELF_RESEARCH=$(VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" self --vault "$RESEARCH_VAULT" --limit 5 2>>"$ASK_ERR" || true)
+    SELF_RESEARCH=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" self --vault "$RESEARCH_VAULT" --limit 5 2>>"$ASK_ERR" || true)
   fi
 
   if [ "$IDENTITY_STATUS" != "0" ]; then
