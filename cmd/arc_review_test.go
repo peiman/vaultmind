@@ -213,3 +213,16 @@ func TestSelf_SaysWhenEpisodesCouldNotBeRead(t *testing.T) {
 	assert.Contains(t, out.String(), "2 sessions await review")
 	assert.Contains(t, out.String(), "1 episode(s) could not be read")
 }
+
+// The message number belongs on the person's line — it is what a desk entry
+// cites. With the number on the agent's line instead, a reader pairing lines
+// by eye attaches each message to the NEXT number (measured: the first full
+// review cited three quotes one number off).
+func TestArcReview_TheNumberSitsOnThePersonsLine(t *testing.T) {
+	vault := t.TempDir()
+	writeTwoReviewEpisodes(t, vault)
+	out, _, err := runRootCmd(t, "arc", "review", "--vault", vault)
+	require.NoError(t, err)
+	assert.Contains(t, out.String(),
+		"     agent: I answered from what the session start gave me.\n[1] person: an older session's message\n")
+}

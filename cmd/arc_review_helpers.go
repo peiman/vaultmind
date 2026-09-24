@@ -200,7 +200,10 @@ func writeArcReview(w io.Writer, vault string, res arcReviewResult, skipped []st
 			if before == "" {
 				before = "(start of session)"
 			}
-			fmt.Fprintf(b, "[%d] agent: %s\n    person: %s\n", m.Index, before, m.Person)
+			// The number goes on the person's line: it is what a desk entry
+			// cites, and on the agent's line readers paired each message with
+			// the next number instead.
+			fmt.Fprintf(b, "     agent: %s\n[%d] person: %s\n", before, m.Index, m.Person)
 		}
 	}
 	b.WriteString("\nFor each turning point, write a desk entry (a note with `type: journal`) that cites\n")
