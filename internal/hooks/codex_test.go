@@ -53,20 +53,33 @@ func TestCodexHooks_ExportProjectDirBeforeTheCommand(t *testing.T) {
 	assert.Positive(t, n)
 }
 
-// Only the hooks that WORK under Codex are wired. Episode capture is left out
-// deliberately: it looks for the transcript under Claude Code's layout, misses
-// the Codex session, and falls back to the newest Claude transcript — recording
-// the WRONG session as this one, silently. Read-tracking has no Read tool to
-// match; PreCompact cannot emit context in Codex.
+// Only the hooks that WORK under Codex are wired. Read-tracking has no Read
+// tool to match; PreCompact cannot emit context in Codex. Episode capture IS
+// wired, on SessionEnd (Codex has it since openai/codex#33895): the payload
+// names the session's own transcript, and the capture script uses that file or
+// nothing — so the old failure, recording the newest Claude transcript as this
+// Codex session, cannot happen (capture_transcript_choice_test.go).
 func TestCodexHooks_WiresOnlyWhatWorksUnderCodex(t *testing.T) {
 	out, err := CodexHooksStanza("/p", "", ProfileFull)
 	require.NoError(t, err)
-	for _, want := range []string{hookSessionStartScript, hookHealthScript, hookUserPromptSubmitScript, hookReachScript} {
+	for _, want := range []string{hookSessionStartScript, hookHealthScript, hookUserPromptSubmitScript, hookReachScript, hookSessionEndScript} {
 		assert.Contains(t, out, want)
 	}
-	for _, never := range []string{hookSessionEndScript, hookPreToolUseScript, hookPreCompactScript} {
+	for _, never := range []string{hookPreToolUseScript, hookPreCompactScript} {
 		assert.NotContains(t, out, never)
 	}
+}
+
+func TestCodexHooks_CaptureRunsAtSessionEnd(t *testing.T) {
+	f := renderCodex(t, "/p")
+	require.NotEmpty(t, f.Hooks["SessionEnd"], "Codex accepts SessionEnd in hooks.json since 0.156")
+	var cmds []string
+	for _, g := range f.Hooks["SessionEnd"] {
+		for _, h := range g.Hooks {
+			cmds = append(cmds, h.Command)
+		}
+	}
+	assert.Contains(t, strings.Join(cmds, "\n"), hookSessionEndScript)
 }
 
 // Codex moves context over ~2500 tokens to a file by default. The identity
@@ -144,11 +157,11 @@ func TestCodexHooks_RespectsTheProfile(t *testing.T) {
 	assert.NotContains(t, out, hookSessionStartScript)
 }
 
-// An event with no hooks must be absent, not null. Codex drops PreCompact and
-// SessionEnd; rendering them as `null` hands Codex a malformed event list.
+// An event with no hooks must be absent, not null. Codex drops PreCompact;
+// rendering it as `null` hands Codex a malformed event list.
 func TestCodexHooks_NoNullEvents(t *testing.T) {
 	out, err := CodexHooksStanza("/p", "", ProfileFull)
 	require.NoError(t, err)
 	assert.NotContains(t, out, "null")
-	assert.NotContains(t, out, `"SessionEnd"`)
+	assert.NotContains(t, out, `"PreCompact"`)
 }

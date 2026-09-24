@@ -26,10 +26,15 @@ const (
 	codexHooksFile = "hooks.json"
 )
 
-// codexScripts are the hooks that work under Codex. Deliberately absent:
-//   - capture-episode.sh: it looks for the transcript under Claude Code's
-//     layout, misses the Codex session, and falls back to the newest Claude
-//     transcript — recording the WRONG session as this one, silently.
+// codexScripts are the hooks that work under Codex.
+//
+// capture-episode.sh runs on SessionEnd (openai/codex#33895, in 0.156). It was
+// left out until 2026-09-24 on the belief that Codex had no SessionEnd and that
+// the script would find the wrong transcript. Both were fixed by measurement:
+// Codex's SessionEnd payload names the session's own transcript_path, and the
+// script now captures that file or nothing — never the newest neighbour.
+//
+// Deliberately absent:
 //   - vault-track-read.sh: matches Claude Code's Read tool; Codex has none.
 //   - precompact-preserve.sh: Codex's PreCompact cannot emit context.
 var codexScripts = map[string]bool{
@@ -37,6 +42,7 @@ var codexScripts = map[string]bool{
 	hookHealthScript:           true,
 	hookUserPromptSubmitScript: true,
 	hookReachScript:            true,
+	hookSessionEndScript:       true,
 }
 
 // codexHooks derives Codex's wiring from the canonical hooks (one source of
