@@ -25,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The mesh watcher arms from any folder.** It asked `identity paths` who it
+  was, and that falls back to the current folder for the project, so a watcher
+  started while the shell sat in a subfolder resolved no identity and refused
+  to arm. It now names the project it belongs to (unless the harness already
+  did).
 - **Recall no longer searches on messages relayed from other agents**
   (`<agent-message>`), which the noise guard did not yet cover. And a question
   a harness wraps in `<user_query>…</user_query>` (262 of 4,686 real recall

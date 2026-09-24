@@ -40,6 +40,12 @@
 set -uo pipefail   # NOT -e: a transient network hiccup must not abort the watch
 
 # ── Identity bootstrap — the binary answers, or we refuse to arm ─────────────
+# `identity paths` falls back to the CURRENT DIRECTORY for the project; a watcher
+# started while the shell sat in a subfolder resolved no identity and refused to
+# arm (2026-09-24). Pin the project this script belongs to, unless the harness
+# already set it (chat-mcp does). Two levels up from .claude/scripts or
+# .vaultmind/scripts is the project.
+export AGENT_CHAT_PROJECT_PATH="${AGENT_CHAT_PROJECT_PATH:-${VAULTMIND_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}}}"
 PATHS_OUT="$(vaultmind identity paths 2>&1)" || {
   printf 'mesh-watch: %s\n' "$PATHS_OUT" >&2
   printf 'mesh-watch: refusing to arm without a resolved identity.\n' >&2

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -414,4 +415,33 @@ func TestMeshWatchCountdown_AFailedFetchWithNoOutputStillSaysSo(t *testing.T) {
 	out := runCountdownFn(t, countdownFn(t), "",
 		`[ "$2" = fetch-registry ] && exit 1`+"\n"+`echo "VM_MESH_REGISTRY_DAYS_LEFT=''"`)
 	require.Contains(t, out, "registry fetch failed: (no output)")
+}
+
+// `identity paths` falls back to the CURRENT DIRECTORY for the project, so a
+// watcher started while the shell sat in a subfolder resolved no identity and
+// refused to arm — seen 2026-09-24 when a session had cd'd into an experiment
+// folder. The script pins the project it belongs to before asking.
+func TestMeshWatch_AsksAboutItsProjectNotTheCurrentFolder(t *testing.T) {
+	body, ok := Get("mesh-watch.sh")
+	require.True(t, ok)
+	project := t.TempDir()
+	scripts := filepath.Join(project, ".claude", "scripts")
+	require.NoError(t, os.MkdirAll(scripts, 0o750))
+	script := filepath.Join(scripts, "mesh-watch.sh")
+	require.NoError(t, os.WriteFile(script, body, 0o700)) //nolint:gosec // G306: must be executable
+
+	bin := t.TempDir()
+	seen := filepath.Join(t.TempDir(), "seen")
+	fake := "#!/bin/sh\nprintf '%s' \"$AGENT_CHAT_PROJECT_PATH\" > '" + seen + "'\nexit 1\n"
+	require.NoError(t, os.WriteFile(filepath.Join(bin, "vaultmind"), []byte(fake), 0o755)) //nolint:gosec // G306: test fixture must be executable
+
+	elsewhere := t.TempDir()
+	cmd := exec.Command("bash", script)
+	cmd.Dir = elsewhere
+	cmd.Env = []string{"PATH=" + bin + ":/usr/bin:/bin", "HOME=" + t.TempDir(), "CLAUDE_PROJECT_DIR=" + project}
+	_ = cmd.Run() // refuses to arm: the fake resolves nothing
+
+	got, err := os.ReadFile(seen) // #nosec G304 -- test-controlled path
+	require.NoError(t, err)
+	assert.Equal(t, project, string(got), "asked about the project, not %s", elsewhere)
 }
