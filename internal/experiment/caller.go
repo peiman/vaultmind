@@ -22,6 +22,16 @@ const (
 	EnvUserSessionID = "VAULTMIND_USER_SESSION_ID"
 )
 
+// The harnesses' own conversation ids, which each exposes to the agent's shell
+// (Claude Code: CLAUDE_CODE_SESSION_ID; Codex 0.156: CODEX_SESSION_ID, the
+// root session, see codex-rs protocol/shell_environment.rs). They are the same
+// ids the harness puts in every hook payload, so an agent's own CLI call and
+// the hooks' searches land in one user session.
+const (
+	EnvClaudeCodeSessionID = "CLAUDE_CODE_SESSION_ID"
+	EnvCodexSessionID      = "CODEX_SESSION_ID"
+)
+
 // MetaUserSessionID is the caller-meta key carrying the harness's REAL
 // conversation id. Present ⇒ used verbatim; absent ⇒ the time heuristic. Named
 // once here so the hook, the detector and the resolver cannot disagree.

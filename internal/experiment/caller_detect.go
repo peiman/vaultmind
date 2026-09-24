@@ -36,11 +36,17 @@ func DetectCaller() (string, map[string]any) {
 	if projectDir := os.Getenv("CLAUDE_PROJECT_DIR"); projectDir != "" {
 		meta["claude_project_dir"] = projectDir
 	}
-	// The harness's REAL conversation id, when a hook forwards it. Absent ⇒ the
-	// 30-minute time heuristic, which cannot separate a subagent from its
-	// parent (identical caller, user and host, seconds apart).
-	if sid := os.Getenv(EnvUserSessionID); sid != "" {
-		meta[MetaUserSessionID] = sid
+	// The harness's REAL conversation id: forwarded by a hook from its payload,
+	// else the one the harness exposes to the agent's shell. Without the second,
+	// the agent's own reads never shared a session with the hooks' searches
+	// (0 of 654, 2026-09-24), so "recall showed it, then it was used" could not
+	// be observed. Absent everywhere ⇒ the 30-minute time heuristic, which
+	// cannot separate a subagent from its parent.
+	for _, k := range []string{EnvUserSessionID, EnvClaudeCodeSessionID, EnvCodexSessionID} {
+		if sid := os.Getenv(k); sid != "" {
+			meta[MetaUserSessionID] = sid
+			break
+		}
 	}
 	return caller, meta
 }

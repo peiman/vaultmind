@@ -59,9 +59,49 @@ func TestDetectCaller_CarriesTheHarnessSessionIDWhenPresent(t *testing.T) {
 		"the real conversation id must reach the session row, not be re-derived from timing")
 }
 
+// clearHarnessSessionIDs isolates a test from the shell running it: under
+// Claude Code or Codex the agent's own shell carries a real session id.
+func clearHarnessSessionIDs(t *testing.T) {
+	t.Helper()
+	for _, k := range []string{EnvUserSessionID, EnvClaudeCodeSessionID, EnvCodexSessionID} {
+		t.Setenv(k, "")
+	}
+}
+
 func TestDetectCaller_OmitsTheKeyWhenUnset(t *testing.T) {
-	t.Setenv("VAULTMIND_USER_SESSION_ID", "")
+	clearHarnessSessionIDs(t)
 	_, meta := DetectCaller()
 	_, present := meta[MetaUserSessionID]
 	require.False(t, present, "absent means fall back to the heuristic, not group under an empty string")
+}
+
+// The agent's own CLI calls (a `note get` after recall showed a pointer) must
+// land in the SAME user session as the hooks' searches, or "shown, then used"
+// cannot be observed at all. Measured 2026-09-24: 0 of 654 recall-hook sessions
+// shared an id with the agent's reads; every usage-learning arm of the
+// plasticity replay was starved by it. Claude Code and Codex both expose the
+// conversation id to the agent's shell.
+func TestDetectCaller_UsesClaudeCodesSessionIDFromTheShell(t *testing.T) {
+	clearHarnessSessionIDs(t)
+	t.Setenv(EnvClaudeCodeSessionID, "cc-conv")
+	_, meta := DetectCaller()
+	assert.Equal(t, "cc-conv", meta[MetaUserSessionID])
+}
+
+func TestDetectCaller_UsesCodexsSessionIDFromTheShell(t *testing.T) {
+	clearHarnessSessionIDs(t)
+	t.Setenv(EnvCodexSessionID, "codex-root")
+	_, meta := DetectCaller()
+	assert.Equal(t, "codex-root", meta[MetaUserSessionID])
+}
+
+// A hook forwards the id from its payload explicitly; that wins over whatever
+// the process environment happens to carry.
+func TestDetectCaller_AForwardedIDWinsOverTheShells(t *testing.T) {
+	clearHarnessSessionIDs(t)
+	t.Setenv(EnvUserSessionID, "from-payload")
+	t.Setenv(EnvClaudeCodeSessionID, "cc-conv")
+	t.Setenv(EnvCodexSessionID, "codex-root")
+	_, meta := DetectCaller()
+	assert.Equal(t, "from-payload", meta[MetaUserSessionID])
 }
