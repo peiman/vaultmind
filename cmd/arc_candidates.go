@@ -44,6 +44,11 @@ func runArcCandidates(cmd *cobra.Command, _ []string) error {
 	if info, err := os.Stat(vaultPath); err != nil || !info.IsDir() {
 		return fmt.Errorf("vault %q does not exist or is not a directory", vaultPath)
 	}
+	if getConfigValueWithFlags[bool](cmd, "review", config.KeyAppArcCandidatesReview) {
+		return runArcReview(cmd.OutOrStdout(), vaultPath,
+			getConfigValueWithFlags[string](cmd, "episode", config.KeyAppArcCandidatesEpisode),
+			getConfigValueWithFlags[bool](cmd, "json", config.KeyAppArcCandidatesJson))
+	}
 	report, err := distill.ScanEpisodes(filepath.Join(vaultPath, "episodes"))
 	if err != nil {
 		return err

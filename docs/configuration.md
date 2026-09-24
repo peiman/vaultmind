@@ -39,6 +39,8 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.arc.candidates.vault` | string | `.` | `VAULTMIND_APP_ARC_CANDIDATES_VAULT` | Path to vault root |
 | `app.arc.candidates.json` | bool | `false` | `VAULTMIND_APP_ARC_CANDIDATES_JSON` | Output in JSON format |
 | `app.arc.candidates.arcs_vault` | string | `` | `VAULTMIND_APP_ARC_CANDIDATES_ARCS_VAULT` | Vault holding the existing arcs to compare proposals against (default: the scanned vault). Set this when the desk and the arcs live in different vaults |
+| `app.arc.candidates.review` | bool | `false` | `VAULTMIND_APP_ARC_CANDIDATES_REVIEW` | List the person's messages from a session, each with what the agent had just said, to judge which were turning points |
+| `app.arc.candidates.episode` | string | `` | `VAULTMIND_APP_ARC_CANDIDATES_EPISODE` | With --review: the episode id(s) to review, comma-separated (default: the most recent session) |
 | `app.arc.recite.vault` | string | `.` | `VAULTMIND_APP_ARC_RECITE_VAULT` | Path to vault root |
 | `app.arc.recite.json` | bool | `false` | `VAULTMIND_APP_ARC_RECITE_JSON` | Output in JSON format |
 | `app.arc.recite.budget` | int | `0` | `VAULTMIND_APP_ARC_RECITE_BUDGET` | Total token ceiling for the pack. 0 = unbounded. Arcs that do not fit are reported by id, never dropped silently |
@@ -322,6 +324,12 @@ app:
 
     # Vault holding the existing arcs to compare proposals against (default: the scanned vault). Set this when the desk and the arcs live in different vaults
     candidates.arcs_vault: 
+
+    # List the person's messages from a session, each with what the agent had just said, to judge which were turning points
+    candidates.review: false
+
+    # With --review: the episode id(s) to review, comma-separated (default: the most recent session)
+    candidates.episode: 
 
     # Path to vault root
     recite.vault: .
@@ -1224,6 +1232,12 @@ export VAULTMIND_APP_ARC_CANDIDATES_JSON=false
 
 # Vault holding the existing arcs to compare proposals against (default: the scanned vault). Set this when the desk and the arcs live in different vaults
 export VAULTMIND_APP_ARC_CANDIDATES_ARCS_VAULT=
+
+# List the person's messages from a session, each with what the agent had just said, to judge which were turning points
+export VAULTMIND_APP_ARC_CANDIDATES_REVIEW=false
+
+# With --review: the episode id(s) to review, comma-separated (default: the most recent session)
+export VAULTMIND_APP_ARC_CANDIDATES_EPISODE=
 
 # Path to vault root
 export VAULTMIND_APP_ARC_RECITE_VAULT=.

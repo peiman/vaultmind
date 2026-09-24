@@ -34,6 +34,12 @@ app:
     # Vault holding the existing arcs to compare proposals against (default: the scanned vault). Set this when the desk and the arcs live in different vaults
     candidates.arcs_vault: 
 
+    # List the person's messages from a session, each with what the agent had just said, to judge which were turning points
+    candidates.review: false
+
+    # With --review: the episode id(s) to review, comma-separated (default: the most recent session)
+    candidates.episode: 
+
     # Path to vault root
     recite.vault: .
 

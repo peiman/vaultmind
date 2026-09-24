@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`vaultmind arc candidates --review`** lists the person's messages from a
+  session, each with a one-line reminder of what the agent had just said, for
+  the agent to judge which were turning points worth an arc. Measured on real
+  sessions: the existing phrase rules proposed 0 of 5 moments that became
+  arcs; an agent reading this list, with no other context, found 4 of 5. What
+  makes a moment a turning point is what the agent had just done, which only a
+  reader of meaning can see, so the tool now makes that reading cheap instead
+  of guessing. Machine messages, compaction summaries and one-word replies are
+  left out. Defaults to the most recent session; `--episode` names others.
+  Turning points become desk entries; arcs are still written by hand.
+
 - **Session start says when this project's hook scripts are out of date.**
   Scripts are copied into a project, so they only change when someone reruns
   `hooks install`, and nothing said when they fell behind: two projects kept a
