@@ -83,9 +83,16 @@ func TestComputeActivationScores_WithSimilarities(t *testing.T) {
 	scoresWithSim := computeActivationScores(ctx, similarities, 0.2)
 	require.NotNil(t, scoresWithSim)
 
-	// note-a should score higher than note-b due to similarity boost
-	assert.Greater(t, scoresWithSim["note-a"], scoresWithSim["note-b"],
-		"note-a (sim=0.95) should outscore note-b (sim=0.1) with spreading activation")
+	// Compare the BOOST similarity adds, not raw scores. The two accesses are
+	// logged one after the other with second-resolution timestamps; when they
+	// straddle a second boundary note-b is ~1s more recent, and at these elapsed
+	// times that recency outweighs the similarity term — the raw comparison
+	// failed ~1 run in 200 (CI, 2026-09-24). The boost is what this test is
+	// about, and it does not depend on when each access landed.
+	boostA := scoresWithSim["note-a"] - scoresNoSim["note-a"]
+	boostB := scoresWithSim["note-b"] - scoresNoSim["note-b"]
+	assert.Greater(t, boostA, boostB,
+		"note-a (sim=0.95) should gain more from spreading activation than note-b (sim=0.1)")
 }
 
 // Tests for BuildShadowVariantResults and rankedItem moved to
