@@ -19,7 +19,7 @@
 
 set -eu
 
-project_dir="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+project_dir="${VAULTMIND_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-$(pwd)}}"
 
 # Claude Code encodes the absolute project directory path into the transcripts
 # subdirectory name by replacing "/" with "-". Derive instead of hardcoding so
@@ -66,6 +66,22 @@ if [[ -n "$payload" ]]; then
     fi
 fi
 
+# One line per run in ~/.vaultmind/capture/capture.log (the scripts' log
+# convention): SessionEnd output is shown nowhere, under Codex or Claude Code,
+# so without this a failed capture and a hook that never ran look identical —
+# no episode. Found on the first live Codex test, 2026-09-24. Bounded, and
+# never allowed to fail the hook.
+capture_log="${VAULTMIND_CAPTURE_LOG:-$HOME/.vaultmind/capture/capture.log}"
+record_capture() {
+    {
+        mkdir -p "$(dirname "$capture_log")" &&
+            printf '%s\t%s\t%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$project_dir" "${session_id:--}" "$1" >>"$capture_log" &&
+            if [ "$(wc -l <"$capture_log")" -gt 1000 ]; then
+                tail -n 500 "$capture_log" >"$capture_log.tmp" && mv -f "$capture_log.tmp" "$capture_log"
+            fi
+    } 2>/dev/null || true
+}
+
 transcript=""
 if [[ -n "$transcript_path" ]]; then
     # The payload named the file. Use it or nothing — a named file that is
@@ -74,6 +90,7 @@ if [[ -n "$transcript_path" ]]; then
         transcript="$transcript_path"
     else
         echo "capture-episode: the session's transcript is not there: $transcript_path — nothing captured" >&2
+        record_capture "not captured: transcript not found at $transcript_path"
         exit 0
     fi
 elif [[ -n "$session_id" ]]; then
@@ -81,6 +98,7 @@ elif [[ -n "$session_id" ]]; then
         transcript="$transcripts_dir/$session_id.jsonl"
     else
         echo "capture-episode: no transcript for session $session_id in $transcripts_dir — nothing captured (not substituting another session's)" >&2
+        record_capture "not captured: no transcript for this session in $transcripts_dir"
         exit 0
     fi
 elif [[ -d "$transcripts_dir" ]]; then
@@ -91,6 +109,7 @@ fi
 
 if [[ -z "$transcript" ]]; then
     echo "capture-episode: no transcript found (session=$session_id)" >&2
+    record_capture "not captured: no transcript found"
     exit 0
 fi
 
@@ -103,14 +122,17 @@ mkdir -p "$output_dir"
 if [[ -n "$binary" ]]; then
     err=$("$binary" episode capture "$transcript" --output-dir "$output_dir" --incremental 2>&1 >/dev/null) || {
         echo "capture-episode: binary run failed: $err" >&2
+        record_capture "failed: $(printf '%s' "$err" | tr '\t\n' '  ' | cut -c1-200)"
         exit 0
     }
 else
     err=$(cd "$project_dir" && go run . episode capture "$transcript" --output-dir "$output_dir" --incremental 2>&1 >/dev/null) || {
         echo "capture-episode: go run failed: $err" >&2
+        record_capture "failed: $(printf '%s' "$err" | tr '\t\n' '  ' | cut -c1-200)"
         exit 0
     }
 fi
+record_capture "captured $transcript"
 
 # days_between prints whole days from $1 to $2 (both YYYY-MM-DD), or nothing when
 # either cannot be parsed. GNU and BSD date disagree on the flag for parsing a

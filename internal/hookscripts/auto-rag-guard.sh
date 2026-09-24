@@ -203,7 +203,7 @@ case "$TOOL_NAME" in
     # Allowed roots from AUTORAG_ALLOWED_ROOTS (colon-separated,
     # trailing slash optional). Default: project root + ~/.claude +
     # /tmp. Anything outside is cross-project drift.
-    ALLOWED="${AUTORAG_ALLOWED_ROOTS:-${CLAUDE_PROJECT_DIR:-.}:${HOME}/.claude:/tmp}"
+    ALLOWED="${AUTORAG_ALLOWED_ROOTS:-${VAULTMIND_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-.}}:${HOME}/.claude:/tmp}"
     in_allowed=0
     IFS=':' read -ra ROOTS <<<"$ALLOWED"
     for root in "${ROOTS[@]}"; do
@@ -239,7 +239,7 @@ fi
 # the agent's context via additionalContext below. Hook is on the slow
 # path here (~1s for vaultmind ask) — acceptable since the alternative
 # is the agent proceeding without the reminder.
-VAULT_ROOT="${AUTORAG_VAULT:-${CLAUDE_PROJECT_DIR:-.}/vaultmind-identity}"
+VAULT_ROOT="${AUTORAG_VAULT:-${VAULTMIND_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-.}}/vaultmind-identity}"
 # Prefer PATH-installed vaultmind (canonical); /tmp is dev-loop only
 # (per memory feedback_use_vaultmind_ask). Override via VAULTMIND_BIN.
 VAULTMIND="${VAULTMIND_BIN:-$(command -v vaultmind 2>/dev/null || echo /tmp/vaultmind)}"

@@ -72,7 +72,7 @@ VAULTMIND=$(command -v vaultmind)
 # --vault`, and the simple single-var default), then to the vaultmind-identity
 # convention. A dual-vault adopter can route recall, episodes, and persona
 # independently; a single-var setup is unchanged (issue #41.6).
-VAULT_PATH="${VAULTMIND_RECALL_VAULT:-${VAULTMIND_VAULT:-$CLAUDE_PROJECT_DIR/vaultmind-identity}}"
+VAULT_PATH="${VAULTMIND_RECALL_VAULT:-${VAULTMIND_VAULT:-${VAULTMIND_PROJECT_DIR:-$CLAUDE_PROJECT_DIR}/vaultmind-identity}}"
 
 # Substrate not ready — silently no-op.
 if [ ! -d "$VAULT_PATH" ]; then

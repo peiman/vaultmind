@@ -106,11 +106,15 @@ func TestHealthHook_VaultButNoBinaryNamesInstall(t *testing.T) {
 		"the nudge must be on stdout, not stderr — SessionStart surfaces stdout to the agent")
 }
 
-// Binary present, index unbuilt -> name the build command.
-func TestHealthHook_IndexUnbuiltNamesBuild(t *testing.T) {
+// No embeddings -> say what that MEANS: search works, by keyword only. This
+// used to say "index not built yet" for a vault with a built index and no
+// embeddings (reported from the first live Codex session, 2026-09-24); doctor
+// says "keyword-only retrieval", and so must the notice built from it.
+func TestHealthHook_NoEmbeddingsSaysKeywordOnly(t *testing.T) {
 	stub := stubVaultmind(t, "Embeddings: none (5 notes) — keyword-only retrieval")
 	out, _ := runHealthHook(t, projectWithVault(t), stub)
-	assert.Contains(t, out, "index not built yet")
+	assert.Contains(t, out, "keyword-only")
+	assert.NotContains(t, out, "not built")
 	assert.Contains(t, out, "vaultmind index --embed")
 }
 

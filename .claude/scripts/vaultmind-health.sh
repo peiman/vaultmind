@@ -27,7 +27,7 @@
 cat >/dev/null 2>&1
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+PROJECT_DIR="${VAULTMIND_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}}"
 
 DOC="https://github.com/peiman/vaultmind/blob/main/docs/embedding-backends.md"
 
@@ -86,8 +86,8 @@ elif printf '%s' "$DOCTOR" | grep -q "semantic search is DOWN"; then
   echo "⚠ VaultMind vault detected ($VAULT) — but $(printf '%s' "$DOCTOR" | grep -o "semantic search is DOWN.*" | head -n 1)"
   echo "   Details: vaultmind doctor --vault \"$VAULT\""
 elif printf '%s' "$DOCTOR" | grep -q "Embeddings: none"; then
-  echo "📚 VaultMind vault detected ($VAULT) — index not built yet."
-  echo "   Build it: vaultmind index --vault \"$VAULT\" && vaultmind index --embed --vault \"$VAULT\""
+  echo "📚 VaultMind vault detected ($VAULT) — search is keyword-only: no embeddings yet."
+  echo "   Add meaning-based search: vaultmind index --embed --vault \"$VAULT\""
 elif printf '%s' "$DOCTOR" | grep -qE "\(minilm\)|degraded recall"; then
   echo "✓ VaultMind active ($VAULT) — but recall is degraded (MiniLM, 2-lane)."
   echo "   Ask: vaultmind ask \"<question>\" --vault \"$VAULT\""

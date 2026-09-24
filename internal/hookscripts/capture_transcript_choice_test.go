@@ -24,6 +24,7 @@ import (
 type choiceRun struct {
 	captured string // the transcript the binary was asked to capture; "" = not called
 	stderr   string
+	log      string // the capture log after the run
 }
 
 type choiceEnv struct {
@@ -76,6 +77,7 @@ func (e choiceEnv) run(t *testing.T, payload map[string]any) choiceRun {
 		"CLAUDE_PROJECT_DIR=" + e.projectDir,
 		"HOME=" + e.home,
 	}
+	logFile := filepath.Join(e.home, ".vaultmind", "capture", "capture.log")
 	if payload != nil {
 		raw, mErr := json.Marshal(payload)
 		require.NoError(t, mErr)
@@ -85,8 +87,9 @@ func (e choiceEnv) run(t *testing.T, payload map[string]any) choiceRun {
 	cmd.Stderr = &errb
 	require.NoErrorf(t, cmd.Run(), "SessionEnd must always exit 0 (stderr: %s)", errb.String())
 
-	got, _ := os.ReadFile(record) // #nosec G304 -- test-controlled path
-	return choiceRun{captured: string(got), stderr: errb.String()}
+	got, _ := os.ReadFile(record)     // #nosec G304 -- test-controlled path
+	logged, _ := os.ReadFile(logFile) // #nosec G304 -- test-controlled path
+	return choiceRun{captured: string(got), stderr: errb.String(), log: string(logged)}
 }
 
 func TestCaptureHook_UsesTheTranscriptPathThePayloadNames(t *testing.T) {
@@ -138,4 +141,23 @@ func TestCaptureHook_NoPayloadKeepsTheNewestFallback(t *testing.T) {
 
 	r := e.run(t, nil)
 	assert.Equal(t, newest, r.captured)
+}
+
+// SessionEnd output is shown nowhere — under Codex or Claude Code — so a
+// capture that failed, or a hook that never ran, looked identical: no episode.
+// Found on the first live Codex test (2026-09-24). Every run now leaves one
+// line in ~/.vaultmind/capture/capture.log saying what happened.
+func TestCaptureHook_LogsEveryRunWithItsOutcome(t *testing.T) {
+	e := newChoiceEnv(t)
+	mine := e.transcript(t, "mine", 0)
+
+	r := e.run(t, map[string]any{"session_id": "mine"})
+	assert.Equal(t, mine, r.captured)
+	assert.Contains(t, r.log, "\tmine\tcaptured")
+	assert.Contains(t, r.log, e.projectDir)
+
+	r = e.run(t, map[string]any{"session_id": "gone"})
+	lines := strings.Split(strings.TrimSpace(r.log), "\n")
+	require.Len(t, lines, 2, "one line per run, appended")
+	assert.Contains(t, lines[1], "\tgone\tnot captured: no transcript for this session")
 }

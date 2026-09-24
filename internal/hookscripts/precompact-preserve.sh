@@ -31,7 +31,7 @@
 
 set -uo pipefail
 
-PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+PROJECT_DIR="${VAULTMIND_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-$(pwd)}}"
 
 # The desk is where raw, ungated entries land: VAULTMIND_DESK_DIR, else the
 # journal/ convention inside the identity vault. Same resolution capture-episode.sh

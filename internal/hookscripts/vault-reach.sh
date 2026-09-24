@@ -56,7 +56,7 @@ except Exception:
 
 [ -z "$CMD" ] && exit 0
 
-VAULT_PATH="${VAULTMIND_VAULT:-${CLAUDE_PROJECT_DIR:-$PWD}/vaultmind-identity}"
+VAULT_PATH="${VAULTMIND_VAULT:-${VAULTMIND_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-$PWD}}/vaultmind-identity}"
 # The vault's own directory name, so the identity-write trigger below fires for
 # an adopter whose vault is not named by the default convention.
 IDENTITY_VAULT_NAME="${VAULT_PATH##*/}"
