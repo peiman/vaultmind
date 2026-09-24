@@ -47,12 +47,9 @@ func (m *Mutator) Run(req MutationRequest) (*MutationResult, error) {
 	}
 
 	// R1: Guard against empty or non-mapping frontmatter.
-	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 {
-		return nil, &MutationError{Code: "parse_error", Message: "frontmatter produced empty document node"}
-	}
-	mapping := doc.Content[0]
-	if mapping.Kind != yaml.MappingNode {
-		return nil, &MutationError{Code: "parse_error", Message: "frontmatter is not a YAML mapping"}
+	mapping, err := frontmatterMapping(doc)
+	if err != nil {
+		return nil, err
 	}
 
 	// Step 3: Validate
