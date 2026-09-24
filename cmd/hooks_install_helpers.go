@@ -35,7 +35,7 @@ const (
 	hooksAgentClaude = "claude"
 	hooksAgentCodex  = "codex"
 
-	codexTrustNotice = "\n⚠ Codex runs these hooks ONLY after two one-time approvals, and skips them silently until then:\n" +
+	codexTrustNotice = "\n⚠ Codex runs these hooks ONLY after two approvals, and skips them silently until then:\n" +
 		"  1. trust this project when Codex asks, and\n" +
 		"  2. run /hooks inside Codex and trust the VaultMind hooks.\n" +
 		"  Until both are done, Codex starts with no memory and does not say so.\n" +
