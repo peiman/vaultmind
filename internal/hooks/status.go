@@ -58,17 +58,7 @@ type StatusReport struct {
 
 // Counts returns how many scripts are in each state — the summary line.
 func (r StatusReport) Counts() (inSync, drifted, missing int) {
-	for _, s := range r.Scripts {
-		switch s.State {
-		case ScriptInSync:
-			inSync++
-		case ScriptDrifted:
-			drifted++
-		case ScriptMissing:
-			missing++
-		}
-	}
-	return inSync, drifted, missing
+	return countScripts(r.Scripts)
 }
 
 // Status compares every canonical hook script against the project's installed
@@ -90,17 +80,38 @@ func Status(projectDir string) (StatusReport, error) {
 	if err != nil {
 		return StatusReport{}, err
 	}
-	if len(codex.Hooks) > 0 {
-		report.Codex = &codex
-	}
-	scriptsDir := filepath.Join(projectDir, ".claude", "scripts")
+	scriptsDir := ScriptsDir(projectDir, AgentClaude)
 	if _, err := os.Stat(scriptsDir); err == nil {
 		report.Installed = true
 	} else if !os.IsNotExist(err) {
 		return StatusReport{}, fmt.Errorf("reading %s: %w", scriptsDir, err)
 	}
 
-	for _, name := range ScriptsForProfile(profile) {
+	if len(codex.Hooks) > 0 {
+		codex.ScriptsDir = ScriptsDir(projectDir, AgentCodex)
+		if codex.Scripts, err = scriptStatuses(codex.ScriptsDir, codex.wiredScripts()); err != nil {
+			return StatusReport{}, err
+		}
+		report.Codex = &codex
+		// A Codex-only project is judged as one. Grading it on Claude Code
+		// wiring it never had failed status forever ("7 unwired") on the
+		// first real Codex install.
+		if wired, _ := report.EventCounts(); !report.Installed && wired == 0 {
+			report.Events = nil
+			return report, nil
+		}
+	}
+
+	if report.Scripts, err = scriptStatuses(scriptsDir, ScriptsForProfile(profile)); err != nil {
+		return StatusReport{}, err
+	}
+	return report, nil
+}
+
+// scriptStatuses compares each named canonical script with its copy in dir.
+func scriptStatuses(dir string, names []string) ([]ScriptStatus, error) {
+	var out []ScriptStatus
+	for _, name := range names {
 		canonical, ok := hookscripts.Get(name)
 		if !ok {
 			continue
@@ -110,20 +121,35 @@ func Status(projectDir string) (StatusReport, error) {
 		// the guarantee lives in another package, and this is the line that
 		// would do the damage if it ever stopped holding.
 		if name != filepath.Base(name) {
-			return StatusReport{}, fmt.Errorf("canonical script name %q is not a bare filename", name)
+			return nil, fmt.Errorf("canonical script name %q is not a bare filename", name)
 		}
-		dst := filepath.Join(scriptsDir, name)
+		dst := filepath.Join(dir, name)
 		existing, err := os.ReadFile(dst) // #nosec G304 -- name validated as a bare filename just above
 		switch {
 		case os.IsNotExist(err):
-			report.Scripts = append(report.Scripts, ScriptStatus{Name: name, State: ScriptMissing})
+			out = append(out, ScriptStatus{Name: name, State: ScriptMissing})
 		case err != nil:
-			return StatusReport{}, fmt.Errorf("reading %s: %w", dst, err)
+			return nil, fmt.Errorf("reading %s: %w", dst, err)
 		case shellparse.StripCommentsAndBlanks(string(existing)) == shellparse.StripCommentsAndBlanks(string(canonical)):
-			report.Scripts = append(report.Scripts, ScriptStatus{Name: name, State: ScriptInSync})
+			out = append(out, ScriptStatus{Name: name, State: ScriptInSync})
 		default:
-			report.Scripts = append(report.Scripts, ScriptStatus{Name: name, State: ScriptDrifted})
+			out = append(out, ScriptStatus{Name: name, State: ScriptDrifted})
 		}
 	}
-	return report, nil
+	return out, nil
+}
+
+// countScripts tallies script states.
+func countScripts(scripts []ScriptStatus) (inSync, drifted, missing int) {
+	for _, s := range scripts {
+		switch s.State {
+		case ScriptInSync:
+			inSync++
+		case ScriptDrifted:
+			drifted++
+		case ScriptMissing:
+			missing++
+		}
+	}
+	return inSync, drifted, missing
 }

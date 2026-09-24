@@ -109,18 +109,29 @@ func EventScriptsForProfile(p Profile) []EventScript {
 // preserving today's behaviour for every existing adopter. An unrecognised
 // value is an ERROR: silently treating a typo as "full" would report a
 // misconfigured project as a healthy one.
+//
+// A Claude Code install declares it under .claude/, a Codex install under
+// .vaultmind/; the Claude Code location is read first.
 func DeclaredProfile(projectDir string) (Profile, error) {
-	path := filepath.Join(projectDir, ".claude", profileFilename)
-	// projectDir is operator-supplied (same trust class as the vault path);
-	// the filename is a package constant, so no component is caller-controlled.
-	// #nosec G304 G703
-	// nosemgrep: go-path-traversal
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return ProfileFull, nil
+	var raw []byte
+	var path string
+	for _, a := range []Agent{AgentClaude, AgentCodex} {
+		path = filepath.Join(baseDir(projectDir, a), profileFilename)
+		// projectDir is operator-supplied (same trust class as the vault path);
+		// the filename is a package constant, so no component is caller-controlled.
+		// #nosec G304 G703
+		// nosemgrep: go-path-traversal
+		b, err := os.ReadFile(path)
+		if err == nil {
+			raw = b
+			break
 		}
-		return "", fmt.Errorf("reading declared profile %s: %w", path, err)
+		if !os.IsNotExist(err) {
+			return "", fmt.Errorf("reading declared profile %s: %w", path, err)
+		}
+	}
+	if raw == nil {
+		return ProfileFull, nil
 	}
 	switch p := Profile(strings.TrimSpace(string(raw))); p {
 	case ProfileFull, ProfileKnowledge, ProfilePersona:
@@ -132,9 +143,15 @@ func DeclaredProfile(projectDir string) (Profile, error) {
 	}
 }
 
-// WriteDeclaredProfile records the choice. Callers pass a validated Profile.
+// WriteDeclaredProfile records the choice for a Claude Code install. Callers
+// pass a validated Profile.
 func WriteDeclaredProfile(projectDir string, p Profile) error {
-	dir := filepath.Join(projectDir, ".claude")
+	return writeDeclaredProfileFor(projectDir, AgentClaude, p)
+}
+
+// writeDeclaredProfileFor records the choice in agent a's folder.
+func writeDeclaredProfileFor(projectDir string, a Agent, p Profile) error {
+	dir := baseDir(projectDir, a)
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("creating %s: %w", dir, err)
 	}

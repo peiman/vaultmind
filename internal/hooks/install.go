@@ -57,6 +57,9 @@ type InstallConfig struct {
 	// binary's whole inventory — which reported deliberate omissions as
 	// defects on every run.
 	Profile Profile
+	// Agent decides where the scripts go: .claude/scripts for Claude Code (the
+	// default, empty), .vaultmind/scripts for Codex.
+	Agent Agent
 }
 
 // InstallResult is the JSON-serializable output of Install.
@@ -106,7 +109,7 @@ func Install(cfg InstallConfig) (*InstallResult, error) {
 		// a persona loader the adopter will never wire.
 		names = ScriptsForProfile(profile)
 	}
-	scriptsDir := filepath.Join(cfg.ProjectDir, ".claude", "scripts")
+	scriptsDir := ScriptsDir(cfg.ProjectDir, cfg.Agent)
 	res := &InstallResult{
 		ProjectDir: cfg.ProjectDir,
 		ScriptsDir: scriptsDir,
@@ -118,7 +121,7 @@ func Install(cfg InstallConfig) (*InstallResult, error) {
 	if err := os.MkdirAll(scriptsDir, 0o750); err != nil {
 		return nil, fmt.Errorf("creating %s: %w", scriptsDir, err)
 	}
-	if err := WriteDeclaredProfile(cfg.ProjectDir, profile); err != nil {
+	if err := writeDeclaredProfileFor(cfg.ProjectDir, cfg.Agent, profile); err != nil {
 		return nil, err
 	}
 

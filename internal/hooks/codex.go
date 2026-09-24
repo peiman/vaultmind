@@ -13,9 +13,10 @@ import (
 // {"hooks": {Event: [groups]}} form. Three differences decide this file:
 //
 //   - No CLAUDE_PROJECT_DIR. Every script path resolved to /.claude/scripts/…
-//     and every hook "Failed". The project dir is baked in and EXPORTED first:
-//     as a prefix assignment it would expand after the "$CLAUDE_PROJECT_DIR"
-//     beside it — the exact bug hit while proving this.
+//     and every hook "Failed". The script path is now absolute, and the project
+//     dir is EXPORTED first as VAULTMIND_PROJECT_DIR for the scripts to read
+//     (as a prefix assignment it would expand too late — the bug hit while
+//     proving this). Scripts live under .vaultmind/scripts, not .claude/.
 //   - Context over ~2500 tokens is moved to a file by default. The identity
 //     load is ~18KB, so the limit is set to 0 (never).
 //   - Hooks run only once trusted (`/hooks`), and an untrusted hook is skipped
@@ -24,6 +25,11 @@ import (
 const (
 	codexDir       = ".codex"
 	codexHooksFile = "hooks.json"
+
+	codexSessionEndEvent = "SessionEnd"
+	// codexSessionEndMaxTimeout is Codex's ceiling for a SessionEnd hook
+	// (SESSION_END_MAX_TIMEOUT_SEC, codex-rs 0.156.1); its default is 1s.
+	codexSessionEndMaxTimeout = 3
 )
 
 // codexScripts are the hooks that work under Codex.
@@ -54,16 +60,26 @@ func codexHooks(projectDir, vaultPath string, vaults []string, p Profile) []cano
 		allowed[n] = true
 	}
 	noLimit := 0
-	prefix := "export CLAUDE_PROJECT_DIR=" + singleQuote(projectDir) + "; "
+	prefix := "export " + envProjectDir + "=" + singleQuote(projectDir) + "; "
+	scriptRef := func(script string) string {
+		return singleQuote(filepath.Join(ScriptsDir(projectDir, AgentCodex), script))
+	}
 	var out []canonicalHook
-	for _, ch := range canonicalHooksFor(vaultPath, vaults) {
+	for _, ch := range canonicalHooksWith(vaultPath, vaults, scriptRef) {
 		if !codexScripts[ch.Script] || !allowed[ch.Script] {
 			continue
 		}
 		g := hookGroup{Matcher: ch.Group.Matcher}
 		for _, h := range ch.Group.Hooks {
 			h.Command = prefix + h.Command
-			h.AdditionalContextLimit = &noLimit
+			if ch.Event == codexSessionEndEvent {
+				// Codex allows SessionEnd 1s by default, 3s at most, and cannot
+				// take context from it (it ignores the limit, with a warning).
+				t := codexSessionEndMaxTimeout
+				h.Timeout = &t
+			} else {
+				h.AdditionalContextLimit = &noLimit
+			}
 			g.Hooks = append(g.Hooks, h)
 		}
 		ch.Group = g
@@ -101,7 +117,9 @@ func MergeIntoCodexHooksFor(projectDir, vaultPath string, vaults []string, p Pro
 	if err != nil {
 		return nil, err
 	}
-	merged, changed, err := mergeHooks(existing, codexHooks(projectDir, vaultPath, vaults, p))
+	// refresh: installs from before 2026-09-24 ran .claude/scripts via
+	// CLAUDE_PROJECT_DIR; a plain merge would keep those commands forever.
+	merged, changed, err := mergeHooksWith(existing, codexHooks(projectDir, vaultPath, vaults, p), true)
 	if err != nil {
 		return nil, fmt.Errorf("merging into %s: %w", path, err)
 	}

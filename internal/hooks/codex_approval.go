@@ -1,6 +1,9 @@
 package hooks
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,6 +27,9 @@ const (
 	CodexApproved    CodexApprovalState = "approved"
 	CodexNotApproved CodexApprovalState = "not_approved"
 	CodexDisabled    CodexApprovalState = "disabled"
+	// CodexModified: approved once, changed since (e.g. an upgrade rewrote the
+	// command). Codex shows it as "modified" in /hooks and skips it.
+	CodexModified CodexApprovalState = "modified"
 )
 
 const (
@@ -36,12 +42,38 @@ type CodexHookApproval struct {
 	Event  string             `json:"event"`
 	Script string             `json:"script"`
 	State  CodexApprovalState `json:"state"`
+	// Key and Hash are Codex's own names for this hook's approval: the
+	// [hooks.state."<key>"] entry, and the trusted_hash it must carry.
+	Key  string `json:"key"`
+	Hash string `json:"hash"`
 }
 
 // CodexApproval reports the approvals for a project's Codex hooks.
 type CodexApproval struct {
 	HooksFile string              `json:"hooks_file"`
 	Hooks     []CodexHookApproval `json:"hooks"`
+	// ScriptsDir is where Codex runs the scripts from (.vaultmind/scripts);
+	// Scripts compares each wired script there with the canonical copy.
+	ScriptsDir string         `json:"scripts_dir"`
+	Scripts    []ScriptStatus `json:"scripts"`
+}
+
+// ScriptCounts tallies the Codex scripts' states.
+func (a *CodexApproval) ScriptCounts() (inSync, drifted, missing int) {
+	return countScripts(a.Scripts)
+}
+
+// wiredScripts lists each VaultMind script the Codex hooks run, once, in order.
+func (a *CodexApproval) wiredScripts() []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, h := range a.Hooks {
+		if !seen[h.Script] {
+			seen[h.Script] = true
+			out = append(out, h.Script)
+		}
+	}
+	return out
 }
 
 // Approved counts hooks Codex will run.
@@ -92,9 +124,7 @@ func codexApprovals(projectDir, codexHome string) (CodexApproval, error) {
 	if err != nil {
 		return report, fmt.Errorf("reading %s: %w", hooksFile, err)
 	}
-	var file struct {
-		Hooks map[string][]hookGroup `json:"hooks"`
-	}
+	var file codexHooksFileJSON
 	if err := json.Unmarshal(raw, &file); err != nil {
 		return report, fmt.Errorf("parsing %s: %w", hooksFile, err)
 	}
@@ -119,18 +149,27 @@ func codexApprovals(projectDir, codexHome string) (CodexApproval, error) {
 				if script == "" {
 					continue
 				}
-				state := CodexNotApproved
+				hash := codexHookHash(event, group.Matcher, h)
+				entry := CodexHookApproval{Event: event, Script: script, State: CodexNotApproved, Hash: hash,
+					Key: fmt.Sprintf("%s:%s:%d:%d", hooksFile, codexEventLabel(event), gi, hi)}
 				for _, src := range sources {
 					key := fmt.Sprintf("%s:%s:%d:%d", src, codexEventLabel(event), gi, hi)
-					if st, ok := approved[key]; ok {
-						state = CodexApproved
-						if st.Enabled != nil && !*st.Enabled {
-							state = CodexDisabled
-						}
-						break
+					st, ok := approved[key]
+					if !ok {
+						continue
 					}
+					entry.Key = key
+					switch {
+					case st.TrustedHash != hash:
+						entry.State = CodexModified
+					case st.Enabled != nil && !*st.Enabled:
+						entry.State = CodexDisabled
+					default:
+						entry.State = CodexApproved
+					}
+					break
 				}
-				report.Hooks = append(report.Hooks, CodexHookApproval{Event: event, Script: script, State: state})
+				report.Hooks = append(report.Hooks, entry)
 			}
 		}
 	}
@@ -168,7 +207,7 @@ func readCodexHookStates(codexHome string) (map[string]codexHookState, error) {
 // vaultmindScriptIn returns the VaultMind script a hook command runs, or "".
 func vaultmindScriptIn(command string) string {
 	for script := range codexScripts {
-		if strings.Contains(command, "/"+script) {
+		if commandReferencesScript(command, script) {
 			return script
 		}
 	}
@@ -191,8 +230,81 @@ func codexEventLabel(event string) string {
 	return b.String()
 }
 
+// codexHooksFileJSON is .codex/hooks.json with every field Codex hashes.
+type codexHooksFileJSON struct {
+	Hooks map[string][]codexGroupJSON `json:"hooks"`
+}
+
+type codexGroupJSON struct {
+	Matcher *string         `json:"matcher"`
+	Hooks   []codexHookJSON `json:"hooks"`
+}
+
+type codexHookJSON struct {
+	Type                   string  `json:"type"`
+	Command                string  `json:"command"`
+	Timeout                *int    `json:"timeout"`
+	Async                  bool    `json:"async"`
+	StatusMessage          *string `json:"statusMessage"`
+	AdditionalContextLimit *int    `json:"additionalContextLimit"`
+}
+
+// Codex's hook normalization constants (codex-rs 0.156.1).
+const (
+	codexDefaultTimeout          = 600  // any event but SessionEnd
+	codexSessionEndDefault       = 1    // SESSION_END_DEFAULT_TIMEOUT_SEC
+	codexDefaultOutputTokenLimit = 2500 // DEFAULT_HOOK_OUTPUT_TOKEN_LIMIT
+)
+
+// codexContextEvents are the events whose additionalContextLimit Codex keeps.
+var codexContextEvents = map[string]bool{
+	"PreToolUse": true, "PostToolUse": true, "SessionStart": true,
+	"UserPromptSubmit": true, "SubagentStart": true,
+}
+
+// codexHookHash is the trusted_hash Codex records when a hook is approved
+// (codex-rs hooks/src/engine/discovery.rs hook_hash, config/src/fingerprint.rs
+// version_for_toml, 0.156.1): sha256 over the canonical (sorted-key, compact)
+// JSON of the NORMALIZED hook. Normalization fills the timeout default (600s;
+// SessionEnd 1s, clamped to 1..3s), always includes async, and keeps
+// additionalContextLimit only on context-capable events and only when it is
+// not the 2500 default. Unset optional fields are absent, not null.
+// An independent implementation reproduced all 10 real trusted hashes on a
+// real machine before this was written.
+func codexHookHash(event string, matcher *string, h codexHookJSON) string {
+	timeout := codexDefaultTimeout
+	if event == codexSessionEndEvent {
+		timeout = codexSessionEndDefault
+		if h.Timeout != nil {
+			timeout = min(max(*h.Timeout, 1), codexSessionEndMaxTimeout)
+		}
+	} else if h.Timeout != nil {
+		timeout = max(*h.Timeout, 1)
+	}
+	handler := map[string]any{"type": h.Type, "command": h.Command, "timeout": timeout, "async": h.Async}
+	if h.StatusMessage != nil {
+		handler["statusMessage"] = *h.StatusMessage
+	}
+	if l := h.AdditionalContextLimit; l != nil && codexContextEvents[event] && *l != codexDefaultOutputTokenLimit {
+		handler["additionalContextLimit"] = *l
+	}
+	identity := map[string]any{"event_name": codexEventLabel(event), "hooks": []any{handler}}
+	if matcher != nil {
+		identity["matcher"] = *matcher
+	}
+	// encoding/json sorts map keys; serde_json does not HTML-escape, so neither may we.
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(identity); err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(bytes.TrimRight(buf.Bytes(), "\n"))
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
 // sortedEvents lists the events in lifecycle order, unknown ones last.
-func sortedEvents(m map[string][]hookGroup) []string {
+func sortedEvents[G any](m map[string][]G) []string {
 	order := []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PreCompact", "SessionEnd"}
 	var out []string
 	seen := map[string]bool{}

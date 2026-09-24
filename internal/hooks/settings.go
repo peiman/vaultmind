@@ -3,6 +3,7 @@ package hooks
 import (
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 )
 
@@ -31,6 +32,41 @@ const (
 	hookSessionEndScript       = "capture-episode.sh"
 )
 
+// Where each agent's hook files live in a project. Claude Code's are under
+// .claude/ (its convention). Codex's are under .vaultmind/: a Codex project
+// should not grow a .claude/ folder, nor show "Claude" in the hook commands a
+// person reads when approving them in /hooks.
+const (
+	claudeBaseDir = ".claude"
+	codexBaseDir  = ".vaultmind"
+	scriptsSubdir = "scripts"
+	// envProjectDir is the agent-neutral name the scripts read for the project
+	// directory, before Claude Code's CLAUDE_PROJECT_DIR.
+	envProjectDir = "VAULTMIND_PROJECT_DIR"
+)
+
+// Agent is the coding agent a project's hooks are installed for.
+type Agent string
+
+// Supported agents.
+const (
+	AgentClaude Agent = "claude"
+	AgentCodex  Agent = "codex"
+)
+
+// baseDir is the per-project folder holding an agent's hook files.
+func baseDir(projectDir string, a Agent) string {
+	if a == AgentCodex {
+		return filepath.Join(projectDir, codexBaseDir)
+	}
+	return filepath.Join(projectDir, claudeBaseDir)
+}
+
+// ScriptsDir is where the hook scripts for agent a live in projectDir.
+func ScriptsDir(projectDir string, a Agent) string {
+	return filepath.Join(baseDir(projectDir, a), scriptsSubdir)
+}
+
 type hookCommand struct {
 	Type    string `json:"type"`
 	Command string `json:"command"`
@@ -38,6 +74,8 @@ type hookCommand struct {
 	// is unchanged). Codex moves context over ~2500 tokens to a file unless
 	// told otherwise; 0 means never.
 	AdditionalContextLimit *int `json:"additionalContextLimit,omitempty"`
+	// Timeout (seconds) is Codex-only, set on SessionEnd — see codexHooks.
+	Timeout *int `json:"timeout,omitempty"`
 }
 
 type hookGroup struct {
@@ -88,11 +126,18 @@ var federatedScripts = map[string]bool{
 // set, the searching hooks get VAULTMIND_VAULTS; the primary vault (vaultPath,
 // else the first listed) stays VAULTMIND_VAULT for everything else.
 func canonicalHooksFor(vaultPath string, vaults []string) []canonicalHook {
+	return canonicalHooksWith(vaultPath, vaults, claudeScriptRef)
+}
+
+// canonicalHooksWith is canonicalHooksFor with the script reference supplied:
+// Claude Code runs `"$CLAUDE_PROJECT_DIR"/.claude/scripts/<s>`, Codex an
+// absolute path under .vaultmind/scripts (codex.go).
+func canonicalHooksWith(vaultPath string, vaults []string, scriptRef func(string) string) []canonicalHook {
 	if vaultPath == "" && len(vaults) > 0 {
 		vaultPath = vaults[0]
 	}
 	cmd := func(script string) hookCommand {
-		c := hookCommandString(script, vaultPath)
+		c := hookCommandWith(scriptRef(script), vaultPath)
 		if len(vaults) > 0 && federatedScripts[script] {
 			c = "VAULTMIND_VAULTS=" + singleQuote(strings.Join(vaults, ",")) + " " + c
 		}
@@ -200,13 +245,17 @@ func renderStanza(hooks []canonicalHook) (string, error) {
 	return string(out), nil
 }
 
-// hookCommandString builds the shell command for one hook. The script is
-// resolved relative to $CLAUDE_PROJECT_DIR (Claude Code exports it), matching
-// the onboarding doc's convention. A non-empty vaultPath is single-quoted and
-// exported as VAULTMIND_VAULT so the literal path survives JSON encoding and
-// the shell does not expand it.
-func hookCommandString(script, vaultPath string) string {
-	base := `bash "$CLAUDE_PROJECT_DIR"/.claude/scripts/` + script
+// claudeScriptRef is how Claude Code hooks name a script: through the
+// CLAUDE_PROJECT_DIR Claude Code sets for every hook.
+func claudeScriptRef(script string) string {
+	return `"$CLAUDE_PROJECT_DIR"/` + claudeBaseDir + "/" + scriptsSubdir + "/" + script
+}
+
+// hookCommandWith builds the shell command for one hook: run the script at ref.
+// A non-empty vaultPath is single-quoted and set as VAULTMIND_VAULT so the
+// literal path survives JSON encoding and the shell does not expand it.
+func hookCommandWith(ref, vaultPath string) string {
+	base := "bash " + ref
 	if vaultPath == "" {
 		return base
 	}

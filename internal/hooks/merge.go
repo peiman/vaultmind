@@ -32,6 +32,15 @@ func MergeStanza(existing []byte, vaultPath string) ([]byte, bool, error) {
 // additive, dedup-by-script, never-clobber rules for whichever hook set the
 // agent runs.
 func mergeHooks(existing []byte, hooksToAdd []canonicalHook) ([]byte, bool, error) {
+	return mergeHooksWith(existing, hooksToAdd, false)
+}
+
+// mergeHooksWith is mergeHooks; with refresh set, a group that is ONLY our
+// hook for a script but carries a different command is replaced in place —
+// same position, so an agent that keys approvals by position (Codex) sees an
+// update, not a new hook elsewhere. A group mixing our hook with the project's
+// own is hand-wired and left alone.
+func mergeHooksWith(existing []byte, hooksToAdd []canonicalHook, refresh bool) ([]byte, bool, error) {
 	top, err := parseOrderedObject(existing)
 	if err != nil {
 		return nil, false, fmt.Errorf("parsing settings: %w", err)
@@ -53,14 +62,18 @@ func mergeHooks(existing []byte, hooksToAdd []canonicalHook) ([]byte, bool, erro
 				return nil, false, fmt.Errorf("parsing hooks.%s array: %w", ch.Event, err)
 			}
 		}
-		if anyGroupReferencesScript(arr, ch.Script) {
-			continue // already wired (by us on a prior run, or by hand) — never duplicate
-		}
 		groupRaw, err := json.Marshal(ch.Group)
 		if err != nil {
 			return nil, false, fmt.Errorf("marshaling %s entry: %w", ch.Event, err)
 		}
-		arr = append(arr, groupRaw)
+		if anyGroupReferencesScript(arr, ch.Script) {
+			// Already wired (by us on a prior run, or by hand) — never duplicate.
+			if !refresh || !refreshOwnGroup(arr, ch.Script, groupRaw) {
+				continue
+			}
+		} else {
+			arr = append(arr, groupRaw)
+		}
 		newArr, err := json.Marshal(arr)
 		if err != nil {
 			return nil, false, fmt.Errorf("marshaling hooks.%s array: %w", ch.Event, err)
@@ -85,6 +98,28 @@ func mergeHooks(existing []byte, hooksToAdd []canonicalHook) ([]byte, bool, erro
 		return nil, false, fmt.Errorf("rendering settings: %w", err)
 	}
 	return out, true, nil
+}
+
+// refreshOwnGroup replaces, in place, the group in arr that holds exactly one
+// hook — ours for script — when it differs from want. It reports whether it
+// replaced anything.
+func refreshOwnGroup(arr []json.RawMessage, script string, want json.RawMessage) bool {
+	for i, el := range arr {
+		var g hookGroup
+		if err := json.Unmarshal(el, &g); err != nil || len(g.Hooks) != 1 {
+			continue
+		}
+		if !commandReferencesScript(g.Hooks[0].Command, script) {
+			continue
+		}
+		have, err := json.Marshal(g)
+		if err != nil || string(have) == string(want) {
+			return false
+		}
+		arr[i] = want
+		return true
+	}
+	return false
 }
 
 // anyGroupReferencesScript reports whether any hook group in arr has a command

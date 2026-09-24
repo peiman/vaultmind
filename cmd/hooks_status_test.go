@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/cmdutil"
@@ -197,10 +199,13 @@ func codexProject(t *testing.T) (dir, hooksFile string) {
 		writeCanonical(t, scripts, hookscripts.Names()...)
 	})
 	wireAllCanonicalEvents(t, dir)
+	codexScripts := filepath.Join(dir, ".vaultmind", "scripts")
+	require.NoError(t, os.MkdirAll(codexScripts, 0o750))
+	writeCanonical(t, codexScripts, "capture-episode.sh")
 	hooksFile = filepath.Join(dir, ".codex", "hooks.json")
 	require.NoError(t, os.MkdirAll(filepath.Dir(hooksFile), 0o750))
 	require.NoError(t, os.WriteFile(hooksFile, []byte(`{"hooks":{"SessionEnd":[{"hooks":[
-		{"type":"command","command":"bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/capture-episode.sh"}]}]}}`), 0o600))
+		{"type":"command","command":"bash '`+codexScripts+`/capture-episode.sh'"}]}]}}`), 0o600))
 	return dir, hooksFile
 }
 
@@ -217,13 +222,61 @@ func TestHooksStatus_UnapprovedCodexHooksFailAndSayHowToFix(t *testing.T) {
 }
 
 func TestHooksStatus_ApprovedCodexHooksPass(t *testing.T) {
-	dir, hooksFile := codexProject(t)
-	home := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(home, "config.toml"),
-		[]byte(`[hooks.state."`+hooksFile+`:session_end:0:0"]`+"\ntrusted_hash = \"sha256:x\"\n"), 0o600))
-	t.Setenv("CODEX_HOME", home)
+	dir, _ := codexProject(t)
+	approveAllCodexHooks(t, dir)
 
 	out, _, err := runRootCmd(t, "hooks", "status", dir)
 	require.NoError(t, err)
 	assert.Contains(t, out.String(), "Codex: 1 of 1 VaultMind hooks approved")
+}
+
+// A Codex-only project: no "No hook scripts installed", no Claude Code events —
+// its scripts are checked in .vaultmind/scripts and it passes once approved.
+func TestHooksStatus_CodexOnlyProjectPassesWhenApprovedAndInSync(t *testing.T) {
+	dir := t.TempDir()
+	_, _, err := runRootCmd(t, "hooks", "install", dir, "--agent", "codex", "--merge")
+	require.NoError(t, err)
+	approveAllCodexHooks(t, dir)
+
+	out, _, err := runRootCmd(t, "hooks", "status", dir)
+	require.NoError(t, err, out.String())
+	s := out.String()
+	assert.NotContains(t, s, "No hook scripts installed")
+	assert.NotContains(t, s, "unwired")
+	assert.Contains(t, s, "Codex: 5 of 5 VaultMind hooks approved")
+	assert.Contains(t, s, ".vaultmind/scripts: 5 in sync")
+	_, statErr := os.Stat(filepath.Join(dir, ".claude"))
+	assert.True(t, os.IsNotExist(statErr), "a Codex install creates no .claude folder")
+}
+
+// approveAllCodexHooks records, in a fresh CODEX_HOME, the approval Codex
+// itself would write for every VaultMind hook in dir: its key and current hash.
+func approveAllCodexHooks(t *testing.T, dir string) {
+	t.Helper()
+	t.Setenv("CODEX_HOME", t.TempDir())
+	report, err := hooks.Status(dir)
+	require.NoError(t, err)
+	require.NotNil(t, report.Codex)
+	var cfg strings.Builder
+	for _, h := range report.Codex.Hooks {
+		fmt.Fprintf(&cfg, "[hooks.state.%q]\ntrusted_hash = %q\n\n", h.Key, h.Hash)
+	}
+	home := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(home, "config.toml"), []byte(cfg.String()), 0o600))
+	t.Setenv("CODEX_HOME", home)
+}
+
+// An upgrade that rewrites a hook's command leaves Codex's old approval in
+// place with the old hash; Codex skips the hook. status must say so rather
+// than count the stale record as approval.
+func TestHooksStatus_ACodexHookChangedAfterApprovalFails(t *testing.T) {
+	dir, hooksFile := codexProject(t)
+	approveAllCodexHooks(t, dir)
+	raw, err := os.ReadFile(hooksFile) // #nosec G304 -- test-controlled path
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(hooksFile, []byte(strings.Replace(string(raw), "bash '", "bash  '", 1)), 0o600))
+
+	out, _, err := runRootCmd(t, "hooks", "status", dir)
+	require.ErrorIs(t, err, cmdutil.ErrAlreadyWritten)
+	assert.Contains(t, out.String(), "changed since you approved it  SessionEnd -> capture-episode.sh")
 }

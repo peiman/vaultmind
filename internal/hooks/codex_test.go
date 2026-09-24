@@ -46,7 +46,7 @@ func TestCodexHooks_ExportProjectDirBeforeTheCommand(t *testing.T) {
 		for _, g := range groups {
 			for _, h := range g.Hooks {
 				n++
-				assert.True(t, strings.HasPrefix(h.Command, "export CLAUDE_PROJECT_DIR='/Users/x/proj'; "), h.Command)
+				assert.True(t, strings.HasPrefix(h.Command, "export VAULTMIND_PROJECT_DIR='/Users/x/proj'; "), h.Command)
 			}
 		}
 	}
@@ -108,7 +108,7 @@ func TestClaudeStanza_Unchanged(t *testing.T) {
 func TestCodexHooks_PathWithQuoteIsSafe(t *testing.T) {
 	out, err := CodexHooksStanza("/Users/o'brien/p", "", ProfileFull)
 	require.NoError(t, err)
-	assert.Contains(t, out, `export CLAUDE_PROJECT_DIR='/Users/o'\\''brien/p'; `)
+	assert.Contains(t, out, `export VAULTMIND_PROJECT_DIR='/Users/o'\\''brien/p'; `)
 }
 
 func TestMergeIntoCodexHooks_WritesAndIsIdempotent(t *testing.T) {

@@ -55,7 +55,8 @@ func runHooksStatus(cmd *cobra.Command, args []string) error {
 	// from inside the agent it looks exactly like having no memory at all.
 	unapproved := 0
 	if report.Codex != nil {
-		unapproved = report.Codex.Unapproved()
+		_, codexDrifted, codexMissing := report.Codex.ScriptCounts()
+		unapproved = report.Codex.Unapproved() + codexDrifted + codexMissing
 	}
 	if drifted+missing+unwired+unapproved > 0 {
 		return cmdutil.ErrAlreadyWritten
@@ -67,6 +68,10 @@ func renderHooksStatus(w io.Writer, report hooks.StatusReport) error {
 	inSync, drifted, missing := report.Counts()
 
 	if !report.Installed {
+		if report.Codex != nil {
+			// A Codex-only project: its scripts live under .vaultmind/scripts.
+			return renderCodexApprovals(w, report)
+		}
 		_, err := fmt.Fprintf(w,
 			"No hook scripts installed in %s\n  run: vaultmind hooks install %s --merge\n",
 			report.ProjectDir, report.ProjectDir)
@@ -132,9 +137,8 @@ func renderHooksStatus(w io.Writer, report hooks.StatusReport) error {
 }
 
 // renderCodexApprovals names every VaultMind hook Codex will skip, and the one
-// fix. "Approved" means Codex has a record of approving it; a hook changed since
-// shows as modified in /hooks, which this check cannot see — said once, so a
-// clean line is not read as more than it is.
+// fix. Approval is checked the way Codex checks it — the recorded hash against
+// the hook as it is now — so a hook changed after approval shows as changed.
 func renderCodexApprovals(w io.Writer, report hooks.StatusReport) error {
 	c := report.Codex
 	if c == nil {
@@ -144,13 +148,35 @@ func renderCodexApprovals(w io.Writer, report hooks.StatusReport) error {
 		c.Approved(), len(c.Hooks), c.HooksFile); err != nil {
 		return err
 	}
+	inSync, drifted, missing := c.ScriptCounts()
+	if _, err := fmt.Fprintf(w, "  scripts in %s: %d in sync, %d drifted, %d missing\n",
+		c.ScriptsDir, inSync, drifted, missing); err != nil {
+		return err
+	}
+	for _, sc := range c.Scripts {
+		if sc.State != hooks.ScriptInSync {
+			if _, err := fmt.Fprintf(w, "  %-9s %s\n", sc.State, sc.Name); err != nil {
+				return err
+			}
+		}
+	}
+	if drifted+missing > 0 {
+		if _, err := fmt.Fprintf(w,
+			"  fix: vaultmind hooks install %s --agent codex --merge --force, then approve the changed hooks in /hooks\n",
+			report.ProjectDir); err != nil {
+			return err
+		}
+	}
 	for _, h := range c.Hooks {
 		if h.State == hooks.CodexApproved {
 			continue
 		}
 		label := "not approved"
-		if h.State == hooks.CodexDisabled {
+		switch h.State {
+		case hooks.CodexDisabled:
 			label = "disabled"
+		case hooks.CodexModified:
+			label = "changed since you approved it"
 		}
 		if _, err := fmt.Fprintf(w, "  %s  %s -> %s\n", label, h.Event, h.Script); err != nil {
 			return err

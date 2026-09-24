@@ -241,6 +241,7 @@ func runHooksInstallCodex(cmd *cobra.Command, p hooksInstallParams, only []strin
 		VaultPath:  vault,
 		Vaults:     vaults,
 		Profile:    profile,
+		Agent:      hooks.AgentCodex,
 	}, false, false, false)
 	res := prov.Install
 
