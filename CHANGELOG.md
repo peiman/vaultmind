@@ -7,13 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-> **Upgrading, Codex users.** Every VaultMind hook changes in this release
-> (a new episode-capture hook, and the others now run from `.vaultmind/scripts/`
-> with no Claude names), and Codex skips a changed hook until you approve it
-> again. Run `vaultmind hooks install <project> --agent codex --merge --force`,
-> then `/hooks` inside Codex and trust them, then confirm with
-> `vaultmind hooks status <project>`. The old `.claude/` folder in a Codex-only
-> project can be deleted afterwards.
+## [0.9.1] - 2026-09-24
+
+> **Upgrading, Codex users.** Your existing hooks keep working until you
+> reinstall. Reinstalling changes every VaultMind hook (a new episode-capture
+> hook, and the others now run from `.vaultmind/scripts/` with no Claude
+> names), and Codex skips a changed hook until you approve it again. Run
+> `vaultmind hooks install <project> --agent codex --merge --force`, then
+> `/hooks` inside Codex and trust them (Codex may ask as it starts), then
+> confirm with `vaultmind hooks status <project>`. The old `.claude/` folder in
+> a Codex-only project can be deleted afterwards. Claude Code users: nothing to
+> do.
 
 ### Added
 
@@ -43,7 +47,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reproduced exactly on all 10 real approvals on the machine it was built on.
   The first run found a project whose hooks had never been approved.
 - **Every episode capture leaves a line in `~/.vaultmind/capture/capture.log`**:
-  when, which project and session, and whether it captured or why not. A
+  when, which project and session, and the outcome: the episode written,
+  "nothing new to capture", or why it failed. A
   `SessionEnd` hook's output is shown nowhere, so a failed capture and a hook
   that never ran used to look the same: no episode.
 
@@ -54,7 +59,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   project gets no `.claude/` folder. Reinstalling updates older entries in place
   (same position in `hooks.json`, your own hooks untouched), and `hooks status`
   judges a Codex-only project on its Codex hooks, where it used to report seven
-  "unwired" Claude Code events and fail forever. Claude Code installs are
+  "unwired" Claude Code events and fail forever. A `.claude/scripts/` left in a
+  Codex-only project by an older install is named as safe to delete, not
+  graded (and never deleted for you). Claude Code installs are
   unchanged; the scripts read `VAULTMIND_PROJECT_DIR` first, then
   `CLAUDE_PROJECT_DIR`.
 - **Codex's episode capture gets 3 seconds**, Codex's maximum for a
@@ -1688,7 +1695,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/peiman/vaultmind/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/peiman/vaultmind/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/peiman/vaultmind/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/peiman/vaultmind/compare/v0.7.0...v0.7.1
