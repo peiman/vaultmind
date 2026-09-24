@@ -41,6 +41,7 @@ type Episode struct {
 	Commits           []string
 	PRs               []PRLink
 	FilesTouched      []string
+	Agent             string // AgentCodex for a Codex rollout; "" for Claude Code
 }
 
 // ParseTranscript reads a Claude Code JSONL transcript and returns the
@@ -105,19 +106,8 @@ func ParseTranscriptFrom(path string, startLine int) (*Episode, int, error) {
 			ep.SessionID = rec.SessionID
 		}
 
-		switch rec.Type {
-		case "user":
-			handleUser(ep, rec)
-		case "assistant":
-			handleAssistant(ep, rec, filesSeen)
-		case "pr-link":
-			if _, dup := prsSeen[rec.PRNumber]; !dup && rec.PRNumber != 0 {
-				prsSeen[rec.PRNumber] = struct{}{}
-				ep.PRs = append(ep.PRs, PRLink{
-					Number: rec.PRNumber, URL: rec.PRURL,
-					Repository: rec.PRRepository, Timestamp: rec.Timestamp,
-				})
-			}
+		if !handleCodex(ep, rec, filesSeen) {
+			handleClaudeRecord(ep, rec, filesSeen, prsSeen)
 		}
 
 		if rec.Timestamp != "" {
@@ -171,6 +161,24 @@ func ParseTranscriptFrom(path string, startLine int) (*Episode, int, error) {
 	return ep, lineNum, nil
 }
 
+// handleClaudeRecord folds one Claude Code transcript record into ep.
+func handleClaudeRecord(ep *Episode, rec record, filesSeen map[string]struct{}, prsSeen map[int]struct{}) {
+	switch rec.Type {
+	case "user":
+		handleUser(ep, rec)
+	case "assistant":
+		handleAssistant(ep, rec, filesSeen)
+	case "pr-link":
+		if _, dup := prsSeen[rec.PRNumber]; !dup && rec.PRNumber != 0 {
+			prsSeen[rec.PRNumber] = struct{}{}
+			ep.PRs = append(ep.PRs, PRLink{
+				Number: rec.PRNumber, URL: rec.PRURL,
+				Repository: rec.PRRepository, Timestamp: rec.Timestamp,
+			})
+		}
+	}
+}
+
 // sessionIDOf returns the sessionId carried by the first record that has
 // one, scanning from the start regardless of any cursor — used only to label
 // a zero-record delta with the right session, never to extract content.
@@ -190,6 +198,9 @@ func sessionIDOf(path string) (string, error) {
 		}
 		if rec.SessionID != "" {
 			return rec.SessionID, nil
+		}
+		if sid := codexSessionID(rec); sid != "" {
+			return sid, nil
 		}
 	}
 	return "", scanner.Err()
@@ -231,7 +242,7 @@ func isSidechainTranscript(path string) bool {
 		if err := json.Unmarshal(scanner.Bytes(), &rec); err != nil {
 			continue
 		}
-		if rec.AgentID != "" || rec.IsSidechain {
+		if rec.AgentID != "" || rec.IsSidechain || isCodexSubagent(rec) {
 			return true
 		}
 	}
@@ -273,6 +284,7 @@ type record struct {
 	PRNumber     int             `json:"prNumber"`
 	PRURL        string          `json:"prUrl"`
 	PRRepository string          `json:"prRepository"`
+	Payload      json.RawMessage `json:"payload"` // Codex rollouts only (codex.go)
 }
 
 type userMessage struct {

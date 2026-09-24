@@ -29,6 +29,9 @@ func RenderMarkdown(ep *Episode) string {
 		fmt.Fprintf(&b, "git_branch: %s\n", ep.GitBranch)
 	}
 	b.WriteString("tags:\n  - episode\n")
+	if ep.Agent != "" {
+		fmt.Fprintf(&b, "  - %s\n", ep.Agent)
+	}
 	// `created` is the started_at date portion — when the session
 	// happened, the episode's semantic birthday. Tolerated optional
 	// field per schema.recognizedFields; vaultmind sets it on capture
@@ -77,6 +80,10 @@ func formatToolCounts(counts map[string]int) string {
 
 func writeCommits(b *strings.Builder, ep *Episode) {
 	b.WriteString("## Commits made\n\n")
+	if ep.Agent == AgentCodex {
+		b.WriteString(codexNotRecorded + "\n\n")
+		return
+	}
 	if len(ep.Commits) == 0 {
 		b.WriteString("_(none)_\n\n")
 		return
@@ -89,6 +96,10 @@ func writeCommits(b *strings.Builder, ep *Episode) {
 
 func writePRs(b *strings.Builder, ep *Episode) {
 	b.WriteString("## PRs opened\n\n")
+	if ep.Agent == AgentCodex {
+		b.WriteString(codexNotRecorded + "\n\n")
+		return
+	}
 	if len(ep.PRs) == 0 {
 		b.WriteString("_(none)_\n\n")
 		return
