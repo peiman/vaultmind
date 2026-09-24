@@ -119,20 +119,31 @@ mkdir -p "$output_dir"
 # SessionEnd, not the whole transcript every time. A session that never
 # closes (or is manually resumed across many technical restarts) would
 # otherwise re-render into one ever-growing episode file at every SessionEnd.
+# stdout is the episode path written, or "(nothing new …)" when the session
+# had nothing to capture (e.g. opened and quit); stderr is kept for failures.
+errf=$(mktemp 2>/dev/null || echo "/tmp/capture-episode.$$")
 if [[ -n "$binary" ]]; then
-    err=$("$binary" episode capture "$transcript" --output-dir "$output_dir" --incremental 2>&1 >/dev/null) || {
+    out=$("$binary" episode capture "$transcript" --output-dir "$output_dir" --incremental 2>"$errf") || {
+        err=$(cat "$errf" 2>/dev/null); rm -f "$errf"
         echo "capture-episode: binary run failed: $err" >&2
         record_capture "failed: $(printf '%s' "$err" | tr '\t\n' '  ' | cut -c1-200)"
         exit 0
     }
 else
-    err=$(cd "$project_dir" && go run . episode capture "$transcript" --output-dir "$output_dir" --incremental 2>&1 >/dev/null) || {
+    out=$(cd "$project_dir" && go run . episode capture "$transcript" --output-dir "$output_dir" --incremental 2>"$errf") || {
+        err=$(cat "$errf" 2>/dev/null); rm -f "$errf"
         echo "capture-episode: go run failed: $err" >&2
         record_capture "failed: $(printf '%s' "$err" | tr '\t\n' '  ' | cut -c1-200)"
         exit 0
     }
 fi
-record_capture "captured $transcript"
+rm -f "$errf"
+episode_written=$(printf '%s\n' "$out" | grep '\.md$' | tail -n 1)
+if [[ -n "$episode_written" ]]; then
+    record_capture "captured $episode_written"
+else
+    record_capture "nothing new to capture"
+fi
 
 # days_between prints whole days from $1 to $2 (both YYYY-MM-DD), or nothing when
 # either cannot be parsed. GNU and BSD date disagree on the flag for parsing a

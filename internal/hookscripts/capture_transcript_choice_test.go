@@ -56,6 +56,13 @@ func (e choiceEnv) transcript(t *testing.T, sid string, age time.Duration) strin
 // and a stub binary that records the transcript it is asked to capture.
 func (e choiceEnv) run(t *testing.T, payload map[string]any) choiceRun {
 	t.Helper()
+	return e.runWith(t, payload, "/vault/episodes/episode-x.md")
+}
+
+// runWith is run with the stub binary's stdout set: the real binary prints the
+// episode path it wrote, or a "(nothing new …)" line when there was nothing.
+func (e choiceEnv) runWith(t *testing.T, payload map[string]any, binaryOut string) choiceRun {
+	t.Helper()
 	bashPath, err := exec.LookPath("bash")
 	if err != nil {
 		t.Skip("bash not available")
@@ -68,7 +75,7 @@ func (e choiceEnv) run(t *testing.T, payload map[string]any) choiceRun {
 
 	binDir := t.TempDir()
 	record := filepath.Join(t.TempDir(), "captured")
-	stub := "#!/bin/bash\n[ \"$1 $2\" = \"episode capture\" ] && printf '%s' \"$3\" > '" + record + "'\nexit 0\n"
+	stub := "#!/bin/bash\n[ \"$1 $2\" = \"episode capture\" ] && printf '%s' \"$3\" > '" + record + "'\necho '" + binaryOut + "'\nexit 0\n"
 	require.NoError(t, os.WriteFile(filepath.Join(binDir, "vaultmind"), []byte(stub), 0o700)) //nolint:gosec // G306: test stub must be executable
 
 	cmd := exec.Command(bashPath, script)
@@ -153,11 +160,22 @@ func TestCaptureHook_LogsEveryRunWithItsOutcome(t *testing.T) {
 
 	r := e.run(t, map[string]any{"session_id": "mine"})
 	assert.Equal(t, mine, r.captured)
-	assert.Contains(t, r.log, "\tmine\tcaptured")
+	assert.Contains(t, r.log, "\tmine\tcaptured /vault/episodes/episode-x.md", "names the episode written")
 	assert.Contains(t, r.log, e.projectDir)
 
 	r = e.run(t, map[string]any{"session_id": "gone"})
 	lines := strings.Split(strings.TrimSpace(r.log), "\n")
 	require.Len(t, lines, 2, "one line per run, appended")
 	assert.Contains(t, lines[1], "\tgone\tnot captured: no transcript for this session")
+}
+
+// A session with nothing said in it (opened, approved, quit) writes no episode.
+// The log said "captured" for one on the first live Codex run; it now says what
+// the binary said.
+func TestCaptureHook_LogsWhenThereWasNothingToCapture(t *testing.T) {
+	e := newChoiceEnv(t)
+	e.transcript(t, "empty", 0)
+	r := e.runWith(t, map[string]any{"session_id": "empty"}, "(nothing new to capture since the last incremental capture)")
+	assert.Contains(t, r.log, "\tempty\tnothing new to capture")
+	assert.NotContains(t, r.log, "captured")
 }
