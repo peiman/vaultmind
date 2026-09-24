@@ -20,13 +20,32 @@ go install github.com/peiman/vaultmind@latest
 vaultmind init <vault>          # e.g. ./vaultmind-identity or "$HOME/.vaultmind/persona"
 ```
 
-## 3. Wire the Claude Code hooks
+## 3. Wire the hooks
 
 ```bash
-vaultmind hooks install --vault <vault-path> .
+# Claude Code (.claude/settings.json)
+vaultmind hooks install --vault <vault-path> --merge .
+
+# Codex CLI (.codex/hooks.json)
+vaultmind hooks install --vault <vault-path> --agent codex --merge .
 ```
 
 `--vault` bakes `VAULTMIND_VAULT=<path>` into every wired hook — no script editing.
+
+**Codex: approve the hooks, or nothing runs.** Codex skips unapproved hooks
+*silently*: the agent starts with no memory and nothing tells you why. Tell the
+person, plainly:
+
+1. Open Codex in the project and **trust the project** when it asks.
+2. Inside Codex, run **`/hooks`** and **trust the VaultMind hooks**.
+3. **After every upgrade, do step 2 again**: a new or changed hook is skipped
+   until it is approved.
+
+Then confirm it rather than assume it:
+
+```bash
+vaultmind hooks status .   # lists each VaultMind hook Codex has not approved; fails until all are
+```
 
 ## 4. Env-var routing
 

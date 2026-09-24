@@ -25,18 +25,21 @@ copies them out for use by Claude Code's hook system.
 CODEX (--agent codex)
 
   Wires the same scripts into Codex CLI through <project-dir>/.codex/hooks.json:
-  identity at session start, the health check, recall on every prompt, and vault
-  context before consequential commands. The project path is baked into each
-  command, because Codex sets no CLAUDE_PROJECT_DIR.
+  identity at session start, the health check, recall on every prompt, vault
+  context before consequential commands, and episode capture when the session
+  ends. The project path is baked into each command, because Codex sets no
+  CLAUDE_PROJECT_DIR.
 
-  Two one-time steps Codex requires, and skips SILENTLY without:
+  Two steps Codex requires, and skips SILENTLY without:
     1. trust the project (Codex asks when you first open it), and
     2. approve the hooks: run /hooks inside Codex and trust them.
   Until both are done Codex starts with no memory and says nothing about it.
+  Step 2 is not one-time: after an upgrade, a new or changed hook is skipped
+  until you approve it again. ` + "`vaultmind hooks status <project-dir>`" + ` shows
+  which VaultMind hooks Codex has approved, and fails while any are not.
 
-  Not wired for Codex yet: episode capture (it would read the wrong transcript
-  and record another session as this one), read-tracking (Codex has no Read
-  tool), and the pre-compaction prompt (Codex cannot add context there).
+  Not wired for Codex yet: read-tracking (Codex has no Read tool) and the
+  pre-compaction prompt (Codex cannot add context there).
 
 PROJECT-DIR
 
@@ -192,7 +195,7 @@ func HooksInstallOptions() []config.ConfigOption {
 		{
 			Key:          "app.hooksinstall.agent",
 			DefaultValue: "claude",
-			Description:  "Agent to wire: claude (default; .claude/settings.json) or codex (.codex/hooks.json). Codex gets identity, recall and decision-time hooks; episode capture is not wired for Codex yet.",
+			Description:  "Agent to wire: claude (default; .claude/settings.json) or codex (.codex/hooks.json). Codex gets identity, recall, decision-time and episode-capture hooks; approve them in Codex with /hooks.",
 			Type:         "string",
 		},
 		{

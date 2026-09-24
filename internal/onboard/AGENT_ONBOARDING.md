@@ -664,7 +664,7 @@ Tell the user explicitly what was changed and where to find sidecar logs (`~/.va
 
 **Migration would touch a file under `.git/` or `node_modules/`.** Refuse. The exclude list should catch this; if it doesn't, your survey logic is wrong.
 
-**The user is using Codex CLI.** Run §6 with `--agent codex`: `vaultmind hooks install <project-dir> --agent codex --vault <vault-path> --merge`. It writes `.codex/hooks.json` (identity at session start, health, per-prompt recall, decision-time context). Then tell the user, plainly, the two one-time steps Codex requires and skips SILENTLY without: *"Trust this project when Codex asks, then run `/hooks` inside Codex and trust the VaultMind hooks. Until both are done Codex starts with no memory and won't say so."* Episode capture is not wired for Codex yet.
+**The user is using Codex CLI.** Run §6 with `--agent codex`: `vaultmind hooks install <project-dir> --agent codex --vault <vault-path> --merge`. It writes `.codex/hooks.json` (identity at session start, health, per-prompt recall, decision-time context, episode capture at session end). Then tell the user, plainly, the steps Codex requires and skips SILENTLY without: *"Trust this project when Codex asks, then run `/hooks` inside Codex and trust the VaultMind hooks. Until both are done Codex starts with no memory and won't say so. After every VaultMind upgrade, run `/hooks` again: a new or changed hook is skipped until you approve it."* Do not take their word or yours for it — run `vaultmind hooks status <project-dir>`, which reads Codex's own record of approvals, names each VaultMind hook still unapproved, and fails until none are.
 
 **The user is using another non-Claude-Code agent** (Cursor, Aider, …). Skip §6 and tell the user: *"Your agent needs different integration. The CLI works fine; the auto-loading-of-persona-on-session-start needs to be configured in your agent's hook system. See [vaultmind repo's load-persona.sh] as a reference for the pattern."*
 
@@ -698,7 +698,7 @@ These were caught walking this doc against a real local repo (greenfield via `/t
 - **Debug log on stdout** during retrieval (`INF Using config file...`). Annoying for the agent's grep/parse. Fix candidate: log to stderr only by default; stdout reserved for command output.
 - **Vaultmind's own `Next steps` output uses bare `vaultmind`** (PATH-assumption — same root cause as §1a's first-version bug). Fix candidate: vaultmind detects how it was invoked and uses that in its hint output.
 - **No URL fallback for this doc.** The entry sentence assumes the user has a local clone. If they `go install` (future) or use a release binary, the local path doesn't exist. Fix candidate once the repo is public: the entry sentence cites both a local path AND a GitHub URL, agent uses whichever the user has.
-- **Per-vault adapter for other non-Claude-Code agents** (Cursor, Aider, etc.) — Codex is wired (`--agent codex`); the rest are still out of scope. Codex episode capture is open: it needs a parser for Codex's rollout transcript format.
+- **Per-vault adapter for other non-Claude-Code agents** (Cursor, Aider, etc.) — Codex is wired (`--agent codex`, episode capture included); the rest are still out of scope.
 
 ## Source
 

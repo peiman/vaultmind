@@ -702,7 +702,7 @@
           "properties": {
             "agent": {
               "default": "claude",
-              "description": "Agent to wire: claude (default; .claude/settings.json) or codex (.codex/hooks.json). Codex gets identity, recall and decision-time hooks; episode capture is not wired for Codex yet.",
+              "description": "Agent to wire: claude (default; .claude/settings.json) or codex (.codex/hooks.json). Codex gets identity, recall, decision-time and episode-capture hooks; approve them in Codex with /hooks.",
               "type": "string"
             },
             "dryrun": {

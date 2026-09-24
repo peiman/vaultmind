@@ -150,7 +150,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.hooksinstall.merge` | bool | `false` | `VAULTMIND_APP_HOOKSINSTALL_MERGE` | Additively merge the hook stanza into the project's settings file (never clobbers existing hooks) instead of only printing it. |
 | `app.hooksinstall.local` | bool | `false` | `VAULTMIND_APP_HOOKSINSTALL_LOCAL` | With --merge, target .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared). |
 | `app.hooksinstall.vaults` | string | `` | `VAULTMIND_APP_HOOKSINSTALL_VAULTS` | Comma-separated vaults to search TOGETHER (federated recall): wired into the recall and decision-time hooks. The persona still loads one vault — --vault, else the first listed. |
-| `app.hooksinstall.agent` | string | `claude` | `VAULTMIND_APP_HOOKSINSTALL_AGENT` | Agent to wire: claude (default; .claude/settings.json) or codex (.codex/hooks.json). Codex gets identity, recall and decision-time hooks; episode capture is not wired for Codex yet. |
+| `app.hooksinstall.agent` | string | `claude` | `VAULTMIND_APP_HOOKSINSTALL_AGENT` | Agent to wire: claude (default; .claude/settings.json) or codex (.codex/hooks.json). Codex gets identity, recall, decision-time and episode-capture hooks; approve them in Codex with /hooks. |
 | `app.hooksinstall.dryrun` | bool | `false` | `VAULTMIND_APP_HOOKSINSTALL_DRYRUN` | With --merge, print the merged result without writing it (preview/diff). |
 | `app.hooksrecord.json` | bool | `false` | `VAULTMIND_APP_HOOKSRECORD_JSON` | Output in JSON format |
 | `app.hooksrecord.vault` | string | `.` | `VAULTMIND_APP_HOOKSRECORD_VAULT` | Path to vault root |
@@ -671,7 +671,7 @@ app:
     # Comma-separated vaults to search TOGETHER (federated recall): wired into the recall and decision-time hooks. The persona still loads one vault — --vault, else the first listed.
     vaults: 
 
-    # Agent to wire: claude (default; .claude/settings.json) or codex (.codex/hooks.json). Codex gets identity, recall and decision-time hooks; episode capture is not wired for Codex yet.
+    # Agent to wire: claude (default; .claude/settings.json) or codex (.codex/hooks.json). Codex gets identity, recall, decision-time and episode-capture hooks; approve them in Codex with /hooks.
     agent: claude
 
     # With --merge, print the merged result without writing it (preview/diff).
@@ -1554,7 +1554,7 @@ export VAULTMIND_APP_HOOKSINSTALL_LOCAL=false
 # Comma-separated vaults to search TOGETHER (federated recall): wired into the recall and decision-time hooks. The persona still loads one vault — --vault, else the first listed.
 export VAULTMIND_APP_HOOKSINSTALL_VAULTS=
 
-# Agent to wire: claude (default; .claude/settings.json) or codex (.codex/hooks.json). Codex gets identity, recall and decision-time hooks; episode capture is not wired for Codex yet.
+# Agent to wire: claude (default; .claude/settings.json) or codex (.codex/hooks.json). Codex gets identity, recall, decision-time and episode-capture hooks; approve them in Codex with /hooks.
 export VAULTMIND_APP_HOOKSINSTALL_AGENT=claude
 
 # With --merge, print the merged result without writing it (preview/diff).

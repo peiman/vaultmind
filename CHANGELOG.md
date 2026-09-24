@@ -7,7 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+> **Upgrading, Codex users.** This release adds a hook (episode capture at
+> session end). Codex skips a new hook until you approve it: after
+> `vaultmind hooks install <project> --agent codex --merge --force`, run `/hooks`
+> inside Codex and trust it, then check with `vaultmind hooks status <project>`.
+
+### Added
+
+- **Codex sessions are captured as episodes** (#152), when the session ends.
+  Codex's `SessionEnd` hook names the session's own transcript, and the capture
+  reads exactly that file. The parser handles Codex's session files, measured
+  on 200 real ones from Codex 0.153–0.156:
+  - **Kept:** what the person typed, including answers to the agent's
+    questions, and the agent's replies.
+  - **Dropped:** text Codex adds to the conversation itself (environment
+    context, AGENTS.md, editor file lists, plugin lists).
+  - **Recorded as well:** tools used, and files changed through `apply_patch`.
+    Commits and PRs are marked "not recorded for Codex sessions" rather than
+    "none", since the capture doesn't look for them.
+  - **Skipped:** Codex's own sub-agent threads (reviewers, spawned helpers),
+    which outnumbered real sessions about 20 to 1 on one machine.
+
+  Codex episodes carry a `codex` tag. `episode capture` also accepts Codex
+  session files directly.
+- **`vaultmind hooks status` shows whether Codex has approved each VaultMind
+  hook.** Codex runs a project's hooks only after you approve them in `/hooks`,
+  and skips unapproved ones without a word, so the agent just starts with no
+  memory. Status reads Codex's own record of approvals, names each hook still
+  unapproved or disabled, and exits non-zero until all are approved. A hook
+  changed after you approved it shows as "modified" in `/hooks`, which this
+  check cannot see. The first run on a real machine found a project whose
+  hooks had never been approved.
+
 ### Fixed
+
+- **Episode capture no longer records another session.** When the hook payload
+  named a session whose transcript wasn't where the capture looked, it captured
+  the newest transcript instead. That was a different session: always under
+  Codex, and under Claude Code whenever two sessions shared a repo. A session
+  the payload names is now captured from its own file or not at all, with a
+  message saying which. Only a run with no payload still falls back to the
+  newest transcript.
 
 - **`doctor` now reads the same pinned root key as `identity fetch-registry`**
   (#151). A machine pinned through `app.identityfetchregistry.root_pubkey` —

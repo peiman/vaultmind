@@ -39,7 +39,9 @@ const (
 		"  1. trust this project when Codex asks, and\n" +
 		"  2. run /hooks inside Codex and trust the VaultMind hooks.\n" +
 		"  Until both are done, Codex starts with no memory and does not say so.\n" +
-		"  Not wired for Codex yet: episode capture, read-tracking, the pre-compaction prompt.\n"
+		"  Approve again after every upgrade: a new or changed hook is skipped until you do.\n" +
+		"  Check it any time: vaultmind hooks status <project-dir>\n" +
+		"  Not wired for Codex yet: read-tracking, the pre-compaction prompt.\n"
 )
 
 // hooksInstallPayload is the JSON shape for an install run. InstallResult is

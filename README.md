@@ -97,7 +97,7 @@ vaultmind hooks install <project-dir> --vaults <identity-vault>,<desk-vault> --m
 
 Add `--dry-run` to preview the change first. Without `--merge` the scripts are written and the wiring is printed for you to paste. Without `--vault`, the hooks look for `<project-dir>/vaultmind-identity`.
 
-**Codex needs two one-time approvals**, and skips the hooks silently until you give them: trust the project when Codex asks, then run `/hooks` inside Codex and trust the VaultMind hooks. Episode capture is not wired for Codex yet.
+**Codex needs your approval, and skips the hooks silently without it**: trust the project when Codex asks, then run `/hooks` inside Codex and trust the VaultMind hooks. Until then the agent starts with no memory and nothing says why. Approve again after upgrading: a new or changed hook is skipped until you do. `vaultmind hooks status <project-dir>` shows which VaultMind hooks Codex has approved, and fails while any are not. Under Codex, episode capture runs when the session ends; read-tracking and the pre-compaction prompt are Claude Code only.
 
 This installs hook scripts that load identity + current context at session start, surface relevant pointers per turn, and capture each session as an episode for later distillation. Check them with `vaultmind hooks status <project-dir>`, which reports both halves — whether each script matches the canonical copy, and whether each canonical event is actually **wired** in `settings.json`. A project can hold every script byte-identical and still run none of them; an unwired event is reported by name and fails the check. The scripts are embedded in the binary and written into `<project-dir>/.claude/scripts/` (idempotent). See **[docs/AGENT_USAGE.md](docs/AGENT_USAGE.md)** for the day-to-day agent workflow, and **[docs/building-an-identity-vault.md](docs/building-an-identity-vault.md)** for how to grow an agent's identity from scratch — the arc method, and why an identity vault is **personal** and usually shouldn't be committed to a shared repo.
 
@@ -107,6 +107,8 @@ This installs hook scripts that load identity + current context at session start
 vaultmind episode capture ~/.claude/projects/<project> --output-dir ~/.vaultmind/persona/episodes
 vaultmind arc candidates --vault ~/.vaultmind/persona
 ```
+
+Codex sessions work too: each is one `rollout-*.jsonl` under `~/.codex/sessions/`. Codex keeps **every project's** sessions in that one folder, so capture the files of the project you mean rather than the whole folder, which would pull other projects' sessions into this vault. Codex's own sub-agent threads (its reviewers, spawned helpers) are passed over, the same as Claude Code's.
 
 Subagent and workflow transcripts nested under a session are passed over: they carry the parent session's id, so capturing them would overwrite the session itself. The summary reports how many. (Pass one directly if you do want it captured.)
 
