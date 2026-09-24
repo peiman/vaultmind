@@ -250,8 +250,13 @@ var commandCatalog = map[string]catalogEntry{
 	},
 	"vaultmind arc candidates": {
 		group: groupLifecycle,
-		when:  "you finished a session and want candidate transformation moments to review for arcs.",
+		when:  "you want phrase-matched candidate moments and unfinished desk entries to consider for arcs.",
 		short: "Surface candidate transformation moments for arc distillation",
+	},
+	"vaultmind arc review": {
+		group: groupLifecycle,
+		when:  "sessions await review — judge which of the person's messages were turning points, then mark each session reviewed.",
+		short: "Review captured sessions for turning points, oldest first",
 	},
 	"vaultmind arc guide": {
 		group: groupLifecycle,

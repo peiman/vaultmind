@@ -379,7 +379,7 @@ markers; `task check` fails if it drifts from the catalog. Everything outside th
 hand-written and stays.
 
 <!-- VAULTMIND:GENERATED:commands:START -->
-<!-- checksum:e843038fc522e36a6cb6e17596eeba6f79d0612145c5c347a6d8df9fded6c24b -->
+<!-- checksum:c23325e2c0ff1b76fef732677b9bd2fea2a3a2ba74e299f305f9d9a602e06929 -->
 # VaultMind Commands
 
 Every user-facing command, grouped by intent, with its when-to-use trigger.
@@ -432,8 +432,9 @@ Generated from the command tree — do not edit by hand (run `task generate:docs
 | Command | What | When to use |
 |---------|------|-------------|
 | `vaultmind arc` | Surface arc-distillation candidates from episodes (propose-only) | you want to surface arc-distillation candidate moments from episodes (propose-only). |
-| `vaultmind arc candidates` | Surface candidate transformation moments for arc distillation | you finished a session and want candidate transformation moments to review for arcs. |
+| `vaultmind arc candidates` | Surface candidate transformation moments for arc distillation | you want phrase-matched candidate moments and unfinished desk entries to consider for arcs. |
 | `vaultmind arc guide` | Print the arc-writing discipline — how to find and write your own arcs | you want to learn how to find and write your own arcs — the shapes, the bar, and the self-check. |
+| `vaultmind arc review` | Review captured sessions for turning points, oldest first | sessions await review — judge which of the person's messages were turning points, then mark each session reviewed. |
 | `vaultmind episode` | Capture Claude Code sessions as episodic-memory artifacts | you want to capture Claude Code sessions as episodic-memory artifacts. |
 | `vaultmind episode capture` | Convert session transcripts into episode notes | you have a session transcript (or a directory of them) to convert into episode notes. |
 | `vaultmind hooks` | Manage VaultMind's Claude Code hook scripts | you need to install, remove, or check VaultMind's Claude Code hook scripts. |

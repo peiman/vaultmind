@@ -39,13 +39,15 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.arc.candidates.vault` | string | `.` | `VAULTMIND_APP_ARC_CANDIDATES_VAULT` | Path to vault root |
 | `app.arc.candidates.json` | bool | `false` | `VAULTMIND_APP_ARC_CANDIDATES_JSON` | Output in JSON format |
 | `app.arc.candidates.arcs_vault` | string | `` | `VAULTMIND_APP_ARC_CANDIDATES_ARCS_VAULT` | Vault holding the existing arcs to compare proposals against (default: the scanned vault). Set this when the desk and the arcs live in different vaults |
-| `app.arc.candidates.review` | bool | `false` | `VAULTMIND_APP_ARC_CANDIDATES_REVIEW` | List the person's messages from a session, each with what the agent had just said, to judge which were turning points |
-| `app.arc.candidates.episode` | string | `` | `VAULTMIND_APP_ARC_CANDIDATES_EPISODE` | With --review: the episode id(s) to review, comma-separated (default: the most recent session) |
 | `app.arc.recite.vault` | string | `.` | `VAULTMIND_APP_ARC_RECITE_VAULT` | Path to vault root |
 | `app.arc.recite.json` | bool | `false` | `VAULTMIND_APP_ARC_RECITE_JSON` | Output in JSON format |
 | `app.arc.recite.budget` | int | `0` | `VAULTMIND_APP_ARC_RECITE_BUDGET` | Total token ceiling for the pack. 0 = unbounded. Arcs that do not fit are reported by id, never dropped silently |
 | `app.arc.recite.excerpt` | int | `0` | `VAULTMIND_APP_ARC_RECITE_EXCERPT` | Cap each arc at N tokens, preferring its Principle section (the rule it carries) over its opening lines (story setup). 0 = whole bodies |
 | `app.arc.recite.type` | string | `arc` | `VAULTMIND_APP_ARC_RECITE_TYPE` | Note type to recite. Defaults to arc; set to another always-load layer (e.g. principle) to give it the same unranked treatment |
+| `app.arc.review.vault` | string | `.` | `VAULTMIND_APP_ARC_REVIEW_VAULT` | Path to vault root (its episodes/ folder is reviewed) |
+| `app.arc.review.json` | bool | `false` | `VAULTMIND_APP_ARC_REVIEW_JSON` | Output in JSON format |
+| `app.arc.review.episode` | string | `` | `VAULTMIND_APP_ARC_REVIEW_EPISODE` | The episode id(s) to review, comma-separated (default: the oldest session awaiting review) |
+| `app.arc.review.mark_reviewed` | string | `` | `VAULTMIND_APP_ARC_REVIEW_MARK_REVIEWED` | Record that these episode id(s), comma-separated, have been judged — they leave the queue |
 | `app.ask.vault` | string | `.` | `VAULTMIND_APP_ASK_VAULT` | Path to vault root |
 | `app.ask.vaults` | string | `` | `VAULTMIND_APP_ASK_VAULTS` | Comma-separated vault paths to search TOGETHER (federated). Merged by cross-vault RRF — ranks, not scores, because each vault calibrates its own noise floor. Every hit is tagged with the vault it came from. |
 | `app.ask.json` | bool | `false` | `VAULTMIND_APP_ASK_JSON` | Output in JSON format |
@@ -325,12 +327,6 @@ app:
     # Vault holding the existing arcs to compare proposals against (default: the scanned vault). Set this when the desk and the arcs live in different vaults
     candidates.arcs_vault: 
 
-    # List the person's messages from a session, each with what the agent had just said, to judge which were turning points
-    candidates.review: false
-
-    # With --review: the episode id(s) to review, comma-separated (default: the most recent session)
-    candidates.episode: 
-
     # Path to vault root
     recite.vault: .
 
@@ -345,6 +341,18 @@ app:
 
     # Note type to recite. Defaults to arc; set to another always-load layer (e.g. principle) to give it the same unranked treatment
     recite.type: arc
+
+    # Path to vault root (its episodes/ folder is reviewed)
+    review.vault: .
+
+    # Output in JSON format
+    review.json: false
+
+    # The episode id(s) to review, comma-separated (default: the oldest session awaiting review)
+    review.episode: 
+
+    # Record that these episode id(s), comma-separated, have been judged — they leave the queue
+    review.mark_reviewed: 
 
   ask:
     # Path to vault root
@@ -1233,12 +1241,6 @@ export VAULTMIND_APP_ARC_CANDIDATES_JSON=false
 # Vault holding the existing arcs to compare proposals against (default: the scanned vault). Set this when the desk and the arcs live in different vaults
 export VAULTMIND_APP_ARC_CANDIDATES_ARCS_VAULT=
 
-# List the person's messages from a session, each with what the agent had just said, to judge which were turning points
-export VAULTMIND_APP_ARC_CANDIDATES_REVIEW=false
-
-# With --review: the episode id(s) to review, comma-separated (default: the most recent session)
-export VAULTMIND_APP_ARC_CANDIDATES_EPISODE=
-
 # Path to vault root
 export VAULTMIND_APP_ARC_RECITE_VAULT=.
 
@@ -1253,6 +1255,18 @@ export VAULTMIND_APP_ARC_RECITE_EXCERPT=0
 
 # Note type to recite. Defaults to arc; set to another always-load layer (e.g. principle) to give it the same unranked treatment
 export VAULTMIND_APP_ARC_RECITE_TYPE=arc
+
+# Path to vault root (its episodes/ folder is reviewed)
+export VAULTMIND_APP_ARC_REVIEW_VAULT=.
+
+# Output in JSON format
+export VAULTMIND_APP_ARC_REVIEW_JSON=false
+
+# The episode id(s) to review, comma-separated (default: the oldest session awaiting review)
+export VAULTMIND_APP_ARC_REVIEW_EPISODE=
+
+# Record that these episode id(s), comma-separated, have been judged — they leave the queue
+export VAULTMIND_APP_ARC_REVIEW_MARK_REVIEWED=
 
 # Path to vault root
 export VAULTMIND_APP_ASK_VAULT=.

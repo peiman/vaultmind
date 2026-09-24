@@ -41,8 +41,12 @@ type ReviewMessage struct {
 
 // ReviewSession is the review list for one episode.
 type ReviewSession struct {
-	EpisodeID string          `json:"episode"`
-	Messages  []ReviewMessage `json:"messages"`
+	EpisodeID string `json:"episode"`
+	// File is the episode's file name without .md — what --mark-reviewed takes.
+	// Set by the caller, which knows the path; equal to EpisodeID for captured
+	// episodes, not necessarily for renamed or imported ones.
+	File     string          `json:"file"`
+	Messages []ReviewMessage `json:"messages"`
 }
 
 // BuildReview lists the person's messages in ep, each paired with the agent's

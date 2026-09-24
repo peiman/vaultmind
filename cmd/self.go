@@ -22,7 +22,10 @@ func runSelf(cmd *cobra.Command, _ []string) error {
 	}
 	defer vdb.Close()
 
-	return query.RunSelf(vdb.DB, query.SelfConfig{
+	if err := query.RunSelf(vdb.DB, query.SelfConfig{
 		Limit: getConfigValueWithFlags[int](cmd, "limit", config.KeyAppSelfLimit),
-	}, cmd.OutOrStdout())
+	}, cmd.OutOrStdout()); err != nil {
+		return err
+	}
+	return writeReviewNudge(cmd.OutOrStdout(), vaultPath)
 }

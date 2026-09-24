@@ -43,19 +43,9 @@
                   "description": "Vault holding the existing arcs to compare proposals against (default: the scanned vault). Set this when the desk and the arcs live in different vaults",
                   "type": "string"
                 },
-                "episode": {
-                  "default": "",
-                  "description": "With --review: the episode id(s) to review, comma-separated (default: the most recent session)",
-                  "type": "string"
-                },
                 "json": {
                   "default": false,
                   "description": "Output in JSON format",
-                  "type": "boolean"
-                },
-                "review": {
-                  "default": false,
-                  "description": "List the person's messages from a session, each with what the agent had just said, to judge which were turning points",
                   "type": "boolean"
                 },
                 "vault": {
@@ -91,6 +81,31 @@
                 "vault": {
                   "default": ".",
                   "description": "Path to vault root",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "review": {
+              "properties": {
+                "episode": {
+                  "default": "",
+                  "description": "The episode id(s) to review, comma-separated (default: the oldest session awaiting review)",
+                  "type": "string"
+                },
+                "json": {
+                  "default": false,
+                  "description": "Output in JSON format",
+                  "type": "boolean"
+                },
+                "mark_reviewed": {
+                  "default": "",
+                  "description": "Record that these episode id(s), comma-separated, have been judged — they leave the queue",
+                  "type": "string"
+                },
+                "vault": {
+                  "default": ".",
+                  "description": "Path to vault root (its episodes/ folder is reviewed)",
                   "type": "string"
                 }
               },

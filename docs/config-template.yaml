@@ -34,12 +34,6 @@ app:
     # Vault holding the existing arcs to compare proposals against (default: the scanned vault). Set this when the desk and the arcs live in different vaults
     candidates.arcs_vault: 
 
-    # List the person's messages from a session, each with what the agent had just said, to judge which were turning points
-    candidates.review: false
-
-    # With --review: the episode id(s) to review, comma-separated (default: the most recent session)
-    candidates.episode: 
-
     # Path to vault root
     recite.vault: .
 
@@ -54,6 +48,18 @@ app:
 
     # Note type to recite. Defaults to arc; set to another always-load layer (e.g. principle) to give it the same unranked treatment
     recite.type: arc
+
+    # Path to vault root (its episodes/ folder is reviewed)
+    review.vault: .
+
+    # Output in JSON format
+    review.json: false
+
+    # The episode id(s) to review, comma-separated (default: the oldest session awaiting review)
+    review.episode: 
+
+    # Record that these episode id(s), comma-separated, have been judged — they leave the queue
+    review.mark_reviewed: 
 
   ask:
     # Path to vault root

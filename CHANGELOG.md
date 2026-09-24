@@ -9,16 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **`vaultmind arc candidates --review`** lists the person's messages from a
+- **`vaultmind arc review`** lists the person's messages from a captured
   session, each with a one-line reminder of what the agent had just said, for
   the agent to judge which were turning points worth an arc. Measured on real
-  sessions: the existing phrase rules proposed 0 of 5 moments that became
-  arcs; an agent reading this list, with no other context, found 4 of 5. What
-  makes a moment a turning point is what the agent had just done, which only a
-  reader of meaning can see, so the tool now makes that reading cheap instead
-  of guessing. Machine messages, compaction summaries and one-word replies are
-  left out. Defaults to the most recent session; `--episode` names others.
-  Turning points become desk entries; arcs are still written by hand.
+  sessions: the existing phrase rules (`arc candidates`) proposed 0 of 5
+  moments that became arcs; an agent reading this list, with no other
+  context, found 4 of 5. What makes a moment a turning point is what the agent
+  had just done, which only a reader of meaning can see, so the tool makes
+  that reading cheap instead of guessing. Machine messages, compaction
+  summaries and one-word replies are left out. Turning points become desk
+  entries; arcs are still written by hand.
+- **Sessions wait in a review queue, and session start says so.** `arc
+  review` opens the oldest session nobody has judged; `--mark-reviewed <id>`
+  records the judgement as `reviewed: <date>` on the episode, and the queue
+  moves on (`--episode` still opens any session). `vaultmind self` — which the
+  session-start hook already runs — now ends with how many sessions await
+  review and the command to start, so review no longer depends on anyone
+  remembering it. Episodes with nothing to judge never enter the queue.
 
 - **Session start says when this project's hook scripts are out of date.**
   Scripts are copied into a project, so they only change when someone reruns
