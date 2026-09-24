@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
 # capture-episode.sh
 #
-# Called from the Claude Code SessionEnd / Stop hook. Parses the current
-# session's JSONL transcript into a markdown "episode" file under
+# Called from the SessionEnd hook of Claude Code or Codex CLI. Parses the
+# current session's JSONL transcript into a markdown "episode" file under
 # vaultmind-identity/episodes/. Episodic substrate v0 — no distillation,
 # no indexing, just durable per-session capture.
 #
-# Reads the hook JSON payload from stdin (Claude Code convention) to get
-# session_id. Falls back to the most recently modified transcript in the
-# project's transcripts directory if the payload is absent or unreadable.
+# WHICH TRANSCRIPT. The hook payload on stdin names it: transcript_path (sent
+# by Claude Code and by Codex), else session_id under Claude Code's transcript
+# directory. A session the payload NAMES but whose file cannot be found is
+# captured as nothing, with a message — never replaced by the newest
+# transcript, which is some other session (always, under Codex, whose
+# transcripts live elsewhere; sometimes, with two Claude sessions in one repo).
+# Only with no payload at all is the newest transcript the fallback.
 #
 # Exits 0 on success or graceful-degradation paths: a failed capture must
 # never block the user's session end. Errors go to stderr for debugging.
@@ -52,19 +56,36 @@ if [[ ! -t 0 ]]; then
 fi
 
 session_id=""
+transcript_path=""
 if [[ -n "$payload" ]]; then
     if command -v jq >/dev/null 2>&1; then
         session_id=$(printf '%s' "$payload" | jq -r '.session_id // empty' 2>/dev/null || true)
+        transcript_path=$(printf '%s' "$payload" | jq -r '.transcript_path // empty' 2>/dev/null || true)
     else
         echo "capture-episode: jq not found; falling back to most-recent transcript (risks capturing the wrong session under concurrent sessions in the same repo)" >&2
     fi
 fi
 
 transcript=""
-if [[ -n "$session_id" && -f "$transcripts_dir/$session_id.jsonl" ]]; then
-    transcript="$transcripts_dir/$session_id.jsonl"
+if [[ -n "$transcript_path" ]]; then
+    # The payload named the file. Use it or nothing — a named file that is
+    # missing is not permission to capture a different one.
+    if [[ -f "$transcript_path" ]]; then
+        transcript="$transcript_path"
+    else
+        echo "capture-episode: the session's transcript is not there: $transcript_path — nothing captured" >&2
+        exit 0
+    fi
+elif [[ -n "$session_id" ]]; then
+    if [[ -f "$transcripts_dir/$session_id.jsonl" ]]; then
+        transcript="$transcripts_dir/$session_id.jsonl"
+    else
+        echo "capture-episode: no transcript for session $session_id in $transcripts_dir — nothing captured (not substituting another session's)" >&2
+        exit 0
+    fi
 elif [[ -d "$transcripts_dir" ]]; then
-    # Fallback: most recently modified .jsonl in this project.
+    # No payload at all: no session to be wrong about, so the newest transcript
+    # in this project is the only available guess.
     transcript=$(ls -1t "$transcripts_dir"/*.jsonl 2>/dev/null | head -n1 || true)
 fi
 
