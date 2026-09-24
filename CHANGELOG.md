@@ -7,10 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-> **Upgrading, Codex users.** This release adds a hook (episode capture at
-> session end). Codex skips a new hook until you approve it: after
-> `vaultmind hooks install <project> --agent codex --merge --force`, run `/hooks`
-> inside Codex and trust it, then check with `vaultmind hooks status <project>`.
+> **Upgrading, Codex users.** Every VaultMind hook changes in this release
+> (a new episode-capture hook, and the others now run from `.vaultmind/scripts/`
+> with no Claude names), and Codex skips a changed hook until you approve it
+> again. Run `vaultmind hooks install <project> --agent codex --merge --force`,
+> then `/hooks` inside Codex and trust them, then confirm with
+> `vaultmind hooks status <project>`. The old `.claude/` folder in a Codex-only
+> project can be deleted afterwards.
 
 ### Added
 
@@ -30,17 +33,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   Codex episodes carry a `codex` tag. `episode capture` also accepts Codex
   session files directly.
-- **`vaultmind hooks status` shows whether Codex has approved each VaultMind
-  hook.** Codex runs a project's hooks only after you approve them in `/hooks`,
-  and skips unapproved ones without a word, so the agent just starts with no
-  memory. Status reads Codex's own record of approvals, names each hook still
-  unapproved or disabled, and exits non-zero until all are approved. A hook
-  changed after you approved it shows as "modified" in `/hooks`, which this
-  check cannot see. The first run on a real machine found a project whose
-  hooks had never been approved.
+- **`vaultmind hooks status` shows whether Codex will actually run each
+  VaultMind hook.** Codex runs a project's hooks only after you approve them in
+  `/hooks`, and skips the rest without a word, so the agent just starts with no
+  memory. Status checks each hook the way Codex does, against the approval
+  record and its hash: never approved, disabled, or **changed since you
+  approved it** (the usual state right after an upgrade). It names each one and
+  exits non-zero until Codex would run them all. The hash is Codex's own,
+  reproduced exactly on all 10 real approvals on the machine it was built on.
+  The first run found a project whose hooks had never been approved.
+- **Every episode capture leaves a line in `~/.vaultmind/capture/capture.log`**:
+  when, which project and session, and whether it captured or why not. A
+  `SessionEnd` hook's output is shown nowhere, so a failed capture and a hook
+  that never ran used to look the same: no episode.
+
+### Changed
+
+- **Codex hooks no longer mention Claude.** They run from
+  `<project>/.vaultmind/scripts/` and set `VAULTMIND_PROJECT_DIR`; a Codex
+  project gets no `.claude/` folder. Reinstalling updates older entries in place
+  (same position in `hooks.json`, your own hooks untouched), and `hooks status`
+  judges a Codex-only project on its Codex hooks, where it used to report seven
+  "unwired" Claude Code events and fail forever. Claude Code installs are
+  unchanged; the scripts read `VAULTMIND_PROJECT_DIR` first, then
+  `CLAUDE_PROJECT_DIR`.
+- **Codex's episode capture gets 3 seconds**, Codex's maximum for a
+  `SessionEnd` hook (its default is 1). A capture takes about 0.06 s; the rest
+  is margin for a cold start.
 
 ### Fixed
 
+- **The session-start notice said "index not built yet" for a vault whose
+  index is built but has no embeddings.** It now says search is keyword-only
+  and names `vaultmind index --embed`, matching what `doctor` reports.
 - **Episode capture no longer records another session.** When the hook payload
   named a session whose transcript wasn't where the capture looked, it captured
   the newest transcript instead. That was a different session: always under

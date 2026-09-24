@@ -24,19 +24,22 @@ copies them out for use by Claude Code's hook system.
 
 CODEX (--agent codex)
 
-  Wires the same scripts into Codex CLI through <project-dir>/.codex/hooks.json:
+  Wires the same scripts into Codex CLI through <project-dir>/.codex/hooks.json,
+  with the scripts under <project-dir>/.vaultmind/scripts/ (a Codex project gets
+  no .claude/ folder):
   identity at session start, the health check, recall on every prompt, vault
   context before consequential commands, and episode capture when the session
-  ends. The project path is baked into each command, because Codex sets no
-  CLAUDE_PROJECT_DIR.
+  ends. Each command exports VAULTMIND_PROJECT_DIR and runs its script by
+  absolute path; Codex sets no project variable of its own.
 
   Two steps Codex requires, and skips SILENTLY without:
     1. trust the project (Codex asks when you first open it), and
     2. approve the hooks: run /hooks inside Codex and trust them.
   Until both are done Codex starts with no memory and says nothing about it.
   Step 2 is not one-time: after an upgrade, a new or changed hook is skipped
-  until you approve it again. ` + "`vaultmind hooks status <project-dir>`" + ` shows
-  which VaultMind hooks Codex has approved, and fails while any are not.
+  until you approve it again. ` + "`vaultmind hooks status <project-dir>`" + ` checks each
+  VaultMind hook the way Codex does (never approved, or changed since), and
+  fails while any would be skipped.
 
   Not wired for Codex yet: read-tracking (Codex has no Read tool) and the
   pre-compaction prompt (Codex cannot add context there).
