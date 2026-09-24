@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   asks `hooks status`, which checks Claude Code and Codex layouts both, and
   names the refresh command for the one that is behind.
 
+- **`vaultmind hooks uninstall --agent codex`** removes VaultMind's entries
+  from `.codex/hooks.json`, keeping the project's own hooks, and with
+  `--remove-scripts` deletes our scripts from `.vaultmind/scripts`. Uninstall
+  used to know only Claude Code. It never removes the `.vaultmind` folder
+  (it can also hold a vault's data) or Codex's own approval records.
+
 ### Fixed
 
 - **Recall no longer searches on messages relayed from other agents**

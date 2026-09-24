@@ -161,3 +161,44 @@ func TestStatus_LeftoverClaudeScriptsInACodexProjectAreNotJudged(t *testing.T) {
 	_, err = os.Stat(filepath.Join(dir, ".claude", "scripts"))
 	require.NoError(t, err, "status reports; it never deletes")
 }
+
+// Uninstall used to know only Claude Code: a Codex project kept its
+// .codex/hooks.json entries and .vaultmind/scripts after `hooks uninstall`.
+func TestRemoveFromCodexHooks_StripsOnlyOurEntries(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".codex"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".codex", "hooks.json"),
+		[]byte(`{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"echo mine"}]}]}}`), 0o600))
+	_, err := Install(InstallConfig{ProjectDir: dir, Agent: AgentCodex})
+	require.NoError(t, err)
+	_, err = MergeIntoCodexHooks(dir, "", ProfileFull, false)
+	require.NoError(t, err)
+
+	res, err := RemoveFromCodexHooks(dir, false)
+	require.NoError(t, err)
+	assert.Len(t, res.Removed, 5)
+	raw, err := os.ReadFile(filepath.Join(dir, ".codex", "hooks.json"))
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), "echo mine", "the project's own hook survives")
+	assert.NotContains(t, string(raw), ".vaultmind/scripts")
+	_, err = os.Stat(filepath.Join(dir, ".vaultmind", "scripts", hookSessionStartScript))
+	require.NoError(t, err, "scripts stay unless asked to remove them")
+}
+
+func TestRemoveFromCodexHooks_RemovesScriptsButNeverTheVaultmindFolder(t *testing.T) {
+	dir := t.TempDir()
+	_, err := Install(InstallConfig{ProjectDir: dir, Agent: AgentCodex})
+	require.NoError(t, err)
+	_, err = MergeIntoCodexHooks(dir, "", ProfileFull, false)
+	require.NoError(t, err)
+	// .vaultmind/ can also be a vault's own data folder.
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".vaultmind", "index.db"), []byte("vault data"), 0o600))
+
+	res, err := RemoveFromCodexHooks(dir, true)
+	require.NoError(t, err)
+	assert.NotEmpty(t, res.ScriptsDeleted)
+	_, err = os.Stat(filepath.Join(dir, ".vaultmind", "scripts", hookSessionStartScript))
+	assert.True(t, os.IsNotExist(err))
+	_, err = os.Stat(filepath.Join(dir, ".vaultmind", "index.db"))
+	require.NoError(t, err, "nothing but our scripts is deleted")
+}

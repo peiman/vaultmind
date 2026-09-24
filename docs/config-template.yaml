@@ -407,8 +407,11 @@ app:
     # Target .claude/settings.local.json instead of .claude/settings.json.
     local: false
 
-    # Also delete the installed hook scripts under .claude/scripts/ (default: leave them).
+    # Also delete the installed hook scripts under .claude/scripts/ (Codex: .vaultmind/scripts/; default: leave them).
     removescripts: false
+
+    # Agent to unwire: claude (default; .claude/settings.json) or codex (.codex/hooks.json).
+    agent: claude
 
   identityenroll:
     # Network invite: a vmenroll1: token or enroll URL (required)

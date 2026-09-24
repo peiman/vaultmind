@@ -21,5 +21,6 @@ func runHooksUninstall(cmd *cobra.Command, args []string) error {
 	jsonOut := getConfigValueWithFlags[bool](cmd, "json", config.KeyAppHooksuninstallJson)
 	local := getConfigValueWithFlags[bool](cmd, "local", config.KeyAppHooksuninstallLocal)
 	removeScripts := getConfigValueWithFlags[bool](cmd, "remove-scripts", config.KeyAppHooksuninstallRemovescripts)
-	return runHooksUninstallCore(cmd, resolveProjectDir(args), jsonOut, local, removeScripts)
+	agent := getConfigValueWithFlags[string](cmd, "agent", config.KeyAppHooksuninstallAgent)
+	return runHooksUninstallCore(cmd, resolveProjectDir(args), agent, jsonOut, local, removeScripts)
 }

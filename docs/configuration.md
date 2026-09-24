@@ -157,7 +157,8 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.hooksstatus.json` | bool | `false` | `VAULTMIND_APP_HOOKSSTATUS_JSON` | Output in JSON format |
 | `app.hooksuninstall.json` | bool | `false` | `VAULTMIND_APP_HOOKSUNINSTALL_JSON` | Output in JSON format |
 | `app.hooksuninstall.local` | bool | `false` | `VAULTMIND_APP_HOOKSUNINSTALL_LOCAL` | Target .claude/settings.local.json instead of .claude/settings.json. |
-| `app.hooksuninstall.removescripts` | bool | `false` | `VAULTMIND_APP_HOOKSUNINSTALL_REMOVESCRIPTS` | Also delete the installed hook scripts under .claude/scripts/ (default: leave them). |
+| `app.hooksuninstall.removescripts` | bool | `false` | `VAULTMIND_APP_HOOKSUNINSTALL_REMOVESCRIPTS` | Also delete the installed hook scripts under .claude/scripts/ (Codex: .vaultmind/scripts/; default: leave them). |
+| `app.hooksuninstall.agent` | string | `claude` | `VAULTMIND_APP_HOOKSUNINSTALL_AGENT` | Agent to unwire: claude (default; .claude/settings.json) or codex (.codex/hooks.json). |
 | `app.identityenrolladd.request` | string | `` | `VAULTMIND_APP_IDENTITYENROLLADD_REQUEST` | Signed enrollment-request JSON file (stdin when empty or "-") |
 | `app.identityenrolladd.registry` | string | `` | `VAULTMIND_APP_IDENTITYENROLLADD_REGISTRY` | Current registry file: unsigned wireRegistry OR signed envelope (absent => fresh) |
 | `app.identityenrolladd.root_pubkey` | string | `` | `VAULTMIND_APP_IDENTITYENROLLADD_ROOT_PUBKEY` | Base64-std root ed25519 pubkey (required for a signed-envelope --registry; derives the network) |
@@ -695,8 +696,11 @@ app:
     # Target .claude/settings.local.json instead of .claude/settings.json.
     local: false
 
-    # Also delete the installed hook scripts under .claude/scripts/ (default: leave them).
+    # Also delete the installed hook scripts under .claude/scripts/ (Codex: .vaultmind/scripts/; default: leave them).
     removescripts: false
+
+    # Agent to unwire: claude (default; .claude/settings.json) or codex (.codex/hooks.json).
+    agent: claude
 
   identityenroll:
     # Network invite: a vmenroll1: token or enroll URL (required)
@@ -1575,8 +1579,11 @@ export VAULTMIND_APP_HOOKSUNINSTALL_JSON=false
 # Target .claude/settings.local.json instead of .claude/settings.json.
 export VAULTMIND_APP_HOOKSUNINSTALL_LOCAL=false
 
-# Also delete the installed hook scripts under .claude/scripts/ (default: leave them).
+# Also delete the installed hook scripts under .claude/scripts/ (Codex: .vaultmind/scripts/; default: leave them).
 export VAULTMIND_APP_HOOKSUNINSTALL_REMOVESCRIPTS=false
+
+# Agent to unwire: claude (default; .claude/settings.json) or codex (.codex/hooks.json).
+export VAULTMIND_APP_HOOKSUNINSTALL_AGENT=claude
 
 # Signed enrollment-request JSON file (stdin when empty or "-")
 export VAULTMIND_APP_IDENTITYENROLLADD_REQUEST=

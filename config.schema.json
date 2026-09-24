@@ -780,6 +780,11 @@
         },
         "hooksuninstall": {
           "properties": {
+            "agent": {
+              "default": "claude",
+              "description": "Agent to unwire: claude (default; .claude/settings.json) or codex (.codex/hooks.json).",
+              "type": "string"
+            },
             "json": {
               "default": false,
               "description": "Output in JSON format",
@@ -792,7 +797,7 @@
             },
             "removescripts": {
               "default": false,
-              "description": "Also delete the installed hook scripts under .claude/scripts/ (default: leave them).",
+              "description": "Also delete the installed hook scripts under .claude/scripts/ (Codex: .vaultmind/scripts/; default: leave them).",
               "type": "boolean"
             }
           },

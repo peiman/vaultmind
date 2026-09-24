@@ -3,6 +3,8 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	"github.com/peiman/vaultmind/internal/envelope"
 	"github.com/peiman/vaultmind/internal/hooks"
@@ -14,8 +16,8 @@ import (
 // --remove-scripts, deletes the installed scripts), then emits a JSON envelope
 // or a human-readable summary. Removal is surgical — only entries referencing
 // our canonical scripts are touched (hooks.RemoveFromSettings).
-func runHooksUninstallCore(cmd *cobra.Command, projectDir string, jsonOut, local, removeScripts bool) error {
-	res, err := hooks.RemoveFromSettings(projectDir, local, removeScripts)
+func runHooksUninstallCore(cmd *cobra.Command, projectDir, agent string, jsonOut, local, removeScripts bool) error {
+	res, scriptsDir, err := removeHooksFor(projectDir, agent, local, removeScripts)
 
 	w := cmd.OutOrStdout()
 	if jsonOut {
@@ -42,11 +44,30 @@ func runHooksUninstallCore(cmd *cobra.Command, projectDir string, jsonOut, local
 			_, _ = fmt.Fprintf(w, "\nNo VaultMind hook entries found — nothing to remove.\n")
 		}
 		if len(res.ScriptsDeleted) > 0 {
-			_, _ = fmt.Fprintf(w, "\nDeleted %d script(s) from .claude/scripts/:\n", len(res.ScriptsDeleted))
+			_, _ = fmt.Fprintf(w, "\nDeleted %d script(s) from %s/:\n", len(res.ScriptsDeleted), scriptsDir)
 			for _, name := range res.ScriptsDeleted {
 				_, _ = fmt.Fprintf(w, "  - %s\n", name)
 			}
 		}
 	}
 	return err
+}
+
+// removeHooksFor dispatches on --agent: Claude Code's settings file, or Codex's
+// .codex/hooks.json. It returns the scripts folder (relative to the project)
+// that --remove-scripts cleans, for the summary.
+func removeHooksFor(projectDir, agent string, local, removeScripts bool) (*hooks.RemoveFileResult, string, error) {
+	switch strings.TrimSpace(agent) {
+	case "", hooksAgentClaude:
+		res, err := hooks.RemoveFromSettings(projectDir, local, removeScripts)
+		return res, filepath.Join(".claude", "scripts"), err
+	case hooksAgentCodex:
+		if local {
+			return nil, "", fmt.Errorf("--local is a Claude Code settings option; Codex reads .codex/hooks.json")
+		}
+		res, err := hooks.RemoveFromCodexHooks(projectDir, removeScripts)
+		return res, filepath.Join(".vaultmind", "scripts"), err
+	default:
+		return nil, "", fmt.Errorf("--agent %q: must be %q or %q", agent, hooksAgentClaude, hooksAgentCodex)
+	}
 }

@@ -280,3 +280,27 @@ func TestHooksStatus_ACodexHookChangedAfterApprovalFails(t *testing.T) {
 	require.ErrorIs(t, err, cmdutil.ErrAlreadyWritten)
 	assert.Contains(t, out.String(), "changed since you approved it  SessionEnd -> capture-episode.sh")
 }
+
+// `hooks uninstall --agent codex` is the inverse of the Codex install: our
+// entries leave .codex/hooks.json, and with --remove-scripts our scripts leave
+// .vaultmind/scripts. It used to know only Claude Code.
+func TestHooksUninstall_Codex(t *testing.T) {
+	dir := t.TempDir()
+	_, _, err := runRootCmd(t, "hooks", "install", dir, "--agent", "codex", "--merge")
+	require.NoError(t, err)
+
+	out, _, err := runRootCmd(t, "hooks", "uninstall", dir, "--agent", "codex", "--remove-scripts")
+	require.NoError(t, err)
+	s := out.String()
+	assert.Contains(t, s, filepath.Join(dir, ".codex", "hooks.json"))
+	assert.Contains(t, s, "Removed 5 VaultMind hook entries")
+	assert.Contains(t, s, "from .vaultmind/scripts/")
+	raw, err := os.ReadFile(filepath.Join(dir, ".codex", "hooks.json")) // #nosec G304 -- test path
+	require.NoError(t, err)
+	assert.NotContains(t, string(raw), "vaultmind")
+}
+
+func TestHooksUninstall_CodexRejectsLocal(t *testing.T) {
+	_, _, err := runRootCmd(t, "hooks", "uninstall", t.TempDir(), "--agent", "codex", "--local")
+	require.ErrorContains(t, err, "--local")
+}

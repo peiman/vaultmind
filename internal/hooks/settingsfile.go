@@ -109,7 +109,42 @@ func RemoveFromSettings(projectDir string, local, removeScripts bool) (*RemoveFi
 	}
 
 	if removeScripts {
-		deleted, err := deleteInstalledScripts(projectDir)
+		deleted, err := deleteInstalledScripts(ScriptsDir(projectDir, AgentClaude))
+		if err != nil {
+			return res, err
+		}
+		res.ScriptsDeleted = deleted
+	}
+	return res, nil
+}
+
+// RemoveFromCodexHooks is RemoveFromSettings for Codex: it strips VaultMind's
+// entries from .codex/hooks.json (the same {"hooks": {...}} shape, so the same
+// surgical removal) and, with removeScripts, deletes the scripts from
+// .vaultmind/scripts. It never removes the .vaultmind folder itself — that can
+// also be a vault's own data folder — nor touches Codex's approval records.
+func RemoveFromCodexHooks(projectDir string, removeScripts bool) (*RemoveFileResult, error) {
+	path := CodexHooksPath(projectDir)
+	res := &RemoveFileResult{SettingsPath: path}
+	existing, err := readSettingsFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		out, removed, err := RemoveStanza(existing)
+		if err != nil {
+			return nil, fmt.Errorf("removing from %s: %w", path, err)
+		}
+		res.Removed = removed
+		res.Changed = len(removed) > 0
+		if res.Changed {
+			if err := atomicWriteFile(path, out, 0o600); err != nil {
+				return nil, fmt.Errorf("writing %s: %w", path, err)
+			}
+		}
+	}
+	if removeScripts {
+		deleted, err := deleteInstalledScripts(ScriptsDir(projectDir, AgentCodex))
 		if err != nil {
 			return res, err
 		}
@@ -166,11 +201,10 @@ func readSettingsFile(path string) ([]byte, error) {
 	return data, nil
 }
 
-// deleteInstalledScripts removes the canonical hook scripts under
-// .claude/scripts/. Absent scripts are skipped; the returned slice names the
-// ones actually deleted, in canonical order.
-func deleteInstalledScripts(projectDir string) ([]string, error) {
-	scriptsDir := filepath.Join(projectDir, ".claude", "scripts")
+// deleteInstalledScripts removes the canonical hook scripts from scriptsDir.
+// Only canonical names are touched; absent scripts are skipped; the returned
+// slice names the ones actually deleted, in canonical order.
+func deleteInstalledScripts(scriptsDir string) ([]string, error) {
 	var deleted []string
 	for _, name := range hookscripts.Names() {
 		p := filepath.Join(scriptsDir, name)
