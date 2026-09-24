@@ -17,6 +17,14 @@ import (
 // is whether the hook decided to query at all.
 func runRecallHook(t *testing.T, prompt string) (stdout string, queried bool) {
 	t.Helper()
+	out, invocations := runRecallHookLog(t, prompt)
+	return out, invocations != ""
+}
+
+// runRecallHookLog is runRecallHook returning every argument list the stub
+// vaultmind was called with, so a test can see WHAT the hook searched for.
+func runRecallHookLog(t *testing.T, prompt string) (stdout, invocations string) {
+	t.Helper()
 	bashPath, err := exec.LookPath("bash")
 	if err != nil {
 		t.Skip("bash not available")
@@ -50,8 +58,8 @@ func runRecallHook(t *testing.T, prompt string) (stdout string, queried bool) {
 	cmd.Stderr = &errb
 	require.NoErrorf(t, cmd.Run(), "recall hook must always exit 0 (stderr: %s)", errb.String())
 
-	_, statErr := os.Stat(marker)
-	return out.String(), statErr == nil
+	logged, _ := os.ReadFile(marker) // #nosec G304 -- test-controlled path
+	return out.String(), string(logged)
 }
 
 // Not every UserPromptSubmit payload is a human asking something. Background
@@ -74,6 +82,10 @@ func TestRecallHook_SkipsMachineGeneratedPrompts(t *testing.T) {
 		"system reminder": `<system-reminder>As you answer, remember the following context about the user's preferences and setup</system-reminder>`,
 		"local command":   `<local-command-stdout>Compacted (ctrl+o to see full summary) and some more output text here</local-command-stdout>`,
 		"hook output":     `UserPromptSubmit hook success: Success — vault pointers were already injected for this turn`,
+		// Another agent's message relayed into this session (seen 2026-09-23,
+		// a subagent's correction report) — not the person asking anything.
+		"agent message": `<agent-message from="locate-023">
+correction to Part 3, item C3: the count is FIVE, not six, and here is why in detail</agent-message>`,
 	}
 
 	for name, prompt := range cases {
@@ -103,4 +115,14 @@ func TestRecallHook_MentioningAMarkerIsStillAQuestion(t *testing.T) {
 		"why does the recall hook skip a system-reminder payload instead of ranking it?")
 	assert.True(t, queried,
 		"talking about a marker is a question; only the bracketed payload form is noise")
+}
+
+// Some harnesses wrap what the person typed: <user_query>…</user_query> (262 of
+// 4,686 real recall queries, 2026-09-24). That IS a question — search the
+// words inside it, not the wrapper.
+func TestRecallHook_SearchesTheQuestionInsideAUserQueryWrapper(t *testing.T) {
+	_, log := runRecallHookLog(t, "<user_query>\ncould you investigate this computer and see what we should do to make sure it is secure?\n</user_query>")
+	require.NotEmpty(t, log, "a wrapped question must still reach the vault")
+	assert.Contains(t, log, "could you investigate this computer")
+	assert.NotContains(t, log, "user_query", "the wrapper is not part of the question")
 }

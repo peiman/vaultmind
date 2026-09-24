@@ -27,6 +27,16 @@ PROMPT=$(echo "$HOOK_INPUT" | python3 -c "import json,sys; print(json.load(sys.s
 # heuristic is not good enough to key anything on.
 HOOK_SESSION_ID=$(echo "$HOOK_INPUT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('session_id','') or '')" 2>/dev/null || echo "")
 
+# Some harnesses wrap what the person typed in <user_query>…</user_query> (262 of
+# 4,686 real recall queries, 2026-09-24). That is a question: search the words
+# inside, not the wrapper. Unwrapped before the checks below so they judge the
+# person's words.
+case "$PROMPT" in
+  *"<user_query>"*"</user_query>"*)
+    PROMPT=$(printf '%s' "$PROMPT" | python3 -c "import sys,re; t=sys.stdin.read(); m=re.search(r'<user_query>(.*?)</user_query>', t, re.S); print((m.group(1) if m else t).strip())" 2>/dev/null || printf '%s' "$PROMPT")
+    ;;
+esac
+
 # Single-word / command-style messages aren't worth a vault query. The
 # threshold is rough — favors silence over noise. Real topical questions
 # usually have at least a sentence-fragment shape.
@@ -47,13 +57,16 @@ fi
 # misses the half that mattered. That is a tooling defect, not a discipline
 # problem: the fix belongs here, not in a resolution to read more carefully.
 #
+# <agent-message is another agent's report relayed into this session (seen
+# 2026-09-23, after the guard existed) — not the person asking anything.
+#
 # Matched anywhere in the prompt rather than only at the start — a notification
 # envelope is often preceded by a banner line. The ANGLE-BRACKETED form is what
 # separates a payload from prose about one, so "why does the hook skip a
 # system-reminder?" still queries; typing the brackets out does not. That is an
 # accepted, rare cost in exchange for silence on the common case.
 case "$PROMPT" in
-  *"<task-notification>"*|*"<system-reminder>"*|*"<local-command-"*|*"hook success:"*)
+  *"<task-notification>"*|*"<system-reminder>"*|*"<local-command-"*|*"hook success:"*|*"<agent-message"*)
     exit 0
     ;;
 esac
