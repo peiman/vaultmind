@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-09-24
+
+> Nothing to change for anyone. To have your hooks forward the conversation id
+> (below), refresh them with `vaultmind hooks install <project> --force`
+> (Codex: add `--agent codex --merge`); script updates need no re-approval in
+> Codex.
+
 ### Fixed
 
 - **An agent's own reads now land in the same session as the hooks'
@@ -1713,7 +1720,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.2...HEAD
+[0.9.2]: https://github.com/peiman/vaultmind/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/peiman/vaultmind/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/peiman/vaultmind/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/peiman/vaultmind/compare/v0.7.1...v0.8.0
