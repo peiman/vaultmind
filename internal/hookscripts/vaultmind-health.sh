@@ -119,4 +119,35 @@ if [ "$DOCTOR_RC" -eq 0 ] && [ -n "$STALE_LINE" ]; then
   echo "⚠ ${STALE_LINE} — recall is serving the OLD text for those notes."
   echo "   Refresh: vaultmind index --vault \"$VAULT\" && vaultmind index --embed --vault \"$VAULT\""
 fi
+
+# Stale hook scripts relay. Scripts are copied into the project, so they only
+# change when someone reruns `hooks install`; nothing said when they fell
+# behind. Two projects kept a recall script from before its noise guard for five
+# weeks (found 2026-09-24), searching on background-task notifications the whole
+# time. `hooks status` checks both layouts (.claude/scripts for Claude Code,
+# .vaultmind/scripts for Codex) — doctor's drift line only knows the first — so
+# ask it, and name the refresh for the agent that is behind. It exits non-zero
+# when anything is off; only its JSON matters here.
+STATUS_JSON="$("$VM" hooks status "$PROJECT_DIR" --json 2>/dev/null || true)"
+if [ -n "$STATUS_JSON" ]; then
+  STALE="$(printf '%s' "$STATUS_JSON" | python3 -c '
+import json, sys
+try:
+    r = (json.load(sys.stdin) or {}).get("result") or {}
+except Exception:
+    sys.exit(0)
+off = lambda ss: sum(1 for s in (ss or []) if s.get("state") in ("drifted", "missing"))
+print(off(r.get("scripts")), off((r.get("codex") or {}).get("scripts")))
+' 2>/dev/null)"
+  CLAUDE_STALE="${STALE%% *}"
+  CODEX_STALE="${STALE##* }"
+  if [ "${CLAUDE_STALE:-0}" -gt 0 ] 2>/dev/null; then
+    echo "⚠ ${CLAUDE_STALE} hook script(s) here are out of date for this vaultmind. If you didn't change them yourself, refresh:"
+    echo "   vaultmind hooks install \"$PROJECT_DIR\" --force"
+  fi
+  if [ "${CODEX_STALE:-0}" -gt 0 ] 2>/dev/null; then
+    echo "⚠ ${CODEX_STALE} Codex hook script(s) here are out of date for this vaultmind. If you didn't change them yourself, refresh:"
+    echo "   vaultmind hooks install \"$PROJECT_DIR\" --agent codex --merge --force"
+  fi
+fi
 exit 0

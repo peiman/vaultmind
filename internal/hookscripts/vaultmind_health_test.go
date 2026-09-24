@@ -200,3 +200,47 @@ func TestHealthHook_RuntimeDownBeatsFullRecall(t *testing.T) {
 	assert.Contains(t, out, "Error setting ORT API base: 2")
 	assert.NotContains(t, out, "full BGE-M3 hybrid", "a green line above a dead search is the defect")
 }
+
+// stubVaultmindWithStatus is stubVaultmind whose `hooks status --json` returns
+// the given report (the real envelope's shape: result.scripts / result.codex).
+func stubVaultmindWithStatus(t *testing.T, doctorOut, statusResult string) string {
+	t.Helper()
+	bin := t.TempDir()
+	body := "#!/bin/bash\n" +
+		"if [ \"$1\" = doctor ]; then printf '%s\\n' " + shellSingleQuote(doctorOut) + "; fi\n" +
+		"if [ \"$1 $2\" = \"hooks status\" ]; then printf '%s\\n' " +
+		shellSingleQuote(`{"status":"ok","result":`+statusResult+`}`) + "; fi\n"
+	require.NoError(t, os.WriteFile(filepath.Join(bin, "vaultmind"), []byte(body), 0o755))
+	return bin
+}
+
+const healthyTier = "Embeddings: dense 5/5 (bge-m3), sparse 5/5, colbert 5/5"
+
+// Stale hook scripts are invisible unless someone runs `hooks status`: two
+// projects kept a recall script from before the noise guard for five weeks
+// (found 2026-09-24), searching on background-task notifications all along.
+// Session start is the surface an agent actually reads, so it says so there.
+func TestHealthHook_SaysWhenHookScriptsAreOutOfDate(t *testing.T) {
+	stub := stubVaultmindWithStatus(t, healthyTier,
+		`{"scripts":[{"name":"vault-recall.sh","state":"drifted"},{"name":"load-persona.sh","state":"in_sync"},{"name":"capture-episode.sh","state":"missing"}]}`)
+	out, _ := runHealthHook(t, projectWithVault(t), stub)
+	assert.Contains(t, out, "2 hook script(s)")
+	assert.Contains(t, out, "vaultmind hooks install")
+	assert.Contains(t, out, "--force")
+	assert.NotContains(t, out, "--agent codex")
+}
+
+func TestHealthHook_CodexProjectsGetTheCodexRefresh(t *testing.T) {
+	stub := stubVaultmindWithStatus(t, healthyTier,
+		`{"scripts":[],"codex":{"scripts":[{"name":"vault-recall.sh","state":"drifted"}]}}`)
+	out, _ := runHealthHook(t, projectWithVault(t), stub)
+	assert.Contains(t, out, "1 Codex hook script(s)")
+	assert.Contains(t, out, "--agent codex --merge --force")
+}
+
+func TestHealthHook_UpToDateScriptsSayNothingAboutThem(t *testing.T) {
+	stub := stubVaultmindWithStatus(t, healthyTier,
+		`{"scripts":[{"name":"vault-recall.sh","state":"in_sync"}],"codex":{"scripts":[{"name":"load-persona.sh","state":"in_sync"}]}}`)
+	out, _ := runHealthHook(t, projectWithVault(t), stub)
+	assert.NotContains(t, out, "hook script(s)")
+}

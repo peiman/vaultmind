@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Session start says when this project's hook scripts are out of date.**
+  Scripts are copied into a project, so they only change when someone reruns
+  `hooks install`, and nothing said when they fell behind: two projects kept a
+  recall script from before its noise guard for five weeks, searching on
+  background-task notifications the whole time. The session-start notice now
+  asks `hooks status`, which checks Claude Code and Codex layouts both, and
+  names the refresh command for the one that is behind.
+
+### Fixed
+
+- **Recall no longer searches on messages relayed from other agents**
+  (`<agent-message>`), which the noise guard did not yet cover. And a question
+  a harness wraps in `<user_query>…</user_query>` (262 of 4,686 real recall
+  queries) is now searched by its words, not with the wrapper.
+
 ## [0.9.2] - 2026-09-24
 
 > Nothing to change for anyone. To have your hooks forward the conversation id
