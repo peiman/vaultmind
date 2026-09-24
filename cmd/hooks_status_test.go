@@ -187,3 +187,43 @@ func TestRenderHooksStatus_NotInstalledPropagatesWriteError(t *testing.T) {
 	err := renderHooksStatus(&failAfterNWriter{ok: 0}, hooks.StatusReport{ProjectDir: "/tmp/p"})
 	require.Error(t, err)
 }
+
+// Codex skips an unapproved hook SILENTLY — the agent starts with no memory
+// and nothing says why. hooks status is where it says so, and fails, because a
+// check that only prints cannot gate a setup script.
+func codexProject(t *testing.T) (dir, hooksFile string) {
+	t.Helper()
+	dir = projectWithScripts(t, func(scripts string) {
+		writeCanonical(t, scripts, hookscripts.Names()...)
+	})
+	wireAllCanonicalEvents(t, dir)
+	hooksFile = filepath.Join(dir, ".codex", "hooks.json")
+	require.NoError(t, os.MkdirAll(filepath.Dir(hooksFile), 0o750))
+	require.NoError(t, os.WriteFile(hooksFile, []byte(`{"hooks":{"SessionEnd":[{"hooks":[
+		{"type":"command","command":"bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/capture-episode.sh"}]}]}}`), 0o600))
+	return dir, hooksFile
+}
+
+func TestHooksStatus_UnapprovedCodexHooksFailAndSayHowToFix(t *testing.T) {
+	dir, _ := codexProject(t)
+	t.Setenv("CODEX_HOME", t.TempDir())
+
+	out, _, err := runRootCmd(t, "hooks", "status", dir)
+	require.ErrorIs(t, err, cmdutil.ErrAlreadyWritten)
+	s := out.String()
+	assert.Contains(t, s, "Codex: 0 of 1 VaultMind hooks approved")
+	assert.Contains(t, s, "not approved  SessionEnd -> capture-episode.sh")
+	assert.Contains(t, s, "/hooks", "the fix, named")
+}
+
+func TestHooksStatus_ApprovedCodexHooksPass(t *testing.T) {
+	dir, hooksFile := codexProject(t)
+	home := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(home, "config.toml"),
+		[]byte(`[hooks.state."`+hooksFile+`:session_end:0:0"]`+"\ntrusted_hash = \"sha256:x\"\n"), 0o600))
+	t.Setenv("CODEX_HOME", home)
+
+	out, _, err := runRootCmd(t, "hooks", "status", dir)
+	require.NoError(t, err)
+	assert.Contains(t, out.String(), "Codex: 1 of 1 VaultMind hooks approved")
+}

@@ -51,7 +51,13 @@ func runHooksStatus(cmd *cobra.Command, args []string) error {
 	// none of them, and that absence renders as nothing — the exact shape this
 	// command was built to end, one layer up from where it ended it.
 	_, unwired := report.EventCounts()
-	if drifted+missing+unwired > 0 {
+	// An unapproved Codex hook gates as well: Codex skips it without a word, so
+	// from inside the agent it looks exactly like having no memory at all.
+	unapproved := 0
+	if report.Codex != nil {
+		unapproved = report.Codex.Unapproved()
+	}
+	if drifted+missing+unwired+unapproved > 0 {
 		return cmdutil.ErrAlreadyWritten
 	}
 	return nil
@@ -103,6 +109,10 @@ func renderHooksStatus(w io.Writer, report hooks.StatusReport) error {
 		}
 	}
 
+	if err := renderCodexApprovals(w, report); err != nil {
+		return err
+	}
+
 	if drifted > 0 {
 		if _, err := fmt.Fprintf(w,
 			"\nDrifted scripts differ from the canonical copy. If the change is yours and\n"+
@@ -119,4 +129,40 @@ func renderHooksStatus(w io.Writer, report hooks.StatusReport) error {
 		}
 	}
 	return nil
+}
+
+// renderCodexApprovals names every VaultMind hook Codex will skip, and the one
+// fix. "Approved" means Codex has a record of approving it; a hook changed since
+// shows as modified in /hooks, which this check cannot see — said once, so a
+// clean line is not read as more than it is.
+func renderCodexApprovals(w io.Writer, report hooks.StatusReport) error {
+	c := report.Codex
+	if c == nil {
+		return nil
+	}
+	if _, err := fmt.Fprintf(w, "Codex: %d of %d VaultMind hooks approved (%s)\n",
+		c.Approved(), len(c.Hooks), c.HooksFile); err != nil {
+		return err
+	}
+	for _, h := range c.Hooks {
+		if h.State == hooks.CodexApproved {
+			continue
+		}
+		label := "not approved"
+		if h.State == hooks.CodexDisabled {
+			label = "disabled"
+		}
+		if _, err := fmt.Fprintf(w, "  %s  %s -> %s\n", label, h.Event, h.Script); err != nil {
+			return err
+		}
+	}
+	if c.Unapproved() == 0 {
+		return nil
+	}
+	_, err := fmt.Fprintf(w,
+		"\nCodex skips these without saying so: the agent starts with no memory.\n"+
+			"  fix: open Codex in %s, run /hooks, and trust the VaultMind hooks.\n"+
+			"  Re-check after every upgrade: a new or changed hook needs approving again.\n",
+		report.ProjectDir)
+	return err
 }

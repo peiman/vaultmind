@@ -50,6 +50,10 @@ type StatusReport struct {
 	// Emitted so a reader can tell "healthy" from "healthy for a narrower
 	// profile than you thought you installed".
 	Profile Profile `json:"profile"`
+	// Codex reports whether Codex has approved each VaultMind hook in
+	// .codex/hooks.json; nil when the project has none. Codex skips an
+	// unapproved hook silently, so this is the only place it shows.
+	Codex *CodexApproval `json:"codex,omitempty"`
 }
 
 // Counts returns how many scripts are in each state — the summary line.
@@ -82,6 +86,13 @@ func Status(projectDir string) (StatusReport, error) {
 	}
 	report.Profile = profile
 	report.Events = eventWiringForProfile(projectDir, profile)
+	codex, err := codexApprovals(projectDir, codexHomeDir())
+	if err != nil {
+		return StatusReport{}, err
+	}
+	if len(codex.Hooks) > 0 {
+		report.Codex = &codex
+	}
 	scriptsDir := filepath.Join(projectDir, ".claude", "scripts")
 	if _, err := os.Stat(scriptsDir); err == nil {
 		report.Installed = true

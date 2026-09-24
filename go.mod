@@ -12,6 +12,7 @@ require (
 	github.com/mattn/go-isatty v0.0.24
 	github.com/nlpodyssey/gopickle v0.3.0
 	github.com/peiman/ckeletin-go v0.11.0
+	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/pressly/goose/v3 v3.28.0
 	github.com/rs/zerolog v1.35.1
 	github.com/sebdah/goldie/v2 v2.8.0
@@ -76,7 +77,6 @@ require (
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
-	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pjbgf/sha1cd v0.6.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
