@@ -168,6 +168,8 @@ func handleClaudeRecord(ep *Episode, rec record, filesSeen map[string]struct{}, 
 		handleUser(ep, rec)
 	case "assistant":
 		handleAssistant(ep, rec, filesSeen)
+	case recordTypeAttachment:
+		handleQueued(ep, rec)
 	case "pr-link":
 		if _, dup := prsSeen[rec.PRNumber]; !dup && rec.PRNumber != 0 {
 			prsSeen[rec.PRNumber] = struct{}{}
@@ -284,7 +286,8 @@ type record struct {
 	PRNumber     int             `json:"prNumber"`
 	PRURL        string          `json:"prUrl"`
 	PRRepository string          `json:"prRepository"`
-	Payload      json.RawMessage `json:"payload"` // Codex rollouts only (codex.go)
+	Payload      json.RawMessage `json:"payload"`    // Codex rollouts only (codex.go)
+	Attachment   json.RawMessage `json:"attachment"` // queued messages (queued.go)
 }
 
 type userMessage struct {

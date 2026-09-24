@@ -45,6 +45,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`<agent-message>`), which the noise guard did not yet cover. And a question
   a harness wraps in `<user_query>…</user_query>` (262 of 4,686 real recall
   queries) is now searched by its words, not with the wrapper.
+- **Episodes keep what you type while the agent is working.** Claude Code
+  records a message sent mid-turn differently from one sent at the prompt,
+  and episode capture read only the second kind, so every mid-turn message was
+  missing from its episode (96 across 32 real sessions, one of them the
+  turning point of an arc). They are captured now, text included when an image
+  was pasted with it. Messages relayed from other agents, background-task
+  notices and re-sent goals are still left out. Already-captured episodes keep
+  their gaps until the session is captured again.
 
 ## [0.9.2] - 2026-09-24
 
