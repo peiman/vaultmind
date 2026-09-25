@@ -7,8 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Before a commit, the reach hook asks about that commit.** It searches the
+  vault with the commit's subject line (conventional prefix removed) instead
+  of one fixed sentence, which returned the same notes before every commit.
+  A commit whose message is not on the command line keeps the old query.
+
 ### Fixed
 
+- **Only a real `git commit` brings up the commit notes.** The words "git
+  commit" anywhere in a command — a grep, an echo — used to fire the hook.
 - **A very long session id no longer loses the persona sidecar record.** The
   id in the file name is capped, so the name stays under the filesystem's
   255-byte limit; the write used to fail silently past about 200 characters.
