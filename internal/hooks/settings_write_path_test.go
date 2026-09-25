@@ -56,7 +56,7 @@ func TestSettingsStanza_PreToolUseKeepsBothReadAndBash(t *testing.T) {
 		} `json:"hooks"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(stanza), &parsed))
-	require.Len(t, parsed.Hooks.PreToolUse, 2, "Read-tracking and reach-pointers are both PreToolUse")
+	require.Len(t, parsed.Hooks.PreToolUse, 3, "read-tracking, reach-pointers and the code map are all PreToolUse")
 
 	matchers := map[string]string{}
 	for _, g := range parsed.Hooks.PreToolUse {
@@ -65,6 +65,7 @@ func TestSettingsStanza_PreToolUseKeepsBothReadAndBash(t *testing.T) {
 	}
 	assert.Contains(t, matchers["Read"], "vault-track-read.sh")
 	assert.Contains(t, matchers["Bash|Edit|Write|MultiEdit"], "vault-reach.sh")
+	assert.Contains(t, matchers["Read|Edit|Write|MultiEdit"], "vault-code-map.sh")
 }
 
 // The vault path must reach the new hooks too, or an adopter with a

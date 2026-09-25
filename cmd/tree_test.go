@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -96,4 +98,30 @@ func TestTree_VaultsMapsEachVault(t *testing.T) {
 	assert.Equal(t, 2, strings.Count(out.String(), " notes"), "one header per vault")
 	assert.Contains(t, out.String(), a)
 	assert.Contains(t, out.String(), b)
+}
+
+// `tree --for <file>` is the map of the notes about one file: the ones whose
+// `paths:` cover it.
+func TestTree_ForAFileListsTheNotesThatCoverIt(t *testing.T) {
+	repo := filepath.Join(t.TempDir(), "code-repo")
+	require.NoError(t, os.MkdirAll(filepath.Join(repo, ".git"), 0o750))
+	require.NoError(t, os.MkdirAll(filepath.Join(repo, "internal"), 0o750))
+	file := filepath.Join(repo, "internal", "a.go")
+	require.NoError(t, os.WriteFile(file, []byte("package internal\n"), 0o600))
+
+	vault := testvault.IndexedFixtureVault(t)
+	note := "---\nid: concept-about-a\ntype: concept\ntitle: About a.go\npaths:\n  - internal/*.go\n---\n\nWhy a.go is built this way. More.\n"
+	require.NoError(t, os.WriteFile(filepath.Join(vault, "concepts", "about-a.md"), []byte(note), 0o600))
+	_, _, err := runRootCmd(t, "index", "--vault", vault)
+	require.NoError(t, err)
+
+	out, _, err := runRootCmd(t, "tree", "--vault", vault, "--for", file)
+	require.NoError(t, err)
+	assert.Contains(t, out.String(), "About a.go (concept-about-a) — Why a.go is built this way.")
+	assert.NotContains(t, out.String(), "ACT-R", "only the notes that cover the file")
+	assert.Contains(t, out.String(), "code-repo:internal/a.go", "the header names the file as paths: sees it")
+
+	out, _, err = runRootCmd(t, "tree", "--vault", vault, "--for", filepath.Join(repo, "README.md"))
+	require.NoError(t, err)
+	assert.Contains(t, out.String(), "No notes cover")
 }

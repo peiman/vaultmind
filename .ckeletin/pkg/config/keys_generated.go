@@ -280,6 +280,7 @@ const (
 	KeyAppTreeType                           = "app.tree.type"                            // Only notes of this type
 	KeyAppTreeDepth                          = "app.tree.depth"                           // Folder levels to list; deeper folders fold into counts (0 = all)
 	KeyAppTreeBrief                          = "app.tree.brief"                           // Titles and ids only, without the one-line descriptions
+	KeyAppTreeFor                            = "app.tree.for"                             // Only the notes whose paths: frontmatter covers this code file
 	KeyAppVaultstatusVault                   = "app.vaultstatus.vault"                    // Path to vault root
 	KeyAppVaultstatusJson                    = "app.vaultstatus.json"                     // Output in JSON format
 )

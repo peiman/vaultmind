@@ -20,6 +20,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `VAULTMIND_VAULTS` — after the health line, capped at 30 lines
   (`VAULTMIND_MAP_MAX_LINES`), with how to open a note and list a folder.
   Refresh hooks to get it; a binary without `tree` skips the map.
+- **Notes can say which code they are about.** A `paths:` frontmatter field
+  holds globs relative to the repository root (`internal/hooks/**`,
+  `cmd/*.go`, a trailing `/` for a folder), with `repo:` in front for code in
+  another repository — named by its `origin` remote (`vaultmind` for
+  github.com/peiman/vaultmind, whatever folder it is cloned into; the folder
+  name when there is no remote). `vaultmind tree --for <file>` lists the notes
+  that cover that file.
+- **The knowledge about a file arrives when the file is opened.** A new hook,
+  `vault-code-map.sh` (PreToolUse on Read, Edit, Write and MultiEdit), shows
+  the notes that cover the file as a short map — title, id, one line — once
+  per file per session, and stays silent when nothing covers it. It is part
+  of the full and knowledge profiles; `vaultmind hooks install <project>
+  --merge --force` wires it.
 
 ## [0.9.8] - 2026-09-25
 

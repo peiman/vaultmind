@@ -28,6 +28,7 @@ const (
 	hookUserPromptSubmitScript = "vault-recall.sh"
 	hookPreToolUseScript       = "vault-track-read.sh"
 	hookReachScript            = "vault-reach.sh"
+	hookCodeMapScript          = "vault-code-map.sh"
 	hookPreCompactScript       = "precompact-preserve.sh"
 	hookSessionEndScript       = "capture-episode.sh"
 )
@@ -36,6 +37,11 @@ const (
 // irreversible commands run, and the file-writing tools, where arcs are
 // actually written. Bash alone left it silent on every arc written with Write.
 const reachMatcher = "Bash|Edit|Write|MultiEdit"
+
+// codeMapMatcher is the tools that open a file: reading it and changing it.
+// The code map rides on them — the knowledge about a file arrives when the
+// file is opened.
+const codeMapMatcher = "Read|Edit|Write|MultiEdit"
 
 // legacyMatchers are matchers an earlier release installed for a script. A
 // group still carrying one is upgraded in place by the merge (only the matcher
@@ -142,6 +148,7 @@ func canonicalHooks(vaultPath string) []canonicalHook {
 var federatedScripts = map[string]bool{
 	hookUserPromptSubmitScript: true,
 	hookReachScript:            true,
+	hookCodeMapScript:          true,
 }
 
 // canonicalHooksFor is canonicalHooks with an optional federation. With vaults
@@ -179,6 +186,10 @@ func canonicalHooksWith(vaultPath string, vaults []string, scriptRef func(string
 		// failure mode, not silence. Shares PreToolUse with read-tracking under a
 		// different matcher.
 		{Event: "PreToolUse", Script: hookReachScript, Group: hookGroup{Matcher: reachMatcher, Hooks: []hookCommand{cmd(hookReachScript)}}},
+		// The knowledge about a file, when the file is opened: notes whose paths:
+		// cover it, as a short map. Found by the path the agent is already reading,
+		// not by a query it would have to guess.
+		{Event: "PreToolUse", Script: hookCodeMapScript, Group: hookGroup{Matcher: codeMapMatcher, Hooks: []hookCommand{cmd(hookCodeMapScript)}}},
 		// The WRITE-path trigger. Every other hook is read-path or telemetry;
 		// nothing fired at the moment a transformation could be written down, and a
 		// desk that depends on remembering collects nothing (measured: two entries
