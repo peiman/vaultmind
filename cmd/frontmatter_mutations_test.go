@@ -243,3 +243,45 @@ func TestFrontmatterSet_AnUnknownIDSaysSo(t *testing.T) {
 	assert.Contains(t, err.Error(), "no-such-note")
 	assert.NotContains(t, err.Error(), "not yet available")
 }
+
+// A name two notes share is refused, with both paths named, rather than
+// guessing which note to change.
+func TestFrontmatterUnset_AnAmbiguousNameNamesTheCandidates(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	twin := "---\nid: proj-beta-twin\ntype: project\ntitle: Beta Project\nstatus: active\n---\nTwin.\n"
+	require.NoError(t, os.WriteFile(filepath.Join(vault, "projects", "beta-twin.md"), []byte(twin), 0o600))
+	_, _, err := runRootCmd(t, "index", "--vault", vault)
+	require.NoError(t, err)
+
+	_, _, err = runRootCmd(t, "frontmatter", "unset", "Beta Project", "status", "--vault", vault)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "projects/beta.md")
+	assert.Contains(t, err.Error(), "projects/beta-twin.md")
+}
+
+func TestFrontmatterSet_AnUnknownIDIsAStructuredJSONError(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+
+	out, _, _ := runRootCmd(t, "frontmatter", "set", "no-such-note", "status", "paused", "--vault", vault, "--json")
+	var env struct {
+		Status string `json:"status"`
+		Errors []struct {
+			Code string `json:"code"`
+		} `json:"errors"`
+	}
+	require.NoError(t, json.Unmarshal(out.Bytes(), &env), out.String())
+	require.NotEmpty(t, env.Errors)
+	assert.Equal(t, "unresolved_target", env.Errors[0].Code)
+}
+
+// Text that parses as an array is stored as text when written as a JSON string.
+func TestFrontmatterSet_AJSONStringKeepsArrayTextAsText(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	target := "projects/beta.md"
+
+	_, _, err := runRootCmd(t, "frontmatter", "set", target, "summary", `"[a, b]"`, "--vault", vault, "--allow-extra")
+	require.NoError(t, err)
+	content, err := os.ReadFile(filepath.Join(vault, target)) //nolint:gosec // test fixture path
+	require.NoError(t, err)
+	assert.Regexp(t, `summary: ['"]\[a, b\]['"]`, string(content), "the text, quoted by YAML, not a list")
+}
