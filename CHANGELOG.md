@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.9] - 2026-09-26
+
+> The knowledge vault becomes navigable and tied to code. Refresh hooks to get
+> the session-start map and the code map:
+> `vaultmind hooks install <project> --merge --force` (a knowledge project's
+> remembered profile is kept). Then give your decisions and lessons a
+> `paths:` list naming the code they are about.
+
 ### Added
 
 - **`vaultmind tree` — the map of a vault.** Every folder with its note count,
@@ -1949,7 +1957,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.8...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.9...HEAD
+[0.9.9]: https://github.com/peiman/vaultmind/compare/v0.9.8...v0.9.9
 [0.9.8]: https://github.com/peiman/vaultmind/compare/v0.9.7...v0.9.8
 [0.9.7]: https://github.com/peiman/vaultmind/compare/v0.9.6...v0.9.7
 [0.9.6]: https://github.com/peiman/vaultmind/compare/v0.9.5...v0.9.6
