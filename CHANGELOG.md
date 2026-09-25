@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.6] - 2026-09-25
+
+> Opt-in; nothing changes unless you set the variable. To get the new hook,
+> run `vaultmind hooks install <project> --merge --force` (a knowledge
+> project's remembered profile is kept).
+
 ### Added
 
 - **`VAULTMIND_PERSONA_MODE` on the SessionStart persona hook.** `served`
@@ -1866,7 +1872,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.5...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.6...HEAD
+[0.9.6]: https://github.com/peiman/vaultmind/compare/v0.9.5...v0.9.6
 [0.9.5]: https://github.com/peiman/vaultmind/compare/v0.9.4...v0.9.5
 [0.9.4]: https://github.com/peiman/vaultmind/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/peiman/vaultmind/compare/v0.9.2...v0.9.3
