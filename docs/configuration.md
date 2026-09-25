@@ -283,6 +283,13 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.search.mode` | string | `keyword` | `VAULTMIND_APP_SEARCH_MODE` | Search mode: keyword, semantic, or hybrid |
 | `app.self.vault` | string | `.` | `VAULTMIND_APP_SELF_VAULT` | Path to vault root |
 | `app.self.limit` | int | `10` | `VAULTMIND_APP_SELF_LIMIT` | Max rows per section (recent/hot/stale) |
+| `app.tree.vault` | string | `.` | `VAULTMIND_APP_TREE_VAULT` | Path to vault root |
+| `app.tree.vaults` | string | `` | `VAULTMIND_APP_TREE_VAULTS` | Map several vaults, comma-separated (overrides --vault) |
+| `app.tree.json` | bool | `false` | `VAULTMIND_APP_TREE_JSON` | Output in JSON format |
+| `app.tree.path` | string | `` | `VAULTMIND_APP_TREE_PATH` | Only notes under this folder (path prefix, e.g. decisions/) |
+| `app.tree.type` | string | `` | `VAULTMIND_APP_TREE_TYPE` | Only notes of this type |
+| `app.tree.depth` | int | `0` | `VAULTMIND_APP_TREE_DEPTH` | Folder levels to list; deeper folders fold into counts (0 = all) |
+| `app.tree.brief` | bool | `false` | `VAULTMIND_APP_TREE_BRIEF` | Titles and ids only, without the one-line descriptions |
 | `app.vaultstatus.vault` | string | `.` | `VAULTMIND_APP_VAULTSTATUS_VAULT` | Path to vault root |
 | `app.vaultstatus.json` | bool | `false` | `VAULTMIND_APP_VAULTSTATUS_JSON` | Output in JSON format |
 
@@ -1146,6 +1153,28 @@ app:
     # Max rows per section (recent/hot/stale)
     limit: 10
 
+  tree:
+    # Path to vault root
+    vault: .
+
+    # Map several vaults, comma-separated (overrides --vault)
+    vaults: 
+
+    # Output in JSON format
+    json: false
+
+    # Only notes under this folder (path prefix, e.g. decisions/)
+    path: 
+
+    # Only notes of this type
+    type: 
+
+    # Folder levels to list; deeper folders fold into counts (0 = all)
+    depth: 0
+
+    # Titles and ids only, without the one-line descriptions
+    brief: false
+
   vaultstatus:
     # Path to vault root
     vault: .
@@ -1972,6 +2001,27 @@ export VAULTMIND_APP_SELF_VAULT=.
 
 # Max rows per section (recent/hot/stale)
 export VAULTMIND_APP_SELF_LIMIT=10
+
+# Path to vault root
+export VAULTMIND_APP_TREE_VAULT=.
+
+# Map several vaults, comma-separated (overrides --vault)
+export VAULTMIND_APP_TREE_VAULTS=
+
+# Output in JSON format
+export VAULTMIND_APP_TREE_JSON=false
+
+# Only notes under this folder (path prefix, e.g. decisions/)
+export VAULTMIND_APP_TREE_PATH=
+
+# Only notes of this type
+export VAULTMIND_APP_TREE_TYPE=
+
+# Folder levels to list; deeper folders fold into counts (0 = all)
+export VAULTMIND_APP_TREE_DEPTH=0
+
+# Titles and ids only, without the one-line descriptions
+export VAULTMIND_APP_TREE_BRIEF=false
 
 # Path to vault root
 export VAULTMIND_APP_VAULTSTATUS_VAULT=.

@@ -74,6 +74,11 @@ var commandCatalog = map[string]catalogEntry{
 		group: groupRetrieval,
 		when:  "you want your WHOLE arc layer as bodies — every arc, unranked and ungated; the counterpart to ask, which ranks.",
 	},
+	"vaultmind tree": {
+		group: groupRetrieval,
+		when:  "you need to see what a vault holds before you know what to ask — folders, counts, one line per note.",
+		short: "Show what a vault holds — folders, counts, one line per note",
+	},
 	"vaultmind search": {
 		group: groupRetrieval,
 		when:  "you want a ranked list of hits to browse and pick from, without packed context.",

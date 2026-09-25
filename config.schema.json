@@ -1727,6 +1727,46 @@
           },
           "type": "object"
         },
+        "tree": {
+          "properties": {
+            "brief": {
+              "default": false,
+              "description": "Titles and ids only, without the one-line descriptions",
+              "type": "boolean"
+            },
+            "depth": {
+              "default": 0,
+              "description": "Folder levels to list; deeper folders fold into counts (0 = all)",
+              "type": "integer"
+            },
+            "json": {
+              "default": false,
+              "description": "Output in JSON format",
+              "type": "boolean"
+            },
+            "path": {
+              "default": "",
+              "description": "Only notes under this folder (path prefix, e.g. decisions/)",
+              "type": "string"
+            },
+            "type": {
+              "default": "",
+              "description": "Only notes of this type",
+              "type": "string"
+            },
+            "vault": {
+              "default": ".",
+              "description": "Path to vault root",
+              "type": "string"
+            },
+            "vaults": {
+              "default": "",
+              "description": "Map several vaults, comma-separated (overrides --vault)",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
         "vaultstatus": {
           "properties": {
             "json": {
