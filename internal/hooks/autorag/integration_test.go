@@ -90,6 +90,25 @@ func TestGuard_DriftCatalog_NoMatch_StaysSilent(t *testing.T) {
 		"no catalog match + no hardcoded match must produce zero output")
 }
 
+// A catalog entry with decision "allow" exists to suppress a canonical
+// signature. It must do that by staying silent, not by approving the tool:
+// permissionDecision "allow" lets the call skip the permission prompt the
+// user's settings would show.
+func TestGuard_DriftCatalog_AllowSuppressesWithoutApproving(t *testing.T) {
+	catalog := `[{
+		"name":"quiet-rebuild",
+		"tool":"Bash",
+		"match":"go\\s+(build|install)",
+		"decision":"allow",
+		"query":"q"
+	}]`
+	hookInput := `{"tool_name":"Bash","tool_input":{"command":"go install ./cmd/vaultmind"}}`
+
+	out := runGuard(t, hookInput, "DRIFT_CATALOG="+catalog)
+	assert.NotContains(t, out, "permissionDecision", "suppressing a signature must not approve the tool call")
+	assert.Empty(t, strings.TrimSpace(out), "an allow entry suppresses the guard entirely")
+}
+
 // TestGuard_NoCatalog_HardcodedFallbackStillFires — backward-compat:
 // without DRIFT_CATALOG, the hardcoded canonical signatures (rebuild-
 // vaultmind-binary and -embeddings) still fire. Existing consumers

@@ -238,6 +238,13 @@ if [ -z "$DRIFT" ]; then
   exit 0
 fi
 
+# A catalog entry with decision "allow" suppresses a signature. It does that
+# by staying silent: emitting permissionDecision "allow" would let the call
+# skip the permission prompt the user's settings would show.
+if [ "$DECISION" = "allow" ]; then
+  exit 0
+fi
+
 # Auto-RAG: query vault for canonical guidance. The query result enters
 # the agent's context via additionalContext below. Hook is on the slow
 # path here (~1s for vaultmind ask) — acceptable since the alternative
@@ -301,8 +308,9 @@ print(json.dumps({
     > "$LOG_DIR/${TIMESTAMP}-${DRIFT}.json" 2>/dev/null
 fi
 
-# Emit hookSpecificOutput. For DECISION=inject, warn-and-allow via
-# additionalContext. For DECISION=ask|deny|allow, route through
+# Emit hookSpecificOutput. For DECISION=inject, warn via additionalContext
+# and leave the permission decision to the user's settings. For DECISION=deny
+# ("allow" exited silently above; "ask" is not a catalog decision), route through
 # permissionDecision and pass the vault excerpt in the reason — Claude
 # Code shows the reason in the prompt (ask) or block notice (deny).
 if [ "$DECISION" = "inject" ]; then

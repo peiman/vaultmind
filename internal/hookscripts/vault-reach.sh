@@ -471,7 +471,11 @@ DELIVERING_VAULT="$TARGET_VAULT"
 printf '{"timestamp":"%s","matched":true,"injected":true,"chars":%d}\n' "$TS" "${#POINTERS}" \
   >> "$LOG_DIR/${TS}-reach.jsonl" 2>/dev/null
 
-# permissionDecision "allow" is explicit: this hook informs, it never gates.
+# No permissionDecision: this hook informs, it never decides. "allow" is not
+# neutral in Claude Code — it lets the tool run without the permission prompt
+# the user's settings would show, and it was auto-approving every commit, push,
+# merge and vault write this hook fired on. With no decision the context still
+# reaches the model and the normal permission flow applies.
 python3 -c "
 import json, sys
 pointers = sys.stdin.read()
@@ -479,7 +483,6 @@ vault = sys.argv[1]
 print(json.dumps({
     'hookSpecificOutput': {
         'hookEventName': 'PreToolUse',
-        'permissionDecision': 'allow',
         'additionalContext': (
             'VAULT — you are at a decision point, not a greeting. '
             'These are ranked against what you are about to do:\n\n'
