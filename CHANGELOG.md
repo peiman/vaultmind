@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-09-25
+
+> To pick up the hook fixes, refresh your hooks:
+> `vaultmind hooks install <project> --merge --force` (Codex: add
+> `--agent codex`), and approve the changed reach hook once in Codex.
+> `vaultmind hooks status` names anything still out of date.
+
 ### Added
 
 - **`vaultmind arc review`** lists the person's messages from a captured
@@ -1787,7 +1794,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.2...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.3...HEAD
+[0.9.3]: https://github.com/peiman/vaultmind/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/peiman/vaultmind/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/peiman/vaultmind/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/peiman/vaultmind/compare/v0.8.0...v0.9.0
