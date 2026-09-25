@@ -8,6 +8,9 @@ import (
 	"time"
 )
 
+// NoteExtension is the extension of a note file; only these are indexed.
+const NoteExtension = ".md"
+
 // ScannedFile represents a discovered .md file in the vault.
 type ScannedFile struct {
 	RelPath string    // Vault-relative path (e.g., "concepts/act-r.md")
@@ -74,7 +77,7 @@ func Scan(vaultRoot string, excludes []string) (ScanResult, error) {
 			return nil
 		}
 
-		if filepath.Ext(path) != ".md" {
+		if filepath.Ext(path) != NoteExtension {
 			return nil
 		}
 

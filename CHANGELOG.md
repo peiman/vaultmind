@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`frontmatter set` writes a JSON array as a list.** `tags '["a","b"]'`
+  was written as the quoted string `'["a","b"]'`, turning a note's tags into
+  one tag (#159). A value that parses as a JSON array is now a YAML list;
+  anything else stays the text it is.
+- **The frontmatter commands find a note by id, title or alias.** Only a
+  file path worked; anything else failed with "entity resolution not yet
+  available" (#160). They now resolve the target the way `vaultmind resolve`
+  does, and say which notes an ambiguous name matches.
+
 ## [0.9.9] - 2026-09-26
 
 > The knowledge vault becomes navigable and tied to code. Refresh hooks to get
