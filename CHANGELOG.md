@@ -7,11 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.5] - 2026-09-25
+
+> Knowledge-vault projects: upgrade with this release, not 0.9.4, and name
+> your profile once:
+> `vaultmind hooks install <project> --vault <your-vault> --profile knowledge --merge --force`.
+> After that, `--profile` can be left off; the project remembers it.
+
+### Fixed
+
+- **A knowledge-profile install no longer wires persona hooks.** `hooks
+  install --profile knowledge --merge` wrote only the knowledge scripts but
+  wired every hook into settings.json — persona loading and episode capture
+  included — pointing at scripts it had just declined to write. The merge now
+  wires only the profile's hooks, as the Codex install already did.
+- **Re-running `hooks install` keeps the project's profile.** Without
+  `--profile` it declared the project "full" and wired a persona into a
+  knowledge vault — on the very upgrade command 0.9.4's notes gave. It now
+  keeps the profile the project declared.
+
 ## [0.9.4] - 2026-09-25
 
-> Knowledge-vault projects: refresh your hooks with
-> `vaultmind hooks install <project> --merge --force` (Codex: add
-> `--agent codex`) to pick this up.
+> Knowledge-vault projects: **do not use this release's upgrade command —
+> use 0.9.5's.** Without `--profile knowledge` it wires persona hooks into
+> a knowledge project.
 
 ### Fixed
 
@@ -1813,7 +1832,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.4...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.5...HEAD
+[0.9.5]: https://github.com/peiman/vaultmind/compare/v0.9.4...v0.9.5
 [0.9.4]: https://github.com/peiman/vaultmind/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/peiman/vaultmind/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/peiman/vaultmind/compare/v0.9.1...v0.9.2

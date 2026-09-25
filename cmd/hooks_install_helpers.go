@@ -97,6 +97,14 @@ func runHooksInstallCore(cmd *cobra.Command, p hooksInstallParams) error {
 	if perr != nil {
 		return perr
 	}
+	// No --profile: keep what the project already declared. Defaulting to
+	// "full" re-declared a knowledge vault as full and wired a persona into it
+	// on the very upgrade command the release notes gave.
+	if strings.TrimSpace(p.profile) == "" {
+		if profile, perr = hooks.DeclaredProfile(p.projectDir); perr != nil {
+			return perr
+		}
+	}
 
 	vaults, verr := parseHookVaults(p.vaults)
 	if verr != nil {

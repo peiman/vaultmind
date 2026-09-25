@@ -331,3 +331,20 @@ func TestHooksStatus_NamesAnOldReachMatcherAndTheMergeFixesIt(t *testing.T) {
 	require.NoError(t, err, out.String())
 	assert.NotContains(t, out.String(), "old matcher")
 }
+
+// Re-running install without --profile must keep the profile the project
+// declared, not reset it to "full" and wire a persona into a knowledge vault.
+func TestHooksInstall_KeepsTheDeclaredProfileWhenNoneIsGiven(t *testing.T) {
+	dir := t.TempDir()
+	_, _, err := runRootCmd(t, "hooks", "install", dir, "--profile", "knowledge", "--merge")
+	require.NoError(t, err)
+	_, _, err = runRootCmd(t, "hooks", "install", dir, "--merge", "--force")
+	require.NoError(t, err)
+
+	declared, err := os.ReadFile(filepath.Join(dir, ".claude", "vaultmind-profile"))
+	require.NoError(t, err)
+	assert.Equal(t, "knowledge", strings.TrimSpace(string(declared)))
+	settings, err := os.ReadFile(filepath.Join(dir, ".claude", "settings.json"))
+	require.NoError(t, err)
+	assert.NotContains(t, string(settings), "load-persona.sh")
+}

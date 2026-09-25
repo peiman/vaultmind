@@ -51,12 +51,30 @@ func MergeIntoSettings(projectDir, vaultPath string, local, dryRun bool) (*Merge
 // MergeIntoSettingsFor is MergeIntoSettings with an optional federation: the
 // searching hooks are wired to every vault in vaults.
 func MergeIntoSettingsFor(projectDir, vaultPath string, vaults []string, local, dryRun bool) (*MergeFileResult, error) {
+	return MergeIntoSettingsForProfile(projectDir, vaultPath, vaults, ProfileFull, local, dryRun)
+}
+
+// MergeIntoSettingsForProfile wires only the hooks profile p runs. Without the
+// filter a knowledge install wired persona loading and episode capture to
+// scripts the profile had just declined to write (the Codex path already
+// filtered; this one did not).
+func MergeIntoSettingsForProfile(projectDir, vaultPath string, vaults []string, p Profile, local, dryRun bool) (*MergeFileResult, error) {
 	path := settingsFilePath(projectDir, local)
 	existing, err := readSettingsFile(path)
 	if err != nil {
 		return nil, err
 	}
-	merged, changed, err := mergeHooks(existing, canonicalHooksFor(vaultPath, vaults))
+	allowed := map[string]bool{}
+	for _, n := range ScriptsForProfile(p) {
+		allowed[n] = true
+	}
+	var wanted []canonicalHook
+	for _, ch := range canonicalHooksFor(vaultPath, vaults) {
+		if allowed[ch.Script] {
+			wanted = append(wanted, ch)
+		}
+	}
+	merged, changed, err := mergeHooks(existing, wanted)
 	if err != nil {
 		return nil, fmt.Errorf("merging into %s: %w", path, err)
 	}

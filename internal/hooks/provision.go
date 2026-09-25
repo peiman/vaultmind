@@ -24,7 +24,11 @@ func Provision(cfg InstallConfig, merge, local, dryRun bool) (*ProvisionResult, 
 	if !merge || err != nil {
 		return out, err
 	}
-	merged, mErr := MergeIntoSettingsFor(cfg.ProjectDir, cfg.VaultPath, cfg.Vaults, local, dryRun)
+	profile := cfg.Profile
+	if profile == "" {
+		profile = ProfileFull
+	}
+	merged, mErr := MergeIntoSettingsForProfile(cfg.ProjectDir, cfg.VaultPath, cfg.Vaults, profile, local, dryRun)
 	out.Merge = merged
 	return out, mErr
 }
