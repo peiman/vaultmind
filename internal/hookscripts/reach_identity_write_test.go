@@ -2,10 +2,12 @@ package hookscripts_test
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // The reach hook's identity trigger exists for one moment: writing to the
@@ -22,6 +24,15 @@ const echoStub = "#!/bin/bash\nif [ \"$1\" = ask ]; then echo \"  0.42  q  $2\";
 
 const identityQuery = "writing to my identity vault"
 
+// identityEnv is a hook environment whose vault is an identity vault — it has
+// arcs/, which `vaultmind init` creates and a knowledge vault does not.
+func identityEnv(t *testing.T) hookEnv {
+	t.Helper()
+	h := newHookEnv(t, echoStub)
+	require.NoError(t, os.MkdirAll(filepath.Join(h.projectDir, "vaultmind-identity", "arcs"), 0o750))
+	return h
+}
+
 func bashPayload(cmd string) string {
 	b, _ := json.Marshal(map[string]any{"tool_name": "Bash", "tool_input": map[string]any{"command": cmd}})
 	return string(b)
@@ -33,7 +44,7 @@ func filePayload(tool, path string) string {
 }
 
 func TestReachHook_ReadingTheIdentityVaultIsSilent(t *testing.T) {
-	h := newHookEnv(t, echoStub)
+	h := identityEnv(t)
 	for _, cmd := range []string{
 		"vaultmind note get arc-x --vault vaultmind-identity 2>&1 | head -5",
 		"cat vaultmind-identity/arcs/x.md",
@@ -51,7 +62,7 @@ func TestReachHook_ReadingTheIdentityVaultIsSilent(t *testing.T) {
 }
 
 func TestReachHook_WritingToTheIdentityVaultFromTheShellFires(t *testing.T) {
-	h := newHookEnv(t, echoStub)
+	h := identityEnv(t)
 	for _, cmd := range []string{
 		"echo x > vaultmind-identity/arcs/x.md",
 		"cat a >> vaultmind-identity/arcs/x.md",
@@ -86,7 +97,7 @@ func TestReachHook_WritingToTheIdentityVaultFromTheShellFires(t *testing.T) {
 }
 
 func TestReachHook_EditOrWriteInsideTheIdentityVaultFires(t *testing.T) {
-	h := newHookEnv(t, echoStub)
+	h := identityEnv(t)
 	inside := filepath.Join(h.projectDir, "vaultmind-identity", "arcs", "x.md")
 	outside := filepath.Join(h.projectDir, "docs", "x.md")
 	for _, tool := range []string{"Write", "Edit", "MultiEdit"} {
@@ -100,7 +111,7 @@ func TestReachHook_EditOrWriteInsideTheIdentityVaultFires(t *testing.T) {
 
 // A sibling directory that shares the vault's name as a prefix is not the vault.
 func TestReachHook_ASiblingWithTheVaultsNameAsPrefixIsNotTheVault(t *testing.T) {
-	h := newHookEnv(t, echoStub)
+	h := identityEnv(t)
 	sibling := filepath.Join(h.projectDir, "vaultmind-identity-backup", "x.md")
 	out, _ := runHookScript(t, "vault-reach.sh", h.env(false), filePayload("Write", sibling))
 	assert.Empty(t, out)
@@ -109,7 +120,7 @@ func TestReachHook_ASiblingWithTheVaultsNameAsPrefixIsNotTheVault(t *testing.T) 
 // A vault path set with a trailing slash left the vault's name empty, and an
 // empty name matched every command: every rm anywhere became an identity write.
 func TestReachHook_ATrailingSlashOnTheVaultPathChangesNothing(t *testing.T) {
-	h := newHookEnv(t, echoStub)
+	h := identityEnv(t)
 	vault := filepath.Join(h.projectDir, "vaultmind-identity")
 	env := append(h.env(false), "VAULTMIND_VAULT="+vault+"/")
 
@@ -122,7 +133,7 @@ func TestReachHook_ATrailingSlashOnTheVaultPathChangesNothing(t *testing.T) {
 
 // Inside the vault, a redirect to an absolute path elsewhere writes elsewhere.
 func TestReachHook_ARedirectOutOfTheVaultIsNotAVaultWrite(t *testing.T) {
-	h := newHookEnv(t, echoStub)
+	h := identityEnv(t)
 	out, _ := runHookScript(t, "vault-reach.sh", h.env(false), bashPayload("cd vaultmind-identity && cat arcs/x.md > /tmp/out.md"))
 	assert.Empty(t, out)
 	out, _ = runHookScript(t, "vault-reach.sh", h.env(false), bashPayload("cd vaultmind-identity && echo x > arcs/x.md"))

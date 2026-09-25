@@ -68,8 +68,14 @@ VAULT_PATH="${VAULTMIND_VAULT:-${VAULTMIND_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-$P
 # A trailing slash would leave the vault's name below empty, and an empty name
 # matches every command.
 VAULT_PATH="${VAULT_PATH%/}"
-# The vault's own directory name, so the identity-write trigger below fires for
-# an adopter whose vault is not named by the default convention.
+# A relative vault path (focalc sets ./vaultmind-vault) is relative to the
+# project. Resolve it, or the absolute file_path of an Edit/Write never matches.
+case "$VAULT_PATH" in
+  /*) ;;
+  *) VAULT_PATH="${VAULTMIND_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-$PWD}}/${VAULT_PATH#./}" ;;
+esac
+# The vault's own directory name, so the write trigger below fires for an
+# adopter whose vault is not named by the default convention.
 IDENTITY_VAULT_NAME="${VAULT_PATH##*/}"
 
 # The allowlist: irreversible or outward-facing moves, plus writes to the
@@ -93,10 +99,25 @@ esac
 # writes into it — a redirect whose target is in the vault, a file command
 # (rm, mv, cp, tee, …), an in-place sed, a git add/rm/mv, or a vaultmind
 # command that mutates notes.
-IDENTITY_QUERY="writing to my identity vault: arc discipline, curation, never silently rewrite identity"
+#
+# What to ask depends on the vault. An identity vault (it has arcs/, which
+# `vaultmind init` creates) gets arc discipline. A project's knowledge vault is
+# not an identity: before writing a note there, what helps is what the vault
+# already says about that topic (taken from the file name) and its conventions.
+if [ -d "$VAULT_PATH/arcs" ]; then
+  WRITE_QUERY="writing to my identity vault: arc discipline, curation, never silently rewrite identity"
+else
+  TOPIC=""
+  [ -n "$FILE_PATH" ] && TOPIC=$(basename "$FILE_PATH" .md | tr '_-' '  ')
+  if [ -n "$TOPIC" ]; then
+    WRITE_QUERY="writing about $TOPIC: what this knowledge base already says about it, and its conventions"
+  else
+    WRITE_QUERY="changing this project's knowledge base: its conventions, frontmatter, and what is already written"
+  fi
+fi
 if [ -z "$QUERY" ] && [ -n "$FILE_PATH" ]; then
   case "$FILE_PATH" in
-    "$VAULT_PATH"/*) QUERY="$IDENTITY_QUERY" ;;
+    "$VAULT_PATH"/*) QUERY="$WRITE_QUERY" ;;
   esac
 fi
 if [ -z "$QUERY" ] && [ -n "$CMD" ]; then
@@ -179,7 +200,7 @@ for s in segs:
 print(1 if found else 0)
 PY
 )" "$CMD" "$IDENTITY_VAULT_NAME" 2>/dev/null || echo 0)
-  [ "$WRITES" = "1" ] && QUERY="$IDENTITY_QUERY"
+  [ "$WRITES" = "1" ] && QUERY="$WRITE_QUERY"
 fi
 
 [ -z "$QUERY" ] && exit 0

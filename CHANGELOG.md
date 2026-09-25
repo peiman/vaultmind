@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **In a project's knowledge vault, a write brings up what that vault already
+  says.** The reach hook treated every vault as an identity vault: writing a
+  note to a knowledge base brought up "arc discipline … never silently rewrite
+  identity". Now an identity vault (one with `arcs/`) keeps that reminder, and
+  a knowledge vault gets what it already says about the topic being written
+  (taken from the file name) and its conventions — before writing
+  `a0-ledger-store.md` in focalc's vault, the existing note and its four
+  closest neighbours. A vault configured as a relative path
+  (`VAULTMIND_VAULT=./vaultmind-vault`) is now resolved against the project,
+  so Edit and Write inside it are recognised at all.
+
 ## [0.9.3] - 2026-09-25
 
 > To pick up the hook fixes, refresh your hooks:
