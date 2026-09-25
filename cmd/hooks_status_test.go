@@ -304,3 +304,30 @@ func TestHooksUninstall_CodexRejectsLocal(t *testing.T) {
 	_, _, err := runRootCmd(t, "hooks", "uninstall", t.TempDir(), "--agent", "codex", "--local")
 	require.ErrorContains(t, err, "--local")
 }
+
+// A project installed before the reach hook learned to see Edit and Write
+// still has it under "Bash". Status must name that, with the fix, and the
+// merge must upgrade it — or the new trigger never reaches anyone.
+func TestHooksStatus_NamesAnOldReachMatcherAndTheMergeFixesIt(t *testing.T) {
+	dir := t.TempDir()
+	_, _, err := runRootCmd(t, "hooks", "install", dir, "--merge")
+	require.NoError(t, err)
+	settings := filepath.Join(dir, ".claude", "settings.json")
+	raw, err := os.ReadFile(settings)
+	require.NoError(t, err)
+	old := strings.Replace(string(raw), `"Bash|Edit|Write|MultiEdit"`, `"Bash"`, 1)
+	require.NotEqual(t, string(raw), old, "fixture: the installed reach matcher was found")
+	require.NoError(t, os.WriteFile(settings, []byte(old), 0o600))
+
+	out, _, err := runRootCmd(t, "hooks", "status", dir)
+	require.ErrorIs(t, err, cmdutil.ErrAlreadyWritten)
+	s := out.String()
+	assert.Contains(t, s, "old matcher PreToolUse -> vault-reach.sh")
+	assert.Contains(t, s, "vaultmind hooks install "+dir+" --merge", "the fix, named")
+
+	_, _, err = runRootCmd(t, "hooks", "install", dir, "--merge")
+	require.NoError(t, err)
+	out, _, err = runRootCmd(t, "hooks", "status", dir)
+	require.NoError(t, err, out.String())
+	assert.NotContains(t, out.String(), "old matcher")
+}

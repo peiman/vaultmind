@@ -18,6 +18,10 @@ const (
 	// exactly like health: the whole reason this command exists, applied to the
 	// event map rather than to the script files.
 	EventUnwired EventState = "unwired"
+	// EventStaleMatcher — the script is wired, but under a matcher an earlier
+	// release installed, so it misses tools it now needs to see (the reach hook
+	// on "Bash" cannot see Edit or Write). `hooks install --merge` upgrades it.
+	EventStaleMatcher EventState = "stale_matcher"
 )
 
 // EventStatus is one canonical event→script pair and whether it is live.
@@ -47,7 +51,8 @@ func eventWiringForProfile(projectDir string, p Profile) []EventStatus {
 	// alarms — which is how a check gets ignored, then deleted.
 	var parsed struct {
 		Hooks map[string][]struct {
-			Hooks []struct {
+			Matcher string `json:"matcher"`
+			Hooks   []struct {
 				Command string `json:"command"`
 			} `json:"hooks"`
 		} `json:"hooks"`
@@ -56,15 +61,20 @@ func eventWiringForProfile(projectDir string, p Profile) []EventStatus {
 		_ = json.Unmarshal(raw, &parsed)
 	}
 
-	wired := func(event, script string) bool {
+	// A script wired under a matcher an earlier release installed is not
+	// healthy: it runs, but misses tools it now needs to see.
+	stateOf := func(event, script string) EventState {
 		for _, group := range parsed.Hooks[event] {
 			for _, h := range group.Hooks {
 				if strings.Contains(h.Command, script) {
-					return true
+					if isLegacyMatcher(script, group.Matcher) {
+						return EventStaleMatcher
+					}
+					return EventWired
 				}
 			}
 		}
-		return false
+		return EventUnwired
 	}
 
 	// vaultPath is only used to build command strings for install; wiring
@@ -75,11 +85,7 @@ func eventWiringForProfile(projectDir string, p Profile) []EventStatus {
 	expected := EventScriptsForProfile(p)
 	out := make([]EventStatus, 0, len(expected))
 	for _, c := range expected {
-		state := EventUnwired
-		if wired(c.Event, c.Script) {
-			state = EventWired
-		}
-		out = append(out, EventStatus{Event: c.Event, Script: c.Script, State: state})
+		out = append(out, EventStatus{Event: c.Event, Script: c.Script, State: stateOf(c.Event, c.Script)})
 	}
 	return out
 }

@@ -32,6 +32,28 @@ const (
 	hookSessionEndScript       = "capture-episode.sh"
 )
 
+// reachMatcher is the tools the reach hook stands in front of: Bash, where
+// irreversible commands run, and the file-writing tools, where arcs are
+// actually written. Bash alone left it silent on every arc written with Write.
+const reachMatcher = "Bash|Edit|Write|MultiEdit"
+
+// legacyMatchers are matchers an earlier release installed for a script. A
+// group still carrying one is upgraded in place by the merge (only the matcher
+// changes; the project's own command and timeout stay) and reported by status.
+// A matcher the project set by hand is never touched.
+var legacyMatchers = map[string][]string{
+	hookReachScript: {"Bash"},
+}
+
+func isLegacyMatcher(script, matcher string) bool {
+	for _, m := range legacyMatchers[script] {
+		if m == matcher {
+			return true
+		}
+	}
+	return false
+}
+
 // Where each agent's hook files live in a project. Claude Code's are under
 // .claude/ (its convention). Codex's are under .vaultmind/: a Codex project
 // should not grow a .claude/ folder, nor show "Claude" in the hook commands a
@@ -156,7 +178,7 @@ func canonicalHooksWith(vaultPath string, vaults []string, scriptRef func(string
 		// irreversible or outward-facing commands, because noise is this channel's
 		// failure mode, not silence. Shares PreToolUse with read-tracking under a
 		// different matcher.
-		{Event: "PreToolUse", Script: hookReachScript, Group: hookGroup{Matcher: "Bash", Hooks: []hookCommand{cmd(hookReachScript)}}},
+		{Event: "PreToolUse", Script: hookReachScript, Group: hookGroup{Matcher: reachMatcher, Hooks: []hookCommand{cmd(hookReachScript)}}},
 		// The WRITE-path trigger. Every other hook is read-path or telemetry;
 		// nothing fired at the moment a transformation could be written down, and a
 		// desk that depends on remembering collects nothing (measured: two entries

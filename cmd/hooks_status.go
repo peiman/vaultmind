@@ -106,6 +106,17 @@ func renderHooksStatus(w io.Writer, report hooks.StatusReport) error {
 			// Name the event AND the script: "SessionEnd is off" and "the
 			// script is missing" have different fixes, and a project can have
 			// the script sitting right there unrun.
+			if e.State == hooks.EventStaleMatcher {
+				// Wired, but on a matcher an earlier release installed: it runs
+				// and misses tools it now needs. Not "unwired" — that would send
+				// the reader looking for a hook that is there.
+				if _, err := fmt.Fprintf(w,
+					"  old matcher %s -> %s (update it: vaultmind hooks install %s --merge)\n",
+					e.Event, e.Script, report.ProjectDir); err != nil {
+					return err
+				}
+				continue
+			}
 			if _, err := fmt.Fprintf(w, "  unwired   %s -> %s\n", e.Event, e.Script); err != nil {
 				return err
 			}

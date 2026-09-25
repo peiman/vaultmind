@@ -60,6 +60,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   was pasted with it. Messages relayed from other agents, background-task
   notices and re-sent goals are still left out. Already-captured episodes keep
   their gaps until the session is captured again.
+- **The identity-vault reminder fires when you write, not when you read.** The
+  reach hook reminded the agent of arc discipline before any shell command that
+  merely named the identity vault — every `note get`, every index run — and
+  never before Edit or Write, the tools arcs are actually written with. It now
+  fires on a real write only: Edit, Write or MultiEdit on a file inside the
+  vault, or a shell command that writes into it (a redirect into the vault,
+  `rm`/`mv`/`cp`/`tee`, an in-place `sed`, `git add`, a `cd` into the vault
+  followed by a write, a vaultmind command that changes notes). To pick it up,
+  run `vaultmind hooks install <project> --merge --force`: the merge now
+  upgrades the hook's matcher from `Bash` in place, keeping your own command
+  and timeout, and `hooks status` names a hook still on the old matcher
+  instead of reporting it healthy. Codex will ask you to approve the changed
+  hook once.
 
 ## [0.9.2] - 2026-09-24
 

@@ -33,7 +33,9 @@ func TestSettingsStanza_WiresTheWritePathAndReachHooks(t *testing.T) {
 
 	assert.Contains(t, stanza, "vault-reach.sh",
 		"an arc that surfaces all day and never at the instant it applies is not surfacing")
-	assert.Contains(t, stanza, `"Bash"`, "the reach hook matches Bash, where irreversible commands run")
+	assert.Contains(t, stanza, `"Bash|Edit|Write|MultiEdit"`,
+		"the reach hook matches Bash, where irreversible commands run, and the file-writing tools, "+
+			"where arcs are actually written — matching Bash alone left it silent on every arc written with Write")
 }
 
 // PreToolUse now carries TWO groups with DIFFERENT matchers: Read (access
@@ -62,7 +64,7 @@ func TestSettingsStanza_PreToolUseKeepsBothReadAndBash(t *testing.T) {
 		matchers[g.Matcher] = g.Hooks[0].Command
 	}
 	assert.Contains(t, matchers["Read"], "vault-track-read.sh")
-	assert.Contains(t, matchers["Bash"], "vault-reach.sh")
+	assert.Contains(t, matchers["Bash|Edit|Write|MultiEdit"], "vault-reach.sh")
 }
 
 // The vault path must reach the new hooks too, or an adopter with a

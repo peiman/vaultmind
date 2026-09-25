@@ -68,7 +68,14 @@ func mergeHooksWith(existing []byte, hooksToAdd []canonicalHook, refresh bool) (
 		}
 		if anyGroupReferencesScript(arr, ch.Script) {
 			// Already wired (by us on a prior run, or by hand) — never duplicate.
-			if !refresh || !refreshOwnGroup(arr, ch.Script, groupRaw) {
+			// Two in-place updates are allowed: a matcher an earlier release
+			// installed, and (with refresh) a group that is only ours.
+			upgraded, err := upgradeLegacyMatcher(arr, ch.Script, ch.Group.Matcher)
+			if err != nil {
+				return nil, false, err
+			}
+			refreshed := refresh && refreshOwnGroup(arr, ch.Script, groupRaw)
+			if !upgraded && !refreshed {
 				continue
 			}
 		} else {
@@ -98,6 +105,46 @@ func mergeHooksWith(existing []byte, hooksToAdd []canonicalHook, refresh bool) (
 		return nil, false, fmt.Errorf("rendering settings: %w", err)
 	}
 	return out, true, nil
+}
+
+// upgradeLegacyMatcher sets want as the matcher of every group in arr that
+// runs script under a matcher an earlier release installed. Only the matcher
+// changes: the group's commands, timeouts and any other keys are kept as the
+// project has them. It reports whether it changed anything.
+func upgradeLegacyMatcher(arr []json.RawMessage, script, want string) (bool, error) {
+	changed := false
+	for i, el := range arr {
+		var g hookGroup
+		if err := json.Unmarshal(el, &g); err != nil || !isLegacyMatcher(script, g.Matcher) {
+			continue
+		}
+		// Only a group that is ours alone. A group mixing the project's own hooks
+		// with ours is hand-wired: widening its matcher would run their hooks on
+		// tools they never asked for. Status keeps naming it instead.
+		ours := len(g.Hooks) > 0
+		for _, h := range g.Hooks {
+			ours = ours && commandReferencesScript(h.Command, script)
+		}
+		if !ours {
+			continue
+		}
+		obj, err := parseOrderedObjectFromRaw(el)
+		if err != nil {
+			return false, fmt.Errorf("parsing %s hook group: %w", script, err)
+		}
+		m, err := json.Marshal(want)
+		if err != nil {
+			return false, err
+		}
+		obj.set("matcher", m)
+		raw, err := obj.marshal()
+		if err != nil {
+			return false, fmt.Errorf("rendering %s hook group: %w", script, err)
+		}
+		arr[i] = raw
+		changed = true
+	}
+	return changed, nil
 }
 
 // refreshOwnGroup replaces, in place, the group in arr that holds exactly one
