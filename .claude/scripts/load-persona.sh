@@ -32,8 +32,9 @@ mkdir -p "$LOG_DIR" 2>/dev/null
 TIMESTAMP=$(date +%Y%m%dT%H%M%S)
 # One record per session start. The second alone is not unique: sessions in
 # every project share this directory, and two starting in the same second
-# overwrote each other. The session id (made filename-safe) separates them.
-SIDECAR_FILE="$LOG_DIR/${TIMESTAMP}-$(printf '%s' "$SESSION_ID" | tr -c 'A-Za-z0-9-' '_')-injection.json"
+# overwrote each other. The session id (made filename-safe, and capped so the
+# name stays under the 255-byte limit) separates them.
+SIDECAR_FILE="$LOG_DIR/${TIMESTAMP}-$(printf '%s' "$SESSION_ID" | tr -c 'A-Za-z0-9-' '_' | cut -c1-64)-injection.json"
 HOOK_VERSION="v6-persona-mode"
 
 # Persona mode — how the identity reaches the agent:

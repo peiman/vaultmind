@@ -185,3 +185,14 @@ func TestPersonaMode_SameSecondSessionsKeepSeparateRecords(t *testing.T) {
 
 	assert.Len(t, sidecarModes(t, env), 2, "each session must keep its own record")
 }
+
+// An id long enough to push the file name past the filesystem limit (255
+// bytes) must still leave a record; the write used to fail silently.
+func TestPersonaMode_LongSessionIDStillLeavesARecord(t *testing.T) {
+	project, env := installPersonaHook(t, personaCallLogStub)
+	env = append(env, "VAULTMIND_PERSONA_MODE=explore")
+
+	runPersonaHookSession(t, project, env, strings.Repeat("x", 300))
+
+	assert.Equal(t, []string{"explore"}, sidecarModes(t, env))
+}
