@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`hooks install --dry-run` writes nothing.** It previewed the settings
+  merge but still wrote the scripts, so `--merge --force --dry-run`
+  overwrote locally edited hooks while claiming to preview. Scripts, the
+  scripts directory and the declared profile are now left alone, and the
+  output says "Would write". The Codex path too.
+- **The persona hook's sidecar keeps one record per session.** Records were
+  named by the second alone, and every project shares the directory, so two
+  sessions starting in the same second overwrote each other. The file name
+  now carries the session id.
+
 ## [0.9.6] - 2026-09-25
 
 > Opt-in; nothing changes unless you set the variable. To get the new hook,

@@ -181,7 +181,11 @@ func writeHooksInstallHuman(w io.Writer, res *hooks.InstallResult, mergeRes *hoo
 	_, _ = fmt.Fprintf(w, "Project: %s\n", res.ProjectDir)
 	_, _ = fmt.Fprintf(w, "Scripts dir: %s\n", res.ScriptsDir)
 	if len(res.Written) > 0 {
-		_, _ = fmt.Fprintf(w, "\nWritten (%d):\n", len(res.Written))
+		writtenVerb := "Written"
+		if res.DryRun {
+			writtenVerb = "Would write"
+		}
+		_, _ = fmt.Fprintf(w, "\n%s (%d):\n", writtenVerb, len(res.Written))
 		for _, name := range res.Written {
 			_, _ = fmt.Fprintf(w, "  ✓ %s\n", name)
 		}
@@ -259,7 +263,7 @@ func runHooksInstallCodex(cmd *cobra.Command, p hooksInstallParams, only []strin
 		Vaults:     vaults,
 		Profile:    profile,
 		Agent:      hooks.AgentCodex,
-	}, false, false, false)
+	}, false, false, p.dryRun)
 	res := prov.Install
 
 	var mergeRes *hooks.MergeFileResult

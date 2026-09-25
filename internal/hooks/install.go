@@ -60,12 +60,17 @@ type InstallConfig struct {
 	// Agent decides where the scripts go: .claude/scripts for Claude Code (the
 	// default, empty), .vaultmind/scripts for Codex.
 	Agent Agent
+	// DryRun reports what would be written without touching the disk: no
+	// scripts, no scripts dir, no declared profile. Written then lists the
+	// scripts that would be written.
+	DryRun bool
 }
 
 // InstallResult is the JSON-serializable output of Install.
 type InstallResult struct {
 	ProjectDir string   `json:"project_dir"`
 	ScriptsDir string   `json:"scripts_dir"`
+	DryRun     bool     `json:"dry_run,omitempty"`
 	Written    []string `json:"written"`
 	Skipped    []string `json:"skipped,omitempty"`
 	Conflicts  []string `json:"conflicts,omitempty"`
@@ -114,15 +119,18 @@ func Install(cfg InstallConfig) (*InstallResult, error) {
 		ProjectDir: cfg.ProjectDir,
 		ScriptsDir: scriptsDir,
 		ForceUsed:  cfg.Force,
+		DryRun:     cfg.DryRun,
 		Written:    []string{},
 	}
-	// MkdirAll is idempotent; safe under both first-install and
-	// refresh.
-	if err := os.MkdirAll(scriptsDir, 0o750); err != nil {
-		return nil, fmt.Errorf("creating %s: %w", scriptsDir, err)
-	}
-	if err := writeDeclaredProfileFor(cfg.ProjectDir, cfg.Agent, profile); err != nil {
-		return nil, err
+	if !cfg.DryRun {
+		// MkdirAll is idempotent; safe under both first-install and
+		// refresh.
+		if err := os.MkdirAll(scriptsDir, 0o750); err != nil {
+			return nil, fmt.Errorf("creating %s: %w", scriptsDir, err)
+		}
+		if err := writeDeclaredProfileFor(cfg.ProjectDir, cfg.Agent, profile); err != nil {
+			return nil, err
+		}
 	}
 
 	for _, name := range names {
@@ -165,8 +173,10 @@ func Install(cfg InstallConfig) (*InstallResult, error) {
 		// sent it into the new bytes mid-line ("syntax error near unexpected
 		// token `done'", live 2026-09-23). A rename leaves the running process
 		// its old file and gives the next start the new one.
-		if err := atomicWriteFile(dst, canonical, 0o700); err != nil {
-			return res, fmt.Errorf("writing %s: %w", dst, err)
+		if !cfg.DryRun {
+			if err := atomicWriteFile(dst, canonical, 0o700); err != nil {
+				return res, fmt.Errorf("writing %s: %w", dst, err)
+			}
 		}
 		res.Written = append(res.Written, name)
 	}

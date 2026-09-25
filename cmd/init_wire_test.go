@@ -73,6 +73,8 @@ func TestInitWireHooks_DryRunWritesNoSettings(t *testing.T) {
 
 	_, statErr := os.Stat(filepath.Join(project, ".claude", "settings.json"))
 	assert.True(t, os.IsNotExist(statErr), "dry-run must not write settings.json")
+	_, statErr = os.Stat(filepath.Join(project, ".claude", "scripts"))
+	assert.True(t, os.IsNotExist(statErr), "dry-run must not write the hook scripts")
 	// Vault is still scaffolded.
 	_, err = os.Stat(filepath.Join(vault, ".vaultmind", "config.yaml"))
 	require.NoError(t, err)
