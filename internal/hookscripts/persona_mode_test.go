@@ -137,3 +137,35 @@ func TestPersonaMode_UnknownModeFallsBackToServed(t *testing.T) {
 	assert.Contains(t, out, "IDENTITY CONTEXT:", "a typo must never leave the agent with no identity")
 	assert.Equal(t, []string{"served"}, sidecarModes(t, env))
 }
+
+// The served record carries the right values in the right fields: a shifted
+// printf argument still parses as JSON, so checking only the arm misses it.
+func TestPersonaMode_ServedRecordHasItsFieldsInPlace(t *testing.T) {
+	project, env := installPersonaHook(t, personaCallLogStub)
+
+	runPersonaHookSession(t, project, env, "s-fields")
+
+	files, err := filepath.Glob(filepath.Join(envValue(env, "HOME"), ".vaultmind", "persona-eval", "*-injection.json"))
+	require.NoError(t, err)
+	require.Len(t, files, 1)
+	raw, err := os.ReadFile(files[0])
+	require.NoError(t, err)
+	var rec map[string]any
+	require.NoError(t, json.Unmarshal(raw, &rec), "sidecar must be valid JSON: %s", raw)
+	assert.Equal(t, filepath.Join(project, "vaultmind-identity"), rec["vault_path"])
+	assert.Equal(t, "s-fields", rec["session_id"])
+	assert.Greater(t, rec["identity_length"], 0.0, "the served identity length must land in its own field")
+	assert.Equal(t, true, rec["injection_success"])
+}
+
+// A session assigned to explore stays in explore in the log even when the
+// vault is missing, or the comparison counts it in the wrong arm.
+func TestPersonaMode_MissingVaultKeepsTheAssignedArmInTheLog(t *testing.T) {
+	project, env := installPersonaHook(t, personaCallLogStub)
+	require.NoError(t, os.RemoveAll(filepath.Join(project, "vaultmind-identity")))
+	env = append(env, "VAULTMIND_PERSONA_MODE=explore")
+
+	runPersonaHookSession(t, project, env, "s-no-vault")
+
+	assert.Equal(t, []string{"explore"}, sidecarModes(t, env))
+}

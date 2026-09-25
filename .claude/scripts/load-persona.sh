@@ -91,8 +91,8 @@ $v"
   echo "  vaultmind search \"<words>\" --vault <vault>"
   echo "  vaultmind note get <id> --vault <vault>"
 
-  printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","persona_mode":"explore","vault_path":"%s","injection_success":true}\n' \
-    "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$VAULT_PATH" \
+  printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","persona_mode":"%s","vault_path":"%s","injection_success":true}\n' \
+    "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$PERSONA_MODE" "$VAULT_PATH" \
     > "$LOG_DIR/${TIMESTAMP}-injection.json" 2>/dev/null
   exit 0
 fi
@@ -254,18 +254,18 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
     fi
 
     # Sidecar log — write injection manifest (agent never sees this)
-    printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","persona_mode":"served","vault_path":"%s","identity_length":%d,"context_length":%d,"self_identity_length":%d,"self_research_length":%d,"injection_success":true}\n' \
-      "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$VAULT_PATH" "${#IDENTITY}" "${#CONTEXT}" "${#SELF_IDENTITY}" "${#SELF_RESEARCH}" \
+    printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","persona_mode":"%s","vault_path":"%s","identity_length":%d,"context_length":%d,"self_identity_length":%d,"self_research_length":%d,"injection_success":true}\n' \
+      "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$PERSONA_MODE" "$VAULT_PATH" "${#IDENTITY}" "${#CONTEXT}" "${#SELF_IDENTITY}" "${#SELF_RESEARCH}" \
       > "$LOG_DIR/${TIMESTAMP}-injection.json" 2>/dev/null
   else
     # Hook fired but injection was empty — log the failure
-    printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","persona_mode":"served","vault_path":"%s","identity_length":0,"context_length":0,"injection_success":false}\n' \
-      "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$VAULT_PATH" \
+    printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","persona_mode":"%s","vault_path":"%s","identity_length":0,"context_length":0,"injection_success":false}\n' \
+      "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$PERSONA_MODE" "$VAULT_PATH" \
       > "$LOG_DIR/${TIMESTAMP}-injection.json" 2>/dev/null
   fi
 else
   # Hook fired but vaultmind binary or vault missing — log infrastructure failure
-  printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","persona_mode":"served","vault_path":"%s","identity_length":0,"context_length":0,"injection_success":false,"error":"binary_or_vault_missing"}\n' \
-    "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$VAULT_PATH" \
+  printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","persona_mode":"%s","vault_path":"%s","identity_length":0,"context_length":0,"injection_success":false,"error":"binary_or_vault_missing"}\n' \
+    "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$PERSONA_MODE" "$VAULT_PATH" \
     > "$LOG_DIR/${TIMESTAMP}-injection.json" 2>/dev/null
 fi
