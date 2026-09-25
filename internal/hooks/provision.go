@@ -19,6 +19,9 @@ type ProvisionResult struct {
 // sequence behind both `hooks install --merge` and `init --wire-hooks`, so the
 // gating and ordering live in exactly one place (manifesto principle 7 — SSOT).
 func Provision(cfg InstallConfig, merge, local, dryRun bool) (*ProvisionResult, error) {
+	// A dry run previews the scripts as well as the wiring; writing the
+	// scripts during a preview overwrote local edits under --force.
+	cfg.DryRun = cfg.DryRun || dryRun
 	res, err := Install(cfg)
 	out := &ProvisionResult{Install: res}
 	if !merge || err != nil {

@@ -169,3 +169,19 @@ func TestPersonaMode_MissingVaultKeepsTheAssignedArmInTheLog(t *testing.T) {
 
 	assert.Equal(t, []string{"explore"}, sidecarModes(t, env))
 }
+
+// Two sessions starting in the same second each keep their record. The file
+// was named by the second alone, so the later one overwrote the earlier, live
+// on 2026-09-25. The clock is pinned by a date stub to make the collision
+// certain rather than likely.
+func TestPersonaMode_SameSecondSessionsKeepSeparateRecords(t *testing.T) {
+	project, env := installPersonaHook(t, personaCallLogStub)
+	binDir := strings.SplitN(envValue(env, "PATH"), ":", 2)[0]
+	require.NoError(t, os.WriteFile(filepath.Join(binDir, "date"), []byte("#!/bin/sh\necho 20260925T120000\n"), 0o700)) //nolint:gosec // test fixture
+	env = append(env, "VAULTMIND_PERSONA_MODE=explore")
+
+	runPersonaHookSession(t, project, env, "s-one")
+	runPersonaHookSession(t, project, env, "s-two")
+
+	assert.Len(t, sidecarModes(t, env), 2, "each session must keep its own record")
+}

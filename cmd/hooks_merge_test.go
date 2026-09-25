@@ -45,6 +45,37 @@ func TestHooksInstallMerge_DryRunWritesNothing(t *testing.T) {
 
 	_, statErr := os.Stat(filepath.Join(dir, ".claude", "settings.json"))
 	assert.True(t, os.IsNotExist(statErr), "dry-run must not create settings.json")
+	_, statErr = os.Stat(filepath.Join(dir, ".claude", "scripts"))
+	assert.True(t, os.IsNotExist(statErr), "dry-run must not write the scripts either")
+}
+
+// The upgrade preview: --force --dry-run over a script that differs from the
+// canonical must report the overwrite and leave the file as it was. It used
+// to overwrite it, live on 2026-09-25.
+func TestHooksInstallMerge_ForcedDryRunLeavesScriptsAlone(t *testing.T) {
+	dir := t.TempDir()
+	_, _, err := runRootCmd(t, "hooks", "install", dir, "--merge")
+	require.NoError(t, err)
+	script := filepath.Join(dir, ".claude", "scripts", "load-persona.sh")
+	require.NoError(t, os.WriteFile(script, []byte("#!/bin/bash\n# local edit\n"), 0o700)) //nolint:gosec // test fixture
+
+	out, _, err := runRootCmd(t, "hooks", "install", dir, "--merge", "--force", "--dry-run")
+	require.NoError(t, err)
+
+	after, err := os.ReadFile(script) //nolint:gosec // test fixture path
+	require.NoError(t, err)
+	assert.Equal(t, "#!/bin/bash\n# local edit\n", string(after), "a dry run must not overwrite a script")
+	assert.Contains(t, out.String(), "Would write (1)", "the preview must name what it would overwrite")
+	assert.Contains(t, out.String(), "load-persona.sh")
+}
+
+func TestHooksInstallCodex_DryRunWritesNothing(t *testing.T) {
+	dir := t.TempDir()
+	_, _, err := runRootCmd(t, "hooks", "install", dir, "--agent", "codex", "--merge", "--dry-run")
+	require.NoError(t, err)
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	assert.Empty(t, entries, "a codex dry run must not write scripts, a profile, or hooks.json")
 }
 
 func TestHooksInstallMerge_Idempotent(t *testing.T) {
