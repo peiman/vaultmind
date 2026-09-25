@@ -61,6 +61,7 @@ so single-var setups are unchanged):
 | `VAULTMIND_EPISODE_VAULT` | episode writes (SessionEnd) | `VAULTMIND_VAULT` |
 | `LOAD_PERSONA_VAULT` | persona load at SessionStart | `VAULTMIND_VAULT` |
 | `LOAD_PERSONA_RESEARCH_VAULT` | optional 2nd vault — `vaultmind self` only (memory/activation state: hot/recent note titles), NOT a content `ask`; auto-fires if its dir exists | `vaultmind-vault`; skipped if dir absent |
+| `VAULTMIND_PERSONA_MODE` | how the identity arrives at SessionStart: `served` (as text), `explore` (the agent is pointed at its vaults and looks), `alternate` (split by session, for comparison) | `served` |
 
 Set each one inline in the settings.json `command` string (`VAR="value" bash <script>`).
 

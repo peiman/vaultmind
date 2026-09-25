@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`VAULTMIND_PERSONA_MODE` on the SessionStart persona hook.** `served`
+  (the default, unchanged) hands the identity over as text. `explore` hands
+  nothing over: the agent is told where its vaults are and asked to look
+  before it answers. `alternate` splits sessions between the two by session
+  id, so the arms can be compared on real work; a session keeps its arm
+  across compactions. The arm is recorded as `persona_mode` in the sidecar
+  log (`~/.vaultmind/persona-eval/`). Set it inline in `settings.json`, like
+  the hook's other variables.
+
 ## [0.9.5] - 2026-09-25
 
 > Knowledge-vault projects: upgrade with this release, not 0.9.4, and name
