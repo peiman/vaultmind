@@ -65,6 +65,10 @@ func decodePatterns(js string) []string {
 	}
 	var one string
 	if json.Unmarshal([]byte(js), &one) == nil && one != "" {
+		// A list written as a quoted string (`frontmatter set` did, #159).
+		if json.Unmarshal([]byte(one), &list) == nil {
+			return list
+		}
 		return []string{one}
 	}
 	return nil
@@ -98,6 +102,7 @@ func ResolveCodeFile(file string) CodeFile {
 	if err != nil {
 		return CodeFile{Rel: filepath.Base(file)}
 	}
+	abs = realPath(abs)
 	for dir := filepath.Dir(abs); ; dir = filepath.Dir(dir) {
 		if _, err := os.Stat(filepath.Join(dir, gitMarker)); err == nil {
 			rel, relErr := filepath.Rel(dir, abs)
@@ -113,6 +118,19 @@ func ResolveCodeFile(file string) CodeFile {
 	return CodeFile{Rel: filepath.Base(abs)}
 }
 
+// realPath resolves symlinks, so a file reached through a link names the same
+// file as its target. A file that does not exist yet (a Write creating it) has
+// its folder resolved instead.
+func realPath(abs string) string {
+	if p, err := filepath.EvalSymlinks(abs); err == nil {
+		return p
+	}
+	if d, err := filepath.EvalSymlinks(filepath.Dir(abs)); err == nil {
+		return filepath.Join(d, filepath.Base(abs))
+	}
+	return abs
+}
+
 // MatchPath reports whether rel (slash-separated, relative to the repository
 // root) matches pattern. Segments match as in path.Match; `**` matches any
 // number of segments, and a trailing `/` covers everything beneath.
@@ -121,7 +139,20 @@ func MatchPath(pattern, rel string) bool {
 	if strings.HasSuffix(pattern, "/") {
 		pattern += anyDepth
 	}
-	return matchSegments(strings.Split(pattern, "/"), strings.Split(rel, "/"))
+	return matchSegments(collapseAnyDepth(strings.Split(pattern, "/")), strings.Split(rel, "/"))
+}
+
+// collapseAnyDepth folds a run of `**` into one: they mean the same, and each
+// extra one multiplied the search (a 13-long run took seconds per file).
+func collapseAnyDepth(segs []string) []string {
+	out := segs[:0:0]
+	for _, s := range segs {
+		if s == anyDepth && len(out) > 0 && out[len(out)-1] == anyDepth {
+			continue
+		}
+		out = append(out, s)
+	}
+	return out
 }
 
 func matchSegments(pat, segs []string) bool {

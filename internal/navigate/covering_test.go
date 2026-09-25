@@ -3,7 +3,9 @@ package navigate_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/navigate"
@@ -162,4 +164,42 @@ func TestResolveCodeFile_AWorktreeUsesItsMainRepositorysRemote(t *testing.T) {
 
 	got := navigate.ResolveCodeFile(filepath.Join(wt, "a.go"))
 	assert.Equal(t, navigate.CodeFile{Rel: "a.go", Repo: "vaultmind"}, got)
+}
+
+// A run of ** is one **; unfolded, each extra one multiplied the search and a
+// pathological pattern took seconds per file.
+func TestMatchPath_ARunOfAnyDepthStaysFast(t *testing.T) {
+	pattern := strings.Repeat("**/", 20) + "nomatch.go"
+	rel := strings.Repeat("d/", 20) + "file.go"
+	start := time.Now()
+	assert.False(t, navigate.MatchPath(pattern, rel))
+	assert.Less(t, time.Since(start), 100*time.Millisecond)
+	assert.True(t, navigate.MatchPath("**/**/file.go", "a/b/file.go"))
+}
+
+// `vaultmind frontmatter set` writes a JSON array as a quoted string (#159);
+// such a paths value must still be read as the list it was meant to be.
+func TestCovering_ReadsAListWrittenAsAString(t *testing.T) {
+	db := coveringDB(t)
+	_, err := db.Exec(`INSERT INTO notes (id, path, title, type, body_text, hash, mtime) VALUES ('quoted', 'concepts/quoted.md', 'quoted', 'concept', 'Body.', 'h', 0)`)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO frontmatter_kv (note_id, key, value_json) VALUES ('quoted', 'paths', ?)`, `"[\"lib/q.go\"]"`)
+	require.NoError(t, err)
+
+	got, err := navigate.Covering(db, navigate.CodeFile{Rel: "lib/q.go", Repo: "x"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"quoted"}, ids(got))
+}
+
+// A path through a symlink names the same file as its target.
+func TestResolveCodeFile_FollowsSymlinks(t *testing.T) {
+	base := t.TempDir()
+	repo := filepath.Join(base, "real-repo")
+	require.NoError(t, os.MkdirAll(filepath.Join(repo, ".git"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "a.go"), []byte("x"), 0o600))
+	link := filepath.Join(base, "link")
+	require.NoError(t, os.Symlink(repo, link))
+
+	got := navigate.ResolveCodeFile(filepath.Join(link, "a.go"))
+	assert.Equal(t, navigate.CodeFile{Rel: "a.go", Repo: "real-repo"}, got)
 }
