@@ -127,6 +127,9 @@ fi
 # and then cut — piping tree into head would kill it mid-write. A binary older
 # than `tree` fails the call and the map is simply skipped.
 MAP_MAX_LINES="${VAULTMIND_MAP_MAX_LINES:-30}"
+# A cap that is not a positive number falls back to the default: awk compares a
+# non-numeric cap as a string ("1" <= "lots"), which silently lifts the cap.
+case "$MAP_MAX_LINES" in ''|*[!0-9]*|0) MAP_MAX_LINES=30 ;; esac
 if [ "$DOCTOR_RC" -eq 0 ]; then
   if [ -n "${VAULTMIND_VAULTS:-}" ]; then
     MAP_TARGET="--vaults $VAULTMIND_VAULTS"

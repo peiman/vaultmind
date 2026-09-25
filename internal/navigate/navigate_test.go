@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/navigate"
 	"github.com/peiman/vaultmind/internal/testvault"
 	"github.com/stretchr/testify/assert"
@@ -83,6 +84,37 @@ func TestOneLine_CapsALongSentence(t *testing.T) {
 	line := navigate.OneLine(strings.Repeat("word ", 80) + ".")
 	assert.LessOrEqual(t, len([]rune(line)), navigate.MaxLineRunes)
 	assert.True(t, strings.HasSuffix(line, "…"), "a cut line says it was cut")
+}
+
+// An abbreviation is not the end of a sentence: a line that stops at "e.g."
+// tells the reader nothing.
+func TestOneLine_DoesNotStopAtAnAbbreviation(t *testing.T) {
+	for body, want := range map[string]string{
+		"Spreading models, e.g. ACT-R, rank by activation. Second.": "Spreading models, e.g. ACT-R, rank by activation.",
+		"Work by Dr. Anderson on memory. Second.":                   "Work by Dr. Anderson on memory.",
+		"Compare recall vs. recognition here. Second.":              "Compare recall vs. recognition here.",
+		"Tulving, E. defined episodic memory. Second.":              "Tulving, E. defined episodic memory.",
+	} {
+		assert.Equal(t, want, navigate.OneLine(body), body)
+	}
+}
+
+// A folder whose name holds a LIKE wildcard must match only itself.
+func TestLoad_APathPrefixIsLiteral(t *testing.T) {
+	db, err := index.Open(filepath.Join(t.TempDir(), "index.db"))
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	for _, p := range []string{"a_b/x.md", "axb/y.md", "100%/z.md", "100x/w.md"} {
+		_, err := db.Exec(`INSERT INTO notes (id, path, title, type, body_text, hash, mtime) VALUES (?, ?, ?, 'note', '', 'h', 0)`, p, p, p)
+		require.NoError(t, err)
+	}
+
+	for prefix, want := range map[string]string{"a_b/": "a_b/x.md", "100%/": "100%/z.md"} {
+		notes, err := navigate.Load(db, navigate.Filter{PathPrefix: prefix})
+		require.NoError(t, err)
+		require.Len(t, notes, 1, "prefix %q must not match as a wildcard", prefix)
+		assert.Equal(t, want, notes[0].Path)
+	}
 }
 
 func TestLoad_ReadsTheIndexAndFilters(t *testing.T) {

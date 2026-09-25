@@ -60,6 +60,19 @@ func TestHealthMap_ALongMapIsCappedAndSaysHowToSeeTheRest(t *testing.T) {
 	assert.LessOrEqual(t, strings.Count(out, "folder-"), 40)
 }
 
+// A cap that is not a number falls back to the default. awk compared it as a
+// string ("1" <= "lots"), so the cap was silently ignored and a flat vault
+// flooded the session start.
+func TestHealthMap_ANonNumericCapFallsBackToTheDefault(t *testing.T) {
+	bin, _ := stubVaultmindWithTree(t, 200, 0)
+
+	out, _ := runHealthHook(t, projectWithVault(t), bin, "VAULTMIND_MAP_MAX_LINES=lots")
+
+	assert.Contains(t, out, "folder-1/ (3)", "the map must still be shown")
+	assert.NotContains(t, out, "folder-150/", "and still be capped")
+	assert.Contains(t, out, "more lines")
+}
+
 func TestHealthMap_AnOlderBinaryWithoutTreeSkipsTheMap(t *testing.T) {
 	bin, _ := stubVaultmindWithTree(t, 4, 1)
 

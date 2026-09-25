@@ -197,16 +197,38 @@ func OneLine(body string) string {
 	return text
 }
 
+// abbreviations end in a period without ending a sentence. Lowercased, without
+// the final period.
+var abbreviations = map[string]bool{
+	"e.g": true, "i.e": true, "etc": true, "vs": true, "cf": true, "al": true,
+	"dr": true, "mr": true, "mrs": true, "ms": true, "prof": true, "fig": true, "no": true,
+}
+
 // firstSentence returns text up to and including its first sentence end
-// (". ", "! ", "? " or the end of the text).
+// (". ", "! ", "? " or the end of the text). A period after an abbreviation
+// or a single initial ("E.") does not end the sentence.
 func firstSentence(text string) string {
 	for i := 0; i+1 < len(text); i++ {
 		switch text[i] {
-		case '.', '!', '?':
+		case '!', '?':
 			if text[i+1] == ' ' {
+				return text[:i+1]
+			}
+		case '.':
+			if text[i+1] == ' ' && !isAbbreviation(text[:i]) {
 				return text[:i+1]
 			}
 		}
 	}
 	return text
+}
+
+// isAbbreviation reports whether the word just before a period is an
+// abbreviation or a single-letter initial.
+func isAbbreviation(before string) bool {
+	word := before[strings.LastIndexAny(before, " (")+1:]
+	if len([]rune(word)) == 1 {
+		return true
+	}
+	return abbreviations[strings.ToLower(word)]
 }
