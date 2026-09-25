@@ -109,11 +109,72 @@ fi
 # builds, status checks — the vast majority of calls, where a pointer block
 # would be pure noise.
 QUERY=""
+
+# A commit is asked about by its own subject line. A fixed sentence returned
+# the same notes before every commit, and a note seen eight times a day stops
+# being read (measured 2026-09-25). Only a real `git commit` counts — the words
+# inside a grep or an echo used to fire too. Prints nothing for no commit, "-"
+# for a commit whose message is not on the command line, else the subject
+# without its conventional-commit prefix.
+COMMIT_SUBJECT=""
 case "$CMD" in
-  *"git commit"*)              QUERY="committing work: what do I know about commit discipline, atomic commits, and verifying before claiming done" ;;
-  *"git push"*|*"gh pr merge"*) QUERY="pushing or merging: publication is a one-way gate, review before merge, my authority to decide" ;;
-  *"gh pr comment"*|*"gh pr review"*) QUERY="reviewing someone else's work: how I review, what I look for, holding a standard" ;;
+  *git*commit*)
+    COMMIT_SUBJECT=$(python3 -c "$(cat <<'PY'
+import re, shlex, sys
+try:
+    lex = shlex.shlex(sys.argv[1], posix=True, punctuation_chars=True)
+    lex.whitespace_split = True
+    toks = list(lex)
+except ValueError:
+    sys.exit(0)
+segments, cur = [], []
+for t in toks:
+    if t and set(t) <= set(";&|()"):
+        segments.append(cur)
+        cur = []
+    else:
+        cur.append(t)
+segments.append(cur)
+for argv in segments:
+    while argv and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", argv[0]):
+        argv = argv[1:]
+    if not argv or argv[0] != "git":
+        continue
+    rest = argv[1:]
+    while len(rest) > 1 and rest[0] in ("-C", "-c"):
+        rest = rest[2:]
+    if not rest or rest[0] != "commit":
+        continue
+    args, msg = rest[1:], None
+    for i, a in enumerate(args):
+        if a.startswith("--message="):
+            msg = a.split("=", 1)[1]
+        elif a == "--message" or (a.startswith("-") and not a.startswith("--") and a.endswith("m")):
+            msg = args[i + 1] if i + 1 < len(args) else None
+        if msg is not None:
+            break
+    lines = [l.strip() for l in (msg or "").splitlines() if l.strip()]
+    if lines and lines[0].startswith("$(cat <<"):
+        lines = lines[1:]
+    subject = re.sub(r"^[a-z]+(\([^)]*\))?!?:\s*", "", lines[0]) if lines else ""
+    print(subject or "-")
+    sys.exit(0)
+PY
+)" "$CMD" 2>/dev/null)
+    ;;
 esac
+case "$COMMIT_SUBJECT" in
+  "")  ;;
+  "-") QUERY="committing work: what do I know about commit discipline, atomic commits, and verifying before claiming done" ;;
+  *)   QUERY="committing: $COMMIT_SUBJECT — what do I already know about this" ;;
+esac
+
+if [ -z "$QUERY" ]; then
+  case "$CMD" in
+    *"git push"*|*"gh pr merge"*) QUERY="pushing or merging: publication is a one-way gate, review before merge, my authority to decide" ;;
+    *"gh pr comment"*|*"gh pr review"*) QUERY="reviewing someone else's work: how I review, what I look for, holding a standard" ;;
+  esac
+fi
 
 # A write aimed at the identity vault itself, whatever it is called. This used
 # to fire on any command that merely NAMED the vault — every read, every
