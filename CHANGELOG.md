@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A very long session id no longer loses the persona sidecar record.** The
+  id in the file name is capped, so the name stays under the filesystem's
+  255-byte limit; the write used to fail silently past about 200 characters.
+
 ## [0.9.7] - 2026-09-25
 
 > Refresh hooks with `vaultmind hooks install <project> --merge --force`.
