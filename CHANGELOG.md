@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`vaultmind tree` — the map of a vault.** Every folder with its note count,
+  every note as `Title (id) — what it is about` (the first sentence of its
+  Principle section or opening prose). `--depth 1` gives an overview of a large
+  vault; `--path` and `--type` narrow it; `--brief` drops the lines; `--vaults`
+  maps several; `--json` carries the whole map. Until now an agent could only
+  search, which needs a question already formed.
+- **The session starts with the map.** The health hook now shows
+  `tree --depth 1` for the project's vault — or every vault in
+  `VAULTMIND_VAULTS` — after the health line, capped at 30 lines
+  (`VAULTMIND_MAP_MAX_LINES`), with how to open a note and list a folder.
+  Refresh hooks to get it; a binary without `tree` skips the map.
+
 ## [0.9.8] - 2026-09-25
 
 > **Security release — upgrade and refresh your hooks:**

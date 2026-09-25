@@ -273,6 +273,13 @@ const (
 	KeyAppSearchMode                         = "app.search.mode"                          // Search mode: keyword, semantic, or hybrid
 	KeyAppSelfVault                          = "app.self.vault"                           // Path to vault root
 	KeyAppSelfLimit                          = "app.self.limit"                           // Max rows per section (recent/hot/stale)
+	KeyAppTreeVault                          = "app.tree.vault"                           // Path to vault root
+	KeyAppTreeVaults                         = "app.tree.vaults"                          // Map several vaults, comma-separated (overrides --vault)
+	KeyAppTreeJson                           = "app.tree.json"                            // Output in JSON format
+	KeyAppTreePath                           = "app.tree.path"                            // Only notes under this folder (path prefix, e.g. decisions/)
+	KeyAppTreeType                           = "app.tree.type"                            // Only notes of this type
+	KeyAppTreeDepth                          = "app.tree.depth"                           // Folder levels to list; deeper folders fold into counts (0 = all)
+	KeyAppTreeBrief                          = "app.tree.brief"                           // Titles and ids only, without the one-line descriptions
 	KeyAppVaultstatusVault                   = "app.vaultstatus.vault"                    // Path to vault root
 	KeyAppVaultstatusJson                    = "app.vaultstatus.json"                     // Output in JSON format
 )

@@ -22,6 +22,7 @@ Generated from the command tree — do not edit by hand (run `task generate:docs
 | `vaultmind resolve` | Resolve a fragment, alias, title, or path to canonical note IDs | you have a fragment, alias, title, or path and need the canonical note ID. |
 | `vaultmind search` | Search vault notes by keyword, semantic similarity, or both | you want a ranked list of hits to browse and pick from, without packed context. |
 | `vaultmind self` | Show your memory state — recent, hot, and stale notes | you want to see your own memory state — recent, hot, and stale notes. |
+| `vaultmind tree` | Show what a vault holds — folders, counts, one line per note | you need to see what a vault holds before you know what to ask — folders, counts, one line per note. |
 
 ## Vault maintenance:
 

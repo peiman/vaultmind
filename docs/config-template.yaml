@@ -853,6 +853,28 @@ app:
     # Max rows per section (recent/hot/stale)
     limit: 10
 
+  tree:
+    # Path to vault root
+    vault: .
+
+    # Map several vaults, comma-separated (overrides --vault)
+    vaults: 
+
+    # Output in JSON format
+    json: false
+
+    # Only notes under this folder (path prefix, e.g. decisions/)
+    path: 
+
+    # Only notes of this type
+    type: 
+
+    # Folder levels to list; deeper folders fold into counts (0 = all)
+    depth: 0
+
+    # Titles and ids only, without the one-line descriptions
+    brief: false
+
   vaultstatus:
     # Path to vault root
     vault: .
