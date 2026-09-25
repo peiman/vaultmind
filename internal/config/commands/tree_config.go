@@ -13,10 +13,14 @@ var TreeMetadata = config.CommandMetadata{
 		"Search needs a question already formed; the map shows what is there to ask about. " +
 		"Start a large vault with --depth 1 (folders and counts), then narrow with --path " +
 		"or --type.\n\n" +
+		"A note names the code it is about with `paths:` in its frontmatter — globs relative " +
+		"to the repository root (`internal/hooks/**`, `cmd/*.go`), with `repo:` in front for " +
+		"code in another repository. --for <file> lists the notes that cover that file.\n\n" +
 		"  vaultmind tree --vault ./vaultmind-vault --depth 1\n" +
 		"  vaultmind tree --vault ./vaultmind-vault --path decisions/\n" +
 		"  vaultmind tree --vault ./vaultmind-vault --type concept --brief\n" +
 		"  vaultmind tree --vaults ./vaultmind-vault,./docs-vault --depth 1\n" +
+		"  vaultmind tree --vault ./vaultmind-vault --for internal/hooks/merge.go\n" +
 		"  vaultmind tree --vault ./vaultmind-vault --json",
 	ConfigPrefix: "app.tree",
 	FlagOverrides: map[string]string{
@@ -27,6 +31,7 @@ var TreeMetadata = config.CommandMetadata{
 		"app.tree.type":   "type",
 		"app.tree.depth":  "depth",
 		"app.tree.brief":  "brief",
+		"app.tree.for":    "for",
 	},
 }
 
@@ -40,6 +45,7 @@ func TreeOptions() []config.ConfigOption {
 		{Key: "app.tree.type", DefaultValue: "", Description: "Only notes of this type", Type: "string"},
 		{Key: "app.tree.depth", DefaultValue: 0, Description: "Folder levels to list; deeper folders fold into counts (0 = all)", Type: "int"},
 		{Key: "app.tree.brief", DefaultValue: false, Description: "Titles and ids only, without the one-line descriptions", Type: "bool"},
+		{Key: "app.tree.for", DefaultValue: "", Description: "Only the notes whose paths: frontmatter covers this code file", Type: "string"},
 	}
 }
 

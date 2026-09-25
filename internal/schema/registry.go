@@ -42,10 +42,14 @@ var coreFields = []string{"id", "type"}
 // became orphaned ceremony and was retired entirely. Same truth-
 // seeking lens that drove the original schema rescope, applied
 // recursively.
+//
+// `paths` names the code a note is about (globs relative to the repository
+// root, `repo:` for another repository). Consumer: `vaultmind tree --for` and
+// the hook that surfaces a note when its code is read or edited.
 var recognizedFields = []string{
 	"title", "status", "aliases", "tags",
 	"parent_id", "related_ids", "source_ids",
-	"created", "updated",
+	"created", "updated", "paths",
 }
 
 // CreatedDateFormat is the canonical format for the `created` field —

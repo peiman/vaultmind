@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `VAULTMIND_VAULTS` — after the health line, capped at 30 lines
   (`VAULTMIND_MAP_MAX_LINES`), with how to open a note and list a folder.
   Refresh hooks to get it; a binary without `tree` skips the map.
+- **Notes can say which code they are about.** A `paths:` frontmatter field
+  holds globs relative to the repository root (`internal/hooks/**`,
+  `cmd/*.go`, a trailing `/` for a folder), with `repo:` in front for code in
+  another repository. `vaultmind tree --for <file>` lists the notes that
+  cover that file.
 
 ## [0.9.8] - 2026-09-25
 

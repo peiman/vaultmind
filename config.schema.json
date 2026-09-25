@@ -1739,6 +1739,11 @@
               "description": "Folder levels to list; deeper folders fold into counts (0 = all)",
               "type": "integer"
             },
+            "for": {
+              "default": "",
+              "description": "Only the notes whose paths: frontmatter covers this code file",
+              "type": "string"
+            },
             "json": {
               "default": false,
               "description": "Output in JSON format",

@@ -290,6 +290,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.tree.type` | string | `` | `VAULTMIND_APP_TREE_TYPE` | Only notes of this type |
 | `app.tree.depth` | int | `0` | `VAULTMIND_APP_TREE_DEPTH` | Folder levels to list; deeper folders fold into counts (0 = all) |
 | `app.tree.brief` | bool | `false` | `VAULTMIND_APP_TREE_BRIEF` | Titles and ids only, without the one-line descriptions |
+| `app.tree.for` | string | `` | `VAULTMIND_APP_TREE_FOR` | Only the notes whose paths: frontmatter covers this code file |
 | `app.vaultstatus.vault` | string | `.` | `VAULTMIND_APP_VAULTSTATUS_VAULT` | Path to vault root |
 | `app.vaultstatus.json` | bool | `false` | `VAULTMIND_APP_VAULTSTATUS_JSON` | Output in JSON format |
 
@@ -1175,6 +1176,9 @@ app:
     # Titles and ids only, without the one-line descriptions
     brief: false
 
+    # Only the notes whose paths: frontmatter covers this code file
+    for: 
+
   vaultstatus:
     # Path to vault root
     vault: .
@@ -2022,6 +2026,9 @@ export VAULTMIND_APP_TREE_DEPTH=0
 
 # Titles and ids only, without the one-line descriptions
 export VAULTMIND_APP_TREE_BRIEF=false
+
+# Only the notes whose paths: frontmatter covers this code file
+export VAULTMIND_APP_TREE_FOR=
 
 # Path to vault root
 export VAULTMIND_APP_VAULTSTATUS_VAULT=.

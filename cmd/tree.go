@@ -29,9 +29,17 @@ type treeVault struct {
 	Root  *navigate.Dir `json:"root"`
 }
 
-// treeResult is the JSON result: one map per vault.
+// treeResult is the JSON result: one map per vault. For is the file the map
+// was narrowed to (repo:path), when --for was given.
 type treeResult struct {
+	For    string      `json:"for,omitempty"`
 	Vaults []treeVault `json:"vaults"`
+}
+
+// treeQuery is what to map: a filtered vault, or the notes covering one file.
+type treeQuery struct {
+	filter  navigate.Filter
+	forFile *navigate.CodeFile
 }
 
 func runTree(cmd *cobra.Command, _ []string) error {
@@ -39,13 +47,10 @@ func runTree(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	filter := navigate.Filter{
-		PathPrefix: getConfigValueWithFlags[string](cmd, "path", config.KeyAppTreePath),
-		Type:       getConfigValueWithFlags[string](cmd, "type", config.KeyAppTreeType),
-	}
-	var result treeResult
+	q := treeQueryFromFlags(cmd)
+	result := treeResult{For: q.label()}
 	for _, p := range paths {
-		m, err := loadTreeVault(cmd, p, filter)
+		m, err := loadTreeVault(cmd, p, q)
 		if err != nil {
 			return err
 		}
@@ -58,6 +63,30 @@ func runTree(cmd *cobra.Command, _ []string) error {
 		Depth: getConfigValueWithFlags[int](cmd, "depth", config.KeyAppTreeDepth),
 		Brief: getConfigValueWithFlags[bool](cmd, "brief", config.KeyAppTreeBrief),
 	})
+}
+
+func treeQueryFromFlags(cmd *cobra.Command) treeQuery {
+	q := treeQuery{filter: navigate.Filter{
+		PathPrefix: getConfigValueWithFlags[string](cmd, "path", config.KeyAppTreePath),
+		Type:       getConfigValueWithFlags[string](cmd, "type", config.KeyAppTreeType),
+	}}
+	if file := getConfigValueWithFlags[string](cmd, "for", config.KeyAppTreeFor); file != "" {
+		f := navigate.ResolveCodeFile(file)
+		q.forFile = &f
+	}
+	return q
+}
+
+// label names the --for file the way paths: sees it: repo:path, or the path
+// alone outside a repository.
+func (q treeQuery) label() string {
+	if q.forFile == nil {
+		return ""
+	}
+	if q.forFile.Repo == "" {
+		return q.forFile.Rel
+	}
+	return q.forFile.Repo + ":" + q.forFile.Rel
 }
 
 // treeVaultPaths is --vaults when given (each must already be a vault), else --vault.
@@ -76,13 +105,18 @@ func treeVaultPaths(cmd *cobra.Command) ([]string, error) {
 	return paths, nil
 }
 
-func loadTreeVault(cmd *cobra.Command, vaultPath string, filter navigate.Filter) (treeVault, error) {
+func loadTreeVault(cmd *cobra.Command, vaultPath string, q treeQuery) (treeVault, error) {
 	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, treeEnvelope)
 	if err != nil {
 		return treeVault{}, err
 	}
 	defer vdb.Close()
-	notes, err := navigate.Load(vdb.DB, filter)
+	var notes []navigate.Note
+	if q.forFile != nil {
+		notes, err = navigate.Covering(vdb.DB, *q.forFile)
+	} else {
+		notes, err = navigate.Load(vdb.DB, q.filter)
+	}
 	if err != nil {
 		return treeVault{}, err
 	}
@@ -97,11 +131,11 @@ func writeTree(w io.Writer, result treeResult, o navigate.RenderOptions) error {
 				return err
 			}
 		}
-		if _, err := fmt.Fprintf(w, "%s — %d notes\n", v.Vault, v.Total); err != nil {
+		if _, err := fmt.Fprintln(w, treeHeader(v, result.For)); err != nil {
 			return err
 		}
 		if v.Total == 0 {
-			if _, err := fmt.Fprintln(w, "  No notes match. If the vault has notes, it may not be indexed: vaultmind index --vault "+v.Vault); err != nil {
+			if _, err := fmt.Fprintln(w, treeEmpty(v, result.For)); err != nil {
 				return err
 			}
 			continue
@@ -111,4 +145,18 @@ func writeTree(w io.Writer, result treeResult, o navigate.RenderOptions) error {
 		}
 	}
 	return nil
+}
+
+func treeHeader(v treeVault, forLabel string) string {
+	if forLabel != "" {
+		return fmt.Sprintf("%s — %d notes about %s", v.Vault, v.Total, forLabel)
+	}
+	return fmt.Sprintf("%s — %d notes", v.Vault, v.Total)
+}
+
+func treeEmpty(v treeVault, forLabel string) string {
+	if forLabel != "" {
+		return "  No notes cover " + forLabel + ". A note names the code it is about with paths: in its frontmatter."
+	}
+	return "  No notes match. If the vault has notes, it may not be indexed: vaultmind index --vault " + v.Vault
 }

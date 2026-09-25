@@ -875,6 +875,9 @@ app:
     # Titles and ids only, without the one-line descriptions
     brief: false
 
+    # Only the notes whose paths: frontmatter covers this code file
+    for: 
+
   vaultstatus:
     # Path to vault root
     vault: .
