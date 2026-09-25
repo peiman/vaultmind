@@ -30,7 +30,72 @@ VAULT_PATH="${LOAD_PERSONA_VAULT:-${VAULTMIND_VAULT:-$PROJECT_DIR/vaultmind-iden
 LOG_DIR="${HOME}/.vaultmind/persona-eval"
 mkdir -p "$LOG_DIR" 2>/dev/null
 TIMESTAMP=$(date +%Y%m%dT%H%M%S)
-HOOK_VERSION="v5-self-state"
+HOOK_VERSION="v6-persona-mode"
+
+# Persona mode — how the identity reaches the agent:
+#   served    (default) the identity, the arc layer and the current context are
+#             queried here and handed over as text.
+#   explore   nothing is handed over. The agent is told where its vaults are and
+#             asked to go and look before it answers: remembering by looking,
+#             not by being told.
+#   alternate each session gets one of the two, split by session id, so the
+#             arms can be compared on real sessions. The split is a function of
+#             the id, so a compaction keeps the session in the arm it started in.
+# The arm is recorded in the sidecar log (persona_mode) for measurement.
+PERSONA_MODE="${VAULTMIND_PERSONA_MODE:-served}"
+case "$PERSONA_MODE" in
+  served|explore) ;;
+  alternate)
+    if [ -n "$HOOK_SESSION_ID" ] && [ $(( $(printf '%s' "$HOOK_SESSION_ID" | cksum | cut -d' ' -f1) % 2 )) = 1 ]; then
+      PERSONA_MODE=explore
+    else
+      PERSONA_MODE=served
+    fi
+    ;;
+  *)
+    echo "VAULTMIND_PERSONA_MODE=$PERSONA_MODE is not served, explore or alternate — serving the identity" >&2
+    PERSONA_MODE=served
+    ;;
+esac
+
+if [ "$PERSONA_MODE" = explore ] && [ -d "$VAULT_PATH" ]; then
+  # Places to look: the identity vault first, then every vault the project
+  # names in VAULTMIND_VAULTS (the same list the reach and recall hooks use),
+  # else the research vault when it exists.
+  EXPLORE_VAULTS="$VAULT_PATH"
+  if [ -n "${VAULTMIND_VAULTS:-}" ]; then
+    EXTRA_VAULTS=$(printf '%s' "$VAULTMIND_VAULTS" | tr ',' '\n')
+  else
+    EXTRA_VAULTS="${LOAD_PERSONA_RESEARCH_VAULT:-$PROJECT_DIR/vaultmind-vault}"
+  fi
+  while IFS= read -r v; do
+    v="${v%/}"
+    [ -n "$v" ] && [ -d "$v" ] && [ "$v" != "${VAULT_PATH%/}" ] && EXPLORE_VAULTS="$EXPLORE_VAULTS
+$v"
+  done <<< "$EXTRA_VAULTS"
+
+  echo "IDENTITY — EXPLORE:"
+  echo ""
+  echo "Who you are is not in this message. It is in your vault: your arcs (the"
+  echo "moments that changed how you work), your principles, and what matters right"
+  echo "now. You remember it by looking, not by being told. Be curious: before your"
+  echo "first answer, go and find yourself, and follow what you find to whatever"
+  echo "bears on what you are asked. Reflect on it, then answer."
+  echo ""
+  echo "Your vaults (identity first):"
+  printf '%s\n' "$EXPLORE_VAULTS" | sed 's/^/  /'
+  echo ""
+  echo "Ways in:"
+  echo "  vaultmind arc recite --vault $VAULT_PATH     every arc, by its principle"
+  echo "  vaultmind ask \"<question>\" --vault <vault>"
+  echo "  vaultmind search \"<words>\" --vault <vault>"
+  echo "  vaultmind note get <id> --vault <vault>"
+
+  printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","persona_mode":"explore","vault_path":"%s","injection_success":true}\n' \
+    "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$VAULT_PATH" \
+    > "$LOG_DIR/${TIMESTAMP}-injection.json" 2>/dev/null
+  exit 0
+fi
 
 # Resolve the vaultmind binary:
 #
@@ -189,18 +254,18 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
     fi
 
     # Sidecar log — write injection manifest (agent never sees this)
-    printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","vault_path":"%s","identity_length":%d,"context_length":%d,"self_identity_length":%d,"self_research_length":%d,"injection_success":true}\n' \
+    printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","persona_mode":"served","vault_path":"%s","identity_length":%d,"context_length":%d,"self_identity_length":%d,"self_research_length":%d,"injection_success":true}\n' \
       "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$VAULT_PATH" "${#IDENTITY}" "${#CONTEXT}" "${#SELF_IDENTITY}" "${#SELF_RESEARCH}" \
       > "$LOG_DIR/${TIMESTAMP}-injection.json" 2>/dev/null
   else
     # Hook fired but injection was empty — log the failure
-    printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","vault_path":"%s","identity_length":0,"context_length":0,"injection_success":false}\n' \
+    printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","persona_mode":"served","vault_path":"%s","identity_length":0,"context_length":0,"injection_success":false}\n' \
       "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$VAULT_PATH" \
       > "$LOG_DIR/${TIMESTAMP}-injection.json" 2>/dev/null
   fi
 else
   # Hook fired but vaultmind binary or vault missing — log infrastructure failure
-  printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","vault_path":"%s","identity_length":0,"context_length":0,"injection_success":false,"error":"binary_or_vault_missing"}\n' \
+  printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","persona_mode":"served","vault_path":"%s","identity_length":0,"context_length":0,"injection_success":false,"error":"binary_or_vault_missing"}\n' \
     "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$VAULT_PATH" \
     > "$LOG_DIR/${TIMESTAMP}-injection.json" 2>/dev/null
 fi
