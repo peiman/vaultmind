@@ -90,7 +90,8 @@ func coversAny(patterns []string, f CodeFile) bool {
 const gitMarker = ".git"
 
 // ResolveCodeFile names a file the way `paths:` does: relative to the nearest
-// enclosing repository root, and the repository by that root's folder name.
+// enclosing repository root, and the repository by its origin remote (the
+// root's folder name when it has none).
 // Outside a repository the Rel is the file name alone and Repo is empty.
 func ResolveCodeFile(file string) CodeFile {
 	abs, err := filepath.Abs(file)
@@ -103,7 +104,7 @@ func ResolveCodeFile(file string) CodeFile {
 			if relErr != nil {
 				break
 			}
-			return CodeFile{Rel: filepath.ToSlash(rel), Repo: filepath.Base(dir)}
+			return CodeFile{Rel: filepath.ToSlash(rel), Repo: repoName(dir)}
 		}
 		if dir == filepath.Dir(dir) {
 			break

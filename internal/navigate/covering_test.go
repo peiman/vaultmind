@@ -134,3 +134,32 @@ func TestResolveCodeFile_OutsideARepoHasNoRepo(t *testing.T) {
 	assert.Equal(t, "", got.Repo)
 	assert.Equal(t, "loose.go", got.Rel, "the file name alone, so only bare patterns can match")
 }
+
+// The repository is named by its origin remote, not by the folder it happens
+// to be cloned into: the same repo is "vaultmind-oss" on one machine and
+// "vaultmind" on another, and a `repo:` prefix must mean the same on both.
+func TestResolveCodeFile_NamesTheRepoByItsOriginRemote(t *testing.T) {
+	repo := filepath.Join(t.TempDir(), "local-folder-name")
+	require.NoError(t, os.MkdirAll(filepath.Join(repo, ".git"), 0o750))
+	config := "[core]\n\tbare = false\n[remote \"upstream\"]\n\turl = git@github.com:someone/other.git\n" +
+		"[remote \"origin\"]\n\turl = git@github.com:peiman/vaultmind.git\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n"
+	require.NoError(t, os.WriteFile(filepath.Join(repo, ".git", "config"), []byte(config), 0o600))
+
+	got := navigate.ResolveCodeFile(filepath.Join(repo, "cmd", "tree.go"))
+	assert.Equal(t, navigate.CodeFile{Rel: "cmd/tree.go", Repo: "vaultmind"}, got)
+}
+
+func TestResolveCodeFile_AWorktreeUsesItsMainRepositorysRemote(t *testing.T) {
+	base := t.TempDir()
+	main := filepath.Join(base, "main-clone")
+	require.NoError(t, os.MkdirAll(filepath.Join(main, ".git", "worktrees", "feature"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(main, ".git", "config"),
+		[]byte("[remote \"origin\"]\n\turl = https://github.com/peiman/vaultmind\n"), 0o600))
+	wt := filepath.Join(base, "feature-worktree")
+	require.NoError(t, os.MkdirAll(wt, 0o750))
+	gitdir := filepath.Join(main, ".git", "worktrees", "feature")
+	require.NoError(t, os.WriteFile(filepath.Join(wt, ".git"), []byte("gitdir: "+gitdir+"\n"), 0o600))
+
+	got := navigate.ResolveCodeFile(filepath.Join(wt, "a.go"))
+	assert.Equal(t, navigate.CodeFile{Rel: "a.go", Repo: "vaultmind"}, got)
+}

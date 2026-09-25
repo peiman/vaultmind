@@ -23,8 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Notes can say which code they are about.** A `paths:` frontmatter field
   holds globs relative to the repository root (`internal/hooks/**`,
   `cmd/*.go`, a trailing `/` for a folder), with `repo:` in front for code in
-  another repository. `vaultmind tree --for <file>` lists the notes that
-  cover that file.
+  another repository — named by its `origin` remote (`vaultmind` for
+  github.com/peiman/vaultmind, whatever folder it is cloned into; the folder
+  name when there is no remote). `vaultmind tree --for <file>` lists the notes
+  that cover that file.
 - **The knowledge about a file arrives when the file is opened.** A new hook,
   `vault-code-map.sh` (PreToolUse on Read, Edit, Write and MultiEdit), shows
   the notes that cover the file as a short map — title, id, one line — once
