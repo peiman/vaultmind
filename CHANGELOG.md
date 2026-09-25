@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **The reach hook no longer approves the commands it fires on.** It returned
+  `permissionDecision: "allow"`, which in Claude Code lets a tool run without
+  the permission prompt your settings would show — so every `git commit`,
+  `git push`, `gh pr merge`, `gh pr review` and vault write it added notes to
+  was auto-approved. It now adds its notes and leaves the decision to your
+  settings. A drift-catalog entry with `"decision": "allow"` in
+  `auto-rag-guard` had the same effect; it now suppresses the signature by
+  staying silent. Upgrade and refresh your hooks.
+
 ### Changed
 
 - **Before a commit, the reach hook asks about that commit.** It searches the
