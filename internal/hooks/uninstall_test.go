@@ -40,11 +40,11 @@ func TestRemoveStanza_RemovesOnlyOurEntries(t *testing.T) {
 
 	// Reported removals name our canonical scripts: both SessionStart entries
 	// (persona loader and health nudge), recall, read-tracking, the reach
-	// pointers, the PreCompact write-path trigger, and episode capture.
+	// pointers, the code map, the PreCompact write-path trigger, and episode capture.
 	assert.ElementsMatch(t,
 		[]string{
 			hookSessionStartScript, hookHealthScript, hookUserPromptSubmitScript,
-			hookPreToolUseScript, hookReachScript, hookPreCompactScript, hookSessionEndScript,
+			hookPreToolUseScript, hookReachScript, hookCodeMapScript, hookPreCompactScript, hookSessionEndScript,
 		},
 		removed)
 

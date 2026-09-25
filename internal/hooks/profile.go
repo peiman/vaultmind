@@ -61,6 +61,7 @@ var knowledgeScripts = map[string]bool{
 	hookUserPromptSubmitScript: true,
 	hookPreToolUseScript:       true,
 	hookReachScript:            true,
+	hookCodeMapScript:          true,
 	hookPreCompactScript:       true,
 }
 

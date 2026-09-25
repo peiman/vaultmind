@@ -31,7 +31,7 @@ func TestBuildHooksObject_EveryCanonicalEventIsMapped(t *testing.T) {
 
 	assert.Len(t, obj.SessionStart, 2, "persona loader and health nudge")
 	assert.Len(t, obj.UserPromptSubmit, 1)
-	assert.Len(t, obj.PreToolUse, 2, "read-tracking and reach-pointers")
+	assert.Len(t, obj.PreToolUse, 3, "read-tracking, reach-pointers and the code map")
 	assert.Len(t, obj.PreCompact, 1, "the write-path trigger")
 	assert.Len(t, obj.SessionEnd, 1)
 }
