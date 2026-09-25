@@ -50,11 +50,18 @@ const profileFilename = "vaultmind-profile"
 // knowledgeScripts is the knowledge profile's set. Written as an explicit
 // allowlist rather than "full minus persona" so adding a canonical script
 // later cannot silently enrol every knowledge vault into running it.
+//
+// PreCompact belongs here: a knowledge vault loses findings at compaction too
+// (focalc's measured complaint: "73 notes, none cover a day of findings"), and
+// it prompts for an entry in the vault's journal/. Leaving it out made a
+// knowledge-profile install remove a PreCompact hook focalc had wired on
+// purpose.
 var knowledgeScripts = map[string]bool{
 	hookHealthScript:           true,
 	hookUserPromptSubmitScript: true,
 	hookPreToolUseScript:       true,
 	hookReachScript:            true,
+	hookPreCompactScript:       true,
 }
 
 // personaScripts is everything canonical except the mesh watcher.

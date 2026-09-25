@@ -34,6 +34,9 @@ type MergeFileResult struct {
 	// Merged is the post-merge file content — populated so a caller can show a
 	// dry-run preview or diff. Equal to the on-disk content after a real write.
 	Merged string `json:"merged,omitempty"`
+	// Removed names our hooks taken out because they fall outside the
+	// profile being installed (sorted, unique; empty when none).
+	Removed []string `json:"removed,omitempty"`
 }
 
 // MergeIntoSettings reads the target hook-config file (creating none if it is
@@ -69,16 +72,33 @@ func MergeIntoSettingsForProfile(projectDir, vaultPath string, vaults []string, 
 		allowed[n] = true
 	}
 	var wanted []canonicalHook
+	var outside []string
 	for _, ch := range canonicalHooksFor(vaultPath, vaults) {
 		if allowed[ch.Script] {
 			wanted = append(wanted, ch)
+		} else {
+			outside = append(outside, ch.Script)
 		}
 	}
 	merged, changed, err := mergeHooks(existing, wanted)
 	if err != nil {
 		return nil, fmt.Errorf("merging into %s: %w", path, err)
 	}
-	res := &MergeFileResult{SettingsPath: path, Changed: changed, DryRun: dryRun, Merged: string(merged)}
+	// A narrower profile also takes out our own hooks that fall outside it:
+	// merging only ever added, so a project wired full (as 0.9.4's upgrade
+	// note did to knowledge projects) kept running a persona after the
+	// corrected command.
+	var removed []string
+	if len(outside) > 0 {
+		trimmed, names, rerr := removeOurGroupsOutside(merged, outside)
+		if rerr != nil {
+			return nil, fmt.Errorf("removing hooks outside the %s profile from %s: %w", p, path, rerr)
+		}
+		if len(names) > 0 {
+			merged, removed, changed = trimmed, names, true
+		}
+	}
+	res := &MergeFileResult{SettingsPath: path, Changed: changed, DryRun: dryRun, Merged: string(merged), Removed: removed}
 	if dryRun || !changed {
 		return res, nil
 	}

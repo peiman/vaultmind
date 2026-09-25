@@ -22,6 +22,11 @@ const (
 	// release installed, so it misses tools it now needs to see (the reach hook
 	// on "Bash" cannot see Edit or Write). `hooks install --merge` upgrades it.
 	EventStaleMatcher EventState = "stale_matcher"
+	// EventOutsideProfile — the project runs one of our hooks that its declared
+	// profile excludes (a persona loader in a knowledge project). It runs a
+	// script the profile chose not to have; `hooks install --profile <p>
+	// --merge` removes it.
+	EventOutsideProfile EventState = "outside_profile"
 )
 
 // EventStatus is one canonical event→script pair and whether it is live.
@@ -84,8 +89,18 @@ func eventWiringForProfile(projectDir string, p Profile) []EventStatus {
 	// is reporting a choice as a defect.
 	expected := EventScriptsForProfile(p)
 	out := make([]EventStatus, 0, len(expected))
+	inProfile := map[EventScript]bool{}
 	for _, c := range expected {
+		inProfile[c] = true
 		out = append(out, EventStatus{Event: c.Event, Script: c.Script, State: stateOf(c.Event, c.Script)})
+	}
+	// And the other direction: one of our hooks wired that the profile
+	// excludes. Without this a knowledge project running a persona loader
+	// reported healthy — the profile was only ever read as "what to expect".
+	for _, c := range CanonicalEventScripts() {
+		if !inProfile[c] && stateOf(c.Event, c.Script) != EventUnwired {
+			out = append(out, EventStatus{Event: c.Event, Script: c.Script, State: EventOutsideProfile})
+		}
 	}
 	return out
 }

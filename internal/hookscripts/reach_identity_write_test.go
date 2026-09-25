@@ -75,7 +75,7 @@ func TestReachHook_WritingToTheIdentityVaultFromTheShellFires(t *testing.T) {
 		"vaultmind frontmatter set arc-x title Y --vault vaultmind-identity",
 		// Writes that no longer name the vault in the writing segment (review, 2026-09-25).
 		"cd vaultmind-identity && rm arcs/x.md",
-		"cd /abs/vaultmind-identity && git add arcs/x.md",
+		"cd " + filepath.Join(h.projectDir, "vaultmind-identity") + " && git add arcs/x.md",
 		"(cd vaultmind-identity && echo x > arcs/x.md)",
 		"git -C vaultmind-identity add .",
 		// Prefixed and wrapped commands.

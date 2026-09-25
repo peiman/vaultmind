@@ -68,9 +68,14 @@ func (h hookEnv) env(withTimeout bool) []string {
 
 func runHookScript(t *testing.T, name string, env []string, stdin string) (string, time.Duration) {
 	t.Helper()
-	bashPath, err := exec.LookPath("bash")
-	if err != nil {
-		t.Skip("bash not available")
+	// Prefer /bin/bash: it is what a stock Mac runs (bash 3.2), the oldest bash
+	// an adopter has. PATH's bash is Homebrew 5.x on a developer machine, which
+	// once let a hook that 3.2 cannot parse pass every test.
+	bashPath := "/bin/bash"
+	if _, err := os.Stat(bashPath); err != nil {
+		if bashPath, err = exec.LookPath("bash"); err != nil {
+			t.Skip("bash not available")
+		}
 	}
 	script, err := filepath.Abs(name)
 	require.NoError(t, err)

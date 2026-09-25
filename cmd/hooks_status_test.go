@@ -348,3 +348,17 @@ func TestHooksInstall_KeepsTheDeclaredProfileWhenNoneIsGiven(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, string(settings), "load-persona.sh")
 }
+
+// init --wire-hooks is the other install path: it must keep the declared
+// profile too, not re-declare the project full.
+func TestInitWireHooks_KeepsTheDeclaredProfile(t *testing.T) {
+	dir := t.TempDir()
+	_, _, err := runRootCmd(t, "hooks", "install", dir, "--profile", "knowledge", "--merge")
+	require.NoError(t, err)
+	t.Chdir(dir)
+	_, _, err = runRootCmd(t, "init", filepath.Join(dir, "second-vault"), "--wire-hooks")
+	require.NoError(t, err)
+	declared, err := os.ReadFile(filepath.Join(dir, ".claude", "vaultmind-profile"))
+	require.NoError(t, err)
+	assert.Equal(t, "knowledge", strings.TrimSpace(string(declared)))
+}

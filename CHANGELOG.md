@@ -12,19 +12,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Knowledge-vault projects: upgrade with this release, not 0.9.4, and name
 > your profile once:
 > `vaultmind hooks install <project> --vault <your-vault> --profile knowledge --merge --force`.
-> After that, `--profile` can be left off; the project remembers it.
+> After that, `--profile` can be left off; the project remembers it. If you
+> already ran 0.9.4's command, the same command removes the persona hooks it
+> added and says which.
+
+### Changed
+
+- **The knowledge profile includes PreCompact.** A knowledge vault loses
+  findings at compaction too, and the hook prompts for an entry in the
+  vault's `journal/`. focalc had wired it on purpose; the profile now agrees.
 
 ### Fixed
 
-- **A knowledge-profile install no longer wires persona hooks.** `hooks
-  install --profile knowledge --merge` wrote only the knowledge scripts but
-  wired every hook into settings.json — persona loading and episode capture
-  included — pointing at scripts it had just declined to write. The merge now
-  wires only the profile's hooks, as the Codex install already did.
-- **Re-running `hooks install` keeps the project's profile.** Without
-  `--profile` it declared the project "full" and wired a persona into a
-  knowledge vault — on the very upgrade command 0.9.4's notes gave. It now
-  keeps the profile the project declared.
+- **A knowledge-profile install no longer wires persona hooks, and removes
+  ones already there.** `hooks install --profile knowledge --merge` wrote only
+  the knowledge scripts but wired every hook into settings.json — persona
+  loading and episode capture included. The merge now wires only the
+  profile's hooks (as the Codex install already did), and takes out our own
+  hooks the profile excludes, naming each one. A hook group that also runs the
+  project's own command is left for a person. `hooks status` now names a hook
+  wired outside the declared profile instead of reporting the project
+  healthy.
+- **Re-running `hooks install`, or `init --wire-hooks`, keeps the project's
+  profile.** Without `--profile` they declared the project "full" and wired a
+  persona into a knowledge vault — on the very upgrade command 0.9.4's notes
+  gave. They now keep the profile the project declared.
+- **A project with several vaults gets the right reminder for each.** The
+  reach hook is given every vault in `VAULTMIND_VAULTS`, but it looked for
+  writes only in the primary one, so writing to a second vault — a project's
+  knowledge vault next to a persona, or an agent's desk next to its identity —
+  brought up nothing. It now finds the vault being written, asks the question
+  that fits that vault (arc discipline for an identity vault; what it already
+  says about the topic for any other), and searches that vault alone. Shell
+  writes are matched to a vault by path, resolved where the command runs, so
+  `kb-archive/` is not taken for `kb`, two vaults may share a folder name, and
+  `cp`/`mv` count for their destination. A leading date in a file name
+  (`2026-09-25-…`) is no longer read as part of the topic.
 
 ## [0.9.4] - 2026-09-25
 

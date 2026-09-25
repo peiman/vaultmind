@@ -62,6 +62,15 @@ try:
 except Exception:
     print('')" 2>/dev/null || echo "")
 
+# The directory the command runs in, which relative paths in it resolve
+# against. The harness sends it; absent, the project directory stands in.
+CMD_CWD=$(printf '%s' "$HOOK_INPUT" | python3 -c \
+  "import json,sys
+try:
+    print(json.load(sys.stdin).get('cwd', '') or '')
+except Exception:
+    print('')" 2>/dev/null || echo "")
+
 [ -z "$CMD" ] && [ -z "$FILE_PATH" ] && exit 0
 
 VAULT_PATH="${VAULTMIND_VAULT:-${VAULTMIND_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-$PWD}}/vaultmind-identity}"
@@ -74,9 +83,25 @@ case "$VAULT_PATH" in
   /*) ;;
   *) VAULT_PATH="${VAULTMIND_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-$PWD}}/${VAULT_PATH#./}" ;;
 esac
-# The vault's own directory name, so the write trigger below fires for an
-# adopter whose vault is not named by the default convention.
-IDENTITY_VAULT_NAME="${VAULT_PATH##*/}"
+# Every vault the project gave this hook: the primary, then VAULTMIND_VAULTS.
+# A project can hold an identity vault AND knowledge vaults (mine: identity +
+# desk; an adopter's: persona + project knowledge). A write to any of them is a
+# moment worth reaching into — not only a write to the primary.
+resolve_vault() {
+  local v="${1%/}"
+  case "$v" in
+    /*) printf '%s' "$v" ;;
+    *) printf '%s' "${VAULTMIND_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-$PWD}}/${v#./}" ;;
+  esac
+}
+VAULT_LIST=("$VAULT_PATH")
+if [ -n "${VAULTMIND_VAULTS:-}" ]; then
+  while IFS= read -r v; do
+    [ -z "$v" ] && continue
+    v=$(resolve_vault "$v")
+    [ "$v" = "$VAULT_PATH" ] || VAULT_LIST+=("$v")
+  done <<< "$(printf '%s' "$VAULTMIND_VAULTS" | tr ',' '\n')"
+fi
 
 # The allowlist: irreversible or outward-facing moves, plus writes to the
 # identity vault itself. These are the moments where being wrong is expensive
@@ -100,38 +125,72 @@ esac
 # (rm, mv, cp, tee, …), an in-place sed, a git add/rm/mv, or a vaultmind
 # command that mutates notes.
 #
-# What to ask depends on the vault. An identity vault (it has arcs/, which
-# `vaultmind init` creates) gets arc discipline. A project's knowledge vault is
-# not an identity: before writing a note there, what helps is what the vault
-# already says about that topic (taken from the file name) and its conventions.
-if [ -d "$VAULT_PATH/arcs" ]; then
-  WRITE_QUERY="writing to my identity vault: arc discipline, curation, never silently rewrite identity"
-else
-  TOPIC=""
-  [ -n "$FILE_PATH" ] && TOPIC=$(basename "$FILE_PATH" .md | tr '_-' '  ')
-  if [ -n "$TOPIC" ]; then
-    WRITE_QUERY="writing about $TOPIC: what this knowledge base already says about it, and its conventions"
-  else
-    WRITE_QUERY="changing this project's knowledge base: its conventions, frontmatter, and what is already written"
+# What to ask depends on the vault being written, and it is asked of THAT vault
+# alone. An identity vault (it has arcs/, which `vaultmind init` creates) gets
+# arc discipline. A knowledge vault — a project's, or a desk — is not an
+# identity: before writing a note there, what helps is what the vault already
+# says about that topic (taken from the file name) and its conventions.
+write_query_for() {
+  local vault="$1" topic=""
+  if [ -d "$vault/arcs" ]; then
+    printf '%s' "writing to my identity vault: arc discipline, curation, never silently rewrite identity"
+    return
   fi
-fi
+  # Journal and desk files are named date-first; the date is not the topic.
+  [ -n "$FILE_PATH" ] && topic=$(basename "$FILE_PATH" .md | sed -E 's/^[0-9]{4}-[0-9]{2}-[0-9]{2}-//' | tr '_-' '  ')
+  if [ -n "$topic" ]; then
+    printf '%s' "writing about $topic: what this knowledge base already says about it, and its conventions"
+  else
+    printf '%s' "changing this project's knowledge base: its conventions, frontmatter, and what is already written"
+  fi
+}
+TARGET_VAULT=""
 if [ -z "$QUERY" ] && [ -n "$FILE_PATH" ]; then
-  case "$FILE_PATH" in
-    "$VAULT_PATH"/*) QUERY="$WRITE_QUERY" ;;
-  esac
+  # The innermost vault wins when one is nested in another.
+  for v in "${VAULT_LIST[@]}"; do
+    case "$FILE_PATH" in
+      "$v"/*) [ ${#v} -gt ${#TARGET_VAULT} ] && TARGET_VAULT="$v" ;;
+    esac
+  done
 fi
-if [ -z "$QUERY" ] && [ -n "$CMD" ]; then
+if [ -z "$QUERY" ] && [ -z "$TARGET_VAULT" ] && [ -n "$CMD" ]; then
   WRITES=$(python3 -c "$(cat <<'PY'
-import shlex, sys
-cmd, name = sys.argv[1], sys.argv[2]
-if name not in cmd:
-    print(0); sys.exit()
+import os, shlex, sys
+# Prints the index (into argv[3:], one absolute vault path each) of the vault
+# the command writes into, or -1. argv[2] is the directory the command runs in.
+#
+# Vaults are matched by PATH, not by a name found somewhere in the command: a
+# name match took "kb-archive/n.md" for vault "kb", and could not tell two
+# vaults that share a directory name apart. Each word is resolved against the
+# directory it would be resolved against (moved by any cd), and the owning
+# vault is the longest vault path that contains it.
+cmd, start, vaults = sys.argv[1], sys.argv[2], sys.argv[3:]
+def resolve(tok, cwd):
+    tok = os.path.expanduser(tok)
+    return os.path.normpath(tok if tok.startswith('/') else os.path.join(cwd, tok))
+def owner(path):
+    best, width = None, -1
+    for i, v in enumerate(vaults):
+        if v and (path == v or path.startswith(v + '/')) and len(v) > width:
+            best, width = i, len(v)
+    return best
+# Cheap exit for the common case: a command that neither names a vault nor
+# runs inside one (and does not cd anywhere) cannot write into one.
+if (owner(os.path.normpath(start)) is None and 'cd' not in cmd
+        and not any(os.path.basename(v) in cmd for v in vaults if v)):
+    print(-1); sys.exit()
+def hit(tok, cwd):
+    if tok.startswith('-'):
+        if '=' not in tok:
+            return None
+        tok = tok.split('=', 1)[1]
+    return owner(resolve(tok, cwd))
 try:
     lex = shlex.shlex(cmd, posix=True, punctuation_chars=True)
     lex.whitespace_split = True
     toks = list(lex)
 except ValueError:
-    print(0); sys.exit()
+    print(-1); sys.exit()
 segs, cur = [], []
 for t in toks:
     if t in (';', '|', '||', '&&', '&'):
@@ -140,6 +199,25 @@ for t in toks:
         cur.append(t)
 segs.append(cur)
 FILE_CMDS = {'rm', 'mv', 'cp', 'tee', 'touch', 'mkdir', 'rmdir', 'ln', 'truncate'}
+# These leave their sources untouched and write only their last argument, so
+# that alone decides. mv is not here (moving out of a vault changes it), nor
+# tee (it writes to every file it is given).
+COPY_CMDS = {'cp', 'ln'}
+# Redirect operators: they and the word after them are not arguments.
+REDIRECTS = {'>', '>>', '<', '<<', '<<<', '>&', '<&', '&>', '&>>', '>|'}
+def without_redirects(args):
+    out, skip = [], False
+    for i, t in enumerate(args):
+        if skip:
+            skip = False
+            continue
+        if t in REDIRECTS:
+            skip = True
+            continue
+        if t.isdigit() and i + 1 < len(args) and args[i + 1] in REDIRECTS:
+            continue
+        out.append(t)
+    return out
 GIT_WRITES = {'add', 'rm', 'mv', 'restore', 'checkout'}
 WRAPPERS = {'sudo', 'env', 'command', 'time', 'nohup', 'xargs', 'exec'}
 # vaultmind commands that change notes, as the leading subcommand words.
@@ -160,54 +238,71 @@ def strip_prefix(seg):
         else:
             break
     return seg[i:]
-def writes(seg, in_vault):
-    if not in_vault and not any(name in t for t in seg):
-        return False
+def writes(seg, cwd):
+    """The vault index this segment writes into, or None."""
     for i, t in enumerate(seg):
-        # Inside the vault a relative target stays inside; an absolute or
-        # home-relative one goes wherever it names.
-        if t in ('>', '>>') and i + 1 < len(seg) and (
-                name in seg[i + 1] or (in_vault and not seg[i + 1].startswith(('/', '~')))):
-            return True
+        if t in ('>', '>>') and i + 1 < len(seg):
+            h = hit(seg[i + 1], cwd)
+            if h is not None:
+                return h
     seg = strip_prefix(seg)
     head = seg[0].rsplit('/', 1)[-1] if seg else ''
-    args = seg[1:]
-    if head in FILE_CMDS:
-        return True
-    if head == 'sed' and any(t.startswith('-i') or t == '--in-place' for t in args):
-        return True
+    args = without_redirects(seg[1:])
+    git_args = args
     if head == 'git':
-        while len(args) >= 2 and args[0] == '-C':
-            args = args[2:]
-        return bool(args) and args[0] in GIT_WRITES
+        # git -C <dir> runs in <dir>: its paths resolve there.
+        while len(git_args) >= 2 and git_args[0] == '-C':
+            cwd = resolve(git_args[1], cwd)
+            git_args = git_args[2:]
+    hits = [h for h in (hit(t, cwd) for t in (git_args if head == 'git' else args)) if h is not None]
+    if head == 'git' and not hits and git_args[1:2]:
+        hits = [h for h in [owner(cwd)] if h is not None]
+    if not hits:
+        return None
+    if head in COPY_CMDS:
+        # Copying out of a vault writes somewhere else: the destination decides.
+        dest = [t for t in args if not t.startswith('-')]
+        return hit(dest[-1], cwd) if dest else None
+    if head in FILE_CMDS:
+        return hits[-1]
+    if head == 'sed' and any(t.startswith('-i') or t == '--in-place' for t in args):
+        return hits[-1]
+    if head == 'git':
+        return hits[0] if git_args and git_args[0] in GIT_WRITES else None
     if head == 'vaultmind':
         words = [t for t in args if not t.startswith('-')]
         if tuple(words[:1]) in VM_MUTATIONS or tuple(words[:2]) in VM_MUTATIONS:
-            return True
-        return any(t == '--fix' or t.startswith('--mark-reviewed') for t in args)
-    return False
-# A cd into the vault makes the following segments act inside it, where writes
-# no longer name it; a cd anywhere else ends that.
-in_vault, found = False, False
+            return hits[0]
+        if any(t == '--fix' or t.startswith('--mark-reviewed') for t in args):
+            return hits[0]
+    return None
+# A cd moves where relative paths in the segments after it resolve.
+# (No apostrophes in this heredoc: bash 3.2 scans it for quotes.)
+cwd, found = start, -1
 for s in segs:
     core = strip_prefix(s)
     if core and core[0] in ('cd', 'pushd'):
-        in_vault = len(core) > 1 and name in core[1]
+        cwd = resolve(core[1], cwd) if len(core) > 1 else os.path.expanduser('~')
         continue
-    if writes(s, in_vault):
-        found = True
+    w = writes(s, cwd)
+    if w is not None:
+        found = w
         break
-print(1 if found else 0)
+print(found)
 PY
-)" "$CMD" "$IDENTITY_VAULT_NAME" 2>/dev/null || echo 0)
-  [ "$WRITES" = "1" ] && QUERY="$WRITE_QUERY"
+)" "$CMD" "${CMD_CWD:-${VAULTMIND_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-$PWD}}}" "${VAULT_LIST[@]}" 2>/dev/null || echo -1)
+  case "$WRITES" in
+    ''|-1|*[!0-9]*) ;;
+    *) TARGET_VAULT="${VAULT_LIST[$WRITES]:-}" ;;
+  esac
 fi
+[ -z "$QUERY" ] && [ -n "$TARGET_VAULT" ] && QUERY=$(write_query_for "$TARGET_VAULT")
 
 [ -z "$QUERY" ] && exit 0
 
 command -v vaultmind >/dev/null 2>&1 || exit 0
 VAULTMIND=$(command -v vaultmind)
-[ -d "$VAULT_PATH" ] || exit 0
+[ -d "${TARGET_VAULT:-$VAULT_PATH}" ] || exit 0
 
 LOG_DIR="${HOME}/.vaultmind/reach-hook"
 mkdir -p "$LOG_DIR" 2>/dev/null
@@ -246,7 +341,10 @@ fi
 # Unset ⇒ exactly today's single-vault call. Additive by construction: no
 # existing adopter changes behaviour on upgrade.
 VAULT_ARGS=(--vault "$VAULT_PATH")
-if [ -n "${VAULTMIND_VAULTS:-}" ]; then
+if [ -n "$TARGET_VAULT" ]; then
+  # A write is about one vault: ask that vault, not all of them.
+  VAULT_ARGS=(--vault "$TARGET_VAULT")
+elif [ -n "${VAULTMIND_VAULTS:-}" ]; then
   VAULT_ARGS=(--vaults "$VAULTMIND_VAULTS")
 fi
 
@@ -306,7 +404,8 @@ resolve_delivering_vault() {
   done <<< "$(printf '%s' "$VAULTMIND_VAULTS" | tr ',' '\n')"
   printf '%s' "$VAULT_PATH"
 }
-DELIVERING_VAULT=$(resolve_delivering_vault "$POINTERS")
+DELIVERING_VAULT="$TARGET_VAULT"
+[ -z "$DELIVERING_VAULT" ] && DELIVERING_VAULT=$(resolve_delivering_vault "$POINTERS")
 
 printf '{"timestamp":"%s","matched":true,"injected":true,"chars":%d}\n' "$TS" "${#POINTERS}" \
   >> "$LOG_DIR/${TS}-reach.jsonl" 2>/dev/null

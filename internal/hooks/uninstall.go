@@ -22,6 +22,43 @@ import (
 // Returns the input bytes verbatim when there was nothing to remove (idempotent
 // re-run). Malformed JSON returns an error and nil output.
 func RemoveStanza(existing []byte) ([]byte, []string, error) {
+	names := hookscripts.Names()
+	return removeGroupsWhere(existing, func(el json.RawMessage) []string {
+		return groupReferencedScriptNames(el, names)
+	})
+}
+
+// removeOurGroupsOutside removes the groups that hold ONLY our hooks for
+// scripts in outside — a profile's excluded scripts. A group that also runs a
+// project's own hook is theirs as much as ours and is left alone.
+func removeOurGroupsOutside(existing []byte, outside []string) ([]byte, []string, error) {
+	return removeGroupsWhere(existing, func(el json.RawMessage) []string {
+		var g hookGroup
+		if err := json.Unmarshal(el, &g); err != nil || len(g.Hooks) == 0 {
+			return nil
+		}
+		var matched []string
+		for _, h := range g.Hooks {
+			found := ""
+			for _, s := range outside {
+				if commandReferencesScript(h.Command, s) {
+					found = s
+					break
+				}
+			}
+			if found == "" {
+				return nil
+			}
+			matched = append(matched, found)
+		}
+		return matched
+	})
+}
+
+// removeGroupsWhere drops every hook group for which match returns script
+// names, and returns the sorted, unique names removed. Empty event arrays and
+// an empty hooks object are dropped; everything else is kept in order.
+func removeGroupsWhere(existing []byte, match func(json.RawMessage) []string) ([]byte, []string, error) {
 	top, err := parseOrderedObject(existing)
 	if err != nil {
 		return nil, nil, fmt.Errorf("parsing settings: %w", err)
@@ -35,7 +72,6 @@ func RemoveStanza(existing []byte) ([]byte, []string, error) {
 		return nil, nil, fmt.Errorf("parsing existing hooks: %w", err)
 	}
 
-	names := hookscripts.Names()
 	removed := map[string]struct{}{}
 	changed := false
 
@@ -48,7 +84,7 @@ func RemoveStanza(existing []byte) ([]byte, []string, error) {
 		}
 		kept := make([]json.RawMessage, 0, len(arr))
 		for _, el := range arr {
-			matches := groupReferencedScriptNames(el, names)
+			matches := match(el)
 			if len(matches) > 0 {
 				for _, m := range matches {
 					removed[m] = struct{}{}

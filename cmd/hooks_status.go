@@ -117,6 +117,19 @@ func renderHooksStatus(w io.Writer, report hooks.StatusReport) error {
 				}
 				continue
 			}
+			if e.State == hooks.EventOutsideProfile {
+				// Wired, but the declared profile excludes it: a persona loader
+				// in a knowledge project runs a script it chose not to have.
+				// The merge removes a group that is ours alone; one shared with
+				// the project's own hook it leaves, so say both.
+				if _, err := fmt.Fprintf(w,
+					"  outside profile %s -> %s (remove it: vaultmind hooks install %s --profile %s --merge; "+
+						"if that group also runs a hook of your own, remove ours from it by hand)\n",
+					e.Event, e.Script, report.ProjectDir, report.Profile); err != nil {
+					return err
+				}
+				continue
+			}
 			if _, err := fmt.Fprintf(w, "  unwired   %s -> %s\n", e.Event, e.Script); err != nil {
 				return err
 			}

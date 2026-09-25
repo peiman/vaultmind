@@ -39,9 +39,16 @@ func wireInitHooks(w io.Writer, vaultPath string, p initWireParams) error {
 		return fmt.Errorf("resolving vault path: %w", err)
 	}
 
+	// Keep the profile the project declared; without it init re-declared a
+	// knowledge project "full" and wired a persona into it.
+	profile, err := hooks.DeclaredProfile(projectDir)
+	if err != nil {
+		return err
+	}
 	prov, err := hooks.Provision(hooks.InstallConfig{
 		ProjectDir: projectDir,
 		VaultPath:  absVault,
+		Profile:    profile,
 	}, true, p.local, p.dryRun)
 	if err != nil {
 		return fmt.Errorf("wiring hooks: %w", err)

@@ -231,6 +231,15 @@ func writeMergeOutcome(w io.Writer, mergeRes *hooks.MergeFileResult) {
 	default:
 		_, _ = fmt.Fprintf(w, "\n· %s already wired — no changes.\n", mergeRes.SettingsPath)
 	}
+	// Removal is the one thing a merge does that a person might not expect:
+	// name every hook taken out.
+	if len(mergeRes.Removed) > 0 {
+		verb := "Removed"
+		if mergeRes.DryRun {
+			verb = "Would remove"
+		}
+		_, _ = fmt.Fprintf(w, "%s VaultMind hooks outside this profile: %s\n", verb, strings.Join(mergeRes.Removed, ", "))
+	}
 }
 
 // runHooksInstallCodex installs the same scripts, then wires Codex instead of

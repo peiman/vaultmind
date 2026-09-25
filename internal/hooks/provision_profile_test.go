@@ -21,10 +21,10 @@ func TestProvision_WiresOnlyTheProfilesHooks(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join(dir, ".claude", "settings.json"))
 	require.NoError(t, err)
 	s := string(raw)
-	for _, want := range []string{hookHealthScript, hookUserPromptSubmitScript, hookPreToolUseScript, hookReachScript} {
+	for _, want := range []string{hookHealthScript, hookUserPromptSubmitScript, hookPreToolUseScript, hookReachScript, hookPreCompactScript} {
 		assert.Contains(t, s, want)
 	}
-	for _, not := range []string{hookSessionStartScript, hookSessionEndScript, hookPreCompactScript} {
+	for _, not := range []string{hookSessionStartScript, hookSessionEndScript} {
 		assert.NotContains(t, s, not, "a knowledge profile must not wire %s", not)
 	}
 }
