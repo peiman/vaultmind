@@ -120,6 +120,32 @@ if [ "$DOCTOR_RC" -eq 0 ] && [ -n "$STALE_LINE" ]; then
   echo "   Refresh: vaultmind index --vault \"$VAULT\" && vaultmind index --embed --vault \"$VAULT\""
 fi
 
+# The map. An agent reads a file when it knows where the answer lives; with a
+# knowledge vault it can only know that if it can see what the vault holds.
+# Folders and counts (tree --depth 1), for every vault the project names, capped
+# so a flat vault cannot flood the session start. The output is captured whole
+# and then cut — piping tree into head would kill it mid-write. A binary older
+# than `tree` fails the call and the map is simply skipped.
+MAP_MAX_LINES="${VAULTMIND_MAP_MAX_LINES:-30}"
+if [ "$DOCTOR_RC" -eq 0 ]; then
+  if [ -n "${VAULTMIND_VAULTS:-}" ]; then
+    MAP_TARGET="--vaults $VAULTMIND_VAULTS"
+    MAP="$("$VM" tree --vaults "$VAULTMIND_VAULTS" --depth 1 2>/dev/null)" || MAP=""
+  else
+    MAP_TARGET="--vault $VAULT"
+    MAP="$("$VM" tree --vault "$VAULT" --depth 1 2>/dev/null)" || MAP=""
+  fi
+  if [ -n "$MAP" ]; then
+    MAP_LINES="$(printf '%s\n' "$MAP" | wc -l | tr -d ' ')"
+    echo ""
+    echo "MAP — what the knowledge vault holds. Open a note: vaultmind note get <id>; list a folder: vaultmind tree ${MAP_TARGET} --path <folder>/"
+    printf '%s\n' "$MAP" | awk -v max="$MAP_MAX_LINES" 'NR <= max'
+    if [ "$MAP_LINES" -gt "$MAP_MAX_LINES" ] 2>/dev/null; then
+      echo "  … $((MAP_LINES - MAP_MAX_LINES)) more lines: vaultmind tree ${MAP_TARGET} --depth 1"
+    fi
+  fi
+fi
+
 # Stale hook scripts relay. Scripts are copied into the project, so they only
 # change when someone reruns `hooks install`; nothing said when they fell
 # behind. Two projects kept a recall script from before its noise guard for five
