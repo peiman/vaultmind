@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.13] - 2026-09-26
+
+> A hook that fires in bursts stops repeating itself. Within ten minutes of a
+> conversation, the reach hook sends a note it already delivered as its title.
+> Refresh hooks: `vaultmind hooks install <project> --merge --force`.
+
 ### Added
 
 - **A note already shown in a conversation comes back as its title.**
@@ -2119,7 +2125,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.12...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.13...HEAD
+[0.9.13]: https://github.com/peiman/vaultmind/compare/v0.9.12...v0.9.13
 [0.9.12]: https://github.com/peiman/vaultmind/compare/v0.9.11...v0.9.12
 [0.9.11]: https://github.com/peiman/vaultmind/compare/v0.9.10...v0.9.11
 [0.9.10]: https://github.com/peiman/vaultmind/compare/v0.9.9...v0.9.10
