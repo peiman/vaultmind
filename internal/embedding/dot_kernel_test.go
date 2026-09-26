@@ -51,6 +51,10 @@ func TestDotProductF32_UsesTheShorterVector(t *testing.T) {
 	}
 }
 
+// benchSink keeps the benchmarked result alive so the call cannot be
+// optimised away.
+var benchSink float64
+
 func BenchmarkMaxSimScore(b *testing.B) {
 	r := rand.New(rand.NewSource(1))
 	query := make([][]float32, 8)
@@ -63,6 +67,6 @@ func BenchmarkMaxSimScore(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = MaxSimScore(query, doc)
+		benchSink = MaxSimScore(query, doc)
 	}
 }
