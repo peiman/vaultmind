@@ -37,6 +37,9 @@ func validateSet(req MutationRequest, note ParsedNoteInfo, reg *schema.Registry)
 	if !req.AllowExtra && !reg.IsFieldAllowed(note.Type, req.Key) {
 		return &MutationError{Code: "unknown_key", Message: fmt.Sprintf("field %q is not allowed for type %q", req.Key, note.Type), Field: req.Key}
 	}
+	if msg := reg.ValueShapeError(req.Key, req.Value); msg != "" {
+		return &MutationError{Code: "invalid_type", Message: msg, Field: req.Key}
+	}
 	if req.Key == "status" {
 		if s, ok := req.Value.(string); ok {
 			if !reg.ValidStatus(note.Type, s) {

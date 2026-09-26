@@ -6,6 +6,7 @@ import (
 	"github.com/peiman/vaultmind/internal/schema"
 	"github.com/peiman/vaultmind/internal/vault"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func testRegistry() *schema.Registry {
@@ -89,4 +90,19 @@ func TestValidatePlan_NilOperations(t *testing.T) {
 	errs := ValidatePlan(p, testRegistry())
 	assert.Len(t, errs, 1)
 	assert.Equal(t, "empty_plan", errs[0].Code)
+}
+
+// A note_create writes its frontmatter as given, so a value of the wrong shape
+// lands in the file and is dropped on read. It is refused before anything is
+// written, as frontmatter set refuses it.
+func TestValidatePlan_NoteCreateChecksValueShapes(t *testing.T) {
+	p := Plan{Version: 1, Operations: []Operation{{
+		Op: OpNoteCreate, Path: "decisions/x.md", Type: "decision",
+		Frontmatter: map[string]interface{}{"title": []interface{}{"a"}, "tags": []interface{}{"ok"}, "created": 5},
+	}}}
+	errs := ValidatePlan(p, testRegistry())
+	require.Len(t, errs, 2)
+	assert.Equal(t, "invalid_type", errs[0].Code)
+	assert.Contains(t, errs[0].Message, `"created"`, "keys are checked in a stable order")
+	assert.Contains(t, errs[1].Message, `"title"`)
 }

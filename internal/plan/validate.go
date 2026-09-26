@@ -2,6 +2,7 @@ package plan
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/peiman/vaultmind/internal/schema"
 )
@@ -73,6 +74,25 @@ func ValidatePlan(p Plan, reg *schema.Registry) []OpError {
 			if op.Type != "" && !reg.HasType(op.Type) {
 				errs = append(errs, OpError{Code: "unknown_type", Message: fmt.Sprintf("%s: type %q not in registry", pf, op.Type)})
 			}
+			errs = append(errs, shapeErrors(pf, op.Frontmatter, reg)...)
+		}
+	}
+	return errs
+}
+
+// shapeErrors checks each frontmatter value against its field's shape, in key
+// order so the report is stable. note_create writes the map as given, so this
+// is the only check between a wrong-shaped value and the file.
+func shapeErrors(pf string, fm map[string]interface{}, reg *schema.Registry) []OpError {
+	keys := make([]string, 0, len(fm))
+	for k := range fm {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var errs []OpError
+	for _, k := range keys {
+		if msg := reg.ValueShapeError(k, fm[k]); msg != "" {
+			errs = append(errs, OpError{Code: "invalid_type", Message: pf + ": " + msg})
 		}
 	}
 	return errs
