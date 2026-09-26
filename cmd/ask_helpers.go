@@ -33,6 +33,10 @@ func askRetriever(cmd *cobra.Command, db *index.DB) query.AutoRetrieverResult {
 // shownLedgerDir is the state subfolder holding one ledger per conversation.
 const shownLedgerDir = "shown"
 
+// shownLedgerRetention is how long a finished conversation's ledger is kept
+// before the next dedup-window ask sweeps it.
+const shownLedgerRetention = 7 * 24 * time.Hour
+
 // askShown is --dedup-window: the conversation's ledger and how far back it
 // counts. The zero value is off.
 type askShown struct {
@@ -59,7 +63,9 @@ func openAskShown(cmd *cobra.Command) (askShown, error) {
 	if err != nil {
 		return askShown{}, fmt.Errorf("--dedup-window: data directory: %w", err)
 	}
-	ledger := query.OpenShownLedger(filepath.Join(dir, shownLedgerDir), os.Getenv(experiment.EnvUserSessionID))
+	ledgerDir := filepath.Join(dir, shownLedgerDir)
+	query.PruneShownLedgers(ledgerDir, shownLedgerRetention, time.Now())
+	ledger := query.OpenShownLedger(ledgerDir, os.Getenv(experiment.EnvUserSessionID))
 	return askShown{ledger: ledger, window: window}, nil
 }
 

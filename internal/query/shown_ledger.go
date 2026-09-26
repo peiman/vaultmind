@@ -92,3 +92,21 @@ func (l ShownLedger) Record(ids []string, now time.Time) error {
 	}
 	return f.Close()
 }
+
+// PruneShownLedgers removes ledgers in dir untouched for longer than
+// retention. A ledger is only read within a short window, so a finished
+// conversation's file is dead weight; best effort, never an error.
+func PruneShownLedgers(dir string, retention time.Duration, now time.Time) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	cutoff := now.Add(-retention)
+	for _, e := range entries {
+		info, ierr := e.Info()
+		if ierr != nil || e.IsDir() || info.ModTime().After(cutoff) {
+			continue
+		}
+		_ = os.Remove(filepath.Join(dir, e.Name())) // nosemgrep: go-path-traversal -- names come from ReadDir of the ledger dir itself
+	}
+}

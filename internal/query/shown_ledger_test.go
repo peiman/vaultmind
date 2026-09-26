@@ -62,3 +62,22 @@ func TestShownLedger_IgnoresLinesItCannotRead(t *testing.T) {
 	require.NoError(t, f.Close())
 	assert.Equal(t, map[string]bool{"good": true}, l.Recent(time.Hour, now))
 }
+
+// Ledgers of finished conversations do not pile up: opening the ledger sweeps
+// files untouched for longer than the retention.
+func TestPruneShownLedgers_RemovesOnlyOldConversations(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Now()
+	old, fresh := filepath.Join(dir, "old"), filepath.Join(dir, "fresh")
+	require.NoError(t, os.WriteFile(old, []byte("1\tn\n"), 0o600))
+	require.NoError(t, os.WriteFile(fresh, []byte("1\tn\n"), 0o600))
+	require.NoError(t, os.Chtimes(old, now.Add(-8*24*time.Hour), now.Add(-8*24*time.Hour)))
+
+	query.PruneShownLedgers(dir, 7*24*time.Hour, now)
+
+	_, err := os.Stat(old)
+	assert.True(t, os.IsNotExist(err), "a conversation idle past the retention is swept")
+	_, err = os.Stat(fresh)
+	assert.NoError(t, err)
+	query.PruneShownLedgers(filepath.Join(dir, "missing"), time.Hour, now) // a missing dir is not an error
+}

@@ -154,6 +154,9 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	resolver := graph.NewResolver(vdb.DB)
 	delta := getConfigValueWithFlags[float64](cmd, "activation-delta", config.KeyExperimentsActivationDelta)
 
+	// --read does not consult or feed the --dedup-window ledger: it is a read
+	// the agent asked for by name, not the burst of ambient deliveries the
+	// ledger exists to thin, and it runs without the flag.
 	// --read short-circuits the full Ask path. When set, we run the
 	// search-only AskHits (which doesn't fire access tracking on the
 	// top hit + neighbors), resolve the chosen rank/id, fetch its body,
