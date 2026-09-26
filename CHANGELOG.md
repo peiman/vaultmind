@@ -18,6 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   steps name a project question instead of "who am I". With `--wire-hooks`,
   the profile named on `init` is the hook profile installed.
 
+### Changed
+
+- **Hook and hint wording no longer assumes an agent-identity vault.** The
+  reach hook said "notes written as arcs carry their rule in a Principle
+  section"; it now says what the recall hook already did — a Principle
+  section where a note has one, else its opening lines. The keyword-only
+  hint's example was an agent's arc ("The Judgment Gap"); it is now a
+  project question for a note titled "Rate Limiting".
+
 ### Fixed
 
 - **A knowledge project's compaction prompt is about the code, not an agent.**

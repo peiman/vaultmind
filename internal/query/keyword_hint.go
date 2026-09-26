@@ -19,8 +19,8 @@ func WriteKeywordOnlyHint(w io.Writer, retrievalMode string, hitCount int) bool 
 	}
 	_, _ = fmt.Fprintln(w, "")
 	_, _ = fmt.Fprintln(w, "Note: this vault has no embeddings — running keyword search only.")
-	_, _ = fmt.Fprintln(w, "Paraphrase queries (e.g. 'how do I mislead myself' for an arc titled")
-	_, _ = fmt.Fprintln(w, "'The Judgment Gap') won't match unless the query echoes a title word.")
+	_, _ = fmt.Fprintln(w, "Paraphrase queries (e.g. 'how is login throttled' for a note titled")
+	_, _ = fmt.Fprintln(w, "'Rate Limiting') won't match unless the query echoes a title word.")
 	_, _ = fmt.Fprintln(w, "")
 	_, _ = fmt.Fprintln(w, "To enable semantic retrieval:")
 	// Backend-agnostic on purpose: `--embed` lets the binary pick its default
