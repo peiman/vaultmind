@@ -70,6 +70,11 @@ func (r *ActivationRetriever) Search(_ context.Context, _ string, limit, offset 
 		return nil, 0, nil
 	}
 
+	keep, err := noteFilter(r.DB, filters)
+	if err != nil {
+		return nil, 0, err
+	}
+
 	// Hydrate metadata for accessed notes. Filter early — we don't
 	// want to score notes the caller is going to drop.
 	candidates := make([]retrieval.ScoredResult, 0, len(stats))
@@ -79,7 +84,7 @@ func (r *ActivationRetriever) Search(_ context.Context, _ string, limit, offset 
 		if qerr != nil || row == nil {
 			continue
 		}
-		if !matchesActivationFilters(row, filters) {
+		if !keep(row.ID, row.Type) {
 			continue
 		}
 		candidates = append(candidates, retrieval.ScoredResult{
@@ -118,20 +123,6 @@ func (r *ActivationRetriever) Search(_ context.Context, _ string, limit, offset 
 		candidates = candidates[:limit]
 	}
 	return candidates, total, nil
-}
-
-// matchesActivationFilters mirrors the filter semantics that other
-// lanes' SQL queries enforce. Activation lane's filtering happens in
-// Go because we already have the full row metadata in hand.
-func matchesActivationFilters(row *index.NoteRow, filters index.SearchFilters) bool {
-	if filters.Type != "" && row.Type != filters.Type {
-		return false
-	}
-	// Tag filtering would require a join to the tags table — defer
-	// until evidence the lack matters in practice. Per the Mean-of-
-	// Present RRF, missing notes from this lane just get scored from
-	// the other 4, so a missing tag filter here is a soft fallback.
-	return true
 }
 
 // normalizeActivationScores rescales the score column to [0, 1] so

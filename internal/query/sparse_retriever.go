@@ -35,13 +35,18 @@ func (r *SparseRetriever) Search(ctx context.Context, query string, limit, offse
 		return nil, 0, nil
 	}
 
+	keep, err := noteFilter(r.DB, filters)
+	if err != nil {
+		return nil, 0, err
+	}
+
 	type scored struct {
 		result retrieval.ScoredResult
 		score  float64
 	}
 	var results []scored
 	for _, ne := range all {
-		if filters.Type != "" && ne.Type != filters.Type {
+		if !keep(ne.NoteID, ne.Type) {
 			continue
 		}
 		sim := embedding.SparseDotProduct(querySparse, ne.Sparse)
