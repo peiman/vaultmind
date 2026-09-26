@@ -120,6 +120,13 @@ Use when you want the raw note structure (frontmatter + body) for inspection or 
 vaultmind note get arc-ask-before-assuming --vault examples/ada-vault --json
 ```
 
+An id from a federated `ask` can live in any of the vaults it searched. Pass
+the same list and `note get` reads it from whichever vault holds it:
+
+```bash
+vaultmind note get arc-ask-before-assuming --vaults ~/identity,~/desk,~/research
+```
+
 ### Picking between them
 
 - **Conversational "what do I know about X?"** → `vaultmind ask` (gives you top hits + context)
