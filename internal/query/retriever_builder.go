@@ -269,22 +269,32 @@ func detectEmbedderForDB(ctx context.Context, db *index.DB) (embedding.Embedder,
 		log.Warn().Msg("vault is in mixed-model state (MiniLM + BGE-M3); loading BGE-M3 — run 'vaultmind index --full --embed --model bge-m3' to converge")
 	}
 	if hasBGEM3 {
-		bgem3, bgem3Err := embedding.NewBGEM3Embedder(ctx, embedding.BGEM3Config())
-		if bgem3Err != nil {
-			return nil, nil, fmt.Errorf("creating BGE-M3 embedder: %w", bgem3Err)
-		}
-		return bgem3, func() { _ = bgem3.Close() }, nil
+		return sharedEmbedderFor(sharedKeyBGEM3, func() (embedding.Embedder, func(), error) {
+			bgem3, bgem3Err := embedding.NewBGEM3Embedder(ctx, embedding.BGEM3Config())
+			if bgem3Err != nil {
+				return nil, nil, fmt.Errorf("creating BGE-M3 embedder: %w", bgem3Err)
+			}
+			return bgem3, func() { _ = bgem3.Close() }, nil
+		})
 	}
 	return newMiniLMEmbedder(ctx)
 }
+
+// Keys for the process's shared model (see sharedEmbedderFor).
+const (
+	sharedKeyBGEM3  = "bge-m3"
+	sharedKeyMiniLM = "minilm"
+)
 
 // newMiniLMEmbedder constructs the default MiniLM embedder with a uniform
 // cleanup signature. Extracted to keep the mixed-model branching in
 // detectEmbedderForDB readable.
 func newMiniLMEmbedder(ctx context.Context) (embedding.Embedder, func(), error) {
-	embedder, err := newDefaultEmbedder(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	return embedder, func() { _ = embedder.Close() }, nil
+	return sharedEmbedderFor(sharedKeyMiniLM, func() (embedding.Embedder, func(), error) {
+		embedder, err := newDefaultEmbedder(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		return embedder, func() { _ = embedder.Close() }, nil
+	})
 }
