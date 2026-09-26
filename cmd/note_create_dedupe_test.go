@@ -47,3 +47,30 @@ func TestNoteCreate_ANewNameHasNoDuplicateWarning(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, errOut.String(), "already exists")
 }
+
+// Only a name counts: a title that looks like a path or equals an id is not a
+// duplicate name.
+func TestNoteCreate_OnlyANameIsADuplicate(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+
+	for _, title := range []string{"concepts/alpha", "concepts/alpha.md", "concept-alpha"} {
+		_, errOut, err := runRootCmd(t, "note", "create", "concepts/"+strings.NewReplacer("/", "-", ".", "-").Replace(title)+"-x.md",
+			"--type", "concept", "--field", "title="+title, "--vault", vault)
+		require.NoError(t, err)
+		assert.NotContains(t, errOut.String(), "already exists", "title %q is not another note's name", title)
+	}
+}
+
+// When several notes share the name, all of them are named.
+func TestNoteCreate_AllNotesSharingTheNameAreNamed(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	_, _, err := runRootCmd(t, "note", "create", "concepts/alpha-two.md",
+		"--type", "concept", "--field", "title=Alpha Concept", "--vault", vault)
+	require.NoError(t, err)
+
+	_, errOut, err := runRootCmd(t, "note", "create", "concepts/alpha-three.md",
+		"--type", "concept", "--field", "title=Alpha Concept", "--vault", vault)
+	require.NoError(t, err)
+	assert.Contains(t, errOut.String(), "concepts/alpha.md")
+	assert.Contains(t, errOut.String(), "concepts/alpha-two.md")
+}

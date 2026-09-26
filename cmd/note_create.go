@@ -211,13 +211,21 @@ func duplicateWarning(db *index.DB, frontmatter map[string]interface{}) string {
 		return ""
 	}
 	res, err := graph.NewResolver(db).Resolve(title)
-	if err != nil || !res.Resolved || len(res.Matches) == 0 {
+	if err != nil || !res.Resolved || res.ResolutionTier == nil || !nameTiers[*res.ResolutionTier] {
 		return ""
 	}
-	match := res.Matches[0]
-	return fmt.Sprintf("a note named %q already exists: %s (%s) — extend it rather than adding a second one",
-		title, match.Path, match.ID)
+	found := make([]string, 0, len(res.Matches))
+	for _, m := range res.Matches {
+		found = append(found, fmt.Sprintf("%q at %s (%s)", m.Title, m.Path, m.ID))
+	}
+	return fmt.Sprintf("a note by the name %q already exists: %s — extend it rather than adding another",
+		title, strings.Join(found, "; "))
 }
+
+// nameTiers are the resolver tiers that match a note by its name. The id and
+// path tiers are not names: a title that looks like a path or equals an id is
+// no duplicate of that note.
+var nameTiers = map[string]bool{"title": true, "alias": true, "normalized": true}
 
 // parseFieldSlice converts ["key=value", ...] into a map.
 func parseFieldSlice(fields []string) map[string]string {
