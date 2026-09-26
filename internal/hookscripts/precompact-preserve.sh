@@ -123,7 +123,23 @@ fi
 WHAT MEMORY DID THIS WEEK:
 ${USE_LINE}"
 
-if [[ "$ALREADY_WROTE" == "yes" ]]; then
+# The profile the project installed. A knowledge project keeps a knowledge base,
+# not an agent identity: it is asked only what the segment learned about the
+# code. Found by installing the knowledge profile as a stranger — it got the
+# persona speech below and a journal/ written into its docs vault, and, since
+# init scaffolds arcs/, no code step at all.
+PROFILE=$(tr -d '[:space:]' < "${PROJECT_DIR}/.claude/vaultmind-profile" 2>/dev/null || true)
+
+if [[ "$PROFILE" == "knowledge" ]]; then
+  MSG="CONTEXT IS ABOUT TO BE COMPACTED (session ${SESSION_ID}, trigger=${TRIGGER}).
+
+The summary keeps what this segment did — commits, files, decisions reached. It
+drops what was found on the way: the gotcha, the reason behind a decision, the
+convention that was not written anywhere.
+
+Anchors the summary will keep anyway:
+${COMMITS}"
+elif [[ "$ALREADY_WROTE" == "yes" ]]; then
   MSG="CONTEXT IS ABOUT TO BE COMPACTED (session ${SESSION_ID}, trigger=${TRIGGER}).
 
 A desk entry already exists for this session — good, nothing to write.
@@ -175,13 +191,16 @@ fi
 # Search first, so writing is also reading; write only what is missing, with
 # paths: naming the code, so the note comes back when that code is opened; fix
 # a stale note where it is found. A knowledge vault is one without arcs/ — the
-# identity vault has them. Asked even when the desk entry exists.
+# identity vault has them — or, in a knowledge-profile project, any configured
+# vault. Asked even when the desk entry exists.
 KB_VAULTS=""
 while IFS= read -r v; do
   v="${v%/}"
   [ -n "$v" ] || continue
   case "$v" in /*) ;; *) v="${PROJECT_DIR}/${v#./}" ;; esac
-  [ -d "$v" ] && [ ! -d "$v/arcs" ] || continue
+  # In a knowledge project every configured vault is a knowledge vault.
+  [ -d "$v" ] || continue
+  [ "$PROFILE" = "knowledge" ] || [ ! -d "$v/arcs" ] || continue
   case ",${KB_VAULTS}," in *",${v},"*) continue ;; esac
   KB_VAULTS="${KB_VAULTS:+${KB_VAULTS},}${v}"
 done <<< "$(printf '%s\n%s\n' "$IDENTITY_VAULT" "${VAULTMIND_VAULTS:-}" | tr ',' '\n')"
