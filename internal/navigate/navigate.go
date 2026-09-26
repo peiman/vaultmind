@@ -33,6 +33,9 @@ type Note struct {
 	Title string `json:"title"`
 	Type  string `json:"type"`
 	Line  string `json:"line,omitempty"`
+	// CodeChanged is set by `tree --for` when the file was committed to after
+	// the note was.
+	CodeChanged *CodeChange `json:"code_changed,omitempty"`
 }
 
 // Dir is a folder in the map. Total counts every note beneath it.
@@ -158,6 +161,11 @@ func renderDir(w io.Writer, d *Dir, level int, o RenderOptions) error {
 		for _, n := range d.Notes {
 			if _, err := fmt.Fprintf(w, "%s%s\n", indent, noteLine(n, o.Brief)); err != nil {
 				return err
+			}
+			if n.CodeChanged != nil {
+				if _, err := fmt.Fprintf(w, "%s    %s\n", indent, n.CodeChanged.Summary); err != nil {
+					return err
+				}
 			}
 		}
 	}

@@ -114,6 +114,7 @@ func loadTreeVault(cmd *cobra.Command, vaultPath string, q treeQuery) (treeVault
 	var notes []navigate.Note
 	if q.forFile != nil {
 		notes, err = navigate.Covering(vdb.DB, *q.forFile)
+		navigate.MarkCodeChanged(notes, vaultPath, *q.forFile)
 	} else {
 		notes, err = navigate.Load(vdb.DB, q.filter)
 	}
