@@ -5,7 +5,7 @@ package query_test
 //
 // Targets (all 0–84% before this file):
 //   - AskHits (0%)                    ask.go
-//   - noteIDsWithTag (0%)             embedding_retriever.go (via EmbeddingRetriever tag filter)
+//   - noteIDsWithTag (0%)             note_filter.go (via EmbeddingRetriever tag filter)
 //   - humanDuration (57%)             self.go — hour + minute branches
 //   - FormatAskReadWithOptions (58%)  format.go — nil note path
 //   - Doctor (62%)                    doctor.go — registry + NotesMissingIDOrType

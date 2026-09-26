@@ -35,13 +35,9 @@ func (r *EmbeddingRetriever) Search(ctx context.Context, query string, limit, of
 		return nil, 0, nil
 	}
 
-	// Build tag lookup if tag filter is active (one query instead of N)
-	var noteTags map[string]bool
-	if filters.Tag != "" {
-		noteTags, err = r.noteIDsWithTag(filters.Tag)
-		if err != nil {
-			return nil, 0, fmt.Errorf("loading tags: %w", err)
-		}
+	keep, err := noteFilter(r.DB, filters)
+	if err != nil {
+		return nil, 0, err
 	}
 
 	// Score, filter, and build results in one pass
@@ -51,10 +47,7 @@ func (r *EmbeddingRetriever) Search(ctx context.Context, query string, limit, of
 	}
 	var results []scored
 	for _, ne := range all {
-		if filters.Type != "" && ne.Type != filters.Type {
-			continue
-		}
-		if filters.Tag != "" && !noteTags[ne.NoteID] {
+		if !keep(ne.NoteID, ne.Type) {
 			continue
 		}
 		sim := CosineSimilarity(queryVec, ne.Embedding)
@@ -93,24 +86,6 @@ func (r *EmbeddingRetriever) Search(ctx context.Context, query string, limit, of
 		out[i] = s.result
 	}
 	return out, total, nil
-}
-
-// noteIDsWithTag returns the set of note IDs that have the given tag.
-func (r *EmbeddingRetriever) noteIDsWithTag(tag string) (map[string]bool, error) {
-	rows, err := r.DB.Query("SELECT note_id FROM tags WHERE tag = ?", tag)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	ids := make(map[string]bool)
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		ids[id] = true
-	}
-	return ids, rows.Err()
 }
 
 // truncate returns the first n bytes of s, breaking at a space boundary if possible.

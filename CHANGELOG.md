@@ -42,6 +42,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`search --mode hybrid --tag` returns only notes with the tag.** Three of
+  the hybrid retriever's lanes (sparse, ColBERT, activation) ignored the tag
+  filter and fed untagged notes into the fusion: on the research vault,
+  `--tag git` returned eight notes where one carries the tag. Every lane now
+  applies one shared type-and-tag filter.
+
 - **Compaction names the knowledge vault for lessons, not the desk.** A desk
   that is its own vault has no `arcs/` either, so it looked like a knowledge
   vault and, listed first, was named as the place to write what was learned
