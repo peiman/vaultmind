@@ -2,7 +2,13 @@ package cmd
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/peiman/vaultmind/internal/index"
+	"github.com/peiman/vaultmind/internal/vault"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -64,9 +70,14 @@ func TestAsk_FiltersApplyToEveryFederatedVault(t *testing.T) {
 }
 
 // A federated vault holding no note with the tag reports that it had no hits,
-// not that it has no embedder.
+// not that it has no embedder. The untagged vault is the same baseline with the
+// "graph" tag removed, so the query alone would still find notes there.
 func TestAsk_FederatedVaultWithoutTheTagReportsNoHits(t *testing.T) {
-	tagged, untagged := indexedBaselineVault(t), buildIndexedTestVault(t)
+	tagged, untagged := indexedBaselineVault(t), baselineVaultWithoutTag(t, "graph")
+
+	plain, _, err := runRootCmd(t, "ask", "activation", "--vault", untagged, "--json")
+	require.NoError(t, err)
+	require.NotEmpty(t, askHitIDs(t, plain.Bytes()), "without --tag the untagged vault has hits")
 
 	out, _, err := runRootCmd(t, "ask", "activation", "--vaults", tagged+","+untagged, "--json", "--tag", "graph")
 	require.NoError(t, err)
@@ -86,4 +97,27 @@ func TestAsk_FederatedVaultWithoutTheTagReportsNoHits(t *testing.T) {
 	}
 	assert.False(t, noHits[vaultDisplayName(tagged)])
 	assert.True(t, noHits[vaultDisplayName(untagged)])
+}
+
+// baselineVaultWithoutTag indexes a copy of the baseline vault with one tag
+// removed from every note.
+func baselineVaultWithoutTag(t *testing.T, tag string) string {
+	t.Helper()
+	dir := copyBaselineVaultToTemp(t)
+	notes, err := filepath.Glob(filepath.Join(dir, "*.md"))
+	require.NoError(t, err)
+	require.NotEmpty(t, notes)
+	for _, n := range notes {
+		raw, err := os.ReadFile(n)
+		require.NoError(t, err)
+		stripped := strings.ReplaceAll(string(raw), "tags: ["+tag+", ", "tags: [")
+		require.NoError(t, os.WriteFile(n, []byte(stripped), 0o644))
+	}
+	cfg, err := vault.LoadConfig(dir)
+	require.NoError(t, err)
+	dbPath := filepath.Join(dir, cfg.Index.DBPath)
+	require.NoError(t, os.MkdirAll(filepath.Dir(dbPath), 0o755))
+	_, err = index.NewIndexer(dir, dbPath, cfg).Rebuild()
+	require.NoError(t, err)
+	return dir
 }
