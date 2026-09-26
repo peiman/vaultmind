@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`vaultmind eval <queries.yaml>` scores retrieval against labelled
+  queries.** Hit@1, Hit@K (`--k`, default 5) and MRR over a YAML list of real
+  questions, each naming the notes a good answer surfaces; the queries that did
+  not put a relevant note first are listed with the rank they got, and `--json`
+  carries every query. It runs the vault's own retriever — the one `ask` uses —
+  so a ranking change can be judged better or worse, not merely different. The
+  scoring is the golden-baseline harness the test suite already used, now
+  reachable for any vault.
+
 ## [0.9.15] - 2026-09-26
 
 > Faster recall. A three-vault `ask` — what the recall hook runs on every
