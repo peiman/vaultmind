@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.14] - 2026-09-26
+
+> A project knowledge base that does not pretend to be an agent. `init
+> --profile knowledge` scaffolds one, a knowledge project's compaction prompt
+> asks only about the code, and hook wording no longer assumes an identity
+> vault. Refresh hooks: `vaultmind hooks install <project> --merge --force`.
+
 ### Added
 
 - **`init --profile knowledge` scaffolds a project knowledge base.** `init`
@@ -2155,7 +2162,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.13...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.14...HEAD
+[0.9.14]: https://github.com/peiman/vaultmind/compare/v0.9.13...v0.9.14
 [0.9.13]: https://github.com/peiman/vaultmind/compare/v0.9.12...v0.9.13
 [0.9.12]: https://github.com/peiman/vaultmind/compare/v0.9.11...v0.9.12
 [0.9.11]: https://github.com/peiman/vaultmind/compare/v0.9.10...v0.9.11
