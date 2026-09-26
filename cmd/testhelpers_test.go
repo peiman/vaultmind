@@ -217,6 +217,10 @@ func indexedBaselineVault(t *testing.T) string {
 func runRootCmd(t *testing.T, args ...string) (*bytes.Buffer, *bytes.Buffer, error) {
 	t.Helper()
 	resetFlagsRecursive(RootCmd)
+	// And after: a test that calls a runner directly with a bare command reads
+	// its settings through the flags left on RootCmd, so a value set here would
+	// leak into it (a --profile from one init test broke the next).
+	t.Cleanup(func() { resetFlagsRecursive(RootCmd) })
 	out := &bytes.Buffer{}
 	errOut := &bytes.Buffer{}
 	RootCmd.SetOut(out)
