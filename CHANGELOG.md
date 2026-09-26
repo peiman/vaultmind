@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.11] - 2026-09-26
+
+> Retrieval that finds what is there. `ask` packs every relevant hit, can be
+> scoped by type and tag, and `search` spans vaults. Refresh hooks so the
+> compaction prompt names the knowledge vault and the auto-RAG guard reads
+> the new ranked hit lines: `vaultmind hooks install <project> --merge --force`.
+
 ### Added
 
 - **`ask --type` and `ask --tag`.** Rank only notes of a type, or carrying a
@@ -2053,7 +2060,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.10...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.11...HEAD
+[0.9.11]: https://github.com/peiman/vaultmind/compare/v0.9.10...v0.9.11
 [0.9.10]: https://github.com/peiman/vaultmind/compare/v0.9.9...v0.9.10
 [0.9.9]: https://github.com/peiman/vaultmind/compare/v0.9.8...v0.9.9
 [0.9.8]: https://github.com/peiman/vaultmind/compare/v0.9.7...v0.9.8
