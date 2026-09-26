@@ -168,6 +168,38 @@ ${COMMITS}
 Then re-index the vault holding the desk so the entry is retrievable."
 fi
 
+# What the segment taught about the CODE. The desk entry above is about the
+# agent; a project's knowledge vault is how the next session knows the code, and
+# nothing asked for it: lessons went into commit messages and were never found
+# again (measured 2026-09-25: two notes added to a 414-note vault in five months).
+# Search first, so writing is also reading; write only what is missing, with
+# paths: naming the code, so the note comes back when that code is opened; fix
+# a stale note where it is found. A knowledge vault is one without arcs/ — the
+# identity vault has them. Asked even when the desk entry exists.
+KB_VAULTS=""
+while IFS= read -r v; do
+  v="${v%/}"
+  [ -n "$v" ] || continue
+  case "$v" in /*) ;; *) v="${PROJECT_DIR}/${v#./}" ;; esac
+  [ -d "$v" ] && [ ! -d "$v/arcs" ] || continue
+  case ",${KB_VAULTS}," in *",${v},"*) continue ;; esac
+  KB_VAULTS="${KB_VAULTS:+${KB_VAULTS},}${v}"
+done <<< "$(printf '%s\n%s\n' "$IDENTITY_VAULT" "${VAULTMIND_VAULTS:-}" | tr ',' '\n')"
+
+if [ -n "$KB_VAULTS" ]; then
+  KB_FIRST="${KB_VAULTS%%,*}"
+  SEARCH_VAULTS="${VAULTMIND_VAULTS:-$KB_VAULTS}"
+  MSG="${MSG}
+
+LEARNED ABOUT THE CODE — the knowledge vault is how the next session knows it.
+For each thing this segment taught you about the code or the project (a gotcha,
+a decision and its reason, a convention):
+  1. Search first:  vaultmind ask \"<the lesson>\" --vaults ${SEARCH_VAULTS} --pointers-only
+  2. Not there: add a note to ${KB_FIRST} with paths: naming the code it is about.
+     There but stale: fix that note.
+Nothing learned is an answer too; say so and go on."
+fi
+
 # Record that the prompt was SHOWN. Without this row, a window that ends with no
 # notes banked cannot tell "the prompt fired and was ignored" apart from "the
 # prompt never fired" — a discipline problem and a wiring problem produce

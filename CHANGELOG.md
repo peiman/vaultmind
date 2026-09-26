@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   never fails the write. Turn it off for bulk edits with
   `VAULTMIND_APP_EMBED_ON_WRITE=false` (or `app.embed_on_write: false`) and
   embed once at the end.
+- **At compaction, the hook asks what the segment taught about the code.**
+  When the project has a knowledge vault (a vault without `arcs/`), the
+  PreCompact prompt adds a step: for each lesson, search the vaults first,
+  write only what is missing — with `paths:` naming the code it is about —
+  and fix a stale note where it is found. Asked even when the desk entry
+  exists. The PreCompact hook now receives `VAULTMIND_VAULTS` on install.
 
 ### Fixed
 
