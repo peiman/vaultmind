@@ -787,6 +787,9 @@ app:
     # Path to vault root
     vault: .
 
+    # Comma-separated vaults to look in; the note is read from the one that holds the id. An id held by more than one is an error naming them.
+    vaults: 
+
     # Output in JSON format
     json: false
 

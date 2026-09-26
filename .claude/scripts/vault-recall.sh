@@ -210,45 +210,17 @@ if [ "$ASK_STATUS" != "0" ] || [ -z "$POINTERS" ]; then
 fi
 rm -f "$ASK_ERR"
 
-# Inject with a header that names what is actually here. The phrasing avoids
-# commanding ("you must read this") — we want activation, not coercion.
-#
-# This used to say "run 'vaultmind ask <id>' to read body", which was true when
-# the query passed --pointers-only and no body was ever included. With --excerpt
-# the decision-bearing passage is inline, so the old line would be pointing at a
-# fetch for content already on the screen. The fetch is still named, as the way
-# to get the WHOLE note rather than the way to get anything at all.
-# The footer must name the vault the note CAME FROM, not the primary one.
-#
-# Under federation the delivering vault is whichever one owned the top hit, and
-# `note get` takes only --vault. Pointing at VAULT_PATH sent the reader to a
-# vault the note is not in: measured live, the reach hook delivered a
-# vaultmind-mine journal and told me to fetch it from vaultmind-identity, where
-# `note get` answers "No note found". Dead-end advice introduced by the
-# federation work itself.
-#
-# `ask` already names the owner by directory basename ("delivering from X"), so
-# map that back through VAULTMIND_VAULTS. Unfederated, or if the line is absent
-# or unmatched, this returns VAULT_PATH and the single-vault behaviour is
-# byte-identical.
-resolve_delivering_vault() {
-  local pointers="$1" owner path
-  [ -z "${VAULTMIND_VAULTS:-}" ] && { printf '%s' "$VAULT_PATH"; return; }
-  owner=$(printf '%s' "$pointers" | sed -n 's/.*delivering from \([A-Za-z0-9._-]*\).*/\1/p' | head -1)
-  [ -z "$owner" ] && { printf '%s' "$VAULT_PATH"; return; }
-  while IFS= read -r path; do
-    [ -z "$path" ] && continue
-    if [ "$(basename "$path")" = "$owner" ]; then printf '%s' "$path"; return; fi
-  done <<< "$(printf '%s' "$VAULTMIND_VAULTS" | tr ',' '\n')"
-  printf '%s' "$VAULT_PATH"
-}
-DELIVERING_VAULT=$(resolve_delivering_vault "$POINTERS")
+# The footer reads from where this hook searched. Under federation the ranking
+# lists ids from every vault, and `note get --vaults` finds each in whichever
+# vault holds it; naming one vault (the primary, or the delivering one) left
+# every other ranked id a dead end — "No note found".
+NOTE_GET_WHERE="${VAULT_ARGS[*]}"
 
 echo "VAULT — from your own notes, relevant to what you just said:"
 echo ""
 echo "$POINTERS"
 echo ""
-echo "(the note's own text — a Principle section where it has one, else its opening lines. Full note: vaultmind note get <id> --vault $DELIVERING_VAULT)"
+echo "(the note's own text — a Principle section where it has one, else its opening lines. Full note: vaultmind note get <id> $NOTE_GET_WHERE)"
 
 # Log the successful injection
 printf '{"timestamp":"%s","prompt_len":%d,"ask_status":0,"injection":true,"pointer_chars":%d}\n' \

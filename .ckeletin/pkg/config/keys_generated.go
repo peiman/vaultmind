@@ -252,6 +252,7 @@ const (
 	KeyAppMemorypackExcerpt                  = "app.memorypack.excerpt"                   // Cap each note's contribution at N tokens, preferring its decision-bearing pas...
 	KeyAppMemorypackSlim                     = "app.memorypack.slim"                      // Slim frontmatter (type, title, status only)
 	KeyAppNoteVault                          = "app.note.vault"                           // Path to vault root
+	KeyAppNoteVaults                         = "app.note.vaults"                          // Comma-separated vaults to look in; the note is read from the one that holds t...
 	KeyAppNoteJson                           = "app.note.json"                            // Output in JSON format
 	KeyAppNoteFrontmatterOnly                = "app.note.frontmatter_only"                // Omit body, headings, blocks
 	KeyAppNotecreateVault                    = "app.notecreate.vault"                     // Path to vault root

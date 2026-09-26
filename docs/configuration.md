@@ -262,6 +262,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.memorypack.excerpt` | int | `0` | `VAULTMIND_APP_MEMORYPACK_EXCERPT` | Cap each note's contribution at N tokens, preferring its decision-bearing passage — the Principle section where a note has one, else its opening prose. 0 = off, which also means a note larger than the remaining budget contributes no text at all while the pack still counts it |
 | `app.memorypack.slim` | bool | `false` | `VAULTMIND_APP_MEMORYPACK_SLIM` | Slim frontmatter (type, title, status only) |
 | `app.note.vault` | string | `.` | `VAULTMIND_APP_NOTE_VAULT` | Path to vault root |
+| `app.note.vaults` | string | `` | `VAULTMIND_APP_NOTE_VAULTS` | Comma-separated vaults to look in; the note is read from the one that holds the id. An id held by more than one is an error naming them. |
 | `app.note.json` | bool | `false` | `VAULTMIND_APP_NOTE_JSON` | Output in JSON format |
 | `app.note.frontmatter_only` | bool | `false` | `VAULTMIND_APP_NOTE_FRONTMATTER_ONLY` | Omit body, headings, blocks |
 | `app.notecreate.vault` | string | `.` | `VAULTMIND_APP_NOTECREATE_VAULT` | Path to vault root |
@@ -1091,6 +1092,9 @@ app:
   note:
     # Path to vault root
     vault: .
+
+    # Comma-separated vaults to look in; the note is read from the one that holds the id. An id held by more than one is an error naming them.
+    vaults: 
 
     # Output in JSON format
     json: false
@@ -1958,6 +1962,9 @@ export VAULTMIND_APP_MEMORYPACK_SLIM=false
 
 # Path to vault root
 export VAULTMIND_APP_NOTE_VAULT=.
+
+# Comma-separated vaults to look in; the note is read from the one that holds the id. An id held by more than one is an error naming them.
+export VAULTMIND_APP_NOTE_VAULTS=
 
 # Output in JSON format
 export VAULTMIND_APP_NOTE_JSON=false
