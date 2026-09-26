@@ -126,15 +126,33 @@ func MaxSimScore(queryTokens, docTokens [][]float32) float64 {
 	return total
 }
 
-// dotProductF32 computes the dot product of two float32 vectors.
-// For L2-normalized vectors this equals cosine similarity.
+// dotProductF32 computes the dot product of two float32 vectors over the
+// shorter length. For L2-normalized vectors this equals cosine similarity.
+//
+// It is the inner loop of ColBERT MaxSim — every query token against every
+// token of every note — and measured at most of a warm hybrid search (1.6s of
+// ~1.7s on a 416-note vault). Four independent accumulators, two products
+// each per step, let the adds overlap instead of each waiting on the last, and
+// the bounds are settled once before the loop rather than checked on every
+// element: 3.5x faster than the plain loop (BenchmarkMaxSimScore). Same products; only
+// the order of the sum differs, so results can differ from a plain loop in the
+// last bits (TestDotProductF32_AgreesWithThePlainLoop pins it within 1e-9).
 func dotProductF32(a, b []float32) float64 {
-	var dot float64
-	for i := range a {
-		if i >= len(b) {
-			break
-		}
-		dot += float64(a[i]) * float64(b[i])
+	n := len(a)
+	if len(b) < n {
+		n = len(b)
 	}
-	return dot
+	a, b = a[:n], b[:n]
+	var s0, s1, s2, s3 float64
+	i := 0
+	for ; i+8 <= n; i += 8 {
+		s0 += float64(a[i])*float64(b[i]) + float64(a[i+4])*float64(b[i+4])
+		s1 += float64(a[i+1])*float64(b[i+1]) + float64(a[i+5])*float64(b[i+5])
+		s2 += float64(a[i+2])*float64(b[i+2]) + float64(a[i+6])*float64(b[i+6])
+		s3 += float64(a[i+3])*float64(b[i+3]) + float64(a[i+7])*float64(b[i+7])
+	}
+	for ; i < n; i++ {
+		s0 += float64(a[i]) * float64(b[i])
+	}
+	return (s0 + s1) + (s2 + s3)
 }

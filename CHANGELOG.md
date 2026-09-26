@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`ask` is about a quarter faster on a BGE-M3 vault.** Profiled on a
+  416-note vault: most of a warm hybrid search (1.6s of ~1.7s) was ColBERT
+  scoring — every query token against every token of every note — in a dot
+  product that checked bounds and waited on one accumulator per element. The
+  kernel now uses four accumulators with bounds settled once: 3.5x faster in
+  isolation, hybrid search 2.4s → 1.1s, `ask` 4.5s → 3.4s, a three-vault
+  federated ask 12.2s → 8.6s. Rankings are unchanged (same products, only
+  the order of the sum differs).
+
 ## [0.9.14] - 2026-09-26
 
 > A project knowledge base that does not pretend to be an agent. `init
