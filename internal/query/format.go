@@ -281,10 +281,13 @@ func zGloss(z float64) string {
 }
 
 // writeAskHits emits one line per ranked hit, optionally with a snippet
-// (--preview) and per-lane RRF math (--explain) underneath.
+// (--preview) and per-lane RRF math (--explain) underneath. Each line leads
+// with the hit's rank: the fused RRF score carries order only, printed as 0.02
+// for nearly every hit, and read as relevance it said everything was equally
+// weak. Relevance is in the header; the raw score stays in --json and --explain.
 func writeAskHits(w io.Writer, hits []retrieval.ScoredResult, opts formatOpts) error {
-	for _, h := range hits {
-		if _, err := fmt.Fprintf(w, "  %.2f  %-40s  %s\n", h.Score, h.ID, h.Title); err != nil {
+	for i, h := range hits {
+		if _, err := fmt.Fprintf(w, "  %2d.  %-40s  %s\n", i+1, h.ID, h.Title); err != nil {
 			return err
 		}
 		if opts.preview && h.Snippet != "" {

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`ask` hit lines lead with the rank, not the fused score.** The RRF score
+  printed as `0.02` for nearly every hit: it carries order only, and read as
+  a relevance number it said everything was equally weak. Lines are now
+  `  1.  <id>  <title>`; relevance stays in the header, the raw score in
+  `--json` and `--explain`. Scripts that parse the old `  0.02  <id>` form
+  should accept both (the auto-RAG guard now does).
+
 ### Fixed
 
 - **Compaction names the knowledge vault for lessons, not the desk.** A desk
