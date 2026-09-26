@@ -26,7 +26,11 @@ type CodeChange struct {
 // on either side — a note not yet committed, a file outside a repository —
 // there is nothing to compare, and the note is left unmarked.
 func MarkCodeChanged(notes []Note, vaultRoot string, f CodeFile) {
-	if f.Root == "" {
+	if f.Root == "" || len(notes) == 0 {
+		return
+	}
+	history := codeHistory(f.Root, f.Rel)
+	if len(history) == 0 {
 		return
 	}
 	for i := range notes {
@@ -34,7 +38,7 @@ func MarkCodeChanged(notes []Note, vaultRoot string, f CodeFile) {
 		if !ok {
 			continue
 		}
-		notes[i].CodeChanged = commitsAfter(f.Root, f.Rel, noteTime)
+		notes[i].CodeChanged = commitsAfter(history, noteTime)
 	}
 }
 
@@ -48,24 +52,47 @@ func lastCommitTime(dir, path string) (int64, bool) {
 	return ts, err == nil
 }
 
-// commitsAfter summarises the commits to rel in root made after since.
-func commitsAfter(root, rel string, since int64) *CodeChange {
-	out, err := runGitLog(root, "--format=%ct%x09%as%x09%s", "--", rel)
+// codeCommit is one commit to the code file.
+type codeCommit struct {
+	time    int64
+	date    string
+	subject string
+}
+
+// codeHistory reads the file's commits once, newest first, for every note to
+// be compared against. Committer time decides and committer date is shown, so
+// a rebased commit cannot display a date older than the note it outdates. A
+// rename is not followed: --follow walks the whole history on every read, and
+// a renamed file's notes name the old path anyway.
+func codeHistory(root, rel string) []codeCommit {
+	out, err := runGitLog(root, "--format=%ct%x09%cs%x09%s", "--", rel)
 	if err != nil || out == "" {
 		return nil
 	}
-	var change *CodeChange
+	var history []codeCommit
 	for _, line := range strings.Split(out, "\n") {
 		parts := strings.SplitN(line, "\t", 3)
 		if len(parts) != 3 {
 			continue
 		}
 		ts, perr := strconv.ParseInt(parts[0], 10, 64)
-		if perr != nil || ts <= since {
+		if perr != nil {
+			continue
+		}
+		history = append(history, codeCommit{time: ts, date: parts[1], subject: parts[2]})
+	}
+	return history
+}
+
+// commitsAfter summarises the commits in history made after since.
+func commitsAfter(history []codeCommit, since int64) *CodeChange {
+	var change *CodeChange
+	for _, c := range history {
+		if c.time <= since {
 			continue
 		}
 		if change == nil {
-			change = &CodeChange{Date: parts[1], Latest: parts[2]}
+			change = &CodeChange{Date: c.date, Latest: c.subject}
 		}
 		change.Commits++
 	}

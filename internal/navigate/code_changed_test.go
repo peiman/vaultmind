@@ -81,3 +81,23 @@ func TestMarkCodeChanged_SaysNothingWithoutHistory(t *testing.T) {
 	MarkCodeChanged(notes, vault, CodeFile{Rel: "run.go"})
 	assert.Nil(t, notes[0].CodeChanged, "a file outside a repository has no history")
 }
+
+// A rebased commit keeps its old author date but gets a new committer date.
+// Committer time decides, so committer date is what is shown — never a date
+// older than the note it outdates.
+func TestMarkCodeChanged_ShowsTheCommitterDateOfARebasedCommit(t *testing.T) {
+	vault, code := gitRepo(t), gitRepo(t)
+	commitFile(t, code, "cmd/run.go", "v1", "2026-09-01T10:00:00Z", "feat: first")
+	commitFile(t, vault, "concepts/run.md", "note", "2026-09-10T10:00:00Z", "vault: note")
+	require.NoError(t, os.WriteFile(filepath.Join(code, "cmd/run.go"), []byte("v2"), 0o644))
+	runGit(t, code, "", "add", "cmd/run.go")
+	cmd := exec.Command("git", "-C", code, "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "fix: rebased")
+	cmd.Env = append(withoutGitLocation(os.Environ()), "GIT_AUTHOR_DATE=2026-09-05T10:00:00Z", "GIT_COMMITTER_DATE=2026-09-15T10:00:00Z")
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(out))
+
+	notes := []Note{{ID: "concept-run", Path: "concepts/run.md"}}
+	MarkCodeChanged(notes, vault, CodeFile{Rel: "cmd/run.go", Root: code})
+	require.NotNil(t, notes[0].CodeChanged)
+	assert.Equal(t, "2026-09-15", notes[0].CodeChanged.Date)
+}
