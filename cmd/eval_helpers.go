@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/internal/baseline"
@@ -50,14 +51,17 @@ func evaluateVault(cmd *cobra.Command, path string) (*evalResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("eval: %w", err)
 	}
+	if err := requireLabels(queries, path); err != nil {
+		return nil, err
+	}
 	vaultPath := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppEvalVault)
 	k := getConfigValueWithFlags[int](cmd, "k", config.KeyAppEvalK)
 	if k < 1 {
 		return nil, fmt.Errorf("eval: --k must be at least 1, got %d", k)
 	}
-	vdb, err := cmdutil.OpenVaultDB(vaultPath)
+	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, evalEnvelope)
 	if err != nil {
-		return nil, fmt.Errorf("eval: %w", err)
+		return nil, err
 	}
 	defer vdb.Close()
 	ret := query.BuildAutoRetrieverFull(cmd.Context(), vdb.DB)
@@ -77,6 +81,9 @@ func scoreEval(rep *baseline.Report, vaultPath, mode string, limit int) *evalRes
 		HitAtK: rep.HitAtK, MRR: rep.MRR, limit: limit}
 	hits1 := 0
 	for _, q := range rep.Queries {
+		// baseline.ReciprocalRank is exactly 1/rank of the first relevant note
+		// among all fetched results (0 when none), so inverting it recovers the
+		// rank; the +0.5 only absorbs float error in 1/(1/n).
 		rank := 0
 		if q.ReciprocalRank > 0 {
 			rank = int(1/q.ReciprocalRank + 0.5)
@@ -129,6 +136,22 @@ func writeEvalText(w io.Writer, res *evalResult) error {
 		if _, err := fmt.Fprintln(w, l); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// requireLabels refuses queries with nothing labelled: they cannot be missed,
+// and scoring them as misses would lower every number for a query that had no
+// right answer.
+func requireLabels(queries []baseline.Query, path string) error {
+	var unlabelled []string
+	for _, q := range queries {
+		if len(q.Expected) == 0 {
+			unlabelled = append(unlabelled, q.Name)
+		}
+	}
+	if len(unlabelled) > 0 {
+		return fmt.Errorf("eval: %s: queries with no expected notes: %s — label them or remove them", path, strings.Join(unlabelled, ", "))
 	}
 	return nil
 }
