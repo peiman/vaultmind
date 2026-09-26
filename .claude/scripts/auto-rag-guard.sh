@@ -258,7 +258,9 @@ GUIDANCE=""
 HIT_IDS=""
 if [ -x "$VAULTMIND" ] && [ -d "$VAULT_ROOT/.vaultmind" ]; then
   RAW=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=auto-rag-guard "$VAULTMIND" ask "$QUERY" --vault "$VAULT_ROOT" --max-items 2 --budget 1500 2>/dev/null || true)
-  # Extract hit ids from the "  0.NN  <id>  <title>" lines for logging.
+  # Extract hit ids for logging from the hit lines: "  1.  <id>  <title>"
+  # (rank, since the fused score stopped being shown) or "  0.NN  <id>  <title>"
+  # (score, older binaries).
   HIT_IDS=$(echo "$RAW" | grep -E '^[[:space:]]+[0-9]+\.([0-9]+)?[[:space:]]+[a-z]' | awk '{print $2}' | head -3 | tr '\n' ',' | sed 's/,$//')
   # The body for injection: strip the JSON debug lines that the binary
   # writes to stdout regardless. Keep the human-readable section.

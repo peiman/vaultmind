@@ -1713,6 +1713,11 @@
               "default": ".",
               "description": "Path to vault root",
               "type": "string"
+            },
+            "vaults": {
+              "default": "",
+              "description": "Search several vaults, comma-separated (overrides --vault); one ranked section per vault",
+              "type": "string"
             }
           },
           "type": "object"

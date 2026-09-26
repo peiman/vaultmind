@@ -849,6 +849,9 @@ app:
     # Search mode: keyword, semantic, or hybrid
     mode: keyword
 
+    # Search several vaults, comma-separated (overrides --vault); one ranked section per vault
+    vaults: 
+
   self:
     # Path to vault root
     vault: .

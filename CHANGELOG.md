@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`search --vaults`.** Search several vaults, comma-separated, like `ask`
+  does: one ranked section per vault (scores from different vaults are not on
+  one scale), and one JSON envelope with a result per vault. A listed path
+  that is not a vault is refused.
+
 - **`note create` warns when a note by that name already exists.** Before
   writing, it resolves the new note's title the way `vaultmind resolve` does
   (title, alias, normalized name) and, on a match, names the existing note
