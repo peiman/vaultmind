@@ -136,6 +136,7 @@ func federateAndPickOwner(cmd *cobra.Command, queryText string, paths []string, 
 	for _, n := range names {
 		statuses = append(statuses, query.FederatedVaultStatus{
 			Name: n, Verdict: verdicts[n], Contributed: contributed[n],
+			NoHits: len(perVault[n]) == 0,
 		})
 	}
 
@@ -161,7 +162,7 @@ func searchOneVault(cmd *cobra.Command, vaultPath, queryText string, searchLimit
 	}
 	defer vdb.Close()
 
-	ret := query.BuildAutoRetrieverFull(cmd.Context(), vdb.DB)
+	ret := askRetriever(cmd, vdb.DB)
 	defer ret.Cleanup()
 
 	// ONE retrieval, then judge those same hits. Searching again for the

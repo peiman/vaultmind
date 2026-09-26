@@ -166,6 +166,16 @@
               "description": "Max search hits",
               "type": "integer"
             },
+            "tag": {
+              "default": "",
+              "description": "Rank only notes carrying this tag",
+              "type": "string"
+            },
+            "type": {
+              "default": "",
+              "description": "Rank only notes of this type (e.g. decision, concept)",
+              "type": "string"
+            },
             "vault": {
               "default": ".",
               "description": "Path to vault root",

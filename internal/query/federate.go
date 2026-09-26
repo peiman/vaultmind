@@ -231,6 +231,10 @@ type FederatedVaultStatus struct {
 	Name        string `json:"name"`
 	Verdict     string `json:"verdict,omitempty"`
 	Contributed bool   `json:"contributed"`
+	// NoHits marks a vault the search returned nothing from. It is kept apart
+	// from an empty Verdict, which means unmeasured (no embedder): with --type
+	// or --tag, a vault holding no such notes is ordinary, not broken.
+	NoHits bool `json:"no_hits,omitempty"`
 }
 
 // VaultSource is one vault participating in a federated query: a display name

@@ -148,7 +148,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	}
 	defer vdb.Close()
 
-	ret := query.BuildAutoRetrieverFull(cmd.Context(), vdb.DB)
+	ret := askRetriever(cmd, vdb.DB)
 	defer ret.Cleanup()
 
 	resolver := graph.NewResolver(vdb.DB)

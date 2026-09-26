@@ -675,6 +675,10 @@ func formatFederationBlock(result *AskResult) string {
 		if v.Contributed {
 			continue
 		}
+		if v.NoHits {
+			fmt.Fprintf(&b, "    %-22s no notes match\n", v.Name)
+			continue
+		}
 		fmt.Fprintf(&b, "    %-22s nothing above its own floor (%s)\n", v.Name, verdictOrUnmeasured(v.Verdict))
 	}
 	b.WriteString(formatFederatedRanking(result.Federated))

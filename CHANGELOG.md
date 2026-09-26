@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`ask --type` and `ask --tag`.** Rank only notes of a type, or carrying a
+  tag: `ask "why did we choose BGE-M3" --type decision` lists five decisions,
+  where the unscoped query mixed in concepts and a neuroscience paper.
+  Applies to every vault under `--vaults`, and to `--read`. The context pack
+  still follows the top hit's links, so a neighbour of another type can
+  appear there.
+
+- **A federated vault with no hits says so.** It was reported as
+  "unmeasured — no embedder", the same words as a vault that cannot be
+  judged. With `--type` or `--tag` a vault holding no such notes is ordinary;
+  it now reads "no notes match", and JSON marks it `no_hits`.
+
 - **`search --vaults`.** Search several vaults, comma-separated, like `ask`
   does: one ranked section per vault (scores from different vaults are not on
   one scale), and one JSON envelope with a result per vault. A listed path

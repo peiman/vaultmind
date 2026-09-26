@@ -42,6 +42,14 @@ SEARCH SEVERAL VAULTS AT ONCE
       Note: --vault takes ONE path. Repeating it (--vault A --vault B) is an
       error, because it used to silently keep B and answer from it alone.
 
+SCOPE THE SEARCH
+
+  vaultmind ask "X" --type decision
+  vaultmind ask "X" --tag engineering
+      Rank only notes of that type, or carrying that tag. Applies to every
+      vault under --vaults. The context pack around the top hit still follows
+      its links, so a neighbour of another type can appear there.
+
 ANTI-PATTERN — AVOID
 
   vaultmind ask "X" --budget 3000 | tail -20
@@ -71,6 +79,8 @@ OUTPUT INCLUDES
 		"app.ask.read":             "read",
 		"app.ask.quiet_on_nomatch": "quiet-on-no-match",
 		"app.ask.excerpt":          "excerpt",
+		"app.ask.type":             "type",
+		"app.ask.tag":              "tag",
 	},
 }
 
@@ -89,6 +99,8 @@ func AskOptions() []config.ConfigOption {
 		{Key: "app.ask.read", DefaultValue: "", Description: "Read the body of the named hit inline after the menu — accepts a 1-indexed rank (e.g. --read 2) or an exact id (e.g. --read concept-foo). Single-command shortcut for probe→read when you already know which hit from the titles", Type: "string"},
 		{Key: "app.ask.quiet_on_nomatch", DefaultValue: false, Description: "Print nothing when the top hit is at/below the noise floor (no_match). For ambient recall: inject silence instead of irrelevant pointers when the prompt is off-domain. Also skips the context-pack and access fan-out so off-domain prompts don't reinforce irrelevant notes.", Type: "bool"},
 		{Key: "app.ask.excerpt", DefaultValue: 0, Description: "Cap each note's contribution at N tokens, preferring its decision-bearing passage — the Principle section where a note has one (an arc's rule lives there; its opening is story setup), else the opening prose. Applies to the target note and every context item. 0 = off, which also means an over-budget note contributes no text at all while the pack still counts it, so a tight budget yields items with no content", Type: "int"},
+		{Key: "app.ask.type", DefaultValue: "", Description: "Rank only notes of this type (e.g. decision, concept)", Type: "string"},
+		{Key: "app.ask.tag", DefaultValue: "", Description: "Rank only notes carrying this tag", Type: "string"},
 	}
 }
 
