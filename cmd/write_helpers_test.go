@@ -1,12 +1,15 @@
 package cmd
 
 import (
+	"errors"
 	"path/filepath"
 	"testing"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/internal/embedding"
 	"github.com/peiman/vaultmind/internal/index"
+	"github.com/peiman/vaultmind/internal/vault"
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -80,4 +83,44 @@ func TestEmbedOnWrite_ABacklogIsNamedNotEmbedded(t *testing.T) {
 	assert.Contains(t, errOut.String(), "notes have no embeddings")
 	assert.Contains(t, errOut.String(), "vaultmind index --embed --vault "+vault)
 	assert.NotContains(t, errOut.String(), "embedded ", "the backlog is not embedded on a write")
+}
+
+// The pass itself loads a real model; runEmbedPass is swapped here so the two
+// outcomes a write reports are pinned without one.
+func stubEmbedPass(t *testing.T, res *index.EmbedResult, err error) {
+	t.Helper()
+	saved := runEmbedPass
+	runEmbedPass = func(_ *cobra.Command, _, _ string, _ *vault.Config, _ string) (*index.EmbedResult, error) {
+		return res, err
+	}
+	t.Cleanup(func() { runEmbedPass = saved })
+}
+
+func miniLMVault(t *testing.T) string {
+	t.Helper()
+	vault := buildIndexedTestVault(t)
+	db, err := index.Open(filepath.Join(vault, ".vaultmind", "index.db"))
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	_, err = db.Exec(`UPDATE notes SET embedding = x'00'`)
+	require.NoError(t, err)
+	return vault
+}
+
+func TestEmbedOnWrite_ReportsWhatItEmbedded(t *testing.T) {
+	vault := miniLMVault(t)
+	stubEmbedPass(t, &index.EmbedResult{Embedded: 1}, nil)
+
+	_, errOut, err := runRootCmd(t, "frontmatter", "set", "projects/beta.md", "status", "paused", "--vault", vault)
+	require.NoError(t, err)
+	assert.Contains(t, errOut.String(), "embedded 1 note(s) [model: "+embedding.ModelMiniLM+"]")
+}
+
+func TestEmbedOnWrite_AFailedPassDoesNotFailTheWrite(t *testing.T) {
+	vault := miniLMVault(t)
+	stubEmbedPass(t, nil, errors.New("model load failed"))
+
+	_, errOut, err := runRootCmd(t, "frontmatter", "set", "projects/beta.md", "status", "paused", "--vault", vault)
+	require.NoError(t, err, "the note is written even when embedding fails")
+	assert.Contains(t, errOut.String(), "written, but not embedded (model load failed)")
 }

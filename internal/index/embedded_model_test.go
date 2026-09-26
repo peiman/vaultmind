@@ -1,6 +1,7 @@
 package index_test
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -49,4 +50,12 @@ func TestEmbeddedModel_SparseOrColBERTIsBGEM3(t *testing.T) {
 		"embedding = x'00', sparse_embedding = x'00', colbert_embedding = x'00'", ""))
 	require.NoError(t, err)
 	assert.Equal(t, embedding.ModelBGEM3, model)
+}
+
+func TestEmbeddedModel_AnUnopenableIndexIsAnError(t *testing.T) {
+	blocker := filepath.Join(t.TempDir(), "a-file")
+	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0o600))
+
+	_, err := index.EmbeddedModel(filepath.Join(blocker, "index.db"))
+	assert.Error(t, err)
 }

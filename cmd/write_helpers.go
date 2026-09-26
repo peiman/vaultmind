@@ -22,6 +22,12 @@ const embedOnWriteFlag = "embed-on-write"
 // A variable so a test can lower it.
 var embedOnWriteLimit = 10
 
+// runEmbedPass runs the incremental embed pass. A variable so tests can pin
+// what a write reports without loading a real model.
+var runEmbedPass = func(cmd *cobra.Command, vaultPath, dbPath string, cfg *vault.Config, model string) (*index.EmbedResult, error) {
+	return index.NewIndexer(vaultPath, dbPath, cfg).RunEmbed(cmd.Context(), dbPath, model, false)
+}
+
 // embedAfterWrite embeds the notes a write left without embeddings, with the
 // model the vault already uses. A changed note loses its vectors (the index
 // clears them on a content change), so without this a note just written was
@@ -48,7 +54,7 @@ func embedAfterWrite(cmd *cobra.Command, vaultPath string, cfg *vault.Config) {
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "not embedded: %d notes have no embeddings; embed them with %s\n", pending, finish)
 		return
 	}
-	res, err := index.NewIndexer(vaultPath, dbPath, cfg).RunEmbed(cmd.Context(), dbPath, model, false)
+	res, err := runEmbedPass(cmd, vaultPath, dbPath, cfg, model)
 	if err != nil {
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "written, but not embedded (%v); run %s\n", err, finish)
 		return
