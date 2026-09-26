@@ -42,6 +42,7 @@ EXAMPLES
       memory should persist across multiple repos.
 
   vaultmind init ./vaultmind-identity --wire-hooks
+  vaultmind init ./docs-kb --profile knowledge --wire-hooks   # a project knowledge base
       Scaffold AND wire Claude Code in one step (see ONE-COMMAND SETUP).
 
   vaultmind init --print-instructions
@@ -97,6 +98,7 @@ collaboration produce the rest.`,
 		"app.init.print_instructions": "print-instructions",
 		"app.init.full":               "full",
 		"app.init.wire_hooks":         "wire-hooks",
+		"app.init.profile":            "profile",
 		"app.init.local":              "local",
 		"app.init.dry_run":            "dry-run",
 		"app.init.project_dir":        "project-dir",
@@ -128,6 +130,12 @@ func InitOptions() []config.ConfigOption {
 			DefaultValue: false,
 			Description:  "After scaffolding, install the Claude Code hook scripts into the current project and merge the wiring into .claude/settings.json (baked to the new vault). Never clobbers existing hooks.",
 			Type:         "bool",
+		},
+		{
+			Key:          "app.init.profile",
+			DefaultValue: "",
+			Description:  "What the vault is for: knowledge scaffolds a project knowledge base (decisions/, concepts/, notes tied to code with paths:); empty, full or persona scaffold the agent-identity vault. With --wire-hooks it is also the hook profile installed.",
+			Type:         "string",
 		},
 		{
 			Key:          "app.init.local",

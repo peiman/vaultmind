@@ -586,6 +586,9 @@ app:
     # After scaffolding, install the Claude Code hook scripts into the current project and merge the wiring into .claude/settings.json (baked to the new vault). Never clobbers existing hooks.
     wire_hooks: false
 
+    # What the vault is for: knowledge scaffolds a project knowledge base (decisions/, concepts/, notes tied to code with paths:); empty, full or persona scaffold the agent-identity vault. With --wire-hooks it is also the hook profile installed.
+    profile: 
+
     # With --wire-hooks, merge into .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared).
     local: false
 

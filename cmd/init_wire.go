@@ -16,6 +16,8 @@ type initWireParams struct {
 	local      bool
 	dryRun     bool
 	projectDir string
+	// profile is --profile as given; empty keeps what the project declared.
+	profile string
 }
 
 // wireInitHooks provisions VaultMind's Claude Code hooks for a freshly
@@ -39,11 +41,17 @@ func wireInitHooks(w io.Writer, vaultPath string, p initWireParams) error {
 		return fmt.Errorf("resolving vault path: %w", err)
 	}
 
-	// Keep the profile the project declared; without it init re-declared a
-	// knowledge project "full" and wired a persona into it.
-	profile, err := hooks.DeclaredProfile(projectDir)
+	// A profile named on init wins; otherwise keep the one the project
+	// declared — without that, init re-declared a knowledge project "full" and
+	// wired a persona into it.
+	profile, err := hooks.ParseProfile(p.profile)
 	if err != nil {
 		return err
+	}
+	if p.profile == "" {
+		if profile, err = hooks.DeclaredProfile(projectDir); err != nil {
+			return err
+		}
 	}
 	prov, err := hooks.Provision(hooks.InstallConfig{
 		ProjectDir: projectDir,

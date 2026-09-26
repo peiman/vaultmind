@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`init --profile knowledge` scaffolds a project knowledge base.** `init`
+  only knew the agent-identity shape, so a docs vault started with
+  `identity/`, `arcs/` and `principles/`. The knowledge scaffold has
+  `decisions/` and `concepts/` with one example each (showing `paths:`,
+  commented out so the examples cover no real code), a README on tying notes
+  to code and searching before writing, and the same type registry. Next
+  steps name a project question instead of "who am I". With `--wire-hooks`,
+  the profile named on `init` is the hook profile installed.
+
 ### Fixed
 
 - **A knowledge project's compaction prompt is about the code, not an agent.**
