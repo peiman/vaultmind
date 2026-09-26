@@ -511,7 +511,22 @@ func TestCheckProjectStructurePartialDirs(t *testing.T) {
 	assert.Contains(t, results[0].Details, "Missing files")
 }
 
+// clearGitEnv unsets the variables git exports to its hooks. Inside a hook run
+// from a worktree GIT_DIR points at the worktree's repository, and a git
+// command in a temp dir then finds that repository instead of none (the
+// v0.9.10 release push failed this test exactly so).
+func clearGitEnv(t *testing.T) {
+	t.Helper()
+	for _, name := range []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_PREFIX"} {
+		if value, ok := os.LookupEnv(name); ok {
+			assert.NoError(t, os.Unsetenv(name))
+			t.Cleanup(func() { _ = os.Setenv(name, value) })
+		}
+	}
+}
+
 func TestCheckGitStatusInNonGitDir(t *testing.T) {
+	clearGitEnv(t)
 	doctor := NewDoctor()
 
 	currentDir, err := os.Getwd()

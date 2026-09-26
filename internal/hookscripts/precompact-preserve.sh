@@ -187,7 +187,17 @@ while IFS= read -r v; do
 done <<< "$(printf '%s\n%s\n' "$IDENTITY_VAULT" "${VAULTMIND_VAULTS:-}" | tr ',' '\n')"
 
 if [ -n "$KB_VAULTS" ]; then
-  KB_FIRST="${KB_VAULTS%%,*}"
+  # Lessons go to a knowledge vault, not the desk: a desk that is its own vault
+  # has no arcs/ either and would otherwise be named. When the desk sits inside
+  # the knowledge vault (its journal/), that vault is still the one.
+  DESK_VAULT="${DESK_DIR%/}"
+  case "$DESK_VAULT" in /*) ;; *) DESK_VAULT="${PROJECT_DIR}/${DESK_VAULT#./}" ;; esac
+  [ "$(basename "$DESK_VAULT")" = "journal" ] && DESK_VAULT="$(dirname "$DESK_VAULT")"
+  KB_FIRST=""
+  while IFS= read -r v; do
+    if [ -n "$v" ] && [ "$v" != "$DESK_VAULT" ]; then KB_FIRST="$v"; break; fi
+  done <<< "$(printf '%s' "$KB_VAULTS" | tr ',' '\n')"
+  [ -n "$KB_FIRST" ] || KB_FIRST="${KB_VAULTS%%,*}"
   SEARCH_VAULTS="${VAULTMIND_VAULTS:-$KB_VAULTS}"
   MSG="${MSG}
 

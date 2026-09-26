@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Compaction names the knowledge vault for lessons, not the desk.** A desk
+  that is its own vault has no `arcs/` either, so it looked like a knowledge
+  vault and, listed first, was named as the place to write what was learned
+  about the code. The vault holding the desk is now passed over when another
+  knowledge vault exists; a desk inside the knowledge vault keeps it.
+
 ## [0.9.10] - 2026-09-26
 
 > A write path that keeps the vault current. Refresh hooks so the compaction

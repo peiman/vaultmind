@@ -81,3 +81,31 @@ func TestPrecompact_TheCodeStepStaysAfterTheDeskEntryIsWritten(t *testing.T) {
 	assert.Contains(t, msg, "already exists", "the desk entry is not asked for again")
 	assert.Contains(t, msg, learnedStep, "but what was learned about the code still is")
 }
+
+// The desk is where the agent writes about itself; lessons about the code go
+// to the knowledge vault. A desk that is its own vault has no arcs/ either, so
+// it looked like a knowledge vault — and, listed first, was named as the
+// place for lessons (found live, 2026-09-26).
+func TestPrecompact_LessonsGoToTheKnowledgeVaultNotTheDesk(t *testing.T) {
+	e := newPrecompactEnv(t, true)
+	desk := filepath.Join(filepath.Dir(e.identity), "desk")
+	require.NoError(t, os.MkdirAll(filepath.Join(desk, "journal"), 0o750))
+	env := append(append([]string{}, e.env...),
+		"VAULTMIND_VAULTS="+e.identity+","+desk+","+e.kb,
+		"VAULTMIND_DESK_DIR="+filepath.Join(desk, "journal"))
+
+	msg := precompactMessage(t, env)
+	assert.Contains(t, msg, "add a note to "+e.kb+" ")
+	assert.NotContains(t, msg, "add a note to "+desk+" ")
+}
+
+// When the desk lives inside the knowledge vault (its journal/), that vault is
+// still where lessons go.
+func TestPrecompact_ADeskInsideTheKnowledgeVaultKeepsIt(t *testing.T) {
+	e := newPrecompactEnv(t, true)
+	env := append(append([]string{}, e.env...),
+		"VAULTMIND_VAULT="+e.kb, "VAULTMIND_VAULTS="+e.kb,
+		"VAULTMIND_DESK_DIR="+filepath.Join(e.kb, "journal"))
+
+	assert.Contains(t, precompactMessage(t, env), "add a note to "+e.kb+" ")
+}
