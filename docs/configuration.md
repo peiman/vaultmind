@@ -62,6 +62,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.ask.excerpt` | int | `0` | `VAULTMIND_APP_ASK_EXCERPT` | Cap each note's contribution at N tokens, preferring its decision-bearing passage — the Principle section where a note has one (an arc's rule lives there; its opening is story setup), else the opening prose. Applies to the target note and every context item. 0 = off, which also means an over-budget note contributes no text at all while the pack still counts it, so a tight budget yields items with no content |
 | `app.ask.type` | string | `` | `VAULTMIND_APP_ASK_TYPE` | Rank only notes of this type (e.g. decision, concept) |
 | `app.ask.tag` | string | `` | `VAULTMIND_APP_ASK_TAG` | Rank only notes carrying this tag |
+| `app.ask.dedup_window` | string | `` | `VAULTMIND_APP_ASK_DEDUP_WINDOW` | Send a note as its title alone when this conversation (VAULTMIND_USER_SESSION_ID) received its text within this long, e.g. 10m. Empty = off. For hooks that fire in bursts. |
 | `app.check.fail_fast` | bool | `false` | `VAULTMIND_APP_CHECK_FAIL_FAST` | Stop on first failed check |
 | `app.check.verbose` | bool | `false` | `VAULTMIND_APP_CHECK_VERBOSE` | Show verbose output including command details |
 | `app.check.parallel` | bool | `true` | `VAULTMIND_APP_CHECK_PARALLEL` | Run checks within each category in parallel (disable with --parallel=false) |
@@ -412,6 +413,9 @@ app:
 
     # Rank only notes carrying this tag
     tag: 
+
+    # Send a note as its title alone when this conversation (VAULTMIND_USER_SESSION_ID) received its text within this long, e.g. 10m. Empty = off. For hooks that fire in bursts.
+    dedup_window: 
 
   check:
     # Stop on first failed check
@@ -1362,6 +1366,9 @@ export VAULTMIND_APP_ASK_TYPE=
 
 # Rank only notes carrying this tag
 export VAULTMIND_APP_ASK_TAG=
+
+# Send a note as its title alone when this conversation (VAULTMIND_USER_SESSION_ID) received its text within this long, e.g. 10m. Empty = off. For hooks that fire in bursts.
+export VAULTMIND_APP_ASK_DEDUP_WINDOW=
 
 # Stop on first failed check
 export VAULTMIND_APP_CHECK_FAIL_FAST=true

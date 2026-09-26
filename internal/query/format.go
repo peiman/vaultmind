@@ -347,10 +347,23 @@ type deliveryCounts struct {
 	// same lie in the other direction. Both facts are reported; neither is
 	// allowed to stand in for the other.
 	Excerpted int
+	// ShownBefore is the blocks sent as a title because this conversation
+	// already received their text. Not a budget loss, so not in TitlesOnly.
+	ShownBefore int
 }
 
-// TitlesOnly is the blocks that rendered a title and no text.
-func (c deliveryCounts) TitlesOnly() int { return c.Notes - c.Delivered }
+// TitlesOnly is the blocks that rendered a title and no text for lack of room.
+func (c deliveryCounts) TitlesOnly() int { return c.Notes - c.Delivered - c.ShownBefore }
+
+// shownBeforeSuffix follows the title of a note this conversation already has.
+const shownBeforeSuffix = " — shown earlier this session"
+
+func titleSuffix(shownBefore bool) string {
+	if shownBefore {
+		return shownBeforeSuffix
+	}
+	return ""
+}
 
 // countDelivery mirrors writeContextTarget and writeContextItems exactly: a
 // block counts as delivered under precisely the conditions that make those
@@ -360,6 +373,9 @@ func countDelivery(ctx *memory.ContextPackResult, opts formatOpts) deliveryCount
 	var c deliveryCounts
 	if ctx.Target != nil {
 		c.Notes++
+		if ctx.Target.ShownBefore {
+			c.ShownBefore++
+		}
 		if !opts.pointersOnly && ctx.Target.Body != "" {
 			c.Delivered++
 			if ctx.Target.BodyExcerpted {
@@ -369,6 +385,9 @@ func countDelivery(ctx *memory.ContextPackResult, opts formatOpts) deliveryCount
 	}
 	for _, item := range ctx.Context {
 		c.Notes++
+		if item.ShownBefore {
+			c.ShownBefore++
+		}
 		if !opts.pointersOnly && item.BodyIncluded && item.Body != "" {
 			c.Delivered++
 			if item.BodyExcerpted {
@@ -398,6 +417,9 @@ func deliveryPhrase(c deliveryCounts) string {
 	}
 	if t := c.TitlesOnly(); t > 0 && c.Delivered > 0 {
 		s += fmt.Sprintf(", %d title%s only", t, pluralS(t))
+	}
+	if c.ShownBefore > 0 {
+		s += fmt.Sprintf(", %d%s", c.ShownBefore, shownBeforeSuffix[len(" —"):])
 	}
 	return s
 }
@@ -449,7 +471,7 @@ func writeContextTarget(w io.Writer, target *memory.ContextPackTarget, opts form
 	}
 	noteType, _ := target.Frontmatter["type"].(string)
 	title, _ := target.Frontmatter["title"].(string)
-	if _, err := fmt.Fprintf(w, "  [%s] %s\n", noteType, title); err != nil {
+	if _, err := fmt.Fprintf(w, "  [%s] %s%s\n", noteType, title, titleSuffix(target.ShownBefore)); err != nil {
 		return err
 	}
 	if !opts.pointersOnly && target.Body != "" {
@@ -476,7 +498,7 @@ func writeContextItems(w io.Writer, items []memory.ContextItem, opts formatOpts)
 	for _, item := range items {
 		noteType, _ := item.Frontmatter["type"].(string)
 		title, _ := item.Frontmatter["title"].(string)
-		if _, err := fmt.Fprintf(w, "  [%s] %s\n", noteType, title); err != nil {
+		if _, err := fmt.Fprintf(w, "  [%s] %s%s\n", noteType, title, titleSuffix(item.ShownBefore)); err != nil {
 			return err
 		}
 		if !opts.pointersOnly && item.BodyIncluded && item.Body != "" {
