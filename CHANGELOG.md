@@ -22,6 +22,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   they show can be opened. Refresh hooks:
   `vaultmind hooks install <project> --merge --force`.
 
+### Fixed
+
+- **A frontmatter value must fit its field.** `frontmatter set`, `frontmatter
+  merge` and a plan's `note_create` checked that a field was allowed but not
+  its value: a list could be written to `title`, and a number to `status`
+  skipped the status check. The readers drop a value of the wrong shape
+  without a word, so it was lost rather than rejected. Text fields now take
+  text, list fields (`tags`, `aliases`, `related_ids`, `source_ids`, `paths`)
+  take text or a list of text, and `created`/`updated` take a date; anything
+  else is refused as `invalid_type`, naming what was given. Fields the schema
+  does not shape take any value, as before.
+
 ## [0.9.11] - 2026-09-26
 
 > Retrieval that finds what is there. `ask` packs every relevant hit, can be
