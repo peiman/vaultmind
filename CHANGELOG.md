@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.12] - 2026-09-26
+
+> Notes that keep up with the code. A note about a file now says when that
+> file changed after it, `note get --vaults` opens any id a federated hook
+> shows, and frontmatter writes refuse a value of the wrong shape. Refresh
+> hooks for the new footers and the code-map warning:
+> `vaultmind hooks install <project> --merge --force`.
+
 ### Added
 
 - **A note about code says when that code changed after it.** `tree --for
@@ -2097,7 +2105,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.11...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.12...HEAD
+[0.9.12]: https://github.com/peiman/vaultmind/compare/v0.9.11...v0.9.12
 [0.9.11]: https://github.com/peiman/vaultmind/compare/v0.9.10...v0.9.11
 [0.9.10]: https://github.com/peiman/vaultmind/compare/v0.9.9...v0.9.10
 [0.9.9]: https://github.com/peiman/vaultmind/compare/v0.9.8...v0.9.9
