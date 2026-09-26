@@ -310,18 +310,14 @@ func hookScriptBody(t *testing.T, name string) string {
 	return string(body)
 }
 
-// A federated hook must point at the vault the note CAME FROM.
+// A federated hook's footer must lead to every note it shows.
 //
-// Both hooks build their "full note: vaultmind note get <id> --vault X" footer
-// from VAULT_PATH, which under federation is just the first vault. Measured
-// live: the reach hook delivered journal-2026-06-04-the-re-sealing from
-// vaultmind-mine and told me to fetch it from vaultmind-identity, where
-// `note get` answers "No note found". Dead-end advice, on every turn, and
-// introduced by the federation work itself.
-//
-// `note get` takes only --vault, so the footer has to name the owning vault's
-// PATH — which means mapping the display name in "delivering from <name>" back
-// through VAULTMIND_VAULTS.
+// The footer once named VAULT_PATH, which under federation is just the first
+// vault: the reach hook delivered a vaultmind-mine journal and sent me to
+// vaultmind-identity, where `note get` answers "No note found". Naming the
+// delivering vault fixed the context notes but not the ranking, which lists
+// ids from every vault. `note get --vaults` finds an id in whichever vault
+// holds it, so the footer reads from where the hook searched.
 const federatedOwnerStub = "#!/bin/bash\n" +
 	"if [ \"$1\" = ask ]; then\n" +
 	"  echo '  [federated: 2 vaults searched; delivering from beta-vault]'\n" +
@@ -329,7 +325,7 @@ const federatedOwnerStub = "#!/bin/bash\n" +
 	"  echo 'Context from: some-note — 1 note, 1 delivered as excerpt (10 tok)'\n" +
 	"fi\nexit 0\n"
 
-func TestRecallHook_FooterNamesTheVaultTheNoteCameFrom(t *testing.T) {
+func TestRecallHook_FederatedFooterReadsFromEveryVaultSearched(t *testing.T) {
 	h := newHookEnv(t, federatedOwnerStub)
 	payload, err := json.Marshal(map[string]string{"prompt": "what did we decide about retries?", "session_id": "test"})
 	require.NoError(t, err)
@@ -337,21 +333,21 @@ func TestRecallHook_FooterNamesTheVaultTheNoteCameFrom(t *testing.T) {
 	env := append(h.env(true), "VAULTMIND_VAULTS=/vaults/alpha-vault,/vaults/beta-vault")
 	out, _ := runHookScript(t, "vault-recall.sh", env, string(payload))
 
-	assert.Contains(t, out, "--vault /vaults/beta-vault",
-		"the footer must name the vault that delivered the note")
+	assert.Contains(t, out, "note get <id> --vaults /vaults/alpha-vault,/vaults/beta-vault",
+		"an id from any vault in the ranking must be readable from the footer")
 	assert.NotContains(t, out, "--vault "+h.projectDir+"/vaultmind-identity",
 		"pointing at the primary vault sends the reader to a note that is not there")
 }
 
-func TestReachHook_FooterNamesTheVaultTheNoteCameFrom(t *testing.T) {
+func TestReachHook_FederatedFooterReadsFromEveryVaultSearched(t *testing.T) {
 	h := newHookEnv(t, federatedOwnerStub)
 	payload := `{"tool_name":"Bash","tool_input":{"command":"git commit -m x"}}`
 
 	env := append(h.env(true), "VAULTMIND_VAULTS=/vaults/alpha-vault,/vaults/beta-vault")
 	out, _ := runHookScript(t, "vault-reach.sh", env, payload)
 
-	assert.Contains(t, out, "--vault /vaults/beta-vault",
-		"the footer must name the vault that delivered the note")
+	assert.Contains(t, out, "note get <id> --vaults /vaults/alpha-vault,/vaults/beta-vault",
+		"an id from any vault in the ranking must be readable from the footer")
 }
 
 // Unfederated, the footer is unchanged — the fix must not disturb the single

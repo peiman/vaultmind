@@ -23,6 +23,7 @@ EXAMPLES
       Same content, structured envelope. Use from scripts.
 
   vaultmind note get concept-act-r --vault vaultmind-vault --frontmatter-only
+  vaultmind note get <id> --vaults ~/identity,~/desk,~/research   # an id from a federated ask
       Header + frontmatter only, no body. Use to inspect tags/related_ids.
 
 PAIRS WELL WITH
@@ -32,6 +33,7 @@ PAIRS WELL WITH
 	ConfigPrefix: "app.note",
 	FlagOverrides: map[string]string{
 		"app.note.vault":            "vault",
+		"app.note.vaults":           "vaults",
 		"app.note.json":             "json",
 		"app.note.frontmatter_only": "frontmatter-only",
 	},
@@ -41,6 +43,7 @@ PAIRS WELL WITH
 func NoteOptions() []config.ConfigOption {
 	return []config.ConfigOption{
 		{Key: "app.note.vault", DefaultValue: ".", Description: "Path to vault root", Type: "string"},
+		{Key: "app.note.vaults", DefaultValue: "", Description: "Comma-separated vaults to look in; the note is read from the one that holds the id. An id held by more than one is an error naming them.", Type: "string"},
 		{Key: "app.note.json", DefaultValue: false, Description: "Output in JSON format", Type: "bool"},
 		{Key: "app.note.frontmatter_only", DefaultValue: false, Description: "Omit body, headings, blocks", Type: "bool"},
 	}

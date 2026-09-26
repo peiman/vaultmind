@@ -22,7 +22,10 @@ func runNoteGet(cmd *cobra.Command, args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: vaultmind note get <id-or-path>")
 	}
-	vaultPath := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppNoteVault)
+	vaultPath, err := noteGetVault(cmd, args[0])
+	if err != nil {
+		return err
+	}
 	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, "note get")
 	if err != nil {
 		return err

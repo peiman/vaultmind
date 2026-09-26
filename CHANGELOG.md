@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`note get --vaults`.** Reads an id from whichever of the listed vaults
+  holds it. A federated `ask` ranks ids from every vault but its footer named
+  one, so an id copied from the ranking often answered "No note found". An id
+  held by more than one vault is an error naming them (`ambiguous_vault`),
+  not a silent pick; a miss names every vault searched.
+
+### Changed
+
+- **Federated hook footers read from every vault searched.** The recall and
+  reach hooks now say `note get <id> --vaults <the same list>`, so every id
+  they show can be opened. Refresh hooks:
+  `vaultmind hooks install <project> --merge --force`.
+
 ## [0.9.11] - 2026-09-26
 
 > Retrieval that finds what is there. `ask` packs every relevant hit, can be
