@@ -30,6 +30,38 @@ func TestFrontmatterSet_WritesFieldAndPreservesOthers(t *testing.T) {
 	assert.Contains(t, body, "id: proj-beta", "id must be preserved")
 }
 
+// A JSON array value is written as a YAML list, as the help promises. It was
+// written as a quoted string, turning a note's tags into one tag (#159).
+func TestFrontmatterSet_AJSONArrayBecomesAList(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	target := "projects/beta.md"
+	full := filepath.Join(vault, target)
+
+	_, _, err := runRootCmd(t, "frontmatter", "set", target, "tags", `["graph","correctness"]`, "--vault", vault)
+	require.NoError(t, err)
+	_, _, err = runRootCmd(t, "frontmatter", "set", target, "paths", `["internal/graph/**"]`, "--vault", vault, "--allow-extra")
+	require.NoError(t, err)
+
+	content, err := os.ReadFile(full) //nolint:gosec // test fixture path
+	require.NoError(t, err)
+	body := string(content)
+	assert.NotContains(t, body, `'["`, "a list must not be written as a quoted string")
+	assert.Regexp(t, `tags:\s*\n\s+- graph\n\s+- correctness`, body)
+	assert.Regexp(t, `paths:\s*\n\s+- internal/graph/\*\*`, body)
+}
+
+// Text that only looks like the start of an array stays text.
+func TestFrontmatterSet_TextThatIsNotAnArrayStaysText(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	target := "projects/beta.md"
+
+	_, _, err := runRootCmd(t, "frontmatter", "set", target, "summary", "[draft", "--vault", vault, "--allow-extra")
+	require.NoError(t, err)
+	content, err := os.ReadFile(filepath.Join(vault, target)) //nolint:gosec // test fixture path
+	require.NoError(t, err)
+	assert.Contains(t, string(content), "[draft")
+}
+
 // dry-run must leave the file untouched. If dry-run ever wrote the file it
 // would silently corrupt vaults during "just previewing" sessions.
 func TestFrontmatterSet_DryRunDoesNotWrite(t *testing.T) {
@@ -189,4 +221,67 @@ body
 	} else {
 		require.Error(t, err)
 	}
+}
+
+// A note is found by its id, as the help promises; only a file path worked,
+// with "entity resolution not yet available" for anything else (#160).
+func TestFrontmatterSet_FindsANoteByItsID(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+
+	_, _, err := runRootCmd(t, "frontmatter", "set", "proj-beta", "status", "paused", "--vault", vault)
+	require.NoError(t, err)
+	content, err := os.ReadFile(filepath.Join(vault, "projects", "beta.md")) //nolint:gosec // test fixture path
+	require.NoError(t, err)
+	assert.Contains(t, string(content), "status: paused")
+}
+
+func TestFrontmatterSet_AnUnknownIDSaysSo(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+
+	_, _, err := runRootCmd(t, "frontmatter", "set", "no-such-note", "status", "paused", "--vault", vault)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no-such-note")
+	assert.NotContains(t, err.Error(), "not yet available")
+}
+
+// A name two notes share is refused, with both paths named, rather than
+// guessing which note to change.
+func TestFrontmatterUnset_AnAmbiguousNameNamesTheCandidates(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	twin := "---\nid: proj-beta-twin\ntype: project\ntitle: Beta Project\nstatus: active\n---\nTwin.\n"
+	require.NoError(t, os.WriteFile(filepath.Join(vault, "projects", "beta-twin.md"), []byte(twin), 0o600))
+	_, _, err := runRootCmd(t, "index", "--vault", vault)
+	require.NoError(t, err)
+
+	_, _, err = runRootCmd(t, "frontmatter", "unset", "Beta Project", "status", "--vault", vault)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "projects/beta.md")
+	assert.Contains(t, err.Error(), "projects/beta-twin.md")
+}
+
+func TestFrontmatterSet_AnUnknownIDIsAStructuredJSONError(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+
+	out, _, _ := runRootCmd(t, "frontmatter", "set", "no-such-note", "status", "paused", "--vault", vault, "--json")
+	var env struct {
+		Status string `json:"status"`
+		Errors []struct {
+			Code string `json:"code"`
+		} `json:"errors"`
+	}
+	require.NoError(t, json.Unmarshal(out.Bytes(), &env), out.String())
+	require.NotEmpty(t, env.Errors)
+	assert.Equal(t, "unresolved_target", env.Errors[0].Code)
+}
+
+// Text that parses as an array is stored as text when written as a JSON string.
+func TestFrontmatterSet_AJSONStringKeepsArrayTextAsText(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	target := "projects/beta.md"
+
+	_, _, err := runRootCmd(t, "frontmatter", "set", target, "summary", `"[a, b]"`, "--vault", vault, "--allow-extra")
+	require.NoError(t, err)
+	content, err := os.ReadFile(filepath.Join(vault, target)) //nolint:gosec // test fixture path
+	require.NoError(t, err)
+	assert.Regexp(t, `summary: ['"]\[a, b\]['"]`, string(content), "the text, quoted by YAML, not a list")
 }

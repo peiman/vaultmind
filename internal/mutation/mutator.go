@@ -203,7 +203,7 @@ func atomicWrite(absPath, relPath string, newContent []byte, preHash string) err
 // resolveTarget handles path-based targets (contains "/" or ends in ".md").
 // For non-path targets (bare id/alias), returns unresolved_target for now.
 func (m *Mutator) resolveTarget(target string) (string, ParsedNoteInfo, error) {
-	if !strings.Contains(target, "/") && !strings.HasSuffix(target, ".md") {
+	if !strings.Contains(target, "/") && !strings.HasSuffix(target, vault.NoteExtension) {
 		return "", ParsedNoteInfo{}, &MutationError{
 			Code:    "unresolved_target",
 			Message: fmt.Sprintf("cannot resolve target %q: entity resolution not yet available", target),

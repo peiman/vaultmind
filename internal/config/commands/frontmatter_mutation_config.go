@@ -13,6 +13,9 @@ Arguments:
   key               Frontmatter key to set (e.g., "status", "tags")
   value             Value to assign (strings, numbers, JSON arrays like '["a","b"]')
 
+A value that parses as a JSON array is written as a YAML list. To store such
+text as text, write it as a JSON string: '"[a, b]"'.
+
 The key is validated against the note's type schema. Use --allow-extra to set
 keys not defined in the schema. Use --dry-run --diff to preview the change.`,
 	ConfigPrefix: "app.frontmatterset",

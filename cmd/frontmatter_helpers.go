@@ -5,12 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/envelope"
 	"github.com/peiman/vaultmind/internal/git"
+	"github.com/peiman/vaultmind/internal/graph"
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/mutation"
+	"github.com/peiman/vaultmind/internal/vault"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -48,7 +51,7 @@ func runMutation(cmd *cobra.Command, req mutation.MutationRequest,
 		Registry:  vdb.Reg,
 	}
 
-	result, err := m.Run(req)
+	result, err := runResolvedMutation(m, vdb.DB, req)
 	if err != nil {
 		if getConfigValueWithFlags[bool](cmd, "json", jsonKey) {
 			var me *mutation.MutationError
@@ -95,4 +98,42 @@ func runMutation(cmd *cobra.Command, req mutation.MutationRequest,
 		_, err = fmt.Fprintf(cmd.OutOrStdout(), "%s %s: %s\n", result.Operation, result.Path, result.ID)
 	}
 	return err
+}
+
+// runResolvedMutation finds the target note — a path, or an id, title or alias
+// resolved the way `vaultmind resolve` does — and runs the mutation on it. Only
+// a path used to work; anything else failed with "entity resolution not yet
+// available" (#160).
+func runResolvedMutation(m *mutation.Mutator, db *index.DB, req mutation.MutationRequest) (*mutation.MutationResult, error) {
+	target, err := resolveMutationTarget(db, req.Target)
+	if err != nil {
+		return nil, err
+	}
+	req.Target = target
+	return m.Run(req)
+}
+
+// resolveMutationTarget returns a path for target. A path (it holds "/" or ends
+// in .md) is used as given.
+func resolveMutationTarget(db *index.DB, target string) (string, error) {
+	if strings.Contains(target, "/") || strings.HasSuffix(target, vault.NoteExtension) {
+		return target, nil
+	}
+	res, err := graph.NewResolver(db).Resolve(target)
+	if err != nil {
+		return "", fmt.Errorf("resolving %q: %w", target, err)
+	}
+	switch {
+	case !res.Resolved:
+		return "", &mutation.MutationError{Code: "unresolved_target",
+			Message: fmt.Sprintf("no note has the id, title or alias %q — check it with: vaultmind resolve %q", target, target)}
+	case res.Ambiguous || len(res.Matches) != 1:
+		paths := make([]string, 0, len(res.Matches))
+		for _, match := range res.Matches {
+			paths = append(paths, match.Path)
+		}
+		return "", &mutation.MutationError{Code: "ambiguous_target",
+			Message: fmt.Sprintf("%q names %d notes (%s) — pass the path of the one you mean", target, len(res.Matches), strings.Join(paths, ", "))}
+	}
+	return res.Matches[0].Path, nil
 }
