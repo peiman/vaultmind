@@ -13,7 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   vectors, so a note made by `note create` or edited by a frontmatter command
   was invisible to semantic search until the next `vaultmind index --embed`.
   Those commands now embed what they wrote, with the model the vault already
-  uses. A vault never embedded is left alone; BGE-M3 on a build without the
+  uses. A write embeds what it wrote, not a backlog: with more than 10 notes
+  waiting, it names them and the command instead. A vault never embedded is
+  left alone; BGE-M3 on a build without the
   ORT backend is skipped with the command that finishes the job; a failure
   never fails the write. Turn it off for bulk edits with
   `VAULTMIND_APP_EMBED_ON_WRITE=false` (or `app.embed_on_write: false`) and

@@ -33,3 +33,10 @@ func EmbeddedModel(dbPath string) (string, error) {
 	}
 	return "", nil
 }
+
+// PendingEmbeddings counts the notes that have no vectors for model yet — what
+// an incremental embed pass would embed.
+func PendingEmbeddings(dbPath, model string) (int, error) {
+	pending, _, err := countPendingForModel(dbPath, model)
+	return pending, err
+}

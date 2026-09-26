@@ -60,3 +60,24 @@ func TestEmbedOnWrite_CanBeTurnedOff(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, errOut.String(), "embed", "turned off, it neither embeds nor explains")
 }
+
+// A write embeds the note it wrote, not a backlog. A vault with many notes
+// never embedded would turn one small edit into a long embedding run, so above
+// the limit the write says how many notes wait and how to embed them.
+func TestEmbedOnWrite_ABacklogIsNamedNotEmbedded(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	db, err := index.Open(filepath.Join(vault, ".vaultmind", "index.db"))
+	require.NoError(t, err)
+	_, err = db.Exec(`UPDATE notes SET embedding = x'00' WHERE path = 'concepts/alpha.md'`)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+	saved := embedOnWriteLimit
+	embedOnWriteLimit = 1
+	t.Cleanup(func() { embedOnWriteLimit = saved })
+
+	_, errOut, err := runRootCmd(t, "frontmatter", "set", "projects/beta.md", "status", "paused", "--vault", vault)
+	require.NoError(t, err, "the write itself succeeds")
+	assert.Contains(t, errOut.String(), "notes have no embeddings")
+	assert.Contains(t, errOut.String(), "vaultmind index --embed --vault "+vault)
+	assert.NotContains(t, errOut.String(), "embedded ", "the backlog is not embedded on a write")
+}

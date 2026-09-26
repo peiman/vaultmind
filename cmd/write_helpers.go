@@ -16,6 +16,12 @@ import (
 // VAULTMIND_APP_EMBED_ON_WRITE.
 const embedOnWriteFlag = "embed-on-write"
 
+// embedOnWriteLimit is how many notes a write embeds. A write embeds the note
+// it wrote; a vault with a backlog of notes never embedded would turn one small
+// edit into a long run, so above this the write names the backlog instead.
+// A variable so a test can lower it.
+var embedOnWriteLimit = 10
+
 // embedAfterWrite embeds the notes a write left without embeddings, with the
 // model the vault already uses. A changed note loses its vectors (the index
 // clears them on a content change), so without this a note just written was
@@ -36,6 +42,10 @@ func embedAfterWrite(cmd *cobra.Command, vaultPath string, cfg *vault.Config) {
 	finish := fmt.Sprintf("vaultmind index --embed --vault %s", vaultPath)
 	if model == embedding.ModelBGEM3 && embedding.BackendName() != embedding.BackendNameORT {
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "not embedded: this build has no ORT backend for BGE-M3; run %s with an ORT build\n", finish)
+		return
+	}
+	if pending, err := index.PendingEmbeddings(dbPath, model); err == nil && pending > embedOnWriteLimit {
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "not embedded: %d notes have no embeddings; embed them with %s\n", pending, finish)
 		return
 	}
 	res, err := index.NewIndexer(vaultPath, dbPath, cfg).RunEmbed(cmd.Context(), dbPath, model, false)
