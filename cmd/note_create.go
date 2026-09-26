@@ -14,6 +14,7 @@ import (
 	"github.com/peiman/vaultmind/internal/config/commands"
 	"github.com/peiman/vaultmind/internal/envelope"
 	"github.com/peiman/vaultmind/internal/git"
+	"github.com/peiman/vaultmind/internal/graph"
 	"github.com/peiman/vaultmind/internal/index"
 	tmpl "github.com/peiman/vaultmind/internal/template"
 	"github.com/peiman/vaultmind/internal/vault"
@@ -124,6 +125,10 @@ func executeNoteCreate(cmd *cobra.Command, notePath string) error {
 		}
 	}
 
+	if w := duplicateWarning(vdb.DB, result.FinalFrontmatter); w != "" {
+		result.Warnings = append(result.Warnings, w)
+	}
+
 	if existing, err := vdb.DB.QueryNoteByID(result.ID); err != nil {
 		return fmt.Errorf("checking ID uniqueness: %w", err)
 	} else if existing != nil {
@@ -189,8 +194,29 @@ func executeNoteCreate(cmd *cobra.Command, notePath string) error {
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(env)
 	}
 
+	for _, w := range warnings {
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", w)
+	}
 	_, err = fmt.Fprintf(cmd.OutOrStdout(), "Created: %s (id: %s)\n", notePath, result.ID)
 	return err
+}
+
+// duplicateWarning asks the vault whether a note by the new note's title is
+// already there — by title, alias or normalized name, the way resolve does. A
+// duplicate splits what the vault knows about one thing in two, and the next
+// reader finds half. It warns; it does not refuse.
+func duplicateWarning(db *index.DB, frontmatter map[string]interface{}) string {
+	title, _ := frontmatter["title"].(string)
+	if strings.TrimSpace(title) == "" {
+		return ""
+	}
+	res, err := graph.NewResolver(db).Resolve(title)
+	if err != nil || !res.Resolved || len(res.Matches) == 0 {
+		return ""
+	}
+	match := res.Matches[0]
+	return fmt.Sprintf("a note named %q already exists: %s (%s) — extend it rather than adding a second one",
+		title, match.Path, match.ID)
 }
 
 // parseFieldSlice converts ["key=value", ...] into a map.
