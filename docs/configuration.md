@@ -281,6 +281,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.search.type` | string | `` | `VAULTMIND_APP_SEARCH_TYPE` | Filter by note type |
 | `app.search.tag` | string | `` | `VAULTMIND_APP_SEARCH_TAG` | Filter by tag |
 | `app.search.mode` | string | `keyword` | `VAULTMIND_APP_SEARCH_MODE` | Search mode: keyword, semantic, or hybrid |
+| `app.search.vaults` | string | `` | `VAULTMIND_APP_SEARCH_VAULTS` | Search several vaults, comma-separated (overrides --vault); one ranked section per vault |
 | `app.self.vault` | string | `.` | `VAULTMIND_APP_SELF_VAULT` | Path to vault root |
 | `app.self.limit` | int | `10` | `VAULTMIND_APP_SELF_LIMIT` | Max rows per section (recent/hot/stale) |
 | `app.tree.vault` | string | `.` | `VAULTMIND_APP_TREE_VAULT` | Path to vault root |
@@ -1151,6 +1152,9 @@ app:
     # Search mode: keyword, semantic, or hybrid
     mode: keyword
 
+    # Search several vaults, comma-separated (overrides --vault); one ranked section per vault
+    vaults: 
+
   self:
     # Path to vault root
     vault: .
@@ -2003,6 +2007,9 @@ export VAULTMIND_APP_SEARCH_TAG=
 
 # Search mode: keyword, semantic, or hybrid
 export VAULTMIND_APP_SEARCH_MODE=keyword
+
+# Search several vaults, comma-separated (overrides --vault); one ranked section per vault
+export VAULTMIND_APP_SEARCH_VAULTS=
 
 # Path to vault root
 export VAULTMIND_APP_SELF_VAULT=.

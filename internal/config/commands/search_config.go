@@ -30,6 +30,7 @@ FLAGS
   --tag string      Filter results to notes with this tag
   --limit int       Maximum number of results to return (default 20)
   --offset int      Skip the first N results for pagination (default 0)
+  --vaults string   Search several vaults, comma-separated — one ranked section per vault
   --json            Output results as a JSON envelope instead of plain text
 
 OUTPUT INCLUDES
@@ -60,6 +61,7 @@ EXAMPLES
 		"app.search.type":   "type",
 		"app.search.tag":    "tag",
 		"app.search.mode":   "mode",
+		"app.search.vaults": "vaults",
 	},
 }
 
@@ -73,6 +75,7 @@ func SearchOptions() []config.ConfigOption {
 		{Key: "app.search.type", DefaultValue: "", Description: "Filter by note type", Type: "string"},
 		{Key: "app.search.tag", DefaultValue: "", Description: "Filter by tag", Type: "string"},
 		{Key: "app.search.mode", DefaultValue: "keyword", Description: "Search mode: keyword, semantic, or hybrid", Type: "string"},
+		{Key: "app.search.vaults", DefaultValue: "", Description: "Search several vaults, comma-separated (overrides --vault); one ranked section per vault", Type: "string"},
 	}
 }
 
