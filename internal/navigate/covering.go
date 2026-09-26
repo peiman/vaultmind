@@ -25,6 +25,9 @@ const anyDepth = "**"
 type CodeFile struct {
 	Rel  string
 	Repo string
+	// Root is the repository's folder, empty outside a repository. It is where
+	// the file's history is read.
+	Root string
 }
 
 // Covering returns the notes whose `paths:` cover f, each with its line.
@@ -109,7 +112,7 @@ func ResolveCodeFile(file string) CodeFile {
 			if relErr != nil {
 				break
 			}
-			return CodeFile{Rel: filepath.ToSlash(rel), Repo: repoName(dir)}
+			return CodeFile{Rel: filepath.ToSlash(rel), Repo: repoName(dir), Root: dir}
 		}
 		if dir == filepath.Dir(dir) {
 			break

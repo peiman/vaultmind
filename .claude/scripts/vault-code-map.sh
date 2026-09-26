@@ -102,12 +102,19 @@ for v in result.get("vaults") or []:
         if len(result.get("vaults") or []) > 1:
             line += "  [" + os.path.basename(v.get("vault", "").rstrip("/")) + "]"
         lines.append(line)
+        changed = n.get("code_changed") or {}
+        if changed.get("summary"):
+            lines.append("    " + changed["summary"])
 if not lines:
     sys.exit(0)
-vault_hint = vaults[0] if len(vaults) == 1 else "<vault>"
+# One vault: name it. Several: note get --vaults finds each id in whichever
+# configured vault holds it.
+where = "--vault " + vaults[0]
+if len(vaults) > 1:
+    where = "--vaults " + (os.environ.get("VAULTMIND_VAULTS") or ",".join(vaults))
 text = ("VAULT \u2014 notes about " + (result.get("for") or "this file")
         + ", the file you are about to open. They were written for this code; "
-        + "open one with: vaultmind note get <id> --vault " + vault_hint + "\n"
+        + "open one with: vaultmind note get <id> " + where + "\n"
         + "\n".join(lines))
 print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": text}}))
 PY

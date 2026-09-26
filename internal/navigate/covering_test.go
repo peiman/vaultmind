@@ -117,7 +117,7 @@ func TestResolveCodeFile_IsRelativeToTheGitRootAndNamedByIt(t *testing.T) {
 	file := filepath.Join(repo, "internal", "x", "y.go")
 
 	got := navigate.ResolveCodeFile(file)
-	assert.Equal(t, navigate.CodeFile{Rel: "internal/x/y.go", Repo: "my-repo"}, got)
+	assert.Equal(t, navigate.CodeFile{Rel: "internal/x/y.go", Repo: "my-repo"}, withoutRoot(got))
 }
 
 func TestResolveCodeFile_AWorktreeGitFileCountsAsARoot(t *testing.T) {
@@ -126,7 +126,7 @@ func TestResolveCodeFile_AWorktreeGitFileCountsAsARoot(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(repo, ".git"), []byte("gitdir: /elsewhere\n"), 0o600))
 
 	got := navigate.ResolveCodeFile(filepath.Join(repo, "a.go"))
-	assert.Equal(t, navigate.CodeFile{Rel: "a.go", Repo: "wt"}, got)
+	assert.Equal(t, navigate.CodeFile{Rel: "a.go", Repo: "wt"}, withoutRoot(got))
 }
 
 func TestResolveCodeFile_OutsideARepoHasNoRepo(t *testing.T) {
@@ -148,7 +148,7 @@ func TestResolveCodeFile_NamesTheRepoByItsOriginRemote(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(repo, ".git", "config"), []byte(config), 0o600))
 
 	got := navigate.ResolveCodeFile(filepath.Join(repo, "cmd", "tree.go"))
-	assert.Equal(t, navigate.CodeFile{Rel: "cmd/tree.go", Repo: "vaultmind"}, got)
+	assert.Equal(t, navigate.CodeFile{Rel: "cmd/tree.go", Repo: "vaultmind"}, withoutRoot(got))
 }
 
 func TestResolveCodeFile_AWorktreeUsesItsMainRepositorysRemote(t *testing.T) {
@@ -163,7 +163,7 @@ func TestResolveCodeFile_AWorktreeUsesItsMainRepositorysRemote(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(wt, ".git"), []byte("gitdir: "+gitdir+"\n"), 0o600))
 
 	got := navigate.ResolveCodeFile(filepath.Join(wt, "a.go"))
-	assert.Equal(t, navigate.CodeFile{Rel: "a.go", Repo: "vaultmind"}, got)
+	assert.Equal(t, navigate.CodeFile{Rel: "a.go", Repo: "vaultmind"}, withoutRoot(got))
 }
 
 // A run of ** is one **; unfolded, each extra one multiplied the search and a
@@ -201,5 +201,12 @@ func TestResolveCodeFile_FollowsSymlinks(t *testing.T) {
 	require.NoError(t, os.Symlink(repo, link))
 
 	got := navigate.ResolveCodeFile(filepath.Join(link, "a.go"))
-	assert.Equal(t, navigate.CodeFile{Rel: "a.go", Repo: "real-repo"}, got)
+	assert.Equal(t, navigate.CodeFile{Rel: "a.go", Repo: "real-repo"}, withoutRoot(got))
+}
+
+// withoutRoot compares a resolved file by what `paths:` matches on; Root is
+// the machine-specific folder it was found in.
+func withoutRoot(f navigate.CodeFile) navigate.CodeFile {
+	f.Root = ""
+	return f
 }

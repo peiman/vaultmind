@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A note about code says when that code changed after it.** `tree --for
+  <file>` — and so the hook that maps notes when a file is read or edited —
+  now adds, under a note whose `paths:` cover the file: `code changed since
+  this note: 2 commits, latest 2026-09-20 "fix: …" — check it still holds`.
+  Commit times on both sides (a checkout rewrites file times); nothing is
+  said without history on either side. It is a prompt, not a verdict: a
+  broad glob changes for reasons that leave the note true. Committing the
+  note after checking it clears the line. JSON carries it as `code_changed`.
+  The hook now points notes from several vaults at `note get --vaults`.
+
 - **`note get --vaults`.** Reads an id from whichever of the listed vaults
   holds it. A federated `ask` ranks ids from every vault but its footer named
   one, so an id copied from the ranking often answered "No note found". An id

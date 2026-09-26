@@ -139,3 +139,39 @@ func TestCodeMap_AsksEveryConfiguredVault(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, strings.Contains(string(calls), "tree --vaults "+vaults+" --for "+e.file+" --json"), string(calls))
 }
+
+// When the file changed after a note about it was committed, the map says so
+// under that note, in the words `tree` chose — the hook adds none of its own.
+func TestCodeMap_ShowsWhenTheCodeChangedAfterANote(t *testing.T) {
+	summary := `code changed since this note: 2 commits, latest 2026-09-20 "fix: a" — check it still holds`
+	stale := fmt.Sprintf(`{"status":"ok","result":{"for":"repo:internal/a.go","vaults":[{"vault":"kb","total":1,`+
+		`"root":{"path":"","total":1,"dirs":[{"path":"decisions","total":1,"notes":[`+
+		`{"id":"decision-a","path":"decisions/a.md","title":"Why a is built so","type":"decision",`+
+		`"code_changed":{"commits":2,"date":"2026-09-20","latest":"fix: a","summary":%q}}]}]}}]}}`, summary)
+	bin, _ := codeMapStub(t, stale, 0)
+	e := newCodeMapEnv(t, bin)
+
+	out, _ := runHookScript(t, codeMapScript, e.env, codeMapPayload("Read", e.file, "s1"))
+	var got struct {
+		HookSpecificOutput map[string]any `json:"hookSpecificOutput"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(out), &got), out)
+	ctx, _ := got.HookSpecificOutput["additionalContext"].(string)
+	assert.Contains(t, ctx, "Why a is built so (decision-a)\n    "+summary)
+}
+
+// Notes from two vaults: `note get --vaults` with the configured list opens
+// any of them, where a single --vault could name only one.
+func TestCodeMap_NotesFromSeveralVaultsPointAtThemAll(t *testing.T) {
+	two := `{"status":"ok","result":{"for":"repo:internal/a.go","vaults":[` +
+		`{"vault":"kb","total":1,"root":{"path":"","total":1,"notes":[{"id":"decision-a","path":"a.md","title":"A","type":"decision"}]}},` +
+		`{"vault":"desk","total":1,"root":{"path":"","total":1,"notes":[{"id":"journal-b","path":"b.md","title":"B","type":"journal"}]}}]}}`
+	bin, _ := codeMapStub(t, two, 0)
+	e := newCodeMapEnv(t, bin)
+	vaults := e.vault + "," + filepath.Join(e.project, "desk")
+	env := append(append([]string{}, e.env...), "VAULTMIND_VAULTS="+vaults)
+
+	out, _ := runHookScript(t, codeMapScript, env, codeMapPayload("Read", e.file, "s1"))
+	assert.Contains(t, out, "vaultmind note get <id> --vaults "+vaults)
+	assert.NotContains(t, out, "<vault>")
+}
