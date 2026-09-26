@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A federated `ask` loads the embedding model once, not once per vault.**
+  Each vault's search built its own retriever, and each build loaded the
+  model (~1.1s): four loads for a three-vault ask, plus the vault that
+  delivers. The model now stays loaded for the process — one slot, so a
+  different model replaces it rather than a second ONNX session opening. A
+  three-vault ask (what the recall hook runs) went 9.4s → 6.5s; with the
+  faster MaxSim below, 12.2s → 6.5s. Rankings are unchanged.
+
 - **`ask` is about a quarter faster on a BGE-M3 vault.** Profiled on a
   416-note vault: most of a warm hybrid search (1.6s of ~1.7s) was ColBERT
   scoring — every query token against every token of every note — in a dot

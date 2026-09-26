@@ -49,6 +49,10 @@ func TestDetectEmbedderForDB_MixedStatePicksBGEM3(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	// detectEmbedderForDB loads into the process-wide slot; leave it empty for
+	// the next test so none passes on a model it did not load.
+	CloseSharedEmbedder()
+	t.Cleanup(CloseSharedEmbedder)
 	emb, cleanup, err := detectEmbedderForDB(context.Background(), db)
 	if err != nil {
 		// Embedder init can fail in environments without the model files

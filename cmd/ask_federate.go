@@ -153,8 +153,9 @@ func federateAndPickOwner(cmd *cobra.Command, queryText string, paths []string, 
 }
 
 // searchOneVault opens a vault, searches it, computes its OWN relevance
-// verdict, and closes everything before returning — so the next vault can
-// claim the single available embedder session.
+// verdict, and closes the vault before returning. The embedder is not closed:
+// every vault shares the process's one loaded model (query.sharedEmbedderFor),
+// which is also what keeps the process to a single ONNX session.
 func searchOneVault(cmd *cobra.Command, vaultPath, queryText string, searchLimit int) ([]retrieval.ScoredResult, string, float64, error) {
 	vdb, err := cmdutil.OpenVaultDB(vaultPath)
 	if err != nil {
