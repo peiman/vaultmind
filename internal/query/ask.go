@@ -247,6 +247,35 @@ func AskHits(ctx context.Context, retriever retrieval.Retriever, query string, s
 	}, nil
 }
 
+// relevantLaterHits returns the hits after the first whose own relevance
+// clears the weak band (z > noisefloor.WeakMaxZ), so a note that genuinely
+// answers the question but ranked second still reaches the reader instead of
+// losing its place to the top hit's graph neighbours. It needs the per-hit
+// cosines and the floor, so without an applied noise floor it returns nil.
+//
+// The gate is the same band edge that labels the top hit: on the research
+// vault it admitted every relevant later hit in the probe set (z 1.1–1.9) and
+// none of the off-topic ones (z ≤ 0.7).
+func relevantLaterHits(hits []retrieval.ScoredResult, r *AskResult) []memory.Seed {
+	if !r.NoiseFloorApplied {
+		return nil
+	}
+	var seeds []memory.Seed
+	for _, h := range hits[1:] {
+		cos, ok := r.Similarities[h.ID]
+		if !ok {
+			continue
+		}
+		// The embedder-default argument only moves the no_match floor, which
+		// sits below N; a hit past WeakMaxZ is above N, so N stands in for it.
+		z, label := noisefloor.Relevance(cos, r.NoiseFloor, r.NoiseFloorSigma, r.NoiseFloor)
+		if z > noisefloor.WeakMaxZ {
+			seeds = append(seeds, memory.Seed{ID: h.ID, Confidence: label})
+		}
+	}
+	return seeds
+}
+
 // Ask searches the vault for the query, computes raw cosine similarities
 // (when an embedder is available), recomputes activation scores with
 // spreading activation (via ActivationFunc), then packs token-budgeted
@@ -355,6 +384,7 @@ func Ask(ctx context.Context, retriever retrieval.Retriever, resolver *graph.Res
 		Slim:             true,
 		ActivationScores: activationScores,
 		ExcerptTokens:    cfg.ExcerptTokens,
+		Seeds:            relevantLaterHits(hits, result),
 	})
 	if packErr != nil {
 		log.Debug().Err(packErr).Str("note_id", hits[0].ID).Msg("context-pack failed; returning search results only")

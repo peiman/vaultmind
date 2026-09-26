@@ -23,6 +23,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`ask` packs every relevant hit, not only the first one's neighbours.**
+  The context pack used to be built around the top hit alone, so a note that
+  answered the question but ranked second or fourth lost its place to notes
+  merely linked to the top hit. On the research vault, the founding paper for
+  "spreading activation" ranked 4th and never reached the reader. A later hit
+  whose own relevance clears the weak band (z > 1.0 against the noise floor)
+  now leads the pack, in rank order, as `edge_type: "search_hit"` with its own
+  band as `confidence`. Off-topic hits (z ≤ 0.7 in the probe set) stay out.
+  Needs the noise floor, so keyword-only search is unchanged.
+
 - **`ask` hit lines lead with the rank, not the fused score.** The RRF score
   printed as `0.02` for nearly every hit: it carries order only, and read as
   a relevance number it said everything was equally weak. Lines are now
