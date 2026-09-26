@@ -379,3 +379,26 @@ func TestMergeByRRF_TiedOwnershipGoesToTheMoreRelevantVault(t *testing.T) {
 		})
 	}
 }
+
+// A vault with no hits at all was reported as "unmeasured — no embedder": the
+// empty verdict meant both. With --type or --tag, a vault holding no such notes
+// is ordinary, and blaming its embedder sends the reader to fix the wrong thing.
+func TestFormatAsk_FederationSaysWhenAVaultHadNoHits(t *testing.T) {
+	res := &AskResult{
+		Query:     "q",
+		Vault:     "vaultmind-vault",
+		TopHits:   []retrieval.ScoredResult{{ID: "concept-x", Title: "X"}},
+		Federated: []FederatedHit{{ScoredResult: retrieval.ScoredResult{ID: "concept-x", Title: "X"}, Vault: "vaultmind-vault"}},
+		FederatedVaults: []FederatedVaultStatus{
+			{Name: "vaultmind-mine", NoHits: true},
+			{Name: "vaultmind-vault", Verdict: ConfidenceModerate, Contributed: true},
+		},
+	}
+	var buf bytes.Buffer
+	require.NoError(t, FormatAsk(res, &buf))
+	out := buf.String()
+
+	require.Contains(t, out, "vaultmind-mine")
+	require.Contains(t, out, "no notes match")
+	require.NotContains(t, out, "no embedder", "a vault with nothing to rank says so, not that its embedder is missing")
+}

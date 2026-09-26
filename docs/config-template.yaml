@@ -101,6 +101,12 @@ app:
     # Cap each note's contribution at N tokens, preferring its decision-bearing passage — the Principle section where a note has one (an arc's rule lives there; its opening is story setup), else the opening prose. Applies to the target note and every context item. 0 = off, which also means an over-budget note contributes no text at all while the pack still counts it, so a tight budget yields items with no content
     excerpt: 0
 
+    # Rank only notes of this type (e.g. decision, concept)
+    type: 
+
+    # Rank only notes carrying this tag
+    tag: 
+
   check:
     # Stop on first failed check
     fail_fast: true
