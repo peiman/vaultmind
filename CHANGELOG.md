@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A knowledge project's compaction prompt is about the code, not an agent.**
+  With `hooks install --profile knowledge`, compaction delivered the persona
+  speech ("what changed in you"), asked for a desk entry written into the
+  project's docs vault and an identity re-read — and, because `init`'s
+  scaffold has `arcs/`, skipped the code step entirely. It now asks only what
+  the segment learned about the code, in the configured vault, with the
+  commits as anchors. The full and persona profiles are unchanged.
+
 ## [0.9.13] - 2026-09-26
 
 > A hook that fires in bursts stops repeating itself. Within ten minutes of a
