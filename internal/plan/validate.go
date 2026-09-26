@@ -36,6 +36,8 @@ func ValidatePlan(p Plan, reg *schema.Registry) []OpError {
 			}
 			if op.Value == nil {
 				errs = append(errs, OpError{Code: "missing_field", Message: pf + ": requires value"})
+			} else if op.Key != "" {
+				errs = append(errs, shapeErrors(pf, map[string]interface{}{op.Key: op.Value}, reg)...)
 			}
 		case OpFrontmatterUnset:
 			if op.Target == "" {
@@ -51,6 +53,7 @@ func ValidatePlan(p Plan, reg *schema.Registry) []OpError {
 			if len(op.Fields) == 0 {
 				errs = append(errs, OpError{Code: "missing_field", Message: pf + ": requires fields"})
 			}
+			errs = append(errs, shapeErrors(pf, op.Fields, reg)...)
 		case OpGeneratedRegion:
 			if op.Target == "" {
 				errs = append(errs, OpError{Code: "missing_field", Message: pf + ": requires target"})
@@ -74,15 +77,18 @@ func ValidatePlan(p Plan, reg *schema.Registry) []OpError {
 			if op.Type != "" && !reg.HasType(op.Type) {
 				errs = append(errs, OpError{Code: "unknown_type", Message: fmt.Sprintf("%s: type %q not in registry", pf, op.Type)})
 			}
-			errs = append(errs, shapeErrors(pf, op.Frontmatter, reg)...)
+			if op.Frontmatter != nil {
+				errs = append(errs, shapeErrors(pf, op.Frontmatter, reg)...)
+			}
 		}
 	}
 	return errs
 }
 
-// shapeErrors checks each frontmatter value against its field's shape, in key
-// order so the report is stable. note_create writes the map as given, so this
-// is the only check between a wrong-shaped value and the file.
+// shapeErrors checks each value against its field's shape, in key order so the
+// report is stable. note_create writes its map as given, so for it this is the
+// only check between a wrong-shaped value and the file; for set and merge it
+// makes a dry run fail where the run itself would.
 func shapeErrors(pf string, fm map[string]interface{}, reg *schema.Registry) []OpError {
 	keys := make([]string, 0, len(fm))
 	for k := range fm {

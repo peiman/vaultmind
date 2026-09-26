@@ -25,6 +25,7 @@ func TestValidateMutation_ValueMustFitTheFieldShape(t *testing.T) {
 		{"list into title", "title", []interface{}{"a", "b"}, false},
 		{"number into title", "title", 2024, false},
 		{"number into status", "status", 3, false},
+		{"YAML null (~) into title", "title", nil, false},
 		{"one tag as text", "tags", "retrieval", true},
 		{"tags as a list", "tags", []interface{}{"a", "b"}, true},
 		{"a number inside tags", "tags", []interface{}{"a", 3}, false},

@@ -106,3 +106,18 @@ func TestValidatePlan_NoteCreateChecksValueShapes(t *testing.T) {
 	assert.Contains(t, errs[0].Message, `"created"`, "keys are checked in a stable order")
 	assert.Contains(t, errs[1].Message, `"title"`)
 }
+
+// A dry run must fail where the run would: set and merge values are checked
+// here too, not only when the mutation executes.
+func TestValidatePlan_SetAndMergeCheckValueShapes(t *testing.T) {
+	p := Plan{Version: 1, Operations: []Operation{
+		{Op: OpFrontmatterSet, Target: "proj-1", Key: "title", Value: []interface{}{1, 2}},
+		{Op: OpFrontmatterMerge, Target: "proj-1", Fields: map[string]interface{}{"tags": "ok", "status": 3}},
+	}}
+	errs := ValidatePlan(p, testRegistry())
+	require.Len(t, errs, 2)
+	assert.Contains(t, errs[0].Message, "operation[0]")
+	assert.Contains(t, errs[0].Message, `"title"`)
+	assert.Contains(t, errs[1].Message, "operation[1]")
+	assert.Contains(t, errs[1].Message, `"status"`)
+}
