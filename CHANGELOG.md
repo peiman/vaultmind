@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`note create` warns when a note by that name already exists.** Before
+  writing, it resolves the new note's title the way `vaultmind resolve` does
+  (title, alias, normalized name) and, on a match, names the existing note
+  and suggests extending it: a duplicate splits what the vault knows about
+  one thing in two. It warns and still creates the note. Warnings from
+  `note create` now also reach the terminal, not only `--json`.
+
 ### Fixed
 
 - **Compaction names the knowledge vault for lessons, not the desk.** A desk
