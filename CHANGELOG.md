@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.15] - 2026-09-26
+
+> Faster recall. A three-vault `ask` — what the recall hook runs on every
+> prompt — went from 12.2s to about 6.5s on a 416-note BGE-M3 vault, with the
+> same results. No hook changes.
+
 ### Changed
 
 - **A federated `ask` loads the embedding model once, not once per vault.**
@@ -2181,7 +2187,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.14...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.15...HEAD
+[0.9.15]: https://github.com/peiman/vaultmind/compare/v0.9.14...v0.9.15
 [0.9.14]: https://github.com/peiman/vaultmind/compare/v0.9.13...v0.9.14
 [0.9.13]: https://github.com/peiman/vaultmind/compare/v0.9.12...v0.9.13
 [0.9.12]: https://github.com/peiman/vaultmind/compare/v0.9.11...v0.9.12
