@@ -26,7 +26,25 @@ type ContextPackConfig struct {
 	// nothing but titles — which is what a 900-token hook budget does against a
 	// vault whose median note is larger than the budget.
 	ExcerptTokens int
+
+	// Seeds are notes the caller already judged relevant — ask passes the
+	// search hits after the first that clear the weak band. They are packed
+	// ahead of every graph neighbour, in the order given, because a note that
+	// matched the question outranks one that is merely linked to the answer.
+	Seeds []Seed
 }
+
+// Seed is a note to pack as context regardless of its graph distance from the
+// target. Confidence is the caller's relevance band for it, carried through to
+// the item so the reader can see why it is there.
+type Seed struct {
+	ID         string
+	Confidence string
+}
+
+// EdgeTypeSearchHit marks a context item that entered the pack as a seed
+// (a relevant search hit), not by an edge from the target.
+const EdgeTypeSearchHit = "search_hit"
 
 // ContextPackTarget holds the fully-loaded target note.
 type ContextPackTarget struct {
@@ -173,6 +191,8 @@ func ContextPack(resolver *graph.Resolver, db *index.DB, cfg ContextPackConfig) 
 		return nil, err
 	}
 
+	candidates = withSeeds(cfg.Seeds, targetID, candidates, loadNote)
+
 	// Step 6: Pack context items until budget exhausted.
 	if cfg.MaxItems > 0 {
 		packBodyFirst(candidates, cfg, result, &remaining, loadNote)
@@ -183,6 +203,34 @@ func ContextPack(resolver *graph.Resolver, db *index.DB, cfg ContextPackConfig) 
 	}
 
 	return result, nil
+}
+
+// withSeeds puts the seeds ahead of the sorted graph candidates, in the order
+// given. A seed that is the target or names no note is skipped; a seed that is
+// also a neighbour appears once, as the seed, since matching the question is
+// the stronger reason to be in the pack.
+func withSeeds(seeds []Seed, targetID string, candidates []contextCandidate, loadNote func(string) (*index.FullNote, error)) []contextCandidate {
+	if len(seeds) == 0 {
+		return candidates
+	}
+	out := make([]contextCandidate, 0, len(seeds)+len(candidates))
+	seeded := map[string]bool{targetID: true}
+	for _, s := range seeds {
+		if seeded[s.ID] {
+			continue
+		}
+		if n, err := loadNote(s.ID); err != nil || n == nil {
+			continue
+		}
+		seeded[s.ID] = true
+		out = append(out, contextCandidate{noteID: s.ID, edgeType: EdgeTypeSearchHit, confidence: s.Confidence})
+	}
+	for _, c := range candidates {
+		if !seeded[c.noteID] {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 // packBodyFirst packs frontmatter + body together for each candidate (body-first single-pass).
