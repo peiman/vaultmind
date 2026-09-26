@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.10] - 2026-09-26
+
+> A write path that keeps the vault current. Refresh hooks so the compaction
+> prompt asks what was learned about the code:
+> `vaultmind hooks install <project> --merge --force`.
+
 ### Added
 
 - **A note is embedded as soon as it is written.** A changed note loses its
@@ -1988,7 +1994,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.9...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.10...HEAD
+[0.9.10]: https://github.com/peiman/vaultmind/compare/v0.9.9...v0.9.10
 [0.9.9]: https://github.com/peiman/vaultmind/compare/v0.9.8...v0.9.9
 [0.9.8]: https://github.com/peiman/vaultmind/compare/v0.9.7...v0.9.8
 [0.9.7]: https://github.com/peiman/vaultmind/compare/v0.9.6...v0.9.7
