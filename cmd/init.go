@@ -32,6 +32,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		local:      getConfigValueWithFlags[bool](cmd, "local", config.KeyAppInitLocal),
 		dryRun:     getConfigValueWithFlags[bool](cmd, "dry-run", config.KeyAppInitDryRun),
 		projectDir: getConfigValueWithFlags[string](cmd, "project-dir", config.KeyAppInitProjectDir),
+		profile:    getConfigValueWithFlags[string](cmd, "profile", config.KeyAppInitProfile),
 	})
 }
 

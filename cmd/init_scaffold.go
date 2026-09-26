@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"path/filepath"
 
+	"github.com/peiman/vaultmind/internal/hooks"
 	"github.com/peiman/vaultmind/internal/initvault"
 	"github.com/peiman/vaultmind/internal/telemetry"
 	"github.com/spf13/cobra"
@@ -15,7 +17,18 @@ import (
 // this file is the create-files lane. When p.wireHooks is set, the
 // Claude Code hooks are provisioned after the scaffold (init_wire.go).
 func runInitScaffold(cmd *cobra.Command, path string, p initWireParams) error {
-	res, err := initvault.Init(path)
+	// Validated before anything is written: a typo must not leave a half-made
+	// vault behind.
+	profile, err := hooks.ParseProfile(p.profile)
+	if err != nil {
+		return err
+	}
+	knowledge := profile == hooks.ProfileKnowledge
+	scaffold := initvault.Init
+	if knowledge {
+		scaffold = initvault.InitKnowledge
+	}
+	res, err := scaffold(path)
 	if err != nil {
 		return err
 	}
@@ -31,12 +44,7 @@ func runInitScaffold(cmd *cobra.Command, path string, p initWireParams) error {
 		}
 	}
 
-	_, _ = fmt.Fprintf(w, "Next steps:\n")
-	_, _ = fmt.Fprintf(w, "  cd %s\n", res.VaultPath)
-	_, _ = fmt.Fprintf(w, "  vaultmind index --vault .\n")
-	_, _ = fmt.Fprintf(w, "  vaultmind index --embed --vault .\n")
-	_, _ = fmt.Fprintf(w, "  vaultmind ask \"who am I\" --vault .\n\n")
-	_, _ = fmt.Fprintf(w, "Edit identity/who-am-i.md and references/current-context.md to make it yours.\n\n")
+	writeInitNextSteps(w, res.VaultPath, knowledge)
 	_, _ = fmt.Fprintf(w, "If this vault lives in a git repo, add to .gitignore (the index is a\nregenerable cache; the type registry is source):\n")
 	_, _ = fmt.Fprintf(w, "  .vaultmind/index.db*\n")
 	_, _ = fmt.Fprintf(w, "  !.vaultmind/config.yaml\n\n")
@@ -49,4 +57,21 @@ func runInitScaffold(cmd *cobra.Command, path string, p initWireParams) error {
 		_, _ = fmt.Fprintf(w, "for agent-led setup (interview, project read, migration): vaultmind init --print-instructions\n")
 	}
 	return nil
+}
+
+// writeInitNextSteps says what to do with the vault just made — the first
+// question and the files to replace differ between a knowledge base and an
+// agent's identity.
+func writeInitNextSteps(w io.Writer, vaultPath string, knowledge bool) {
+	question, edit := "who am I", "Edit identity/who-am-i.md and references/current-context.md to make it yours."
+	if knowledge {
+		question = "<a question about this project>"
+		edit = "Replace the examples in decisions/ and concepts/ with real notes, and tie each\nto the code it is about with paths: — README.md shows how."
+	}
+	_, _ = fmt.Fprintf(w, "Next steps:\n")
+	_, _ = fmt.Fprintf(w, "  cd %s\n", vaultPath)
+	_, _ = fmt.Fprintf(w, "  vaultmind index --vault .\n")
+	_, _ = fmt.Fprintf(w, "  vaultmind index --embed --vault .\n")
+	_, _ = fmt.Fprintf(w, "  vaultmind ask %q --vault .\n\n", question)
+	_, _ = fmt.Fprintf(w, "%s\n\n", edit)
 }

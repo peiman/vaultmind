@@ -21,6 +21,13 @@ import (
 //go:embed all:templates
 var templates embed.FS
 
+// knowledge is the knowledge-vault scaffold: a project knowledge base, not an
+// agent's identity. It has no config of its own — the type registry comes from
+// templates/, so both scaffolds share one.
+//
+//go:embed all:knowledge
+var knowledge embed.FS
+
 // Result is what Init returns to the caller — used by cmd/init.go to
 // render the next-steps message after scaffolding succeeds.
 type Result struct {
@@ -68,52 +75,82 @@ func WriteConfigOnly(vaultPath string) (bool, error) {
 // Each templated note has its frontmatter dates filled in with today's
 // date so a fresh vault indexes cleanly without manual editing.
 func Init(vaultPath string) (*Result, error) {
+	cleanPath, err := freshPath(vaultPath)
+	if err != nil {
+		return nil, err
+	}
+	count, err := writeTree(templates, "templates", cleanPath, today())
+	if err != nil {
+		return nil, err
+	}
+	return &Result{VaultPath: cleanPath, FilesAdded: count}, nil
+}
+
+// InitKnowledge scaffolds a project knowledge base at vaultPath: decisions/
+// and concepts/ with an example each, a README on tying notes to code, and the
+// shared type registry. Like Init, it refuses an existing path.
+func InitKnowledge(vaultPath string) (*Result, error) {
+	cleanPath, err := freshPath(vaultPath)
+	if err != nil {
+		return nil, err
+	}
+	count, err := writeTree(knowledge, "knowledge", cleanPath, today())
+	if err != nil {
+		return nil, err
+	}
+	wrote, err := WriteConfigOnly(cleanPath)
+	if err != nil {
+		return nil, err
+	}
+	if wrote {
+		count++
+	}
+	return &Result{VaultPath: cleanPath, FilesAdded: count}, nil
+}
+
+// freshPath refuses a path that already exists: a vault is stateful, and
+// silently rewriting someone's would be the worst kind of surprise.
+func freshPath(vaultPath string) (string, error) {
 	cleanPath := filepath.Clean(vaultPath)
 	if _, err := os.Stat(cleanPath); err == nil {
-		return nil, fmt.Errorf("refuse to overwrite existing path: %s", cleanPath)
+		return "", fmt.Errorf("refuse to overwrite existing path: %s", cleanPath)
 	} else if !os.IsNotExist(err) {
-		return nil, fmt.Errorf("stat %s: %w", cleanPath, err)
+		return "", fmt.Errorf("stat %s: %w", cleanPath, err)
 	}
+	return cleanPath, nil
+}
 
-	now := time.Now().UTC()
-	today := now.Format(schema.CreatedDateFormat)
+func today() string { return time.Now().UTC().Format(schema.CreatedDateFormat) }
+
+// writeTree copies the embedded tree under root into dst, stamping each note's
+// frontmatter with today's date, and returns the number of files written.
+func writeTree(fsys embed.FS, root, dst, today string) (int, error) {
 	count := 0
-
-	walkErr := fs.WalkDir(templates, "templates", func(p string, d fs.DirEntry, err error) error {
+	err := fs.WalkDir(fsys, root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if p == "templates" {
+		if p == root {
 			return nil
 		}
-		// Strip the "templates/" prefix to get the in-vault relative path.
-		rel := strings.TrimPrefix(p, "templates/")
-		dst := filepath.Join(cleanPath, rel)
-
+		target := filepath.Join(dst, strings.TrimPrefix(p, root+"/"))
 		if d.IsDir() {
-			return os.MkdirAll(dst, 0o750)
+			return os.MkdirAll(target, 0o750)
 		}
-
-		body, readErr := templates.ReadFile(p)
+		body, readErr := fsys.ReadFile(p)
 		if readErr != nil {
 			return fmt.Errorf("read template %s: %w", p, readErr)
 		}
-		body = renderTemplate(body, today)
-
-		if err := os.MkdirAll(filepath.Dir(dst), 0o750); err != nil {
-			return fmt.Errorf("create dir for %s: %w", dst, err)
+		if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
+			return fmt.Errorf("create dir for %s: %w", target, err)
 		}
-		if err := os.WriteFile(dst, body, 0o600); err != nil {
-			return fmt.Errorf("write %s: %w", dst, err)
+		if err := os.WriteFile(target, renderTemplate(body, today), 0o600); err != nil {
+			return fmt.Errorf("write %s: %w", target, err)
 		}
 		count++
 		return nil
 	})
-	if walkErr != nil {
-		return nil, walkErr
-	}
-
-	return &Result{VaultPath: cleanPath, FilesAdded: count}, nil
+	return count, err
 }
 
 // renderTemplate fills in date placeholders in the embedded templates.
