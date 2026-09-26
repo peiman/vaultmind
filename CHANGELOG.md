@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A note is embedded as soon as it is written.** A changed note loses its
+  vectors, so a note made by `note create` or edited by a frontmatter command
+  was invisible to semantic search until the next `vaultmind index --embed`.
+  Those commands now embed what they wrote, with the model the vault already
+  uses. A write embeds what it wrote, not a backlog: with more than 10 notes
+  waiting, it names them and the command instead. A vault never embedded is
+  left alone; BGE-M3 on a build without the
+  ORT backend is skipped with the command that finishes the job; a failure
+  never fails the write. Turn it off for bulk edits with
+  `VAULTMIND_APP_EMBED_ON_WRITE=false` (or `app.embed_on_write: false`) and
+  embed once at the end.
+- **At compaction, the hook asks what the segment taught about the code.**
+  When the project has a knowledge vault (a vault without `arcs/`), the
+  PreCompact prompt adds a step: for each lesson, search the vaults first,
+  write only what is missing — with `paths:` naming the code it is about —
+  and fix a stale note where it is found. Asked even when the desk entry
+  exists. The PreCompact hook now receives `VAULTMIND_VAULTS` on install.
+
 ### Fixed
 
 - **`frontmatter set` writes a JSON array as a list.** `tags '["a","b"]'`

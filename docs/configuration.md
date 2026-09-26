@@ -293,6 +293,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.tree.for` | string | `` | `VAULTMIND_APP_TREE_FOR` | Only the notes whose paths: frontmatter covers this code file |
 | `app.vaultstatus.vault` | string | `.` | `VAULTMIND_APP_VAULTSTATUS_VAULT` | Path to vault root |
 | `app.vaultstatus.json` | bool | `false` | `VAULTMIND_APP_VAULTSTATUS_JSON` | Output in JSON format |
+| `app.embed_on_write` | bool | `true` | `VAULTMIND_APP_EMBED_ON_WRITE` | Embed a note as soon as a command writes it (note create, the frontmatter commands), with the model the vault already uses. A changed note loses its embeddings, and without this it drops out of semantic search until the next `vaultmind index --embed`. Turn off for bulk edits and embed once at the end. |
 
 ## Example Configuration
 
@@ -308,6 +309,9 @@ app:
 
   # Output format: text (human-readable) or json (machine-readable)
   output_format: json
+
+  # Embed a note as soon as a command writes it (note create, the frontmatter commands), with the model the vault already uses. A changed note loses its embeddings, and without this it drops out of semantic search until the next `vaultmind index --embed`. Turn off for bulk edits and embed once at the end.
+  embed_on_write: true
 
   apply:
     # Path to vault root
@@ -2035,5 +2039,8 @@ export VAULTMIND_APP_VAULTSTATUS_VAULT=.
 
 # Output in JSON format
 export VAULTMIND_APP_VAULTSTATUS_JSON=false
+
+# Embed a note as soon as a command writes it (note create, the frontmatter commands), with the model the vault already uses. A changed note loses its embeddings, and without this it drops out of semantic search until the next `vaultmind index --embed`. Turn off for bulk edits and embed once at the end.
+export VAULTMIND_APP_EMBED_ON_WRITE=true
 
 ```

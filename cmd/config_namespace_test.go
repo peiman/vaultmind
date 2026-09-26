@@ -117,6 +117,8 @@ func TestConfigNamespace_CommandsReadOnlyTheirOwnKeys(t *testing.T) {
 // it should be visible in a diff.
 var globalOwners = map[string][]string{
 	"root.go": {"app.log", "app.log_level", "app.output_format"},
+	// Every command that writes a note embeds it; the switch is one setting.
+	"write_helpers.go": {"app.embed_on_write"},
 }
 
 // ownedPrefixes resolves which namespaces a command file may read from.

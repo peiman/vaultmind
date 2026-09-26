@@ -1,0 +1,126 @@
+package cmd
+
+import (
+	"errors"
+	"path/filepath"
+	"testing"
+
+	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
+	"github.com/peiman/vaultmind/internal/embedding"
+	"github.com/peiman/vaultmind/internal/index"
+	"github.com/peiman/vaultmind/internal/vault"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// A write embeds its note with the vault's own model. These tests pin the
+// decisions around that pass: a vault never embedded is left alone, the opt-out
+// holds, and BGE-M3 without the ORT backend is skipped with the command that
+// finishes the job. The embedding pass itself loads a real model and is
+// checked end to end on a real vault, not here.
+
+// markEmbedded gives one note of the vault BGE-M3-shaped vectors, so the vault
+// reads as embedded with BGE-M3.
+func markEmbedded(t *testing.T, vault string) {
+	t.Helper()
+	db, err := index.Open(filepath.Join(vault, ".vaultmind", "index.db"))
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	_, err = db.Exec(`UPDATE notes SET embedding = x'00', sparse_embedding = x'00', colbert_embedding = x'00' WHERE path = 'concepts/alpha.md'`)
+	require.NoError(t, err)
+}
+
+func TestEmbedOnWrite_AVaultNeverEmbeddedIsLeftAlone(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+
+	_, errOut, err := runRootCmd(t, "frontmatter", "set", "projects/beta.md", "status", "paused", "--vault", vault)
+	require.NoError(t, err)
+	assert.NotContains(t, errOut.String(), "embed", "nothing to say when the vault has no embeddings")
+}
+
+func TestEmbedOnWrite_BGEM3WithoutORTSaysHowToFinish(t *testing.T) {
+	if embedding.BackendName() == embedding.BackendNameORT {
+		t.Skip("this build has the ORT backend; the skip path is for builds without it")
+	}
+	vault := buildIndexedTestVault(t)
+	markEmbedded(t, vault)
+
+	_, errOut, err := runRootCmd(t, "frontmatter", "set", "projects/beta.md", "status", "paused", "--vault", vault)
+	require.NoError(t, err, "the write itself succeeds")
+	assert.Contains(t, errOut.String(), "not embedded")
+	assert.Contains(t, errOut.String(), "vaultmind index --embed --vault "+vault)
+}
+
+func TestEmbedOnWrite_CanBeTurnedOff(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	markEmbedded(t, vault)
+	viper.Set(config.KeyAppEmbedOnWrite, false)
+	t.Cleanup(func() { viper.Set(config.KeyAppEmbedOnWrite, true) })
+
+	_, errOut, err := runRootCmd(t, "frontmatter", "set", "projects/beta.md", "status", "paused", "--vault", vault)
+	require.NoError(t, err)
+	assert.NotContains(t, errOut.String(), "embed", "turned off, it neither embeds nor explains")
+}
+
+// A write embeds the note it wrote, not a backlog. A vault with many notes
+// never embedded would turn one small edit into a long embedding run, so above
+// the limit the write says how many notes wait and how to embed them.
+func TestEmbedOnWrite_ABacklogIsNamedNotEmbedded(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	db, err := index.Open(filepath.Join(vault, ".vaultmind", "index.db"))
+	require.NoError(t, err)
+	_, err = db.Exec(`UPDATE notes SET embedding = x'00' WHERE path = 'concepts/alpha.md'`)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+	saved := embedOnWriteLimit
+	embedOnWriteLimit = 1
+	t.Cleanup(func() { embedOnWriteLimit = saved })
+
+	_, errOut, err := runRootCmd(t, "frontmatter", "set", "projects/beta.md", "status", "paused", "--vault", vault)
+	require.NoError(t, err, "the write itself succeeds")
+	assert.Contains(t, errOut.String(), "notes have no embeddings")
+	assert.Contains(t, errOut.String(), "vaultmind index --embed --vault "+vault)
+	assert.NotContains(t, errOut.String(), "embedded ", "the backlog is not embedded on a write")
+}
+
+// The pass itself loads a real model; runEmbedPass is swapped here so the two
+// outcomes a write reports are pinned without one.
+func stubEmbedPass(t *testing.T, res *index.EmbedResult, err error) {
+	t.Helper()
+	saved := runEmbedPass
+	runEmbedPass = func(_ *cobra.Command, _, _ string, _ *vault.Config, _ string) (*index.EmbedResult, error) {
+		return res, err
+	}
+	t.Cleanup(func() { runEmbedPass = saved })
+}
+
+func miniLMVault(t *testing.T) string {
+	t.Helper()
+	vault := buildIndexedTestVault(t)
+	db, err := index.Open(filepath.Join(vault, ".vaultmind", "index.db"))
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	_, err = db.Exec(`UPDATE notes SET embedding = x'00'`)
+	require.NoError(t, err)
+	return vault
+}
+
+func TestEmbedOnWrite_ReportsWhatItEmbedded(t *testing.T) {
+	vault := miniLMVault(t)
+	stubEmbedPass(t, &index.EmbedResult{Embedded: 1}, nil)
+
+	_, errOut, err := runRootCmd(t, "frontmatter", "set", "projects/beta.md", "status", "paused", "--vault", vault)
+	require.NoError(t, err)
+	assert.Contains(t, errOut.String(), "embedded 1 note(s) [model: "+embedding.ModelMiniLM+"]")
+}
+
+func TestEmbedOnWrite_AFailedPassDoesNotFailTheWrite(t *testing.T) {
+	vault := miniLMVault(t)
+	stubEmbedPass(t, nil, errors.New("model load failed"))
+
+	_, errOut, err := runRootCmd(t, "frontmatter", "set", "projects/beta.md", "status", "paused", "--vault", vault)
+	require.NoError(t, err, "the note is written even when embedding fails")
+	assert.Contains(t, errOut.String(), "written, but not embedded (model load failed)")
+}

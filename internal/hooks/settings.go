@@ -149,6 +149,9 @@ var federatedScripts = map[string]bool{
 	hookUserPromptSubmitScript: true,
 	hookReachScript:            true,
 	hookCodeMapScript:          true,
+	// Not a search, but it names the knowledge vaults to write lessons into
+	// and the list to search first, so it needs the whole list too.
+	hookPreCompactScript: true,
 }
 
 // canonicalHooksFor is canonicalHooks with an optional federation. With vaults

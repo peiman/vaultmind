@@ -283,4 +283,5 @@ const (
 	KeyAppTreeFor                            = "app.tree.for"                             // Only the notes whose paths: frontmatter covers this code file
 	KeyAppVaultstatusVault                   = "app.vaultstatus.vault"                    // Path to vault root
 	KeyAppVaultstatusJson                    = "app.vaultstatus.json"                     // Output in JSON format
+	KeyAppEmbedOnWrite                       = "app.embed_on_write"                       // Embed a note as soon as a command writes it (note create, the frontmatter com...
 )

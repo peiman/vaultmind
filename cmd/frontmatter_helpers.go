@@ -76,6 +76,7 @@ func runMutation(cmd *cobra.Command, req mutation.MutationRequest,
 			log.Warn().Err(idxErr).Str("path", result.Path).Msg("post-mutation re-index failed — index is stale for this file")
 		} else {
 			result.ReindexRequired = false
+			embedAfterWrite(cmd, vaultPath, vdb.Config)
 		}
 	}
 

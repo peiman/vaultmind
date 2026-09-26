@@ -140,6 +140,8 @@ func executeNoteCreate(cmd *cobra.Command, notePath string) error {
 	dbPath := filepath.Join(vaultPath, vdb.Config.Index.DBPath)
 	if idxErr := index.NewIndexer(vaultPath, dbPath, vdb.Config).IndexFile(notePath); idxErr != nil {
 		result.Warnings = append(result.Warnings, fmt.Sprintf("re-index failed: %s", idxErr))
+	} else {
+		embedAfterWrite(cmd, vaultPath, vdb.Config)
 	}
 
 	var commitSHA string
