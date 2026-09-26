@@ -409,11 +409,19 @@ elif [ -n "${VAULTMIND_VAULTS:-}" ]; then
   VAULT_ARGS=(--vaults "$VAULTMIND_VAULTS")
 fi
 
+# Cross-turn dedup. This hook fires in bursts (commit, push, merge within a
+# minute) and 82% of its delivered bodies in a conversation were repeats, 68%
+# within five minutes (measured 2026-09-06). A note delivered inside the window
+# comes back as its title — never dropped, so after compaction it can still be
+# opened. Keyed on VAULTMIND_USER_SESSION_ID, passed below.
+REACH_DEDUP_WINDOW="${VAULTMIND_REACH_DEDUP_WINDOW:-10m}"
+
 POINTERS=$(VAULTMIND_CALLER=vaultmind-reach-hook VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" $TIMEOUT_CMD "$VAULTMIND" ask "$QUERY" \
   "${VAULT_ARGS[@]}" \
   --max-items 2 \
   --budget 900 \
   --quiet-on-no-match \
+  --dedup-window "$REACH_DEDUP_WINDOW" \
   --excerpt 80 2>/dev/null)
 ASK_STATUS=$?
 

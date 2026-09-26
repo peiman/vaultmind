@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A note already shown in a conversation comes back as its title.**
+  `ask --dedup-window 10m` keeps a per-conversation ledger (keyed on
+  `VAULTMIND_USER_SESSION_ID`, which the hooks pass) of the notes whose text
+  it delivered; within the window a repeat is listed as `[type] title — shown
+  earlier this session`, never dropped, so after compaction it can still be
+  opened with `note get`. The header counts it apart from budget losses, and
+  it is not recorded as a delivered read. A subagent gets a fresh id, so it
+  is never deduplicated against its parent. The reach hook uses a 10-minute
+  window (`VAULTMIND_REACH_DEDUP_WINDOW` overrides): it fires in bursts, and
+  82% of its delivered bodies in a conversation were repeats, 68% within five
+  minutes. Refresh hooks: `vaultmind hooks install <project> --merge --force`.
+
 ## [0.9.12] - 2026-09-26
 
 > Notes that keep up with the code. A note about a file now says when that

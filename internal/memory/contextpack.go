@@ -56,6 +56,9 @@ type ContextPackTarget struct {
 	// an already-bounded excerpt a second time.
 	BodyExcerpted bool   `json:"body_excerpted,omitempty"`
 	Body          string `json:"body,omitempty"`
+	// ShownBefore marks a note whose body this conversation already received
+	// recently; it is sent as its title alone. See ContextItem.ShownBefore.
+	ShownBefore bool `json:"shown_before,omitempty"`
 }
 
 // ContextItem holds context metadata for a single related note.
@@ -71,6 +74,10 @@ type ContextItem struct {
 	// and a metric that cannot tell them apart reports the second as the first.
 	BodyExcerpted bool   `json:"body_excerpted,omitempty"`
 	Body          string `json:"body,omitempty"`
+	// ShownBefore marks a note whose body this conversation already received
+	// recently. It degrades to its title — never dropped, so an agent that lost
+	// the earlier copy to compaction still sees the note exists.
+	ShownBefore bool `json:"shown_before,omitempty"`
 }
 
 // ContextPackResult is the full output of a ContextPack operation.

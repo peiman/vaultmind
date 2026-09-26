@@ -78,6 +78,9 @@ func TestContextHeader_EveryNumberIsRecountable(t *testing.T) {
 	titleOnly := memory.ContextItem{
 		ID: "bare", Frontmatter: map[string]any{"type": "concept", "title": "Bare"},
 	}
+	shown := memory.ContextItem{
+		ID: "shown", ShownBefore: true, Frontmatter: map[string]any{"type": "journal", "title": "Seen"},
+	}
 
 	cases := []struct {
 		name  string
@@ -104,6 +107,11 @@ func TestContextHeader_EveryNumberIsRecountable(t *testing.T) {
 			name:  "budget ran out — some notes are titles only",
 			ctx:   &memory.ContextPackResult{TargetID: "t", BudgetTokens: 900, UsedTokens: 880, Target: target("the rule", true), Context: []memory.ContextItem{excerpt, titleOnly, titleOnly}},
 			shape: "4 notes, 2 delivered as excerpts, 2 titles only",
+		},
+		{
+			name:  "a note shown earlier this session is a pointer, not a budget loss",
+			ctx:   &memory.ContextPackResult{TargetID: "t", BudgetTokens: 900, UsedTokens: 100, Target: target("the rule", true), Context: []memory.ContextItem{shown}},
+			shape: "2 notes, 1 delivered as excerpt, 1 shown earlier this session",
 		},
 		{
 			name:  "nothing delivered at all",
@@ -190,4 +198,21 @@ func TestContextHeader_NamesTheBudgetOnlyWhenItBound(t *testing.T) {
 	out := buf.String()
 	assert.Contains(t, out, "900", "a note was dropped for budget; name the budget that dropped it")
 	assert.Contains(t, out, "--budget", "and the flag that changes it")
+}
+
+// A note already delivered this session renders as its title with the reason,
+// and the footer does not blame the budget for it — that would send the reader
+// to raise --budget for a note it already has.
+func TestContext_ShownBeforeIsNamedAndNotBlamedOnTheBudget(t *testing.T) {
+	ctx := &memory.ContextPackResult{
+		TargetID: "t", BudgetTokens: 900, UsedTokens: 100,
+		Target:  &memory.ContextPackTarget{ID: "t", ShownBefore: true, Frontmatter: map[string]any{"type": "arc", "title": "Seen Target"}},
+		Context: []memory.ContextItem{{ID: "bare", Frontmatter: map[string]any{"type": "concept", "title": "Bare"}}},
+	}
+	var buf bytes.Buffer
+	require.NoError(t, writeContextTarget(&buf, ctx.Target, formatOpts{}))
+	require.NoError(t, writeContextFooter(&buf, ctx, formatOpts{}))
+	out := buf.String()
+	assert.Contains(t, out, "[arc] Seen Target — shown earlier this session")
+	assert.Contains(t, out, "1 note above had no room", "the bare note is a budget loss; the shown one is not")
 }

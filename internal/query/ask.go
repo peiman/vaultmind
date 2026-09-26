@@ -61,6 +61,11 @@ type AskConfig struct {
 	// where such an item contributes no text and the pack still counts it —
 	// which is how a hook reports "3 items" while delivering only titles.
 	ExcerptTokens int
+
+	// ShownBefore names notes whose text this conversation received recently.
+	// They stay in the pack as titles (see memory.ContextItem.ShownBefore);
+	// their text is not sent again and their access is not a delivered read.
+	ShownBefore map[string]bool
 }
 
 // AskResult is the combined output of a search + context-pack operation.
@@ -391,6 +396,7 @@ func Ask(ctx context.Context, retriever retrieval.Retriever, resolver *graph.Res
 		return result, nil
 	}
 
+	markShownBefore(packResult, cfg.ShownBefore)
 	result.Context = packResult
 
 	// Plasticity roadmap step 5 reinforcement signal — record every note
@@ -436,4 +442,43 @@ func Ask(ctx context.Context, retriever retrieval.Retriever, resolver *graph.Res
 	}
 
 	return result, nil
+}
+
+// markShownBefore withholds the text of notes in shown, keeping their titles,
+// and takes that text out of the token count so the header reports what was
+// actually sent.
+func markShownBefore(pack *memory.ContextPackResult, shown map[string]bool) {
+	if len(shown) == 0 || pack == nil {
+		return
+	}
+	if t := pack.Target; t != nil && shown[pack.TargetID] {
+		pack.UsedTokens -= memory.EstimateTokens(t.Body)
+		t.Body, t.BodyExcerpted, t.ShownBefore = "", false, true
+	}
+	for i := range pack.Context {
+		item := &pack.Context[i]
+		if !shown[item.ID] {
+			continue
+		}
+		pack.UsedTokens -= memory.EstimateTokens(item.Body)
+		item.Body, item.BodyIncluded, item.BodyExcerpted, item.ShownBefore = "", false, false, true
+	}
+}
+
+// DeliveredIDs is the notes whose text this answer carries — what a session
+// ledger records as shown.
+func (r *AskResult) DeliveredIDs() []string {
+	if r == nil || r.Context == nil {
+		return nil
+	}
+	var ids []string
+	if t := r.Context.Target; t != nil && t.Body != "" {
+		ids = append(ids, r.Context.TargetID)
+	}
+	for _, item := range r.Context.Context {
+		if item.Body != "" {
+			ids = append(ids, item.ID)
+		}
+	}
+	return ids
 }

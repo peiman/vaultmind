@@ -189,6 +189,10 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	// output mode is what decides whether text reached the caller.
 	pointersOnly := getConfigValueWithFlags[bool](cmd, "pointers-only", config.KeyAppAskPointersOnly)
 	jsonOut := getConfigValueWithFlags[bool](cmd, "json", config.KeyAppAskJson)
+	shown, err := openAskShown(cmd)
+	if err != nil {
+		return err
+	}
 
 	result, err := query.Ask(cmd.Context(), ret.Retriever, resolver, vdb.DB, query.AskConfig{
 		Query:             args[0],
@@ -209,6 +213,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		// when nothing is handed over.
 		PointersOnly: pointersOnly,
 		JSONOutput:   jsonOut,
+		ShownBefore:  shown.recent(),
 		ActivationFunc: func(sims map[string]float64) map[string]float64 {
 			return computeActivationScores(cmd.Context(), sims, delta)
 		},
@@ -237,6 +242,9 @@ func runAsk(cmd *cobra.Command, args []string) error {
 
 	if err != nil {
 		return fmt.Errorf("ask: %w", err)
+	}
+	if !suppressed {
+		shown.record(result, pointersOnly, jsonOut)
 	}
 
 	// Suppress only the human-readable recall noise. A --json consumer still

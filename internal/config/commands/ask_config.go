@@ -81,6 +81,7 @@ OUTPUT INCLUDES
 		"app.ask.excerpt":          "excerpt",
 		"app.ask.type":             "type",
 		"app.ask.tag":              "tag",
+		"app.ask.dedup_window":     "dedup-window",
 	},
 }
 
@@ -101,6 +102,7 @@ func AskOptions() []config.ConfigOption {
 		{Key: "app.ask.excerpt", DefaultValue: 0, Description: "Cap each note's contribution at N tokens, preferring its decision-bearing passage — the Principle section where a note has one (an arc's rule lives there; its opening is story setup), else the opening prose. Applies to the target note and every context item. 0 = off, which also means an over-budget note contributes no text at all while the pack still counts it, so a tight budget yields items with no content", Type: "int"},
 		{Key: "app.ask.type", DefaultValue: "", Description: "Rank only notes of this type (e.g. decision, concept)", Type: "string"},
 		{Key: "app.ask.tag", DefaultValue: "", Description: "Rank only notes carrying this tag", Type: "string"},
+		{Key: "app.ask.dedup_window", DefaultValue: "", Description: "Send a note as its title alone when this conversation (VAULTMIND_USER_SESSION_ID) received its text within this long, e.g. 10m. Empty = off. For hooks that fire in bursts.", Type: "string"},
 	}
 }
 

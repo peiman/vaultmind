@@ -121,6 +121,11 @@
               "description": "Token budget for context-pack",
               "type": "integer"
             },
+            "dedup_window": {
+              "default": "",
+              "description": "Send a note as its title alone when this conversation (VAULTMIND_USER_SESSION_ID) received its text within this long, e.g. 10m. Empty = off. For hooks that fire in bursts.",
+              "type": "string"
+            },
             "excerpt": {
               "default": 0,
               "description": "Cap each note's contribution at N tokens, preferring its decision-bearing passage — the Principle section where a note has one (an arc's rule lives there; its opening is story setup), else the opening prose. Applies to the target note and every context item. 0 = off, which also means an over-budget note contributes no text at all while the pack still counts it, so a tight budget yields items with no content",

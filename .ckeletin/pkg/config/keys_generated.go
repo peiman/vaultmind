@@ -52,6 +52,7 @@ const (
 	KeyAppAskExcerpt                         = "app.ask.excerpt"                          // Cap each note's contribution at N tokens, preferring its decision-bearing pas...
 	KeyAppAskType                            = "app.ask.type"                             // Rank only notes of this type (e.g. decision, concept)
 	KeyAppAskTag                             = "app.ask.tag"                              // Rank only notes carrying this tag
+	KeyAppAskDedupWindow                     = "app.ask.dedup_window"                     // Send a note as its title alone when this conversation (VAULTMIND_USER_SESSION...
 	KeyAppCheckFailFast                      = "app.check.fail_fast"                      // Stop on first failed check
 	KeyAppCheckVerbose                       = "app.check.verbose"                        // Show verbose output including command details
 	KeyAppCheckParallel                      = "app.check.parallel"                       // Run checks within each category in parallel (disable with --parallel=false)
