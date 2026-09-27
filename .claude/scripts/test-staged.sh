@@ -32,7 +32,9 @@ if [ "${1:-}" = "--list" ]; then
 fi
 
 if [ "$#" -eq 0 ]; then
-    staged=$(git diff --cached --name-only --no-renames --diff-filter=ACMRD)
+    # quotePath=false: git otherwise quotes non-ASCII paths, which then name
+    # no directory.
+    staged=$(git -c core.quotePath=false diff --cached --name-only --no-renames --diff-filter=ACMRD)
     # shellcheck disable=SC2086 # one path per word; the repository has no paths with spaces
     set -- $staged
 fi
@@ -70,9 +72,11 @@ if [ "$everything" = 1 ]; then
     packages="./..."
 elif [ -n "$packages" ]; then
     # Keep only real packages: a directory of build-constrained Go files is
-    # not one, and `go test` on it fails.
+    # not one, and `go test` on it fails. A package that fails to load (a
+    # missing embed) is kept, so its tests fail loudly instead of passing by
+    # absence.
     # shellcheck disable=SC2046,SC2086 # word-splitting the package list is the point
-    packages=$(go list -e -f '{{if not .Error}}{{.Dir}}{{end}}' $(printf '%s\n' $packages | sort -u) |
+    packages=$(go list -e -f '{{if or .GoFiles .CgoFiles .TestGoFiles .XTestGoFiles}}{{.Dir}}{{end}}' $(printf '%s\n' $packages | sort -u) |
         sed "s|^$(pwd)|.|" | sort -u | tr '\n' ' ' | sed 's/ *$//')
 fi
 

@@ -86,7 +86,9 @@ trap 'rm -rf "$scratch"' EXIT
     # c keeps a file after the move, so it is still a package to test.
     printf 'package b\n' >c/moved.go
     printf 'package b\n' >c/stays.go
-    git add . && git -c user.email=t@t -c user.name=t commit -qm init
+    # No signing, no hooks: the developer's global git config must not decide
+    # whether this test can commit.
+    git add . && git -c user.email=t@t -c user.name=t -c commit.gpgsign=false -c core.hooksPath=/dev/null commit -qm init
     git rm -q a/one.go
     git mv c/moved.go b/moved.go
     bash "$SCRIPT" --list | tr '\n' ' ' | sed 's/ *$//' >"$scratch/got"
