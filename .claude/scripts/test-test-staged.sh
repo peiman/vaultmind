@@ -53,6 +53,51 @@ expect "./internal/navigate" internal/navigate/no-longer-here.go
 # A dependency change can affect anything: everything runs.
 expect "./..." go.mod
 expect "./..." internal/navigate/navigate.go go.sum
+# Shared fixtures are read by many packages' tests: everything runs.
+expect "./..." test/fixtures/testvault/concepts/x.md
+expect "./..." testdata/config/valid.yaml
+# An installed hook copy is compared with the embedded original.
+expect "./internal/hookscripts" .claude/scripts/vault-reach.sh
+# A folder of build-constrained Go files is not a package: nothing to run.
+expect "" .ckeletin/scripts/lint.sh
+
+# Without --list: an integration-only commit runs nothing, and says why.
+got=$(bash "$SCRIPT" test/integration/integration_test.go 2>&1) && rc=0 || rc=$?
+if [ "$rc" = 0 ] && echo "$got" | grep -q "only integration tests touched"; then
+    echo "ok: integration-only commit -> nothing, exit 0"
+else
+    echo "FAIL: integration-only commit -> exit $rc: $got" >&2
+    failures=$((failures + 1))
+fi
+
+# With no files named, the staged files come from git — including a deleted
+# file and the old side of a rename, which lefthook does not pass.
+scratch=$(mktemp -d)
+trap 'rm -rf "$scratch"' EXIT
+(
+    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
+    cd "$scratch"
+    git init -q .
+    printf 'module scratch\n\ngo 1.21\n' >go.mod
+    mkdir a b c
+    printf 'package a\n' >a/one.go
+    printf 'package a\n' >a/two.go
+    printf 'package b\n' >b/keep.go
+    # c keeps a file after the move, so it is still a package to test.
+    printf 'package b\n' >c/moved.go
+    printf 'package b\n' >c/stays.go
+    git add . && git -c user.email=t@t -c user.name=t commit -qm init
+    git rm -q a/one.go
+    git mv c/moved.go b/moved.go
+    bash "$SCRIPT" --list | tr '\n' ' ' | sed 's/ *$//' >"$scratch/got"
+)
+got=$(cat "$scratch/got")
+if [ "$got" = "./a ./b ./c" ]; then
+    echo "ok: staged from git -> ./a ./b ./c"
+else
+    echo "FAIL: staged from git -> got '$got', want './a ./b ./c'" >&2
+    failures=$((failures + 1))
+fi
 
 if [ "$failures" -gt 0 ]; then
     echo "$failures case(s) failed" >&2

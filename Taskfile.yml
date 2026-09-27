@@ -201,7 +201,7 @@ tasks:
       - bash .claude/scripts/test-mutation-check.sh
 
   test:staged:
-    desc: Run the unit tests of the packages the given files belong to (the pre-commit selection — #185)
+    desc: Run the unit tests of the packages the staged (or given) files belong to — the pre-commit selection (#185)
     cmds:
       - bash .claude/scripts/test-staged.sh {{.CLI_ARGS}}
 

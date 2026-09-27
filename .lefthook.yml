@@ -54,12 +54,15 @@ pre-push:
 # both files set the same key, lefthook 1.7 keeps the extended base's value, so
 # the base `test` is skipped (skip merges, as scaffold's does above) and this
 # runs instead.
+#
+# No {staged_files}: lefthook leaves out deleted files and the old side of a
+# rename, so the script reads the staged set from git itself.
 pre-commit:
   commands:
     test:
       skip: true
     test-staged:
-      run: task test:staged -- {staged_files}
+      run: task test:staged
 
 commit-msg:
   commands:
