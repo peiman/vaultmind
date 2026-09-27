@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.16] - 2026-09-27
+
+> Retrieval you can measure. `vaultmind eval` scores a vault against labelled
+> questions, and the first thing it judged ships with it: ColBERT scoring only
+> what the other lanes found, no worse on 32 real queries and a second faster
+> per `ask`. No hook changes.
+
 ### Added
 
 - **`vaultmind eval <queries.yaml>` scores retrieval against labelled
@@ -2210,7 +2217,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.15...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.16...HEAD
+[0.9.16]: https://github.com/peiman/vaultmind/compare/v0.9.15...v0.9.16
 [0.9.15]: https://github.com/peiman/vaultmind/compare/v0.9.14...v0.9.15
 [0.9.14]: https://github.com/peiman/vaultmind/compare/v0.9.13...v0.9.14
 [0.9.13]: https://github.com/peiman/vaultmind/compare/v0.9.12...v0.9.13
