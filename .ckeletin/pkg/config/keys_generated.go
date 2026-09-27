@@ -83,6 +83,9 @@ const (
 	KeyAppDoctorhealwikilinksVault           = "app.doctorhealwikilinks.vault"            // Path to vault root
 	KeyAppDoctorhealwikilinksJson            = "app.doctorhealwikilinks.json"             // Output in JSON format
 	KeyAppDoctorhealwikilinksDryRun          = "app.doctorhealwikilinks.dry_run"          // Preview repairs without writing (default applies)
+	KeyAppEvalVault                          = "app.eval.vault"                           // Path to vault root
+	KeyAppEvalK                              = "app.eval.k"                               // K for Hit@K: a query counts as a hit when a relevant note is in the top K
+	KeyAppEvalJson                           = "app.eval.json"                            // Output in JSON format
 	KeyAppExperimentreportExperiment         = "app.experimentreport.experiment"          // Experiment name to report on
 	KeyAppExperimentreportJson               = "app.experimentreport.json"                // Output in JSON format
 	KeyAppExperimentreportK                  = "app.experimentreport.k"                   // K value for Hit@K metric

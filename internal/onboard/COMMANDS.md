@@ -86,6 +86,7 @@ Generated from the command tree — do not edit by hand (run `task generate:docs
 | `vaultmind docs` | Generate documentation | you want to generate documentation about the app and its configuration. |
 | `vaultmind docs commands` | Generate the grouped command reference (COMMANDS.md) | you want a generated grouped reference of every command, each with its when-to-use. |
 | `vaultmind docs config` | Generate the configuration-options reference | you want a generated reference of every configuration option. |
+| `vaultmind eval` | Score a vault's retrieval against labelled queries: Hit@1, Hit@K, MRR | you changed retrieval (or want to know how good it is) and have labelled questions — Hit@1, Hit@K and MRR on your own vault. |
 | `vaultmind experiment` | Experiment tracking and reporting | you want to inspect experiment tracking: retrieval quality, usage, traces, comparisons. |
 | `vaultmind experiment compare` | Surface where retrieval variants disagree, no labels needed | you want to see where retrieval variants disagree, without labeled ground truth. |
 | `vaultmind experiment report` | Measure retrieval quality: Hit@K and MRR per variant | you want to measure retrieval quality — Hit@K and MRR per variant. |

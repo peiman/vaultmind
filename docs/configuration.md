@@ -93,6 +93,9 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.doctorhealwikilinks.vault` | string | `.` | `VAULTMIND_APP_DOCTORHEALWIKILINKS_VAULT` | Path to vault root |
 | `app.doctorhealwikilinks.json` | bool | `false` | `VAULTMIND_APP_DOCTORHEALWIKILINKS_JSON` | Output in JSON format |
 | `app.doctorhealwikilinks.dry_run` | bool | `false` | `VAULTMIND_APP_DOCTORHEALWIKILINKS_DRY_RUN` | Preview repairs without writing (default applies) |
+| `app.eval.vault` | string | `.` | `VAULTMIND_APP_EVAL_VAULT` | Path to vault root |
+| `app.eval.k` | int | `5` | `VAULTMIND_APP_EVAL_K` | K for Hit@K: a query counts as a hit when a relevant note is in the top K |
+| `app.eval.json` | bool | `false` | `VAULTMIND_APP_EVAL_JSON` | Output in JSON format |
 | `app.experimentreport.experiment` | string | `` | `VAULTMIND_APP_EXPERIMENTREPORT_EXPERIMENT` | Experiment name to report on |
 | `app.experimentreport.json` | bool | `false` | `VAULTMIND_APP_EXPERIMENTREPORT_JSON` | Output in JSON format |
 | `app.experimentreport.k` | int | `10` | `VAULTMIND_APP_EXPERIMENTREPORT_K` | K value for Hit@K metric |
@@ -521,6 +524,16 @@ app:
 
     # Preview repairs without writing (default applies)
     dry_run: false
+
+  eval:
+    # Path to vault root
+    vault: .
+
+    # K for Hit@K: a query counts as a hit when a relevant note is in the top K
+    k: 5
+
+    # Output in JSON format
+    json: false
 
   experimentcompare:
     # Restrict to a single session ID
@@ -1463,6 +1476,15 @@ export VAULTMIND_APP_DOCTORHEALWIKILINKS_JSON=false
 
 # Preview repairs without writing (default applies)
 export VAULTMIND_APP_DOCTORHEALWIKILINKS_DRY_RUN=false
+
+# Path to vault root
+export VAULTMIND_APP_EVAL_VAULT=.
+
+# K for Hit@K: a query counts as a hit when a relevant note is in the top K
+export VAULTMIND_APP_EVAL_K=5
+
+# Output in JSON format
+export VAULTMIND_APP_EVAL_JSON=false
 
 # Experiment name to report on
 export VAULTMIND_APP_EXPERIMENTREPORT_EXPERIMENT=

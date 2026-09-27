@@ -214,6 +214,16 @@ app:
     # Preview repairs without writing (default applies)
     dry_run: false
 
+  eval:
+    # Path to vault root
+    vault: .
+
+    # K for Hit@K: a query counts as a hit when a relevant note is in the top K
+    k: 5
+
+    # Output in JSON format
+    json: false
+
   experimentcompare:
     # Restrict to a single session ID
     session: 

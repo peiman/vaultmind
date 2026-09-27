@@ -410,6 +410,11 @@ var commandCatalog = map[string]catalogEntry{
 		when:  "you want to inspect experiment tracking: retrieval quality, usage, traces, comparisons.",
 		short: "Experiment tracking and reporting",
 	},
+	"vaultmind eval": {
+		group: groupSetup,
+		when:  "you changed retrieval (or want to know how good it is) and have labelled questions — Hit@1, Hit@K and MRR on your own vault.",
+		short: "Score a vault's retrieval against labelled queries: Hit@1, Hit@K, MRR",
+	},
 	"vaultmind experiment report": {
 		group: groupSetup,
 		when:  "you want to measure retrieval quality — Hit@K and MRR per variant.",
