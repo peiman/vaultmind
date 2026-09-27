@@ -44,6 +44,26 @@ pre-push:
     scaffold:
       skip: true
 
+# Override: pre-commit ran the whole unit suite and pre-push ran it again under
+# coverage — a commit plus a push took up to ten minutes on a loaded machine
+# (#185). Pre-commit now tests only the packages that own the staged files
+# (.claude/scripts/test-staged.sh); pre-push keeps the full coverage run, the
+# authoritative gate before anything leaves the machine.
+#
+# A new command rather than a replacement `run:` for the base's `test`: when
+# both files set the same key, lefthook 1.7 keeps the extended base's value, so
+# the base `test` is skipped (skip merges, as scaffold's does above) and this
+# runs instead.
+#
+# No {staged_files}: lefthook leaves out deleted files and the old side of a
+# rename, so the script reads the staged set from git itself.
+pre-commit:
+  commands:
+    test:
+      skip: true
+    test-staged:
+      run: task test:staged
+
 commit-msg:
   commands:
     # The `!` before the colon is the breaking-change marker the Conventional
