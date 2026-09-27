@@ -71,23 +71,58 @@ func (h *HybridRetriever) Search(ctx context.Context, query string, limit, offse
 
 	perRetriever := make([]retrieverResult, len(h.Retrievers))
 
-	g, gCtx := errgroup.WithContext(ctx)
-	for i, nr := range h.Retrievers {
-		g.Go(func() error {
-			results, _, err := nr.Retriever.Search(gCtx, query, fetchLimit, 0, filters)
-			if err != nil {
-				return fmt.Errorf("retriever %s: %w", nr.Name, err)
-			}
-			perRetriever[i] = retrieverResult{results: results}
-			return nil
-		})
+	// Two phases. Lanes that must see every note run first, in parallel; a lane
+	// that can score a given set (ColBERT) then scores only what they found.
+	// ColBERT's per-token MaxSim over every note was most of a search; the
+	// other lanes' candidates are a fraction of the vault (163 of 416). On 32
+	// labelled real queries (`vaultmind eval`) it was no worse than scoring every
+	// note — Hit@1 27 -> 28, Hit@5 30 -> 30, MRR 0.888 -> 0.903 — and 1.3s faster.
+	// It does move results: under mean-of-present fusion a low-ranked candidate's
+	// extra ColBERT vote lowers that note's score, so top-5 sets differ, among
+	// notes the labels mark not relevant.
+	run := func(indices []int, candidates []string) error {
+		g, gCtx := errgroup.WithContext(ctx)
+		for _, i := range indices {
+			nr := h.Retrievers[i]
+			g.Go(func() error {
+				var (
+					results []retrieval.ScoredResult
+					err     error
+				)
+				if cs, ok := nr.Retriever.(CandidateSearcher); ok && len(candidates) > 0 {
+					results, _, err = cs.SearchAmong(gCtx, query, fetchLimit, filters, candidates)
+				} else {
+					results, _, err = nr.Retriever.Search(gCtx, query, fetchLimit, 0, filters)
+				}
+				if err != nil {
+					return fmt.Errorf("retriever %s: %w", nr.Name, err)
+				}
+				perRetriever[i] = retrieverResult{results: results}
+				return nil
+			})
+		}
+		return g.Wait()
 	}
-	if err := g.Wait(); err != nil {
+	var direct, narrowed []int
+	for i, nr := range h.Retrievers {
+		if _, ok := nr.Retriever.(CandidateSearcher); ok {
+			narrowed = append(narrowed, i)
+		} else {
+			direct = append(direct, i)
+		}
+	}
+	if err := run(direct, nil); err != nil {
 		return nil, 0, err
 	}
+	if len(narrowed) > 0 {
+		// Empty when the other lanes found nothing: the lane then searches
+		// everything rather than returning nothing.
+		lane := func(i int) []retrieval.ScoredResult { return perRetriever[i].results }
+		if err := run(narrowed, candidateIDs(lane, direct)); err != nil {
+			return nil, 0, err
+		}
+	}
 
-	// Compute RRF scores: for each note, sum 1/(K+rank) across all retrievers.
-	// Also track the per-retriever contribution keyed by retriever name.
 	rrfScores := make(map[string]*rrfEntry)
 	for i, rr := range perRetriever {
 		name := h.Retrievers[i].Name
@@ -146,4 +181,26 @@ func (h *HybridRetriever) Search(ctx context.Context, query string, limit, offse
 	}
 
 	return results, total, nil
+}
+
+// CandidateSearcher is a lane that can score a given set of notes instead of
+// the whole vault. The hybrid retriever hands it the other lanes' results.
+type CandidateSearcher interface {
+	SearchAmong(ctx context.Context, query string, limit int, filters index.SearchFilters, ids []string) ([]retrieval.ScoredResult, int, error)
+}
+
+// candidateIDs is the union of the ids the given lanes returned, in first-seen
+// order.
+func candidateIDs(lane func(int) []retrieval.ScoredResult, indices []int) []string {
+	seen := map[string]bool{}
+	var ids []string
+	for _, i := range indices {
+		for _, r := range lane(i) {
+			if !seen[r.ID] {
+				seen[r.ID] = true
+				ids = append(ids, r.ID)
+			}
+		}
+	}
+	return ids
 }

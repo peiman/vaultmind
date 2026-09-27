@@ -32,6 +32,25 @@ func (r *ColBERTRetriever) Search(ctx context.Context, query string, limit, offs
 	if err != nil {
 		return nil, 0, fmt.Errorf("loading ColBERT embeddings: %w", err)
 	}
+	return r.score(queryTokens, all, limit, offset, filters)
+}
+
+// SearchAmong scores only the notes named in ids, reading only their vectors.
+// The hybrid retriever passes the other lanes' results (see CandidateSearcher).
+func (r *ColBERTRetriever) SearchAmong(ctx context.Context, query string, limit int, filters index.SearchFilters, ids []string) ([]retrieval.ScoredResult, int, error) {
+	queryTokens, err := r.EmbedColBERT(ctx, query)
+	if err != nil {
+		return nil, 0, fmt.Errorf("embedding query (ColBERT): %w", err)
+	}
+	some, err := index.LoadColBERTEmbeddingsFor(r.DB, r.Dims, ids)
+	if err != nil {
+		return nil, 0, err
+	}
+	return r.score(queryTokens, some, limit, 0, filters)
+}
+
+// score ranks notes by MaxSim against the query tokens.
+func (r *ColBERTRetriever) score(queryTokens [][]float32, all []index.NoteColBERTEmbedding, limit, offset int, filters index.SearchFilters) ([]retrieval.ScoredResult, int, error) {
 	if len(all) == 0 {
 		return nil, 0, nil
 	}
