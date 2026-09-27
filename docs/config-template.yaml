@@ -567,6 +567,22 @@ app:
     # Signer socket path (default: XDG state dir)
     signer_socket: 
 
+  import:
+    # Path to vault root
+    vault: .
+
+    # Report what the import would do and write nothing
+    dry_run: false
+
+    # Remove imported notes whose doc is gone
+    prune: false
+
+    # Overwrite imported notes edited by hand when their doc changed
+    force: false
+
+    # Output in JSON format
+    json: false
+
   index:
     # Path to the vault root directory
     vault: ./my-vault

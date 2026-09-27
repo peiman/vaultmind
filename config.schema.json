@@ -1108,6 +1108,36 @@
           },
           "type": "object"
         },
+        "import": {
+          "properties": {
+            "dry_run": {
+              "default": false,
+              "description": "Report what the import would do and write nothing",
+              "type": "boolean"
+            },
+            "force": {
+              "default": false,
+              "description": "Overwrite imported notes edited by hand when their doc changed",
+              "type": "boolean"
+            },
+            "json": {
+              "default": false,
+              "description": "Output in JSON format",
+              "type": "boolean"
+            },
+            "prune": {
+              "default": false,
+              "description": "Remove imported notes whose doc is gone",
+              "type": "boolean"
+            },
+            "vault": {
+              "default": ".",
+              "description": "Path to vault root",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
         "index": {
           "properties": {
             "allow_slow_backend": {

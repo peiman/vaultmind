@@ -205,6 +205,11 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.identitysignerinstall.signer_socket` | string | `` | `VAULTMIND_APP_IDENTITYSIGNERINSTALL_SIGNER_SOCKET` | Signer socket path (default: XDG state dir, per --config-path-mode) |
 | `app.identitysignerinstall.name` | string | `` | `VAULTMIND_APP_IDENTITYSIGNERINSTALL_NAME` | Job name suffix (default: the key file's name without extension) |
 | `app.identitysignerinstall.print` | bool | `false` | `VAULTMIND_APP_IDENTITYSIGNERINSTALL_PRINT` | Print the LaunchAgent plist and exit without writing or loading anything |
+| `app.import.vault` | string | `.` | `VAULTMIND_APP_IMPORT_VAULT` | Path to vault root |
+| `app.import.dry_run` | bool | `false` | `VAULTMIND_APP_IMPORT_DRY_RUN` | Report what the import would do and write nothing |
+| `app.import.prune` | bool | `false` | `VAULTMIND_APP_IMPORT_PRUNE` | Remove imported notes whose doc is gone |
+| `app.import.force` | bool | `false` | `VAULTMIND_APP_IMPORT_FORCE` | Overwrite imported notes edited by hand when their doc changed |
+| `app.import.json` | bool | `false` | `VAULTMIND_APP_IMPORT_JSON` | Output in JSON format |
 | `app.index.vault` | string | `.` | `VAULTMIND_APP_INDEX_VAULT` | Path to the vault root directory |
 | `app.index.json` | bool | `false` | `VAULTMIND_APP_INDEX_JSON` | Output in JSON format |
 | `app.index.full` | bool | `false` | `VAULTMIND_APP_INDEX_FULL` | Force full rebuild instead of incremental index |
@@ -877,6 +882,22 @@ app:
 
     # Signer socket path (default: XDG state dir)
     signer_socket: 
+
+  import:
+    # Path to vault root
+    vault: .
+
+    # Report what the import would do and write nothing
+    dry_run: false
+
+    # Remove imported notes whose doc is gone
+    prune: false
+
+    # Overwrite imported notes edited by hand when their doc changed
+    force: false
+
+    # Output in JSON format
+    json: false
 
   index:
     # Path to the vault root directory
@@ -1812,6 +1833,21 @@ export VAULTMIND_APP_IDENTITYSIGNERINSTALL_NAME=
 
 # Print the LaunchAgent plist and exit without writing or loading anything
 export VAULTMIND_APP_IDENTITYSIGNERINSTALL_PRINT=false
+
+# Path to vault root
+export VAULTMIND_APP_IMPORT_VAULT=.
+
+# Report what the import would do and write nothing
+export VAULTMIND_APP_IMPORT_DRY_RUN=false
+
+# Remove imported notes whose doc is gone
+export VAULTMIND_APP_IMPORT_PRUNE=false
+
+# Overwrite imported notes edited by hand when their doc changed
+export VAULTMIND_APP_IMPORT_FORCE=false
+
+# Output in JSON format
+export VAULTMIND_APP_IMPORT_JSON=false
 
 # Path to the vault root directory
 export VAULTMIND_APP_INDEX_VAULT=./my-vault

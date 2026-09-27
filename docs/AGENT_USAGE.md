@@ -386,7 +386,7 @@ markers; `task check` fails if it drifts from the catalog. Everything outside th
 hand-written and stays.
 
 <!-- VAULTMIND:GENERATED:commands:START -->
-<!-- checksum:f019c31434f2af75fac058f2f96f0b072916802649952bcf4d8d1cfc39e21aff -->
+<!-- checksum:b798aae36968990a7a7bac69bf64e28d2094e1cc64fa59462aee875f28c31052 -->
 # VaultMind Commands
 
 Every user-facing command, grouped by intent, with its when-to-use trigger.
@@ -431,6 +431,7 @@ Generated from the command tree — do not edit by hand (run `task generate:docs
 | `vaultmind frontmatter set` | Set one frontmatter field on a note | you want to set a single frontmatter field on one note, schema-validated. |
 | `vaultmind frontmatter unset` | Remove one frontmatter field from a note | you want to remove one frontmatter field from a note. |
 | `vaultmind frontmatter validate` | Check vault notes for frontmatter rule violations | you want to catch missing fields, bad statuses, unknown types, or broken refs before indexing. |
+| `vaultmind import` | Import a folder of markdown docs as notes, and keep them in step on re-runs | a project already has docs (design notes, ADRs, guides) and you want them found like notes — re-run after the docs change. |
 | `vaultmind index` | Scan and index vault notes into SQLite, optionally embedding | vault notes changed and you need to refresh the SQLite index (and optionally embeddings). |
 | `vaultmind schema` | Query the vault's type schema | you need to discover the vault's note types, required fields, and valid statuses. |
 | `vaultmind schema list-types` | List every note type with its required fields and valid statuses | you want every registered type with its required fields and valid statuses before creating notes. |
