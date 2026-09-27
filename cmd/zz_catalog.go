@@ -151,6 +151,11 @@ var commandCatalog = map[string]catalogEntry{
 		when:  "vault notes changed and you need to refresh the SQLite index (and optionally embeddings).",
 		short: "Scan and index vault notes into SQLite, optionally embedding",
 	},
+	"vaultmind import": {
+		group: groupMaintenance,
+		when:  "a project already has docs (design notes, ADRs, guides) and you want them found like notes — re-run after the docs change.",
+		short: "Import a folder of markdown docs as notes, and keep them in step on re-runs",
+	},
 	"vaultmind apply": {
 		group: groupMaintenance,
 		when:  "you have an AI-generated JSON plan and want to execute its note mutations.",

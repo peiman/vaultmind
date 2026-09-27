@@ -195,6 +195,11 @@ const (
 	KeyAppIdentitysignerinstallSignerSocket  = "app.identitysignerinstall.signer_socket"  // Signer socket path (default: XDG state dir, per --config-path-mode)
 	KeyAppIdentitysignerinstallName          = "app.identitysignerinstall.name"           // Job name suffix (default: the key file's name without extension)
 	KeyAppIdentitysignerinstallPrint         = "app.identitysignerinstall.print"          // Print the LaunchAgent plist and exit without writing or loading anything
+	KeyAppImportVault                        = "app.import.vault"                         // Path to vault root
+	KeyAppImportDryRun                       = "app.import.dry_run"                       // Report what the import would do and write nothing
+	KeyAppImportPrune                        = "app.import.prune"                         // Remove imported notes whose doc is gone
+	KeyAppImportForce                        = "app.import.force"                         // Overwrite imported notes edited by hand when their doc changed
+	KeyAppImportJson                         = "app.import.json"                          // Output in JSON format
 	KeyAppIndexVault                         = "app.index.vault"                          // Path to the vault root directory
 	KeyAppIndexJson                          = "app.index.json"                           // Output in JSON format
 	KeyAppIndexFull                          = "app.index.full"                           // Force full rebuild instead of incremental index

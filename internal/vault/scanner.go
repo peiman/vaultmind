@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -43,10 +42,7 @@ func Scan(vaultRoot string, excludes []string) (ScanResult, error) {
 		return ScanResult{}, fmt.Errorf("resolving vault root: %w", err)
 	}
 
-	excludeSet := make(map[string]bool, len(excludes))
-	for _, e := range excludes {
-		excludeSet[e] = true
-	}
+	skip := newExcludeSet(excludes)
 
 	var files []ScannedFile
 	var skippedSymlinks []string
@@ -57,22 +53,14 @@ func Scan(vaultRoot string, excludes []string) (ScanResult, error) {
 		}
 
 		if d.IsDir() {
-			// Check directory name (existing behavior: "templates", ".obsidian", etc.)
-			if excludeSet[d.Name()] {
-				return filepath.SkipDir
-			}
-			// Check relative path prefix (new: supports "archive/old" style patterns)
+			// By name ("templates", ".obsidian") or by relative path prefix
+			// ("archive/old"); the root is checked by name, as it always was.
 			relDir, relErr := filepath.Rel(absRoot, path)
-			if relErr == nil {
-				for pattern := range excludeSet {
-					if strings.Contains(pattern, string(filepath.Separator)) || strings.Contains(pattern, "/") {
-						// Path-style pattern: match against relative path
-						cleanPattern := filepath.Clean(pattern)
-						if relDir == cleanPattern || strings.HasPrefix(relDir, cleanPattern+string(filepath.Separator)) {
-							return filepath.SkipDir
-						}
-					}
-				}
+			if relErr != nil {
+				relDir = ""
+			}
+			if skip.dir(d.Name(), relDir) {
+				return filepath.SkipDir
 			}
 			return nil
 		}
@@ -96,7 +84,7 @@ func Scan(vaultRoot string, excludes []string) (ScanResult, error) {
 		// "README.md" — vault meta, not a knowledge note) or an exact
 		// vault-relative path. Without this, a vault's own README indexed as a
 		// note and polluted every query's results.
-		if excludeSet[d.Name()] || excludeSet[relPath] {
+		if skip.file(relPath) {
 			return nil
 		}
 

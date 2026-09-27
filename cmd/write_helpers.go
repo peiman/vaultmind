@@ -37,6 +37,13 @@ var runEmbedPass = func(cmd *cobra.Command, vaultPath, dbPath string, cfg *vault
 // slow pure-Go backend is skipped, and a failure is reported on stderr with the
 // command that finishes the job. app.embed_on_write=false turns it off.
 func embedAfterWrite(cmd *cobra.Command, vaultPath string, cfg *vault.Config) {
+	embedAfterWriteUpTo(cmd, vaultPath, cfg, embedOnWriteLimit)
+}
+
+// embedAfterWriteUpTo is embedAfterWrite for a write of many notes: import
+// raises the limit by the notes it wrote, so what it asked for is embedded
+// and only a backlog beyond that is left to `vaultmind index --embed`.
+func embedAfterWriteUpTo(cmd *cobra.Command, vaultPath string, cfg *vault.Config, limit int) {
 	if !getConfigValueWithFlags[bool](cmd, embedOnWriteFlag, config.KeyAppEmbedOnWrite) {
 		return
 	}
@@ -50,7 +57,7 @@ func embedAfterWrite(cmd *cobra.Command, vaultPath string, cfg *vault.Config) {
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "not embedded: this build has no ORT backend for BGE-M3; run %s with an ORT build\n", finish)
 		return
 	}
-	if pending, err := index.PendingEmbeddings(dbPath, model); err == nil && pending > embedOnWriteLimit {
+	if pending, err := index.PendingEmbeddings(dbPath, model); err == nil && pending > limit {
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "not embedded: %d notes have no embeddings; embed them with %s\n", pending, finish)
 		return
 	}
