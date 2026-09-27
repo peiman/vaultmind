@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 )
 
 // EncodeEmbedding serializes a float32 slice to raw little-endian bytes for BLOB storage.
@@ -339,8 +340,43 @@ func LoadAllColBERTEmbeddings(d *DB, dims int) ([]NoteColBERTEmbedding, error) {
 	if err != nil {
 		return nil, fmt.Errorf("loading ColBERT embeddings: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
+	return scanColBERTRows(rows, dims)
+}
 
+// colbertIDChunk bounds the ids in one IN (...) list, well under SQLite's
+// variable limit.
+const colbertIDChunk = 500
+
+// LoadColBERTEmbeddingsFor returns the ColBERT embeddings of the named notes
+// only. ColBERT is nearly all of a BGE-M3 index (921 of 926 MB on a 416-note
+// vault), so reading just the candidates is most of what narrowing saves.
+// Unknown ids and notes without ColBERT are skipped.
+func LoadColBERTEmbeddingsFor(d *DB, dims int, ids []string) ([]NoteColBERTEmbedding, error) {
+	var result []NoteColBERTEmbedding
+	for start := 0; start < len(ids); start += colbertIDChunk {
+		chunk := ids[start:min(start+colbertIDChunk, len(ids))]
+		args := make([]any, len(chunk))
+		for i, id := range chunk {
+			args[i] = id
+		}
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(chunk)), ",")
+		rows, err := d.Query(`SELECT id, colbert_embedding, type, title, path, body_text, is_domain
+			FROM notes WHERE colbert_embedding IS NOT NULL AND id IN (`+placeholders+`)`, args...) // nosemgrep: go-sql-injection -- only "?" placeholders are concatenated; ids are bound
+		if err != nil {
+			return nil, fmt.Errorf("loading ColBERT embeddings for candidates: %w", err)
+		}
+		got, err := scanColBERTRows(rows, dims)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, got...)
+	}
+	return result, nil
+}
+
+// scanColBERTRows decodes ColBERT rows and closes them.
+func scanColBERTRows(rows *sql.Rows, dims int) ([]NoteColBERTEmbedding, error) {
+	defer func() { _ = rows.Close() }()
 	var result []NoteColBERTEmbedding
 	for rows.Next() {
 		var ne NoteColBERTEmbedding

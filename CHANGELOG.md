@@ -18,6 +18,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scoring is the golden-baseline harness the test suite already used, now
   reachable for any vault.
 
+### Changed
+
+- **ColBERT scores only what the other lanes found.** The hybrid search ran
+  ColBERT's per-token MaxSim over every note in the vault; it now runs the
+  other lanes first and has ColBERT score only their candidates, reading only
+  those notes' vectors (ColBERT is nearly all of a BGE-M3 index). When the
+  other lanes find nothing, ColBERT still searches everything. On a 416-note
+  vault `ask` went 4.4s → 3.1s. Results move: judged on 32 labelled real
+  queries it was no worse than scoring every note (Hit@1 27 → 28 of 32, Hit@5
+  unchanged, MRR 0.888 → 0.903); the top-5 changes fell among notes the labels
+  mark not relevant.
+
 ## [0.9.15] - 2026-09-26
 
 > Faster recall. A three-vault `ask` — what the recall hook runs on every
