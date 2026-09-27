@@ -134,6 +134,7 @@ tasks:
             && task ckeletin:test:coverage:project \
             && task test:baseline \
             && task check:validate-test \
+            && task check:test-staged \
             && task check:docs-drift
 
   test:baseline:
@@ -199,6 +200,16 @@ tasks:
     cmds:
       - bash .claude/scripts/test-mutation-check.sh
 
+  test:staged:
+    desc: Run the unit tests of the packages the given files belong to (the pre-commit selection — #185)
+    cmds:
+      - bash .claude/scripts/test-staged.sh {{.CLI_ARGS}}
+
+  check:test-staged:
+    desc: Test the pre-commit test selection against the repository's own layout
+    cmds:
+      - bash .claude/scripts/test-test-staged.sh
+
   check:fast:
     desc: Run fast quality checks (XDG_DATA_HOME isolated — issue #17)
     cmds:
@@ -214,6 +225,7 @@ tasks:
       # — it is a gate you have to remember, which is the kind this one exists
       # to replace. 1.2s.
       - task: check:validate-test
+      - task: check:test-staged
 
   check:deps:
     desc: Run all dependency checks
