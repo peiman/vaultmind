@@ -482,3 +482,50 @@ func listDir(t *testing.T, dir string) []string {
 	}
 	return names
 }
+
+// Review round 3, low 1: a note another import wrote that cannot be read is
+// not this import's problem. It only blocks the import whose folder it is in.
+func TestImport_AnUnreadableNoteElsewhereDoesNotBlock(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("root reads a 0000 file")
+	}
+	repo, vault := srcRepo(t), t.TempDir()
+	other := filepath.Join(vault, "imported", "other-repo", "docs", "x.md")
+	write(t, other, "---\nid: x\n---\nX.\n")
+	require.NoError(t, os.Chmod(other, 0))
+	t.Cleanup(func() { _ = os.Chmod(other, 0o600) })
+
+	res := run(t, repo, vault, importdocs.Options{})
+	assert.Equal(t, 2, res.Count(importdocs.Added))
+
+	mine := filepath.Join(vault, "imported", "demo-repo", "docs", "alpha.md")
+	require.NoError(t, os.Chmod(mine, 0))
+	t.Cleanup(func() { _ = os.Chmod(mine, 0o600) })
+	_, err := importdocs.Import(source(repo), vault, importdocs.Options{})
+	require.Error(t, err, "an unreadable note in this import's own folder still stops it")
+}
+
+// Review round 3, low 2: a doc renamed with its content unchanged refreshes
+// the note's source and keeps a hand-edited body — the doc did not change,
+// so there is nothing to choose between.
+func TestImport_ARenamedUnchangedDocKeepsTheHandEditedBody(t *testing.T) {
+	repo, vault := srcRepo(t), t.TempDir()
+	write(t, filepath.Join(repo, "docs", "UP.MD"), "# Up\n\nText.\n")
+	run(t, repo, vault, importdocs.Options{})
+	note := filepath.Join(vault, "imported", "demo-repo", "docs", "UP.md")
+	raw, _ := os.ReadFile(note) //nolint:gosec // test path
+	write(t, note, string(raw)+"HAND\n")
+	require.NoError(t, os.Rename(filepath.Join(repo, "docs", "UP.MD"), filepath.Join(repo, "docs", "tmp")))
+	require.NoError(t, os.Rename(filepath.Join(repo, "docs", "tmp"), filepath.Join(repo, "docs", "UP.md")))
+
+	res := run(t, repo, vault, importdocs.Options{})
+	assert.Equal(t, 1, res.Count(importdocs.Updated))
+	assert.Zero(t, res.Count(importdocs.Conflict))
+	raw, _ = os.ReadFile(note) //nolint:gosec // test path
+	assert.Contains(t, string(raw), "source: demo-repo:docs/UP.md")
+	assert.Contains(t, string(raw), "HAND", "the hand edit survives")
+
+	write(t, filepath.Join(repo, "docs", "UP.md"), "# Up\n\nChanged.\n")
+	res = run(t, repo, vault, importdocs.Options{})
+	assert.Equal(t, 1, res.Count(importdocs.Conflict), "still counted as edited: a later doc change is a conflict")
+}

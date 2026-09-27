@@ -130,7 +130,7 @@ func Import(src Source, vaultRoot string, opts Options) (*Result, error) {
 	base := path.Join(ImportedDir, src.Repo, src.Prefix)
 	// Every imported note is read, not only this folder's: an id must be
 	// unique across all imports in the vault.
-	all, noteSkips, err := readNotes(vaultAbs, ImportedDir)
+	all, noteSkips, err := readNotes(vaultAbs, ImportedDir, base)
 	if err != nil {
 		return nil, err
 	}
@@ -270,6 +270,11 @@ func (s *syncer) syncDoc(d doc, rel, existing string) Entry {
 		}
 		return e
 	}
+	if prev.managed && prev.sourceHash == d.Hash && prev.edited() {
+		// A rename of an unchanged doc: the hand-edited body stays, and so does
+		// the source hash, so the note still counts as edited.
+		d.Body = prev.body
+	}
 	id := assignID(d, existing, prev, s.taken)
 	s.taken[id] = rel
 	if existing != "" && existing != rel {
@@ -307,6 +312,11 @@ func plan(d doc, n note, opts Options) (Action, string) {
 		return Skipped, "a note the import did not write is in the way"
 	case n.sourceHash == d.Hash && n.title == d.Title && n.source == d.Source:
 		return Unchanged, ""
+	case n.sourceHash == d.Hash && n.title == d.Title:
+		// Only the doc's name changed: refresh source and paths. A hand-edited
+		// body is kept (see syncDoc) — the doc did not change, so nothing is
+		// lost either way.
+		return Updated, "its doc was renamed"
 	case n.edited() && !opts.Force:
 		return Conflict, "edited by hand since the last import; --force overwrites"
 	}

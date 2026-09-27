@@ -27,7 +27,9 @@ type note struct {
 	sourceHash string
 	// bodyHash differs from sourceHash when the body was edited by hand.
 	bodyHash string
-	title    string
+	// body is the note's body as it stands, kept when only the source moved.
+	body  string
+	title string
 	// extra is frontmatter the import does not own; an update keeps it.
 	extra map[string]interface{}
 }
@@ -41,28 +43,31 @@ var ownedKeys = map[string]bool{
 	"id": true, "type": true, "title": true, "paths": true, "source": true, "source_hash": true,
 }
 
-// readNotes reads the notes under base, keyed by vault-relative path.
-// vaultRoot is absolute. A link anywhere from the vault root down to base is
-// refused before anything is read through it.
-func readNotes(vaultRoot, base string) (map[string]note, []Entry, error) {
+// readNotes reads the notes under dir, keyed by vault-relative path.
+// vaultRoot is absolute. A link anywhere from the vault root down to dir is
+// refused before anything is read through it. A note that cannot be read
+// stops the import only inside base, this import's own folder; elsewhere it
+// is another import's note, passed over.
+func readNotes(vaultRoot, dir, base string) (map[string]note, []Entry, error) {
 	notes := map[string]note{}
-	if err := noLinkOnTheWay(vaultRoot, base, false); err != nil {
+	if err := noLinkOnTheWay(vaultRoot, dir, false); err != nil {
 		return nil, nil, err
 	}
-	dir, err := vault.ResolveInside(vaultRoot, base)
+	abs, err := vault.ResolveInside(vaultRoot, dir)
 	if err != nil {
 		return nil, nil, err
 	}
 	var skipped []Entry
-	err = filepath.WalkDir(dir, func(p string, d fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
+	err = filepath.WalkDir(abs, func(p string, d fs.DirEntry, walkErr error) error {
 		rel, err := filepath.Rel(vaultRoot, p)
 		if err != nil {
 			return err
 		}
 		rel = filepath.ToSlash(rel)
+		mine := rel == base || strings.HasPrefix(rel, base+"/") || strings.HasPrefix(base, rel+"/") || p == abs
+		if walkErr != nil {
+			return passOver(walkErr, mine, d)
+		}
 		if _, skip := vault.SkipSymlink(vaultRoot, p, d); skip {
 			skipped = append(skipped, Entry{Action: Skipped, Note: rel, Reason: "a symlink in the vault; not followed"})
 			return nil
@@ -72,7 +77,7 @@ func readNotes(vaultRoot, base string) (map[string]note, []Entry, error) {
 		}
 		n, err := readNote(p)
 		if err != nil {
-			return err
+			return passOver(err, mine, d)
 		}
 		notes[rel] = n
 		return nil
@@ -81,6 +86,18 @@ func readNotes(vaultRoot, base string) (map[string]note, []Entry, error) {
 		return nil, nil, fmt.Errorf("reading imported notes: %w", err)
 	}
 	return notes, skipped, nil
+}
+
+// passOver returns err for a path in this import's folder (or above it), and
+// skips the path anywhere else.
+func passOver(err error, mine bool, d fs.DirEntry) error {
+	if mine {
+		return err
+	}
+	if d != nil && d.IsDir() {
+		return filepath.SkipDir
+	}
+	return nil
 }
 
 func readNote(p string) (note, error) {
@@ -106,6 +123,7 @@ func parseNote(raw []byte) note {
 	n.title, _ = fm["title"].(string)
 	n.managed = n.source != "" && n.sourceHash != ""
 	n.bodyHash = hashOf(body)
+	n.body = body
 	n.extra = map[string]interface{}{}
 	for k, v := range fm {
 		if !ownedKeys[k] {
