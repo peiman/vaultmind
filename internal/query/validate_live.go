@@ -9,6 +9,7 @@ import (
 
 	"github.com/peiman/vaultmind/internal/parser"
 	"github.com/peiman/vaultmind/internal/schema"
+	"github.com/peiman/vaultmind/internal/vault"
 )
 
 // ValidateLive walks vaultPath, parses each .md file's frontmatter, and runs
@@ -38,10 +39,18 @@ func ValidateLive(vaultPath string, reg *schema.Registry) (*ValidateResult, erro
 		if !strings.HasSuffix(d.Name(), ".md") {
 			return nil
 		}
+		// Never follow a link: os.ReadFile would read whatever it points at, and
+		// a parse error could echo it back (#194). Reported, not dropped.
+		if _, skip := vault.SkipSymlink(vaultPath, path, d); skip {
+			result.Issues = append(result.Issues, ValidateIssue{
+				Path: path, Severity: "warning", Rule: RuleSkippedSymlink,
+				Message: "a symlink; not followed",
+			})
+			return nil
+		}
 
-		// path is produced by filepath.WalkDir rooted at vaultPath, not user input;
-		// the symlink-TOCTOU that gosec G122 warns about is out of scope for a
-		// single-user CLI reading its own local vault.
+		// path is produced by filepath.WalkDir rooted at vaultPath and is not a
+		// link (checked above), so it names a file inside the vault.
 		content, readErr := os.ReadFile(path) // #nosec G304 G122
 		if readErr != nil {
 			return fmt.Errorf("reading %s: %w", path, readErr)

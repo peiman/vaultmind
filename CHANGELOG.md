@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **`frontmatter validate --live` no longer follows symlinks** (#194). It
+  read every `*.md` it walked, so in a vault you did not write, a link such as
+  `secrets.md -> ~/.ssh/id_rsa` was read and parsed, and a parse error could
+  echo what it read. Every other vault walk already refused links; this one
+  was missed. A link is now reported as a `skipped_symlink` warning and not
+  read.
+
 ## [0.9.17] - 2026-09-28
 
 > A knowledge vault doesn't have to start empty. `vaultmind import <dir>`

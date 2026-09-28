@@ -147,3 +147,24 @@ func TestValidateLive_VaultNotFound(t *testing.T) {
 	_, err := ValidateLive("/nonexistent/path/that/does/not/exist", buildRegistry(t))
 	require.Error(t, err)
 }
+
+// A *.md symlink is never followed (#194): in a vault you did not write,
+// `secrets.md -> ~/.ssh/id_rsa` would otherwise be read and parsed, and its
+// parse error could echo what it read. The link is reported, not dropped —
+// a file passed over and a file never there must not look the same.
+func TestValidateLive_NeverFollowsASymlink(t *testing.T) {
+	dir := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "secret.txt")
+	require.NoError(t, os.WriteFile(outside, []byte("---\nid: [SECRET-CONTENT\n---\n"), 0o600))
+	require.NoError(t, os.Symlink(outside, filepath.Join(dir, "secrets.md")))
+	writeNote(t, dir, "ok.md", "---\nid: n-1\ntype: note\n---\nbody\n")
+
+	res, err := ValidateLive(dir, buildRegistry(t))
+	require.NoError(t, err)
+	assert.Equal(t, 1, res.FilesChecked, "only the real note is read")
+	require.Len(t, res.Issues, 1)
+	assert.Equal(t, RuleSkippedSymlink, res.Issues[0].Rule)
+	assert.Equal(t, "warning", res.Issues[0].Severity)
+	assert.Equal(t, filepath.Join(dir, "secrets.md"), res.Issues[0].Path, "the same path form as the other issues")
+	assert.NotContains(t, res.Issues[0].Message, "SECRET-CONTENT")
+}
