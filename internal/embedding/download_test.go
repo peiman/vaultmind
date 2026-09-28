@@ -83,7 +83,8 @@ func TestEnsureModel_RefusesContentThatDoesNotMatchTheHash(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "sha256")
 	assert.NoFileExists(t, filepath.Join(dir, "model.onnx"))
-	assert.NoFileExists(t, filepath.Join(dir, "model.onnx.tmp"), "the partial download is removed")
+	leftovers, _ := filepath.Glob(filepath.Join(dir, "*.tmp"))
+	assert.Empty(t, leftovers, "the partial download is removed")
 	assert.NoFileExists(t, filepath.Join(dir, ".verified-rev1"))
 }
 
@@ -155,4 +156,28 @@ func TestBGEM3Files_ArePinned(t *testing.T) {
 		assert.Positive(t, f.size, f.local)
 		assert.Len(t, f.sha256, 64, f.local)
 	}
+}
+
+// Two processes fetching at once each write their own temp file, and both
+// end with the verified file in place.
+func TestEnsureModel_ConcurrentFetchesEachVerifyTheirOwnBytes(t *testing.T) {
+	srv, dir := newModelServer(t, testContent()), t.TempDir()
+	var wg sync.WaitGroup
+	errs := make([]error, 4)
+	for i := range errs {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			errs[i] = ensureModel(srv.URL, dir, "rev1", testFiles)
+		}(i)
+	}
+	wg.Wait()
+	for i, err := range errs {
+		assert.NoError(t, err, "fetch %d", i)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, "model.onnx")) //nolint:gosec // test path
+	require.NoError(t, err)
+	assert.Equal(t, "the model", string(got))
+	leftovers, _ := filepath.Glob(filepath.Join(dir, "*.tmp"))
+	assert.Empty(t, leftovers)
 }

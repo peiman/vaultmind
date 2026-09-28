@@ -151,11 +151,14 @@ func downloadVerified(url, dest string, f modelFile) error {
 		return fmt.Errorf("HTTP %d for %s", resp.StatusCode, url)
 	}
 
-	tmpPath := dest + ".tmp"
-	out, err := os.Create(tmpPath) //nolint:gosec // path in the model cache, named by the pinned list
+	// A temp file of its own: two processes fetching the same file must not
+	// write into one another's download, or the hash each checked would not
+	// be of the bytes it renames into place.
+	out, err := os.CreateTemp(filepath.Dir(dest), filepath.Base(dest)+".*.tmp")
 	if err != nil {
 		return err
 	}
+	tmpPath := out.Name()
 	h := sha256.New()
 	written, copyErr := copyWithProgress(io.MultiWriter(out, h), resp.Body, f.local, f.size)
 	closeErr := out.Close()
