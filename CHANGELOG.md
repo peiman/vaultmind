@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-28
+
+> The knowledge vault is now the default. **Breaking:** `vaultmind init` makes a
+> project knowledge base, and a bare `hooks install` in a fresh project wires
+> the knowledge hooks. For an agent identity vault, pass `--profile persona`
+> to both. Existing projects keep their hooks: a declared profile is kept, and
+> an older install that never declared one stays `full`. Also faster (opening
+> a vault no longer reads the whole index) and a sharper push hook. Upgrading:
+> `vaultmind hooks install <project> --vault <your-vault> --merge --force`
+> refreshes the reach script (use `--vaults a,b` if you recall across several).
+
 ### Changed
 
 - **Opening a vault no longer hashes its whole index.** Every command that
@@ -51,6 +62,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that already has hooks but never declared a profile (every install before
   profiles existed) stays `full`, so re-running the upgrade command does not
   strip its persona hooks.
+
+- **Dependencies:** hugot 0.8.0, go-toml 2.4.3, jcs 1.0.2. Embedding output
+  is unchanged (retrieval-eval metrics identical under ORT); the Contract B
+  canonicalization vectors still match byte for byte.
 
 ## [0.9.18] - 2026-09-28
 
@@ -2351,7 +2366,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.18...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/peiman/vaultmind/compare/v0.9.18...v0.10.0
 [0.9.18]: https://github.com/peiman/vaultmind/compare/v0.9.17...v0.9.18
 [0.9.17]: https://github.com/peiman/vaultmind/compare/v0.9.16...v0.9.17
 [0.9.16]: https://github.com/peiman/vaultmind/compare/v0.9.15...v0.9.16
