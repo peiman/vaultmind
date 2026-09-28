@@ -529,3 +529,59 @@ func TestImport_ARenamedUnchangedDocKeepsTheHandEditedBody(t *testing.T) {
 	res = run(t, repo, vault, importdocs.Options{})
 	assert.Equal(t, 1, res.Count(importdocs.Conflict), "still counted as edited: a later doc change is a conflict")
 }
+
+// caseSensitive reports whether dir tells Foo.md and FOO.md apart.
+func caseSensitive(t *testing.T, dir string) bool {
+	t.Helper()
+	write(t, filepath.Join(dir, "Probe.md"), "x")
+	_, err := os.Stat(filepath.Join(dir, "PROBE.md"))
+	require.NoError(t, os.Remove(filepath.Join(dir, "Probe.md")))
+	return err != nil
+}
+
+// #189: with two imported notes differing only in case already on disk (a
+// case-sensitive filesystem), a doc matching neither exactly is not guessed
+// at — it is reported, naming both.
+func TestImport_AmbiguousCaseMatchIsReportedNotGuessed(t *testing.T) {
+	repo, vault := srcRepo(t), t.TempDir()
+	if !caseSensitive(t, vault) {
+		t.Skip("case-insensitive filesystem: two notes differing only in case cannot exist")
+	}
+	run(t, repo, vault, importdocs.Options{})
+	base := filepath.Join(vault, "imported", "demo-repo", "docs")
+	raw, _ := os.ReadFile(filepath.Join(base, "alpha.md")) //nolint:gosec // test path
+	write(t, filepath.Join(base, "Gamma.md"), strings.Replace(string(raw), "docs/alpha.md", "docs/Gamma.md", -1))
+	write(t, filepath.Join(base, "GAMMA.md"), strings.Replace(string(raw), "docs/alpha.md", "docs/GAMMA.md", -1))
+	write(t, filepath.Join(repo, "docs", "gamma.md"), "# Gamma\n")
+
+	res := run(t, repo, vault, importdocs.Options{Force: true})
+	var reason string
+	for _, e := range res.Entries {
+		if e.Source == "demo-repo:docs/gamma.md" {
+			assert.Equal(t, importdocs.Skipped, e.Action)
+			reason = e.Reason
+		}
+	}
+	assert.Contains(t, reason, "Gamma.md")
+	assert.Contains(t, reason, "GAMMA.md")
+}
+
+// #189: a managed note whose doc is gone is an orphan even while a note
+// differing from it only in case is imported in the same run. (A doc merely
+// renamed Up.md -> up.md is a rename, not an orphan: the note follows it.)
+func TestImport_AnOrphanIsFoundBesideACaseVariant(t *testing.T) {
+	repo, vault := srcRepo(t), t.TempDir()
+	if !caseSensitive(t, vault) {
+		t.Skip("case-insensitive filesystem: two notes differing only in case cannot exist")
+	}
+	write(t, filepath.Join(repo, "docs", "up.md"), "# up\n")
+	run(t, repo, vault, importdocs.Options{})
+	base := filepath.Join(vault, "imported", "demo-repo", "docs")
+	raw, _ := os.ReadFile(filepath.Join(base, "up.md")) //nolint:gosec // test path
+	// A second managed note, Up.md, whose doc no longer exists.
+	write(t, filepath.Join(base, "Up.md"), strings.Replace(string(raw), "docs/up.md", "docs/Up.md", -1))
+
+	res := run(t, repo, vault, importdocs.Options{})
+	assert.Equal(t, 1, res.Count(importdocs.Orphaned), "Up.md's doc is gone, though up.md is imported")
+	assert.Equal(t, 3, res.Count(importdocs.Unchanged), "up.md itself is untouched")
+}
