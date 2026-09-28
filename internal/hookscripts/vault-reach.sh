@@ -169,9 +169,102 @@ case "$COMMIT_SUBJECT" in
   *)   QUERY="committing: $COMMIT_SUBJECT — what do I already know about this" ;;
 esac
 
+# A push is asked about by what it publishes: the subjects of the commits not
+# yet on any remote (the newest three), else the last commit (a tag, or
+# nothing new), merges skipped, newest by ancestry (--topo-order: commits in
+# the same second tie on date). The fixed sentence put a relevant note in the top 5 for none of
+# eight real pushes; the subjects did for all eight (measured 2026-09-28). Only
+# a real `git push` counts, found where the command runs it — after a cd, or at
+# git -C — so the words inside an echo or a grep no longer fire. Prints the
+# repository directory for a push, nothing otherwise.
+PUSH_DIR=""
+case "$CMD" in
+  *git*push*)
+    PUSH_DIR=$(python3 -c "$(cat <<'PY'
+import os, re, shlex, sys
+try:
+    lex = shlex.shlex(sys.argv[1], posix=True, punctuation_chars=True)
+    lex.whitespace_split = True
+    toks = list(lex)
+except ValueError:
+    sys.exit(0)
+cwd = sys.argv[2] or os.getcwd()
+def resolve(p, base):
+    p = os.path.expanduser(p)
+    return os.path.normpath(p if p.startswith("/") else os.path.join(base, p))
+segments, cur = [], []
+for t in toks:
+    if t and set(t) <= set(";&|()"):
+        segments.append(cur)
+        cur = []
+    else:
+        cur.append(t)
+segments.append(cur)
+# Commands that run another command: their own options (and, for the ones
+# that take one, the option value) come first. A push behind sudo or env is
+# still a push; reading past them keeps it from going unnoticed.
+WRAPPERS = {"sudo": ("-u", "-g", "-C", "-D", "-h", "-p", "-U", "-r", "-t"),
+            "env": ("-u", "-C", "-S"), "nice": ("-n",), "nohup": (), "time": (),
+            "command": (), "exec": ()}
+def unwrap(argv):
+    while True:
+        while argv and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", argv[0]):
+            argv = argv[1:]
+        if not argv or argv[0] not in WRAPPERS:
+            return argv
+        takes = WRAPPERS[argv[0]]
+        argv = argv[1:]
+        while argv and argv[0].startswith("-"):
+            argv = argv[2:] if argv[0] in takes else argv[1:]
+for argv in segments:
+    argv = unwrap(argv)
+    if not argv:
+        continue
+    if argv[0] == "cd" and len(argv) > 1:
+        cwd = resolve(argv[1], cwd)
+        continue
+    if argv[0] != "git":
+        continue
+    # The options git takes come before the subcommand. -C, --git-dir and
+    # --work-tree say where the repository is; the work tree wins.
+    rest, where, gitdir = argv[1:], cwd, None
+    while rest and rest[0].startswith("-"):
+        opt = rest[0]
+        if opt in ("-C", "-c", "--git-dir", "--work-tree") and len(rest) > 1:
+            if opt == "-C":
+                where = resolve(rest[1], where)
+            elif opt == "--git-dir":
+                gitdir = resolve(rest[1], where)
+            elif opt == "--work-tree":
+                where = resolve(rest[1], where)
+            rest = rest[2:]
+            continue
+        if opt.startswith("--git-dir="):
+            gitdir = resolve(opt.split("=", 1)[1], where)
+        elif opt.startswith("--work-tree="):
+            where = resolve(opt.split("=", 1)[1], where)
+        rest = rest[1:]
+    if rest and rest[0] == "push":
+        work_tree_given = any(a == "--work-tree" or a.startswith("--work-tree=") for a in argv[1:])
+        print(where if work_tree_given or gitdir is None else gitdir)
+        sys.exit(0)
+PY
+)" "$CMD" "$CMD_CWD" 2>/dev/null)
+    ;;
+esac
+if [ -z "$QUERY" ] && [ -n "$PUSH_DIR" ]; then
+  PUSH_SUBJECTS=$(git -C "$PUSH_DIR" log --no-merges --topo-order --format=%s HEAD --not --remotes 2>/dev/null | head -3)
+  [ -z "$PUSH_SUBJECTS" ] && PUSH_SUBJECTS=$(git -C "$PUSH_DIR" log -1 --no-merges --topo-order --format=%s 2>/dev/null)
+  if [ -n "$PUSH_SUBJECTS" ]; then
+    PUSH_SUBJECTS=$(printf '%s\n' "$PUSH_SUBJECTS" | sed -E 's/^[a-z]+(\([^)]*\))?!?:[[:space:]]*//' | paste -sd ';' - | sed 's/;/; /g')
+    QUERY="pushing: $PUSH_SUBJECTS — what do I already know about this"
+  fi
+fi
+
 if [ -z "$QUERY" ]; then
   case "$CMD" in
-    *"git push"*|*"gh pr merge"*) QUERY="pushing or merging: publication is a one-way gate, review before merge, my authority to decide" ;;
+    *"gh pr merge"*) QUERY="pushing or merging: publication is a one-way gate, review before merge, my authority to decide" ;;
+    *"git push"*) [ -n "$PUSH_DIR" ] && QUERY="pushing or merging: publication is a one-way gate, review before merge, my authority to decide" ;;
     *"gh pr comment"*|*"gh pr review"*) QUERY="reviewing someone else's work: how I review, what I look for, holding a standard" ;;
   esac
 fi
