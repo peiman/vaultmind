@@ -16,14 +16,9 @@ import (
 // downloadClient is an HTTP client with a generous timeout for large model downloads.
 var downloadClient = &http.Client{Timeout: 30 * time.Minute}
 
-const (
-	huggingFaceBase = "https://huggingface.co"
-	bgem3Repo       = "BAAI/bge-m3"
-	// bgem3Revision pins the commit the files below come from. `main` moves;
-	// a pinned commit and a hash per file mean the bytes we run are the bytes
-	// we checked (#192, review M7).
-	bgem3Revision = "5617a9f61b028005a4858fdac845db406aefb181"
-)
+// huggingFaceBase is where pinned model files are fetched from. A variable
+// so a test can point it at a local server.
+var huggingFaceBase = "https://huggingface.co"
 
 // modelFile is one file of a pinned model and what it must be.
 type modelFile struct {
@@ -33,10 +28,32 @@ type modelFile struct {
 	sha256 string
 }
 
-// bgem3Files are the BGE-M3 files at bgem3Revision. Sizes and hashes are
-// HuggingFace's LFS records for that commit, or the sha256 of the served
-// bytes for the three small files LFS does not track; all eight were checked
-// against a cache in use.
+// pinnedModel is a model at a fixed commit: `main` moves, and a pinned commit
+// with a hash per file means the bytes we run are the bytes we checked (#192,
+// #197, review M7).
+type pinnedModel struct {
+	repo     string
+	revision string
+	files    []modelFile
+}
+
+// pinnedModels are the only models VaultMind downloads. Sizes and hashes are
+// HuggingFace's LFS records for each commit, or the sha256 of the served bytes
+// for files LFS does not track; every file was also checked against a cache in
+// use. A model not in this table is refused rather than fetched unchecked.
+var pinnedModels = map[string]pinnedModel{
+	BGEM3ModelName: {repo: BGEM3ModelName, revision: "5617a9f61b028005a4858fdac845db406aefb181", files: bgem3Files},
+	DefaultModelName: {repo: DefaultModelName, revision: "1110a243fdf4706b3f48f1d95db1a4f5529b4d41", files: []modelFile{
+		{"onnx/model.onnx", "model.onnx", 90405214, "6fd5d72fe4589f189f8ebc006442dbb529bb7ce38f8082112682524616046452"},
+		{"config.json", "config.json", 612, "953f9c0d463486b10a6871cc2fd59f223b2c70184f49815e7efbcab5d8908b41"},
+		{"tokenizer.json", "tokenizer.json", 466247, "be50c3628f2bf5bb5e3a7f17b1f74611b2561a3a27eeab05e5aa30f411572037"},
+		{"tokenizer_config.json", "tokenizer_config.json", 350, "acb92769e8195aabd29b7b2137a9e6d6e25c476a4f15aa4355c233426c61576b"},
+		{"special_tokens_map.json", "special_tokens_map.json", 112, "303df45a03609e4ead04bc3dc1536d0ab19b5358db685b6f3da123d05ec200e3"},
+		{"vocab.txt", "vocab.txt", 231508, "07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3"},
+	}},
+}
+
+// bgem3Files are the BGE-M3 files at its pinned commit.
 var bgem3Files = []modelFile{
 	{"onnx/model.onnx", "model.onnx", 724923, "f84251230831afb359ab26d9fd37d5936d4d9bb5d1d5410e66442f630f24435b"},
 	{"onnx/model.onnx_data", "model.onnx_data", 2266820608, "1eebfb28493f67bba03ce0ef64bfdc7fc5a3bd9d7493f818bb1d78cd798416b4"},
@@ -52,9 +69,20 @@ var bgem3Files = []modelFile{
 // match their hashes, downloading what is missing or wrong. Returns the path
 // to the model directory.
 func DownloadBGEM3(cacheDir string) (string, error) {
-	modelDir := filepath.Join(cacheDir, "BAAI_bge-m3")
-	base := fmt.Sprintf("%s/%s/resolve/%s", huggingFaceBase, bgem3Repo, bgem3Revision)
-	if err := ensureModel(base, modelDir, bgem3Revision, bgem3Files); err != nil {
+	return downloadPinned(cacheDir, BGEM3ModelName)
+}
+
+// downloadPinned makes sure the pinned files of the named model are in the
+// cache and match their hashes. Returns the model directory — the layout the
+// embedding pipelines read, <cache>/<owner>_<name>.
+func downloadPinned(cacheDir, name string) (string, error) {
+	m, ok := pinnedModels[name]
+	if !ok {
+		return "", fmt.Errorf("model %q has no pinned files; only pinned models are downloaded", name)
+	}
+	modelDir := hugotModelDir(cacheDir, name)
+	base := fmt.Sprintf("%s/%s/resolve/%s", huggingFaceBase, m.repo, m.revision)
+	if err := ensureModel(base, modelDir, m.revision, m.files); err != nil {
 		return "", err
 	}
 	return modelDir, nil
@@ -83,7 +111,7 @@ func ensureModel(baseURL, modelDir, revision string, files []modelFile) error {
 			continue
 		}
 		if !announced {
-			fmt.Fprintf(os.Stderr, "BGE-M3 model files missing or not verified. Downloading to %s\n", modelDir)
+			fmt.Fprintf(os.Stderr, "Model files missing or not verified. Downloading to %s\n", modelDir)
 			announced = true
 		}
 		if err := downloadVerified(baseURL+"/"+f.remote, path, f); err != nil {

@@ -148,36 +148,44 @@ func TestEnsureModel_ANewRevisionVerifiesAgain(t *testing.T) {
 	assert.FileExists(t, filepath.Join(dir, ".verified-rev2"))
 }
 
-// The pinned list itself: a revision, and a size and hash for every file.
-func TestBGEM3Files_ArePinned(t *testing.T) {
-	assert.Len(t, bgem3Revision, 40, "a full commit sha, not a branch")
-	require.NotEmpty(t, bgem3Files)
-	for _, f := range bgem3Files {
-		assert.Positive(t, f.size, f.local)
-		assert.Len(t, f.sha256, 64, f.local)
+// Every model VaultMind downloads is pinned: a full commit, and a size and
+// hash for every file. A model missing from the table is not downloaded.
+func TestPinnedModels_ArePinned(t *testing.T) {
+	for _, name := range []string{DefaultModelName, BGEM3ModelName} {
+		m, ok := pinnedModels[name]
+		require.True(t, ok, "%s has no pinned files", name)
+		assert.Len(t, m.revision, 40, "%s: a full commit sha, not a branch", name)
+		require.NotEmpty(t, m.files, name)
+		for _, f := range m.files {
+			assert.Positive(t, f.size, "%s %s", name, f.local)
+			assert.Len(t, f.sha256, 64, "%s %s", name, f.local)
+		}
 	}
 }
 
-// Two processes fetching at once each write their own temp file, and both
-// end with the verified file in place.
-func TestEnsureModel_ConcurrentFetchesEachVerifyTheirOwnBytes(t *testing.T) {
-	srv, dir := newModelServer(t, testContent()), t.TempDir()
-	var wg sync.WaitGroup
-	errs := make([]error, 4)
-	for i := range errs {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			errs[i] = ensureModel(srv.URL, dir, "rev1", testFiles)
-		}(i)
+// A model with no pinned files is refused rather than fetched unchecked.
+func TestDownloadPinned_RefusesAModelWithNoPinnedFiles(t *testing.T) {
+	_, err := downloadPinned(t.TempDir(), "someone/unknown-model")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no pinned files")
+}
+
+// Pinned models land where the embedding pipelines read them: the layout
+// hugot used, <cache>/<owner>_<name>.
+func TestDownloadPinned_UsesTheModelDirectoryThePipelineReads(t *testing.T) {
+	content := map[string]string{}
+	for remote, body := range testContent() {
+		content["owner/name/resolve/rev1/"+remote] = body // the URL shape HuggingFace serves
 	}
-	wg.Wait()
-	for i, err := range errs {
-		assert.NoError(t, err, "fetch %d", i)
-	}
-	got, err := os.ReadFile(filepath.Join(dir, "model.onnx")) //nolint:gosec // test path
+	srv, cache := newModelServer(t, content), t.TempDir()
+	saved := pinnedModels
+	pinnedModels = map[string]pinnedModel{"owner/name": {repo: "owner/name", revision: "rev1", files: testFiles}}
+	savedBase := huggingFaceBase
+	huggingFaceBase = srv.URL
+	t.Cleanup(func() { pinnedModels, huggingFaceBase = saved, savedBase })
+
+	dir, err := downloadPinned(cache, "owner/name")
 	require.NoError(t, err)
-	assert.Equal(t, "the model", string(got))
-	leftovers, _ := filepath.Glob(filepath.Join(dir, "*.tmp"))
-	assert.Empty(t, leftovers)
+	assert.Equal(t, filepath.Join(cache, "owner_name"), dir)
+	assert.FileExists(t, filepath.Join(dir, "model.onnx"))
 }

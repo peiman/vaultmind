@@ -47,11 +47,10 @@ The cases that matter:
   mesh daemon over loopback only. See the README's "The one network call" and
   "The local usage log".
 
-The BGE-M3 model is pinned to a HuggingFace commit, and every file is checked
-against its size and sha256 before use; a file that does not match is
-refused. Known gap: the smaller MiniLM fallback model, used on builds without
-ORT, is not yet pinned or checked
-([#197](https://github.com/peiman/vaultmind/issues/197)).
+Both embedding models (BGE-M3, and the MiniLM fallback used on builds without
+ORT) are pinned to a HuggingFace commit, and every file is checked against its
+size and sha256 before use; a file that does not match is refused, and a
+model with no pinned files is not downloaded at all.
 
 ## Verifying a release
 

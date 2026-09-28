@@ -3,7 +3,6 @@ package embedding
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
@@ -11,7 +10,6 @@ import (
 	"github.com/knights-analytics/hugot"
 	"github.com/knights-analytics/hugot/backends"
 	"github.com/knights-analytics/hugot/pipelines"
-	"github.com/knights-analytics/hugot/util/fileutil"
 )
 
 // HugotEmbedder wraps the hugot library to produce embeddings using ONNX models.
@@ -132,22 +130,9 @@ func NewHugotEmbedder(ctx context.Context, cfg HugotConfig) (*HugotEmbedder, err
 		if cacheDir == "" {
 			cacheDir = "./models"
 		}
-		opts := hugot.NewDownloadOptions()
-		if cfg.OnnxFilePath != "" {
-			opts.OnnxFilePath = cfg.OnnxFilePath
-		}
-		// hugot 0.7.8 resolves files through a filesystem bound to the context;
-		// a bare context fails with "no filesystem bound to context". nil binds
-		// the OS filesystem, which is what sessions default to (#148).
-		dlCtx := fileutil.WithFileSystem(ctx, nil)
-		// hugot 0.7.8 copies each downloaded file into <cacheDir>/<model>/ but
-		// its OS filesystem adapter does not create that directory, so every
-		// FIRST download failed with "open .../config.json: no such file or
-		// directory" — the fresh-install path exactly (#148). Create it first.
-		if err := os.MkdirAll(hugotModelDir(cacheDir, cfg.ModelName), 0o750); err != nil {
-			return nil, fmt.Errorf("creating model directory: %w", err)
-		}
-		modelPath, err = hugot.DownloadModel(dlCtx, cfg.ModelName, cacheDir, opts)
+		// Fetched through the pinned, hash-checked path — hugot's own
+		// downloader follows a moving branch and checks nothing (#197).
+		modelPath, err = downloadPinned(cacheDir, cfg.ModelName)
 		if err != nil {
 			return nil, fmt.Errorf("downloading model %q: %w", cfg.ModelName, err)
 		}
@@ -236,7 +221,8 @@ func (e *HugotEmbedder) Close() error {
 	return nil
 }
 
-// hugotModelDir mirrors where hugot.DownloadModel places a model: the name
+// hugotModelDir is where a model lives in the cache — the layout
+// hugot.DownloadModel used, kept so existing caches stay valid: the name
 // before any ":" revision suffix, with "/" replaced by "_", under cacheDir.
 func hugotModelDir(cacheDir, modelName string) string {
 	name, _, _ := strings.Cut(modelName, ":")
