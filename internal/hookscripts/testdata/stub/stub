@@ -1,0 +1,9 @@
+#!/bin/bash
+# Test stand-in for any command a hook runs (vaultmind, date, ...). A test
+# links a command name to this file and writes the behaviour to <link>.body,
+# which is sourced here rather than executed.
+#
+# Why: macOS scans every newly written executable before its first run - up to
+# four minutes each on a loaded machine (#191). One stub per test paid that
+# every time; this committed file is scanned once, and a body is never exec.
+. "$0.body"

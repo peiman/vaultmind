@@ -193,12 +193,11 @@ func TestMeshWatch_EvalsOnlyVMLines(t *testing.T) {
 	// identity-paths stand-in and prove the poison line never executes.
 	dir := t.TempDir()
 	marker := filepath.Join(dir, "injected")
-	fake := filepath.Join(dir, "vaultmind")
-	require.NoError(t, os.WriteFile(fake, []byte(
+	InstallStub(t, dir, "vaultmind",
 		"#!/bin/bash\n"+
 			"echo '{\"level\":\"info\",\"message\":\"nag\"}'\n"+ // the log-line case
 			"echo 'touch "+marker+"'\n"+ // the actual injection case
-			"echo \"VM_MESH_SLUG='mira'\"\n"), 0o755))
+			"echo \"VM_MESH_SLUG='mira'\"\n")
 
 	start := strings.Index(s, `PATHS_OUT=`)
 	require.Positive(t, start)
@@ -261,8 +260,7 @@ func runCountdown(t *testing.T, daysLeft string) string {
 func runCountdownFn(t *testing.T, fn, armValue, fakeBody string) string {
 	t.Helper()
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "vaultmind"),
-		[]byte("#!/bin/sh\n"+fakeBody+"\n"), 0o755)) //nolint:gosec // G306: test fixture must be executable
+	InstallStub(t, dir, "vaultmind", "#!/bin/sh\n"+fakeBody+"\n")
 
 	script := "set -u\n" + fn + "\nregistry_countdown\n"
 	cmd := exec.Command("bash", "-c", script)
@@ -428,12 +426,12 @@ func TestMeshWatch_AsksAboutItsProjectNotTheCurrentFolder(t *testing.T) {
 	scripts := filepath.Join(project, ".claude", "scripts")
 	require.NoError(t, os.MkdirAll(scripts, 0o750))
 	script := filepath.Join(scripts, "mesh-watch.sh")
-	require.NoError(t, os.WriteFile(script, body, 0o700)) //nolint:gosec // G306: must be executable
+	require.NoError(t, os.WriteFile(script, body, 0o600)) // run as `bash script`, never exec — see InstallStub
 
 	bin := t.TempDir()
 	seen := filepath.Join(t.TempDir(), "seen")
 	fake := "#!/bin/sh\nprintf '%s' \"$AGENT_CHAT_PROJECT_PATH\" > '" + seen + "'\nexit 1\n"
-	require.NoError(t, os.WriteFile(filepath.Join(bin, "vaultmind"), []byte(fake), 0o755)) //nolint:gosec // G306: test fixture must be executable
+	InstallStub(t, bin, "vaultmind", fake)
 
 	elsewhere := t.TempDir()
 	cmd := exec.Command("bash", script)

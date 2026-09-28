@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/hookscripts"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -177,7 +179,7 @@ func TestPersonaMode_MissingVaultKeepsTheAssignedArmInTheLog(t *testing.T) {
 func TestPersonaMode_SameSecondSessionsKeepSeparateRecords(t *testing.T) {
 	project, env := installPersonaHook(t, personaCallLogStub)
 	binDir := strings.SplitN(envValue(env, "PATH"), ":", 2)[0]
-	require.NoError(t, os.WriteFile(filepath.Join(binDir, "date"), []byte("#!/bin/sh\necho 20260925T120000\n"), 0o700)) //nolint:gosec // test fixture
+	hookscripts.InstallStub(t, binDir, "date", "echo 20260925T120000\n")
 	env = append(env, "VAULTMIND_PERSONA_MODE=explore")
 
 	runPersonaHookSession(t, project, env, "s-one")

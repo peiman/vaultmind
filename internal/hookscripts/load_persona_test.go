@@ -35,10 +35,10 @@ func installPersonaHook(t *testing.T, stub string) (project string, env []string
 
 	body, ok := hookscripts.All()["load-persona.sh"]
 	require.True(t, ok, "load-persona.sh must be embedded")
-	require.NoError(t, os.WriteFile(filepath.Join(scripts, "load-persona.sh"), body, 0o700)) //nolint:gosec // test fixture
+	require.NoError(t, os.WriteFile(filepath.Join(scripts, "load-persona.sh"), body, 0o600)) // run as `bash script`, never exec — see InstallStub
 
 	binDir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(binDir, "vaultmind"), []byte(stub), 0o700)) //nolint:gosec // test fixture
+	hookscripts.InstallStub(t, binDir, "vaultmind", stub)
 
 	home := t.TempDir()
 	return project, []string{
