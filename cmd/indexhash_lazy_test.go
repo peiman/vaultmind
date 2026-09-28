@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"encoding/json"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -34,4 +36,25 @@ func TestIndexHash_OnlyJSONOutputPaysForIt(t *testing.T) {
 		require.NoError(t, err, "%v --json", c)
 		assert.Equal(t, before+1, cmdutil.IndexHashesComputed(), "%v --json: the envelope reports the hash", c)
 	}
+}
+
+// --live validation reads the raw files, not the index, so it has no index
+// hash to report — and must not pay for one, on success or on failure.
+func TestIndexHash_LiveValidationNeverHashes(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+
+	before := cmdutil.IndexHashesComputed()
+	out, _, err := runRootCmd(t, "frontmatter", "validate", "--live", "--vault", vault, "--json")
+	require.NoError(t, err)
+	var env struct {
+		Meta struct {
+			IndexHash string `json:"index_hash"`
+		} `json:"meta"`
+	}
+	require.NoError(t, json.Unmarshal(out.Bytes(), &env))
+	assert.Empty(t, env.Meta.IndexHash)
+
+	_, _, err = runRootCmd(t, "frontmatter", "validate", "--live", "--vault", filepath.Join(vault, "missing"), "--json")
+	require.Error(t, err)
+	assert.Equal(t, before, cmdutil.IndexHashesComputed())
 }
