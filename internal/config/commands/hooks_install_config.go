@@ -116,8 +116,9 @@ OVERWRITE PROTECTION
 
 EXAMPLES
 
-  vaultmind hooks install                                              # install all 8 into current dir
-  vaultmind hooks install ~/dev/myproject                              # install all 8 into a specific project
+  vaultmind hooks install                                              # a fresh project gets the knowledge set
+  vaultmind hooks install ~/dev/myproject                              # the same, into a specific project
+  vaultmind hooks install --profile persona                            # an agent identity vault: persona loader + episodes
   vaultmind hooks install --force                                      # refresh after binary upgrade
   vaultmind hooks install --json                                       # machine-readable output
   vaultmind hooks install --only auto-rag-guard.sh,shell-strip.sh      # only the auto-RAG slice (companion-project pattern)
@@ -126,7 +127,7 @@ EXAMPLES
   vaultmind hooks install --vault ./my-knowledge --merge               # write scripts AND wire settings.json
   vaultmind hooks install --vault ./my-knowledge --merge --local       # wire personal settings.local.json instead
   vaultmind hooks install --agent codex --merge                        # wire Codex CLI (.codex/hooks.json) instead of Claude Code
-  vaultmind hooks install --vaults ./identity,./desk --merge           # recall searches both vaults; persona loads ./identity`,
+  vaultmind hooks install --profile persona --vaults ./identity,./desk --merge  # recall searches both; persona loads ./identity`,
 	ConfigPrefix: "app.hooksinstall",
 	FlagOverrides: map[string]string{
 		"app.hooksinstall.force":   "force",
@@ -162,7 +163,7 @@ func HooksInstallOptions() []config.ConfigOption {
 		{
 			Key:          "app.hooksinstall.profile",
 			DefaultValue: "",
-			Description:  "Capability profile to declare and install: full (default), knowledge, or persona. Recorded in .claude/vaultmind-profile so `hooks status` judges what you chose, not everything the binary ships.",
+			Description:  "Capability profile to declare and install: knowledge, persona, or full. Unset, the project's declared profile is kept; else full if hooks are already installed (older installs were all full); else knowledge, like init. Recorded in .claude/vaultmind-profile so `hooks status` judges what you chose, not everything the binary ships.",
 			Type:         "string",
 		},
 		{

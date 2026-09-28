@@ -24,7 +24,7 @@ func TestHooksInstallMerge_WiresSettingsWithoutClobbering(t *testing.T) {
   "permissions": { "allow": ["Bash(ls:*)"] }
 }`), 0o600))
 
-	_, _, err := runRootCmd(t, "hooks", "install", dir, "--vault", filepath.Join(dir, "their-vault"), "--merge")
+	_, _, err := runRootCmd(t, "hooks", "install", dir, "--profile", "full", "--vault", filepath.Join(dir, "their-vault"), "--merge")
 	require.NoError(t, err)
 
 	written, err := os.ReadFile(settings)
@@ -54,7 +54,7 @@ func TestHooksInstallMerge_DryRunWritesNothing(t *testing.T) {
 // to overwrite it, live on 2026-09-25.
 func TestHooksInstallMerge_ForcedDryRunLeavesScriptsAlone(t *testing.T) {
 	dir := t.TempDir()
-	_, _, err := runRootCmd(t, "hooks", "install", dir, "--merge")
+	_, _, err := runRootCmd(t, "hooks", "install", dir, "--profile", "full", "--merge")
 	require.NoError(t, err)
 	script := filepath.Join(dir, ".claude", "scripts", "load-persona.sh")
 	require.NoError(t, os.WriteFile(script, []byte("#!/bin/bash\n# local edit\n"), 0o700)) //nolint:gosec // test fixture

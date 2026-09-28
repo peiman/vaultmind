@@ -42,6 +42,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   project now gets knowledge hooks for its knowledge vault instead of the full
   persona set.
 
+- **Breaking: `vaultmind hooks install` in a fresh project installs the
+  knowledge set by default**, the same default as `init`: recall,
+  decision-time reach, read tracking, health and the pre-compaction prompt,
+  with no persona loader or episode capture. **To wire an identity vault, add
+  `--profile persona`** (or `--profile full` for the mesh watcher too).
+  Existing projects are unchanged: a declared profile is kept, and a project
+  that already has hooks but never declared a profile (every install before
+  profiles existed) stays `full`, so re-running the upgrade command does not
+  strip its persona hooks.
+
 ## [0.9.18] - 2026-09-28
 
 > A security release. Model downloads are pinned and hash-checked, and

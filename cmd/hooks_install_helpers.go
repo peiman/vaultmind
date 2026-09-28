@@ -99,9 +99,10 @@ func runHooksInstallCore(cmd *cobra.Command, p hooksInstallParams) error {
 	}
 	// No --profile: keep what the project already declared. Defaulting to
 	// "full" re-declared a knowledge vault as full and wired a persona into it
-	// on the very upgrade command the release notes gave.
+	// on the very upgrade command the release notes gave. A fresh project
+	// gets knowledge, like init; see hooks.InstallProfile.
 	if strings.TrimSpace(p.profile) == "" {
-		if profile, perr = hooks.DeclaredProfile(p.projectDir); perr != nil {
+		if profile, perr = hooks.InstallProfile(p.projectDir); perr != nil {
 			return perr
 		}
 	}

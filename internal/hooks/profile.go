@@ -128,6 +128,28 @@ func DeclaredProfile(projectDir string) (Profile, error) {
 	return ProfileFull, nil
 }
 
+// InstallProfile is the profile a bare `hooks install` uses: the declared one
+// if any; else full when hooks are already installed (every install before
+// profiles existed was full and declared nothing, and the upgrade command
+// must not strip their persona hooks); else knowledge, matching `init`.
+//
+// "Already installed" means a scripts dir exists. An undeclared project whose
+// scripts dir was deleted by hand while settings still wire the hooks reads as
+// fresh, and a knowledge --merge then unwires its persona hooks; `hooks
+// uninstall` removes both halves, so only a manual deletion lands there.
+func InstallProfile(projectDir string) (Profile, error) {
+	p, declared, err := DeclaredProfileIfAny(projectDir)
+	if err != nil || declared {
+		return p, err
+	}
+	for _, a := range []Agent{AgentClaude, AgentCodex} {
+		if _, err := os.Stat(ScriptsDir(projectDir, a)); err == nil {
+			return ProfileFull, nil
+		}
+	}
+	return ProfileKnowledge, nil
+}
+
 // DeclaredProfileIfAny reads the project's declared profile and reports
 // whether there was one. DeclaredProfile answers "full" for both a project
 // that declared full and one that declared nothing; a caller that must tell
