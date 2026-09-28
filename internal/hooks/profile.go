@@ -132,6 +132,11 @@ func DeclaredProfile(projectDir string) (Profile, error) {
 // if any; else full when hooks are already installed (every install before
 // profiles existed was full and declared nothing, and the upgrade command
 // must not strip their persona hooks); else knowledge, matching `init`.
+//
+// "Already installed" means a scripts dir exists. An undeclared project whose
+// scripts dir was deleted by hand while settings still wire the hooks reads as
+// fresh, and a knowledge --merge then unwires its persona hooks; `hooks
+// uninstall` removes both halves, so only a manual deletion lands there.
 func InstallProfile(projectDir string) (Profile, error) {
 	p, declared, err := DeclaredProfileIfAny(projectDir)
 	if err != nil || declared {
