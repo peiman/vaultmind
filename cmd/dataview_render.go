@@ -37,21 +37,21 @@ func runDataviewRender(cmd *cobra.Command, args []string) error {
 		return dataviewRenderError(cmd, useJSON, err)
 	}
 	if useJSON {
-		return cmdutil.WriteJSON(cmd.OutOrStdout(), "dataview render", result, vaultPath, indexHash)
+		return cmdutil.WriteJSON(cmd.OutOrStdout(), "dataview render", result, vaultPath, indexHash())
 	}
 	return dataviewRenderText(cmd, result)
 }
 
-func executeDataviewRender(cmd *cobra.Command, vaultPath, target string) (*marker.RenderResult, string, error) {
+func executeDataviewRender(cmd *cobra.Command, vaultPath, target string) (*marker.RenderResult, func() string, error) {
 	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, "dataview render")
 	if err != nil {
-		return nil, "", err
+		return nil, noIndexHash, err
 	}
 	defer vdb.Close()
 
 	checker, err := git.NewPolicyChecker(vdb.Config.Git)
 	if err != nil {
-		return nil, "", fmt.Errorf("creating policy checker: %w", err)
+		return nil, noIndexHash, fmt.Errorf("creating policy checker: %w", err)
 	}
 
 	result, err := marker.RenderRegion(marker.RenderConfig{
@@ -66,7 +66,7 @@ func executeDataviewRender(cmd *cobra.Command, vaultPath, target string) (*marke
 		Checker:    checker,
 		Committer:  &git.Committer{},
 	})
-	return result, vdb.GetIndexHash(), err
+	return result, vdb.GetIndexHash, err
 }
 
 func dataviewRenderError(cmd *cobra.Command, useJSON bool, err error) error {

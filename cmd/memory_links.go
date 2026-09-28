@@ -64,7 +64,10 @@ func runLinksDirection(cmd *cobra.Command, args []string, direction string) erro
 		VaultPath:  vaultPath,
 		EdgeType:   getConfigValueWithFlags[string](cmd, "edge-type", config.KeyAppMemorylinksEdgeType),
 		JSONOutput: getConfigValueWithFlags[bool](cmd, "json", config.KeyAppMemorylinksJson),
-		IndexHash:  vdb.GetIndexHash(),
+	}
+	// Only a JSON envelope reports it, and it reads the whole index file.
+	if cfg.JSONOutput {
+		cfg.IndexHash = vdb.GetIndexHash()
 	}
 
 	if direction == "both" {

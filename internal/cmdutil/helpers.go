@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/peiman/vaultmind/internal/envelope"
 	"github.com/peiman/vaultmind/internal/index"
@@ -19,10 +21,14 @@ import (
 
 // VaultDB bundles the commonly needed vault resources.
 type VaultDB struct {
-	DB        *index.DB
-	Config    *vault.Config
-	Reg       *schema.Registry
-	dbPath    string
+	DB     *index.DB
+	Config *vault.Config
+	Reg    *schema.Registry
+	dbPath string
+	// indexHash is computed on the first GetIndexHash: it reads the whole
+	// index file (a gigabyte on a large BGE-M3 vault), and only JSON envelopes
+	// report it. Opening a vault used to pay for it on every command.
+	hashOnce  sync.Once
 	indexHash string
 }
 
@@ -33,8 +39,10 @@ func (v *VaultDB) Close() {
 	}
 }
 
-// GetIndexHash returns the cached SHA-256 hash of the SQLite database file.
+// GetIndexHash returns the SHA-256 hash of the SQLite database file,
+// computing it on the first call and returning the same value after.
 func (v *VaultDB) GetIndexHash() string {
+	v.hashOnce.Do(func() { v.indexHash = v.IndexHash() })
 	return v.indexHash
 }
 
@@ -83,13 +91,22 @@ func OpenVaultDB(vaultPath string) (*VaultDB, error) {
 		Reg:    schema.NewRegistryWithAliases(cfg.Types, cfg.Schema.Aliases),
 		dbPath: dbPath,
 	}
-	vdb.indexHash = vdb.IndexHash()
 	return vdb, nil
 }
+
+// indexHashes counts full-file index hashes, so a test can prove an open does
+// not pay for one.
+var indexHashes atomic.Int64
+
+// IndexHashesComputed reports how many full-file index hashes this process has
+// computed. For tests: a command that does not report the hash must not pay
+// for reading the whole index.
+func IndexHashesComputed() int64 { return indexHashes.Load() }
 
 // IndexHash computes the SHA-256 hash of the SQLite database file.
 // Uses streaming hash to avoid loading the entire file into memory.
 func (v *VaultDB) IndexHash() string {
+	indexHashes.Add(1)
 	f, err := os.Open(v.dbPath)
 	if err != nil {
 		return ""
