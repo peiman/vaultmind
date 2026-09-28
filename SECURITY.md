@@ -37,11 +37,15 @@ The cases that matter:
   events. They query your vaults and never approve a tool call on the agent's
   behalf. A hook that grants a permission, or runs vault content as a
   command, is a vulnerability.
-- **Network.** VaultMind sends nothing about you or your vaults. The only
-  network calls are `doctor`'s daily version check (opt out with
-  `VAULTMIND_NO_UPDATE_CHECK=1`) and the embedding-model download that
-  `index --embed` makes the first time it needs a model. See the README's
-  "The one network call" and "The local usage log".
+- **Network.** VaultMind sends nothing about your vaults. On its own it
+  makes one call: `doctor`'s daily version check (opt out with
+  `VAULTMIND_NO_UPDATE_CHECK=1`). Other calls happen only when you ask for
+  them: `index --embed` downloads the embedding model the first time it needs
+  one, and the agent-mesh commands (`identity enroll --invite <url>`, still
+  pre-release) fetch the network's root and directory from the relay named in
+  the invite. With a mesh identity configured, `doctor` also checks the local
+  mesh daemon over loopback only. See the README's "The one network call" and
+  "The local usage log".
 
 Known gap: the embedding-model download is not yet checksum-verified or pinned
 to a revision ([#192](https://github.com/peiman/vaultmind/issues/192)).
