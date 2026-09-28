@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Before a push, the reach hook asks about what is being pushed.** It used
+  one fixed sentence ("publication is a one-way gate…") for every push, which
+  returned the same notes each time. It now asks about the subjects of the
+  commits not yet on any remote (the newest three; merges skipped), or the last
+  commit when nothing new is going out. Measured on eight real pushes labelled
+  before ranking: the fixed sentence put a relevant note in the top 5 for none
+  (MRR 0.06), the subjects did for all eight (MRR 0.79). Only a real `git push`
+  fires now, found where the command runs it (after a `cd`, at `git -C`,
+  `--git-dir` or `--work-tree`, and behind `sudo`, `env` or `nice`); the words
+  inside an `echo` or a `grep` no longer do. `gh pr merge` keeps the fixed
+  sentence: its subject is on GitHub, and the hook makes no network call.
+
 - **Breaking: `vaultmind init` scaffolds a project knowledge base by
   default.** The knowledge vault is what VaultMind is for; the agent-identity
   vault is an add-on. `init <path>` now makes `decisions/` and `concepts/`
