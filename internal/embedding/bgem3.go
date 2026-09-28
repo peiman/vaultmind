@@ -31,6 +31,9 @@ type BGEM3Embedder struct {
 	// pipeline.Preprocess; tests substitute a fake so the token-fitting path
 	// (#39) is exercisable without loading the 2.2GB model.
 	preprocess func(*backends.PipelineBatch, []string) error
+	// memo makes a query text cost one forward pass however many lanes and
+	// vaults ask for it (see queryMemo).
+	memo queryMemo
 }
 
 // NewBGEM3Embedder creates a BGE-M3 embedder with all three heads.
@@ -135,16 +138,20 @@ func (e *BGEM3Embedder) Close() error {
 	return nil
 }
 
-// EmbedFull produces all three embedding types for a single text.
+// EmbedFull produces all three embedding types for a single text. The same
+// text is computed once while remembered: every retrieval lane calls this
+// for the query, and each wants a different one of the three outputs.
 func (e *BGEM3Embedder) EmbedFull(ctx context.Context, text string) (*BGEM3Output, error) {
-	outputs, err := e.EmbedFullBatch(ctx, []string{text})
-	if err != nil {
-		return nil, err
-	}
-	if len(outputs) == 0 {
-		return nil, fmt.Errorf("empty BGE-M3 output")
-	}
-	return outputs[0], nil
+	return e.memo.get(text, func() (*BGEM3Output, error) {
+		outputs, err := e.EmbedFullBatch(ctx, []string{text})
+		if err != nil {
+			return nil, err
+		}
+		if len(outputs) == 0 {
+			return nil, fmt.Errorf("empty BGE-M3 output")
+		}
+		return outputs[0], nil
+	})
 }
 
 // EmbedFullBatch produces all three embedding types for multiple texts.

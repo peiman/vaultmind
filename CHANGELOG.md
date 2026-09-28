@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **A query runs the model once, not sixteen times.** Every retrieval lane
+  (dense, sparse, ColBERT) in every vault embedded the query again, and each
+  pass computed all three outputs to keep one: a three-vault `ask` — the
+  recall hook's query — ran BGE-M3 16 times on the same text. The embedder
+  now remembers its last few query texts. CPU per three-vault `ask` 10.6s →
+  5.7s (−46%); results unchanged (output byte-identical on the queries
+  checked, labelled-eval metrics identical).
+
 ## [0.10.0] - 2026-09-28
 
 > The knowledge vault is now the default. **Breaking:** `vaultmind init` makes a
