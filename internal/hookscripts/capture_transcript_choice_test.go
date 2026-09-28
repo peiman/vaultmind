@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/peiman/vaultmind/internal/hookscripts"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -76,7 +78,7 @@ func (e choiceEnv) runWith(t *testing.T, payload map[string]any, binaryOut strin
 	binDir := t.TempDir()
 	record := filepath.Join(t.TempDir(), "captured")
 	stub := "#!/bin/bash\n[ \"$1 $2\" = \"episode capture\" ] && printf '%s' \"$3\" > '" + record + "'\necho '" + binaryOut + "'\nexit 0\n"
-	require.NoError(t, os.WriteFile(filepath.Join(binDir, "vaultmind"), []byte(stub), 0o700)) //nolint:gosec // G306: test stub must be executable
+	hookscripts.InstallStub(t, binDir, "vaultmind", stub)
 
 	cmd := exec.Command(bashPath, script)
 	cmd.Env = []string{

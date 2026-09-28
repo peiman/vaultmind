@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/hookscripts"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -41,7 +43,7 @@ func runRecallHookLog(t *testing.T, prompt string) (stdout, invocations string) 
 	marker := filepath.Join(binDir, "invoked")
 	stub := "#!/bin/bash\necho \"$@\" >> " + marker + "\n" +
 		"if [ \"$1\" = ask ]; then echo '  0.42  some-note   A Note'; fi\nexit 0\n"
-	require.NoError(t, os.WriteFile(filepath.Join(binDir, "vaultmind"), []byte(stub), 0o700))
+	hookscripts.InstallStub(t, binDir, "vaultmind", stub)
 
 	payload, err := json.Marshal(map[string]string{"prompt": prompt, "session_id": "test"})
 	require.NoError(t, err)

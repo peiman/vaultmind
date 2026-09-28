@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/hookscripts"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -30,7 +32,7 @@ func stubVaultmindWithTree(t *testing.T, treeLines, treeCode int) (bin, log stri
 		"  [ %d -ne 0 ] && { echo 'Error: unknown command \"tree\"' >&2; exit %d; }\n"+
 		"  echo 'kb — %d notes'; i=1; while [ $i -lt %d ]; do echo \"folder-$i/ (3)\"; i=$((i+1)); done\n"+
 		"fi\n", shellSingleQuote(log), shellSingleQuote(healthBGEM3), treeCode, treeCode, treeLines, treeLines)
-	require.NoError(t, os.WriteFile(filepath.Join(bin, "vaultmind"), []byte(body), 0o755))
+	hookscripts.InstallStub(t, bin, "vaultmind", body)
 	return bin, log
 }
 

@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/hookscripts"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -35,7 +37,7 @@ func codeMapStub(t *testing.T, treeOut string, treeCode int) (bin, log string) {
 	log = filepath.Join(bin, "calls.log")
 	body := fmt.Sprintf("#!/bin/bash\necho \"$*\" >> %s\nif [ \"$1\" = tree ]; then printf '%%s\\n' %s; exit %d; fi\nexit 0\n",
 		shellSingleQuote(log), shellSingleQuote(treeOut), treeCode)
-	require.NoError(t, os.WriteFile(filepath.Join(bin, "vaultmind"), []byte(body), 0o755))
+	hookscripts.InstallStub(t, bin, "vaultmind", body)
 	return bin, log
 }
 

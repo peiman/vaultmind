@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/hookscripts"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -64,8 +66,7 @@ func (f *captureFixture) run(t *testing.T, extraEnv ...string) string {
 	// Stub binary so `episode capture` succeeds without doing anything — the
 	// episode already exists on disk, and the Go side is not under test here.
 	binDir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(binDir, "vaultmind"),
-		[]byte("#!/bin/bash\nexit 0\n"), 0o700))
+	hookscripts.InstallStub(t, binDir, "vaultmind", "#!/bin/bash\nexit 0\n")
 
 	payload, err := json.Marshal(map[string]string{"session_id": "sess1234"})
 	require.NoError(t, err)

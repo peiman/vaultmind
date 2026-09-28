@@ -41,7 +41,7 @@ type hookEnv struct {
 func newHookEnv(t *testing.T, stub string) hookEnv {
 	t.Helper()
 	binDir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(binDir, "vaultmind"), []byte(stub), 0o700))
+	hookscripts.InstallStub(t, binDir, "vaultmind", stub)
 
 	projectDir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(projectDir, "vaultmind-identity"), 0o750))

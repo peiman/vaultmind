@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/hookscripts"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -69,7 +71,7 @@ func stubVaultmindFailing(t *testing.T, errMsg string, code int) string {
 	bin := t.TempDir()
 	body := fmt.Sprintf("#!/bin/bash\nif [ \"$1\" = doctor ]; then printf '%%s\\n' %s 1>&2; exit %d; fi\n",
 		shellSingleQuote(errMsg), code)
-	require.NoError(t, os.WriteFile(filepath.Join(bin, "vaultmind"), []byte(body), 0o755))
+	hookscripts.InstallStub(t, bin, "vaultmind", body)
 	return bin
 }
 
@@ -80,7 +82,7 @@ func stubVaultmind(t *testing.T, doctorOut string) string {
 	t.Helper()
 	bin := t.TempDir()
 	body := "#!/bin/bash\nif [ \"$1\" = doctor ]; then printf '%s\\n' " + shellSingleQuote(doctorOut) + "; fi\n"
-	require.NoError(t, os.WriteFile(filepath.Join(bin, "vaultmind"), []byte(body), 0o755))
+	hookscripts.InstallStub(t, bin, "vaultmind", body)
 	return bin
 }
 
@@ -210,7 +212,7 @@ func stubVaultmindWithStatus(t *testing.T, doctorOut, statusResult string) strin
 		"if [ \"$1\" = doctor ]; then printf '%s\\n' " + shellSingleQuote(doctorOut) + "; fi\n" +
 		"if [ \"$1 $2\" = \"hooks status\" ]; then printf '%s\\n' " +
 		shellSingleQuote(`{"status":"ok","result":`+statusResult+`}`) + "; fi\n"
-	require.NoError(t, os.WriteFile(filepath.Join(bin, "vaultmind"), []byte(body), 0o755))
+	hookscripts.InstallStub(t, bin, "vaultmind", body)
 	return bin
 }
 
