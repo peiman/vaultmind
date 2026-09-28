@@ -121,3 +121,42 @@ func TestDataDir_DoesNotCreateTheRealDirectoryBeforeRefusing(t *testing.T) {
 	assert.True(t, os.IsNotExist(statErr),
 		"the guard created %s before refusing — it runs after MkdirAll", probe)
 }
+
+// #176: StateDir had no guard, and on macOS ignored XDG_STATE_HOME, so a test
+// that set it still wrote into the real ~/Library/Application Support (the
+// ask dedup ledger's first test run did). It now refuses as DataDir does.
+func TestStateDir_PanicsWhenATestBinaryWouldUseTheRealStateDir(t *testing.T) {
+	SetAppName("vaultmind")
+	t.Setenv("XDG_STATE_HOME", "")
+	t.Setenv("HOME", realHomeOrSkip(t))
+
+	defer func() {
+		r := recover()
+		require.NotNil(t, r, "StateDir returned a path under the user's real state dir instead of refusing")
+		assert.Contains(t, fmt.Sprint(r), "XDG_STATE_HOME", "the panic names the variable that fixes it")
+	}()
+
+	dir, err := StateDir()
+	t.Fatalf("expected a panic; got dir=%q err=%v", dir, err)
+}
+
+// XDG_STATE_HOME is honored on every platform, macOS included — the setting a
+// test (or a user) makes is where state goes.
+func TestStateDir_HonorsXDGStateHomeOnEveryPlatform(t *testing.T) {
+	SetAppName("vaultmind")
+	tmp := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", tmp)
+
+	dir, err := StateDir()
+	require.NoError(t, err)
+	assert.True(t, strings.HasPrefix(dir, tmp), "state must resolve inside XDG_STATE_HOME, got %q", dir)
+}
+
+func realHomeOrSkip(t *testing.T) string {
+	t.Helper()
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		t.Skip("no home directory to test against")
+	}
+	return home
+}

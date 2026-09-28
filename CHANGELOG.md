@@ -44,6 +44,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   even when a note differing from it only in case is imported in the same
   run; before, the shared lower-case name hid it.
 
+- **`XDG_STATE_HOME` is honored on macOS** (#176). It was ignored there, so
+  state (episode capture cursors, the mesh signer socket) always went to
+  `~/Library/Application Support/vaultmind`. When set, it now wins on every
+  platform, as `XDG_DATA_HOME` already did. If you set it on a Mac, state
+  moves there: episode capture starts from fresh cursors, and a running
+  signer must be restarted so client and signer agree on the socket. Tests
+  are now refused, as for data, if they would write real state.
+
 ## [0.9.17] - 2026-09-28
 
 > A knowledge vault doesn't have to start empty. `vaultmind import <dir>`

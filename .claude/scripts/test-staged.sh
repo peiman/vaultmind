@@ -110,6 +110,7 @@ if [ -z "${XDG_DATA_HOME:-}" ]; then
     export XDG_DATA_HOME
     trap 'rm -rf "$XDG_DATA_HOME"' EXIT
 fi
+export XDG_STATE_HOME="$XDG_DATA_HOME/state"  # #176: state isolated too
 echo "test-staged: $packages"
 # shellcheck disable=SC2086 # word-splitting the package list is the point
 gotestsum --format short --hide-summary=skipped -- -short $packages

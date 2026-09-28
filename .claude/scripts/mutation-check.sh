@@ -133,6 +133,7 @@ if [ -z "${XDG_DATA_HOME:-}" ]; then
     MC_XDG_TMP="$(mktemp -d)"
     export XDG_DATA_HOME="$MC_XDG_TMP"
 fi
+export XDG_STATE_HOME="${XDG_STATE_HOME:-$XDG_DATA_HOME/state}"  # #176: state isolated too
 
 # BASELINE. A test that already fails proves nothing by failing under the
 # mutation. Live 2026-09-23: a doctor test panicked on a missing XDG_DATA_HOME
