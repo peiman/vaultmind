@@ -3,47 +3,56 @@ package commands
 import "github.com/peiman/vaultmind/.ckeletin/pkg/config"
 
 // InitMetadata defines the metadata for the init command — scaffolds a
-// fresh persona-shaped vault at a user-provided path.
+// fresh vault at a user-provided path.
 //
-// VaultMind is built for a human collaborating with an AI agent: the
-// agent reads the vault as long-term memory, both human and agent
-// curate the markdown. The default scaffold reflects that — types and
-// starter notes match the persona-reconstruction model that makes
-// VaultMind distinct from a plain notes app.
+// The knowledge vault is the product: a curated knowledge base for a project
+// or across repos, found by search and by the code hooks. That is the default
+// scaffold. The agent-identity (persona) vault is an add-on, one flag away.
 var InitMetadata = config.CommandMetadata{
 	Use:   "init [path]",
-	Short: "Scaffold a fresh vault — persona-shaped, ready for you and your agent",
-	Long: `Create a new VaultMind vault at <path> with the standard persona-shaped
-type registry, a vault-level README, and starter notes that demonstrate
-the schema. After init, you index, embed, and you're ready.
+	Short: "Scaffold a fresh vault — a project knowledge base by default, or an agent's identity vault",
+	Long: `Create a new VaultMind vault at <path>: a type registry, a vault-level
+README, and starter notes that demonstrate the schema. After init, you
+index, embed, and you're ready.
 
-WHAT YOU GET
+By default it is a project knowledge base. --profile persona (or full)
+scaffolds an agent's identity vault instead.
+
+WHAT YOU GET (default: knowledge)
 
   <path>/
-    .vaultmind/config.yaml       Type registry — identity, principle, arc,
-                                 reference, concept, source, decision
-    README.md                    Vault model + workflow
-    identity/who-am-i.md         Foundational identity note (placeholder)
+    .vaultmind/config.yaml         Type registry — decision, concept, source,
+                                   reference, and the identity types
+    README.md                      How to use the vault
+    decisions/decision-example.md  Template — a decision and why
+    concepts/concept-example.md    Template — a concept, with an optional
+                                   paths: list tying it to code
+
+WITH --profile persona (or full)
+
+  <path>/
+    .vaultmind/config.yaml         The same type registry
+    README.md                      The persona model + workflow
+    identity/who-am-i.md           Foundational identity note (placeholder)
     references/current-context.md  Live-edge priority note (placeholder)
     principles/principle-example.md  Template — replace or delete
-    arcs/arc-example.md          Template — replace or delete
+    arcs/arc-example.md            Template — replace or delete
 
-The placeholder notes have today's date in their frontmatter so the
-index reads them cleanly without hand-editing. Replace the bodies with
-your agent's real content as your collaboration produces it.
+The starter notes have today's date in their frontmatter so the index
+reads them cleanly without hand-editing. Replace or delete them as real
+content arrives.
 
 EXAMPLES
 
-  vaultmind init ./my-vault
-      Standard scaffold at a relative path.
+  vaultmind init ./knowledge
+      A project knowledge base at a relative path.
 
-  vaultmind init "$HOME/.vaultmind/persona"
-      A vault outside the project tree — common when the agent's
-      memory should persist across multiple repos.
-
-  vaultmind init ./vaultmind-identity --wire-hooks
-  vaultmind init ./docs-kb --profile knowledge --wire-hooks   # a project knowledge base
+  vaultmind init ./knowledge --wire-hooks
       Scaffold AND wire Claude Code in one step (see ONE-COMMAND SETUP).
+
+  vaultmind init "$HOME/.vaultmind/persona" --profile persona
+      An agent's identity vault, outside the project tree — common when
+      the agent's memory should persist across repos.
 
   vaultmind init --print-instructions
       Print the concise agent-onboarding quick-start and exit. No vault
@@ -61,11 +70,16 @@ ONE-COMMAND SETUP (--wire-hooks)
 
   --wire-hooks does the Claude Code wiring for you right after the
   scaffold: it installs the hook scripts into the current project's
-  .claude/scripts/ and merges the four hook entries into
+  .claude/scripts/ and merges the hook entries into
   .claude/settings.json, baked to the new vault via VAULTMIND_VAULT.
   The merge is additive and NEVER clobbers — a project's own hooks are
   preserved, re-runs are no-ops, malformed settings error out before any
   write. (This is the same engine as "vaultmind hooks install --merge".)
+
+  Which hooks: the --profile you name; else the profile the project
+  already declared; else the profile of the vault init just made. So a
+  fresh project gets knowledge hooks for a knowledge vault, and a project
+  that declared its hooks keeps them.
 
     --local     wire .claude/settings.local.json (gitignored, personal)
                 instead of the committed settings.json
@@ -81,18 +95,19 @@ NEXT STEPS
   cd <path>
   vaultmind index --vault .            # build the SQLite index
   vaultmind index --embed --vault .    # compute embeddings (one-time)
-  vaultmind ask "who am I" --vault .   # see what the agent would see
+  vaultmind import ../docs --vault .   # bring in a project's existing docs
+  vaultmind ask "what did we decide about X" --vault .
 
   For agent-led setup (interview, project read, migration, hooks),
   run: vaultmind init --print-instructions
 
-THE MODEL
+THE PERSONA MODEL
 
-VaultMind treats arcs — transformation notes — as the atomic unit of
-persona. Identity is carried by the journey, not by the rules. The
-default scaffold gives you placeholder identity + current-context
-notes and example templates for principles and arcs; let your real
-collaboration produce the rest.`,
+With --profile persona, VaultMind treats arcs — transformation notes — as
+the atomic unit of an agent's identity. Identity is carried by the
+journey, not by the rules. The persona scaffold gives you placeholder
+identity + current-context notes and templates for principles and arcs;
+let your real collaboration produce the rest.`,
 	ConfigPrefix: "app.init",
 	FlagOverrides: map[string]string{
 		"app.init.print_instructions": "print-instructions",
@@ -134,7 +149,7 @@ func InitOptions() []config.ConfigOption {
 		{
 			Key:          "app.init.profile",
 			DefaultValue: "",
-			Description:  "What the vault is for: knowledge scaffolds a project knowledge base (decisions/, concepts/, notes tied to code with paths:); empty, full or persona scaffold the agent-identity vault. With --wire-hooks it is also the hook profile installed.",
+			Description:  "What the vault is for: knowledge (the default) scaffolds a project knowledge base (decisions/, concepts/, notes tied to code with paths:); persona or full scaffold an agent's identity vault. With --wire-hooks it is also the hook profile installed; unset, the project's declared profile is kept, else the scaffold's.",
 			Type:         "string",
 		},
 		{

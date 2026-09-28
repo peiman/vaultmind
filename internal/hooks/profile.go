@@ -121,6 +121,18 @@ func EventScriptsForProfile(p Profile) []EventScript {
 // A Claude Code install declares it under .claude/, a Codex install under
 // .vaultmind/; the Claude Code location is read first.
 func DeclaredProfile(projectDir string) (Profile, error) {
+	p, declared, err := DeclaredProfileIfAny(projectDir)
+	if err != nil || declared {
+		return p, err
+	}
+	return ProfileFull, nil
+}
+
+// DeclaredProfileIfAny reads the project's declared profile and reports
+// whether there was one. DeclaredProfile answers "full" for both a project
+// that declared full and one that declared nothing; a caller that must tell
+// them apart (init choosing hooks for the vault it just made) uses this.
+func DeclaredProfileIfAny(projectDir string) (Profile, bool, error) {
 	var raw []byte
 	var path string
 	for _, a := range []Agent{AgentClaude, AgentCodex} {
@@ -135,17 +147,17 @@ func DeclaredProfile(projectDir string) (Profile, error) {
 			break
 		}
 		if !os.IsNotExist(err) {
-			return "", fmt.Errorf("reading declared profile %s: %w", path, err)
+			return "", false, fmt.Errorf("reading declared profile %s: %w", path, err)
 		}
 	}
 	if raw == nil {
-		return ProfileFull, nil
+		return "", false, nil
 	}
 	switch p := Profile(strings.TrimSpace(string(raw))); p {
 	case ProfileFull, ProfileKnowledge, ProfilePersona:
-		return p, nil
+		return p, true, nil
 	default:
-		return "", fmt.Errorf(
+		return "", false, fmt.Errorf(
 			"unknown vaultmind profile %q in %s (expected %s, %s or %s)",
 			p, path, ProfileFull, ProfileKnowledge, ProfilePersona)
 	}

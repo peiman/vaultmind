@@ -119,7 +119,7 @@ components:
       - internal/episode/**
       # VaultMind arc distillation (rendered episode markdown → candidate moments and the review queue; never writes arcs, only an episode's `reviewed` mark):
       - internal/distill/**
-      # VaultMind vault scaffold (vaultmind init — embedded persona-shaped templates):
+      # VaultMind vault scaffold (vaultmind init — embedded knowledge and persona templates):
       - internal/initvault/**
       # VaultMind telemetry primitives (vault fingerprint, content-free aggregate features):
       - internal/telemetry/**

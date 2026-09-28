@@ -36,7 +36,8 @@ See **[docs/embedding-backends.md](docs/embedding-backends.md)** for every backe
 ## Quickstart
 
 ```bash
-# 1. scaffold a vault (type registry, README, starter notes)
+# 1. scaffold a project knowledge base (type registry, README, starter notes)
+#    — or an agent's identity vault with --profile persona
 vaultmind init ./my-vault
 
 # 2. index + embed
@@ -52,7 +53,7 @@ copies a folder's Markdown into the vault as notes tied to their doc, and a
 re-run brings changes across.
 
 ```bash
-vaultmind init ./knowledge --profile knowledge
+vaultmind init ./knowledge
 vaultmind import docs --vault ./knowledge --dry-run   # see what it would do
 vaultmind import docs --vault ./knowledge             # re-run after the docs change
 ```

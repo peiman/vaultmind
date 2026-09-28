@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking: `vaultmind init` scaffolds a project knowledge base by
+  default.** The knowledge vault is what VaultMind is for; the agent-identity
+  vault is an add-on. `init <path>` now makes `decisions/` and `concepts/`
+  (what `--profile knowledge` made before); `--profile persona` or
+  `--profile full` makes the identity vault (`identity/`, `principles/`,
+  `arcs/`) that was the default. **If a script runs `vaultmind init` to set
+  up an identity vault, add `--profile persona`.** With `--wire-hooks` and no
+  `--profile`, a project that declared its hooks keeps them, and a fresh
+  project now gets knowledge hooks for its knowledge vault instead of the full
+  persona set.
+
 ## [0.9.18] - 2026-09-28
 
 > A security release. Model downloads are pinned and hash-checked, and

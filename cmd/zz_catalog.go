@@ -240,8 +240,8 @@ var commandCatalog = map[string]catalogEntry{
 	// ── Identity & sessions ──────────────────────────────────────────────
 	"vaultmind init": {
 		group: groupLifecycle,
-		when:  "you are starting fresh and need to scaffold a new persona-shaped vault.",
-		short: "Scaffold a fresh persona-shaped vault, ready for you and your agent",
+		when:  "you are starting fresh: a project knowledge base by default, or an agent's identity vault with --profile persona.",
+		short: "Scaffold a fresh vault — a project knowledge base by default, or an agent's identity vault",
 	},
 	"vaultmind episode": {
 		group: groupLifecycle,

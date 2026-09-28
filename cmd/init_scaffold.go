@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"strings"
 
 	"github.com/peiman/vaultmind/internal/hooks"
 	"github.com/peiman/vaultmind/internal/initvault"
@@ -19,7 +20,7 @@ import (
 func runInitScaffold(cmd *cobra.Command, path string, p initWireParams) error {
 	// Validated before anything is written: a typo must not leave a half-made
 	// vault behind.
-	profile, err := hooks.ParseProfile(p.profile)
+	profile, err := initScaffoldProfile(p.profile)
 	if err != nil {
 		return err
 	}
@@ -39,7 +40,7 @@ func runInitScaffold(cmd *cobra.Command, path string, p initWireParams) error {
 	_, _ = fmt.Fprintf(w, "✅ Vault scaffolded at %s (%d files)\n\n", res.VaultPath, res.FilesAdded)
 
 	if p.wireHooks {
-		if err := wireInitHooks(w, res.VaultPath, p); err != nil {
+		if err := wireInitHooks(w, res.VaultPath, profile, p); err != nil {
 			return err
 		}
 	}
@@ -74,4 +75,16 @@ func writeInitNextSteps(w io.Writer, vaultPath string, knowledge bool) {
 	_, _ = fmt.Fprintf(w, "  vaultmind index --embed --vault .\n")
 	_, _ = fmt.Fprintf(w, "  vaultmind ask %q --vault .\n\n", question)
 	_, _ = fmt.Fprintf(w, "%s\n\n", edit)
+}
+
+// initScaffoldProfile is the vault init makes: the named profile, else the
+// knowledge base — the knowledge vault is the product, the persona vault an
+// add-on one flag away (--profile persona or full). Deliberately NOT the
+// project's declared hooks profile: a knowledge vault is a common addition to
+// a persona project, and the folder init runs in should not decide the shape.
+func initScaffoldProfile(named string) (hooks.Profile, error) {
+	if strings.TrimSpace(named) == "" {
+		return hooks.ProfileKnowledge, nil
+	}
+	return hooks.ParseProfile(named)
 }
