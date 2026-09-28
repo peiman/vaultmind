@@ -168,3 +168,20 @@ func TestValidateLive_NeverFollowsASymlink(t *testing.T) {
 	assert.Equal(t, filepath.Join(dir, "secrets.md"), res.Issues[0].Path, "the same path form as the other issues")
 	assert.NotContains(t, res.Issues[0].Message, "SECRET-CONTENT")
 }
+
+// A vault named through a symlink (a "current" pointer, say) is the
+// operator's own choice of path and is validated, not reported as empty:
+// WalkDir does not descend into a root that is a link, and a green
+// "Checked 0 files" for a vault full of problems is a false clean.
+func TestValidateLive_ValidatesAVaultNamedThroughASymlink(t *testing.T) {
+	real := t.TempDir()
+	writeNote(t, real, "bad.md", "---\nid: [unclosed\n---\n")
+	link := filepath.Join(t.TempDir(), "current")
+	require.NoError(t, os.Symlink(real, link))
+
+	res, err := ValidateLive(link, buildRegistry(t))
+	require.NoError(t, err)
+	assert.Equal(t, 1, res.FilesChecked)
+	require.Len(t, res.Issues, 1)
+	assert.Equal(t, "invalid_frontmatter", res.Issues[0].Rule)
+}

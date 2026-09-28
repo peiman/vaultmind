@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   was missed. A link is now reported as a `skipped_symlink` warning and not
   read.
 
+### Fixed
+
+- **`frontmatter validate --live` validates a vault named through a
+  symlink.** A `--vault` path that was itself a link (a "current" pointer)
+  was not walked at all, and reported "Checked 0 files" as clean. The path
+  you name is now resolved; links found inside the vault are still never
+  followed.
+
 ## [0.9.17] - 2026-09-28
 
 > A knowledge vault doesn't have to start empty. `vaultmind import <dir>`

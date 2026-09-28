@@ -20,7 +20,8 @@ MODES
   --live:
     Reads raw .md files on disk instead of the indexed database.
     Use when the index may be stale or you want to validate before indexing.
-    No index hash is reported in this mode.
+    No index hash is reported in this mode. A .md symlink is never read: it
+    is reported as a skipped_symlink warning.
 
 FLAGS
 
@@ -34,9 +35,9 @@ OUTPUT INCLUDES (human-readable)
   Per issue: [severity] path: message (rule)
 
   Severity values:  error (missing required field), warning (unknown type,
-                    invalid status, broken reference)
+                    invalid status, broken reference, skipped symlink)
   Rule values:      missing_required_field, unknown_type, invalid_status,
-                    broken_reference
+                    broken_reference, skipped_symlink (--live only)
 
 OUTPUT INCLUDES (--json)
 
