@@ -44,21 +44,21 @@ func runDataviewLint(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	if useJSON {
-		return dataviewLintJSON(cmd, result, vaultPath, indexHash)
+		return dataviewLintJSON(cmd, result, vaultPath, indexHash())
 	}
 	return dataviewLintText(cmd, result)
 }
 
-func executeDataviewLint(cmd *cobra.Command, vaultPath string) (dataviewLintResult, string, error) {
+func executeDataviewLint(cmd *cobra.Command, vaultPath string) (dataviewLintResult, func() string, error) {
 	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, "dataview lint")
 	if err != nil {
-		return dataviewLintResult{}, "", err
+		return dataviewLintResult{}, noIndexHash, err
 	}
 	defer vdb.Close()
 
 	scan, err := vault.Scan(vaultPath, vdb.Config.Vault.Exclude)
 	if err != nil {
-		return dataviewLintResult{}, "", fmt.Errorf("scanning vault: %w", err)
+		return dataviewLintResult{}, noIndexHash, fmt.Errorf("scanning vault: %w", err)
 	}
 
 	result := dataviewLintResult{Issues: []dataviewIssue{}}
@@ -90,7 +90,7 @@ func executeDataviewLint(cmd *cobra.Command, vaultPath string) (dataviewLintResu
 			})
 		}
 	}
-	return result, vdb.GetIndexHash(), nil
+	return result, vdb.GetIndexHash, nil
 }
 
 func dataviewLintJSON(cmd *cobra.Command, result dataviewLintResult, vaultPath, indexHash string) error {

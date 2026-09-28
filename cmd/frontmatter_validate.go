@@ -35,7 +35,7 @@ func runFrontmatterValidate(cmd *cobra.Command, _ []string) error {
 			env.Status = "warning"
 		}
 		env.Meta.VaultPath = vaultPath
-		env.Meta.IndexHash = indexHash
+		env.Meta.IndexHash = indexHash()
 		return json.NewEncoder(cmd.OutOrStdout()).Encode(env)
 	}
 
@@ -54,27 +54,27 @@ func runFrontmatterValidate(cmd *cobra.Command, _ []string) error {
 
 // runValidation dispatches to either live (raw .md) or indexed validation and
 // returns the result plus an index hash (empty string in live mode).
-func runValidation(cmd *cobra.Command, vaultPath string, live bool) (*query.ValidateResult, string, error) {
+func runValidation(cmd *cobra.Command, vaultPath string, live bool) (*query.ValidateResult, func() string, error) {
 	if live {
 		reg, err := cmdutil.LoadRegistry(vaultPath)
 		if err != nil {
-			return nil, "", fmt.Errorf("loading registry: %w", err)
+			return nil, noIndexHash, fmt.Errorf("loading registry: %w", err)
 		}
 		res, err := query.ValidateLive(vaultPath, reg)
 		if err != nil {
-			return nil, "", fmt.Errorf("validating: %w", err)
+			return nil, noIndexHash, fmt.Errorf("validating: %w", err)
 		}
-		return res, "", nil
+		return res, noIndexHash, nil
 	}
 
 	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, "frontmatter validate")
 	if err != nil {
-		return nil, "", err
+		return nil, noIndexHash, err
 	}
 	defer vdb.Close()
 	res, err := query.Validate(vdb.DB, vdb.Reg)
 	if err != nil {
-		return nil, "", fmt.Errorf("validating: %w", err)
+		return nil, noIndexHash, fmt.Errorf("validating: %w", err)
 	}
-	return res, vdb.GetIndexHash(), nil
+	return res, vdb.GetIndexHash, nil
 }

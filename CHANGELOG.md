@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Opening a vault no longer hashes its whole index.** Every command that
+  opened a vault read the entire `index.db` to compute a SHA-256 — about 1 GB
+  for a 418-note BGE-M3 vault — though only `--json` envelopes report it
+  (`meta.index_hash`). Profiled, it was 18% of the CPU of a three-vault
+  recall query. It is now computed only when a JSON envelope asks for it. The
+  recall hook's three-vault `ask` went 4.6s → 3.1s. `index_hash` is now taken
+  when the envelope is written rather than when the vault was opened, so for a
+  command that records access (`ask`) it includes that record; it was never
+  stable across two `ask`s, which each write to the index.
+
 - **Before a push, the reach hook asks about what is being pushed.** It used
   one fixed sentence ("publication is a one-way gate…") for every push, which
   returned the same notes each time. It now asks about the subjects of the

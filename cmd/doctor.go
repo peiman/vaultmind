@@ -178,7 +178,7 @@ func runDoctorCore(cmd *cobra.Command, vaultPath string, jsonOut, summaryOnly bo
 	if jsonOut {
 		env := envelope.OK("doctor", result)
 		env.Meta.VaultPath = vaultPath
-		env.Meta.IndexHash = indexHash
+		env.Meta.IndexHash = indexHash()
 		// M4: surface every mesh warning as a structured envelope warning so
 		// scripted `jq '.status=="warning"'` / `.warnings[]` catches an
 		// unauthenticated (or misconfigured) mesh state. Status flips ok→warning;
@@ -195,22 +195,22 @@ func runDoctorCore(cmd *cobra.Command, vaultPath string, jsonOut, summaryOnly bo
 // index hash. The single-vault path (runDoctorCore) uses this; the multi-vault
 // path opens vaults itself (so one bad vault can't emit a stray error envelope)
 // and shares populateDoctorResult below.
-func diagnoseVault(cmd *cobra.Command, vaultPath string) (*query.DoctorResult, string, error) {
+func diagnoseVault(cmd *cobra.Command, vaultPath string) (*query.DoctorResult, func() string, error) {
 	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, "doctor")
 	if err != nil {
-		return nil, "", err
+		return nil, noIndexHash, err
 	}
 	defer vdb.Close()
 
 	result, err := populateDoctorResult(cmd.Context(), vdb, vaultPath)
 	if err != nil {
-		return nil, "", err
+		return nil, noIndexHash, err
 	}
 	// Contract-B mesh-identity section (single-vault path only — it is about the
 	// local agent's identity custody/binding/reachability, independent of the
 	// vault). Attached only when a mesh signal exists (nil ⇒ absent from --json).
 	if err := populateMeshIdentity(cmd, result); err != nil {
-		return nil, "", err
+		return nil, noIndexHash, err
 	}
 	// Backup health. Best-effort: a vault outside git, or a git error, must not
 	// fail the whole diagnosis — but "could not tell" is reported by the check
@@ -228,7 +228,7 @@ func diagnoseVault(cmd *cobra.Command, vaultPath string) (*query.DoctorResult, s
 	} else {
 		result.BadCitations = bad
 	}
-	return result, vdb.GetIndexHash(), nil
+	return result, vdb.GetIndexHash, nil
 }
 
 // populateDoctorResult runs the read-only diagnosis against an already-open
