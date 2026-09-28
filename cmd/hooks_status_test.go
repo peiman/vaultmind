@@ -234,7 +234,7 @@ func TestHooksStatus_ApprovedCodexHooksPass(t *testing.T) {
 // its scripts are checked in .vaultmind/scripts and it passes once approved.
 func TestHooksStatus_CodexOnlyProjectPassesWhenApprovedAndInSync(t *testing.T) {
 	dir := t.TempDir()
-	_, _, err := runRootCmd(t, "hooks", "install", dir, "--agent", "codex", "--merge")
+	_, _, err := runRootCmd(t, "hooks", "install", dir, "--agent", "codex", "--profile", "full", "--merge")
 	require.NoError(t, err)
 	approveAllCodexHooks(t, dir)
 
@@ -286,7 +286,7 @@ func TestHooksStatus_ACodexHookChangedAfterApprovalFails(t *testing.T) {
 // .vaultmind/scripts. It used to know only Claude Code.
 func TestHooksUninstall_Codex(t *testing.T) {
 	dir := t.TempDir()
-	_, _, err := runRootCmd(t, "hooks", "install", dir, "--agent", "codex", "--merge")
+	_, _, err := runRootCmd(t, "hooks", "install", dir, "--agent", "codex", "--profile", "full", "--merge")
 	require.NoError(t, err)
 
 	out, _, err := runRootCmd(t, "hooks", "uninstall", dir, "--agent", "codex", "--remove-scripts")

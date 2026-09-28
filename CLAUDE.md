@@ -109,7 +109,7 @@ vaultmind doctor --vault examples/ada-vault
 
 Build the binary first if needed: `task build` (produces `./vaultmind`; auto-selects ORT when `lib/libtokenizers.a` is present, pure-Go MiniLM otherwise — run `task setup:ort` first for the full BGE-M3 hybrid). Or `go install github.com/peiman/vaultmind@latest` (MiniLM), or download a prebuilt ORT archive from the release (full hybrid, darwin-arm64/linux-amd64).
 
-Ada is illustrative only — replace her with your own vault via `vaultmind init`.
+Ada is illustrative only — replace her with your own vault via `vaultmind init --profile persona` (plain `vaultmind init` makes a knowledge vault).
 
 ## Known Rule Violations (These Have Happened Before)
 

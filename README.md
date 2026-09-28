@@ -93,17 +93,17 @@ Everything is `--json`-able for programmatic use; every command returns a stable
 
 ## Agent integration (persona reconstruction)
 
-VaultMind wires into **Claude Code** and **Codex CLI** so the agent reconstructs itself from its vault each session. Name the project and the vault, and let it write the wiring:
+VaultMind wires into **Claude Code** and **Codex CLI** so the agent reconstructs itself from its vault each session. Name the project and the vault, and let it write the wiring. `--profile persona` asks for the persona loader and episode capture; without it a fresh project gets the knowledge set (recall, decision-time reach, health), the right shape for a knowledge vault:
 
 ```bash
 # Claude Code — writes <project-dir>/.claude/settings.json
-vaultmind hooks install <project-dir> --vault <your-vault> --merge
+vaultmind hooks install <project-dir> --vault <your-vault> --profile persona --merge
 
 # Codex CLI — writes <project-dir>/.codex/hooks.json
-vaultmind hooks install <project-dir> --vault <your-vault> --agent codex --merge
+vaultmind hooks install <project-dir> --vault <your-vault> --profile persona --agent codex --merge
 
 # Recall across several vaults (identity + a desk, say); the persona loads the first
-vaultmind hooks install <project-dir> --vaults <identity-vault>,<desk-vault> --merge
+vaultmind hooks install <project-dir> --vaults <identity-vault>,<desk-vault> --profile persona --merge
 ```
 
 Add `--dry-run` to preview the change first. Without `--merge` the scripts are written and the wiring is printed for you to paste. Without `--vault`, the hooks look for `<project-dir>/vaultmind-identity`.
