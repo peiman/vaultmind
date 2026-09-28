@@ -16,7 +16,8 @@ type initWireParams struct {
 	local      bool
 	dryRun     bool
 	projectDir string
-	// profile is --profile as given; empty keeps what the project declared.
+	// profile is --profile as given; empty keeps what the project declared,
+	// and a project that declared nothing gets the scaffold's profile.
 	profile string
 }
 
@@ -27,7 +28,7 @@ type initWireParams struct {
 // resolve it regardless of where Claude Code runs them. It reuses
 // hooks.Provision — the same engine as `hooks install --merge` — so the
 // install-then-wire sequence stays in one place (SSOT).
-func wireInitHooks(w io.Writer, vaultPath string, p initWireParams) error {
+func wireInitHooks(w io.Writer, vaultPath string, scaffold hooks.Profile, p initWireParams) error {
 	projectDir := p.projectDir
 	if projectDir == "" {
 		cwd, err := os.Getwd()
@@ -41,17 +42,9 @@ func wireInitHooks(w io.Writer, vaultPath string, p initWireParams) error {
 		return fmt.Errorf("resolving vault path: %w", err)
 	}
 
-	// A profile named on init wins; otherwise keep the one the project
-	// declared — without that, init re-declared a knowledge project "full" and
-	// wired a persona into it.
-	profile, err := hooks.ParseProfile(p.profile)
+	profile, err := initHooksProfile(projectDir, scaffold, p.profile)
 	if err != nil {
 		return err
-	}
-	if p.profile == "" {
-		if profile, err = hooks.DeclaredProfile(projectDir); err != nil {
-			return err
-		}
 	}
 	prov, err := hooks.Provision(hooks.InstallConfig{
 		ProjectDir: projectDir,
@@ -79,4 +72,20 @@ func wireInitHooks(w io.Writer, vaultPath string, p initWireParams) error {
 	}
 	_, _ = fmt.Fprintln(w)
 	return nil
+}
+
+// initHooksProfile is the hooks init wires: the named profile; else the one
+// the project declared (without that, init re-declared a knowledge project
+// "full" and wired a persona into it); else the profile of the vault init just
+// made, so a fresh project's knowledge vault gets knowledge hooks rather than
+// the persona set.
+func initHooksProfile(projectDir string, scaffold hooks.Profile, named string) (hooks.Profile, error) {
+	if named != "" {
+		return hooks.ParseProfile(named)
+	}
+	declared, ok, err := hooks.DeclaredProfileIfAny(projectDir)
+	if err != nil || ok {
+		return declared, err
+	}
+	return scaffold, nil
 }

@@ -17,7 +17,8 @@ go install github.com/peiman/vaultmind@latest
 ## 2. Scaffold a vault
 
 ```bash
-vaultmind init <vault>          # e.g. ./vaultmind-identity or "$HOME/.vaultmind/persona"
+vaultmind init <vault>                     # a project knowledge base, e.g. ./knowledge
+vaultmind init <vault> --profile persona   # or an agent's identity vault, e.g. "$HOME/.vaultmind/persona"
 ```
 
 ## 3. Wire the hooks

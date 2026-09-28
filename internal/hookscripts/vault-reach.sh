@@ -187,7 +187,7 @@ fi
 # command that mutates notes.
 #
 # What to ask depends on the vault being written, and it is asked of THAT vault
-# alone. An identity vault (it has arcs/, which `vaultmind init` creates) gets
+# alone. An identity vault (it has arcs/, which `vaultmind init --profile persona` creates) gets
 # arc discipline. A knowledge vault — a project's, or a desk — is not an
 # identity: before writing a note there, what helps is what the vault already
 # says about that topic (taken from the file name) and its conventions.

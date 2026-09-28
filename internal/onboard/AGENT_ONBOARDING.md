@@ -137,8 +137,11 @@ is in **[docs/building-an-identity-vault.md](../../docs/building-an-identity-vau
 ### 4b. Run init
 
 ```bash
-vaultmind init "<path>"
+vaultmind init "<path>" --profile persona
 ```
+
+(`--profile persona` matters: without it, `init` scaffolds a project knowledge
+base — decisions/ and concepts/ — which is the default since v0.10.0.)
 
 This produces eight files:
 - `.vaultmind/config.yaml` — type registry
@@ -255,7 +258,7 @@ Identify the user's **type vocabulary** (`grep -h "^type:" *.md | sort -u`) and 
 
 ### 5c. Adopt user's types into the registry
 
-Vaultmind's default registry is persona-shaped (`identity, principle, arc, reference`). It's a starting suggestion, not a fixed schema.
+Vaultmind's default registry covers a knowledge base (`decision, concept, source, reference`) and an agent's identity (`identity, principle, arc`). It's a starting suggestion, not a fixed schema.
 
 Run the type-vocabulary probe:
 

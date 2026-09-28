@@ -29,7 +29,7 @@ scaffolds into every vault.)
 This is the part people get wrong: they try to author a complete persona up front.
 Don't. An identity vault **accretes**:
 
-1. **Seed it.** `vaultmind init <path>` scaffolds the starting shape — `identity/who-am-i.md`,
+1. **Seed it.** `vaultmind init <path> --profile persona` scaffolds the starting shape — `identity/who-am-i.md`,
    `references/current-context.md`, and the two foundational principle notes
    (`arcs-not-notes.md`, `how-to-write-arcs.md`). Write `who-am-i.md` in the agent's
    own voice: name, role, a few foundational traits. Keep it short.
@@ -138,7 +138,7 @@ Read Ada's arcs (`examples/ada-vault/arcs/`) to see the shape.
 ## Wiring it up
 
 ```bash
-vaultmind init ~/.vaultmind/persona --wire-hooks   # scaffold + install the SessionStart hook in one step
+vaultmind init ~/.vaultmind/persona --profile persona --wire-hooks   # scaffold + install the SessionStart hook in one step
 vaultmind index --embed --vault ~/.vaultmind/persona
 ```
 
