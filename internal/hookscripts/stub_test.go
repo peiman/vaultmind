@@ -42,14 +42,20 @@ func TestInstallStub_BehavesAsTheBodySays(t *testing.T) {
 	dir := t.TempDir()
 	InstallStub(t, dir, "vaultmind", "#!/bin/bash\necho \"got $1 $2\"\nexit 3\n")
 
-	cmd := exec.Command("vaultmind", "ask", "q")
-	cmd.Env = []string{"PATH=" + dir + ":/usr/bin:/bin"}
-	cmd.Path = filepath.Join(dir, "vaultmind")
-	out, err := cmd.Output()
-	assert.Equal(t, "got ask q\n", string(out))
-	var exitErr *exec.ExitError
-	require.ErrorAs(t, err, &exitErr)
-	assert.Equal(t, 3, exitErr.ExitCode())
+	for name, cmd := range map[string]*exec.Cmd{
+		// Found on PATH by a shell, as the hooks run it. exec.Command("vaultmind")
+		// would resolve against THIS process's PATH instead — a real binary on a
+		// developer machine, nothing on CI.
+		"on PATH": exec.Command("/bin/bash", "-c", `vaultmind "$@"`, "bash", "ask", "q"),
+		"by path": exec.Command(filepath.Join(dir, "vaultmind"), "ask", "q"),
+	} {
+		cmd.Env = []string{"PATH=" + dir + ":/usr/bin:/bin"}
+		out, err := cmd.Output()
+		assert.Equal(t, "got ask q\n", string(out), name)
+		var exitErr *exec.ExitError
+		require.ErrorAs(t, err, &exitErr, name)
+		assert.Equal(t, 3, exitErr.ExitCode(), name)
+	}
 }
 
 // Two stubs of the same name in different dirs keep their own behaviour.
