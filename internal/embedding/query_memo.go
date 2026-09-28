@@ -6,8 +6,12 @@ import (
 )
 
 // queryMemoSize bounds the memo. One ask embeds one query text however many
-// vaults and lanes it searches; a few entries cover that with room to spare.
-const queryMemoSize = 8
+// vaults and lanes it searches, so two entries cover it with one to spare.
+// Kept small because not every caller embeds a query: the arc finder and the
+// near-duplicate check embed whole notes, and at the model's 8192-token cap
+// one output's ColBERT vectors are ~32 MB — two entries cap what is retained
+// at ~64 MB.
+const queryMemoSize = 2
 
 // queryMemo remembers recent single-text embeddings, so a query costs one
 // forward pass. A three-vault ask ran the model 16 times on the same text —
@@ -29,6 +33,10 @@ type memoEntry struct {
 // while it is remembered. Concurrent callers share the pass in flight. A
 // failed pass is forgotten, so the next caller tries again. Each caller gets
 // its own copy.
+//
+// The first caller's compute (and so its context) runs the pass. If that
+// context is cancelled, callers waiting on the pass see the cancellation
+// too; the error is not remembered, so a later caller runs its own pass.
 func (m *queryMemo) get(text string, compute func() (*BGEM3Output, error)) (*BGEM3Output, error) {
 	m.mu.Lock()
 	if m.entries == nil {
