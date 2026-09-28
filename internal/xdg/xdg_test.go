@@ -120,9 +120,7 @@ func TestStateDir(t *testing.T) {
 	setupTest(t)
 	tempDir := t.TempDir()
 
-	if runtime.GOOS != "windows" && runtime.GOOS != "darwin" {
-		t.Setenv("XDG_STATE_HOME", tempDir)
-	}
+	t.Setenv("XDG_STATE_HOME", tempDir) // honored on every platform since #176
 
 	SetAppName("testapp")
 	dir, err := StateDir()
@@ -135,9 +133,7 @@ func TestStateFile(t *testing.T) {
 	setupTest(t)
 	tempDir := t.TempDir()
 
-	if runtime.GOOS != "windows" && runtime.GOOS != "darwin" {
-		t.Setenv("XDG_STATE_HOME", tempDir)
-	}
+	t.Setenv("XDG_STATE_HOME", tempDir) // honored on every platform since #176
 
 	SetAppName("testapp")
 	file, err := StateFile("app.log")
@@ -156,6 +152,7 @@ func TestXDGEnvVarsFallback(t *testing.T) {
 	// Clear XDG env vars to test fallback
 	t.Setenv("XDG_CONFIG_HOME", "")
 	t.Setenv("XDG_DATA_HOME", "")
+	t.Setenv("XDG_STATE_HOME", "") // a set one would win on every platform (#176)
 	t.Setenv("XDG_CACHE_HOME", "")
 	t.Setenv("XDG_STATE_HOME", "")
 
@@ -369,6 +366,7 @@ func TestDataBase_Darwin(t *testing.T) {
 	// Clear XDG_DATA_HOME so we exercise the darwin fallback, not the
 	// cross-platform override.
 	t.Setenv("XDG_DATA_HOME", "")
+	t.Setenv("XDG_STATE_HOME", "") // a set one would win on every platform (#176)
 	base := dataBase()
 	assert.Contains(t, base, filepath.Join("Library", "Application Support"))
 }
@@ -397,6 +395,9 @@ func TestStateBase_Darwin(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("darwin-specific test")
 	}
+	// The platform default, when XDG_STATE_HOME is not set (#176: when it is
+	// set, it wins on macOS too).
+	t.Setenv("XDG_STATE_HOME", "")
 	base := stateBase()
 	assert.Contains(t, base, filepath.Join("Library", "Application Support"))
 }
@@ -408,6 +409,7 @@ func TestBasePathsUseHomeDir(t *testing.T) {
 	// default on every platform (not the cross-platform override). Same for
 	// XDG_CONFIG_HOME, which configBase now honours on darwin as well.
 	t.Setenv("XDG_DATA_HOME", "")
+	t.Setenv("XDG_STATE_HOME", "") // a set one would win on every platform (#176)
 	t.Setenv("XDG_CONFIG_HOME", "")
 
 	config := configBase()
@@ -431,6 +433,7 @@ func TestBasePathsUseHomeDir(t *testing.T) {
 		// Linux with no XDG vars set
 		t.Setenv("XDG_CONFIG_HOME", "")
 		t.Setenv("XDG_DATA_HOME", "")
+		t.Setenv("XDG_STATE_HOME", "") // a set one would win on every platform (#176)
 		t.Setenv("XDG_CACHE_HOME", "")
 		t.Setenv("XDG_STATE_HOME", "")
 		assert.Equal(t, "/test/home/.config", configBase())
@@ -444,6 +447,10 @@ func TestDirCreatesDirectory(t *testing.T) {
 	setupTest(t)
 	tempDir := t.TempDir()
 	t.Setenv("HOME", tempDir)
+	// The isolation guard keys on XDG_DATA_HOME / XDG_STATE_HOME, not HOME: a
+	// temp HOME looks like a real one to it (#121, #176).
+	t.Setenv("XDG_DATA_HOME", filepath.Join(tempDir, "data"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(tempDir, "state"))
 	SetAppName("testapp")
 
 	// All Dir functions should create their directories
@@ -484,6 +491,7 @@ func TestBasePaths_Linux(t *testing.T) {
 	t.Run("defaults without XDG vars", func(t *testing.T) {
 		t.Setenv("XDG_CONFIG_HOME", "")
 		t.Setenv("XDG_DATA_HOME", "")
+		t.Setenv("XDG_STATE_HOME", "") // a set one would win on every platform (#176)
 		t.Setenv("XDG_CACHE_HOME", "")
 		t.Setenv("XDG_STATE_HOME", "")
 
@@ -515,6 +523,7 @@ func TestBasePaths_Windows(t *testing.T) {
 	// Clear XDG_DATA_HOME so dataBase() falls through to the Windows
 	// AppData resolution, not the cross-platform override.
 	t.Setenv("XDG_DATA_HOME", "")
+	t.Setenv("XDG_STATE_HOME", "") // a set one would win on every platform (#176)
 
 	t.Run("uses AppData and LocalAppData env vars", func(t *testing.T) {
 		t.Setenv("AppData", `C:\Users\testuser\AppData\Roaming`)
@@ -545,6 +554,7 @@ func TestBasePaths_Darwin(t *testing.T) {
 	t.Setenv("HOME", "/Users/testuser")
 	// Clear XDG_DATA_HOME so dataBase() falls through to the darwin default.
 	t.Setenv("XDG_DATA_HOME", "")
+	t.Setenv("XDG_STATE_HOME", "") // a set one would win on every platform (#176)
 	t.Setenv("XDG_CONFIG_HOME", "")
 
 	// CONFIG diverges from the other three on darwin, deliberately. It follows
@@ -566,6 +576,8 @@ func TestFileFunctions_ReturnAbsolutePaths(t *testing.T) {
 	setupTest(t)
 	tempDir := t.TempDir()
 	t.Setenv("HOME", tempDir)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(tempDir, "data")) // the guard keys on these, not HOME
+	t.Setenv("XDG_STATE_HOME", filepath.Join(tempDir, "state"))
 	SetAppName("testapp")
 
 	tests := []struct {

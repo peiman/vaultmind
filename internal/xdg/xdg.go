@@ -159,19 +159,20 @@ func guardTestIsolation(dir string) {
 	for _, realBase := range []string{
 		filepath.Join(home, "Library", "Application Support"),
 		filepath.Join(home, ".local", "share"),
+		filepath.Join(home, ".local", "state"),
 		filepath.Join(home, "AppData", "Roaming"),
 	} {
 		if !strings.HasPrefix(abs, realBase) {
 			continue
 		}
 		panic(fmt.Sprintf(
-			"vaultmind test isolation (issue #121): this test would write to your real data "+
+			"vaultmind test isolation (issues #121, #176): this test would write to your real data "+
 				"directory at %s.\n"+
 				"Test runs there are recorded as agent behaviour and corrupt every measurement "+
 				"taken from the usage log.\n"+
-				"Fix: run `task test` (which sets XDG_DATA_HOME for you), or set it yourself:\n"+
-				"    export XDG_DATA_HOME=$(mktemp -d)\n"+
-				"In a single test: t.Setenv(\"XDG_DATA_HOME\", t.TempDir())", abs))
+				"Fix: run `task test` (which sets XDG_DATA_HOME and XDG_STATE_HOME for you), or set them:\n"+
+				"    export XDG_DATA_HOME=$(mktemp -d) XDG_STATE_HOME=$(mktemp -d)\n"+
+				"In a single test: t.Setenv(\"XDG_DATA_HOME\", t.TempDir()) and the same for XDG_STATE_HOME", abs))
 	}
 }
 
@@ -217,6 +218,9 @@ func StateDir() (string, error) {
 	}
 	base := stateBase()
 	dir := filepath.Join(base, name)
+	// The same guard as DataDir, before MkdirAll (#176): a test reaching the
+	// state dir wrote into the real ~/Library/Application Support.
+	guardTestIsolation(dir)
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return "", err
 	}
@@ -350,7 +354,13 @@ func cacheBase() string {
 
 // stateBase returns the base state directory.
 // State is for data that should persist between restarts but isn't config (logs, history).
+// XDG_STATE_HOME is honored on all platforms when set, as XDG_DATA_HOME is in
+// dataBase: on macOS it used to be ignored, so a test that set it still wrote
+// into the real ~/Library/Application Support (#176).
 func stateBase() string {
+	if dir := os.Getenv("XDG_STATE_HOME"); dir != "" {
+		return dir
+	}
 	switch osName {
 	case "darwin":
 		// macOS doesn't have a state concept, use Application Support
@@ -361,9 +371,6 @@ func stateBase() string {
 		}
 		return filepath.Join(homeDir(), "AppData", "Roaming")
 	default: // Linux and other Unix
-		if dir := os.Getenv("XDG_STATE_HOME"); dir != "" {
-			return dir
-		}
 		return filepath.Join(homeDir(), ".local", "state")
 	}
 }

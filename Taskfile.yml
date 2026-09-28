@@ -67,6 +67,7 @@ tasks:
       # its own env scope), so isolation must be set at the command level.
       - cmd: |
           export XDG_DATA_HOME=$(mktemp -d -t vm-test.XXXXXX)
+          export XDG_STATE_HOME="$XDG_DATA_HOME/state"  # #176: state isolated too
           trap 'rm -rf "$XDG_DATA_HOME"' EXIT
           task ckeletin:test
 
@@ -129,6 +130,7 @@ tasks:
       # for the non-test categories.
       - cmd: |
           export XDG_DATA_HOME=$(mktemp -d -t vm-test.XXXXXX)
+          export XDG_STATE_HOME="$XDG_DATA_HOME/state"  # #176: state isolated too
           trap 'rm -rf "$XDG_DATA_HOME"' EXIT
           task ckeletin:check -- --category=environment,quality,architecture,security,dependencies \
             && task ckeletin:test:coverage:project \
@@ -142,6 +144,7 @@ tasks:
     cmds:
       - cmd: |
           export XDG_DATA_HOME="${XDG_DATA_HOME:-$(mktemp -d -t vm-test.XXXXXX)}"
+          export XDG_STATE_HOME="$XDG_DATA_HOME/state"  # #176: state isolated too
           go test -tags dev -count=1 -run TestBaseline_GoldenFixture ./internal/baseline/...
 
   test:baseline:update:
@@ -149,6 +152,7 @@ tasks:
     cmds:
       - cmd: |
           export XDG_DATA_HOME="${XDG_DATA_HOME:-$(mktemp -d -t vm-test.XXXXXX)}"
+          export XDG_STATE_HOME="$XDG_DATA_HOME/state"  # #176: state isolated too
           go test -tags dev -count=1 -run TestBaseline_GoldenFixture ./internal/baseline/... -baseline-update
 
   check:bootstrap:
@@ -218,6 +222,7 @@ tasks:
       # in internal/experiment/isolation_test.go fails on PR CI without this.
       - cmd: |
           export XDG_DATA_HOME=$(mktemp -d -t vm-check-fast.XXXXXX)
+          export XDG_STATE_HOME="$XDG_DATA_HOME/state"  # #176: state isolated too
           trap 'rm -rf "$XDG_DATA_HOME"' EXIT
           task ckeletin:check:fast
       # PR CI runs `task check:fast`, not `task check`. A gate wired only into
@@ -401,6 +406,7 @@ tasks:
       # the sentinel for "you ran tests outside the isolation envelope").
       - cmd: |
           export XDG_DATA_HOME="${XDG_DATA_HOME:-$(mktemp -d -t vm-test-coverage.XXXXXX)}"
+          export XDG_STATE_HOME="$XDG_DATA_HOME/state"  # #176: state isolated too
           trap '[ -n "$XDG_DATA_HOME" ] && [ -d "$XDG_DATA_HOME" ] && rm -rf "$XDG_DATA_HOME"' EXIT
           task ckeletin:test:coverage
 
@@ -413,6 +419,7 @@ tasks:
       # sentinel for "you ran tests outside the isolation envelope").
       - cmd: |
           export XDG_DATA_HOME="${XDG_DATA_HOME:-$(mktemp -d -t vm-test-unit.XXXXXX)}"
+          export XDG_STATE_HOME="$XDG_DATA_HOME/state"  # #176: state isolated too
           trap '[ -n "$XDG_DATA_HOME" ] && [ -d "$XDG_DATA_HOME" ] && rm -rf "$XDG_DATA_HOME"' EXIT
           task ckeletin:test:unit
 
@@ -427,6 +434,7 @@ tasks:
       # this task on Ubuntu/macOS, so it MUST set the env.
       - cmd: |
           export XDG_DATA_HOME=$(mktemp -d -t vm-test-race.XXXXXX)
+          export XDG_STATE_HOME="$XDG_DATA_HOME/state"  # #176: state isolated too
           trap 'rm -rf "$XDG_DATA_HOME"' EXIT
           task ckeletin:test:race
 
@@ -435,6 +443,7 @@ tasks:
     cmds:
       - cmd: |
           export XDG_DATA_HOME=$(mktemp -d -t vm-test-dev.XXXXXX)
+          export XDG_STATE_HOME="$XDG_DATA_HOME/state"  # #176: state isolated too
           trap 'rm -rf "$XDG_DATA_HOME"' EXIT
           task ckeletin:test:dev
 
@@ -443,6 +452,7 @@ tasks:
     cmds:
       - cmd: |
           export XDG_DATA_HOME=$(mktemp -d -t vm-test-prod.XXXXXX)
+          export XDG_STATE_HOME="$XDG_DATA_HOME/state"  # #176: state isolated too
           trap 'rm -rf "$XDG_DATA_HOME"' EXIT
           task ckeletin:test:prod
 
@@ -451,6 +461,7 @@ tasks:
     cmds:
       - cmd: |
           export XDG_DATA_HOME=$(mktemp -d -t vm-test-integration.XXXXXX)
+          export XDG_STATE_HOME="$XDG_DATA_HOME/state"  # #176: state isolated too
           trap 'rm -rf "$XDG_DATA_HOME"' EXIT
           task ckeletin:test:integration
 
