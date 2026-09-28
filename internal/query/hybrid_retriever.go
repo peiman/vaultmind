@@ -153,13 +153,18 @@ func (h *HybridRetriever) Search(ctx context.Context, query string, limit, offse
 		}
 	}
 
-	// Sort by RRF score descending
+	// Sort by RRF score descending. Notes at the same rank in different lanes
+	// score exactly alike, and entries come from a map, so ties break by id —
+	// otherwise the same query ranked them differently on every run (#208).
 	entries := make([]rrfEntry, 0, len(rrfScores))
 	for _, e := range rrfScores {
 		entries = append(entries, *e)
 	}
 	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].score > entries[j].score
+		if entries[i].score != entries[j].score {
+			return entries[i].score > entries[j].score
+		}
+		return entries[i].result.ID < entries[j].result.ID
 	})
 
 	total := len(entries)

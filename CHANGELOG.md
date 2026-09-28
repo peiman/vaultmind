@@ -13,9 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (dense, sparse, ColBERT) in every vault embedded the query again, and each
   pass computed all three outputs to keep one: a three-vault `ask` — the
   recall hook's query — ran BGE-M3 16 times on the same text. The embedder
-  now remembers its last few query texts. CPU per three-vault `ask` 10.6s →
+  now remembers its last two texts. CPU per three-vault `ask` 10.6s →
   5.7s (−46%); results unchanged (output byte-identical on the queries
   checked, labelled-eval metrics identical).
+
+### Fixed
+
+- **The same query ranks tied notes the same way every run.** Notes at the
+  same rank in different retrieval lanes get exactly the same fused score,
+  and their order came from iterating a map — so two identical runs of
+  `ask` or `eval` disagreed below the top (6 of 320 slots on the labelled
+  eval, top-1 never). Ties now break by note id. Metrics unchanged; eval
+  results are now reproducible run to run (#208).
 
 ## [0.10.0] - 2026-09-28
 
