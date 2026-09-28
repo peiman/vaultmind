@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.18] - 2026-09-28
+
+> A security release. Model downloads are pinned and hash-checked, and
+> `frontmatter validate --live` no longer reads through symlinks. Upgrading:
+> the first command that loads a model hashes the cached files once (about
+> ten seconds for BGE-M3), then carries on as before. If you set
+> `XDG_STATE_HOME` on a Mac, state now moves there (see Fixed). No hook
+> changes.
+
 ### Security
 
 - **Model downloads are pinned and verified** (#192, #197). The files came
@@ -2297,7 +2306,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.17...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.18...HEAD
+[0.9.18]: https://github.com/peiman/vaultmind/compare/v0.9.17...v0.9.18
 [0.9.17]: https://github.com/peiman/vaultmind/compare/v0.9.16...v0.9.17
 [0.9.16]: https://github.com/peiman/vaultmind/compare/v0.9.15...v0.9.16
 [0.9.15]: https://github.com/peiman/vaultmind/compare/v0.9.14...v0.9.15
