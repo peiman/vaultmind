@@ -1,125 +1,71 @@
 # Security Policy
 
-## Supported Versions
+## Supported versions
 
-We release patches for security vulnerabilities in the following versions:
+VaultMind is pre-1.0. Security fixes land on `main` and ship in the next patch
+release; only the latest release is supported. Upgrade with
+`go install github.com/peiman/vaultmind@latest` or the latest prebuilt archive.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 1.x.x   | :white_check_mark: |
-| < 1.0   | :x:                |
+## Reporting a vulnerability
 
-## Reporting a Vulnerability
+**Please do not open a public issue for a vulnerability.**
 
-We take the security of ckeletin-go seriously. If you have discovered a security vulnerability, we appreciate your help in disclosing it to us in a responsible manner.
+Report it privately through GitHub:
+[**Report a vulnerability**](https://github.com/peiman/vaultmind/security/advisories/new)
+(the repository's *Security* tab → *Report a vulnerability*). Only the
+maintainer sees it.
 
-### How to Report
+Useful to include: the version (`vaultmind version`), the command or hook
+involved, a minimal vault or input that reproduces it, and what an attacker
+gains.
 
-**Please do NOT report security vulnerabilities through public GitHub issues.**
+You will get an acknowledgement within a few days. Fixes ship as a patch
+release with an advisory that credits you, unless you'd rather stay anonymous.
 
-Instead, please report them via one of the following methods:
+## What VaultMind trusts, and what it doesn't
 
-1. **Email**: Send an email to the project maintainer
-2. **GitHub Security Advisories**: Use the [GitHub Security Advisory](https://github.com/peiman/ckeletin-go/security/advisories/new) feature
+VaultMind is a local CLI: one binary, run by you, over folders of Markdown.
+The cases that matter:
 
-### What to Include
+- **A vault you did not write** (a cloned repo, a collaborator's vault, an
+  imported docs folder) is untrusted input. Reads and writes stay inside the
+  vault root, and symlinks are never followed out of a vault: `index`,
+  `doctor`, the mutation commands and `import` refuse them. A way to make
+  VaultMind read or write outside a vault from vault content is a
+  vulnerability.
+- **Hooks** installed by `vaultmind hooks install` run on your agent's
+  events. They query your vaults and never approve a tool call on the agent's
+  behalf. A hook that grants a permission, or runs vault content as a
+  command, is a vulnerability.
+- **Network.** VaultMind sends nothing about you or your vaults. The only
+  network calls are `doctor`'s daily version check (opt out with
+  `VAULTMIND_NO_UPDATE_CHECK=1`) and the embedding-model download that
+  `index --embed` makes the first time it needs a model. See the README's
+  "The one network call" and "The local usage log".
 
-Please include the following information in your report:
+Known gap: the embedding-model download is not yet checksum-verified or pinned
+to a revision ([#192](https://github.com/peiman/vaultmind/issues/192)).
 
-- Type of vulnerability (e.g., buffer overflow, SQL injection, cross-site scripting, etc.)
-- Full paths of source file(s) related to the manifestation of the vulnerability
-- The location of the affected source code (tag/branch/commit or direct URL)
-- Any special configuration required to reproduce the issue
-- Step-by-step instructions to reproduce the issue
-- Proof-of-concept or exploit code (if possible)
-- Impact of the vulnerability, including how an attacker might exploit it
+## Verifying a release
 
-### Response Timeline
+Release archives are signed keylessly with Sigstore from this repository's
+GitHub Actions. To verify a prebuilt ORT archive:
 
-- **Initial Response**: Within 48 hours, you will receive an acknowledgment of your report
-- **Status Update**: Within 7 days, we will send a detailed response indicating the next steps
-- **Fix Timeline**: We aim to release security patches within 30 days of confirmation
-- **Disclosure**: We follow coordinated vulnerability disclosure practices
+```bash
+cosign verify-blob \
+  --bundle vaultmind_vX.Y.Z_darwin_arm64_ort.tar.gz.sigstore.json \
+  --certificate-identity-regexp '^https://github.com/peiman/vaultmind/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  vaultmind_vX.Y.Z_darwin_arm64_ort.tar.gz
+```
 
-### What to Expect
+The other archives are listed in `checksums.txt`, signed the same way
+(`checksums.txt.sigstore.json`): verify the checksums file, then check the
+archive against it. Each release also carries an SPDX SBOM.
 
-After submitting a report, you can expect:
+## Automated checks
 
-1. **Confirmation** - We will confirm receipt of your vulnerability report
-2. **Investigation** - We will investigate and validate the reported vulnerability
-3. **Resolution** - We will work on a fix and determine the release timeline
-4. **Credit** - We will credit you in the security advisory (unless you prefer to remain anonymous)
-5. **Notification** - We will notify you when the vulnerability is fixed and publicly disclosed
-
-## Security Best Practices for Users
-
-When using ckeletin-go in your projects:
-
-1. **Keep Updated**: Always use the latest stable release
-2. **Monitor Advisories**: Watch this repository for security advisories
-3. **Dependency Scanning**: Use tools like `govulncheck` to scan your dependencies
-4. **Input Validation**: Always validate user input in your CLI applications
-5. **Least Privilege**: Run CLI applications with minimal necessary permissions
-
-## Automated Security Measures
-
-This project uses several automated security measures:
-
-- **Dependabot**: Automatic dependency updates for known vulnerabilities
-- **CodeQL**: Automated code scanning for security issues
-- **govulncheck**: Regular vulnerability scanning of Go dependencies
-- **gitleaks**: Secret scanning to prevent credential leaks
-- **semgrep**: Advanced static analysis (SAST)
-- **grype**: SBOM vulnerability scanning
-- **SBOM Generation**: Software Bill of Materials for transparency (SPDX & CycloneDX formats)
-
-### Security Task Commands
-
-| Command | Purpose | When to Run |
-|---------|---------|-------------|
-| `task check:vuln` | Scan for known vulnerabilities | Before commits |
-| `task check:vuln:fast` | Fast cached vulnerability scan | Pre-commit (automatic) |
-| `task check:secrets` | Scan for hardcoded secrets | In `task check` |
-| `task check:secrets:staged` | Scan staged changes for secrets | Pre-commit (automatic) |
-| `task check:sast` | Static analysis with semgrep | In `task check` |
-| `task check:sbom:vulns` | Scan SBOM for vulnerabilities | In `task check` |
-| `task check:deps:verify` | Verify dependency integrity | Pre-commit (automatic) |
-| `task check:deps:checksum` | Verify go.sum checksums | Supply chain verification |
-| `task check:license` | Check dependency licenses | Before adding deps |
-| `task generate:sbom` | Generate SBOM (SPDX + CycloneDX) | Before releases |
-| `task generate:sbom:spdx` | Generate SPDX format only | Compliance audits |
-| `task generate:sbom:cyclonedx` | Generate CycloneDX format only | Security audits |
-
-### Runtime Security (ADR-004)
-
-| Protection | Limit | Purpose |
-|------------|-------|---------|
-| Config file size | 1 MB max | Prevents DoS attacks |
-| String values | 10 KB max | Prevents memory exhaustion |
-| Slice/array length | 1000 elements | Prevents performance DoS |
-| File permissions | Rejects 0666 | Prevents unauthorized modification |
-
-## Security-Related Configuration
-
-### Safe Configuration Practices
-
-When configuring ckeletin-go-based applications:
-
-- Use environment variables for sensitive data (never commit secrets)
-- Validate all configuration inputs
-- Use secure defaults
-- Follow the principle of least privilege
-
-## Attribution
-
-We would like to publicly thank the following people for responsibly disclosing security vulnerabilities:
-
-<!-- Security researchers will be credited here -->
-
-*None yet - be the first to help improve security!*
-
-## Policy Updates
-
-This security policy may be updated from time to time. Please check back regularly for any changes.
-
-**Last Updated**: 2025-10-29
+`task check` runs secret scanning (gitleaks), static analysis (semgrep),
+Go vulnerability scanning (govulncheck), a grype scan of the SBOM, and
+dependency integrity and licence checks. CI adds a Trivy scan; fuzz tests run
+weekly; Dependabot proposes dependency updates.
