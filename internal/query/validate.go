@@ -17,6 +17,8 @@ const (
 	RuleMissingRequired = "missing_required_field"
 	RuleUnknownType     = "unknown_type"
 	RuleInvalidStatus   = "invalid_status"
+	// RuleSkippedSymlink reports a *.md symlink that validation did not follow.
+	RuleSkippedSymlink = "skipped_symlink"
 )
 
 // ValidateResult is the JSON-serializable output of frontmatter validate.
