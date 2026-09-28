@@ -1,11 +1,15 @@
 package embedding
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
+
+	"github.com/knights-analytics/hugot/backends"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -115,4 +119,50 @@ func TestQueryMemo_IsBounded(t *testing.T) {
 	defer m.mu.Unlock()
 	assert.LessOrEqual(t, len(m.entries), queryMemoSize)
 	assert.Len(t, m.order, len(m.entries), "the eviction order tracks exactly the remembered texts")
+}
+
+// EmbedFull goes through the memo, and a failed pass is retried rather than
+// remembered — checked on the real embedder with a tokenizer that fails, so
+// no model is needed.
+func TestEmbedFull_FailedPassIsRetried(t *testing.T) {
+	var calls atomic.Int64
+	fail := func(_ *backends.PipelineBatch, _ []string) error {
+		calls.Add(1)
+		return errors.New("tokenizer down")
+	}
+	e := &BGEM3Embedder{maxTokens: 10, preprocess: fail}
+
+	for range 2 {
+		_, err := e.EmbedFull(context.Background(), "spreading activation")
+		require.ErrorContains(t, err, "tokenizer down")
+	}
+	assert.GreaterOrEqual(t, calls.Load(), int64(2), "each call retried the pass")
+}
+
+// Callers waiting on a pass that fails all see its error.
+func TestQueryMemo_WaitersShareAFailure(t *testing.T) {
+	var m queryMemo
+	release := make(chan struct{})
+	started := make(chan struct{})
+	compute := func() (*BGEM3Output, error) {
+		close(started)
+		<-release
+		return nil, errors.New("model hiccup")
+	}
+
+	errs := make(chan error, 2)
+	go func() { _, err := m.get("q", compute); errs <- err }()
+	<-started
+	go func() {
+		_, err := m.get("q", func() (*BGEM3Output, error) { return fakeOutput(6), nil })
+		errs <- err
+	}()
+	// Give the second caller time to join the pass in flight; neither may return
+	// while it is held.
+	require.Never(t, func() bool { return len(errs) > 0 }, 100*time.Millisecond, 10*time.Millisecond)
+	close(release)
+	// Had the second caller run its own pass, it would have succeeded.
+	for range 2 {
+		require.Error(t, <-errs)
+	}
 }
