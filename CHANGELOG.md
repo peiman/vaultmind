@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **The BGE-M3 model download is pinned and verified** (#192). The files came
+  from HuggingFace's moving `main` branch, and a file already in the cache was
+  trusted forever, so a truncated or substituted download that ended with HTTP
+  200 stayed in use, and one of those files is an ONNX model VaultMind runs.
+  The files now come from a pinned commit, and each download is checked
+  against its size and sha256 before it takes the file's name; a mismatch is
+  deleted and reported. An existing cache is checked once (the first run
+  after upgrading hashes the 2.2 GB, about ten seconds), then only file
+  sizes are compared on each load. The MiniLM fallback model is not yet
+  covered (#197).
+
 - **`frontmatter validate --live` no longer follows symlinks** (#194). It
   read every `*.md` it walked, so in a vault you did not write, a link such as
   `secrets.md -> ~/.ssh/id_rsa` was read and parsed, and a parse error could

@@ -47,8 +47,11 @@ The cases that matter:
   mesh daemon over loopback only. See the README's "The one network call" and
   "The local usage log".
 
-Known gap: the embedding-model download is not yet checksum-verified or pinned
-to a revision ([#192](https://github.com/peiman/vaultmind/issues/192)).
+The BGE-M3 model is pinned to a HuggingFace commit, and every file is checked
+against its size and sha256 before use; a file that does not match is
+refused. Known gap: the smaller MiniLM fallback model, used on builds without
+ORT, is not yet pinned or checked
+([#197](https://github.com/peiman/vaultmind/issues/197)).
 
 ## Verifying a release
 
