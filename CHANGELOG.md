@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.17] - 2026-09-28
+
+> A knowledge vault doesn't have to start empty. `vaultmind import <dir>`
+> brings a project's existing docs in as notes, tied to their doc and kept in
+> step on every re-run. No hook changes; nothing to migrate.
+
+### Added
+
+- **`vaultmind import <dir> --vault <vault>` imports a folder of Markdown
+  docs as notes.** Every `*.md` under the folder becomes a note under
+  `imported/<repo>/`, with its doc in `paths:` — so reading or editing the
+  doc brings the note, and the staleness check flags it when the doc changes —
+  and in `source:` + `source_hash:`, so a re-run knows what changed. The doc
+  stays the source of truth: edit it, then re-run. A re-run adds new docs,
+  rewrites changed ones and leaves the rest; it embeds what it wrote.
+  `--dry-run` shows the plan, `--json` carries every entry.
+  - **Nothing is lost without asking.** A note whose doc is gone is reported
+    as orphaned and removed only with `--prune`. A note edited by hand whose
+    doc also changed is reported as a conflict and kept; `--force`
+    overwrites. A file the import did not write is never touched, `--force`
+    or not. Frontmatter you add to an imported note (tags, links) survives.
+  - **What it leaves out:** hidden folders, dependency folders
+    (`node_modules`, `vendor`), symlinks on either side, a source inside the
+    vault, and anything the vault's exclude list would hide from the index. A
+    README imports as `readme.md`, since vaults exclude `README.md` as their
+    own meta file. Note names match without regard to case, as they do on
+    macOS.
+
+### Changed
+
+- **The vault's exclude rules have one implementation.** The matching that
+  `index` uses to skip excluded folders and files is now a function the
+  import asks as well, so a note is never written where the index won't read
+  it. Behaviour of `index` is unchanged.
+
 ## [0.9.16] - 2026-09-27
 
 > Retrieval you can measure. `vaultmind eval` scores a vault against labelled
@@ -2217,7 +2252,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.16...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.9.17...HEAD
+[0.9.17]: https://github.com/peiman/vaultmind/compare/v0.9.16...v0.9.17
 [0.9.16]: https://github.com/peiman/vaultmind/compare/v0.9.15...v0.9.16
 [0.9.15]: https://github.com/peiman/vaultmind/compare/v0.9.14...v0.9.15
 [0.9.14]: https://github.com/peiman/vaultmind/compare/v0.9.13...v0.9.14

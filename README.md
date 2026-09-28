@@ -47,6 +47,16 @@ vaultmind index --embed --vault ./my-vault
 vaultmind ask "what did we decide about retries?" --vault ./my-vault
 ```
 
+A project that already has docs doesn't have to start empty: `vaultmind import`
+copies a folder's Markdown into the vault as notes tied to their doc, and a
+re-run brings changes across.
+
+```bash
+vaultmind init ./knowledge --profile knowledge
+vaultmind import docs --vault ./knowledge --dry-run   # see what it would do
+vaultmind import docs --vault ./knowledge             # re-run after the docs change
+```
+
 ## Try it with the example vault
 
 VaultMind ships a small **fictional** example vault — *Ada*, an agent that pair-programs with a developer named Sam on a toy CLI — so you can see retrieval and persona reconstruction working before you build your own.
