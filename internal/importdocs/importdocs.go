@@ -189,29 +189,38 @@ type syncer struct {
 	src     Source
 	srcRoot string
 	base    string
-	// notes are this import's notes; folded maps a lowercased path to the
-	// path on disk.
+	// notes are this import's notes; folded maps a lowercased path to every
+	// path on disk that lowercases to it — more than one only on a
+	// case-sensitive filesystem (#189).
 	notes  map[string]note
-	folded map[string]string
+	folded map[string][]string
 	// taken maps every imported note's id, in any folder, to its path.
 	taken map[string]string
 	opts  Options
 	w     writer
+	// claimed holds the note paths on disk this run matched or wrote, exact:
+	// a note not claimed may be an orphan, whatever its case variants did.
+	claimed map[string]bool
 	// written holds the lowercased note paths this run produced.
 	written map[string]bool
 }
 
 func newSyncer(src Source, srcRoot, base string, all map[string]note, opts Options, w writer) *syncer {
 	s := &syncer{src: src, srcRoot: srcRoot, base: base, opts: opts, w: w,
-		notes: map[string]note{}, folded: map[string]string{}, taken: map[string]string{}, written: map[string]bool{}}
+		notes: map[string]note{}, folded: map[string][]string{}, taken: map[string]string{},
+		claimed: map[string]bool{}, written: map[string]bool{}}
 	for rel, n := range all {
 		if n.id != "" {
 			s.taken[n.id] = rel
 		}
 		if strings.HasPrefix(rel, base+"/") {
 			s.notes[rel] = n
-			s.folded[strings.ToLower(rel)] = rel
+			key := strings.ToLower(rel)
+			s.folded[key] = append(s.folded[key], rel)
 		}
+	}
+	for _, paths := range s.folded {
+		sort.Strings(paths) // map order is random; a report must not be
 	}
 	return s
 }
@@ -239,8 +248,14 @@ func (s *syncer) syncDocs(docs []doc) []Entry {
 			e.Action, e.Reason = Skipped, "another doc maps to the same note (names differ only in case)"
 		case vault.Excluded(rel, s.opts.Excludes):
 			e.Action, e.Reason = Skipped, "the vault's exclude list hides this path from the index"
+		case s.ambiguous(rel):
+			e.Action = Skipped
+			e.Reason = "several notes differ from this one only in case (" + strings.Join(s.folded[key], ", ") + "); remove all but one"
+			s.claimAll(key)
 		default:
-			e = s.syncDoc(d, rel, s.existing(rel))
+			existing := s.existing(rel)
+			s.claimed[existing], s.claimed[rel] = true, true
+			e = s.syncDoc(d, rel, existing)
 		}
 		s.written[key] = true
 		out = append(out, e)
@@ -248,13 +263,30 @@ func (s *syncer) syncDocs(docs []doc) []Entry {
 	return out
 }
 
-// existing is the path on disk of the note at rel, matched without regard
-// to case, or "" when there is none.
+// existing is the path on disk of the note at rel: the exact path, else the
+// one note whose name differs only in case, else "".
 func (s *syncer) existing(rel string) string {
 	if s.notes[rel].exists {
 		return rel
 	}
-	return s.folded[strings.ToLower(rel)]
+	if paths := s.folded[strings.ToLower(rel)]; len(paths) == 1 {
+		return paths[0]
+	}
+	return ""
+}
+
+// ambiguous reports several notes differing from rel only in case, none of
+// them rel itself — which one the doc meant cannot be told, so none is used.
+func (s *syncer) ambiguous(rel string) bool {
+	return !s.notes[rel].exists && len(s.folded[strings.ToLower(rel)]) > 1
+}
+
+// claimAll marks every case variant of key as accounted for, so an ambiguous
+// set is reported once and none of it is pruned as an orphan.
+func (s *syncer) claimAll(key string) {
+	for _, p := range s.folded[key] {
+		s.claimed[p] = true
+	}
 }
 
 // syncDoc plans one doc and writes it when it needs writing. A note found
@@ -330,7 +362,7 @@ func plan(d doc, n note, opts Options) (Action, string) {
 func (s *syncer) orphans() []Entry {
 	var out []Entry
 	for rel, n := range s.notes {
-		if s.written[strings.ToLower(rel)] || !n.managed || !s.docGone(n.source) {
+		if s.claimed[rel] || !n.managed || !s.docGone(n.source) {
 			continue
 		}
 		e := Entry{Action: Orphaned, Note: rel, Source: n.source, Reason: "its doc is gone; --prune removes it"}

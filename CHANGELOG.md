@@ -36,6 +36,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   you name is now resolved; links found inside the vault are still never
   followed.
 
+- **`import` no longer guesses between notes that differ only in case**
+  (#189). On a case-sensitive filesystem (Linux), with two imported notes such
+  as `Gamma.md` and `GAMMA.md` already present, a doc matching neither exactly
+  was synced into whichever the lookup saw last. It is now skipped with a
+  reason naming both. And a note whose doc is gone is reported as orphaned
+  even when a note differing from it only in case is imported in the same
+  run; before, the shared lower-case name hid it.
+
 ## [0.9.17] - 2026-09-28
 
 > A knowledge vault doesn't have to start empty. `vaultmind import <dir>`
