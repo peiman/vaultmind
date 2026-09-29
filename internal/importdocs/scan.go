@@ -13,16 +13,21 @@ import (
 	"github.com/peiman/vaultmind/internal/vault"
 )
 
-// doc is one markdown file in the source folder.
+// doc is one markdown file in the source folder, or the one page a URL import
+// turned into markdown.
 type doc struct {
 	// Rel is the doc's path under the source folder.
 	Rel string
 	// Path is the doc's path under the repository root, as `paths:` uses.
+	// For a page it is the slug the note id is built from.
 	Path   string
 	Repo   string
 	Source string
-	Title  string
-	Body   string
+	// URL is the page address when the doc came from a URL import. Empty for
+	// a folder import, which keeps `paths:` and must stay byte-identical.
+	URL   string
+	Title string
+	Body  string
 	// Hash is the sha256 of Body, the content the note carries.
 	Hash string
 }
@@ -102,6 +107,16 @@ func title(fm map[string]interface{}, body, rel string) string {
 	if t, ok := fm["title"].(string); ok && strings.TrimSpace(t) != "" {
 		return strings.TrimSpace(t)
 	}
+	if h, ok := headingTitle(body); ok {
+		return h
+	}
+	return strings.TrimSuffix(path.Base(rel), path.Ext(rel))
+}
+
+// headingTitle is the first `# ` heading outside a fence. The bool is false
+// when there is none. A heading that is only `# ` is found, and empty: the
+// file name is not a substitute for a heading the author wrote.
+func headingTitle(body string) (string, bool) {
 	inFence := false
 	for _, line := range strings.Split(body, "\n") {
 		trimmed := strings.TrimSpace(line)
@@ -110,8 +125,8 @@ func title(fm map[string]interface{}, body, rel string) string {
 			continue
 		}
 		if !inFence && strings.HasPrefix(trimmed, "# ") {
-			return strings.TrimSpace(strings.TrimPrefix(trimmed, "# "))
+			return strings.TrimSpace(strings.TrimPrefix(trimmed, "# ")), true
 		}
 	}
-	return strings.TrimSuffix(path.Base(rel), path.Ext(rel))
+	return "", false
 }

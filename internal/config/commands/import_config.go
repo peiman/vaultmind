@@ -4,20 +4,27 @@ import "github.com/peiman/vaultmind/.ckeletin/pkg/config"
 
 // ImportMetadata defines the `import` command — a folder of docs as notes.
 var ImportMetadata = config.CommandMetadata{
-	Use:   "import <dir>",
-	Short: "Import a folder of markdown docs as notes, and keep them in step on re-runs",
+	Use:   "import <dir|url>",
+	Short: "Import a folder of markdown docs, or one web page, as notes and keep them in step",
 	Long: "Copy every *.md under <dir> into the vault as a note under imported/<repo>/, so " +
 		"a project's existing docs are found by search, ask and the code hooks like any " +
-		"other note.\n\n" +
-		"Each note records its doc in `paths:` — reading or editing the doc brings the " +
+		"other note. Pass an http or https URL instead of a folder and that one page " +
+		"becomes a note under imported/web/<host>/.\n\n" +
+		"Each folder note records its doc in `paths:` — reading or editing the doc brings the " +
 		"note — and in `source:` and `source_hash:`, which is how a re-run knows what " +
-		"changed. The doc stays the source of truth: edit the doc, then re-run.\n\n" +
+		"changed. A page note records the URL you gave in `url:` and `source:` and has no " +
+		"`paths:`. The doc stays the source of truth: edit the doc, then re-run. The page " +
+		"is the source of a URL note: re-run the import to refresh it.\n\n" +
 		"A re-run adds new docs, rewrites changed ones and leaves the rest alone. Nothing " +
 		"is deleted without asking: a note whose doc is gone is reported as orphaned and " +
-		"removed only with --prune. A note edited by hand whose doc also changed is " +
+		"removed only with --prune. A note edited by hand whose doc or page also changed is " +
 		"reported as a conflict and kept; --force overwrites it. Frontmatter you add to " +
 		"an imported note (tags, links) survives a re-run.\n\n" +
-		"Left out: hidden folders, dependency folders (node_modules, vendor), symlinks, " +
+		"A URL import fetches exactly the page you name and nothing else. Only http and " +
+		"https are accepted, one page per run. The body must be HTML or text of at most " +
+		"5 MiB, the request times out after 30 seconds, and at most five redirects are " +
+		"followed, only when they stay on http or https. Scripts on the page are not run.\n\n" +
+		"Left out of a folder import: hidden folders, dependency folders (node_modules, vendor), symlinks, " +
 		"and anything the vault's exclude list would hide from the index. A README is " +
 		"imported as readme.md, since vaults exclude README.md as their own meta file. " +
 		"A repository is known by its name (its origin remote's, else its folder's; " +
@@ -25,7 +32,8 @@ var ImportMetadata = config.CommandMetadata{
 		"share imported/<name>/. Names that differ only in case are one note.\n\n" +
 		"  vaultmind import docs --vault ./knowledge --dry-run\n" +
 		"  vaultmind import docs --vault ./knowledge\n" +
-		"  vaultmind import docs --vault ./knowledge --prune --json",
+		"  vaultmind import docs --vault ./knowledge --prune --json\n" +
+		"  vaultmind import https://sqlite.org/fts5.html --vault ./kb",
 	ConfigPrefix: "app.import",
 	FlagOverrides: map[string]string{
 		"app.import.vault":   "vault",

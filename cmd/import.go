@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"github.com/peiman/vaultmind/internal/config/commands"
+	"github.com/peiman/vaultmind/internal/importdocs"
 	"github.com/spf13/cobra"
 )
 
@@ -12,6 +13,9 @@ var importCmd = func() *cobra.Command {
 }()
 
 func init() {
+	// importdocs cannot import cmd (the command imports it). The version
+	// the User-Agent names is the binary's, read when a request is made.
+	importdocs.UserAgentVersion = Version
 	MustAddToRoot(importCmd)
 }
 
