@@ -107,6 +107,9 @@ app:
     # Rank only notes carrying this tag
     tag: 
 
+    # Rank only notes under this vault folder (path prefix, e.g. decisions/) — the same match as tree --path
+    path: 
+
     # Send a note as its title alone when this conversation (VAULTMIND_USER_SESSION_ID) received its text within this long, e.g. 10m. Empty = off. For hooks that fire in bursts.
     dedup_window: 
 

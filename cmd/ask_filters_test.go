@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/index"
+	"github.com/peiman/vaultmind/internal/testvault"
 	"github.com/peiman/vaultmind/internal/vault"
 
 	"github.com/stretchr/testify/assert"
@@ -43,6 +44,50 @@ func TestAsk_TagScopesTheHits(t *testing.T) {
 	out, _, err := runRootCmd(t, "ask", "activation", "--vault", vault, "--json", "--tag", "graph")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"g-semantic"}, askHitIDs(t, out.Bytes()))
+}
+
+func askHitPaths(t *testing.T, raw []byte) []string {
+	t.Helper()
+	var env struct {
+		Result struct {
+			TopHits []struct {
+				Path string `json:"path"`
+			} `json:"top_hits"`
+		} `json:"result"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &env), string(raw))
+	paths := make([]string, len(env.Result.TopHits))
+	for i, h := range env.Result.TopHits {
+		paths[i] = h.Path
+	}
+	return paths
+}
+
+// The fixture mentions "cognitive architecture" under concepts/ and under
+// sources/. --path concepts/ must keep only the former.
+func TestAsk_PathScopesTheHits(t *testing.T) {
+	vault := testvault.IndexedFixtureVault(t)
+	const query = "cognitive architecture"
+
+	all, _, err := runRootCmd(t, "ask", query, "--vault", vault, "--json")
+	require.NoError(t, err)
+	allPaths := askHitPaths(t, all.Bytes())
+	require.NotEmpty(t, allPaths)
+	var outside bool
+	for _, p := range allPaths {
+		if !strings.HasPrefix(p, "concepts/") {
+			outside = true
+		}
+	}
+	require.True(t, outside, "without --path the query must return a note outside concepts/")
+
+	out, _, err := runRootCmd(t, "ask", query, "--vault", vault, "--path", "concepts/", "--json")
+	require.NoError(t, err)
+	paths := askHitPaths(t, out.Bytes())
+	require.NotEmpty(t, paths, "concepts/ holds a note about cognitive architecture")
+	for _, p := range paths {
+		assert.True(t, strings.HasPrefix(p, "concepts/"), p)
+	}
 }
 
 func TestAsk_TypeScopesTheHits(t *testing.T) {

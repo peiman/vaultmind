@@ -13,6 +13,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/memory"
 )
 
@@ -63,7 +64,7 @@ func Load(q Querier, f Filter) ([]Note, error) {
 	var args []interface{}
 	if f.PathPrefix != "" {
 		stmt += ` AND path LIKE ? ESCAPE '\'`
-		args = append(args, escapeLike(f.PathPrefix)+"%")
+		args = append(args, index.PathPrefixLike(f.PathPrefix))
 	}
 	if f.Type != "" {
 		stmt += ` AND type = ?`
@@ -91,11 +92,6 @@ func Load(q Querier, f Filter) ([]Note, error) {
 		notes = append(notes, n)
 	}
 	return notes, rows.Err()
-}
-
-// escapeLike makes a path prefix literal inside a LIKE pattern.
-func escapeLike(s string) string {
-	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
 }
 
 // Build groups notes into folders. Folders and notes are sorted by path.
