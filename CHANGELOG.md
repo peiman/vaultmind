@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-09-29
+
+> Recall is about twice as fast, and `ask` can be scoped to a folder. A
+> three-vault `ask` — the recall hook's query — ran the embedding model 16
+> times on the same text; it now runs it once, and ColBERT scores on every
+> core: ~6 s → ~3.3 s wall on a loaded machine, results unchanged. Rankings
+> are now the same on every run (ties broke randomly). New:
+> `ask --path <folder>`. No hook or config changes; nothing to do on upgrade.
+
 ### Added
 
 - **`ask --path <folder>` ranks only notes under a vault folder**, the same
@@ -2398,7 +2407,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.1...HEAD
+[0.10.1]: https://github.com/peiman/vaultmind/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/peiman/vaultmind/compare/v0.9.18...v0.10.0
 [0.9.18]: https://github.com/peiman/vaultmind/compare/v0.9.17...v0.9.18
 [0.9.17]: https://github.com/peiman/vaultmind/compare/v0.9.16...v0.9.17
