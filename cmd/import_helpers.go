@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/internal/cmdutil"
@@ -15,6 +17,7 @@ import (
 	"github.com/peiman/vaultmind/internal/importdocs"
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/navigate"
+	"github.com/peiman/vaultmind/internal/vault"
 	"github.com/spf13/cobra"
 )
 
@@ -34,9 +37,13 @@ type importResult struct {
 	IndexWarnings []string `json:"index_warnings,omitempty"`
 }
 
-// importDocs imports dir into the vault, then re-indexes and embeds what
-// changed.
-func importDocs(cmd *cobra.Command, dir string) (*importResult, error) {
+// importDocs imports a folder, or one http(s) page, into the vault, then
+// re-indexes and embeds what changed. A scheme other than http or https is
+// refused before the vault is opened and before any network call.
+func importDocs(cmd *cobra.Command, arg string) (*importResult, error) {
+	if err := unsupportedImportURL(arg); err != nil {
+		return nil, importErr(cmd, err)
+	}
 	vaultPath := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppImportVault)
 	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, importEnvelope)
 	if err != nil {
@@ -45,16 +52,23 @@ func importDocs(cmd *cobra.Command, dir string) (*importResult, error) {
 	cfg := vdb.Config
 	vdb.Close()
 
-	src, err := importSource(dir)
-	if err != nil {
-		return nil, importErr(cmd, err)
-	}
 	opts := importdocs.Options{
 		DryRun: getConfigValueWithFlags[bool](cmd, "dry-run", config.KeyAppImportDryRun),
 		Prune:  getConfigValueWithFlags[bool](cmd, "prune", config.KeyAppImportPrune),
 		Force:  getConfigValueWithFlags[bool](cmd, "force", config.KeyAppImportForce),
 		// The vault's own exclude list: a note it hides is never written.
 		Excludes: cfg.Vault.Exclude,
+	}
+	if isHTTPURL(arg) {
+		rep, err := importdocs.ImportURL(importContext(cmd), arg, vaultPath, opts, importdocs.HTTPFetcher())
+		if err != nil {
+			return nil, importErr(cmd, err)
+		}
+		return finishImport(cmd, vaultPath, arg, cfg, opts, rep)
+	}
+	src, err := importSource(arg)
+	if err != nil {
+		return nil, importErr(cmd, err)
 	}
 	rep, err := importdocs.Import(src, vaultPath, opts)
 	if err != nil {
@@ -64,6 +78,35 @@ func importDocs(cmd *cobra.Command, dir string) (*importResult, error) {
 	if src.Prefix != "" {
 		label += ":" + src.Prefix
 	}
+	return finishImport(cmd, vaultPath, label, cfg, opts, rep)
+}
+
+// isHTTPURL reports an argument the URL import handles. The check is
+// case-sensitive: HTTP:// is not fetched.
+func isHTTPURL(arg string) bool {
+	return strings.HasPrefix(arg, "http://") || strings.HasPrefix(arg, "https://")
+}
+
+// unsupportedImportURL refuses any scheme other than http and https before
+// a folder import could treat the argument as a path.
+func unsupportedImportURL(arg string) error {
+	if isHTTPURL(arg) || !strings.Contains(arg, "://") {
+		return nil
+	}
+	return errors.New("only http and https URLs can be imported")
+}
+
+func importContext(cmd *cobra.Command) context.Context {
+	if cmd != nil {
+		if ctx := cmd.Context(); ctx != nil {
+			return ctx
+		}
+	}
+	return context.Background()
+}
+
+// finishImport attaches the report to the vault and re-indexes what changed.
+func finishImport(cmd *cobra.Command, vaultPath, label string, cfg *vault.Config, opts importdocs.Options, rep *importdocs.Result) (*importResult, error) {
 	res := &importResult{Vault: vaultPath, Source: label, Result: rep, Counts: countActions(rep)}
 	if changed := rep.Changed(); len(changed) > 0 && !opts.DryRun {
 		dbPath := filepath.Join(vaultPath, cfg.Index.DBPath)

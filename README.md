@@ -50,12 +50,13 @@ vaultmind ask "what did we decide about retries?" --vault ./my-vault
 
 A project that already has docs doesn't have to start empty: `vaultmind import`
 copies a folder's Markdown into the vault as notes tied to their doc, and a
-re-run brings changes across.
+re-run brings changes across. An http or https URL imports that one page.
 
 ```bash
 vaultmind init ./knowledge
 vaultmind import docs --vault ./knowledge --dry-run   # see what it would do
 vaultmind import docs --vault ./knowledge             # re-run after the docs change
+vaultmind import https://sqlite.org/fts5.html --vault ./knowledge
 ```
 
 ## Try it with the example vault

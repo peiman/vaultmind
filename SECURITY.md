@@ -44,7 +44,13 @@ The cases that matter:
   one, and the agent-mesh commands (`identity enroll --invite <url>`, still
   pre-release) fetch the network's root and directory from the relay named in
   the invite. With a mesh identity configured, `doctor` also checks the local
-  mesh daemon over loopback only. See the README's "The one network call" and
+  mesh daemon over loopback only. `vaultmind import <url>` fetches exactly
+  the page you name (http/https only, up to 5 MiB, 30 s, redirects only to
+  http/https) and nothing else; it runs no scripts from the page. It can
+  reach any host your machine can, including localhost and internal
+  addresses; an agent that imports a URL it read in untrusted content can be
+  steered to fetch one, and the response is stored in the vault. Import URLs
+  you chose. See the README's "The one network call" and
   "The local usage log".
 
 Both embedding models (BGE-M3, and the MiniLM fallback used on builds without

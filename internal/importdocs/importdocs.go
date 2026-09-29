@@ -1,5 +1,5 @@
-// Package importdocs copies a folder of markdown docs into a vault as notes,
-// and keeps the copies in step with the docs on every re-run.
+// Package importdocs copies a folder of markdown docs, or one web page, into
+// a vault as notes, and keeps the copies in step on every re-run.
 //
 // The doc is the source of truth; its note is a projection. Each note carries
 // the doc as `paths:` (so reading the doc brings the note) and as `source:`
@@ -142,15 +142,24 @@ func Import(src Source, vaultRoot string, opts Options) (*Result, error) {
 	return res, nil
 }
 
+// absVault resolves the vault to an absolute path with links resolved.
+// A relative vault root made the notes a previous import wrote unrecognisable.
+func absVault(vaultRoot string) (vaultAbs, vaultReal string, err error) {
+	if vaultAbs, err = filepath.Abs(vaultRoot); err != nil {
+		return "", "", err
+	}
+	if vaultReal, err = filepath.EvalSymlinks(vaultAbs); err != nil {
+		return "", "", fmt.Errorf("vault %s: %w", vaultRoot, err)
+	}
+	return vaultAbs, vaultReal, nil
+}
+
 // roots resolves the vault and the source to absolute paths with links
 // resolved, and refuses a source inside the vault: its notes are already
 // there, and importing the vault into itself nests a copy on every run.
 func roots(srcDir, vaultRoot string) (vaultAbs, vaultReal, srcRoot string, err error) {
-	if vaultAbs, err = filepath.Abs(vaultRoot); err != nil {
+	if vaultAbs, vaultReal, err = absVault(vaultRoot); err != nil {
 		return "", "", "", err
-	}
-	if vaultReal, err = filepath.EvalSymlinks(vaultAbs); err != nil {
-		return "", "", "", fmt.Errorf("vault %s: %w", vaultRoot, err)
 	}
 	srcAbs, err := filepath.Abs(srcDir)
 	if err != nil {
@@ -342,6 +351,11 @@ func plan(d doc, n note, opts Options) (Action, string) {
 		return Added, ""
 	case !n.managed:
 		return Skipped, "a note the import did not write is in the way"
+	case d.URL != "" && n.source != d.Source:
+		// Two URLs can slug to one path. A folder import treats that as a
+		// renamed doc; a page import would erase the other page. --force
+		// does not override it.
+		return Skipped, "another page maps to this note (" + n.source + ")"
 	case n.sourceHash == d.Hash && n.title == d.Title && n.source == d.Source:
 		return Unchanged, ""
 	case n.sourceHash == d.Hash && n.title == d.Title:
@@ -375,8 +389,14 @@ func (s *syncer) orphans() []Entry {
 }
 
 // docGone reports whether source names a doc under this import's source
-// folder that no longer exists.
+// folder that no longer exists. A source containing :// is a web page, not a
+// file in any repository — a repository named http or https must not report
+// or prune those notes. The check is on the string, before any disk read:
+// filepath.Join would treat the "//host/..." rest as an absolute path.
 func (s *syncer) docGone(source string) bool {
+	if strings.Contains(source, "://") {
+		return false
+	}
 	under := s.src.Repo + ":"
 	if s.src.Prefix != "" {
 		under += s.src.Prefix + "/"

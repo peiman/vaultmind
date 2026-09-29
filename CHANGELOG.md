@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`vaultmind import <url>` imports a web page as a note** — the page's main content
+  (navigation and footers stripped) as markdown, under `imported/web/<host>/`, with the same
+  re-sync by hash and conflict rules as a folder import. http/https only, one page per run.
+
 ## [0.10.1] - 2026-09-29
 
 > Recall is about twice as fast, and `ask` can be scoped to a folder. A

@@ -40,7 +40,7 @@ func (n note) edited() bool { return n.bodyHash != n.sourceHash }
 
 // ownedKeys are the frontmatter keys the import writes and refreshes.
 var ownedKeys = map[string]bool{
-	"id": true, "type": true, "title": true, "paths": true, "source": true, "source_hash": true,
+	"id": true, "type": true, "title": true, "url": true, "paths": true, "source": true, "source_hash": true,
 }
 
 // readNotes reads the notes under dir, keyed by vault-relative path.
@@ -134,11 +134,14 @@ func parseNote(raw []byte) note {
 }
 
 // owned is the frontmatter the import writes, in the order it is written.
+// url is omitted for a folder import and paths for a page, so a folder note
+// stays the bytes it was before pages existed.
 type owned struct {
 	ID         string   `yaml:"id"`
 	Type       string   `yaml:"type"`
 	Title      string   `yaml:"title"`
-	Paths      []string `yaml:"paths"`
+	URL        string   `yaml:"url,omitempty"`
+	Paths      []string `yaml:"paths,omitempty"`
 	Source     string   `yaml:"source"`
 	SourceHash string   `yaml:"source_hash"`
 }
@@ -151,12 +154,19 @@ func render(d doc, id string, prev note) []byte {
 	// A comment line: a control character in the source would end it and
 	// write frontmatter of its own, so none gets through.
 	fmt.Fprintf(&b, "# Imported by `vaultmind import` from %s.\n", strings.Map(dropControl, d.Source))
-	b.WriteString("# The doc is the source: edit it, then re-run the import.\n")
-	head, _ := yaml.Marshal(owned{
+	head := owned{
 		ID: id, Type: "reference", Title: d.Title,
-		Paths: []string{d.Source}, Source: d.Source, SourceHash: d.Hash,
-	})
-	b.Write(head)
+		Source: d.Source, SourceHash: d.Hash,
+	}
+	if d.URL != "" {
+		b.WriteString("# The page is the source: re-run the import to refresh it.\n")
+		head.URL = d.URL
+	} else {
+		b.WriteString("# The doc is the source: edit it, then re-run the import.\n")
+		head.Paths = []string{d.Source}
+	}
+	raw, _ := yaml.Marshal(head)
+	b.Write(raw)
 	b.Write(extraYAML(prev.extra))
 	b.WriteString("---\n")
 	b.WriteString(d.Body)

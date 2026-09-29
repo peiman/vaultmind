@@ -3,11 +3,15 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/index"
+	"github.com/peiman/vaultmind/internal/parser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -196,4 +200,78 @@ func TestImport_ARelativeVaultPathReRunsUnchanged(t *testing.T) {
 	out, _, err := runRootCmd(t, "import", filepath.Join(repo, "docs"), "--vault", rel)
 	require.NoError(t, err)
 	assert.Contains(t, out.String(), "2 unchanged")
+}
+
+// A scheme other than http or https is rejected before the vault is opened
+// and before any network call. file:// must not be read as a document.
+func TestImport_RejectsNonHTTPURLsBeforeAnyWork(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "no-such-vault")
+	for _, arg := range []string{"ftp://x", "file:///etc/passwd", "HTTP://example.com/x"} {
+		_, _, err := runRootCmd(t, "import", arg, "--vault", missing)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "only http and https URLs can be imported")
+		assert.NotContains(t, err.Error(), "no-such-vault")
+	}
+	assert.NoDirExists(t, missing)
+}
+
+// import of one httptest page writes the note and indexes it.
+func TestImport_AURLBecomesAnIndexedNote(t *testing.T) {
+	vault := indexedBaselineVault(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+		_, _ = io.WriteString(w, "# From The Web\n\nIndexed page text.\n")
+	}))
+	t.Cleanup(srv.Close)
+	pageURL := srv.URL + "/guide.md"
+
+	out, _, err := runRootCmd(t, "import", pageURL, "--vault", vault, "--json")
+	require.NoError(t, err)
+	var env struct {
+		Result struct {
+			Source  string         `json:"source"`
+			Counts  map[string]int `json:"counts"`
+			Entries []struct {
+				Action string `json:"action"`
+				Note   string `json:"note"`
+				Source string `json:"source"`
+			} `json:"entries"`
+		} `json:"result"`
+	}
+	require.NoError(t, json.Unmarshal(out.Bytes(), &env), out.String())
+	assert.Equal(t, pageURL, env.Result.Source)
+	assert.Equal(t, map[string]int{"added": 1}, env.Result.Counts)
+	require.Len(t, env.Result.Entries, 1)
+	assert.Equal(t, "added", env.Result.Entries[0].Action)
+	assert.Equal(t, pageURL, env.Result.Entries[0].Source)
+	assert.Contains(t, env.Result.Entries[0].Note, "imported/web/")
+
+	raw, err := os.ReadFile(filepath.Join(vault, filepath.FromSlash(env.Result.Entries[0].Note))) //nolint:gosec // vault path from the test
+	require.NoError(t, err)
+	fm, body, err := parser.ExtractFrontmatter(raw)
+	require.NoError(t, err)
+	assert.Contains(t, body, "Indexed page text.")
+	id, _ := fm["id"].(string)
+	require.NotEmpty(t, id)
+
+	out, _, err = runRootCmd(t, "note", "get", id, "--vault", vault, "--json")
+	require.NoError(t, err, "the import indexed what it wrote")
+	assert.Contains(t, out.String(), "Indexed page text.")
+}
+
+func TestImport_URLDryRunFetchesButWritesNothing(t *testing.T) {
+	vault := indexedBaselineVault(t)
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits++
+		w.Header().Set("Content-Type", "text/plain")
+		_, _ = io.WriteString(w, "Hello.\n")
+	}))
+	t.Cleanup(srv.Close)
+
+	out, _, err := runRootCmd(t, "import", srv.URL+"/hello", "--vault", vault, "--dry-run")
+	require.NoError(t, err)
+	assert.Equal(t, 1, hits, "a dry run still fetches")
+	assert.Contains(t, out.String(), "dry run, nothing written")
+	assert.NoDirExists(t, filepath.Join(vault, "imported"))
 }
