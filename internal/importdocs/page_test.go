@@ -1,10 +1,13 @@
 package importdocs
 
 import (
+	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDropLeadingLinkList_GoDevBreadcrumbLeavesTheNote(t *testing.T) {
@@ -50,4 +53,24 @@ func TestDropLeadingLinkList_UnorderedBreadcrumbWithSpaceLeavesTheNote(t *testin
 		"**Note:** This document was written for Go's release in 2009.\n"
 	got := dropLeadingLinkList(in)
 	assert.True(t, strings.HasPrefix(got, "**Note:**"), "got %q", got)
+}
+
+func TestImportURL_APanicWhileConvertingThePageIsAnError(t *testing.T) {
+	prev := htmlConverter
+	htmlConverter = func(string, string) (string, string, error) {
+		panic("boom")
+	}
+	t.Cleanup(func() { htmlConverter = prev })
+
+	vault := t.TempDir()
+	_, err := ImportURL(t.Context(), "https://example.com/panic", vault, Options{}, func(context.Context, string) (Page, error) {
+		return Page{
+			FinalURL:    "https://example.com/panic",
+			ContentType: "text/html",
+			Body:        []byte("<p>Hi</p>"),
+		}, nil
+	})
+	require.Error(t, err)
+	assert.EqualError(t, err, "converting the page: boom")
+	assert.NoDirExists(t, filepath.Join(vault, "imported"))
 }

@@ -145,7 +145,16 @@ func readPage(r io.Reader, contentType string) ([]byte, error) {
 	if len(body) > maxPageBytes {
 		return nil, errors.New("page is larger than 5 MiB")
 	}
-	return decodeCharset(body, contentType)
+	decoded, err := decodeCharset(body, contentType)
+	if err != nil {
+		return nil, err
+	}
+	// UTF-16 and other wide charsets expand when decoded to UTF-8. The raw
+	// cap above does not cover that growth.
+	if len(decoded) > maxPageBytes {
+		return nil, errors.New("page is larger than 5 MiB")
+	}
+	return decoded, nil
 }
 
 func decodeCharset(body []byte, contentType string) ([]byte, error) {

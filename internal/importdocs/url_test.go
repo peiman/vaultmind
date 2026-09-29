@@ -1,6 +1,7 @@
 package importdocs_test
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -104,6 +105,34 @@ func TestImportURL_HTMLPageBecomesOneNoteWithoutNavOrFooter(t *testing.T) {
 	assert.True(t, strings.HasPrefix(body, "## Full-Text Search in SQLite\n"), "the note opens on the article, got %q", body[:min(80, len(body))])
 	assert.True(t, strings.HasSuffix(body, "\n"))
 	assert.False(t, strings.HasSuffix(strings.TrimSuffix(body, "\n"), "\n"), "exactly one trailing newline")
+}
+
+// A text page may arrive with its own frontmatter. That block is not the
+// note's: the title is kept, the rest is dropped, and the note's id is the
+// import's. The same split a folder import uses for a doc.
+func TestImportURL_ServedFrontmatterIsStrippedAndItsTitleIsKept(t *testing.T) {
+	const served = "---\ntitle: Real Title\nid: evil\n---\n# H\nBody"
+	cases := []struct {
+		ctype, url, rel, id string
+	}{
+		{"text/markdown", "https://example.com/served.md", "imported/web/example.com/served.md", "imported-web-example-com-served"},
+		{"text/x-markdown", "https://example.com/x.md", "imported/web/example.com/x.md", "imported-web-example-com-x"},
+		{"text/plain", "https://example.com/plain.txt", "imported/web/example.com/plain-txt.md", "imported-web-example-com-plain-txt"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.ctype, func(t *testing.T) {
+			vault := t.TempDir()
+			importPage(t, tc.url, vault, importdocs.Options{}, pageFetcher(importdocs.Page{
+				FinalURL: tc.url, ContentType: tc.ctype, Body: []byte(served),
+			}))
+			fm, body, _ := noteFront(t, vault, tc.rel)
+			assert.Equal(t, "Real Title", fm["title"])
+			assert.Equal(t, tc.id, fm["id"])
+			assert.NotEqual(t, "evil", fm["id"])
+			assert.True(t, strings.HasPrefix(body, "# H\n"), "body %q", body)
+			assert.NotContains(t, body, "evil")
+		})
+	}
 }
 
 func TestImportURL_MarkdownBodyIsKeptAndTitleComesFromTheHeading(t *testing.T) {
@@ -283,6 +312,21 @@ func TestImportURL_FetchErrorsWriteNothing(t *testing.T) {
 		assertNothing(t, srv.URL+"/big.txt", "page is larger than 5 MiB")
 	})
 
+	// U+0800 is 2 bytes in UTF-16LE and 3 in UTF-8. A raw body just under
+	// 5 MiB therefore decodes to more than 5 MiB, and must be refused
+	// after charset decoding, with nothing written.
+	t.Run("utf16 grows past the limit", func(t *testing.T) {
+		const maxPageBytes = 5 << 20
+		raw := bytes.Repeat([]byte{0x00, 0x08}, (maxPageBytes/2)-1)
+		require.Less(t, len(raw), maxPageBytes)
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-16le")
+			_, _ = w.Write(raw)
+		}))
+		t.Cleanup(srv.Close)
+		assertNothing(t, srv.URL+"/wide.txt", "page is larger than 5 MiB")
+	})
+
 	t.Run("status", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			http.Error(w, "missing", http.StatusNotFound)
@@ -411,6 +455,65 @@ func TestImport_ARepoNamedHTTPSDoesNotPruneURLNotes(t *testing.T) {
 		assert.NotContains(t, e.Note, "imported/web/")
 		assert.NotContains(t, e.Source, "://")
 	}
+}
+
+// https://x.test/a/b and https://x.test/a-b slug to one note. The second
+// import must not replace the first page, and --force must not either.
+func TestImportURL_ADifferentPageAtTheSamePathIsSkipped(t *testing.T) {
+	const (
+		pageA = "https://x.test/a/b"
+		pageB = "https://x.test/a-b"
+		rel   = "imported/web/x.test/a-b.md"
+	)
+	for _, force := range []bool{false, true} {
+		t.Run(fmt.Sprintf("force=%v", force), func(t *testing.T) {
+			vault := t.TempDir()
+			res := importPage(t, pageA, vault, importdocs.Options{}, pageFetcher(importdocs.Page{
+				FinalURL: pageA, ContentType: "text/plain", Body: []byte("Page A.\n"),
+			}))
+			require.Equal(t, 1, res.Count(importdocs.Added))
+			note := filepath.Join(vault, filepath.FromSlash(rel))
+			before, err := os.ReadFile(note) //nolint:gosec // vault path from the test
+			require.NoError(t, err)
+
+			res = importPage(t, pageB, vault, importdocs.Options{Force: force}, pageFetcher(importdocs.Page{
+				FinalURL: pageB, ContentType: "text/plain", Body: []byte("Page B.\n"),
+			}))
+			require.Len(t, res.Entries, 1)
+			assert.Equal(t, importdocs.Skipped, res.Entries[0].Action)
+			assert.Equal(t, "another page maps to this note ("+pageA+")", res.Entries[0].Reason)
+			after, err := os.ReadFile(note) //nolint:gosec // vault path from the test
+			require.NoError(t, err)
+			assert.Equal(t, before, after)
+			assert.NotContains(t, string(after), "Page B.")
+		})
+	}
+}
+
+// A folder import's note (source repo:path) sitting where a URL lands is
+// another page's note. The URL import skips it through the same check.
+func TestImportURL_AFolderNoteAtThePagePathIsSkipped(t *testing.T) {
+	const (
+		given  = "https://x.test/a/b"
+		rel    = "imported/web/x.test/a-b.md"
+		source = "demo-repo:docs/a-b.md"
+	)
+	vault := t.TempDir()
+	body := "Folder note.\n"
+	sum := sha256.Sum256([]byte(body))
+	note := filepath.Join(vault, filepath.FromSlash(rel))
+	before := fmt.Sprintf("---\nid: imported-demo-repo-docs-a-b\ntype: reference\ntitle: A B\nsource: %s\nsource_hash: %s\n---\n%s", source, hex.EncodeToString(sum[:]), body)
+	write(t, note, before)
+
+	res := importPage(t, given, vault, importdocs.Options{Force: true}, pageFetcher(importdocs.Page{
+		FinalURL: given, ContentType: "text/plain", Body: []byte("Page from the URL.\n"),
+	}))
+	require.Len(t, res.Entries, 1)
+	assert.Equal(t, importdocs.Skipped, res.Entries[0].Action)
+	assert.Equal(t, "another page maps to this note ("+source+")", res.Entries[0].Reason)
+	after, err := os.ReadFile(note) //nolint:gosec // vault path from the test
+	require.NoError(t, err)
+	assert.Equal(t, before, string(after))
 }
 
 func bytesOf(n int) []byte {

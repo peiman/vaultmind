@@ -351,6 +351,11 @@ func plan(d doc, n note, opts Options) (Action, string) {
 		return Added, ""
 	case !n.managed:
 		return Skipped, "a note the import did not write is in the way"
+	case d.URL != "" && n.source != d.Source:
+		// Two URLs can slug to one path. A folder import treats that as a
+		// renamed doc; a page import would erase the other page. --force
+		// does not override it.
+		return Skipped, "another page maps to this note (" + n.source + ")"
 	case n.sourceHash == d.Hash && n.title == d.Title && n.source == d.Source:
 		return Unchanged, ""
 	case n.sourceHash == d.Hash && n.title == d.Title:

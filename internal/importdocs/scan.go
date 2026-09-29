@@ -89,10 +89,7 @@ func readDoc(src Source, rel, p string) (doc, error) {
 		return doc{}, err
 	}
 	docPath := path.Join(src.Prefix, rel)
-	fm, body, err := parser.ExtractFrontmatter(raw)
-	if err != nil {
-		fm, body = nil, string(raw)
-	}
+	fm, body := splitFrontmatter(raw)
 	return doc{
 		Rel: rel, Path: docPath, Repo: src.Repo,
 		Source: src.Repo + ":" + docPath,
@@ -101,16 +98,35 @@ func readDoc(src Source, rel, p string) (doc, error) {
 	}, nil
 }
 
+// splitFrontmatter separates a doc's frontmatter from its body. Frontmatter
+// that does not parse is kept as text, as the doc's reader would see it.
+func splitFrontmatter(raw []byte) (map[string]interface{}, string) {
+	fm, body, err := parser.ExtractFrontmatter(raw)
+	if err != nil {
+		return nil, string(raw)
+	}
+	return fm, body
+}
+
 // title is the doc's frontmatter title, else its first `# ` heading, else
 // its file name.
 func title(fm map[string]interface{}, body, rel string) string {
-	if t, ok := fm["title"].(string); ok && strings.TrimSpace(t) != "" {
-		return strings.TrimSpace(t)
+	if t := frontmatterTitle(fm); t != "" {
+		return t
 	}
 	if h, ok := headingTitle(body); ok {
 		return h
 	}
 	return strings.TrimSuffix(path.Base(rel), path.Ext(rel))
+}
+
+// frontmatterTitle is a doc's frontmatter title, trimmed. Empty when there
+// is none, so a heading or the file name can follow.
+func frontmatterTitle(fm map[string]interface{}) string {
+	if t, ok := fm["title"].(string); ok {
+		return strings.TrimSpace(t)
+	}
+	return ""
 }
 
 // headingTitle is the first `# ` heading outside a fence. The bool is false

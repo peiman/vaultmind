@@ -163,9 +163,32 @@ func fallbackTitle(u *url.URL) string {
 
 func pageMarkdown(media string, body []byte, finalURL string) (string, string, error) {
 	if media != "text/html" && media != "application/xhtml+xml" {
-		return normalizeMarkdown(string(body)), "", nil
+		return servedMarkdown(body)
 	}
-	return htmlMarkdown(string(body), finalURL)
+	return safeHTMLMarkdown(string(body), finalURL)
+}
+
+// servedMarkdown is a text page. A leading frontmatter block is not the
+// note's body: the same split a folder import uses for a doc, and its title
+// when it has one. A heading is the fallback, applied by the caller.
+func servedMarkdown(raw []byte) (string, string, error) {
+	fm, body := splitFrontmatter(raw)
+	return normalizeMarkdown(body), frontmatterTitle(fm), nil
+}
+
+// htmlConverter turns HTML into markdown and a title. A test replaces it
+// to force a panic in the conversion step.
+var htmlConverter = htmlMarkdown
+
+// safeHTMLMarkdown turns a panic in readability or html-to-markdown into an
+// error. Either library can panic on a page; the import should refuse it.
+func safeHTMLMarkdown(html, finalURL string) (md, title string, err error) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			md, title, err = "", "", fmt.Errorf("converting the page: %v", rec)
+		}
+	}()
+	return htmlConverter(html, finalURL)
 }
 
 // htmlMarkdown keeps the article readability extracts, or the whole page
