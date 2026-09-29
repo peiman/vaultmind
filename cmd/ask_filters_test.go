@@ -65,6 +65,7 @@ func askHitPaths(t *testing.T, raw []byte) []string {
 
 // The fixture mentions "cognitive architecture" under concepts/ and under
 // sources/. --path concepts/ must keep only the former.
+// Uses testvault.IndexedFixtureVault because that vault has subfolders (concepts/, sources/), while the baseline vault used elsewhere in this file is flat.
 func TestAsk_PathScopesTheHits(t *testing.T) {
 	vault := testvault.IndexedFixtureVault(t)
 	const query = "cognitive architecture"

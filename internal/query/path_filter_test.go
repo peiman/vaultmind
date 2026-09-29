@@ -43,6 +43,14 @@ func TestRetrievers_EveryLaneHonoursThePathFilter(t *testing.T) {
 			recordAccessForActivationTest(t, idxDB, expDB, sess, outside)
 			return &query.ActivationRetriever{DB: idxDB, ExpDB: expDB, Params: experiment.DefaultActivationParams(0.5)}, inside, outside
 		},
+		"dense": func(t *testing.T) (retrieval.Retriever, string, string) {
+			db := buildRetrieverTestDB(t)
+			inside, outside := folderPair(t, db)
+			vec := []float32{1, 0}
+			require.NoError(t, index.StoreEmbedding(db, inside, vec))
+			require.NoError(t, index.StoreEmbedding(db, outside, vec))
+			return &query.EmbeddingRetriever{DB: db, Embedder: &mockEmbedder{vec: vec, dims: 2}}, inside, outside
+		},
 	}
 	for name, build := range lanes {
 		t.Run(name, func(t *testing.T) {
