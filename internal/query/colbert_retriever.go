@@ -3,6 +3,7 @@ package query
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"sort"
 
 	"github.com/peiman/vaultmind/internal/embedding"
@@ -64,12 +65,19 @@ func (r *ColBERTRetriever) score(queryTokens [][]float32, all []index.NoteColBER
 		result retrieval.ScoredResult
 		score  float64
 	}
-	var results []scored
+	var kept []index.NoteColBERTEmbedding
+	var docs [][][]float32
 	for _, ne := range all {
-		if !keep(ne.NoteID, ne.Type) {
-			continue
+		if keep(ne.NoteID, ne.Type) {
+			kept = append(kept, ne)
+			docs = append(docs, ne.ColBERT)
 		}
-		sim := embedding.MaxSimScore(queryTokens, ne.ColBERT)
+	}
+	sims := embedding.MaxSimAll(queryTokens, docs, runtime.GOMAXPROCS(0))
+
+	results := make([]scored, 0, len(kept))
+	for i, ne := range kept {
+		sim := sims[i]
 		results = append(results, scored{
 			result: retrieval.ScoredResult{
 				ID: ne.NoteID, Type: ne.Type, Title: ne.Title,

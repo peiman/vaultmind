@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   5.7s (−46%); results unchanged (output byte-identical on the queries
   checked, labelled-eval metrics identical).
 
+- **ColBERT scores its candidates on every core.** MaxSim over the candidate
+  notes ran on one core and was over a third of a three-vault `ask`. Each
+  note's score is independent, so notes are now scored in parallel; the
+  scores, and so the rankings, are identical. Three-vault `ask` wall time
+  4.4s → 3.2–3.4s (−24–28%), at about 11% more total CPU on a loaded
+  machine.
+
 ### Fixed
 
 - **The same query ranks tied notes the same way every run.** Notes at the
