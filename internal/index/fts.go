@@ -18,8 +18,16 @@ type FTSResult struct {
 
 // SearchFilters holds optional filters for FTS search.
 type SearchFilters struct {
-	Type string // Filter by note type (empty = no filter)
-	Tag  string // Filter by tag (empty = no filter)
+	Type       string // Filter by note type (empty = no filter)
+	Tag        string // Filter by tag (empty = no filter)
+	PathPrefix string // Only notes whose vault path starts with this prefix (empty = no filter)
+}
+
+// PathPrefixLike is the LIKE pattern for a vault-path prefix: %, _ and \ in
+// the prefix match literally, and the pattern ends in %. tree --path and
+// ask --path both use it.
+func PathPrefixLike(prefix string) string {
+	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(prefix) + "%"
 }
 
 // SearchFTS performs a full-text search against the fts_notes table.
@@ -55,6 +63,10 @@ func SearchFTS(d *DB, query string, limit, offset int, filters ...SearchFilters)
 	if f.Tag != "" {
 		q += " AND n.id IN (SELECT note_id FROM tags WHERE tag = ?)"
 		args = append(args, f.Tag)
+	}
+	if f.PathPrefix != "" {
+		q += ` AND n.path LIKE ? ESCAPE '\'`
+		args = append(args, PathPrefixLike(f.PathPrefix))
 	}
 
 	q += " ORDER BY rank LIMIT ? OFFSET ?"
@@ -144,6 +156,10 @@ func CountFTS(d *DB, query string, filters ...SearchFilters) (int, error) {
 	if f.Tag != "" {
 		q += " AND n.id IN (SELECT note_id FROM tags WHERE tag = ?)"
 		args = append(args, f.Tag)
+	}
+	if f.PathPrefix != "" {
+		q += ` AND n.path LIKE ? ESCAPE '\'`
+		args = append(args, PathPrefixLike(f.PathPrefix))
 	}
 
 	var count int

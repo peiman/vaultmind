@@ -7,7 +7,7 @@ import (
 	"github.com/peiman/vaultmind/internal/retrieval"
 )
 
-// FilteredRetriever applies fixed type and tag filters to every search. A
+// FilteredRetriever applies fixed type, tag and path filters to every search. A
 // command scopes its retriever once instead of threading filters through each
 // path that searches — ask alone searches from the direct, --read and
 // federated paths. A filter the caller passes explicitly takes precedence.
@@ -24,6 +24,9 @@ func (f FilteredRetriever) Search(ctx context.Context, query string, limit, offs
 	}
 	if filters.Tag == "" {
 		filters.Tag = f.Filters.Tag
+	}
+	if filters.PathPrefix == "" {
+		filters.PathPrefix = f.Filters.PathPrefix
 	}
 	return f.Base.Search(ctx, query, limit, offset, filters)
 }

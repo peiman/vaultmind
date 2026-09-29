@@ -20,13 +20,17 @@ func (r *recordingRetriever) Search(_ context.Context, _ string, _, _ int, f ind
 
 func TestFilteredRetriever_FillsEmptyFiltersAndKeepsTheCallers(t *testing.T) {
 	base := &recordingRetriever{}
-	r := query.FilteredRetriever{Base: base, Filters: index.SearchFilters{Type: "decision", Tag: "engineering"}}
+	r := query.FilteredRetriever{Base: base, Filters: index.SearchFilters{Type: "decision", Tag: "engineering", PathPrefix: "decisions/"}}
 
 	_, _, err := r.Search(context.Background(), "q", 5, 0, index.SearchFilters{})
 	require.NoError(t, err)
-	assert.Equal(t, index.SearchFilters{Type: "decision", Tag: "engineering"}, base.got, "empty filters take the fixed ones")
+	assert.Equal(t, index.SearchFilters{Type: "decision", Tag: "engineering", PathPrefix: "decisions/"}, base.got, "empty filters take the fixed ones")
 
 	_, _, err = r.Search(context.Background(), "q", 5, 0, index.SearchFilters{Type: "concept"})
 	require.NoError(t, err)
-	assert.Equal(t, index.SearchFilters{Type: "concept", Tag: "engineering"}, base.got, "a filter the caller passes wins")
+	assert.Equal(t, index.SearchFilters{Type: "concept", Tag: "engineering", PathPrefix: "decisions/"}, base.got, "a filter the caller passes wins")
+
+	_, _, err = r.Search(context.Background(), "q", 5, 0, index.SearchFilters{PathPrefix: "concepts/"})
+	require.NoError(t, err)
+	assert.Equal(t, index.SearchFilters{Type: "decision", Tag: "engineering", PathPrefix: "concepts/"}, base.got, "a path the caller passes wins")
 }

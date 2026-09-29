@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`ask --path <folder>` ranks only notes under a vault folder**, the same
+  match as `tree --path` (a path prefix such as `decisions/`), in every
+  retrieval lane and on every ask path (direct, `--read`, `--vaults`).
+
 ### Changed
 
 - **A query runs the model once, not sixteen times.** Every retrieval lane

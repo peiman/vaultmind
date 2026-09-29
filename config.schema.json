@@ -146,6 +146,11 @@
               "description": "Max context items",
               "type": "integer"
             },
+            "path": {
+              "default": "",
+              "description": "Rank only notes under this vault folder (path prefix, e.g. decisions/) — the same match as tree --path",
+              "type": "string"
+            },
             "pointers_only": {
               "default": false,
               "description": "Skip context-pack bodies; render only id+title+type pointers (forces ask-to-read loop instead of letting the preload satisfy curiosity)",

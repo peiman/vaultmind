@@ -46,9 +46,11 @@ SCOPE THE SEARCH
 
   vaultmind ask "X" --type decision
   vaultmind ask "X" --tag engineering
-      Rank only notes of that type, or carrying that tag. Applies to every
+  vaultmind ask "X" --path decisions/
+      Rank only notes of that type, carrying that tag, or under that vault
+      folder (a path prefix, the same match as tree --path). Applies to every
       vault under --vaults. The context pack around the top hit still follows
-      its links, so a neighbour of another type can appear there.
+      its links, so a neighbour of another type or folder can appear there.
 
 ANTI-PATTERN — AVOID
 
@@ -81,6 +83,7 @@ OUTPUT INCLUDES
 		"app.ask.excerpt":          "excerpt",
 		"app.ask.type":             "type",
 		"app.ask.tag":              "tag",
+		"app.ask.path":             "path",
 		"app.ask.dedup_window":     "dedup-window",
 	},
 }
@@ -102,6 +105,7 @@ func AskOptions() []config.ConfigOption {
 		{Key: "app.ask.excerpt", DefaultValue: 0, Description: "Cap each note's contribution at N tokens, preferring its decision-bearing passage — the Principle section where a note has one (an arc's rule lives there; its opening is story setup), else the opening prose. Applies to the target note and every context item. 0 = off, which also means an over-budget note contributes no text at all while the pack still counts it, so a tight budget yields items with no content", Type: "int"},
 		{Key: "app.ask.type", DefaultValue: "", Description: "Rank only notes of this type (e.g. decision, concept)", Type: "string"},
 		{Key: "app.ask.tag", DefaultValue: "", Description: "Rank only notes carrying this tag", Type: "string"},
+		{Key: "app.ask.path", DefaultValue: "", Description: "Rank only notes under this vault folder (path prefix, e.g. decisions/) — the same match as tree --path", Type: "string"},
 		{Key: "app.ask.dedup_window", DefaultValue: "", Description: "Send a note as its title alone when this conversation (VAULTMIND_USER_SESSION_ID) received its text within this long, e.g. 10m. Empty = off. For hooks that fire in bursts.", Type: "string"},
 	}
 }
