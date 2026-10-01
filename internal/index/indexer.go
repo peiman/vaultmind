@@ -233,12 +233,18 @@ func (idx *Indexer) embedResolved(ctx context.Context, dbPath string, embedder e
 	// (non-nil error → non-zero exit) when a --full run had failures, OR purged real
 	// embeddings yet re-embedded none (a total wipe, e.g. all-empty-output), so it
 	// can't report success to a hook or script that keys on the exit code.
-	if err == nil && full && res != nil && (res.Errors > 0 || (purged > 0 && res.Embedded == 0)) {
+	// Sections count too: the purge cleared them, so a section that failed or
+	// came back empty is a long note's part lost, not merely left pending.
+	sectionsLost := 0
+	if res != nil {
+		sectionsLost = res.SectionsErrors + res.SectionsEmptyOutput
+	}
+	if err == nil && full && res != nil && (res.Errors > 0 || sectionsLost > 0 || (purged > 0 && res.Embedded == 0)) {
 		return res, fmt.Errorf(
-			"--full purged %d embedding(s) but re-embedded only %d note(s) as %s (%d failed); the "+
+			"--full purged %d embedding(s) but re-embedded only %d note(s) as %s (%d failed, %d section(s) of long notes not re-embedded); the "+
 				"vault is now empty or partially indexed — fix the cause (see the warnings above) and "+
 				"re-run 'vaultmind index --full --embed --model %s'",
-			purged, res.Embedded, modelUsed, res.Errors, modelUsed)
+			purged, res.Embedded, modelUsed, res.Errors, sectionsLost, modelUsed)
 	}
 	return res, err
 }

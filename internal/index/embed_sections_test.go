@@ -209,7 +209,6 @@ func TestEmbedNotes_ShortNotesSendNoSectionTexts(t *testing.T) {
 // those carry the "title › heading" line), so notes embed and sections fail.
 type sectionFailingEmbedder struct {
 	recordingFullEmbedder
-	full bool
 }
 
 func (f sectionFailingEmbedder) EmbedFullBatch(ctx context.Context, texts []string) ([]*embedding.BGEM3Output, error) {
