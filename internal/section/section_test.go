@@ -3,6 +3,7 @@ package section
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -188,6 +189,19 @@ func TestSplit_AnOversizedMultiLineParagraphIsCutAtLines(t *testing.T) {
 		assert.LessOrEqual(t, estimateTokens(p.Body), maxSectionTokens+minSectionTokens, "part %s", p.Anchor)
 	}
 	assert.Equal(t, body, joined(Split(body)))
+}
+
+// A page at the import cap with no headings: appending to strings made the
+// cut quadratic (1 MiB took 4.9 s, 2 MiB 6.2 s); it is linear now (5 MiB in
+// ~0.1 s). The bound is generous so a loaded machine cannot fail it, and still
+// an order of magnitude under what the quadratic version took.
+func TestCut_LargeHeadinglessPageIsFast(t *testing.T) {
+	line := strings.Repeat("word ", 15) + "\n"
+	body := strings.Repeat(line, 5<<20/len(line))
+	start := time.Now()
+	ss := Cut(body)
+	assert.Less(t, time.Since(start), 3*time.Second)
+	assert.Equal(t, body, joined(ss))
 }
 
 func TestSplit_DuplicateHeadingsGetUniqueAnchors(t *testing.T) {

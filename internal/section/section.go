@@ -67,6 +67,12 @@ func Needed(text string) bool {
 	return estimateTokens(text) > splitThreshold
 }
 
+// TooSmall reports whether text is below the size worth a retrieval unit of
+// its own. The indexer asks it of a part after stripping, which drops code.
+func TooSmall(text string) bool {
+	return estimateTokens(text) < minSectionTokens
+}
+
 // Cut divides markdown at its headings, whatever its length. Split is Needed
 // and Cut on one text; the indexer decides on the stripped text and cuts the
 // markdown, because only the markdown still has its headings.
@@ -91,41 +97,49 @@ func Prefix(title string, s Section) string {
 
 // estimateTokens is the cheap count the embedder's own pre-cut uses.
 func estimateTokens(s string) int {
-	n := utf8.RuneCountInString(s)
-	return (n + embedding.ApproxCharsPerToken - 1) / embedding.ApproxCharsPerToken
+	return tokensFor(utf8.RuneCountInString(s))
+}
+
+// tokensFor is estimateTokens for a rune count already known.
+func tokensFor(runes int) int {
+	return (runes + embedding.ApproxCharsPerToken - 1) / embedding.ApproxCharsPerToken
 }
 
 var headingRE = regexp.MustCompile(`^ {0,3}(#{1,6})[ \t]+(.*?)[ \t]*$`)
 
 // atHeadings cuts body before every heading of level 1–3 outside a fence.
+//
+// Text accumulates in a builder: appending to a string copies it, and a 1 MiB
+// page with no headings took 4.9 s that way.
 func atHeadings(body string) []Section {
 	var out []Section
 	var levels [maxSplitLevel]string
-	cur := Section{}
+	var curPath []string
+	var cur strings.Builder
+	flush := func() {
+		if cur.Len() > 0 {
+			out = append(out, Section{HeadingPath: curPath, Body: cur.String()})
+			cur.Reset()
+		}
+	}
 	var f fence
 	for _, line := range strings.SplitAfter(body, "\n") {
 		if line == "" {
 			continue
 		}
-		inFence := f.inside(line)
-		if !inFence {
+		if !f.inside(line) {
 			if level, text, ok := heading(line); ok {
-				if cur.Body != "" {
-					out = append(out, cur)
-				}
+				flush()
 				levels[level-1] = text
 				for i := level; i < maxSplitLevel; i++ {
 					levels[i] = ""
 				}
-				cur = Section{HeadingPath: path(levels), Body: line}
-				continue
+				curPath = path(levels)
 			}
 		}
-		cur.Body += line
+		cur.WriteString(line)
 	}
-	if cur.Body != "" {
-		out = append(out, cur)
-	}
+	flush()
 	return out
 }
 
@@ -197,23 +211,27 @@ func splitLarge(s Section) []Section {
 		return []Section{s}
 	}
 	var out []Section
-	part := ""
+	var part strings.Builder
+	partRunes := 0 // runes in part, so its size is known without re-counting
 	for _, block := range units(s.Body) {
-		if part != "" && estimateTokens(part) >= minSectionTokens &&
-			estimateTokens(part+block) > maxSectionTokens {
-			out = append(out, Section{HeadingPath: s.HeadingPath, Body: part})
-			part = ""
+		blockRunes := utf8.RuneCountInString(block)
+		if part.Len() > 0 && tokensFor(partRunes) >= minSectionTokens &&
+			tokensFor(partRunes+blockRunes) > maxSectionTokens {
+			out = append(out, Section{HeadingPath: s.HeadingPath, Body: part.String()})
+			part.Reset()
+			partRunes = 0
 		}
-		part += block
+		part.WriteString(block)
+		partRunes += blockRunes
 	}
 	switch {
-	case part == "":
-	case len(out) > 0 && estimateTokens(part) < minSectionTokens:
+	case part.Len() == 0:
+	case len(out) > 0 && tokensFor(partRunes) < minSectionTokens:
 		// A closing line or two left over after the last cut: it belongs with
 		// what it closes, even if that part runs a little past the cap.
-		out[len(out)-1].Body += part
+		out[len(out)-1].Body += part.String()
 	default:
-		out = append(out, Section{HeadingPath: s.HeadingPath, Body: part})
+		out = append(out, Section{HeadingPath: s.HeadingPath, Body: part.String()})
 	}
 	return out
 }
@@ -242,20 +260,20 @@ func units(text string) []string {
 func paragraphs(text string) []string {
 	var out []string
 	var f fence
-	block := ""
+	var block strings.Builder
 	for _, line := range strings.SplitAfter(text, "\n") {
 		if line == "" {
 			continue
 		}
 		inFence := f.inside(line)
-		block += line
+		block.WriteString(line)
 		if !inFence && strings.TrimSpace(line) == "" {
-			out = append(out, block)
-			block = ""
+			out = append(out, block.String())
+			block.Reset()
 		}
 	}
-	if block != "" {
-		out = append(out, block)
+	if block.Len() > 0 {
+		out = append(out, block.String())
 	}
 	return out
 }

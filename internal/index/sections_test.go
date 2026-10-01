@@ -176,6 +176,23 @@ func TestStoreNote_SectionsRecordTheirNoteHash(t *testing.T) {
 	assert.Equal(t, countSections(t, db), stale, "every section is now recognisably stale")
 }
 
+// The stripped text drops fenced code, so a section that is only a heading and
+// a code block strips to nothing and is left out; the stored ordinals stay
+// 0, 1, 2… with no gap where it was.
+func TestSectionsFor_ACodeOnlySectionIsLeftOutWithoutAGap(t *testing.T) {
+	code := "```\n" + strings.Repeat("x := 1\n", 400) + "```\n\n"
+	md := "## Prose\n\n" + prose(1500) + "## Code\n\n" + code + "## More\n\n" + prose(1500)
+	for len(md) < 9000*4 {
+		md += prose(1500)
+	}
+	got := index.SectionsFor(md, md)
+	require.NotEmpty(t, got)
+	for i, s := range got {
+		assert.Equal(t, i, s.Ordinal)
+		assert.NotEqual(t, "code", s.Anchor, "a part with no text left after stripping is not stored")
+	}
+}
+
 // Whether to split is decided on the text the model is given (the stripped
 // body); the cut is made in the markdown, where the headings are; each
 // section is stored stripped, like a note's body. Found by indexing real

@@ -252,23 +252,38 @@ type SectionRecord struct {
 // Whether to split is decided on plain, because that is what the model is
 // given and what it truncates; the cut is made in markdown, because only the
 // markdown still has its headings; each part is stripped the same way the
-// whole body is. A part that strips to nothing is left out.
+// whole body is.
+//
+// Stripping drops fenced code, so a part can shrink to its heading words. A
+// part too small to stand on its own once stripped joins the stored part
+// before it (or, if first, the one after), so no text is lost and no unit
+// carries only a heading. Ordinals are 0, 1, 2… over what is stored.
 func SectionsFor(markdown, plain string) []SectionRecord {
 	if !section.Needed(plain) {
 		return nil
 	}
 	var out []SectionRecord
+	pending := "" // a too-small first part, waiting for the next one
 	for _, s := range section.Cut(markdown) {
-		body := parser.StripForFTS(s.Body)
-		if strings.TrimSpace(body) == "" {
+		body := pending + parser.StripForFTS(s.Body)
+		pending = ""
+		if section.TooSmall(body) {
+			if len(out) == 0 {
+				pending = body
+				continue
+			}
+			out[len(out)-1].Body += body
 			continue
 		}
 		out = append(out, SectionRecord{
-			Ordinal:     s.Ordinal,
+			Ordinal:     len(out),
 			Anchor:      s.Anchor,
 			HeadingPath: strings.Join(s.HeadingPath, section.PathSeparator),
 			Body:        body,
 		})
+	}
+	if pending != "" && len(out) > 0 {
+		out[len(out)-1].Body += pending
 	}
 	return out
 }
