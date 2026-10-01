@@ -57,8 +57,10 @@ func embedAfterWriteUpTo(cmd *cobra.Command, vaultPath string, cfg *vault.Config
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "not embedded: this build has no ORT backend for BGE-M3; run %s with an ORT build\n", finish)
 		return
 	}
+	// Pending counts the sections of long notes too: one imported page can be
+	// fifty of them, and embedding those inline would stall the write.
 	if pending, err := index.PendingEmbeddings(dbPath, model); err == nil && pending > limit {
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "not embedded: %d notes have no embeddings; embed them with %s\n", pending, finish)
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "not embedded: %d notes and sections have no embeddings; embed them with %s\n", pending, finish)
 		return
 	}
 	res, err := runEmbedPass(cmd, vaultPath, dbPath, cfg, model)
@@ -66,7 +68,12 @@ func embedAfterWriteUpTo(cmd *cobra.Command, vaultPath string, cfg *vault.Config
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "written, but not embedded (%v); run %s\n", err, finish)
 		return
 	}
-	if res != nil && res.Embedded > 0 {
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "embedded %d note(s) [model: %s]\n", res.Embedded, model)
+	if res == nil || res.Embedded+res.SectionsEmbedded == 0 {
+		return
 	}
+	what := fmt.Sprintf("%d note(s)", res.Embedded)
+	if res.SectionsEmbedded > 0 {
+		what += fmt.Sprintf(" and %d section(s)", res.SectionsEmbedded)
+	}
+	_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "embedded %s [model: %s]\n", what, model)
 }
