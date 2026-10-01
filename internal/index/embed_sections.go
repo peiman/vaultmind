@@ -3,7 +3,6 @@ package index
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/peiman/vaultmind/internal/embedding"
 	"github.com/peiman/vaultmind/internal/section"
@@ -87,9 +86,7 @@ func embedSections(ctx context.Context, db *DB, embedder embedding.Embedder, res
 			_ = rows.Close()
 			return fmt.Errorf("scanning unembedded section: %w", err)
 		}
-		if strings.TrimSpace(body) == "" {
-			continue
-		}
+		// Never empty: SectionsFor stores no part too small to stand alone.
 		pending = append(pending, sectionText{id: id, text: SectionText(title, path, body)})
 	}
 	if err := rows.Close(); err != nil {

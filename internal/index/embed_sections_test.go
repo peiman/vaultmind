@@ -2,6 +2,7 @@ package index_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -202,4 +203,84 @@ func TestEmbedNotes_ShortNotesSendNoSectionTexts(t *testing.T) {
 	require.NoError(t, err)
 	assert.Zero(t, r.SectionsEmbedded)
 	assert.Len(t, emb.seen(), 3, "one text per note, nothing else")
+}
+
+// sectionFailingEmbedder fails any batch that holds a section's text (only
+// those carry the "title › heading" line), so notes embed and sections fail.
+type sectionFailingEmbedder struct {
+	recordingFullEmbedder
+	full bool
+}
+
+func (f sectionFailingEmbedder) EmbedFullBatch(ctx context.Context, texts []string) ([]*embedding.BGEM3Output, error) {
+	for _, tx := range texts {
+		if strings.Contains(tx, " › ") {
+			return nil, errors.New("model failed")
+		}
+	}
+	return f.recordingFullEmbedder.EmbedFullBatch(ctx, texts)
+}
+
+func (f sectionFailingEmbedder) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
+	for _, tx := range texts {
+		if strings.Contains(tx, " › ") {
+			return nil, errors.New("model failed")
+		}
+	}
+	return f.fakeDenseEmbedder.EmbedBatch(ctx, texts)
+}
+
+// denseOnly hides EmbedFullBatch so the dense (MiniLM) path is taken.
+type denseOnly struct{ e sectionFailingEmbedder }
+
+func (d denseOnly) Embed(ctx context.Context, t string) ([]float32, error) { return d.e.Embed(ctx, t) }
+func (d denseOnly) EmbedBatch(ctx context.Context, t []string) ([][]float32, error) {
+	return d.e.EmbedBatch(ctx, t)
+}
+func (d denseOnly) Dims() int    { return d.e.Dims() }
+func (d denseOnly) Close() error { return nil }
+
+// A failed model call on a batch of sections counts them as errors and leaves
+// them pending for the next pass — with either kind of model.
+func TestEmbedNotes_AFailedSectionBatchStaysPending(t *testing.T) {
+	for name, emb := range map[string]embedding.Embedder{
+		"bge-m3": sectionFailingEmbedder{recordingFullEmbedder: newRecordingFullEmbedder()},
+		"minilm": denseOnly{e: sectionFailingEmbedder{recordingFullEmbedder: newRecordingFullEmbedder()}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, dbPath, idxr := buildLongNoteVault(t, "Install", "Configure")
+			r, err := idxr.EmbedNotes(context.Background(), dbPath, emb)
+			require.NoError(t, err)
+			total, dense, _ := sectionEmbeddingCounts(t, dbPath)
+			assert.Zero(t, dense)
+			assert.Equal(t, total, r.SectionsErrors)
+			assert.Zero(t, r.SectionsEmbedded)
+		})
+	}
+}
+
+// A batch whose store fails is stored not at all: all or nothing, counted as
+// errors, still pending.
+func TestEmbedNotes_AFailedSectionStoreIsAllOrNothing(t *testing.T) {
+	_, dbPath, idxr := buildLongNoteVault(t, "Install", "Configure")
+	_, err := openDB(t, dbPath).Exec(`CREATE TRIGGER refuse_section_vectors BEFORE UPDATE ON sections
+		BEGIN SELECT RAISE(ABORT, 'refused'); END`)
+	require.NoError(t, err)
+	r, err := idxr.EmbedNotes(context.Background(), dbPath, newRecordingFullEmbedder())
+	require.NoError(t, err)
+	total, dense, _ := sectionEmbeddingCounts(t, dbPath)
+	assert.Zero(t, dense)
+	assert.Equal(t, total, r.SectionsErrors)
+}
+
+// A broken sections table is an error from the count and the purge, not a
+// silent "nothing pending" or a half-done purge reported as done.
+func TestSectionCountAndPurge_ReportABrokenTable(t *testing.T) {
+	_, dbPath, _ := buildLongNoteVault(t, "Install", "Configure")
+	_, err := openDB(t, dbPath).Exec(`DROP TABLE sections`)
+	require.NoError(t, err)
+	_, err = index.PendingEmbeddings(dbPath, embedding.ModelBGEM3)
+	assert.ErrorContains(t, err, "sections")
+	_, err = index.PurgeEmbeddings(dbPath)
+	assert.ErrorContains(t, err, "section")
 }
