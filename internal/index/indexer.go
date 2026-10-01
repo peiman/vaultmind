@@ -1144,6 +1144,7 @@ func buildNoteRecord(file vault.ScannedFile, content []byte, parsed *parser.Pars
 		MTime:    file.ModTime.Unix(),
 		IsDomain: parsed.IsDomain,
 		BodyText: parsed.FTSBody,
+		Sections: SectionsFor(parsed.Body, parsed.FTSBody),
 	}
 
 	if parsed.IsDomain {

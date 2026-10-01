@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/peiman/vaultmind/internal/parser"
+	"github.com/peiman/vaultmind/internal/section"
 )
 
 // NoteRecord is the storage-ready representation of a parsed note.
@@ -27,6 +30,9 @@ type NoteRecord struct {
 	Links    []LinkRecord
 	Headings []HeadingRecord
 	Blocks   []BlockRecord
+	// Sections are the note's parts when it is longer than the model's
+	// window (see SectionsFor); nil for a note that stays one unit.
+	Sections []SectionRecord
 }
 
 // LinkRecord represents a single outbound edge for storage.
@@ -80,7 +86,7 @@ func StoreNote(d *DB, rec NoteRecord) error {
 // an id migration so no orphans linger after the row is re-keyed. SSOT for
 // "what hangs off a note id" — keep aligned with StoreNoteInTx's delete loop.
 var pathIDDependentTables = []string{
-	"aliases", "tags", "frontmatter_kv", "blocks", "headings", "generated_sections",
+	"aliases", "tags", "frontmatter_kv", "blocks", "headings", "generated_sections", "sections",
 }
 
 // StoreNoteInTx stores a note within an existing transaction.
@@ -213,7 +219,63 @@ func StoreNoteInTx(tx *sql.Tx, rec NoteRecord) error {
 		return fmt.Errorf("inserting fts_notes: %w", err)
 	}
 
+	return storeSections(tx, noteID, rec.Hash, rec.Sections)
+}
+
+// storeSections writes a long note's parts, one row each, stamped with the
+// hash of the note text they were cut from. A note that fits the window has
+// none: it stays one unit, in notes. Embeddings are filled by the embed pass.
+func storeSections(tx *sql.Tx, noteID, noteHash string, sections []SectionRecord) error {
+	for _, s := range sections {
+		if _, err := tx.Exec(
+			"INSERT INTO sections (id, note_id, note_hash, ordinal, anchor, heading_path, body) VALUES (?, ?, ?, ?, ?, ?, ?)",
+			SectionID(noteID, s.Anchor), noteID, noteHash, s.Ordinal, s.Anchor, s.HeadingPath, s.Body,
+		); err != nil {
+			return fmt.Errorf("inserting section %q: %w", s.Anchor, err)
+		}
+	}
 	return nil
+}
+
+// SectionRecord is one stored part of a long note.
+type SectionRecord struct {
+	Ordinal int
+	Anchor  string
+	// HeadingPath is the breadcrumb joined with section.PathSeparator.
+	HeadingPath string
+	// Body is the part stripped of markdown, like a note's BodyText.
+	Body string
+}
+
+// SectionsFor is a note's parts, or nil when it stays one unit. markdown is
+// the note's body as written; plain is that body stripped (its BodyText).
+// Whether to split is decided on plain, because that is what the model is
+// given and what it truncates; the cut is made in markdown, because only the
+// markdown still has its headings; each part is stripped the same way the
+// whole body is. A part that strips to nothing is left out.
+func SectionsFor(markdown, plain string) []SectionRecord {
+	if !section.Needed(plain) {
+		return nil
+	}
+	var out []SectionRecord
+	for _, s := range section.Cut(markdown) {
+		body := parser.StripForFTS(s.Body)
+		if strings.TrimSpace(body) == "" {
+			continue
+		}
+		out = append(out, SectionRecord{
+			Ordinal:     s.Ordinal,
+			Anchor:      s.Anchor,
+			HeadingPath: strings.Join(s.HeadingPath, section.PathSeparator),
+			Body:        body,
+		})
+	}
+	return out
+}
+
+// SectionID is a section's id: its note's id and its anchor.
+func SectionID(noteID, anchor string) string {
+	return noteID + "#" + anchor
 }
 
 func upsertNote(tx *sql.Tx, rec NoteRecord) error {
@@ -338,6 +400,7 @@ func DeleteNoteByPath(d *DB, path string) error {
 		{"DELETE FROM blocks WHERE note_id = ?", "blocks"},
 		{"DELETE FROM headings WHERE note_id = ?", "headings"},
 		{"DELETE FROM generated_sections WHERE note_id = ?", "generated_sections"},
+		{"DELETE FROM sections WHERE note_id = ?", "sections"},
 		{"DELETE FROM fts_notes WHERE note_id = ?", "fts_notes"},
 	}
 	for _, dep := range dependentDeletes {
