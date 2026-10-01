@@ -79,11 +79,6 @@ type EmbedResult struct {
 	Errors      int    `json:"errors"`
 	EmptyOutput int    `json:"empty_output,omitempty"`
 	Model       string `json:"model,omitempty"`
-	// Sections* count the parts of long notes (see SectionsFor), embedded in
-	// the same pass. All zero, and absent from JSON, for a vault of short notes.
-	SectionsEmbedded    int `json:"sections_embedded,omitempty"`
-	SectionsErrors      int `json:"sections_errors,omitempty"`
-	SectionsEmptyOutput int `json:"sections_empty_output,omitempty"`
 }
 
 // IndexAndEmbedResult combines index and optional embed results for command output.
@@ -233,18 +228,12 @@ func (idx *Indexer) embedResolved(ctx context.Context, dbPath string, embedder e
 	// (non-nil error → non-zero exit) when a --full run had failures, OR purged real
 	// embeddings yet re-embedded none (a total wipe, e.g. all-empty-output), so it
 	// can't report success to a hook or script that keys on the exit code.
-	// Sections count too: the purge cleared them, so a section that failed or
-	// came back empty is a long note's part lost, not merely left pending.
-	sectionsLost := 0
-	if res != nil {
-		sectionsLost = res.SectionsErrors + res.SectionsEmptyOutput
-	}
-	if err == nil && full && res != nil && (res.Errors > 0 || sectionsLost > 0 || (purged > 0 && res.Embedded == 0)) {
+	if err == nil && full && res != nil && (res.Errors > 0 || (purged > 0 && res.Embedded == 0)) {
 		return res, fmt.Errorf(
-			"--full purged %d embedding(s) but re-embedded only %d note(s) as %s (%d failed, %d section(s) of long notes not re-embedded); the "+
+			"--full purged %d embedding(s) but re-embedded only %d note(s) as %s (%d failed); the "+
 				"vault is now empty or partially indexed — fix the cause (see the warnings above) and "+
 				"re-run 'vaultmind index --full --embed --model %s'",
-			purged, res.Embedded, modelUsed, res.Errors, sectionsLost, modelUsed)
+			purged, res.Embedded, modelUsed, res.Errors, modelUsed)
 	}
 	return res, err
 }
@@ -344,14 +333,7 @@ func countPendingForModel(dbPath, model string) (pending int, skipped int, err e
 	if err := db.QueryRow(skipQuery).Scan(&skipped); err != nil {
 		return 0, 0, fmt.Errorf("counting skipped notes: %w", err)
 	}
-	// Pending sections are work too. Without them, an index whose notes are all
-	// embedded but whose long notes just gained sections would short-circuit
-	// as "nothing to do" and never load the model. skipped stays the notes'.
-	sections, _, err := countSections(db, model == embedding.ModelBGEM3)
-	if err != nil {
-		return 0, 0, err
-	}
-	return pending + sections, skipped, nil
+	return pending, skipped, nil
 }
 
 // countNotes returns the total number of notes in the index. Used by RunEmbed to
@@ -394,12 +376,6 @@ func PurgeEmbeddings(dbPath string) (int64, error) {
 	n, err := res.RowsAffected()
 	if err != nil {
 		return 0, fmt.Errorf("counting purged embeddings: %w", err)
-	}
-	// Sections too: a model switch that kept them would mix two models in one
-	// index. The returned count stays the notes' — what --full reports.
-	if _, err := db.Exec(`UPDATE sections SET embedding = NULL, sparse_embedding = NULL
-		WHERE embedding IS NOT NULL OR sparse_embedding IS NOT NULL`); err != nil {
-		return 0, fmt.Errorf("purging section embeddings: %w", err)
 	}
 	return n, nil
 }
@@ -946,9 +922,7 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 	}
 
 	if len(pending) == 0 {
-		// The notes are done, but a long note's sections may not be: an index
-		// from before sections has its notes embedded and its sections new.
-		return result, embedSections(ctx, db, embedder, result)
+		return result, nil
 	}
 
 	// Process in batches. BGE-M3 inference holds peak memory roughly equal to
@@ -1088,7 +1062,7 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 		}
 	}
 
-	return result, embedSections(ctx, db, embedder, result)
+	return result, nil
 }
 
 // ResolveLinks updates unresolved links by matching dst_raw against note IDs,
@@ -1170,7 +1144,6 @@ func buildNoteRecord(file vault.ScannedFile, content []byte, parsed *parser.Pars
 		MTime:    file.ModTime.Unix(),
 		IsDomain: parsed.IsDomain,
 		BodyText: parsed.FTSBody,
-		Sections: SectionsFor(parsed.Body, parsed.FTSBody),
 	}
 
 	if parsed.IsDomain {

@@ -40,9 +40,7 @@ func MeasureNoiseFloor(ctx context.Context, embedder embedding.Embedder, db *ind
 	if embedder == nil {
 		return nil, fmt.Errorf("noise-floor measurement requires an embedder")
 	}
-	// The units the lanes search: a query competes with a long note's
-	// sections, not its truncated whole-note vector.
-	all, err := index.LoadUnitEmbeddings(db)
+	all, err := index.LoadAllEmbeddings(db)
 	if err != nil {
 		return nil, fmt.Errorf("loading embeddings for calibration: %w", err)
 	}
@@ -63,11 +61,10 @@ func MeasureNoiseFloor(ctx context.Context, embedder embedding.Embedder, db *ind
 				len(ne.Embedding), qDims)
 		}
 	}
-	// Sort by unit id so the strided note-to-note sampling (and thus the stored
+	// Sort by note id so the strided note-to-note sampling (and thus the stored
 	// mu/sigma) is reproducible across runs — SQLite does not guarantee row
-	// order without ORDER BY. A section's id is unique where its note's is not;
-	// for a vault of short notes the unit id is the note id.
-	sort.Slice(all, func(i, j int) bool { return all[i].UnitID() < all[j].UnitID() })
+	// order without ORDER BY.
+	sort.Slice(all, func(i, j int) bool { return all[i].NoteID < all[j].NoteID })
 
 	// N = max over probes of (max cosine to any note).
 	var n float64

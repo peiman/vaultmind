@@ -157,7 +157,7 @@ func TestImport_EmbedsWhatItImportedPastTheWriteLimit(t *testing.T) {
 	_, errOut, err := runRootCmd(t, "import", filepath.Join(repo, "docs"), "--vault", vault)
 	require.NoError(t, err)
 	assert.Contains(t, errOut.String(), "embedded 2 note(s)")
-	assert.NotContains(t, errOut.String(), "notes and sections have no embeddings")
+	assert.NotContains(t, errOut.String(), "notes have no embeddings")
 }
 
 // A note the index did not take is named in the report: written is not the
@@ -274,14 +274,4 @@ func TestImport_URLDryRunFetchesButWritesNothing(t *testing.T) {
 	assert.Equal(t, 1, hits, "a dry run still fetches")
 	assert.Contains(t, out.String(), "dry run, nothing written")
 	assert.NoDirExists(t, filepath.Join(vault, "imported"))
-}
-
-// A long imported page is embedded in parts; the write says how many.
-func TestImport_EmbedOnWriteNamesSections(t *testing.T) {
-	vault, repo := miniLMVault(t), docsRepo(t)
-	stubEmbedPass(t, &index.EmbedResult{Embedded: 1, SectionsEmbedded: 12}, nil)
-
-	_, errOut, err := runRootCmd(t, "import", filepath.Join(repo, "docs"), "--vault", vault)
-	require.NoError(t, err)
-	assert.Contains(t, errOut.String(), "embedded 1 note(s) and 12 section(s)")
 }

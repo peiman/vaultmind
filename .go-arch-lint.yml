@@ -99,8 +99,6 @@ components:
       - internal/schema/**
       - internal/envelope/**
       - internal/index/**
-      # VaultMind section splitter (pure: a long note's body → heading-cut parts; used by the indexer):
-      - internal/section/**
       - internal/retrieval/**
       - internal/embedding/**
       - internal/graph/**
