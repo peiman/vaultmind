@@ -27,7 +27,8 @@ func (r *EmbeddingRetriever) Search(ctx context.Context, query string, limit, of
 		return nil, 0, fmt.Errorf("embedding query: %w", err)
 	}
 
-	all, err := index.LoadAllEmbeddings(r.DB)
+	// Units, not notes: a long note is scored by each of its sections.
+	all, err := index.LoadUnitEmbeddings(r.DB)
 	if err != nil {
 		return nil, 0, fmt.Errorf("loading embeddings: %w", err)
 	}
@@ -41,50 +42,28 @@ func (r *EmbeddingRetriever) Search(ctx context.Context, query string, limit, of
 	}
 
 	// Score, filter, and build results in one pass
-	type scored struct {
-		result retrieval.ScoredResult
-		score  float64
-	}
-	var results []scored
+	var results []retrieval.ScoredResult
 	for _, ne := range all {
 		if !keep(ne.NoteID, ne.Type) {
 			continue
 		}
-		sim := CosineSimilarity(queryVec, ne.Embedding)
-		results = append(results, scored{
-			result: retrieval.ScoredResult{
-				ID:       ne.NoteID,
-				Type:     ne.Type,
-				Title:    ne.Title,
-				Path:     ne.Path,
-				Snippet:  truncate(ne.BodyText, snippetMaxLen),
-				Score:    sim,
-				IsDomain: ne.IsDomain,
-			},
-			score: sim,
+		results = append(results, retrieval.ScoredResult{
+			ID:       ne.NoteID,
+			Section:  ne.SectionID,
+			Type:     ne.Type,
+			Title:    ne.Title,
+			Path:     ne.Path,
+			Snippet:  truncate(ne.BodyText, snippetMaxLen),
+			Score:    CosineSimilarity(queryVec, ne.Embedding),
+			IsDomain: ne.IsDomain,
 		})
 	}
 
-	// Sort by score descending
+	// Sort by score descending, then one hit per note (its best section).
 	sort.Slice(results, func(i, j int) bool {
-		return results[i].score > results[j].score
+		return results[i].Score > results[j].Score
 	})
-
-	total := len(results)
-
-	// Apply offset/limit
-	if offset >= len(results) {
-		return nil, total, nil
-	}
-	results = results[offset:]
-	if limit > 0 && len(results) > limit {
-		results = results[:limit]
-	}
-
-	out := make([]retrieval.ScoredResult, len(results))
-	for i, s := range results {
-		out[i] = s.result
-	}
+	out, total := page(firstPerNote(results), limit, offset)
 	return out, total, nil
 }
 

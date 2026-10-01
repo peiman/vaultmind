@@ -30,6 +30,10 @@ type ScoredResult struct {
 	Score      float64            `json:"score"`
 	IsDomain   bool               `json:"is_domain_note"`
 	Components map[string]float64 `json:"components,omitempty"`
+	// Section is the id (<note>#<anchor>) of the part of a long note that
+	// matched; empty for a whole note. ID stays the note's, so a hit is still
+	// one per note — the section says which part to deliver.
+	Section string `json:"section,omitempty"`
 }
 
 // Retriever abstracts a retrieval backend (FTS, embedding, hybrid).

@@ -43,6 +43,9 @@ type rrfEntry struct {
 	result     retrieval.ScoredResult
 	score      float64
 	components map[string]float64
+	// sectionRank is the best rank at which a lane matched one of this long
+	// note's sections; the fused hit names that section. -1 while none has.
+	sectionRank int
 }
 
 // Search runs all retrievers concurrently, then fuses their ranked lists via RRF.
@@ -135,11 +138,23 @@ func (h *HybridRetriever) Search(ctx context.Context, query string, limit, offse
 				if entry.result.Snippet == "" && result.Snippet != "" {
 					entry.result.Snippet = result.Snippet
 				}
+				// A long note matched by section: name the section from the
+				// lane that ranked it best, with that section's snippet. The
+				// keyword lane matches the whole note and names none.
+				if result.Section != "" && (entry.sectionRank < 0 || rank < entry.sectionRank) {
+					entry.result.Section, entry.result.Snippet = result.Section, result.Snippet
+					entry.sectionRank = rank
+				}
 			} else {
+				sectionRank := -1
+				if result.Section != "" {
+					sectionRank = rank
+				}
 				rrfScores[result.ID] = &rrfEntry{
-					result:     result,
-					score:      rrfScore,
-					components: map[string]float64{name: rrfScore},
+					result:      result,
+					score:       rrfScore,
+					components:  map[string]float64{name: rrfScore},
+					sectionRank: sectionRank,
 				}
 			}
 		}
