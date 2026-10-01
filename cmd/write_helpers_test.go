@@ -80,7 +80,7 @@ func TestEmbedOnWrite_ABacklogIsNamedNotEmbedded(t *testing.T) {
 
 	_, errOut, err := runRootCmd(t, "frontmatter", "set", "projects/beta.md", "status", "paused", "--vault", vault)
 	require.NoError(t, err, "the write itself succeeds")
-	assert.Contains(t, errOut.String(), "notes and sections have no embeddings")
+	assert.Contains(t, errOut.String(), "notes have no embeddings")
 	assert.Contains(t, errOut.String(), "vaultmind index --embed --vault "+vault)
 	assert.NotContains(t, errOut.String(), "embedded ", "the backlog is not embedded on a write")
 }

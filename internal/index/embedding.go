@@ -121,11 +121,7 @@ func DecodeColBERTEmbedding(data []byte, _ int) ([][]float32, error) {
 
 // NoteEmbedding pairs a note ID with its embedding vector and metadata.
 type NoteEmbedding struct {
-	NoteID string
-	// SectionID is set when the unit is a section of a long note (see
-	// LoadUnitEmbeddings); empty for a whole note. BodyText is then the
-	// section's own text.
-	SectionID string
+	NoteID    string
 	Embedding []float32
 	Type      string
 	Title     string
@@ -259,15 +255,13 @@ func HasEmbeddings(d *DB) (bool, error) {
 
 // NoteSparseEmbedding pairs a note ID with its sparse vector and metadata.
 type NoteSparseEmbedding struct {
-	NoteID string
-	// SectionID: as on NoteEmbedding.
-	SectionID string
-	Sparse    map[int32]float32
-	Type      string
-	Title     string
-	Path      string
-	BodyText  string
-	IsDomain  bool
+	NoteID   string
+	Sparse   map[int32]float32
+	Type     string
+	Title    string
+	Path     string
+	BodyText string
+	IsDomain bool
 }
 
 // NoteColBERTEmbedding pairs a note ID with its ColBERT matrix and metadata.
@@ -340,14 +334,9 @@ func LoadAllSparseEmbeddings(d *DB) ([]NoteSparseEmbedding, error) {
 
 // LoadAllColBERTEmbeddings returns all notes that have stored ColBERT embeddings.
 // dims is the embedding dimensionality for decoding.
-//
-// A long note whose sections are embedded is left out: it is searched by its
-// sections (see units.go), which have no ColBERT, and its own ColBERT covers
-// only its first 8,192 tokens.
 func LoadAllColBERTEmbeddings(d *DB, dims int) ([]NoteColBERTEmbedding, error) {
 	rows, err := d.Query(`SELECT id, colbert_embedding, type, title, path, body_text, is_domain
-		FROM notes WHERE colbert_embedding IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sections s
-			WHERE s.note_id = notes.id AND s.note_hash = notes.hash AND s.embedding IS NOT NULL)`)
+		FROM notes WHERE colbert_embedding IS NOT NULL`)
 	if err != nil {
 		return nil, fmt.Errorf("loading ColBERT embeddings: %w", err)
 	}
@@ -371,11 +360,8 @@ func LoadColBERTEmbeddingsFor(d *DB, dims int, ids []string) ([]NoteColBERTEmbed
 			args[i] = id
 		}
 		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(chunk)), ",")
-		// As LoadAllColBERTEmbeddings: a note searched by its sections is left out.
 		rows, err := d.Query(`SELECT id, colbert_embedding, type, title, path, body_text, is_domain
-			FROM notes WHERE colbert_embedding IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sections s
-				WHERE s.note_id = notes.id AND s.note_hash = notes.hash AND s.embedding IS NOT NULL)
-			AND id IN (`+placeholders+`)`, args...) // nosemgrep: go-sql-injection -- only "?" placeholders are concatenated; ids are bound
+			FROM notes WHERE colbert_embedding IS NOT NULL AND id IN (`+placeholders+`)`, args...) // nosemgrep: go-sql-injection -- only "?" placeholders are concatenated; ids are bound
 		if err != nil {
 			return nil, fmt.Errorf("loading ColBERT embeddings for candidates: %w", err)
 		}

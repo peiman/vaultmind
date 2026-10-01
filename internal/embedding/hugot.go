@@ -20,7 +20,7 @@ type HugotEmbedder struct {
 	maxTokens int
 }
 
-// ApproxCharsPerToken bounds the cheap pre-cut in front of the accurate ones.
+// approxCharsPerToken bounds the cheap pre-cut in front of the accurate ones.
 //
 // It was 2, chosen when this estimate was the ONLY thing standing between an
 // oversized note and a hung ORT forward pass: dense / code-heavy / non-English
@@ -42,7 +42,7 @@ type HugotEmbedder struct {
 //
 // 4 is the English-prose rate. Denser content simply reaches the accurate loop,
 // which is what that loop is for.
-const ApproxCharsPerToken = 4
+const approxCharsPerToken = 4
 
 // TruncateForEmbedding truncates text to fit within the model's token limit.
 // Uses a character-based approximation (2 chars/token, empirically derived).
@@ -59,7 +59,7 @@ func TruncateForEmbedding(text string, maxTokens int) string {
 	if maxTokens <= 0 {
 		return ""
 	}
-	return truncateToChars(text, maxTokens*ApproxCharsPerToken)
+	return truncateToChars(text, maxTokens*approxCharsPerToken)
 }
 
 // truncateToChars cuts text to at most maxChars bytes, breaking at a word

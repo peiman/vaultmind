@@ -27,8 +27,7 @@ func (r *EmbeddingRetriever) Search(ctx context.Context, query string, limit, of
 		return nil, 0, fmt.Errorf("embedding query: %w", err)
 	}
 
-	// Units, not notes: a long note is scored by each of its sections.
-	all, err := index.LoadUnitEmbeddings(r.DB)
+	all, err := index.LoadAllEmbeddings(r.DB)
 	if err != nil {
 		return nil, 0, fmt.Errorf("loading embeddings: %w", err)
 	}
@@ -42,28 +41,50 @@ func (r *EmbeddingRetriever) Search(ctx context.Context, query string, limit, of
 	}
 
 	// Score, filter, and build results in one pass
-	var results []retrieval.ScoredResult
+	type scored struct {
+		result retrieval.ScoredResult
+		score  float64
+	}
+	var results []scored
 	for _, ne := range all {
 		if !keep(ne.NoteID, ne.Type) {
 			continue
 		}
-		results = append(results, retrieval.ScoredResult{
-			ID:       ne.NoteID,
-			Section:  ne.SectionID,
-			Type:     ne.Type,
-			Title:    ne.Title,
-			Path:     ne.Path,
-			Snippet:  truncate(ne.BodyText, snippetMaxLen),
-			Score:    CosineSimilarity(queryVec, ne.Embedding),
-			IsDomain: ne.IsDomain,
+		sim := CosineSimilarity(queryVec, ne.Embedding)
+		results = append(results, scored{
+			result: retrieval.ScoredResult{
+				ID:       ne.NoteID,
+				Type:     ne.Type,
+				Title:    ne.Title,
+				Path:     ne.Path,
+				Snippet:  truncate(ne.BodyText, snippetMaxLen),
+				Score:    sim,
+				IsDomain: ne.IsDomain,
+			},
+			score: sim,
 		})
 	}
 
-	// Sort by score descending, then one hit per note (its best section).
+	// Sort by score descending
 	sort.Slice(results, func(i, j int) bool {
-		return results[i].Score > results[j].Score
+		return results[i].score > results[j].score
 	})
-	out, total := page(firstPerNote(results), limit, offset)
+
+	total := len(results)
+
+	// Apply offset/limit
+	if offset >= len(results) {
+		return nil, total, nil
+	}
+	results = results[offset:]
+	if limit > 0 && len(results) > limit {
+		results = results[:limit]
+	}
+
+	out := make([]retrieval.ScoredResult, len(results))
+	for i, s := range results {
+		out[i] = s.result
+	}
 	return out, total, nil
 }
 

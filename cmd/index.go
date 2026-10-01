@@ -304,14 +304,6 @@ func formatIndexResult(r index.IndexAndEmbedResult, model string, w io.Writer) e
 				return err
 			}
 		}
-		// The parts of notes longer than the model's window, embedded in the
-		// same pass. Absent for a vault of short notes.
-		if s := r.Embed; s.SectionsEmbedded+s.SectionsErrors+s.SectionsEmptyOutput > 0 {
-			if _, err := fmt.Fprintf(w, "Embedded %d sections of long notes (%d errors)\n",
-				s.SectionsEmbedded, s.SectionsErrors+s.SectionsEmptyOutput); err != nil {
-				return err
-			}
-		}
 		if model == embedding.ModelMiniLM {
 			// `go install` (and onboarding scripts that wrap it) silently land on
 			// the pure-Go MiniLM build — dense-only, no sparse/ColBERT. An adopter
