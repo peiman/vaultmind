@@ -18,13 +18,18 @@ func NoteSimilarities(ctx context.Context, queryText string, embedder embedding.
 	if err != nil {
 		return nil, err
 	}
-	all, err := index.LoadAllEmbeddings(db)
+	// Units: a long note's similarity is its best section's, the same unit
+	// the lanes scored — not its truncated whole-note vector.
+	all, err := index.LoadUnitEmbeddings(db)
 	if err != nil {
 		return nil, err
 	}
 	sims := make(map[string]float64, len(all))
 	for _, ne := range all {
-		sims[ne.NoteID] = CosineSimilarity(queryVec, ne.Embedding)
+		sim := CosineSimilarity(queryVec, ne.Embedding)
+		if prev, ok := sims[ne.NoteID]; !ok || sim > prev {
+			sims[ne.NoteID] = sim
+		}
 	}
 	return sims, nil
 }

@@ -314,18 +314,24 @@ func relevanceByVault(sources []VaultSource) map[string]float64 {
 
 // topHitCosine returns the cosine between the query and ONE note, reporting
 // ok=false when that note has no stored embedding — which is unmeasured, not
-// a similarity of zero.
+// a similarity of zero. A long note searched by its sections is measured by
+// its best section: its whole-note vector covers only its first 8,192 tokens,
+// and judging a section hit by it would under-rate the hit and withhold it.
 func topHitCosine(ctx context.Context, queryText, noteID string, emb embedding.Embedder, db *index.DB) (float64, bool, error) {
 	queryVec, err := emb.Embed(ctx, queryText)
 	if err != nil {
 		return 0, false, err
 	}
-	noteVec, err := index.LoadEmbedding(db, noteID)
+	vecs, err := index.LoadNoteUnitEmbeddings(db, noteID)
 	if err != nil {
 		return 0, false, err
 	}
-	if len(noteVec) == 0 {
+	if len(vecs) == 0 {
 		return 0, false, nil
 	}
-	return CosineSimilarity(queryVec, noteVec), true, nil
+	best := CosineSimilarity(queryVec, vecs[0])
+	for _, v := range vecs[1:] {
+		best = max(best, CosineSimilarity(queryVec, v))
+	}
+	return best, true, nil
 }
