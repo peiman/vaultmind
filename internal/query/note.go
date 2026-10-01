@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/peiman/vaultmind/internal/envelope"
 	"github.com/peiman/vaultmind/internal/graph"
@@ -37,6 +38,18 @@ type NoteGetOutcome struct {
 
 // RunNoteGet executes the note get logic and reports what it delivered.
 func RunNoteGet(db *index.DB, cfg NoteGetConfig, w io.Writer) (NoteGetOutcome, error) {
+	// `<note>#<anchor>`: one part of a long note — the id a hit on that part
+	// shows. Anything else, and a section that is unknown or stale, resolves
+	// as a note.
+	if strings.Contains(cfg.Input, "#") {
+		note, err := sectionNote(db, cfg.Input)
+		if err != nil {
+			return NoteGetOutcome{}, err
+		}
+		if note != nil {
+			return renderNote(db, cfg, w, note)
+		}
+	}
 	resolver := graph.NewResolver(db)
 	resolved, err := resolver.Resolve(cfg.Input)
 	if err != nil {
@@ -79,7 +92,31 @@ func RunNoteGet(db *index.DB, cfg NoteGetConfig, w io.Writer) (NoteGetOutcome, e
 	if note == nil {
 		return NoteGetOutcome{}, fmt.Errorf("note %q not found in index", resolved.Matches[0].ID)
 	}
+	return renderNote(db, cfg, w, note)
+}
 
+// sectionNote returns the note holding one current section, with its body
+// cut to that section; nil when id names no current section.
+func sectionNote(db *index.DB, id string) (*index.FullNote, error) {
+	s, err := index.QuerySection(db, id)
+	if err != nil || s == nil {
+		return nil, err
+	}
+	note, err := db.QueryFullNote(s.NoteID)
+	if err != nil {
+		return nil, fmt.Errorf("querying note: %w", err)
+	}
+	if note == nil {
+		return nil, nil //nolint:nilnil // the section's note vanished: resolve the input as usual
+	}
+	note.Body, note.Headings, note.Blocks = s.Body, nil, nil
+	note.Section, note.HeadingPath = s.ID, s.HeadingPath
+	return note, nil
+}
+
+// renderNote records the access and writes the note (or the section of it).
+func renderNote(db *index.DB, cfg NoteGetConfig, w io.Writer, note *index.FullNote) (NoteGetOutcome, error) {
+	var err error
 	// Plasticity roadmap step 5 (Track A.2): explicit `note get <id>` is
 	// the highest-signal retrieval-access event vaultmind emits — an
 	// agent or user named this note by id and got back its body. Record
@@ -107,7 +144,11 @@ func RunNoteGet(db *index.DB, cfg NoteGetConfig, w io.Writer) (NoteGetOutcome, e
 		return outcome, json.NewEncoder(w).Encode(env)
 	}
 
-	if _, err = fmt.Fprintf(w, "%s (%s) — %s\n", note.ID, note.Type, note.Title); err != nil {
+	id, title := note.ID, note.Title
+	if note.Section != "" {
+		id, title = note.Section, withHeadingPath(note.Title, note.HeadingPath)
+	}
+	if _, err = fmt.Fprintf(w, "%s (%s) — %s\n", id, note.Type, title); err != nil {
 		return outcome, err
 	}
 	// Render the body in human mode unless the caller asked for

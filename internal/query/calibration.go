@@ -91,8 +91,9 @@ func MeasureNoiseFloor(ctx context.Context, embedder embedding.Embedder, db *ind
 		NTNCosineMu:      mu,
 		NTNCosineSigma:   sigma,
 		NTNSampleCount:   count,
-		NoteCount:        len(all),
-		EmbeddingDims:    qDims, // guaranteed uniform by the mixed-model guard above
+		NoteCount:        len(all), // units measured: notes, and long notes' sections
+
+		EmbeddingDims: qDims, // guaranteed uniform by the mixed-model guard above
 	}, nil
 }
 

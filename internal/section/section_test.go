@@ -238,3 +238,15 @@ func TestPrefix(t *testing.T) {
 		Prefix("SQLite FTS5", Section{HeadingPath: []string{"6. Special INSERT Commands", "6.9. The 'optimize' Command"}}))
 	assert.Equal(t, "SQLite FTS5", Prefix("SQLite FTS5", Section{}))
 }
+
+// A section's stored text opens with its own heading, which delivery names
+// separately. Left in, an excerpt took a numbered heading ("7.1.1. Synonym
+// Support" has a full stop) for the opening sentence and delivered only that.
+func TestWithoutHeading(t *testing.T) {
+	path := "7.1. Custom Tokenizers" + PathSeparator + "7.1.1. Synonym Support"
+	assert.Equal(t, "There are several ways.", WithoutHeading("7.1.1. Synonym Support\n\nThere are several ways.", path))
+	assert.Equal(t, "There are several ways.", WithoutHeading("  7.1.1. Synonym Support  \r\n\r\nThere are several ways.", path))
+	assert.Equal(t, "Text before any heading.", WithoutHeading("Text before any heading.", ""), "a preamble has no heading")
+	assert.Equal(t, "Other line\n\nbody", WithoutHeading("Other line\n\nbody", path), "only the section's own heading goes")
+	assert.Equal(t, "7.1.1. Synonym Support", WithoutHeading("7.1.1. Synonym Support", path), "a heading with nothing under it stays")
+}

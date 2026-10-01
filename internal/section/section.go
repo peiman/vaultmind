@@ -95,6 +95,26 @@ func Prefix(title string, s Section) string {
 	return title + PathSeparator + strings.Join(s.HeadingPath, PathSeparator)
 }
 
+// WithoutHeading drops a section's own heading — the last element of its
+// stored heading path — from the front of its stored text, for delivery, which
+// names the heading path separately. Left in, an excerpt took a numbered
+// heading ("7.1.1. Synonym Support" ends a "sentence") for the opening prose
+// and delivered the title alone. A heading with nothing under it stays.
+func WithoutHeading(text, headingPath string) string {
+	if headingPath == "" {
+		return text
+	}
+	heading := headingPath
+	if i := strings.LastIndex(headingPath, PathSeparator); i >= 0 {
+		heading = headingPath[i+len(PathSeparator):]
+	}
+	first, rest, ok := strings.Cut(strings.TrimLeft(text, " \t\r\n"), "\n")
+	if !ok || strings.TrimSpace(first) != heading || strings.TrimSpace(rest) == "" {
+		return text
+	}
+	return strings.TrimSpace(rest)
+}
+
 // estimateTokens is the cheap count the embedder's own pre-cut uses.
 func estimateTokens(s string) int {
 	return tokensFor(utf8.RuneCountInString(s))

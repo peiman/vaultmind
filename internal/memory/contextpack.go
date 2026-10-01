@@ -32,6 +32,12 @@ type ContextPackConfig struct {
 	// ahead of every graph neighbour, in the order given, because a note that
 	// matched the question outranks one that is merely linked to the answer.
 	Seeds []Seed
+
+	// Sections maps a note id to the section of it that matched (see
+	// retrieval.ScoredResult.Section). Such a note is packed as that section's
+	// text — a long note's opening carries nothing of a deep answer. A section
+	// that is unknown or stale falls back to the whole note.
+	Sections map[string]string
 }
 
 // Seed is a note to pack as context regardless of its graph distance from the
@@ -59,6 +65,10 @@ type ContextPackTarget struct {
 	// ShownBefore marks a note whose body this conversation already received
 	// recently; it is sent as its title alone. See ContextItem.ShownBefore.
 	ShownBefore bool `json:"shown_before,omitempty"`
+	// Section and HeadingPath name the part of a long note Body came from;
+	// empty when Body is the note's own text.
+	Section     string `json:"section,omitempty"`
+	HeadingPath string `json:"heading_path,omitempty"`
 }
 
 // ContextItem holds context metadata for a single related note.
@@ -78,6 +88,9 @@ type ContextItem struct {
 	// recently. It degrades to its title — never dropped, so an agent that lost
 	// the earlier copy to compaction still sees the note exists.
 	ShownBefore bool `json:"shown_before,omitempty"`
+	// Section and HeadingPath: as on ContextPackTarget.
+	Section     string `json:"section,omitempty"`
+	HeadingPath string `json:"heading_path,omitempty"`
 }
 
 // ContextPackResult is the full output of a ContextPack operation.
@@ -153,6 +166,9 @@ func ContextPack(resolver *graph.Resolver, db *index.DB, cfg ContextPackConfig) 
 	// queries per call, so caching halves the query count when a note appears in
 	// both the frontmatter packing pass and the body backfill pass.
 	noteCache := make(map[string]*index.FullNote)
+	// sections records, per note packed as a section, which one — so the
+	// target and items can say where their text came from.
+	sections := map[string]*index.SectionRow{}
 	loadNote := func(id string) (*index.FullNote, error) {
 		if cached, ok := noteCache[id]; ok {
 			return cached, nil
@@ -161,6 +177,7 @@ func ContextPack(resolver *graph.Resolver, db *index.DB, cfg ContextPackConfig) 
 		if loadErr != nil {
 			return nil, loadErr
 		}
+		fullN = withSection(db, fullN, cfg.Sections[id], sections)
 		noteCache[id] = fullN
 		return fullN, nil
 	}
@@ -176,6 +193,9 @@ func ContextPack(resolver *graph.Resolver, db *index.DB, cfg ContextPackConfig) 
 
 	// Step 3: Estimate target tokens and fill budget.
 	target, remaining := packTargetContent(full, cfg.Budget, cfg.ExcerptTokens, result)
+	if s := sections[targetID]; s != nil {
+		target.Section, target.HeadingPath = s.ID, s.HeadingPath
+	}
 	result.Target = target
 
 	if remaining <= 0 {
@@ -208,8 +228,31 @@ func ContextPack(resolver *graph.Resolver, db *index.DB, cfg ContextPackConfig) 
 			return nil, err
 		}
 	}
+	for i := range result.Context {
+		if s := sections[result.Context[i].ID]; s != nil {
+			result.Context[i].Section, result.Context[i].HeadingPath = s.ID, s.HeadingPath
+		}
+	}
 
 	return result, nil
+}
+
+// withSection returns full packed as the named section of it: a copy whose
+// body is that section's text, recorded in packed. With no section named, or
+// one that is unknown or stale, it returns full unchanged — the whole note,
+// as before. full is never modified: other readers may share it.
+func withSection(db *index.DB, full *index.FullNote, sectionID string, packed map[string]*index.SectionRow) *index.FullNote {
+	if full == nil || sectionID == "" {
+		return full
+	}
+	s, err := index.QuerySection(db, sectionID)
+	if err != nil || s == nil || s.NoteID != full.ID {
+		return full
+	}
+	section := *full
+	section.Body = s.Body
+	packed[full.ID] = s
+	return &section
 }
 
 // withSeeds puts the seeds ahead of the sorted graph candidates, in the order

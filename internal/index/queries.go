@@ -129,6 +129,10 @@ type FullNote struct {
 	IsDomain    bool                   `json:"is_domain_note"`
 	Aliases     []string               `json:"-"`
 	Tags        []string               `json:"-"`
+	// Section and HeadingPath are set when Body is one part of a long note
+	// (`note get <note>#<anchor>`); empty for the whole note.
+	Section     string `json:"section,omitempty"`
+	HeadingPath string `json:"heading_path,omitempty"`
 }
 
 // HeadingRow represents a heading in query results.

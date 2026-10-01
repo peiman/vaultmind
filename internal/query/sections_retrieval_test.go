@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/embedding"
+	"github.com/peiman/vaultmind/internal/graph"
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/query"
 	"github.com/peiman/vaultmind/internal/retrieval"
@@ -146,6 +147,22 @@ func TestMeasureNoiseFloor_RunsOverUnits(t *testing.T) {
 	db, _ := sectionedDB(t)
 	_, err := query.MeasureNoiseFloor(context.Background(), axisEmbedder(1), db)
 	require.NoError(t, err)
+}
+
+// ask delivers the matched section of a long note — the whole point of the
+// split: the agent reads the part that answers, not the page's opening.
+func TestAsk_DeliversTheMatchedSectionOfALongNote(t *testing.T) {
+	db, ids := sectionedDB(t)
+	r := &query.EmbeddingRetriever{DB: db, Embedder: axisEmbedder(2)}
+	res, err := query.Ask(context.Background(), r, graph.NewResolver(db), db, query.AskConfig{
+		Query: "q", SearchLimit: 5, Budget: 2000, MaxItems: 3, ExcerptTokens: 80,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, res.Context)
+	require.NotNil(t, res.Context.Target)
+	assert.Equal(t, "ref-long", res.Context.TargetID)
+	assert.Equal(t, ids[1], res.Context.Target.Section)
+	assert.True(t, strings.HasPrefix(res.Context.Target.Body, "Configure"), res.Context.Target.Body[:min(60, len(res.Context.Target.Body))])
 }
 
 var _ embedding.Embedder = &mockEmbedder{}

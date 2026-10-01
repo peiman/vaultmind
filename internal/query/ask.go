@@ -281,6 +281,23 @@ func relevantLaterHits(hits []retrieval.ScoredResult, r *AskResult) []memory.See
 	return seeds
 }
 
+// hitSections maps each hit that matched a section of a long note to that
+// section, so the pack delivers the part that answered rather than the
+// note's opening. Nil when no hit matched a section: the pack is unchanged.
+func hitSections(hits []retrieval.ScoredResult) map[string]string {
+	var out map[string]string
+	for _, h := range hits {
+		if h.Section == "" {
+			continue
+		}
+		if out == nil {
+			out = map[string]string{}
+		}
+		out[h.ID] = h.Section
+	}
+	return out
+}
+
 // Ask searches the vault for the query, computes raw cosine similarities
 // (when an embedder is available), recomputes activation scores with
 // spreading activation (via ActivationFunc), then packs token-budgeted
@@ -390,6 +407,7 @@ func Ask(ctx context.Context, retriever retrieval.Retriever, resolver *graph.Res
 		ActivationScores: activationScores,
 		ExcerptTokens:    cfg.ExcerptTokens,
 		Seeds:            relevantLaterHits(hits, result),
+		Sections:         hitSections(hits),
 	})
 	if packErr != nil {
 		log.Debug().Err(packErr).Str("note_id", hits[0].ID).Msg("context-pack failed; returning search results only")

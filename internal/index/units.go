@@ -3,6 +3,8 @@ package index
 import (
 	"database/sql"
 	"fmt"
+
+	"github.com/peiman/vaultmind/internal/section"
 )
 
 // Retrieval units. A note that fits the model's window is one unit, searched
@@ -134,4 +136,33 @@ func LoadNoteUnitEmbeddings(d *DB, noteID string) ([][]float32, error) {
 		return nil, err
 	}
 	return [][]float32{v}, nil
+}
+
+// SectionRow is one stored section of a long note.
+type SectionRow struct {
+	ID          string `json:"id"`
+	NoteID      string `json:"note_id"`
+	HeadingPath string `json:"heading_path"`
+	Body        string `json:"body"`
+}
+
+const querySection = `SELECT s.id, s.note_id, s.heading_path, s.body
+	FROM sections s JOIN notes n ON n.id = s.note_id
+	WHERE s.id = ? AND s.note_hash = n.hash`
+
+// QuerySection returns one current section by id — its text without its own
+// heading line, which HeadingPath carries — or nil when there is no
+// such section or it is stale (its note re-indexed by an older binary): a
+// part of a note's old text is never served as current.
+func QuerySection(d *DB, sectionID string) (*SectionRow, error) {
+	var s SectionRow
+	err := d.QueryRow(querySection, sectionID).Scan(&s.ID, &s.NoteID, &s.HeadingPath, &s.Body)
+	if err == sql.ErrNoRows {
+		return nil, nil //nolint:nilnil // not found is not an error: the caller falls back to the whole note
+	}
+	if err != nil {
+		return nil, fmt.Errorf("querying section %q: %w", sectionID, err)
+	}
+	s.Body = section.WithoutHeading(s.Body, s.HeadingPath)
+	return &s, nil
 }

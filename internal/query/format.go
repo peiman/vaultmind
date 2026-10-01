@@ -11,6 +11,7 @@ import (
 	"github.com/peiman/vaultmind/internal/memory"
 	"github.com/peiman/vaultmind/internal/noisefloor"
 	"github.com/peiman/vaultmind/internal/retrieval"
+	"github.com/peiman/vaultmind/internal/section"
 )
 
 // FormatAsk writes a human-readable text representation of an AskResult.
@@ -287,7 +288,13 @@ func zGloss(z float64) string {
 // weak. Relevance is in the header; the raw score stays in --json and --explain.
 func writeAskHits(w io.Writer, hits []retrieval.ScoredResult, opts formatOpts) error {
 	for i, h := range hits {
-		if _, err := fmt.Fprintf(w, "  %2d.  %-40s  %s\n", i+1, h.ID, h.Title); err != nil {
+		// A hit on a part of a long note shows the part's id: it is what
+		// `note get` opens, and opening the whole page would bury the answer.
+		id := h.ID
+		if h.Section != "" {
+			id = h.Section
+		}
+		if _, err := fmt.Fprintf(w, "  %2d.  %-40s  %s\n", i+1, id, h.Title); err != nil {
 			return err
 		}
 		if opts.preview && h.Snippet != "" {
@@ -471,7 +478,7 @@ func writeContextTarget(w io.Writer, target *memory.ContextPackTarget, opts form
 	}
 	noteType, _ := target.Frontmatter["type"].(string)
 	title, _ := target.Frontmatter["title"].(string)
-	if _, err := fmt.Fprintf(w, "  [%s] %s%s\n", noteType, title, titleSuffix(target.ShownBefore)); err != nil {
+	if _, err := fmt.Fprintf(w, "  [%s] %s%s\n", noteType, withHeadingPath(title, target.HeadingPath), titleSuffix(target.ShownBefore)); err != nil {
 		return err
 	}
 	if !opts.pointersOnly && target.Body != "" {
@@ -488,6 +495,15 @@ func writeContextTarget(w io.Writer, target *memory.ContextPackTarget, opts form
 	return nil
 }
 
+// withHeadingPath appends where in a long note the text comes from
+// ("Title › Chapter › Section"); a whole note's title is returned as is.
+func withHeadingPath(title, headingPath string) string {
+	if headingPath == "" {
+		return title
+	}
+	return title + section.PathSeparator + headingPath
+}
+
 // itemBodyPreviewRunes bounds a full body rendered as a neighbour preview.
 // Excerpts skip it: they carry their own budget-derived bound.
 const itemBodyPreviewRunes = 120
@@ -498,7 +514,7 @@ func writeContextItems(w io.Writer, items []memory.ContextItem, opts formatOpts)
 	for _, item := range items {
 		noteType, _ := item.Frontmatter["type"].(string)
 		title, _ := item.Frontmatter["title"].(string)
-		if _, err := fmt.Fprintf(w, "  [%s] %s%s\n", noteType, title, titleSuffix(item.ShownBefore)); err != nil {
+		if _, err := fmt.Fprintf(w, "  [%s] %s%s\n", noteType, withHeadingPath(title, item.HeadingPath), titleSuffix(item.ShownBefore)); err != nil {
 			return err
 		}
 		if !opts.pointersOnly && item.BodyIncluded && item.Body != "" {

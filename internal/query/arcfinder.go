@@ -85,6 +85,8 @@ func NewArcFinder(db *index.DB, embedder embedding.Embedder) (*ArcFinder, error)
 	if embedder == nil {
 		return nil, ErrNoEmbedder
 	}
+	// Note-level on purpose, not units: arcs are short notes and are judged
+	// whole, and the finder filters by type.
 	all, err := index.LoadAllEmbeddings(db)
 	if err != nil {
 		return nil, fmt.Errorf("loading arc embeddings: %w", err)
