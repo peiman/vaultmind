@@ -62,9 +62,7 @@ func pdfText(ctx context.Context, data []byte) (text, title string, err error) {
 	}()
 	ctx, cancel := context.WithTimeout(ctx, pdfTimeout)
 	defer cancel()
-	pool, err := webassembly.Init(webassembly.Config{
-		Context: ctx, MinIdle: 1, MaxIdle: 1, MaxTotal: 1, RuntimeConfig: pdfiumRuntime(),
-	})
+	pool, err := newPDFiumPool(ctx)
 	if err != nil {
 		return "", "", fmt.Errorf("reading the PDF: starting pdfium: %w", err)
 	}
@@ -83,6 +81,19 @@ func pdfText(ctx context.Context, data []byte) (text, title string, err error) {
 		return "", "", errors.New("no text layer (scanned PDF?)")
 	}
 	return text, pdfTitle(meta, firstLine(text)), nil
+}
+
+// newPDFiumPool starts pdfium with one worker and no filesystem. The empty
+// FSConfig matters: left nil, go-pdfium mounts the host's "/" into the
+// module, and a pdfium exploit in a crafted PDF could read any file the user
+// can and carry it into the note's text. pdfium gets the PDF as bytes and
+// needs no files.
+func newPDFiumPool(ctx context.Context) (pdfium.Pool, error) {
+	return webassembly.Init(webassembly.Config{
+		Context: ctx, MinIdle: 1, MaxIdle: 1, MaxTotal: 1,
+		RuntimeConfig: pdfiumRuntime(),
+		FSConfig:      wazero.NewFSConfig(),
+	})
 }
 
 // pdfiumRuntime keeps the features pdfium needs (a custom config replaces

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/klippa-app/go-pdfium/requests"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -78,6 +79,25 @@ func TestPDFText_StopsWhenTheContextEnds(t *testing.T) {
 	time.Sleep(time.Millisecond)
 	_, _, err := pdfText(ctx, fixture(t, "paper.pdf"))
 	require.Error(t, err)
+}
+
+// pdfium gets the PDF as bytes and needs no files. go-pdfium mounts the host's
+// "/" into the module unless told otherwise, which would let a pdfium exploit
+// in a crafted PDF read ~/.ssh and write the result into the note.
+func TestPDFium_CannotReachTheHostFilesystem(t *testing.T) {
+	pool, err := newPDFiumPool(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = pool.Close() })
+	inst, err := pool.GetInstance(time.Minute)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = inst.Close() })
+	path, err := filepath.Abs(filepath.Join("testdata", "paper.pdf"))
+	require.NoError(t, err)
+	doc, err := inst.OpenDocument(&requests.OpenDocument{FilePath: &path})
+	if err == nil {
+		_, _ = inst.FPDF_CloseDocument(&requests.FPDF_CloseDocument{Document: doc.Document})
+	}
+	require.Error(t, err, "pdfium opened a host file by path")
 }
 
 func TestCleanPDFText(t *testing.T) {
