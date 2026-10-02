@@ -138,6 +138,9 @@ func finalURL(resp *http.Response, rawURL string) string {
 }
 
 func readPage(r io.Reader, contentType string) ([]byte, error) {
+	if mt, _ := acceptedMedia(contentType); mt == pdfMediaType {
+		return readPDFBody(r)
+	}
 	body, err := io.ReadAll(io.LimitReader(r, maxPageBytes+1))
 	if err != nil {
 		return nil, err
@@ -157,6 +160,20 @@ func readPage(r io.Reader, contentType string) ([]byte, error) {
 	return decoded, nil
 }
 
+// readPDFBody reads a PDF's bytes as they are: a PDF is binary, and a
+// charset decoder would corrupt it. Papers run 0.5–3 MB, so it gets a larger
+// cap than a text page.
+func readPDFBody(r io.Reader) ([]byte, error) {
+	body, err := io.ReadAll(io.LimitReader(r, maxPDFBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(body) > maxPDFBytes {
+		return nil, errors.New("PDF is larger than 20 MiB")
+	}
+	return body, nil
+}
+
 func decodeCharset(body []byte, contentType string) ([]byte, error) {
 	decoded, err := charset.NewReader(bytes.NewReader(body), contentType)
 	if err != nil {
@@ -172,10 +189,16 @@ var textPageTypes = map[string]bool{
 	"text/markdown":         true,
 	"text/x-markdown":       true,
 	"text/plain":            true,
+	pdfMediaType:            true,
 }
 
-// acceptedMedia parses a Content-Type and refuses anything that is not text.
-// The error names the type, so a PDF is refused as a type rather than read.
+// pdfMediaType is the one binary type a page import accepts; its text is
+// extracted (see pdf.go).
+const pdfMediaType = "application/pdf"
+
+// acceptedMedia parses a Content-Type and refuses anything that is not text
+// or a PDF. The error names the type, so a zip is refused as a type rather
+// than read.
 func acceptedMedia(header string) (string, error) {
 	mt, _, err := mime.ParseMediaType(header)
 	if err != nil || !textPageTypes[mt] {

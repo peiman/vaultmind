@@ -294,13 +294,41 @@ func TestImportURL_FetchErrorsWriteNothing(t *testing.T) {
 		assert.NoDirExists(t, filepath.Join(vault, "imported"))
 	}
 
-	t.Run("pdf", func(t *testing.T) {
+	t.Run("broken pdf", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/pdf")
 			_, _ = w.Write([]byte("%PDF-1.4"))
 		}))
 		t.Cleanup(srv.Close)
-		assertNothing(t, srv.URL+"/file.pdf", "not a text page (application/pdf)")
+		assertNothing(t, srv.URL+"/file.pdf", "reading the PDF")
+	})
+
+	t.Run("other binary", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/zip")
+			_, _ = w.Write([]byte("PK"))
+		}))
+		t.Cleanup(srv.Close)
+		assertNothing(t, srv.URL+"/file.zip", "not a text page (application/zip)")
+	})
+
+	t.Run("oversized pdf", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/pdf")
+			_, _ = w.Write(bytesOf(20<<20 + 1))
+		}))
+		t.Cleanup(srv.Close)
+		assertNothing(t, srv.URL+"/big.pdf", "PDF is larger than 20 MiB")
+	})
+
+	// The 20 MiB allowance is for PDFs only: a text page keeps 5 MiB.
+	t.Run("pdf-sized text page", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "text/plain")
+			_, _ = w.Write(bytesOf(10 << 20))
+		}))
+		t.Cleanup(srv.Close)
+		assertNothing(t, srv.URL+"/big.txt", "page is larger than 5 MiB")
 	})
 
 	t.Run("oversized", func(t *testing.T) {
@@ -518,4 +546,44 @@ func TestImportURL_AFolderNoteAtThePagePathIsSkipped(t *testing.T) {
 
 func bytesOf(n int) []byte {
 	return []byte(strings.Repeat("a", n))
+}
+
+// A PDF served over HTTP imports as one note: its text, its title, and the
+// same re-sync as a page. The real fetcher is used, so the PDF's bytes go
+// through the size cap and skip charset decoding.
+func TestImportURL_PDFBecomesOneNoteWithItsTextAndTitle(t *testing.T) {
+	pdf, err := os.ReadFile(filepath.Join("testdata", "paper.pdf"))
+	require.NoError(t, err)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/pdf")
+		_, _ = w.Write(pdf)
+	}))
+	t.Cleanup(srv.Close)
+	vault := t.TempDir()
+	given := srv.URL + "/pdf/2409.04701"
+
+	res := importPage(t, given, vault, importdocs.Options{}, importdocs.HTTPFetcher())
+	require.Len(t, res.Entries, 1)
+	assert.Equal(t, importdocs.Added, res.Entries[0].Action)
+	fm, body, _ := noteFront(t, vault, res.Entries[0].Note)
+	assert.Equal(t, "Retrieval for Agent Memory: A Study", fm["title"])
+	assert.Equal(t, given, fm["url"])
+	assert.Contains(t, body, "We study embedding long notes")
+	assert.Contains(t, body, "Sparse retrieval beats dense retrieval")
+	sum := sha256.Sum256([]byte(body))
+	assert.Equal(t, hex.EncodeToString(sum[:]), fm["source_hash"], "the hash is of the extracted text")
+
+	res = importPage(t, given, vault, importdocs.Options{}, importdocs.HTTPFetcher())
+	assert.Equal(t, 1, res.Count(importdocs.Unchanged))
+}
+
+func TestImportURL_ScannedPDFWritesNothing(t *testing.T) {
+	pdf, err := os.ReadFile(filepath.Join("testdata", "no-text.pdf"))
+	require.NoError(t, err)
+	vault := t.TempDir()
+	_, err = importdocs.ImportURL(t.Context(), "https://example.com/scan.pdf", vault, importdocs.Options{},
+		pageFetcher(importdocs.Page{ContentType: "application/pdf", Body: pdf}))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no text layer (scanned PDF?)")
+	assert.NoDirExists(t, filepath.Join(vault, "imported"))
 }
