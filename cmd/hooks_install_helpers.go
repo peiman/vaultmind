@@ -62,20 +62,21 @@ type hooksAgentWiring struct {
 	file    string // the hook file, relative to the project
 	merge   func(projectDir, vault string, vaults []string, p hooks.Profile, dryRun bool) (*hooks.MergeFileResult, error)
 	stanza  func(projectDir, vault string, vaults []string, p hooks.Profile) (string, error)
+	remove  func(projectDir string, removeScripts bool) (*hooks.RemoveFileResult, error)
 	notice  string
 }
 
 var (
-	codexWiring = hooksAgentWiring{name: hooksAgentCodex, display: "Codex", agent: hooks.AgentCodex,
+	codexAgentWiring = hooksAgentWiring{name: hooksAgentCodex, display: "Codex", agent: hooks.AgentCodex,
 		file: ".codex/hooks.json", merge: hooks.MergeIntoCodexHooksFor, stanza: hooks.CodexHooksStanzaFor,
-		notice: codexTrustNotice}
-	cursorWiring = hooksAgentWiring{name: hooksAgentCursor, display: "Cursor", agent: hooks.AgentCursor,
+		remove: hooks.RemoveFromCodexHooks, notice: codexTrustNotice}
+	cursorAgentWiring = hooksAgentWiring{name: hooksAgentCursor, display: "Cursor", agent: hooks.AgentCursor,
 		file: ".cursor/hooks.json", merge: hooks.MergeIntoCursorHooksFor, stanza: hooks.CursorHooksStanzaFor,
-		notice: cursorNotice}
+		remove: hooks.RemoveFromCursorHooks, notice: cursorNotice}
 )
 
 // agentWirings are the agents beyond Claude Code, by --agent value.
-var agentWirings = map[string]hooksAgentWiring{hooksAgentCodex: codexWiring, hooksAgentCursor: cursorWiring}
+var agentWirings = map[string]hooksAgentWiring{hooksAgentCodex: codexAgentWiring, hooksAgentCursor: cursorAgentWiring}
 
 // errUnknownAgent names every agent --agent accepts.
 func errUnknownAgent(agent string) error {

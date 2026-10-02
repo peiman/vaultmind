@@ -73,10 +73,6 @@ func removeHooksFor(projectDir, agent string, local, removeScripts bool) (*hooks
 	if local {
 		return nil, "", fmt.Errorf("--local is a Claude Code settings option; %s reads %s", aw.display, aw.file)
 	}
-	remove := hooks.RemoveFromCodexHooks
-	if aw.agent == hooks.AgentCursor {
-		remove = hooks.RemoveFromCursorHooks
-	}
-	res, err := remove(projectDir, removeScripts)
+	res, err := aw.remove(projectDir, removeScripts)
 	return res, filepath.Join(".vaultmind", "scripts"), err
 }

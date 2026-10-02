@@ -240,6 +240,19 @@ func TestInstall_TheAdapterShipsOnlyForCursor(t *testing.T) {
 	assert.FileExists(t, filepath.Join(ScriptsDir(project, AgentCursor), hookCodeMapScript))
 }
 
+// --only cannot put another agent's script where it is useless: the adapter
+// in .claude/scripts would be a file nothing runs.
+func TestInstall_OnlyRefusesAnotherAgentsScript(t *testing.T) {
+	project := t.TempDir()
+	_, err := Install(InstallConfig{ProjectDir: project, Only: []string{cursorAdapterScript}, Agent: AgentClaude})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--agent cursor")
+	assert.NoFileExists(t, filepath.Join(ScriptsDir(project, AgentClaude), cursorAdapterScript))
+
+	_, err = Install(InstallConfig{ProjectDir: project, Only: []string{cursorAdapterScript}, Agent: AgentCursor})
+	require.NoError(t, err, "for Cursor it is its own script")
+}
+
 // Codex and Cursor share .vaultmind/scripts. Removing one agent's hooks with
 // --remove-scripts must not break the other's.
 func TestRemoveScripts_KeepsScriptsTheOtherAgentStillRuns(t *testing.T) {
