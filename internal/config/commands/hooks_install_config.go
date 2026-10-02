@@ -41,8 +41,18 @@ CODEX (--agent codex)
   VaultMind hook the way Codex does (never approved, or changed since), and
   fails while any would be skipped.
 
-  Not wired for Codex yet: read-tracking (Codex has no Read tool) and the
-  pre-compaction prompt (Codex cannot add context there).
+  Not wired for Codex yet: read-tracking (Codex has no Read tool), the code
+  map, and the pre-compaction prompt (Codex cannot add context there).
+
+CURSOR (--agent cursor)
+
+  Wires the same scripts into Cursor through <project-dir>/.cursor/hooks.json,
+  each run through cursor-adapter.sh, with the scripts under
+  <project-dir>/.vaultmind/scripts/. Cursor adds context only at session start
+  and after a tool has run, so it gets: the vault map (and the persona, under
+  the persona profile) at session start; the notes about a file after the agent
+  reads or edits it; related notes after a commit. Per-prompt recall is not
+  possible — Cursor's hooks cannot add context to a prompt.
 
 PROJECT-DIR
 
@@ -199,7 +209,7 @@ func HooksInstallOptions() []config.ConfigOption {
 		{
 			Key:          "app.hooksinstall.agent",
 			DefaultValue: "claude",
-			Description:  "Agent to wire: claude (default; .claude/settings.json) or codex (.codex/hooks.json). Codex gets identity, recall, decision-time and episode-capture hooks; approve them in Codex with /hooks.",
+			Description:  "Agent to wire: claude (default; .claude/settings.json), codex (.codex/hooks.json) or cursor (.cursor/hooks.json). Codex gets identity, recall, decision-time and episode-capture hooks; approve them in Codex with /hooks. Cursor gets the session-start map, the code map and post-commit notes.",
 			Type:         "string",
 		},
 		{

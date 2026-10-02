@@ -240,6 +240,19 @@ func TestHealthHook_CodexProjectsGetTheCodexRefresh(t *testing.T) {
 	assert.Contains(t, out, "--agent codex --merge --force")
 }
 
+// Found live in Cursor (2026-10-02): a Cursor-only project was told its "6
+// hook scripts are out of date" with the Claude Code refresh — status graded
+// it on Claude Code scripts it never had. Cursor's own scripts get their own
+// line and their own refresh.
+func TestHealthHook_CursorProjectsGetTheCursorRefresh(t *testing.T) {
+	stub := stubVaultmindWithStatus(t, healthyTier,
+		`{"scripts":[],"cursor":{"scripts":[{"name":"vault-code-map.sh","state":"drifted"},{"name":"cursor-adapter.sh","state":"in_sync"}]}}`)
+	out, _ := runHealthHook(t, projectWithVault(t), stub)
+	assert.Contains(t, out, "1 Cursor hook script(s)")
+	assert.Contains(t, out, "--agent cursor --merge --force")
+	assert.NotContains(t, out, "--agent codex")
+}
+
 func TestHealthHook_UpToDateScriptsSayNothingAboutThem(t *testing.T) {
 	stub := stubVaultmindWithStatus(t, healthyTier,
 		`{"scripts":[{"name":"vault-recall.sh","state":"in_sync"}],"codex":{"scripts":[{"name":"load-persona.sh","state":"in_sync"}]}}`)

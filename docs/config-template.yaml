@@ -420,7 +420,7 @@ app:
     # Comma-separated vaults to search TOGETHER (federated recall): wired into the recall and decision-time hooks. The persona still loads one vault — --vault, else the first listed.
     vaults: 
 
-    # Agent to wire: claude (default; .claude/settings.json) or codex (.codex/hooks.json). Codex gets identity, recall, decision-time and episode-capture hooks; approve them in Codex with /hooks.
+    # Agent to wire: claude (default; .claude/settings.json), codex (.codex/hooks.json) or cursor (.cursor/hooks.json). Codex gets identity, recall, decision-time and episode-capture hooks; approve them in Codex with /hooks. Cursor gets the session-start map, the code map and post-commit notes.
     agent: claude
 
     # With --merge, print the merged result without writing it (preview/diff).
@@ -447,7 +447,7 @@ app:
     # Also delete the installed hook scripts under .claude/scripts/ (Codex: .vaultmind/scripts/; default: leave them).
     removescripts: false
 
-    # Agent to unwire: claude (default; .claude/settings.json) or codex (.codex/hooks.json).
+    # Agent to unwire: claude (default; .claude/settings.json), codex (.codex/hooks.json) or cursor (.cursor/hooks.json).
     agent: claude
 
   identityenroll:

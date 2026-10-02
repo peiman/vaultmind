@@ -58,6 +58,10 @@ func runHooksStatus(cmd *cobra.Command, args []string) error {
 		_, codexDrifted, codexMissing := report.Codex.ScriptCounts()
 		unapproved = report.Codex.Unapproved() + codexDrifted + codexMissing
 	}
+	if report.Cursor != nil {
+		_, cursorDrifted, cursorMissing := report.Cursor.ScriptCounts()
+		unapproved += cursorDrifted + cursorMissing
+	}
 	if drifted+missing+unwired+unapproved > 0 {
 		return cmdutil.ErrAlreadyWritten
 	}
@@ -68,14 +72,17 @@ func renderHooksStatus(w io.Writer, report hooks.StatusReport) error {
 	inSync, drifted, missing := report.Counts()
 
 	if !report.Installed {
-		if report.Codex != nil {
-			// A Codex-only project: its scripts live under .vaultmind/scripts.
+		if report.Codex != nil || report.Cursor != nil {
+			// A Codex or Cursor project: its scripts live under .vaultmind/scripts.
 			if err := renderCodexApprovals(w, report); err != nil {
+				return err
+			}
+			if err := renderCursorScripts(w, report); err != nil {
 				return err
 			}
 			if report.LeftoverClaudeScripts != "" {
 				_, err := fmt.Fprintf(w,
-					"\nLeftover from an older install, unused by Codex (safe to delete): %s\n",
+					"\nLeftover from an older install, unused by Codex or Cursor (safe to delete): %s\n",
 					report.LeftoverClaudeScripts)
 				return err
 			}
@@ -150,6 +157,9 @@ func renderHooksStatus(w io.Writer, report hooks.StatusReport) error {
 	if err := renderCodexApprovals(w, report); err != nil {
 		return err
 	}
+	if err := renderCursorScripts(w, report); err != nil {
+		return err
+	}
 
 	if drifted > 0 {
 		if _, err := fmt.Fprintf(w,
@@ -165,6 +175,33 @@ func renderHooksStatus(w io.Writer, report hooks.StatusReport) error {
 				"  install them: vaultmind hooks install %s --merge\n", report.ProjectDir); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// renderCursorScripts states Cursor's scripts and, when any is off, the fix.
+// Cursor has no approval step: a script in sync and wired is a script that runs.
+func renderCursorScripts(w io.Writer, report hooks.StatusReport) error {
+	c := report.Cursor
+	if c == nil {
+		return nil
+	}
+	inSync, drifted, missing := c.ScriptCounts()
+	if _, err := fmt.Fprintf(w, "Cursor: %d in sync, %d drifted, %d missing (%s)\n",
+		inSync, drifted, missing, c.ScriptsDir); err != nil {
+		return err
+	}
+	for _, s := range c.Scripts {
+		if s.State == hooks.ScriptInSync {
+			continue
+		}
+		if _, err := fmt.Fprintf(w, "  %-9s %s\n", s.State, s.Name); err != nil {
+			return err
+		}
+	}
+	if drifted+missing > 0 {
+		_, err := fmt.Fprintf(w, "  fix: vaultmind hooks install %s --agent cursor --merge --force\n", report.ProjectDir)
+		return err
 	}
 	return nil
 }

@@ -80,11 +80,13 @@ type Agent string
 const (
 	AgentClaude Agent = "claude"
 	AgentCodex  Agent = "codex"
+	AgentCursor Agent = "cursor"
 )
 
-// baseDir is the per-project folder holding an agent's hook files.
+// baseDir is the per-project folder holding an agent's hook files. Codex and
+// Cursor share .vaultmind/: neither should grow a .claude/ folder.
 func baseDir(projectDir string, a Agent) string {
-	if a == AgentCodex {
+	if a == AgentCodex || a == AgentCursor {
 		return filepath.Join(projectDir, codexBaseDir)
 	}
 	return filepath.Join(projectDir, claudeBaseDir)

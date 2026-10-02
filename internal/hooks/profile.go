@@ -65,6 +65,33 @@ var knowledgeScripts = map[string]bool{
 	hookPreCompactScript:       true,
 }
 
+// agentScripts are embedded scripts one agent needs and no profile lists:
+// Cursor runs every hook through its adapter; Claude Code and Codex never do.
+var agentScripts = map[string]Agent{cursorAdapterScript: AgentCursor}
+
+// allScriptNames is every embedded script but the agent-specific ones.
+func allScriptNames() []string {
+	var out []string
+	for _, n := range hookscripts.Names() {
+		if _, agentOnly := agentScripts[n]; !agentOnly {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// scriptsForAgent is what an install writes for agent a: the profile's
+// scripts plus the ones a needs of its own.
+func scriptsForAgent(names []string, a Agent) []string {
+	out := append([]string(nil), names...)
+	for _, n := range hookscripts.Names() {
+		if agentScripts[n] == a && a != "" {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
 // personaScripts is everything canonical except the mesh watcher.
 func personaScripts() map[string]bool {
 	out := map[string]bool{}
@@ -78,7 +105,7 @@ func personaScripts() map[string]bool {
 // and wired. Anything outside the set is neither missing nor unwired for this
 // adopter — it is not part of what they run.
 func ScriptsForProfile(p Profile) []string {
-	names := hookscripts.Names()
+	names := allScriptNames()
 	want := func(n string) bool { return true }
 	switch p {
 	case ProfileKnowledge:

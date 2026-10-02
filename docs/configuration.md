@@ -161,7 +161,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.hooksinstall.merge` | bool | `false` | `VAULTMIND_APP_HOOKSINSTALL_MERGE` | Additively merge the hook stanza into the project's settings file (never clobbers existing hooks) instead of only printing it. |
 | `app.hooksinstall.local` | bool | `false` | `VAULTMIND_APP_HOOKSINSTALL_LOCAL` | With --merge, target .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared). |
 | `app.hooksinstall.vaults` | string | `` | `VAULTMIND_APP_HOOKSINSTALL_VAULTS` | Comma-separated vaults to search TOGETHER (federated recall): wired into the recall and decision-time hooks. The persona still loads one vault — --vault, else the first listed. |
-| `app.hooksinstall.agent` | string | `claude` | `VAULTMIND_APP_HOOKSINSTALL_AGENT` | Agent to wire: claude (default; .claude/settings.json) or codex (.codex/hooks.json). Codex gets identity, recall, decision-time and episode-capture hooks; approve them in Codex with /hooks. |
+| `app.hooksinstall.agent` | string | `claude` | `VAULTMIND_APP_HOOKSINSTALL_AGENT` | Agent to wire: claude (default; .claude/settings.json), codex (.codex/hooks.json) or cursor (.cursor/hooks.json). Codex gets identity, recall, decision-time and episode-capture hooks; approve them in Codex with /hooks. Cursor gets the session-start map, the code map and post-commit notes. |
 | `app.hooksinstall.dryrun` | bool | `false` | `VAULTMIND_APP_HOOKSINSTALL_DRYRUN` | With --merge, print the merged result without writing it (preview/diff). |
 | `app.hooksrecord.json` | bool | `false` | `VAULTMIND_APP_HOOKSRECORD_JSON` | Output in JSON format |
 | `app.hooksrecord.vault` | string | `.` | `VAULTMIND_APP_HOOKSRECORD_VAULT` | Path to vault root |
@@ -169,7 +169,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.hooksuninstall.json` | bool | `false` | `VAULTMIND_APP_HOOKSUNINSTALL_JSON` | Output in JSON format |
 | `app.hooksuninstall.local` | bool | `false` | `VAULTMIND_APP_HOOKSUNINSTALL_LOCAL` | Target .claude/settings.local.json instead of .claude/settings.json. |
 | `app.hooksuninstall.removescripts` | bool | `false` | `VAULTMIND_APP_HOOKSUNINSTALL_REMOVESCRIPTS` | Also delete the installed hook scripts under .claude/scripts/ (Codex: .vaultmind/scripts/; default: leave them). |
-| `app.hooksuninstall.agent` | string | `claude` | `VAULTMIND_APP_HOOKSUNINSTALL_AGENT` | Agent to unwire: claude (default; .claude/settings.json) or codex (.codex/hooks.json). |
+| `app.hooksuninstall.agent` | string | `claude` | `VAULTMIND_APP_HOOKSUNINSTALL_AGENT` | Agent to unwire: claude (default; .claude/settings.json), codex (.codex/hooks.json) or cursor (.cursor/hooks.json). |
 | `app.identityenrolladd.request` | string | `` | `VAULTMIND_APP_IDENTITYENROLLADD_REQUEST` | Signed enrollment-request JSON file (stdin when empty or "-") |
 | `app.identityenrolladd.registry` | string | `` | `VAULTMIND_APP_IDENTITYENROLLADD_REGISTRY` | Current registry file: unsigned wireRegistry OR signed envelope (absent => fresh) |
 | `app.identityenrolladd.root_pubkey` | string | `` | `VAULTMIND_APP_IDENTITYENROLLADD_ROOT_PUBKEY` | Base64-std root ed25519 pubkey (required for a signed-envelope --registry; derives the network) |
@@ -737,7 +737,7 @@ app:
     # Comma-separated vaults to search TOGETHER (federated recall): wired into the recall and decision-time hooks. The persona still loads one vault — --vault, else the first listed.
     vaults: 
 
-    # Agent to wire: claude (default; .claude/settings.json) or codex (.codex/hooks.json). Codex gets identity, recall, decision-time and episode-capture hooks; approve them in Codex with /hooks.
+    # Agent to wire: claude (default; .claude/settings.json), codex (.codex/hooks.json) or cursor (.cursor/hooks.json). Codex gets identity, recall, decision-time and episode-capture hooks; approve them in Codex with /hooks. Cursor gets the session-start map, the code map and post-commit notes.
     agent: claude
 
     # With --merge, print the merged result without writing it (preview/diff).
@@ -764,7 +764,7 @@ app:
     # Also delete the installed hook scripts under .claude/scripts/ (Codex: .vaultmind/scripts/; default: leave them).
     removescripts: false
 
-    # Agent to unwire: claude (default; .claude/settings.json) or codex (.codex/hooks.json).
+    # Agent to unwire: claude (default; .claude/settings.json), codex (.codex/hooks.json) or cursor (.cursor/hooks.json).
     agent: claude
 
   identityenroll:
@@ -1706,7 +1706,7 @@ export VAULTMIND_APP_HOOKSINSTALL_LOCAL=false
 # Comma-separated vaults to search TOGETHER (federated recall): wired into the recall and decision-time hooks. The persona still loads one vault — --vault, else the first listed.
 export VAULTMIND_APP_HOOKSINSTALL_VAULTS=
 
-# Agent to wire: claude (default; .claude/settings.json) or codex (.codex/hooks.json). Codex gets identity, recall, decision-time and episode-capture hooks; approve them in Codex with /hooks.
+# Agent to wire: claude (default; .claude/settings.json), codex (.codex/hooks.json) or cursor (.cursor/hooks.json). Codex gets identity, recall, decision-time and episode-capture hooks; approve them in Codex with /hooks. Cursor gets the session-start map, the code map and post-commit notes.
 export VAULTMIND_APP_HOOKSINSTALL_AGENT=claude
 
 # With --merge, print the merged result without writing it (preview/diff).
@@ -1730,7 +1730,7 @@ export VAULTMIND_APP_HOOKSUNINSTALL_LOCAL=false
 # Also delete the installed hook scripts under .claude/scripts/ (Codex: .vaultmind/scripts/; default: leave them).
 export VAULTMIND_APP_HOOKSUNINSTALL_REMOVESCRIPTS=false
 
-# Agent to unwire: claude (default; .claude/settings.json) or codex (.codex/hooks.json).
+# Agent to unwire: claude (default; .claude/settings.json), codex (.codex/hooks.json) or cursor (.cursor/hooks.json).
 export VAULTMIND_APP_HOOKSUNINSTALL_AGENT=claude
 
 # Signed enrollment-request JSON file (stdin when empty or "-")

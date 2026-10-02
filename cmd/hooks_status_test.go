@@ -133,8 +133,15 @@ func TestHooksStatus_JSONCarriesEveryScriptState(t *testing.T) {
 	require.NoError(t, json.Unmarshal(out.Bytes(), &env))
 	assert.Equal(t, "ok", env.Status)
 	assert.True(t, env.Result.Installed)
-	assert.Len(t, env.Result.Scripts, len(hookscripts.Names()),
+	// Every script a Claude Code install runs: all embedded ones but the Cursor
+	// adapter, which a Claude Code project neither has nor misses.
+	assert.Len(t, env.Result.Scripts, len(hookscripts.Names())-1,
 		"every canonical script gets a state, not just the interesting ones")
+	names := make([]string, 0, len(env.Result.Scripts))
+	for _, s := range env.Result.Scripts {
+		names = append(names, s.Name)
+	}
+	assert.NotContains(t, names, "cursor-adapter.sh", "Claude Code's status is not about Cursor's adapter")
 }
 
 // A stat failure on the scripts path must surface, not be reported as a clean

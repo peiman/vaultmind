@@ -11,6 +11,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// claudeScripts is every embedded script a Claude Code install writes: all of
+// them but the Cursor adapter, which only a Cursor install ships.
+func claudeScripts() []string {
+	var out []string
+	for _, n := range hookscripts.Names() {
+		if n != "cursor-adapter.sh" {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
 // TestInstall_FreshDir_WritesAllCanonicalScripts — first install
 // into a clean project: every embedded canonical script is written
 // to <project>/.claude/scripts/. Pin the contract that this is the
@@ -26,7 +38,7 @@ func TestInstall_FreshDir_WritesAllCanonicalScripts(t *testing.T) {
 	assert.Equal(t, filepath.Join(dir, ".claude", "scripts"), res.ScriptsDir)
 	assert.Empty(t, res.Conflicts)
 	assert.Empty(t, res.Skipped)
-	assert.Equal(t, hookscripts.Names(), res.Written,
+	assert.Equal(t, claudeScripts(), res.Written,
 		"every canonical script must be written on a fresh install")
 
 	// Each written file matches the embedded canonical byte-for-byte.
@@ -116,7 +128,7 @@ func TestInstall_IdempotentOnByteIdenticalCopies(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, res2.Written, "re-install with no changes should write nothing")
 	assert.Empty(t, res2.Conflicts)
-	assert.Equal(t, hookscripts.Names(), res2.Skipped,
+	assert.Equal(t, claudeScripts(), res2.Skipped,
 		"every script reported as skipped (already byte-identical)")
 }
 
@@ -271,7 +283,7 @@ func TestInstall_OnlyEmpty_InstallsAll(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotNil(t, res)
-	assert.Equal(t, hookscripts.Names(), res.Written,
+	assert.Equal(t, claudeScripts(), res.Written,
 		"empty Only must install all canonical scripts (backward compat with pre-MEDIUM-fix Install)")
 }
 
