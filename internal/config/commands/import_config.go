@@ -5,11 +5,12 @@ import "github.com/peiman/vaultmind/.ckeletin/pkg/config"
 // ImportMetadata defines the `import` command — a folder of docs as notes.
 var ImportMetadata = config.CommandMetadata{
 	Use:   "import <dir|url>",
-	Short: "Import a folder of markdown docs, or one web page, as notes and keep them in step",
+	Short: "Import a folder of markdown docs, or one web page or PDF, as notes and keep them in step",
 	Long: "Copy every *.md under <dir> into the vault as a note under imported/<repo>/, so " +
 		"a project's existing docs are found by search, ask and the code hooks like any " +
 		"other note. Pass an http or https URL instead of a folder and that one page " +
-		"becomes a note under imported/web/<host>/.\n\n" +
+		"becomes a note under imported/web/<host>/. A URL that serves a PDF becomes a note " +
+		"holding the PDF's text, titled from its metadata or its first line.\n\n" +
 		"Each folder note records its doc in `paths:` — reading or editing the doc brings the " +
 		"note — and in `source:` and `source_hash:`, which is how a re-run knows what " +
 		"changed. A page note records the URL you gave in `url:` and `source:` and has no " +
@@ -22,8 +23,11 @@ var ImportMetadata = config.CommandMetadata{
 		"an imported note (tags, links) survives a re-run.\n\n" +
 		"A URL import fetches exactly the page you name and nothing else. Only http and " +
 		"https are accepted, one page per run. The body must be HTML or text of at most " +
-		"5 MiB, the request times out after 30 seconds, and at most five redirects are " +
-		"followed, only when they stay on http or https. Scripts on the page are not run.\n\n" +
+		"5 MiB, or a PDF of at most 20 MiB; the request times out after 30 seconds, and at " +
+		"most five redirects are followed, only when they stay on http or https. Scripts on " +
+		"the page are not run. A PDF's text is read by pdfium running in a WebAssembly " +
+		"sandbox, for at most 60 seconds; a PDF with no text layer (a scan) is refused. " +
+		"The first PDF import compiles pdfium once (a few seconds) and caches it.\n\n" +
 		"Left out of a folder import: hidden folders, dependency folders (node_modules, vendor), symlinks, " +
 		"and anything the vault's exclude list would hide from the index. A README is " +
 		"imported as readme.md, since vaults exclude README.md as their own meta file. " +
@@ -33,7 +37,8 @@ var ImportMetadata = config.CommandMetadata{
 		"  vaultmind import docs --vault ./knowledge --dry-run\n" +
 		"  vaultmind import docs --vault ./knowledge\n" +
 		"  vaultmind import docs --vault ./knowledge --prune --json\n" +
-		"  vaultmind import https://sqlite.org/fts5.html --vault ./kb",
+		"  vaultmind import https://sqlite.org/fts5.html --vault ./kb\n" +
+		"  vaultmind import https://arxiv.org/pdf/2402.03216 --vault ./kb",
 	ConfigPrefix: "app.import",
 	FlagOverrides: map[string]string{
 		"app.import.vault":   "vault",

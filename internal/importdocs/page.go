@@ -37,7 +37,7 @@ func ImportURL(ctx context.Context, rawURL, vaultRoot string, opts Options, fetc
 	if err != nil {
 		return nil, err
 	}
-	d, err := docFromPage(rawURL, u, host, name, media, page)
+	d, err := docFromPage(ctx, rawURL, u, host, name, media, page)
 	if err != nil {
 		return nil, err
 	}
@@ -120,12 +120,12 @@ func plainSegment(s string) bool {
 	return s != "" && s != "." && s != ".." && !strings.ContainsAny(s, `/\`) && !hasControl(s)
 }
 
-func docFromPage(rawURL string, u *url.URL, host, name, media string, page Page) (doc, error) {
+func docFromPage(ctx context.Context, rawURL string, u *url.URL, host, name, media string, page Page) (doc, error) {
 	base := page.FinalURL
 	if base == "" {
 		base = rawURL
 	}
-	body, title, err := pageMarkdown(media, page.Body, base)
+	body, title, err := pageMarkdown(ctx, media, page.Body, base)
 	if err != nil {
 		return doc{}, err
 	}
@@ -161,11 +161,15 @@ func fallbackTitle(u *url.URL) string {
 	return strings.ToLower(u.Hostname()) + p
 }
 
-func pageMarkdown(media string, body []byte, finalURL string) (string, string, error) {
-	if media != "text/html" && media != "application/xhtml+xml" {
+func pageMarkdown(ctx context.Context, media string, body []byte, finalURL string) (string, string, error) {
+	switch media {
+	case pdfMediaType:
+		return pdfText(ctx, body)
+	case "text/html", "application/xhtml+xml":
+		return safeHTMLMarkdown(string(body), finalURL)
+	default:
 		return servedMarkdown(body)
 	}
-	return safeHTMLMarkdown(string(body), finalURL)
 }
 
 // servedMarkdown is a text page. A leading frontmatter block is not the
