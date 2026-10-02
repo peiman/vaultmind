@@ -49,25 +49,34 @@ func runHooksUninstallCore(cmd *cobra.Command, projectDir, agent string, jsonOut
 				_, _ = fmt.Fprintf(w, "  - %s\n", name)
 			}
 		}
+		if len(res.ScriptsKept) > 0 {
+			_, _ = fmt.Fprintf(w, "\nKept %d script(s) in %s/: another agent's hooks still run them.\n",
+				len(res.ScriptsKept), scriptsDir)
+		}
 	}
 	return err
 }
 
-// removeHooksFor dispatches on --agent: Claude Code's settings file, or Codex's
-// .codex/hooks.json. It returns the scripts folder (relative to the project)
-// that --remove-scripts cleans, for the summary.
+// removeHooksFor dispatches on --agent: Claude Code's settings file, Codex's
+// .codex/hooks.json or Cursor's .cursor/hooks.json. It returns the scripts
+// folder (relative to the project) that --remove-scripts cleans, for the summary.
 func removeHooksFor(projectDir, agent string, local, removeScripts bool) (*hooks.RemoveFileResult, string, error) {
-	switch strings.TrimSpace(agent) {
-	case "", hooksAgentClaude:
+	agent = strings.TrimSpace(agent)
+	if agent == "" || agent == hooksAgentClaude {
 		res, err := hooks.RemoveFromSettings(projectDir, local, removeScripts)
 		return res, filepath.Join(".claude", "scripts"), err
-	case hooksAgentCodex:
-		if local {
-			return nil, "", fmt.Errorf("--local is a Claude Code settings option; Codex reads .codex/hooks.json")
-		}
-		res, err := hooks.RemoveFromCodexHooks(projectDir, removeScripts)
-		return res, filepath.Join(".vaultmind", "scripts"), err
-	default:
-		return nil, "", fmt.Errorf("--agent %q: must be %q or %q", agent, hooksAgentClaude, hooksAgentCodex)
 	}
+	aw, ok := agentWirings[agent]
+	if !ok {
+		return nil, "", errUnknownAgent(agent)
+	}
+	if local {
+		return nil, "", fmt.Errorf("--local is a Claude Code settings option; %s reads %s", aw.display, aw.file)
+	}
+	remove := hooks.RemoveFromCodexHooks
+	if aw.agent == hooks.AgentCursor {
+		remove = hooks.RemoveFromCursorHooks
+	}
+	res, err := remove(projectDir, removeScripts)
+	return res, filepath.Join(".vaultmind", "scripts"), err
 }

@@ -50,6 +50,8 @@ if pattern and not re.fullmatch(pattern, tool):
     sys.exit(0)
 roots = d.get("workspace_roots")
 project = roots[0] if isinstance(roots, list) and roots and isinstance(roots[0], str) else ""
+# postToolUse is the closest Cursor offers to PreToolUse: the tool has already
+# run, so reach informs about a commit rather than preceding it.
 events = {"sessionStart": "SessionStart", "postToolUse": "PreToolUse"}
 tools = {"Shell": "Bash"}
 out = dict(d)

@@ -772,7 +772,7 @@
           "properties": {
             "agent": {
               "default": "claude",
-              "description": "Agent to wire: claude (default; .claude/settings.json) or codex (.codex/hooks.json). Codex gets identity, recall, decision-time and episode-capture hooks; approve them in Codex with /hooks.",
+              "description": "Agent to wire: claude (default; .claude/settings.json), codex (.codex/hooks.json) or cursor (.cursor/hooks.json). Codex gets identity, recall, decision-time and episode-capture hooks; approve them in Codex with /hooks. Cursor gets the session-start map, the code map and post-commit notes.",
               "type": "string"
             },
             "dryrun": {
@@ -852,7 +852,7 @@
           "properties": {
             "agent": {
               "default": "claude",
-              "description": "Agent to unwire: claude (default; .claude/settings.json) or codex (.codex/hooks.json).",
+              "description": "Agent to unwire: claude (default; .claude/settings.json), codex (.codex/hooks.json) or cursor (.cursor/hooks.json).",
               "type": "string"
             },
             "json": {

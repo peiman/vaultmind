@@ -89,7 +89,7 @@ func HooksUninstallOptions() []config.ConfigOption {
 		{
 			Key:          "app.hooksuninstall.agent",
 			DefaultValue: "claude",
-			Description:  "Agent to unwire: claude (default; .claude/settings.json) or codex (.codex/hooks.json).",
+			Description:  "Agent to unwire: claude (default; .claude/settings.json), codex (.codex/hooks.json) or cursor (.cursor/hooks.json).",
 			Type:         "string",
 		},
 	}

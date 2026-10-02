@@ -166,10 +166,12 @@ try:
 except Exception:
     sys.exit(0)
 off = lambda ss: sum(1 for s in (ss or []) if s.get("state") in ("drifted", "missing"))
-print(off(r.get("scripts")), off((r.get("codex") or {}).get("scripts")))
+print(off(r.get("scripts")), off((r.get("codex") or {}).get("scripts")), off((r.get("cursor") or {}).get("scripts")))
 ' 2>/dev/null)"
   CLAUDE_STALE="${STALE%% *}"
-  CODEX_STALE="${STALE##* }"
+  CURSOR_STALE="${STALE##* }"
+  CODEX_STALE="${STALE#* }"
+  CODEX_STALE="${CODEX_STALE%% *}"
   if [ "${CLAUDE_STALE:-0}" -gt 0 ] 2>/dev/null; then
     echo "⚠ ${CLAUDE_STALE} hook script(s) here are out of date for this vaultmind. If you didn't change them yourself, refresh:"
     echo "   vaultmind hooks install \"$PROJECT_DIR\" --force"
@@ -177,6 +179,10 @@ print(off(r.get("scripts")), off((r.get("codex") or {}).get("scripts")))
   if [ "${CODEX_STALE:-0}" -gt 0 ] 2>/dev/null; then
     echo "⚠ ${CODEX_STALE} Codex hook script(s) here are out of date for this vaultmind. If you didn't change them yourself, refresh:"
     echo "   vaultmind hooks install \"$PROJECT_DIR\" --agent codex --merge --force"
+  fi
+  if [ "${CURSOR_STALE:-0}" -gt 0 ] 2>/dev/null; then
+    echo "⚠ ${CURSOR_STALE} Cursor hook script(s) here are out of date for this vaultmind. If you didn't change them yourself, refresh:"
+    echo "   vaultmind hooks install \"$PROJECT_DIR\" --agent cursor --merge --force"
   fi
 fi
 exit 0

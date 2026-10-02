@@ -114,6 +114,9 @@ func Install(cfg InstallConfig) (*InstallResult, error) {
 		// a persona loader the adopter will never wire.
 		names = ScriptsForProfile(profile)
 	}
+	// Cursor runs every hook through its adapter, so the adapter goes with
+	// whatever the profile or --only chose.
+	names = scriptsForAgent(names, cfg.Agent)
 	scriptsDir := ScriptsDir(cfg.ProjectDir, cfg.Agent)
 	res := &InstallResult{
 		ProjectDir: cfg.ProjectDir,

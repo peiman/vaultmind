@@ -146,6 +146,67 @@ func TestCursorAdapter_SilenceIsAnEmptyObject(t *testing.T) {
 	assert.Equal(t, "{}", strings.TrimSpace(out))
 }
 
+// adapterBesideStub copies the adapter into a fresh dir next to a script that
+// prints the payload it was handed, so a test sees the translation itself.
+func adapterBesideStub(t *testing.T) string {
+	t.Helper()
+	src, err := os.ReadFile(cursorAdapter)
+	require.NoError(t, err)
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, cursorAdapter), src, 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "echo-input.sh"),
+		[]byte("#!/bin/bash\npython3 -c 'import json,sys; print(json.dumps({\"hookSpecificOutput\":{\"additionalContext\":sys.stdin.read()}}))'\n"), 0o600))
+	return filepath.Join(dir, cursorAdapter)
+}
+
+func runAdapterAt(t *testing.T, adapter string, env []string, stdin string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("/bin/bash", append([]string{adapter}, args...)...)
+	cmd.Env = env
+	cmd.Stdin = strings.NewReader(stdin)
+	out, err := cmd.Output()
+	require.NoError(t, err, "the adapter must always exit 0")
+	return string(out)
+}
+
+// The script sees Claude Code's names: Shell becomes Bash, Cursor's
+// conversation becomes the session, the workspace root becomes the cwd.
+func TestCursorAdapter_TranslatesCursorInputForTheScript(t *testing.T) {
+	adapter := adapterBesideStub(t)
+	in := cursorToolPayload("Shell", map[string]any{"command": "git push"},
+		map[string]any{"conversation_id": "conv-9", "workspace_roots": []string{"/proj"}})
+
+	ctx := cursorContext(t, runAdapterAt(t, adapter, []string{"PATH=/usr/bin:/bin"}, in, "echo-input.sh"))
+	var seen map[string]any
+	require.NoError(t, json.Unmarshal([]byte(ctx), &seen), ctx)
+	assert.Equal(t, "Bash", seen["tool_name"])
+	assert.Equal(t, "PreToolUse", seen["hook_event_name"])
+	assert.Equal(t, "conv-9", seen["session_id"])
+	assert.Equal(t, "/proj", seen["cwd"])
+}
+
+func TestCursorAdapter_MalformedInputIsAnEmptyObject(t *testing.T) {
+	adapter := adapterBesideStub(t)
+	for _, in := range []string{"not json at all", "[1,2]", ""} {
+		out := runAdapterAt(t, adapter, []string{"PATH=/usr/bin:/bin"}, in, "echo-input.sh", "Read")
+		assert.Equal(t, "{}", strings.TrimSpace(out), "input %q", in)
+	}
+}
+
+// Without python3 nothing can be translated, and a hook must still not fail.
+func TestCursorAdapter_WithoutPython3IsAnEmptyObject(t *testing.T) {
+	adapter := adapterBesideStub(t)
+	bin := t.TempDir()
+	for _, tool := range []string{"cat", "dirname", "head", "tail"} {
+		p, err := exec.LookPath(tool)
+		require.NoError(t, err)
+		require.NoError(t, os.Symlink(p, filepath.Join(bin, tool)))
+	}
+	in := cursorToolPayload("Read", map[string]any{"file_path": "/x"}, nil)
+	out := runAdapterAt(t, adapter, []string{"PATH=" + bin}, in, "echo-input.sh")
+	assert.Equal(t, "{}", strings.TrimSpace(out))
+}
+
 // A script name that is not a hook script beside the adapter runs nothing.
 func TestCursorAdapter_RunsOnlyItsOwnScripts(t *testing.T) {
 	e := newCodeMapEnv(t, t.TempDir())

@@ -117,6 +117,9 @@ type RemoveFileResult struct {
 	Removed        []string `json:"removed"`
 	Changed        bool     `json:"changed"`
 	ScriptsDeleted []string `json:"scripts_deleted,omitempty"`
+	// ScriptsKept names the scripts --remove-scripts left in place because the
+	// other agent sharing .vaultmind/scripts still runs them.
+	ScriptsKept []string `json:"scripts_kept,omitempty"`
 }
 
 // RemoveFromSettings strips VaultMind's hook entries from the target hook-config
@@ -182,11 +185,9 @@ func RemoveFromCodexHooks(projectDir string, removeScripts bool) (*RemoveFileRes
 		}
 	}
 	if removeScripts {
-		deleted, err := deleteInstalledScripts(ScriptsDir(projectDir, AgentCodex))
-		if err != nil {
+		if err := removeSharedScripts(projectDir, AgentCodex, res); err != nil {
 			return res, err
 		}
-		res.ScriptsDeleted = deleted
 	}
 	return res, nil
 }

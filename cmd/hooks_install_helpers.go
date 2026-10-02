@@ -34,6 +34,7 @@ type hooksInstallParams struct {
 const (
 	hooksAgentClaude = "claude"
 	hooksAgentCodex  = "codex"
+	hooksAgentCursor = "cursor"
 
 	codexTrustNotice = "\n⚠ Codex runs these hooks ONLY after two approvals, and skips them silently until then:\n" +
 		"  1. trust this project when Codex asks, and\n" +
@@ -41,8 +42,45 @@ const (
 		"  Until both are done, Codex starts with no memory and does not say so.\n" +
 		"  Approve again after every upgrade: a new or changed hook is skipped until you do.\n" +
 		"  Check it any time: vaultmind hooks status <project-dir>\n" +
-		"  Not wired for Codex yet: read-tracking, the pre-compaction prompt.\n"
+		"  Not wired for Codex yet: read-tracking, the code map, the pre-compaction prompt.\n"
+
+	// cursorNotice says what Cursor's hooks cannot carry, so nobody expects
+	// recall that never comes (probed live, cursor-agent 2026.10.01).
+	cursorNotice = "\nWhat Cursor delivers: the vault map at session start, the notes about a file after the\n" +
+		"agent reads or edits it, and related notes after a commit (Cursor runs tool hooks after\n" +
+		"the tool, not before).\n" +
+		"Not possible in Cursor: per-prompt recall — Cursor's hooks cannot add context to a prompt.\n" +
+		"The agent can still ask the vault itself: vaultmind ask \"<question>\".\n"
 )
+
+// hooksAgentWiring is what differs between the agents wired outside Claude
+// Code's settings file: where the wiring goes and what to say about it.
+type hooksAgentWiring struct {
+	name    string // the --agent value
+	display string // how the agent is named to the operator
+	agent   hooks.Agent
+	file    string // the hook file, relative to the project
+	merge   func(projectDir, vault string, vaults []string, p hooks.Profile, dryRun bool) (*hooks.MergeFileResult, error)
+	stanza  func(projectDir, vault string, vaults []string, p hooks.Profile) (string, error)
+	notice  string
+}
+
+var (
+	codexWiring = hooksAgentWiring{name: hooksAgentCodex, display: "Codex", agent: hooks.AgentCodex,
+		file: ".codex/hooks.json", merge: hooks.MergeIntoCodexHooksFor, stanza: hooks.CodexHooksStanzaFor,
+		notice: codexTrustNotice}
+	cursorWiring = hooksAgentWiring{name: hooksAgentCursor, display: "Cursor", agent: hooks.AgentCursor,
+		file: ".cursor/hooks.json", merge: hooks.MergeIntoCursorHooksFor, stanza: hooks.CursorHooksStanzaFor,
+		notice: cursorNotice}
+)
+
+// agentWirings are the agents beyond Claude Code, by --agent value.
+var agentWirings = map[string]hooksAgentWiring{hooksAgentCodex: codexWiring, hooksAgentCursor: cursorWiring}
+
+// errUnknownAgent names every agent --agent accepts.
+func errUnknownAgent(agent string) error {
+	return fmt.Errorf("--agent %q: must be %q, %q or %q", agent, hooksAgentClaude, hooksAgentCodex, hooksAgentCursor)
+}
 
 // hooksInstallPayload is the JSON shape for an install run. InstallResult is
 // embedded so its fields stay at the top level (backward-compatible with the
@@ -120,14 +158,14 @@ func runHooksInstallCore(cmd *cobra.Command, p hooksInstallParams) error {
 	if agent == "" {
 		agent = hooksAgentClaude
 	}
-	if agent != hooksAgentClaude && agent != hooksAgentCodex {
-		return fmt.Errorf("--agent %q: must be %q or %q", agent, hooksAgentClaude, hooksAgentCodex)
-	}
-	if agent == hooksAgentCodex {
+	if w, ok := agentWirings[agent]; ok {
 		if p.local {
-			return fmt.Errorf("--local is a Claude Code settings option; Codex reads .codex/hooks.json")
+			return fmt.Errorf("--local is a Claude Code settings option; %s reads %s", w.display, w.file)
 		}
-		return runHooksInstallCodex(cmd, p, onlyList, profile, vaults)
+		return runHooksInstallAgent(cmd, p, onlyList, profile, vaults, w)
+	}
+	if agent != hooksAgentClaude {
+		return errUnknownAgent(agent)
 	}
 
 	prov, retErr := hooks.Provision(hooks.InstallConfig{
@@ -247,10 +285,10 @@ func writeMergeOutcome(w io.Writer, mergeRes *hooks.MergeFileResult) {
 	}
 }
 
-// runHooksInstallCodex installs the same scripts, then wires Codex instead of
-// Claude Code. Scripts first and only then the wiring, with a conflict gating
-// the merge — the same order Provision enforces for Claude Code.
-func runHooksInstallCodex(cmd *cobra.Command, p hooksInstallParams, only []string, profile hooks.Profile, vaults []string) error {
+// runHooksInstallAgent installs the same scripts, then wires Codex or Cursor
+// instead of Claude Code. Scripts first and only then the wiring, with a
+// conflict gating the merge — the same order Provision enforces for Claude Code.
+func runHooksInstallAgent(cmd *cobra.Command, p hooksInstallParams, only []string, profile hooks.Profile, vaults []string, aw hooksAgentWiring) error {
 	projectDir, err := filepath.Abs(p.projectDir)
 	if err != nil {
 		return fmt.Errorf("resolving project dir: %w", err)
@@ -263,15 +301,15 @@ func runHooksInstallCodex(cmd *cobra.Command, p hooksInstallParams, only []strin
 		VaultPath:  vault,
 		Vaults:     vaults,
 		Profile:    profile,
-		Agent:      hooks.AgentCodex,
+		Agent:      aw.agent,
 	}, false, false, p.dryRun)
 	res := prov.Install
 
 	var mergeRes *hooks.MergeFileResult
 	if retErr == nil && res != nil {
 		if p.merge {
-			mergeRes, retErr = hooks.MergeIntoCodexHooksFor(projectDir, vault, vaults, profile, p.dryRun)
-		} else if stanza, serr := hooks.CodexHooksStanzaFor(projectDir, vault, vaults, profile); serr == nil {
+			mergeRes, retErr = aw.merge(projectDir, vault, vaults, profile, p.dryRun)
+		} else if stanza, serr := aw.stanza(projectDir, vault, vaults, profile); serr == nil {
 			res.SettingsStanza = stanza
 		}
 	}
@@ -287,17 +325,18 @@ func runHooksInstallCodex(cmd *cobra.Command, p hooksInstallParams, only []strin
 		_ = json.NewEncoder(w).Encode(env)
 		return retErr
 	}
-	writeHooksInstallCodexHuman(w, res, mergeRes, installGuidance{
-		rerun:        hooksInstallRerun(p, hooksAgentCodex, vaults),
+	writeHooksInstallAgentHuman(w, res, mergeRes, installGuidance{
+		rerun:        hooksInstallRerun(p, aw.name, vaults),
 		missingVault: missingVaultWarning(projectDir, vault, vaults),
-	})
+	}, aw)
 	return retErr
 }
 
-// writeHooksInstallCodexHuman is the Codex variant of the human summary: the
-// wiring target is .codex/hooks.json, and the silent-skip trust rule is said
-// every time, because it is the one failure the operator cannot see.
-func writeHooksInstallCodexHuman(w io.Writer, res *hooks.InstallResult, mergeRes *hooks.MergeFileResult, g installGuidance) {
+// writeHooksInstallAgentHuman is the Codex or Cursor variant of the human
+// summary: the wiring target is the agent's own hook file, and the agent's
+// notice is said every time — for Codex the silent-skip trust rule, for Cursor
+// what its hooks cannot carry.
+func writeHooksInstallAgentHuman(w io.Writer, res *hooks.InstallResult, mergeRes *hooks.MergeFileResult, g installGuidance, aw hooksAgentWiring) {
 	if res == nil {
 		return
 	}
@@ -305,12 +344,12 @@ func writeHooksInstallCodexHuman(w io.Writer, res *hooks.InstallResult, mergeRes
 	res.SettingsStanza = "" // the Claude Code paste instructions do not apply
 	writeHooksInstallHuman(w, res, mergeRes, g)
 	if mergeRes == nil && stanza != "" {
-		_, _ = fmt.Fprintf(w, "\nNext: wire these into .codex/hooks.json.\n")
+		_, _ = fmt.Fprintf(w, "\nNext: wire these into %s.\n", aw.file)
 		_, _ = fmt.Fprintf(w, "  %s --merge --dry-run   preview, write nothing\n", g.rerun)
 		_, _ = fmt.Fprintf(w, "  %s --merge             apply it (additive)\n", g.rerun)
 		_, _ = fmt.Fprintf(w, "\nOr paste this yourself:\n\n%s\n", stanza)
 	}
-	_, _ = io.WriteString(w, codexTrustNotice)
+	_, _ = io.WriteString(w, aw.notice)
 }
 
 // parseHookVaults turns --vaults into absolute paths. Hooks run from wherever
@@ -354,8 +393,8 @@ func hooksInstallRerun(p hooksInstallParams, agent string, vaults []string) stri
 	if d := strings.TrimSpace(p.projectDir); d != "" && d != "." {
 		parts = append(parts, shellWord(d))
 	}
-	if agent == hooksAgentCodex {
-		parts = append(parts, "--agent codex")
+	if _, ok := agentWirings[agent]; ok {
+		parts = append(parts, "--agent "+agent)
 	}
 	if v := strings.TrimSpace(p.vault); v != "" {
 		parts = append(parts, "--vault "+shellWord(v))
