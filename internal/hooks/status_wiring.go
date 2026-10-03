@@ -3,7 +3,6 @@ package hooks
 import (
 	"encoding/json"
 	"path/filepath"
-	"strings"
 )
 
 // EventState says whether a canonical event is actually wired in the project's
@@ -74,7 +73,7 @@ func eventWiringForProfile(projectDir string, p Profile) []EventStatus {
 		groups, stale := 0, false
 		for _, group := range parsed.Hooks[event] {
 			for _, h := range group.Hooks {
-				if strings.Contains(h.Command, script) {
+				if commandReferencesScript(h.Command, script) {
 					groups++
 					stale = isLegacyMatcher(script, group.Matcher)
 					break
