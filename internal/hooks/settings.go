@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// The canonical five-hook wiring for a VaultMind-backed Claude Code project.
+// The canonical hook wiring for a VaultMind-backed Claude Code project.
 // This is the source of truth for the stanza that `hooks install` EMITS, so
 // a consumer doesn't have to hand-transcribe it from the onboarding doc
 // (issue #41 — the single biggest install-time friction was wiring
@@ -147,7 +147,7 @@ type canonicalHook struct {
 	Group  hookGroup
 }
 
-// canonicalHooks is the single source of truth for VaultMind's five-hook
+// canonicalHooks is the single source of truth for VaultMind's hook
 // wiring, in session-lifecycle order (start → prompt → read → end). Both
 // SettingsStanza (the copy-paste/print path) and MergeStanza (the in-place
 // merge path) build from this slice, so the matcher values and event→script
