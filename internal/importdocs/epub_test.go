@@ -141,8 +141,8 @@ func TestImport_AnEPUBBecomesOneNotePerChapterAndABookNote(t *testing.T) {
 			fm, body = noteAt(t, vault, bookDir+"book.md")
 			assert.Equal(t, "The Test Book", fm["title"])
 			assert.Contains(t, body, "Ada Writer")
-			one := strings.Index(body, "[[imported-demo-repo-docs-voyage-epub-01-chapter-one-arrival|Chapter One: Arrival]]")
-			two := strings.Index(body, "[[imported-demo-repo-docs-voyage-epub-02-chapter-two-departure|Chapter Two: Departure]]")
+			one := strings.Index(body, "[["+bookDir+"01-chapter-one-arrival|Chapter One: Arrival]]")
+			two := strings.Index(body, "[["+bookDir+"02-chapter-two-departure|Chapter Two: Departure]]")
 			assert.True(t, one >= 0 && two > one, "chapters in spine order:\n%s", body)
 
 			again := run(t, repo, vault, importdocs.Options{})
@@ -269,4 +269,66 @@ func TestImport_ALongDocumentIsSplitAtItsTableOfContentsEntries(t *testing.T) {
 			assert.Equal(t, []string{bookDir + "04-chapter-iii.md"}, notesBy(res, importdocs.Orphaned))
 		})
 	}
+}
+
+// Manifest hrefs are IRIs relative to the package document: percent-escaped,
+// and free to climb out of its folder.
+func TestImport_AnEPUBsHrefsAreDecodedAndResolved(t *testing.T) {
+	repo, vault := srcRepo(t), t.TempDir()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	add := func(name, content string) {
+		w, err := zw.Create(name)
+		require.NoError(t, err)
+		_, err = w.Write([]byte(content))
+		require.NoError(t, err)
+	}
+	add("META-INF/container.xml", `<container><rootfiles><rootfile full-path="OEBPS/content.opf"/></rootfiles></container>`)
+	add("OEBPS/content.opf", `<package><metadata><title>Paths</title></metadata><manifest>`+
+		`<item id="a" href="ch%201.xhtml" media-type="application/xhtml+xml"/>`+
+		`<item id="b" href="../text/ch2.xhtml" media-type="application/xhtml+xml"/>`+
+		`<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>`+
+		`</manifest><spine><itemref idref="a"/><itemref idref="b"/></spine></package>`)
+	add("OEBPS/ch 1.xhtml", xhtml(epubPara("The first chapter has a space in its file name.")))
+	add("text/ch2.xhtml", xhtml(epubPara("The second chapter lives outside the package folder.")))
+	add("OEBPS/nav.xhtml", xhtml(`<nav epub:type="toc"><ol><li><a href="ch%201.xhtml">Spaced</a></li><li><a href="../text/ch2.xhtml">Outside</a></li></ol></nav>`))
+	require.NoError(t, zw.Close())
+	write(t, filepath.Join(repo, "docs", "paths.epub"), buf.String())
+
+	run(t, repo, vault, importdocs.Options{})
+	dir := "imported/demo-repo/docs/paths-epub/"
+	fm, body := noteAt(t, vault, dir+"01-spaced.md")
+	assert.Equal(t, "Spaced", fm["title"])
+	assert.Contains(t, body, "space in its file name")
+	fm, body = noteAt(t, vault, dir+"02-outside.md")
+	assert.Equal(t, "Outside", fm["title"])
+	assert.Contains(t, body, "outside the package folder")
+}
+
+// A table of contents may list a file's sections out of document order.
+// The cut follows the document; each piece keeps its own entry's title.
+func TestImport_ASplitFollowsTheDocumentNotTheTOCOrder(t *testing.T) {
+	long := func(s string) string { return strings.Repeat(epubPara(s), 70) }
+	repo, vault := srcRepo(t), t.TempDir()
+	writeEPUB(t, filepath.Join(repo, "docs", "voyage.epub"), book{epub3: true, chapters: []chapter{{href: "all.xhtml",
+		body:    `<h2 id="a">A</h2>` + long("Alpha words fill this section of the chapter.") + `<h2 id="b">B</h2>` + long("Bravo words fill this section of the chapter.") + `<h2 id="c">C</h2>` + long("Charlie words fill this section of the chapter."),
+		entries: [][2]string{{"c", "Section C"}, {"a", "Section A"}, {"b", "Section B"}}}}})
+	run(t, repo, vault, importdocs.Options{})
+	for name, want := range map[string]string{"01-section-a.md": "Alpha", "02-section-b.md": "Bravo", "03-section-c.md": "Charlie"} {
+		_, body := noteAt(t, vault, bookDir+name)
+		assert.Contains(t, body, want, name)
+	}
+	_, body := noteAt(t, vault, bookDir+"01-section-a.md")
+	assert.NotContains(t, body, "Bravo")
+}
+
+// The book note links each chapter by its path, so a chapter whose id had to
+// be suffixed is still reached.
+func TestImport_TheBookNoteLinksAChapterWhoseIDWasTaken(t *testing.T) {
+	repo, vault := srcRepo(t), t.TempDir()
+	write(t, filepath.Join(vault, "taken.md"), "---\nid: imported-demo-repo-docs-voyage-epub-01-chapter-one-arrival\ntype: reference\ntitle: Taken\n---\nAn id the chapter wants.\n")
+	writeEPUB(t, filepath.Join(repo, "docs", "voyage.epub"), twoChapterBook(true))
+	run(t, repo, vault, importdocs.Options{})
+	_, body := noteAt(t, vault, bookDir+"book.md")
+	assert.Contains(t, body, "[["+bookDir+"01-chapter-one-arrival|")
 }

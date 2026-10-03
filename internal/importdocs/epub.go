@@ -6,9 +6,11 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path"
 	"regexp"
+	"sort"
 	"strings"
 
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
@@ -166,7 +168,7 @@ func parsePackage(raw []byte, opfDir string) (epubBook, error) {
 	b := epubBook{title: first(pkg.Title), creator: first(pkg.Creator), language: first(pkg.Language), opfDir: opfDir}
 	byID := map[string]epubItem{}
 	for _, it := range pkg.Items {
-		item := epubItem{href: opfDir + strings.SplitN(it.Href, "#", 2)[0], mediaType: it.MediaType}
+		item := epubItem{href: resolveHref(opfDir, it.Href), mediaType: it.MediaType}
 		byID[it.ID] = item
 		if strings.Contains(" "+it.Properties+" ", " nav ") {
 			b.navHref = item.href
@@ -181,6 +183,17 @@ func parsePackage(raw []byte, opfDir string) (epubBook, error) {
 		}
 	}
 	return b, nil
+}
+
+// resolveHref is the zip entry an href names from dir: its fragment
+// dropped, percent-escapes decoded (ch%201.xhtml is the entry "ch 1.xhtml"),
+// and ../ resolved. An href that does not decode is taken as it is.
+func resolveHref(dir, href string) string {
+	file, _, _ := strings.Cut(href, "#")
+	if dec, err := url.PathUnescape(file); err == nil {
+		file = dec
+	}
+	return strings.TrimPrefix(path.Join(dir, file), "/")
 }
 
 func first(s []string) string {
@@ -217,7 +230,7 @@ func refuseDRM(parts officeParts, b epubBook) error {
 		spine[it.href] = true
 	}
 	for _, r := range enc.Refs {
-		if spine[strings.TrimPrefix(path.Clean(r.URI), "/")] {
+		if spine[resolveHref("", r.URI)] {
 			return errors.New("DRM-protected: its chapters are encrypted, so it cannot be read")
 		}
 	}
@@ -345,7 +358,7 @@ func addEntry(out map[string][]tocEntry, dir, href, title string) {
 	if file == "" || title == "" {
 		return
 	}
-	key := path.Join(dir, file)
+	key := resolveHref(dir, file)
 	for _, e := range out[key] {
 		if e.frag == frag {
 			return
@@ -415,7 +428,14 @@ func splitAtEntries(raw string, entries []tocEntry, part string) []chapterPiece 
 		return nil
 	}
 	ids := map[string]*xhtml.Node{}
-	indexIDs(doc, ids)
+	order := map[*xhtml.Node]int{}
+	indexIDs(doc, ids, order)
+	// Cut in document order: a table of contents may list sections in
+	// another order, and the markdown can only be cut in the order it runs.
+	entries = append([]tocEntry(nil), entries...)
+	sort.SliceStable(entries, func(i, j int) bool {
+		return nodeOrder(ids[entries[i].frag], order) < nodeOrder(ids[entries[j].frag], order)
+	})
 	var marked []tocEntry
 	for _, e := range entries {
 		n := ids[e.frag]
@@ -459,9 +479,11 @@ func splitAtEntries(raw string, entries []tocEntry, part string) []chapterPiece 
 // its own.
 var markLine = regexp.MustCompile(splitMark + `\d+\s*`)
 
-// indexIDs maps every id (and every <a name>) in the document to its node.
-func indexIDs(n *xhtml.Node, ids map[string]*xhtml.Node) {
+// indexIDs maps every id (and every <a name>) in the document to its node,
+// and every element to its place in document order.
+func indexIDs(n *xhtml.Node, ids map[string]*xhtml.Node, order map[*xhtml.Node]int) {
 	if n.Type == xhtml.ElementNode {
+		order[n] = len(order)
 		for _, a := range n.Attr {
 			if a.Key == "id" || (a.Key == "name" && n.Data == "a") {
 				if _, seen := ids[a.Val]; !seen {
@@ -471,8 +493,16 @@ func indexIDs(n *xhtml.Node, ids map[string]*xhtml.Node) {
 		}
 	}
 	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		indexIDs(c, ids)
+		indexIDs(c, ids, order)
 	}
+}
+
+// nodeOrder is n's place in document order; a missing node sorts last.
+func nodeOrder(n *xhtml.Node, order map[*xhtml.Node]int) int {
+	if i, ok := order[n]; ok && n != nil {
+		return i
+	}
+	return len(order)
 }
 
 // chapterText converts a chapter's HTML to markdown. A chapter is all
@@ -556,7 +586,7 @@ func chapterName(n, total int, title, part string) string {
 }
 
 // bookDoc is the book's own note: its title, author and language, and its
-// chapters in reading order, linked by id.
+// chapters in reading order, linked.
 func bookDoc(src Source, b epubBook, folder, folderPath, book string, chapters []doc, rel string) doc {
 	title := b.title
 	if title == "" {
@@ -571,8 +601,11 @@ func bookDoc(src Source, b epubBook, folder, folderPath, book string, chapters [
 		fmt.Fprintf(&body, "Language: %s.\n\n", b.language)
 	}
 	body.WriteString("## Chapters\n\n")
+	// Linked by the note's path, which the import fixes, not by its id,
+	// which it may suffix when another note holds the plain one.
 	for i, c := range chapters {
-		fmt.Fprintf(&body, "%d. [[%s|%s]]\n", i+1, noteID(c.Repo, c.Path), strings.ReplaceAll(c.Title, "|", "-"))
+		target := strings.TrimSuffix(path.Join(ImportedDir, src.Repo, src.Prefix, c.Rel), ".md")
+		fmt.Fprintf(&body, "%d. [[%s|%s]]\n", i+1, target, strings.ReplaceAll(c.Title, "|", "-"))
 	}
 	text := body.String()
 	return doc{
