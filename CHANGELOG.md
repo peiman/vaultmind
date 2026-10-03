@@ -21,6 +21,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   skipped with its reason and the rest still imports. `vaultmind import <file>` imports one
   `.md` or `.pdf` without touching the folder's other notes. (#221) Importing into a vault
   that was never embedded says so, with the command that turns on semantic search.
+- **Importing a git repository takes what the project keeps.** Inside a git work tree, a
+  folder import leaves out whatever `.gitignore` (and `.git/info/exclude`, and your
+  global excludes) ignores, and says how many paths that was. A file git tracks is kept
+  even if a pattern matches it. Naming an ignored folder, or a single file, imports it
+  anyway. On one real repository this cut an import from 1,191 notes, mostly generated
+  output, to the 229 docs the project tracks.
 - **`hooks install --agent cursor` wires Cursor** — the vault map at session start, the
   notes about a file after the agent reads or edits it, and related notes after a commit.
   Cursor's hooks cannot add context to a prompt, so there is no per-prompt recall under

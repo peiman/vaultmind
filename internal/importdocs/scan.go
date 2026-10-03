@@ -41,10 +41,13 @@ var skippedFolders = map[string]bool{"node_modules": true, "vendor": true, "bowe
 // scan reads every *.md under root, the source folder with links resolved.
 // Symlinks are reported, not followed; hidden and dependency folders are left
 // out, and so is the vault when it lives inside the source (otherwise a
-// re-run imports its own notes).
+// re-run imports its own notes). In a git work tree, what git ignores is left
+// out too, and reported once.
 func scan(src Source, root, vaultReal string) ([]doc, []Entry, error) {
 	var docs []doc
 	var skipped []Entry
+	git := newGitFilter(root)
+	var ignored []string
 	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -59,9 +62,17 @@ func scan(src Source, root, vaultReal string) ([]doc, []Entry, error) {
 			if p != root && (p == vaultReal || strings.HasPrefix(d.Name(), ".") || skippedFolders[d.Name()]) {
 				return filepath.SkipDir
 			}
+			if p != root && git.ignored(rel, true) {
+				ignored = append(ignored, rel+"/")
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		if !importable(p) {
+			return nil
+		}
+		if git.ignored(rel, false) {
+			ignored = append(ignored, rel)
 			return nil
 		}
 		if hasControl(rel) {
@@ -87,7 +98,22 @@ func scan(src Source, root, vaultReal string) ([]doc, []Entry, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("scanning %s: %w", src.Dir, err)
 	}
+	if len(ignored) > 0 {
+		skipped = append(skipped, ignoredEntry(ignored))
+	}
 	return docs, skipped, nil
+}
+
+// ignoredEntry reports what git ignores as one line, naming the first few
+// paths: a generated-output folder can hold hundreds of docs.
+func ignoredEntry(paths []string) Entry {
+	const shown = 3
+	names := strings.Join(paths[:min(len(paths), shown)], ", ")
+	if len(paths) > shown {
+		names += ", …"
+	}
+	return Entry{Action: Skipped, Note: fmt.Sprintf("%d path(s)", len(paths)),
+		Reason: "git ignores them, so they were not imported (" + names + ")"}
 }
 
 // importable reports a file an import reads: markdown, or a PDF.
