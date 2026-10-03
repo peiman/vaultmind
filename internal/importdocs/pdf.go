@@ -73,21 +73,15 @@ func pdfText(ctx context.Context, data []byte) (text, title string, err error) {
 	// it took 64 s against 60.
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	// A start that overruns cancels ctx, which closes the module: the error
+	// surfaces from GetInstance, or from the read if it lands just after.
 	start := time.AfterFunc(pdfStartTimeout, cancel)
-	pool, err := newPDFiumPool(ctx)
+	inst, closeAll, err := startPDFium(ctx)
+	start.Stop()
 	if err != nil {
-		start.Stop()
 		return "", "", fmt.Errorf("reading the PDF: starting pdfium: %w", err)
 	}
-	defer func() { _ = pool.Close() }()
-	inst, err := pool.GetInstance(pdfStartTimeout)
-	if !start.Stop() && err == nil {
-		err = fmt.Errorf("starting pdfium took longer than %s", pdfStartTimeout)
-	}
-	if err != nil {
-		return "", "", fmt.Errorf("reading the PDF: %w", err)
-	}
-	defer func() { _ = inst.Close() }()
+	defer closeAll()
 	read := time.AfterFunc(pdfTimeout, cancel)
 	defer read.Stop()
 	pages, meta, err := readPDF(inst, data)
@@ -99,6 +93,20 @@ func pdfText(ctx context.Context, data []byte) (text, title string, err error) {
 		return "", "", errors.New("no text layer (scanned PDF?)")
 	}
 	return text, pdfTitle(meta, firstLine(text)), nil
+}
+
+// startPDFium starts pdfium and takes its one instance; closeAll releases both.
+func startPDFium(ctx context.Context) (pdfium.Pdfium, func(), error) {
+	pool, err := newPDFiumPool(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	inst, err := pool.GetInstance(pdfStartTimeout)
+	if err != nil {
+		_ = pool.Close()
+		return nil, nil, err
+	}
+	return inst, func() { _ = inst.Close(); _ = pool.Close() }, nil
 }
 
 // newPDFiumPool starts pdfium with one worker and no filesystem. The empty
