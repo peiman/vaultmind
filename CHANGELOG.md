@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-10-03
+
+> A vault takes in what a project holds and says what it covers.
+>
+> - **Import:** `import` now reads web pages and PDFs by URL; local PDFs; Word,
+>   PowerPoint and Excel files; and single files. Inside a git repository it
+>   leaves out what git ignores.
+> - **Overviews:** `tree` and the session-start map show what each folder
+>   covers, from a folder overview note or the folder's top tags.
+> - **Agents:** Cursor joins Claude Code and Codex.
+> - **Recall:** per-prompt recall stops repeating itself, and the session-start
+>   hooks run again after `/clear` and compaction.
+>
+> To pick up the new hook wiring, run `vaultmind hooks install --merge` (and
+> `--agent cursor --merge` for Cursor).
+
 ### Added
 
 - **`vaultmind import <url>` imports a web page as a note** — the page's main content
