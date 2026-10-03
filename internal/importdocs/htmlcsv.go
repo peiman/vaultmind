@@ -121,17 +121,24 @@ func csvReader(f io.Reader) (io.Reader, []byte, error) {
 		_, _ = br.Discard(len(bom))
 		return br, peek[len(bom):], nil
 	}
-	if validUTF8Prefix(peek) {
+	if validUTF8Prefix(peek, len(peek) == csvSniffBytes) {
 		return br, peek, nil
 	}
 	head, _ := charmap.Windows1252.NewDecoder().Bytes(peek)
 	return charmap.Windows1252.NewDecoder().Reader(br), head, nil
 }
 
-// validUTF8Prefix reports b valid UTF-8, allowing a character cut off at
-// its end by the peek.
-func validUTF8Prefix(b []byte) bool {
-	for cut := 0; cut < utf8.UTFMax && cut <= len(b); cut++ {
+// validUTF8Prefix reports b valid UTF-8. When the peek filled its buffer
+// (truncated), the last character may be cut in half, so up to three bytes
+// at the end are forgiven; a shorter file was read whole and is not.
+func validUTF8Prefix(b []byte, truncated bool) bool {
+	if utf8.Valid(b) {
+		return true
+	}
+	if !truncated {
+		return false
+	}
+	for cut := 1; cut < utf8.UTFMax && cut < len(b); cut++ {
 		if utf8.Valid(b[:len(b)-cut]) {
 			return true
 		}

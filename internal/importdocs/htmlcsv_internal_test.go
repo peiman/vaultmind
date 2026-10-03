@@ -82,3 +82,13 @@ func TestReadHTMLText_RefusesAFileOverTheCapAndAConverterPanic(t *testing.T) {
 }
 
 var _ io.Reader = (*failingReader)(nil)
+
+// A peek can cut the last character in half only when it filled its
+// buffer; a short file was read whole, and its bytes are judged as they are.
+func TestValidUTF8Prefix_OnlyAFullPeekMayEndMidCharacter(t *testing.T) {
+	assert.False(t, validUTF8Prefix([]byte{0xe9, '\n'}, false), "a two-byte Latin-1 file is not UTF-8")
+	assert.False(t, validUTF8Prefix([]byte{0x80, 0x81}, true))
+	assert.True(t, validUTF8Prefix([]byte("caf\xc3"), true), "é cut in half by a full peek")
+	assert.False(t, validUTF8Prefix([]byte("caf\xc3"), false))
+	assert.True(t, validUTF8Prefix([]byte("café"), false))
+}
