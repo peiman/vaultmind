@@ -5,13 +5,16 @@ import "github.com/peiman/vaultmind/.ckeletin/pkg/config"
 // ImportMetadata defines the `import` command — a folder of docs as notes.
 var ImportMetadata = config.CommandMetadata{
 	Use:   "import <dir|file|url>",
-	Short: "Import a folder of docs and PDFs, one file, or one web page or PDF, as notes and keep them in step",
+	Short: "Import a folder of docs, PDFs and Office files, one file, or one web page or PDF, as notes and keep them in step",
 	Long: "Copy every *.md under <dir> into the vault as a note under imported/<repo>/, so " +
 		"a project's existing docs are found by search, ask and the code hooks like any " +
-		"other note. Each *.pdf in the folder becomes a note of its text, <name>-pdf.md; a " +
-		"PDF that cannot be read (a scan, a broken file, over 20 MiB) is skipped with the " +
-		"reason and the rest still imports. Inside a git work tree, what git ignores is left " +
-		"out (naming an ignored folder imports it). Pass one .md or .pdf file instead and only that " +
+		"other note. Each *.pdf in the folder becomes a note of its text, <name>-pdf.md, and " +
+		"each Word, PowerPoint or Excel file (.docx, .pptx, .xlsx) a markdown note of its " +
+		"headings, slides or sheets, <name>-docx.md and so on. A file that cannot be read (a " +
+		"PDF scan, a broken file, a PDF over 20 MiB or an Office file over 512 MiB) is skipped " +
+		"with the reason and the rest still imports. Inside a git work tree, what git ignores " +
+		"is left out (naming an ignored folder imports it). Pass one such file instead and " +
+		"only that " +
 		"file is imported, named as importing its folder would name it; the folder's other " +
 		"notes are left alone. Pass an http or https URL instead of a folder and that one page " +
 		"becomes a note under imported/web/<host>/. A URL that serves a PDF becomes a note " +
