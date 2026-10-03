@@ -104,16 +104,21 @@ fi
 
 # Resolve the vaultmind binary:
 #
-# - Dev loop (vaultmind source dir present): build /tmp/vaultmind from
+# - Dev loop (vaultmind's OWN source tree): build /tmp/vaultmind from
 #   the local Go source when it's missing or stale. Keeps the dogfood
 #   loop self-updating — any commit propagates to the next session
 #   without a manual rm. /tmp/vaultmind is INTENTIONAL HERE; this is
-#   the only place /tmp gets used, because it IS dev work.
+#   the only place /tmp gets used, because it IS dev work. The tree is
+#   recognised by its module path and its build script, not by having
+#   internal/ and cmd/: that is the standard Go layout, and taking the
+#   branch in someone else's Go project ran a build script they do not
+#   have and loaded no persona (found by the 2026-10-02 audit).
 #
 # - Otherwise: use PATH-installed vaultmind (`task install` or
 #   `go install`). Fail loudly if not on PATH so the agent doesn't
 #   load silently-empty persona.
-if [ -d "$VAULTMIND_SRC/internal" ] && [ -d "$VAULTMIND_SRC/cmd" ]; then
+if grep -q '^module github.com/peiman/vaultmind$' "$VAULTMIND_SRC/go.mod" 2>/dev/null \
+  && [ -f "$VAULTMIND_SRC/.claude/scripts/build-vaultmind.sh" ]; then
   # Dev loop.
   VAULTMIND="/tmp/vaultmind"
   needs_build=0

@@ -45,7 +45,7 @@ Output format (JSON):
 }
 ```
 
-**`retrieval_mode`** tells you which lane ran. If it's `"keyword"`, the vault has no embeddings — your paraphrase queries will miss. Run `vaultmind index --embed --model minilm --vault <path>` to fix.
+**`retrieval_mode`** tells you which lane ran. If it's `"keyword"`, the vault has no embeddings — your paraphrase queries will miss. Run `vaultmind index --embed --vault <path>` to fix (`vaultmind doctor` says which model the vault uses).
 
 #### `--excerpt N` — get the passage that matters when the whole note will not fit
 
@@ -90,7 +90,7 @@ the top hit is wrong. Genuinely irrelevant hits still land at or below the noise
 
 ### `vaultmind search <query>` — ranked hits only
 
-Use when you want a hit list without the context-pack overhead. Supports `--mode hybrid | keyword | embedding | sparse | colbert` to pick a specific lane, or omit for auto-selection.
+Use when you want a hit list without the context-pack overhead. `--mode` is `keyword` (the default — full-text, every word must match), `semantic` or `hybrid`; pass `--mode hybrid` on an embedded vault for paraphrase queries. `ask` always uses every lane the vault has.
 
 ```bash
 vaultmind search "judgment gap" --vault examples/ada-vault --limit 10 --json
@@ -192,9 +192,13 @@ status: <value>            # for types with a status lifecycle (project, decisio
 
 ### After saving: re-index
 
+A note made with `vaultmind note create` (or changed with `vaultmind frontmatter set`) is
+indexed and embedded as part of that command. A file you wrote or edited by hand is not —
+index it yourself:
+
 ```bash
-vaultmind index --vault <path>                    # picks up the new file
-vaultmind index --embed --model minilm --vault <path>   # embeds the new note
+vaultmind index --vault <path>           # picks up the new or changed file
+vaultmind index --embed --vault <path>   # embeds it with the vault's model
 ```
 
 Incremental by default — only re-parses changed files. Safe to run every time you save.
@@ -225,8 +229,8 @@ vim examples/ada-vault/arcs/arc-ask-before-assuming.md
 # Re-index to register the change
 vaultmind index --vault examples/ada-vault
 
-# Re-embed the drifted note
-vaultmind index --embed --model minilm --vault examples/ada-vault
+# Re-embed the drifted note, with the vault's model
+vaultmind index --embed --vault examples/ada-vault
 ```
 
 For structured frontmatter changes (agent-safe, no file-level edit), use:
@@ -341,7 +345,7 @@ Session trace shows caller attribution (e.g. `vaultmind-persona-hook` for the Se
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `ask` returns 0 hits on a paraphrase query | Vault not embedded | `vaultmind index --embed --model minilm --vault <path>` |
+| `ask` returns 0 hits on a paraphrase query | Vault not embedded | `vaultmind index --embed --vault <path>` |
 | `doctor` reports `Embeddings: none` | Same | Same |
 | Retrieval quality drops after editing notes | Stale embeddings from pre-drift-fix era | `vaultmind index --embed --vault <path>` picks up the now-cleared drift |
 | `note create` errors with "type not registered" | Vault's config.yaml declares types and yours isn't listed | Add the type to `.vaultmind/config.yaml` or drop the check (convention-based) |

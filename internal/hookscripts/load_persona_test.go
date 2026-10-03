@@ -108,3 +108,20 @@ func TestPersonaHook_ArcFailureDoesNotCostTheIdentityBlock(t *testing.T) {
 	assert.Contains(t, out, "IDENTITY CONTEXT:", "a failed arc pass must not suppress the identity")
 	assert.NotContains(t, out, "YOUR ARCS")
 }
+
+// Found by the 2026-10-02 audit: the dev-loop branch fired on ANY project
+// with internal/ and cmd/ — the standard Go layout — then ran a build script
+// only VaultMind's own repo has, and the persona did not load. An ordinary Go
+// project must use the installed binary.
+func TestPersonaHook_AnOrdinaryGoProjectUsesTheInstalledBinary(t *testing.T) {
+	project, env := installPersonaHook(t, personaReciteStub)
+	for _, d := range []string{"internal", "cmd"} {
+		require.NoError(t, os.MkdirAll(filepath.Join(project, d), 0o750))
+	}
+	require.NoError(t, os.WriteFile(filepath.Join(project, "go.mod"), []byte("module example.com/someone-else\n\ngo 1.22\n"), 0o600))
+
+	out := runPersonaHook(t, project, env)
+
+	assert.Contains(t, out, "IDENTITY CONTEXT:", "the persona loads from the installed binary")
+	assert.NotContains(t, out, "build failed")
+}

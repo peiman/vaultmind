@@ -4,7 +4,7 @@
 
 AI agents start each session from zero: strong parametric knowledge, but no memory of what they did yesterday, what they decided, or what they're working toward. VaultMind turns a directory of Markdown notes into queryable, linked memory an agent can reconstruct itself from at the start of a session — and *continue* from, rather than start over.
 
-It's a single Go binary. Point it at a vault of Markdown files with Obsidian-compatible frontmatter; it builds a derived index (full-text + dense + sparse + late-interaction embeddings), resolves `[[wikilinks]]` and aliases into a knowledge graph, and answers queries with ranked, token-budgeted context.
+It's a single Go binary, local, with no server. Point it at a vault of Markdown files with Obsidian-compatible frontmatter; it builds a derived index (full-text + dense + sparse + late-interaction embeddings), resolves `[[wikilinks]]` and aliases into a knowledge graph, and answers queries with ranked, token-budgeted context. Two things it does need: the embedding model it downloads on first use (BGE-M3, about 2.3 GB, for the full hybrid; MiniLM, about 90 MB, for the pure-Go build), and — for the agent hooks — `bash` and `python3`, which the hook scripts run under.
 
 ## Install
 
@@ -76,7 +76,7 @@ vaultmind ask "what did Ada learn about scope?" --vault examples/ada-vault
 
 - **Vault** — a directory of Markdown notes with Obsidian-compatible frontmatter, tracked in Git. You curate it; the agent reads it.
 - **Index** — a derived SQLite index: full-text (FTS5), dense + sparse + ColBERT embeddings (BGE-M3), and a link/alias knowledge graph. Rebuilt with `vaultmind index`; never hand-edited.
-- **Retrieval** — Reciprocal Rank Fusion over the lanes, with calibrated top-hit confidence. A hit brings along the notes it links to (wikilinks, `related_ids`), so recalling one memory surfaces its neighbours. Ranking does **not** yet learn from use: usage-weighted ranking exists as an experiment, but replayed against real usage it did not improve recall, so it is not applied to results.
+- **Retrieval** — Reciprocal Rank Fusion over the lanes, with top-hit confidence measured against each vault's own noise floor (the strong/moderate/weak bands are provisional: so far fit on a handful of vaults). A hit brings along the notes it links to (wikilinks, `related_ids`), so recalling one memory surfaces its neighbours. Ranking does **not** yet learn from use: usage-weighted ranking exists as an experiment, but replayed against real usage it did not improve recall, so it is not applied to results.
 - **Context packs** — `vaultmind ask` assembles ranked results into a token-budgeted block ready to drop into an agent's context.
 - **Delivery** — the pack carries note *text*, not just titles. A note larger than the remaining budget would otherwise contribute **nothing** while still being counted, which on a vault whose median note exceeds a hook's budget is every query rather than an edge case:
 
@@ -94,14 +94,17 @@ Everything is `--json`-able for programmatic use; every command returns a stable
 
 ## Agent integration (persona reconstruction)
 
-VaultMind wires into **Claude Code** and **Codex CLI** so the agent reconstructs itself from its vault each session. Name the project and the vault, and let it write the wiring. `--profile persona` asks for the persona loader and episode capture; without it a fresh project gets the knowledge set (recall, decision-time reach, health), the right shape for a knowledge vault:
+VaultMind wires into **Claude Code**, **Codex CLI** and **Cursor** so the agent works from its vault each session. Name the project and the vault, and let it write the wiring. `--profile persona` asks for the persona loader and episode capture; without it a fresh project gets the knowledge set (recall, decision-time reach, the code map, health), the right shape for a knowledge vault:
 
 ```bash
 # Claude Code — writes <project-dir>/.claude/settings.json
-vaultmind hooks install <project-dir> --vault <your-vault> --profile persona --merge
+vaultmind hooks install <project-dir> --vault <your-vault> --merge
 
 # Codex CLI — writes <project-dir>/.codex/hooks.json
-vaultmind hooks install <project-dir> --vault <your-vault> --profile persona --agent codex --merge
+vaultmind hooks install <project-dir> --vault <your-vault> --agent codex --merge
+
+# Cursor — writes <project-dir>/.cursor/hooks.json
+vaultmind hooks install <project-dir> --vault <your-vault> --agent cursor --merge
 
 # Recall across several vaults (identity + a desk, say); the persona loads the first
 vaultmind hooks install <project-dir> --vaults <identity-vault>,<desk-vault> --profile persona --merge
@@ -109,7 +112,9 @@ vaultmind hooks install <project-dir> --vaults <identity-vault>,<desk-vault> --p
 
 Add `--dry-run` to preview the change first. Without `--merge` the scripts are written and the wiring is printed for you to paste. Without `--vault`, the hooks look for `<project-dir>/vaultmind-identity`.
 
-**Codex needs your approval, and skips the hooks silently without it**: trust the project when Codex asks, then run `/hooks` inside Codex and trust the VaultMind hooks. Until then the agent starts with no memory and nothing says why. Approve again after upgrading: a new or changed hook is skipped until you do. `vaultmind hooks status <project-dir>` checks each VaultMind hook the way Codex does (never approved, or changed since you approved it) and fails while any would be skipped. Codex projects keep the scripts in `.vaultmind/scripts/`, not `.claude/`. Under Codex, episode capture runs when the session ends; read-tracking and the pre-compaction prompt are Claude Code only. Every capture run, under either agent, leaves a line in `~/.vaultmind/capture/capture.log` saying what happened.
+**Codex needs your approval, and skips the hooks silently without it**: trust the project when Codex asks, then run `/hooks` inside Codex and trust the VaultMind hooks. Until then the agent starts with no memory and nothing says why. Approve again after upgrading: a new or changed hook is skipped until you do. `vaultmind hooks status <project-dir>` checks each VaultMind hook the way Codex does (never approved, or changed since you approved it) and fails while any would be skipped. Codex projects keep the scripts in `.vaultmind/scripts/`, not `.claude/`. Under Codex, episode capture runs when the session ends; read-tracking, the code map and the pre-compaction prompt are Claude Code only. Every capture run, under either agent, leaves a line in `~/.vaultmind/capture/capture.log` saying what happened.
+
+**Cursor adds context only at session start and after a tool runs.** So under Cursor the agent gets the vault map at session start, the notes about a file after it reads or edits that file, and related notes after a commit — but no per-prompt recall: Cursor's hooks cannot add context to a prompt. The session-start message tells the agent to ask the vault itself (`vaultmind ask`), and in our tests it did. Cursor projects share `.vaultmind/scripts/` with Codex.
 
 This installs hook scripts that load identity + current context at session start, surface relevant pointers per turn, and capture each session as an episode for later distillation. Check them with `vaultmind hooks status <project-dir>`, which reports both halves — whether each script matches the canonical copy, and whether each canonical event is actually **wired** in `settings.json`. A project can hold every script byte-identical and still run none of them; an unwired event is reported by name and fails the check. The scripts are embedded in the binary and written into `<project-dir>/.claude/scripts/` (idempotent). See **[docs/AGENT_USAGE.md](docs/AGENT_USAGE.md)** for the day-to-day agent workflow, and **[docs/building-an-identity-vault.md](docs/building-an-identity-vault.md)** for how to grow an agent's identity from scratch — the arc method, and why an identity vault is **personal** and usually shouldn't be committed to a shared repo.
 

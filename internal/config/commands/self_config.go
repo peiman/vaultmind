@@ -32,12 +32,12 @@ EXAMPLES
   vaultmind self --vault vaultmind-identity --limit 5
       Tighter view — 5 rows per section.
 
-THIS IS ALREADY AUTO-INJECTED
+AUTO-INJECTED UNDER THE PERSONA PROFILE
 
-  The SessionStart hook runs 'vaultmind self' for both identity and research
-  vaults at session start. You see your memory state ambiently before any
-  work begins. Run this command manually only when you want a fresh check
-  mid-session.`,
+  With hooks installed under the persona (or full) profile, the SessionStart
+  hook runs 'vaultmind self' for the identity and research vaults, so you see
+  your memory state before any work begins. The knowledge profile — a fresh
+  project's default — does not; run this command when you want the check.`,
 	ConfigPrefix: "app.self",
 	FlagOverrides: map[string]string{
 		"app.self.vault": "vault",

@@ -12,6 +12,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`vaultmind import <url>` imports a web page as a note** — the page's main content
   (navigation and footers stripped) as markdown, under `imported/web/<host>/`, with the same
   re-sync by hash and conflict rules as a folder import. http/https only, one page per run.
+- **A URL that serves a PDF imports as a note of its text** — read by pdfium compiled to
+  WebAssembly (pure Go, no filesystem access, 1 GiB memory cap, 60 s limit); titled from the
+  PDF's metadata or first line; a scan with no text layer is refused. The first PDF import
+  compiles pdfium once and caches it (~20 MB under the user cache dir). (#218)
+- **Folder imports take PDFs, and one file imports alone** — each `*.pdf` in an imported
+  folder becomes `<name>-pdf.md`, tied to the PDF by `paths:`; a PDF that cannot be read is
+  skipped with its reason and the rest still imports. `vaultmind import <file>` imports one
+  `.md` or `.pdf` without touching the folder's other notes. (#221)
+- **`hooks install --agent cursor` wires Cursor** — the vault map at session start, the
+  notes about a file after the agent reads or edits it, and related notes after a commit.
+  Cursor's hooks cannot add context to a prompt, so there is no per-prompt recall under
+  Cursor. `hooks status` judges a Cursor-only project on its own scripts. (#219)
+
+### Fixed
+
+- **The persona loader works in any Go project.** It treated every project with `internal/`
+  and `cmd/` — the standard Go layout — as VaultMind's own source tree, ran a build script
+  only that repo has, and loaded no persona. It now recognises VaultMind's tree by its module
+  path and build script.
+- **Docs and help that described the tool wrongly:** `search --mode` lists the real modes
+  (`keyword` default, `semantic`, `hybrid`); AGENT_USAGE no longer advises re-embedding with
+  `--model minilm` after `note create` (writes embed themselves); `hooks install --help` lists
+  the hooks each profile really wires; `self` is auto-injected only under the persona profile;
+  the README names the model download and the `bash`/`python3` the hooks need.
 
 ## [0.10.1] - 2026-09-29
 
