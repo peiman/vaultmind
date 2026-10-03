@@ -37,8 +37,9 @@ var pdfTimeout = 60 * time.Second
 
 // pdfStartTimeout bounds starting pdfium: compiling the ~20 MB module takes
 // seconds on a normal machine, far longer on a slow or instrumented one, and
-// only once when the compile cache can be written.
-const pdfStartTimeout = 5 * time.Minute
+// only once when the compile cache can be written. A var so a test can
+// shorten it.
+var pdfStartTimeout = 5 * time.Minute
 
 // pdfMemoryPages caps pdfium's memory at 1 GiB (64 KiB WebAssembly pages).
 const pdfMemoryPages = 16384

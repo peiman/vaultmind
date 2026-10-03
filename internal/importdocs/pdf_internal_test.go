@@ -88,6 +88,19 @@ func TestPDFText_CompilingDoesNotCountAgainstTheExtractionBound(t *testing.T) {
 	assert.Contains(t, text, "Sparse retrieval")
 }
 
+// Starting has a bound of its own: a pdfium that cannot start in time fails
+// the import with a reason instead of hanging it.
+func TestPDFText_AStartPastItsBoundIsAnError(t *testing.T) {
+	savedDir, savedStart := pdfiumCacheDir, pdfStartTimeout
+	t.Cleanup(func() { pdfiumCacheDir, pdfStartTimeout = savedDir, savedStart })
+	pdfiumCacheDir = func() (string, error) { return "", os.ErrPermission }
+	pdfStartTimeout = time.Millisecond
+
+	_, _, err := pdfText(t.Context(), fixture(t, "paper.pdf"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "reading the PDF")
+}
+
 func TestPDFText_StopsWhenTheContextEnds(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), time.Nanosecond)
 	defer cancel()
