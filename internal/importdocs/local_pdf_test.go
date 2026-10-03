@@ -103,6 +103,21 @@ func TestImport_AnUnreadablePDFIsSkippedNotFatal(t *testing.T) {
 	assert.True(t, found)
 }
 
+// A PDF that imported once and now cannot be read is skipped, and its note
+// stays: --prune removes the notes of docs that are gone, and this one is not.
+func TestImport_APDFThatBecameUnreadableKeepsItsNote(t *testing.T) {
+	repo, vault := srcRepo(t), t.TempDir()
+	pdf := filepath.Join(repo, "docs", "paper.pdf")
+	copyFixture(t, "paper.pdf", pdf)
+	run(t, repo, vault, importdocs.Options{})
+	write(t, pdf, "%PDF-1.4 truncated")
+
+	res := run(t, repo, vault, importdocs.Options{Prune: true})
+	assert.FileExists(t, filepath.Join(vault, "imported", "demo-repo", "docs", "paper-pdf.md"))
+	assert.Zero(t, res.Count(importdocs.Orphaned))
+	assert.Zero(t, res.Count(importdocs.Pruned))
+}
+
 // One file imports alone, with the repository and prefix of its folder, and
 // without an orphan pass: a sibling's note is not called orphaned.
 func TestImportFile_ImportsOneFileAndLeavesSiblingsAlone(t *testing.T) {
@@ -121,6 +136,44 @@ func TestImportFile_ImportsOneFileAndLeavesSiblingsAlone(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, res.Entries, 1)
 	assert.Equal(t, importdocs.Unchanged, res.Entries[0].Action)
+}
+
+// A PDF over the 20 MiB cap is skipped before it is read into memory.
+func TestImport_AnOversizedPDFIsSkipped(t *testing.T) {
+	repo, vault := srcRepo(t), t.TempDir()
+	big := filepath.Join(repo, "docs", "huge.pdf")
+	f, err := os.Create(big) //nolint:gosec // test path
+	require.NoError(t, err)
+	require.NoError(t, f.Truncate(20<<20+1))
+	require.NoError(t, f.Close())
+
+	res := run(t, repo, vault, importdocs.Options{})
+	found := false
+	for _, e := range res.Entries {
+		if e.Action == importdocs.Skipped && filepath.Base(e.Note) == "huge.pdf" {
+			found = true
+			assert.Contains(t, e.Reason, "larger than 20 MiB")
+		}
+	}
+	assert.True(t, found)
+}
+
+// ImportFile names a file in the source folder, nothing else.
+func TestImportFile_RefusesWhatIsNotAFileInTheFolder(t *testing.T) {
+	repo, vault := srcRepo(t), t.TempDir()
+	for _, rel := range []string{"sub/beta.md", "../escape.md", "missing.md"} {
+		_, err := importdocs.ImportFile(source(repo), rel, vault, importdocs.Options{})
+		assert.Error(t, err, rel)
+	}
+	require.NoError(t, os.MkdirAll(filepath.Join(repo, "docs", "folder.md"), 0o750))
+	_, err := importdocs.ImportFile(source(repo), "folder.md", vault, importdocs.Options{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not a regular file")
+
+	bad := source(repo)
+	bad.Repo = "../x"
+	_, err = importdocs.ImportFile(bad, "alpha.md", vault, importdocs.Options{})
+	assert.Error(t, err, "the repository name is validated as for a folder import")
 }
 
 func TestImportFile_RefusesOtherFiles(t *testing.T) {
