@@ -134,3 +134,20 @@ func TestSidecar_StartupFailure_SurfacesStderrTail(t *testing.T) {
 	require.Contains(t, err.Error(), "could not load model weights",
 		"the startup error should surface the drained stderr tail")
 }
+
+// Close must let the drain read stderr to the end before cmd.Wait closes the
+// pipe (#225). With the drain held back, a Close that waits first loses the
+// tail every time; on CI it lost it about once in thousands of runs.
+func TestSidecar_StartupFailure_KeepsStderrWhenTheDrainIsSlow(t *testing.T) {
+	saved := stderrDrainStarted
+	stderrDrainStarted = func() { time.Sleep(300 * time.Millisecond) }
+	t.Cleanup(func() { stderrDrainStarted = saved })
+	t.Setenv("GO_WANT_SIDECAR_HELPER", "startup_fail")
+
+	_, err := NewSidecarBGEM3(SidecarBGEM3Config{
+		Python:     os.Args[0],
+		ScriptPath: os.Args[0],
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "could not load model weights")
+}

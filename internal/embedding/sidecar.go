@@ -137,7 +137,11 @@ func NewSidecarBGEM3(cfg SidecarBGEM3Config) (*SidecarBGEM3Embedder, error) {
 	// long note — and the sidecar then blocks writing stderr while we block reading
 	// stdout: a deadlock that surfaced as an --embed run wedging at a fixed note
 	// count. Draining forever makes it impossible; the tail is kept only for errors.
-	go func() { _, _ = io.Copy(emb.stderrTail, emb.stderr); close(emb.drainDone) }()
+	go func() {
+		stderrDrainStarted()
+		_, _ = io.Copy(emb.stderrTail, emb.stderr)
+		close(emb.drainDone)
+	}()
 
 	// Wait for ready signal. The sidecar emits exactly one line on startup:
 	// either {"ready":true,"device":"mps"|"cpu"} on success, or
@@ -268,6 +272,10 @@ func (e *SidecarBGEM3Embedder) EmbedFullBatch(_ context.Context, texts []string)
 	return outputs, nil
 }
 
+// stderrDrainStarted runs as the stderr drain starts. A no-op; a test holds
+// the drain back with it to pin the order Close joins it in.
+var stderrDrainStarted = func() {}
+
 // Close terminates the sidecar process. Safe to call multiple times.
 func (e *SidecarBGEM3Embedder) Close() error {
 	e.mu.Lock()
@@ -279,28 +287,40 @@ func (e *SidecarBGEM3Embedder) Close() error {
 	// Closing stdin signals the sidecar to exit cleanly via its EOF check
 	// in the read loop.
 	_ = e.stdin.Close()
-	if e.cmd != nil && e.cmd.Process != nil {
-		// Wait for graceful exit; force-kill if it overstays so we never leak the
-		// process. cmd.Wait also closes the stderr pipe, which unblocks the drain
-		// goroutine joined below.
+	running := e.cmd != nil && e.cmd.Process != nil
+	// Join the stderr drain BEFORE cmd.Wait: Wait closes the pipe, and a read
+	// still in flight then loses what the process wrote (os/exec: "it is
+	// incorrect to call Wait before all reads from the pipe have completed";
+	// #225). The process exiting closes its end, so the drain reaches EOF on its
+	// own; one that overstays is killed, which ends it too.
+	if !joined(e.drainDone, 5*time.Second) && running {
+		_ = e.cmd.Process.Kill()
+		joined(e.drainDone, 2*time.Second)
+	}
+	if running {
+		// Reap the process. By now it has exited (the drain reached EOF) or
+		// been killed, so this is short; bounded, so a process that outlives
+		// the kill cannot hang Close. Worst case for Close: 5s + 2s + 2s.
 		waitDone := make(chan struct{})
 		go func() { _ = e.cmd.Wait(); close(waitDone) }()
-		select {
-		case <-waitDone:
-		case <-time.After(5 * time.Second):
+		if !joined(waitDone, 2*time.Second) {
 			_ = e.cmd.Process.Kill()
 		}
 	}
-	// Join the stderr-drain goroutine so Close leaves nothing running. It ends
-	// when io.Copy hits EOF on the pipe closed by cmd.Wait; bound the wait so a
-	// wedged sidecar can't hang Close.
-	if e.drainDone != nil {
-		select {
-		case <-e.drainDone:
-		case <-time.After(2 * time.Second):
-		}
-	}
 	return nil
+}
+
+// joined waits up to d for ch to close. A nil ch counts as closed.
+func joined(ch <-chan struct{}, d time.Duration) bool {
+	if ch == nil {
+		return true
+	}
+	select {
+	case <-ch:
+		return true
+	case <-time.After(d):
+		return false
+	}
 }
 
 // Device reports the device the sidecar selected ("mps" or "cpu").
