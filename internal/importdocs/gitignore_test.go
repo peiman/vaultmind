@@ -74,6 +74,22 @@ func TestImport_AnIgnoredFolderNamedExplicitlyIsImported(t *testing.T) {
 	assert.Len(t, importedNotes(res), 2, "build/b.md and build/keep.md")
 }
 
+// Git reads the global ignore file at its default place ($XDG_CONFIG_HOME/
+// git/ignore) when core.excludesfile is not set; go-git does not, so the
+// import reads it itself.
+func TestImport_TheDefaultGlobalIgnoreFileApplies(t *testing.T) {
+	home, cfg := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", cfg)
+	write(t, filepath.Join(cfg, "git", "ignore"), "*.draft.md\n")
+	repo := gitRepo(t)
+	write(t, filepath.Join(repo, "docs", "x.draft.md"), "# Draft\n")
+
+	res, err := importdocs.Import(importdocs.Source{Dir: repo, Repo: "demo-repo"}, t.TempDir(), importdocs.Options{})
+	require.NoError(t, err)
+	assert.NotContains(t, importedNotes(res), filepath.Join("imported", "demo-repo", "docs", "x.draft.md"))
+}
+
 // Outside a git work tree nothing is filtered, as before.
 func TestImport_WithoutGitEverythingIsImported(t *testing.T) {
 	repo := filepath.Join(t.TempDir(), "plain")

@@ -69,7 +69,9 @@ type Options struct {
 // Entry is one line of the report.
 type Entry struct {
 	Action Action `json:"action"`
-	// Note is the note's vault-relative path.
+	// Note is the note's vault-relative path. A Skipped entry names what was
+	// skipped instead: a source path, or, for what git ignores, a count such
+	// as "32 path(s)" (one entry for the lot, with the first paths in Reason).
 	Note string `json:"note"`
 	// Source is the doc as `<repo>:<path>`, empty for a skipped note.
 	Source string `json:"source,omitempty"`

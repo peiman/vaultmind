@@ -1,6 +1,7 @@
 package importdocs
 
 import (
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -47,6 +48,9 @@ func newGitFilter(root string) *gitFilter {
 	// Global excludes first, so the repository's own rules (negations
 	// included) have the last word, as git applies them.
 	patterns, _ := gitignore.LoadGlobalPatterns(osfs.New("/"))
+	if len(patterns) == 0 {
+		patterns = defaultGlobalPatterns()
+	}
 	repoPatterns, _ := gitignore.ReadPatterns(wt.Filesystem, nil)
 	f := &gitFilter{matcher: gitignore.NewMatcher(append(patterns, repoPatterns...)), prefix: prefix, tracked: map[string]bool{}}
 	if prefix != "" && f.matcher.Match(strings.Split(prefix, "/"), true) {
@@ -60,6 +64,34 @@ func newGitFilter(root string) *gitFilter {
 		}
 	}
 	return f
+}
+
+// defaultGlobalPatterns reads the global ignore file where git looks when
+// core.excludesfile is unset: $XDG_CONFIG_HOME/git/ignore, else
+// ~/.config/git/ignore. go-git reads only core.excludesfile.
+func defaultGlobalPatterns() []gitignore.Pattern {
+	dir := os.Getenv("XDG_CONFIG_HOME")
+	if dir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil
+		}
+		dir = filepath.Join(home, ".config")
+	}
+	// nosemgrep: go-path-traversal -- git's own config location for this user, not input
+	raw, err := os.ReadFile(filepath.Join(dir, "git", "ignore")) //nolint:gosec // same
+	if err != nil {
+		return nil
+	}
+	var ps []gitignore.Pattern
+	for _, line := range strings.Split(string(raw), "\n") {
+		line = strings.TrimRight(line, "\r")
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		ps = append(ps, gitignore.ParsePattern(line, nil))
+	}
+	return ps
 }
 
 // ignored reports whether git leaves rel (relative to the import root) out.

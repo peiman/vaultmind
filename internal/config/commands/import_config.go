@@ -10,7 +10,8 @@ var ImportMetadata = config.CommandMetadata{
 		"a project's existing docs are found by search, ask and the code hooks like any " +
 		"other note. Each *.pdf in the folder becomes a note of its text, <name>-pdf.md; a " +
 		"PDF that cannot be read (a scan, a broken file, over 20 MiB) is skipped with the " +
-		"reason and the rest still imports. Pass one .md or .pdf file instead and only that " +
+		"reason and the rest still imports. Inside a git work tree, what git ignores is left " +
+		"out (naming an ignored folder imports it). Pass one .md or .pdf file instead and only that " +
 		"file is imported, named as importing its folder would name it; the folder's other " +
 		"notes are left alone. Pass an http or https URL instead of a folder and that one page " +
 		"becomes a note under imported/web/<host>/. A URL that serves a PDF becomes a note " +
