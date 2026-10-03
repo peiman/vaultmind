@@ -99,7 +99,7 @@ of copy-pasting (see WIRING below).
 
 WIRING (--merge)
 
-  --merge additively merges the four canonical hook entries straight into
+  --merge additively merges the profile's hook entries straight into
   the project's hook config — no hand-editing. The merge NEVER clobbers:
   a project's own hooks are preserved, our entries are de-duplicated (so
   re-running is a no-op), all other settings and key order are kept, and

@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// MergeStanza additively merges VaultMind's five canonical hook entries into
+// MergeStanza additively merges VaultMind's canonical hook entries into
 // an existing .claude/settings.json (or settings.local.json) byte payload.
 //
 // The merge is strictly additive and never clobbers: for each of the five

@@ -41,7 +41,7 @@ type MergeFileResult struct {
 
 // MergeIntoSettings reads the target hook-config file (creating none if it is
 // absent — MergeStanza treats absence as a fresh file), additively merges
-// VaultMind's four canonical hook entries via MergeStanza, and writes the
+// VaultMind's canonical hook entries via MergeStanza, and writes the
 // result back. A non-existent file is created with the full stanza. When
 // dryRun is set, nothing is written and the would-be content is returned in
 // MergeFileResult.Merged for preview. A merge that changes nothing writes

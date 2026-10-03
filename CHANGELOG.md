@@ -41,6 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`hooks install` without `--merge` prints only the profile's hooks.** A knowledge
+  project was told to paste the persona loader and episode capture, scripts the same
+  install had declined to write.
 - **The persona loader works in any Go project.** It treated every project with `internal/`
   and `cmd/` — the standard Go layout — as VaultMind's own source tree, ran a build script
   only that repo has, and loaded no persona. It now recognises VaultMind's tree by its module
