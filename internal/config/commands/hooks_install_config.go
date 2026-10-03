@@ -69,10 +69,10 @@ WHAT GETS INSTALLED
     load-persona.sh        SessionStart — identity context (persona and full only)
     vault-recall.sh        UserPromptSubmit — the notes that match the prompt, as excerpts
     vault-track-read.sh    PreToolUse(Read) — records which notes are read
-    vault-reach.sh         PreToolUse(Bash|Edit|Write) — related notes before a commit,
+    vault-reach.sh         PreToolUse(Bash|Edit|Write|MultiEdit) — related notes before a commit,
                            push, merge or vault write
-    vault-code-map.sh      PreToolUse(Read|Edit|Write) — the notes whose paths: cover the
-                           file being opened
+    vault-code-map.sh      PreToolUse(Read|Edit|Write|MultiEdit) — the notes whose paths: cover
+                           the file being opened
     precompact-preserve.sh PreCompact — asks what to write down before context is lost
     capture-episode.sh     SessionEnd — episode transcript capture (persona and full only)
 
