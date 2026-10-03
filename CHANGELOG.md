@@ -37,6 +37,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   Read with the standard library: no converter service, no new dependency. A broken file
   is skipped with its reason. On 95 real Office files, all 95 became notes with text.
+- **A long imported doc becomes one note per section.** A doc past ~8,192 tokens (32,768
+  chars), which the embedding model would otherwise see only the start of, is written as
+  an index note at its usual path (same id, links to each section) plus a folder of
+  section notes, `<name>/NN-<heading>.md`, split at headings into parts of 1,500–6,000
+  chars. Each section is found and ranked like any note. Only the index carries `paths:`,
+  so opening the doc brings one note. A section the doc no longer has is reported orphaned,
+  and `--prune` removes it. Shorter docs are written exactly as before.
 - **`hooks install --agent cursor` wires Cursor** — the vault map at session start, the
   notes about a file after the agent reads or edits it, and related notes after a commit.
   Cursor's hooks cannot add context to a prompt, so there is no per-prompt recall under

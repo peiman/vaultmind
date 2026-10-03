@@ -31,6 +31,10 @@ type doc struct {
 	Body  string
 	// Hash is the sha256 of Body, the content the note carries.
 	Hash string
+	// PartOf is, for one section of a long doc, the id of the doc's index
+	// note. A section note carries no `paths:`: opening the doc brings its
+	// index, not every section.
+	PartOf string
 }
 
 // skippedFolders are dependency folders: their READMEs and CHANGELOGs are

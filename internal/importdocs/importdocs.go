@@ -17,6 +17,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"unicode"
@@ -247,8 +248,11 @@ func under(entries []Entry, base string) []Entry {
 	return out
 }
 
-// syncDocs plans and applies add / update / unchanged / conflict per doc.
+// syncDocs plans and applies add / update / unchanged / conflict per doc. A
+// long doc is written as its index and section notes (sections.go), and a
+// section a doc here no longer has is reported as an orphan.
 func (s *syncer) syncDocs(docs []doc) []Entry {
+	docs = expandAll(docs)
 	var out []Entry
 	for _, d := range docs {
 		rel := path.Join(s.base, noteName(d.Rel))
@@ -269,6 +273,45 @@ func (s *syncer) syncDocs(docs []doc) []Entry {
 			e = s.syncDoc(d, rel, existing)
 		}
 		s.written[key] = true
+		out = append(out, e)
+	}
+	return append(out, s.staleSections(docs)...)
+}
+
+// sectionSuffix is what a section's source adds to its doc's: "#NN-slug".
+var sectionSuffix = regexp.MustCompile(`^#[0-9]{2,}-[\p{L}\p{N}-]+$`)
+
+// staleSections reports, and under --prune removes, the section notes of a
+// doc synced here that the doc no longer has: it shrank, or is no longer
+// long. A page import has no folder to compare against, so this is how its
+// stale sections are found; a folder import's later orphan pass skips them.
+func (s *syncer) staleSections(docs []doc) []Entry {
+	synced := map[string]bool{}
+	for _, d := range docs {
+		if d.PartOf == "" {
+			synced[d.Source] = true
+		}
+	}
+	var out []Entry
+	rels := make([]string, 0, len(s.notes))
+	for rel := range s.notes {
+		rels = append(rels, rel)
+	}
+	sort.Strings(rels)
+	for _, rel := range rels {
+		n := s.notes[rel]
+		if s.claimed[rel] || !n.managed {
+			continue
+		}
+		i := strings.LastIndex(n.source, "#")
+		if i < 0 || !synced[n.source[:i]] || !sectionSuffix.MatchString(n.source[i:]) {
+			continue
+		}
+		s.claimed[rel] = true // reported here; the orphan pass must not repeat it
+		e := Entry{Action: Orphaned, Note: rel, Source: n.source, Reason: "its doc no longer has this section; --prune removes it"}
+		if s.opts.Prune {
+			e = s.prune(rel, n, e)
+		}
 		out = append(out, e)
 	}
 	return out

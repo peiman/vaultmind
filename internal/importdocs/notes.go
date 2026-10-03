@@ -41,6 +41,7 @@ func (n note) edited() bool { return n.bodyHash != n.sourceHash }
 // ownedKeys are the frontmatter keys the import writes and refreshes.
 var ownedKeys = map[string]bool{
 	"id": true, "type": true, "title": true, "url": true, "paths": true, "source": true, "source_hash": true,
+	"part_of": true,
 }
 
 // readNotes reads the notes under dir, keyed by vault-relative path.
@@ -144,6 +145,7 @@ type owned struct {
 	Paths      []string `yaml:"paths,omitempty"`
 	Source     string   `yaml:"source"`
 	SourceHash string   `yaml:"source_hash"`
+	PartOf     string   `yaml:"part_of,omitempty"`
 }
 
 // render is the note for d: the owned frontmatter, then the keys a person
@@ -156,14 +158,16 @@ func render(d doc, id string, prev note) []byte {
 	fmt.Fprintf(&b, "# Imported by `vaultmind import` from %s.\n", strings.Map(dropControl, d.Source))
 	head := owned{
 		ID: id, Type: "reference", Title: d.Title,
-		Source: d.Source, SourceHash: d.Hash,
+		Source: d.Source, SourceHash: d.Hash, PartOf: d.PartOf,
 	}
 	if d.URL != "" {
 		b.WriteString("# The page is the source: re-run the import to refresh it.\n")
 		head.URL = d.URL
 	} else {
 		b.WriteString("# The doc is the source: edit it, then re-run the import.\n")
-		head.Paths = []string{d.Source}
+		if d.PartOf == "" { // a section: the doc's index note carries paths:
+			head.Paths = []string{d.Source}
+		}
 	}
 	raw, _ := yaml.Marshal(head)
 	b.Write(raw)
