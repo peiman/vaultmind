@@ -15,6 +15,7 @@ import (
 
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/memory"
+	"github.com/peiman/vaultmind/internal/vault"
 )
 
 // MaxLineRunes caps a note's one-line description so the map stays a map.
@@ -44,8 +45,8 @@ type Note struct {
 }
 
 // OverviewType is the note type that describes the folder it sits in: its
-// first sentence is the folder's summary in the map.
-const OverviewType = "overview"
+// first sentence is the folder's summary in the map. Defined once, in vault.
+const OverviewType = vault.OverviewType
 
 // Dir is a folder in the map. Total counts every note beneath it.
 type Dir struct {
@@ -77,17 +78,17 @@ type Querier interface {
 
 // Load reads every indexed note matching f, with its one-line description.
 func Load(q Querier, f Filter) ([]Note, error) {
-	stmt := `SELECT id, path, COALESCE(title, ''), COALESCE(type, ''), COALESCE(body_text, ''), mtime FROM notes WHERE 1=1`
+	where := ` WHERE 1=1`
 	var args []interface{}
 	if f.PathPrefix != "" {
-		stmt += ` AND path LIKE ? ESCAPE '\'`
+		where += ` AND path LIKE ? ESCAPE '\'`
 		args = append(args, index.PathPrefixLike(f.PathPrefix))
 	}
 	if f.Type != "" {
-		stmt += ` AND type = ?`
+		where += ` AND type = ?`
 		args = append(args, f.Type)
 	}
-	stmt += ` ORDER BY path`
+	stmt := `SELECT id, path, COALESCE(title, ''), COALESCE(type, ''), COALESCE(body_text, ''), mtime FROM notes` + where + ` ORDER BY path`
 
 	rows, err := q.Query(stmt, args...)
 	if err != nil {
@@ -115,16 +116,17 @@ func Load(q Querier, f Filter) ([]Note, error) {
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	return notes, loadTags(q, notes)
+	return notes, loadTags(q, notes, where, args)
 }
 
-// loadTags fills in each note's tags.
-func loadTags(q Querier, notes []Note) error {
+// loadTags fills in each note's tags, reading only those of the notes the
+// same filter selected.
+func loadTags(q Querier, notes []Note, where string, args []interface{}) error {
 	byID := make(map[string]int, len(notes))
 	for i, n := range notes {
 		byID[n.ID] = i
 	}
-	rows, err := q.Query(`SELECT note_id, tag FROM tags ORDER BY note_id, tag`)
+	rows, err := q.Query(`SELECT note_id, tag FROM tags WHERE note_id IN (SELECT id FROM notes`+where+`) ORDER BY note_id, tag`, args...) // nosemgrep: go-sql-injection -- where is built above from constant clauses; values are bound
 	if err != nil {
 		return fmt.Errorf("listing tags: %w", err)
 	}

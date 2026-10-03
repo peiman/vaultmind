@@ -229,12 +229,6 @@ func diagnoseVault(cmd *cobra.Command, vaultPath string) (*query.DoctorResult, f
 	} else {
 		result.BadCitations = bad
 	}
-	// Folder overviews: advice, best-effort like the checks above.
-	if ov, err := query.CheckOverviews(vdb.DB); err != nil {
-		log.Debug().Err(err).Msg("overview check failed")
-	} else {
-		result.Overviews = ov
-	}
 	return result, vdb.GetIndexHash, nil
 }
 
@@ -250,6 +244,14 @@ func populateDoctorResult(ctx context.Context, vdb *cmdutil.VaultDB, vaultPath s
 		return nil, fmt.Errorf("running doctor: %w", err)
 	}
 	annotateEmbeddingRuntime(ctx, result.Embeddings, doctorBackend())
+
+	// Folder overviews: advice, best-effort — here, so `doctor --all` reports
+	// them for every vault as well.
+	if ov, err := query.CheckOverviews(vdb.DB); err != nil {
+		log.Debug().Err(err).Msg("overview check failed")
+	} else {
+		result.Overviews = ov
+	}
 
 	// Fold in the per-type breakdown + errors/warnings rollup that `vault
 	// status` used to produce. Populated here in cmd/ because the vault config
@@ -802,10 +804,6 @@ func writeBackupStatus(w io.Writer, b *query.DoctorBackup) error {
 	return err
 }
 
-// writeBadCitations names every citation that is not allowed to be evidence.
-//
-// Both notes, every time. "3 bad citations" tells you a number; it does not
-// tell you which claim in your vault is resting on something nobody reviewed.
 // writeOverviews names the big folders without an overview, with the command
 // that writes one for the first, and the overviews their folder has outgrown.
 // Advice, not an issue: it does not count toward errors or warnings.
@@ -826,8 +824,8 @@ func writeOverviews(w io.Writer, h *query.OverviewHealth, vaultPath string) erro
 		file := strings.ToLower(strings.ReplaceAll(first, "/", "-")) + "-overview.md"
 		if _, err := fmt.Fprintf(w, "Overviews:   %d folders without one: %s\n"+
 			"  The map shows a folder's overview beside it. Write one, first sentence = what the folder covers:\n"+
-			"  vaultmind note create %s/%s --type overview --field title=%q --body \"<what the folder covers, in one sentence first>\" --vault %s\n",
-			len(h.Missing), strings.Join(names, ", "), first, file, title, vaultPath); err != nil {
+			"  vaultmind note create %q --type overview --field title=%q --body \"<what the folder covers, in one sentence first>\" --vault %q\n",
+			len(h.Missing), strings.Join(names, ", "), first+"/"+file, title, vaultPath); err != nil {
 			return err
 		}
 	}
@@ -840,6 +838,10 @@ func writeOverviews(w io.Writer, h *query.OverviewHealth, vaultPath string) erro
 	return nil
 }
 
+// writeBadCitations names every citation that is not allowed to be evidence.
+//
+// Both notes, every time. "3 bad citations" tells you a number; it does not
+// tell you which claim in your vault is resting on something nobody reviewed.
 func writeBadCitations(w io.Writer, bad []query.BadCitation) error {
 	if len(bad) == 0 {
 		return nil

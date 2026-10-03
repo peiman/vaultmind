@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/peiman/vaultmind/internal/index"
+	"github.com/peiman/vaultmind/internal/vault"
 )
 
 // A folder overview (a note of type overview) is what the map shows beside a
@@ -14,7 +15,7 @@ import (
 // counts) to 97%. Doctor names the folders that would gain from one, and the
 // overviews their folders have outgrown.
 const (
-	overviewType = "overview"
+	overviewType = vault.OverviewType
 	// overviewMinNotes is the folder size, in notes directly inside it, at
 	// which a missing overview is named.
 	overviewMinNotes = 20

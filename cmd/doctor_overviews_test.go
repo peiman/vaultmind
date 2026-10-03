@@ -21,8 +21,19 @@ func TestWriteOverviews_NamesMissingAndStale(t *testing.T) {
 	assert.Contains(t, out, "Overviews:   2 folders without one: concepts/ (194), sources/ (209)")
 	// Named after the folder: note create takes the id from the file name, so
 	// every folder's overview.md would share one id (found on a real vault).
-	assert.Contains(t, out, "vaultmind note create concepts/concepts-overview.md --type overview --field title=\"Concepts\" --body \"<what the folder covers, in one sentence first>\" --vault /v")
+	assert.Contains(t, out, "vaultmind note create \"concepts/concepts-overview.md\" --type overview --field title=\"Concepts\" --body \"<what the folder covers, in one sentence first>\" --vault \"/v\"")
 	assert.Contains(t, out, "people/overview.md is stale: 12 of its folder's 30 notes changed since")
+}
+
+// A folder or vault path with spaces stays one argument in the printed
+// command, so it can be pasted as is.
+func TestWriteOverviews_QuotesPathsWithSpaces(t *testing.T) {
+	var b strings.Builder
+	require.NoError(t, writeOverviews(&b, &query.OverviewHealth{
+		Missing: []query.FolderCount{{Folder: "my notes", Notes: 30}},
+	}, "/my vault"))
+	assert.Contains(t, b.String(), `vaultmind note create "my notes/my notes-overview.md"`)
+	assert.Contains(t, b.String(), `--vault "/my vault"`)
 }
 
 func TestWriteOverviews_SilentWhenHealthy(t *testing.T) {
