@@ -31,8 +31,15 @@ import (
 const maxPDFBytes = 20 << 20
 
 // pdfTimeout bounds one extraction. A PDF that keeps pdfium busy longer is
-// refused rather than allowed to hang the import.
-const pdfTimeout = 60 * time.Second
+// refused rather than allowed to hang the import. A var so a test can shorten
+// it.
+var pdfTimeout = 60 * time.Second
+
+// pdfStartTimeout bounds starting pdfium: compiling the ~20 MB module takes
+// seconds on a normal machine, far longer on a slow or instrumented one, and
+// only once when the compile cache can be written. A var so a test can
+// shorten it.
+var pdfStartTimeout = 5 * time.Minute
 
 // pdfMemoryPages caps pdfium's memory at 1 GiB (64 KiB WebAssembly pages).
 const pdfMemoryPages = 16384
@@ -60,18 +67,23 @@ func pdfText(ctx context.Context, data []byte) (text, title string, err error) {
 			text, title, err = "", "", fmt.Errorf("reading the PDF: %v", rec)
 		}
 	}()
-	ctx, cancel := context.WithTimeout(ctx, pdfTimeout)
+	// Starting pdfium (compiling it, when no cached module can be used) and
+	// reading the PDF have separate bounds. One bound for both timed out first
+	// imports where compiling alone ran past it: under the race detector on CI
+	// it took 64 s against 60.
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	pool, err := newPDFiumPool(ctx)
+	// A start that overruns cancels ctx, which closes the module: the error
+	// surfaces from GetInstance, or from the read if it lands just after.
+	start := time.AfterFunc(pdfStartTimeout, cancel)
+	inst, closeAll, err := startPDFium(ctx)
+	start.Stop()
 	if err != nil {
 		return "", "", fmt.Errorf("reading the PDF: starting pdfium: %w", err)
 	}
-	defer func() { _ = pool.Close() }()
-	inst, err := pool.GetInstance(pdfTimeout)
-	if err != nil {
-		return "", "", fmt.Errorf("reading the PDF: %w", err)
-	}
-	defer func() { _ = inst.Close() }()
+	defer closeAll()
+	read := time.AfterFunc(pdfTimeout, cancel)
+	defer read.Stop()
 	pages, meta, err := readPDF(inst, data)
 	if err != nil {
 		return "", "", fmt.Errorf("reading the PDF: %w", err)
@@ -81,6 +93,20 @@ func pdfText(ctx context.Context, data []byte) (text, title string, err error) {
 		return "", "", errors.New("no text layer (scanned PDF?)")
 	}
 	return text, pdfTitle(meta, firstLine(text)), nil
+}
+
+// startPDFium starts pdfium and takes its one instance; closeAll releases both.
+func startPDFium(ctx context.Context) (pdfium.Pdfium, func(), error) {
+	pool, err := newPDFiumPool(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	inst, err := pool.GetInstance(pdfStartTimeout)
+	if err != nil {
+		_ = pool.Close()
+		return nil, nil, err
+	}
+	return inst, func() { _ = inst.Close(); _ = pool.Close() }, nil
 }
 
 // newPDFiumPool starts pdfium with one worker and no filesystem. The empty

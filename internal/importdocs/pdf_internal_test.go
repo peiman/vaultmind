@@ -73,6 +73,34 @@ func TestPDFText_WorksWithoutTheCompileCache(t *testing.T) {
 	assert.Contains(t, text, "Sparse retrieval")
 }
 
+// Compiling pdfium is not extraction: the extraction bound starts once pdfium
+// is up. With the compile inside it, a first import on a slow machine (or
+// under the race detector, where CI took 64 s) timed out before reading a
+// page. Here the bound is far shorter than a compile without a cache.
+func TestPDFText_CompilingDoesNotCountAgainstTheExtractionBound(t *testing.T) {
+	savedDir, savedTimeout := pdfiumCacheDir, pdfTimeout
+	t.Cleanup(func() { pdfiumCacheDir, pdfTimeout = savedDir, savedTimeout })
+	pdfiumCacheDir = func() (string, error) { return "", os.ErrPermission }
+	pdfTimeout = 2 * time.Second
+
+	text, _, err := pdfText(t.Context(), fixture(t, "paper.pdf"))
+	require.NoError(t, err)
+	assert.Contains(t, text, "Sparse retrieval")
+}
+
+// Starting has a bound of its own: a pdfium that cannot start in time fails
+// the import with a reason instead of hanging it.
+func TestPDFText_AStartPastItsBoundIsAnError(t *testing.T) {
+	savedDir, savedStart := pdfiumCacheDir, pdfStartTimeout
+	t.Cleanup(func() { pdfiumCacheDir, pdfStartTimeout = savedDir, savedStart })
+	pdfiumCacheDir = func() (string, error) { return "", os.ErrPermission }
+	pdfStartTimeout = time.Millisecond
+
+	_, _, err := pdfText(t.Context(), fixture(t, "paper.pdf"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "reading the PDF")
+}
+
 func TestPDFText_StopsWhenTheContextEnds(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), time.Nanosecond)
 	defer cancel()
