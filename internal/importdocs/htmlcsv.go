@@ -29,11 +29,7 @@ func readHTMLText(docPath, p string) (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
-	decoded, err := decodeCharset(raw, "text/html")
-	if err != nil {
-		return "", "", err
-	}
-	md, title, err := safeHTMLMarkdown(string(decoded), localBase+docPath)
+	md, title, err := safeHTMLMarkdown(decodedHTML(raw), localBase+docPath)
 	if err != nil {
 		return "", "", err
 	}
@@ -41,6 +37,16 @@ func readHTMLText(docPath, p string) (string, string, error) {
 		return "", "", errors.New("the html file holds no text")
 	}
 	return strings.ReplaceAll(md, localBase, "/"), title, nil
+}
+
+// decodedHTML is raw in UTF-8, by its <meta charset> or a sniff of its
+// bytes. With no charset to go on, the bytes are kept as they are.
+func decodedHTML(raw []byte) string {
+	decoded, err := decodeCharset(raw, "text/html")
+	if err != nil {
+		return string(raw)
+	}
+	return string(decoded)
 }
 
 // readCapped reads a whole file, refusing one over limit bytes.
@@ -57,8 +63,9 @@ func readCapped(p string, limit int64, tooBig string) ([]byte, error) {
 }
 
 // maxCSVBytes caps the CSV a note is made from, as for an Office file. Only
-// the first rows are kept; the rest is counted as it streams past.
-const maxCSVBytes = maxOfficeBytes
+// the first rows are kept; the rest is counted as it streams past. A test
+// lowers it.
+var maxCSVBytes int64 = maxOfficeBytes
 
 // csvSniffBytes is how much of a CSV is read to tell its encoding and
 // delimiter.
@@ -74,7 +81,11 @@ func readCSVText(kind, p string) (string, string, error) {
 		return "", "", err
 	}
 	defer func() { _ = f.Close() }()
-	if info, err := f.Stat(); err != nil || info.Size() > maxCSVBytes {
+	info, err := f.Stat()
+	if err != nil {
+		return "", "", err
+	}
+	if info.Size() > maxCSVBytes {
 		return "", "", fmt.Errorf("%s file is larger than %d MiB", kind, maxCSVBytes>>20)
 	}
 	r, head, err := csvReader(f)
@@ -96,27 +107,25 @@ func readCSVText(kind, p string) (string, string, error) {
 }
 
 // csvReader is f as UTF-8 without a byte-order mark: a file whose start is
-// not valid UTF-8 is read as Windows-1252, what Excel writes. head is the
-// decoded start, for sniffing.
+// not valid UTF-8 is read as Windows-1252, what Excel writes. The returned
+// head is the decoded start, for sniffing.
 func csvReader(f io.Reader) (io.Reader, []byte, error) {
 	br := bufio.NewReaderSize(f, csvSniffBytes)
 	peek, err := br.Peek(csvSniffBytes)
 	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, bufio.ErrBufferFull) {
 		return nil, nil, err
 	}
-	var r io.Reader = br
-	if !validUTF8Prefix(peek) {
-		r = charmap.Windows1252.NewDecoder().Reader(br)
-		peek, _ = charmap.Windows1252.NewDecoder().Bytes(peek)
+	// A byte-order mark says UTF-8. It is dropped from the stream; Discard
+	// cannot fail on bytes Peek already holds.
+	if bom := []byte("\ufeff"); bytes.HasPrefix(peek, bom) {
+		_, _ = br.Discard(len(bom))
+		return br, peek[len(bom):], nil
 	}
-	bom := []byte("\ufeff")
-	if bytes.HasPrefix(peek, bom) {
-		if _, err := io.ReadFull(r, make([]byte, len(bom))); err != nil {
-			return nil, nil, err
-		}
-		peek = peek[len(bom):]
+	if validUTF8Prefix(peek) {
+		return br, peek, nil
 	}
-	return r, peek, nil
+	head, _ := charmap.Windows1252.NewDecoder().Bytes(peek)
+	return charmap.Windows1252.NewDecoder().Reader(br), head, nil
 }
 
 // validUTF8Prefix reports b valid UTF-8, allowing a character cut off at
