@@ -459,9 +459,9 @@ For each file, show a diff before writing.
 ```diff
  {
    "hooks": {
-+    "SessionStart": [{"matcher":"startup","hooks":[
++    "SessionStart": [{"matcher":"startup|clear|compact","hooks":[
 +      {"type":"command","command":"bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/load-persona.sh"}
-+    ]},{"matcher":"startup","hooks":[
++    ]},{"matcher":"startup|clear|compact","hooks":[
 +      {"type":"command","command":"bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/vaultmind-health.sh"}
 +    ]}],
 +    "UserPromptSubmit": [{"hooks":[

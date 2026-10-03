@@ -43,12 +43,23 @@ const reachMatcher = "Bash|Edit|Write|MultiEdit"
 // file is opened.
 const codeMapMatcher = "Read|Edit|Write|MultiEdit"
 
+// sessionStartMatcher is the session starts that begin with an empty context:
+// a new session, /clear, and the context after a compaction. Not "resume": it
+// restores the history, which already holds what these hooks said.
+const sessionStartMatcher = "startup|clear|compact"
+
+// codexSessionStartMatcher is Codex's: its SessionStart sources are not
+// verified, and the matcher is part of the hash Codex approves.
+const codexSessionStartMatcher = "startup"
+
 // legacyMatchers are matchers an earlier release installed for a script. A
 // group still carrying one is upgraded in place by the merge (only the matcher
 // changes; the project's own command and timeout stay) and reported by status.
 // A matcher the project set by hand is never touched.
 var legacyMatchers = map[string][]string{
-	hookReachScript: {"Bash"},
+	hookReachScript:        {"Bash"},
+	hookSessionStartScript: {"startup"},
+	hookHealthScript:       {"startup"},
 }
 
 func isLegacyMatcher(script, matcher string) bool {
@@ -178,11 +189,11 @@ func canonicalHooksWith(vaultPath string, vaults []string, scriptRef func(string
 		return hookCommand{Type: "command", Command: c}
 	}
 	return []canonicalHook{
-		{Event: "SessionStart", Script: hookSessionStartScript, Group: hookGroup{Matcher: "startup", Hooks: []hookCommand{cmd(hookSessionStartScript)}}},
+		{Event: "SessionStart", Script: hookSessionStartScript, Group: hookGroup{Matcher: sessionStartMatcher, Hooks: []hookCommand{cmd(hookSessionStartScript)}}},
 		// vault-agnostic health/onboarding nudge — every adopter (persona AND
 		// knowledge-vault) gets the "what do I do next?" answer at session
 		// start. Additive: coexists with load-persona.sh on SessionStart.
-		{Event: "SessionStart", Script: hookHealthScript, Group: hookGroup{Matcher: "startup", Hooks: []hookCommand{cmd(hookHealthScript)}}},
+		{Event: "SessionStart", Script: hookHealthScript, Group: hookGroup{Matcher: sessionStartMatcher, Hooks: []hookCommand{cmd(hookHealthScript)}}},
 		{Event: "UserPromptSubmit", Script: hookUserPromptSubmitScript, Group: hookGroup{Hooks: []hookCommand{cmd(hookUserPromptSubmitScript)}}},
 		{Event: "PreToolUse", Script: hookPreToolUseScript, Group: hookGroup{Matcher: "Read", Hooks: []hookCommand{cmd(hookPreToolUseScript)}}},
 		// Pointers AT the reach, not on the turn. An arc that surfaces all day and

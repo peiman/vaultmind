@@ -112,10 +112,15 @@ func mergeHooksWith(existing []byte, hooksToAdd []canonicalHook, refresh bool) (
 // changes: the group's commands, timeouts and any other keys are kept as the
 // project has them. It reports whether it changed anything.
 func upgradeLegacyMatcher(arr []json.RawMessage, script, want string) (bool, error) {
+	// A script in several groups of one event is hand-wired: the project chose
+	// a matcher per group, and widening one would run the script twice.
+	if groupsReferencingScript(arr, script) > 1 {
+		return false, nil
+	}
 	changed := false
 	for i, el := range arr {
 		var g hookGroup
-		if err := json.Unmarshal(el, &g); err != nil || !isLegacyMatcher(script, g.Matcher) {
+		if err := json.Unmarshal(el, &g); err != nil || g.Matcher == want || !isLegacyMatcher(script, g.Matcher) {
 			continue
 		}
 		// Only a group that is ours alone. A group mixing the project's own hooks
@@ -174,6 +179,12 @@ func refreshOwnGroup(arr []json.RawMessage, script string, want json.RawMessage)
 // and uninstall (remove-if-present). A group whose shape doesn't decode is
 // treated as "not ours" so foreign content is never matched away.
 func anyGroupReferencesScript(arr []json.RawMessage, basename string) bool {
+	return groupsReferencingScript(arr, basename) > 0
+}
+
+// groupsReferencingScript counts the groups in arr with a hook that runs basename.
+func groupsReferencingScript(arr []json.RawMessage, basename string) int {
+	n := 0
 	for _, el := range arr {
 		var g hookGroup
 		if err := json.Unmarshal(el, &g); err != nil {
@@ -181,11 +192,12 @@ func anyGroupReferencesScript(arr []json.RawMessage, basename string) bool {
 		}
 		for _, h := range g.Hooks {
 			if commandReferencesScript(h.Command, basename) {
-				return true
+				n++
+				break
 			}
 		}
 	}
-	return false
+	return n
 }
 
 // commandReferencesScript reports whether a hook command invokes the VaultMind
