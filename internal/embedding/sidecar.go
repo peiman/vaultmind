@@ -276,6 +276,10 @@ func (e *SidecarBGEM3Embedder) EmbedFullBatch(_ context.Context, texts []string)
 // the drain back with it to pin the order Close joins it in.
 var stderrDrainStarted = func() {}
 
+// closeGrace is how long Close lets the sidecar exit on its own after stdin
+// closes before killing it. A var so a test need not wait it out.
+var closeGrace = 5 * time.Second
+
 // Close terminates the sidecar process. Safe to call multiple times.
 func (e *SidecarBGEM3Embedder) Close() error {
 	e.mu.Lock()
@@ -293,7 +297,7 @@ func (e *SidecarBGEM3Embedder) Close() error {
 	// incorrect to call Wait before all reads from the pipe have completed";
 	// #225). The process exiting closes its end, so the drain reaches EOF on its
 	// own; one that overstays is killed, which ends it too.
-	if !joined(e.drainDone, 5*time.Second) && running {
+	if !joined(e.drainDone, closeGrace) && running {
 		_ = e.cmd.Process.Kill()
 		joined(e.drainDone, 2*time.Second)
 	}
