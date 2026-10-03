@@ -107,7 +107,7 @@ func (r *Result) Changed() []string {
 }
 
 // ErrNoMarkdown reports a source folder with nothing to import.
-var ErrNoMarkdown = errors.New("no markdown files")
+var ErrNoMarkdown = errors.New("no markdown files or readable PDFs")
 
 // Import brings the docs under src into vaultRoot and reports what it did.
 func Import(src Source, vaultRoot string, opts Options) (*Result, error) {
@@ -254,7 +254,7 @@ func (s *syncer) syncDocs(docs []doc) []Entry {
 		e := Entry{Note: rel, Source: d.Source}
 		switch {
 		case s.written[key]:
-			e.Action, e.Reason = Skipped, "another doc maps to the same note (names differ only in case)"
+			e.Action, e.Reason = Skipped, "another doc maps to the same note (names that differ only in case, or a markdown file named like a PDF's <name>-pdf.md)"
 		case vault.Excluded(rel, s.opts.Excludes):
 			e.Action, e.Reason = Skipped, "the vault's exclude list hides this path from the index"
 		case s.ambiguous(rel):
@@ -424,14 +424,74 @@ func (s *syncer) prune(rel string, n note, e Entry) Entry {
 
 // noteName is the note's path for a doc's: a lowercase .md, which the index
 // reads, and README renamed — vaults exclude README.md as their own meta
-// file, and a docs folder's README is its overview.
+// file, and a docs folder's README is its overview. A PDF's note is
+// <name>-pdf.md, so paper.md and paper.pdf in one folder stay two notes.
 func noteName(rel string) string {
 	dir, file := path.Split(rel)
 	stem := strings.TrimSuffix(file, path.Ext(file))
 	if strings.EqualFold(stem, "readme") {
 		stem = "readme"
 	}
+	if isPDF(file) {
+		stem += "-pdf"
+	}
 	return dir + stem + vault.NoteExtension
+}
+
+// ImportFile imports one .md or .pdf file, rel under src.Dir, with the
+// repository and prefix of that folder. There is no orphan pass: this import
+// has one doc, and the folder's other notes are not its to report or prune.
+// A PDF that cannot become a note is an error here, not a skip — it is the
+// one thing the operator asked for.
+func ImportFile(src Source, rel, vaultRoot string, opts Options) (*Result, error) {
+	if err := validRepo(src.Repo); err != nil {
+		return nil, err
+	}
+	rel = filepath.ToSlash(filepath.Clean(rel))
+	if !importable(rel) {
+		return nil, fmt.Errorf("%s: only a .md or a .pdf file can be imported", rel)
+	}
+	if strings.Contains(rel, "/") || rel == "." || rel == ".." {
+		return nil, fmt.Errorf("%s: name a file in the source folder", rel)
+	}
+	vaultAbs, _, srcRoot, err := roots(src.Dir, vaultRoot)
+	if err != nil {
+		return nil, err
+	}
+	p := filepath.Join(srcRoot, rel)
+	info, err := os.Lstat(p)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", rel)
+	}
+	var d doc
+	if isPDF(rel) {
+		d, err = readPDFDoc(src, rel, p)
+	} else {
+		d, err = readDoc(src, rel, p)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", rel, err)
+	}
+	base := path.Join(ImportedDir, src.Repo, src.Prefix)
+	all, noteSkips, err := readNotes(vaultAbs, ImportedDir, base)
+	if err != nil {
+		return nil, err
+	}
+	s := newSyncer(src, srcRoot, base, all, opts, writer{vaultRoot: vaultAbs, dryRun: opts.DryRun})
+	// Only what readNotes said about this one note: the folder's others are
+	// not this import's to report.
+	res := &Result{DryRun: opts.DryRun}
+	target := path.Join(base, noteName(rel))
+	for _, e := range noteSkips {
+		if e.Note == target {
+			res.Entries = append(res.Entries, e)
+		}
+	}
+	res.Entries = append(res.Entries, s.syncDocs([]doc{d})...)
+	return res, nil
 }
 
 // noteID is the slug of the repository and the doc's path.

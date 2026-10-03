@@ -66,6 +66,9 @@ func importDocs(cmd *cobra.Command, arg string) (*importResult, error) {
 		}
 		return finishImport(cmd, vaultPath, arg, cfg, opts, rep)
 	}
+	if info, serr := os.Stat(arg); serr == nil && info.Mode().IsRegular() {
+		return importOneFile(cmd, arg, vaultPath, cfg, opts)
+	}
 	src, err := importSource(arg)
 	if err != nil {
 		return nil, importErr(cmd, err)
@@ -79,6 +82,21 @@ func importDocs(cmd *cobra.Command, arg string) (*importResult, error) {
 		label += ":" + src.Prefix
 	}
 	return finishImport(cmd, vaultPath, label, cfg, opts, rep)
+}
+
+// importOneFile imports one .md or .pdf with the repository and prefix of
+// its folder, as importing that folder would name it, and nothing else.
+func importOneFile(cmd *cobra.Command, file, vaultPath string, cfg *vault.Config, opts importdocs.Options) (*importResult, error) {
+	src, err := importSource(filepath.Dir(file))
+	if err != nil {
+		return nil, importErr(cmd, err)
+	}
+	name := filepath.Base(file)
+	rep, err := importdocs.ImportFile(src, name, vaultPath, opts)
+	if err != nil {
+		return nil, importErr(cmd, err)
+	}
+	return finishImport(cmd, vaultPath, src.Repo+":"+path.Join(src.Prefix, name), cfg, opts, rep)
 }
 
 // isHTTPURL reports an argument the URL import handles. The check is

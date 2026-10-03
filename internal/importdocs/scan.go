@@ -1,6 +1,8 @@
 package importdocs
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -59,11 +61,20 @@ func scan(src Source, root, vaultReal string) ([]doc, []Entry, error) {
 			}
 			return nil
 		}
-		if !strings.EqualFold(filepath.Ext(p), ".md") {
+		if !importable(p) {
 			return nil
 		}
 		if hasControl(rel) {
 			skipped = append(skipped, Entry{Action: Skipped, Note: strconv.Quote(rel), Reason: "a control character in the doc's path"})
+			return nil
+		}
+		if isPDF(p) {
+			// One PDF that cannot become a note is reported; the folder goes on.
+			if dc, perr := readPDFDoc(src, rel, p); perr == nil {
+				docs = append(docs, dc)
+			} else {
+				skipped = append(skipped, Entry{Action: Skipped, Note: rel, Reason: perr.Error()})
+			}
 			return nil
 		}
 		dc, err := readDoc(src, rel, p)
@@ -77,6 +88,46 @@ func scan(src Source, root, vaultReal string) ([]doc, []Entry, error) {
 		return nil, nil, fmt.Errorf("scanning %s: %w", src.Dir, err)
 	}
 	return docs, skipped, nil
+}
+
+// importable reports a file an import reads: markdown, or a PDF.
+func importable(p string) bool {
+	return strings.EqualFold(filepath.Ext(p), ".md") || isPDF(p)
+}
+
+func isPDF(p string) bool { return strings.EqualFold(filepath.Ext(p), ".pdf") }
+
+// readPDFDoc reads one PDF as a doc: its extracted text is the body, and its
+// title is the PDF's own (metadata or first line), else the file name. The
+// hash is of the text, as for a PDF fetched by URL. A PDF over the size cap,
+// one pdfium cannot read, and a scan with no text are errors with the reason.
+func readPDFDoc(src Source, rel, p string) (doc, error) {
+	info, err := os.Stat(p)
+	if err != nil {
+		return doc{}, err
+	}
+	if info.Size() > maxPDFBytes {
+		return doc{}, errors.New("PDF is larger than 20 MiB")
+	}
+	// nosemgrep: go-path-traversal -- a file found by walking the folder the operator named; symlinks were skipped
+	raw, err := os.ReadFile(p) //nolint:gosec // same
+	if err != nil {
+		return doc{}, err
+	}
+	text, pdfTitle, err := pdfText(context.Background(), raw)
+	if err != nil {
+		return doc{}, err
+	}
+	if pdfTitle == "" {
+		pdfTitle = strings.TrimSuffix(path.Base(rel), path.Ext(rel))
+	}
+	docPath := path.Join(src.Prefix, rel)
+	return doc{
+		Rel: rel, Path: docPath, Repo: src.Repo,
+		Source: src.Repo + ":" + docPath,
+		Title:  pdfTitle,
+		Body:   text, Hash: hashOf(text),
+	}, nil
 }
 
 // readDoc reads one doc. A doc's own frontmatter is not body: its `title`
