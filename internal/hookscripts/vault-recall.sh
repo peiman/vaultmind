@@ -173,12 +173,20 @@ if [ -n "${VAULTMIND_VAULTS:-}" ]; then
   VAULT_ARGS=(--vaults "$VAULTMIND_VAULTS")
 fi
 
+# Cross-turn dedup. 25.7% of the excerpts this hook delivered had already been
+# delivered in the same conversation within 30 minutes (908 turns, measured
+# 2026-10-03). A note delivered inside the window comes back as its title, so
+# it can still be opened. The ledger is per conversation and shared with the
+# reach hook, so neither repeats what the other just delivered.
+RECALL_DEDUP_WINDOW="${VAULTMIND_RECALL_DEDUP_WINDOW:-30m}"
+
 ASK_ERR=$(mktemp -t vaultmind-userprompt-err.XXXXXX)
 POINTERS=$(VAULTMIND_CALLER=vaultmind-userprompt-hook VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" $TIMEOUT_CMD "$VAULTMIND" ask "$QUERY" \
   "${VAULT_ARGS[@]}" \
   --max-items 3 \
   --budget 1500 \
   --quiet-on-no-match \
+  --dedup-window "$RECALL_DEDUP_WINDOW" \
   --excerpt 80 2>"$ASK_ERR")
 ASK_STATUS=$?
 
