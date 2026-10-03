@@ -118,6 +118,26 @@ func TestImport_APDFThatBecameUnreadableKeepsItsNote(t *testing.T) {
 	assert.Zero(t, res.Count(importdocs.Pruned))
 }
 
+// A PDF deleted from the folder orphans its note, as a markdown doc does, and
+// --prune removes it.
+func TestImport_ADeletedPDFOrphansItsNote(t *testing.T) {
+	repo, vault := srcRepo(t), t.TempDir()
+	pdf := filepath.Join(repo, "docs", "paper.pdf")
+	copyFixture(t, "paper.pdf", pdf)
+	run(t, repo, vault, importdocs.Options{})
+	require.NoError(t, os.Remove(pdf))
+
+	res := run(t, repo, vault, importdocs.Options{})
+	e, ok := entryFor(res, "imported/demo-repo/docs/paper-pdf.md")
+	require.True(t, ok)
+	assert.Equal(t, importdocs.Orphaned, e.Action)
+
+	res = run(t, repo, vault, importdocs.Options{Prune: true})
+	e, _ = entryFor(res, "imported/demo-repo/docs/paper-pdf.md")
+	assert.Equal(t, importdocs.Pruned, e.Action)
+	assert.NoFileExists(t, filepath.Join(vault, "imported", "demo-repo", "docs", "paper-pdf.md"))
+}
+
 // One file imports alone, with the repository and prefix of its folder, and
 // without an orphan pass: a sibling's note is not called orphaned.
 func TestImportFile_ImportsOneFileAndLeavesSiblingsAlone(t *testing.T) {

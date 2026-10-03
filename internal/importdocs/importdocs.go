@@ -107,7 +107,7 @@ func (r *Result) Changed() []string {
 }
 
 // ErrNoMarkdown reports a source folder with nothing to import.
-var ErrNoMarkdown = errors.New("no markdown files")
+var ErrNoMarkdown = errors.New("no markdown files or readable PDFs")
 
 // Import brings the docs under src into vaultRoot and reports what it did.
 func Import(src Source, vaultRoot string, opts Options) (*Result, error) {
@@ -254,7 +254,7 @@ func (s *syncer) syncDocs(docs []doc) []Entry {
 		e := Entry{Note: rel, Source: d.Source}
 		switch {
 		case s.written[key]:
-			e.Action, e.Reason = Skipped, "another doc maps to the same note (names differ only in case)"
+			e.Action, e.Reason = Skipped, "another doc maps to the same note (names that differ only in case, or a markdown file named like a PDF's <name>-pdf.md)"
 		case vault.Excluded(rel, s.opts.Excludes):
 			e.Action, e.Reason = Skipped, "the vault's exclude list hides this path from the index"
 		case s.ambiguous(rel):
@@ -481,7 +481,15 @@ func ImportFile(src Source, rel, vaultRoot string, opts Options) (*Result, error
 		return nil, err
 	}
 	s := newSyncer(src, srcRoot, base, all, opts, writer{vaultRoot: vaultAbs, dryRun: opts.DryRun})
-	res := &Result{DryRun: opts.DryRun, Entries: under(noteSkips, path.Join(base, noteName(rel)))}
+	// Only what readNotes said about this one note: the folder's others are
+	// not this import's to report.
+	res := &Result{DryRun: opts.DryRun}
+	target := path.Join(base, noteName(rel))
+	for _, e := range noteSkips {
+		if e.Note == target {
+			res.Entries = append(res.Entries, e)
+		}
+	}
 	res.Entries = append(res.Entries, s.syncDocs([]doc{d})...)
 	return res, nil
 }
