@@ -25,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Cursor's hooks cannot add context to a prompt, so there is no per-prompt recall under
   Cursor. `hooks status` judges a Cursor-only project on its own scripts. (#219)
 
+### Changed
+
+- **Per-prompt recall no longer repeats itself.** A quarter of the excerpts it delivered
+  had already been delivered in the same conversation within 30 minutes. A note delivered
+  inside that window now comes back as its title, so it can still be opened. The window is
+  shared with the commit-time hook, and `VAULTMIND_RECALL_DEDUP_WINDOW` changes it.
+
 ### Fixed
 
 - **The persona loader works in any Go project.** It treated every project with `internal/`
