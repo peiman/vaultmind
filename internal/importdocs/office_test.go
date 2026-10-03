@@ -166,6 +166,48 @@ func TestOffice_XlsxIgnoresStyledEmptyCellsAndCapsColumns(t *testing.T) {
 	assert.NotContains(t, text, fmt.Sprintf("h%d", maxSheetCols))
 }
 
+// A cell reference is a few bytes; the row it builds must not be. A reference
+// with a long letter run (a column in the billions) is counted as cut, never
+// allocated (review of #230: "ZZZZZZ1" asked for gigabytes).
+func TestOffice_XlsxAHugeColumnReferenceIsNotAllocated(t *testing.T) {
+	raw := ooxml(t, map[string]string{
+		"xl/workbook.xml":            `<workbook ` + nsX + `><sheets><sheet name="S" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+		"xl/_rels/workbook.xml.rels": `<Relationships ` + nsRel + `><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>`,
+		"xl/worksheets/sheet1.xml": `<worksheet ` + nsX + `><sheetData><row r="1">` +
+			`<c r="A1" t="inlineStr"><is><t>kept</t></is></c>` +
+			`<c r="ZZZZZZZZZZ1" t="inlineStr"><is><t>far</t></is></c></row></sheetData></worksheet>`,
+	})
+	text, _, err := officeText("xlsx", raw)
+	require.NoError(t, err)
+	assert.Contains(t, text, "| kept |")
+	assert.NotContains(t, text, "far")
+	assert.Contains(t, text, "more columns not shown")
+}
+
+// Phonetic guides (rPh) are a reading aid on East Asian text, not part of it.
+func TestOffice_XlsxSharedStringsLeaveOutPhoneticRuns(t *testing.T) {
+	raw := ooxml(t, map[string]string{
+		"xl/workbook.xml":            `<workbook ` + nsX + `><sheets><sheet name="S" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+		"xl/_rels/workbook.xml.rels": `<Relationships ` + nsRel + `><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>`,
+		"xl/sharedStrings.xml":       `<sst ` + nsX + `><si><t>東京</t><rPh sb="0" eb="2"><t>とうきょう</t></rPh></si></sst>`,
+		"xl/worksheets/sheet1.xml":   `<worksheet ` + nsX + `><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c></row></sheetData></worksheet>`,
+	})
+	text, _, err := officeText("xlsx", raw)
+	require.NoError(t, err)
+	assert.Contains(t, text, "| 東京 |")
+	assert.NotContains(t, text, "とうきょう")
+}
+
+// A tracked deletion keeps its text in w:delText, which is not document text.
+func TestOffice_DocxLeavesOutTrackedDeletions(t *testing.T) {
+	body := `<w:p><w:r><w:t>kept </w:t></w:r><w:del w:id="1" w:author="a"><w:r><w:delText>removed</w:delText></w:r></w:del></w:p>`
+	raw := ooxml(t, map[string]string{"word/document.xml": `<w:document ` + nsW + `><w:body>` + body + `</w:body></w:document>`})
+	text, _, err := officeText("docx", raw)
+	require.NoError(t, err)
+	assert.Contains(t, text, "kept")
+	assert.NotContains(t, text, "removed")
+}
+
 // columnName is columnIndex's inverse: 0 → A, 26 → AA.
 func columnName(i int) string {
 	s := ""

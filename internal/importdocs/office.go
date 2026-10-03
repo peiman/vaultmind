@@ -253,7 +253,7 @@ func docxText(o officeParts) (string, error) {
 			case "tbl":
 				tableDepth--
 				if tableDepth == 0 {
-					out.WriteString(markdownTable(table, 0))
+					out.WriteString(markdownTable(table))
 				}
 			}
 		case xml.CharData:
@@ -281,8 +281,8 @@ func appendCell(table [][]string, text string) {
 }
 
 // markdownTable renders rows as a markdown table, the first row as its
-// header. With limit > 0, rows past it are counted, not shown.
-func markdownTable(rows [][]string, limit int) string {
+// header.
+func markdownTable(rows [][]string) string {
 	width := 0
 	for _, r := range rows {
 		width = max(width, len(r))
@@ -306,17 +306,8 @@ func markdownTable(rows [][]string, limit int) string {
 	var b strings.Builder
 	b.WriteString(line(rows[0]))
 	b.WriteString("|" + strings.Repeat(" --- |", width) + "\n")
-	body := rows[1:]
-	hidden := 0
-	if limit > 0 && len(body) > limit {
-		hidden = len(body) - limit
-		body = body[:limit]
-	}
-	for _, r := range body {
+	for _, r := range rows[1:] {
 		b.WriteString(line(r))
-	}
-	if hidden > 0 {
-		fmt.Fprintf(&b, "\n(%d more rows not shown)\n", hidden)
 	}
 	return b.String() + "\n"
 }
@@ -440,28 +431,19 @@ func xlsxText(o officeParts) (string, error) {
 		if err != nil {
 			continue
 		}
-		rows, hiddenCols := capColumns(sheetRows(raw, shared), maxSheetCols)
-		if len(rows) == 0 {
+		sh := readSheet(raw, shared)
+		if len(sh.rows) == 0 {
 			continue
 		}
-		fmt.Fprintf(&out, "## %s\n\n%s", s.Name, markdownTable(rows, maxSheetRows))
-		if hiddenCols > 0 {
-			fmt.Fprintf(&out, "(%d more columns not shown)\n\n", hiddenCols)
+		fmt.Fprintf(&out, "## %s\n\n%s", s.Name, markdownTable(sh.rows))
+		if sh.moreRows > 0 {
+			fmt.Fprintf(&out, "(%d more rows not shown)\n\n", sh.moreRows)
+		}
+		if sh.moreCols > 0 {
+			fmt.Fprintf(&out, "(%d more columns not shown)\n\n", sh.moreCols)
 		}
 	}
 	return out.String(), nil
-}
-
-// capColumns keeps the first limit columns and says how many were cut.
-func capColumns(rows [][]string, limit int) ([][]string, int) {
-	hidden := 0
-	for i, r := range rows {
-		if len(r) > limit {
-			hidden = max(hidden, len(r)-limit)
-			rows[i] = r[:limit]
-		}
-	}
-	return rows, hidden
 }
 
 func sharedStrings(o officeParts) []string {
@@ -472,6 +454,7 @@ func sharedStrings(o officeParts) []string {
 	var out []string
 	var cur strings.Builder
 	var inT bool
+	phonetic := 0 // inside rPh: a reading guide, not the text
 	dec := xml.NewDecoder(bytes.NewReader(b))
 	for {
 		tok, err := dec.Token()
@@ -485,16 +468,20 @@ func sharedStrings(o officeParts) []string {
 				cur.Reset()
 			case "t":
 				inT = true
+			case "rPh":
+				phonetic++
 			}
 		case xml.EndElement:
 			switch t.Name.Local {
 			case "t":
 				inT = false
+			case "rPh":
+				phonetic--
 			case "si":
 				out = append(out, cur.String())
 			}
 		case xml.CharData:
-			if inT {
+			if inT && phonetic == 0 {
 				cur.Write(t)
 			}
 		}
@@ -502,16 +489,41 @@ func sharedStrings(o officeParts) []string {
 	return out
 }
 
-// sheetRows reads a worksheet into rows of cells, placing each cell in its
-// column so an empty cell between two values keeps its place. A cell with no
-// value (formatting only) adds nothing, and a row with no values is dropped:
-// real sheets style cells far past their data.
-func sheetRows(raw []byte, shared []string) [][]string {
-	var rows [][]string
-	var col int
+// sheet is what a note shows of one worksheet: at most maxSheetRows+1 rows
+// (the header and the body) of at most maxSheetCols columns, and how much
+// more there was.
+type sheet struct {
+	rows               [][]string
+	moreRows, moreCols int
+}
+
+// excelMaxCols is the widest a sheet can be (column XFD). A reference past it
+// is malformed and counts no further.
+const excelMaxCols = 16384
+
+// readSheet reads a worksheet, placing each cell in its column so an empty
+// cell between two values keeps its place. A cell with no value (formatting
+// only) adds nothing, and a row with no values is dropped: real sheets style
+// cells far past their data. Nothing past the caps is stored, so what a
+// sheet costs is bounded by the caps, not by what its XML claims.
+func readSheet(raw []byte, shared []string) sheet {
+	var sh sheet
+	var row []string
+	var col, next int
 	var kind string
 	var val strings.Builder
 	var inV bool
+	endRow := func() {
+		if len(row) == 0 {
+			return
+		}
+		if len(sh.rows) <= maxSheetRows {
+			sh.rows = append(sh.rows, row)
+		} else {
+			sh.moreRows++
+		}
+		row = nil
+	}
 	dec := xml.NewDecoder(bytes.NewReader(raw))
 	for {
 		tok, err := dec.Token()
@@ -522,12 +534,13 @@ func sheetRows(raw []byte, shared []string) [][]string {
 		case xml.StartElement:
 			switch t.Name.Local {
 			case "row":
-				rows = append(rows, nil)
+				row, next = nil, 0
 			case "c":
 				col, kind = columnIndex(attr(t, "r")), attr(t, "t")
-				if col < 0 && len(rows) > 0 {
-					col = len(rows[len(rows)-1]) // no reference: the next column
+				if col < 0 {
+					col = next // no reference: the next column
 				}
+				next = col + 1
 				val.Reset()
 			case "v", "t":
 				inV = true
@@ -536,10 +549,9 @@ func sheetRows(raw []byte, shared []string) [][]string {
 			switch t.Name.Local {
 			case "v", "t":
 				inV = false
+			case "row":
+				endRow()
 			case "c":
-				if len(rows) == 0 || col < 0 {
-					continue
-				}
 				v := val.String()
 				if kind == "s" {
 					if i, err := strconv.Atoi(v); err == nil && i >= 0 && i < len(shared) {
@@ -549,12 +561,14 @@ func sheetRows(raw []byte, shared []string) [][]string {
 				if strings.TrimSpace(v) == "" {
 					continue
 				}
-				r := rows[len(rows)-1]
-				for len(r) <= col {
-					r = append(r, "")
+				if col >= maxSheetCols {
+					sh.moreCols = max(sh.moreCols, min(col+1, excelMaxCols)-maxSheetCols)
+					continue
 				}
-				r[col] = v
-				rows[len(rows)-1] = r
+				for len(row) <= col {
+					row = append(row, "")
+				}
+				row[col] = v
 			}
 		case xml.CharData:
 			if inV {
@@ -562,17 +576,12 @@ func sheetRows(raw []byte, shared []string) [][]string {
 			}
 		}
 	}
-	kept := rows[:0]
-	for _, r := range rows {
-		if len(r) > 0 {
-			kept = append(kept, r)
-		}
-	}
-	return kept
+	return sh
 }
 
 // columnIndex turns a cell reference's letters (A1, AB12) into a 0-based
-// column; -1 when there are none.
+// column; -1 when there are none. A run past Excel's widest column stops
+// counting there rather than overflowing.
 func columnIndex(ref string) int {
 	n := 0
 	for _, c := range ref {
@@ -580,6 +589,9 @@ func columnIndex(ref string) int {
 			break
 		}
 		n = n*26 + int(c-'A'+1)
+		if n > excelMaxCols {
+			return excelMaxCols
+		}
 	}
 	return n - 1
 }
