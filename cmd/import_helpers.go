@@ -10,6 +10,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/internal/cmdutil"
@@ -44,6 +45,14 @@ func importDocs(cmd *cobra.Command, arg string) (*importResult, error) {
 	if err := unsupportedImportURL(arg); err != nil {
 		return nil, importErr(cmd, err)
 	}
+	crawl := getConfigValueWithFlags[bool](cmd, "crawl", config.KeyAppImportCrawl)
+	var co importdocs.CrawlOptions
+	if crawl {
+		var err error
+		if co, err = crawlOptions(cmd, arg); err != nil {
+			return nil, importErr(cmd, err)
+		}
+	}
 	vaultPath := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppImportVault)
 	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, importEnvelope)
 	if err != nil {
@@ -60,7 +69,12 @@ func importDocs(cmd *cobra.Command, arg string) (*importResult, error) {
 		Excludes: cfg.Vault.Exclude,
 	}
 	if isHTTPURL(arg) {
-		rep, err := importdocs.ImportURL(importContext(cmd), arg, vaultPath, opts, importdocs.HTTPFetcher())
+		var rep *importdocs.Result
+		if crawl {
+			rep, err = importdocs.Crawl(importContext(cmd), arg, vaultPath, opts, co, importdocs.HTTPFetcher(arg))
+		} else {
+			rep, err = importdocs.ImportURL(importContext(cmd), arg, vaultPath, opts, importdocs.HTTPFetcher(arg))
+		}
 		if err != nil {
 			return nil, importErr(cmd, err)
 		}
@@ -98,6 +112,34 @@ func importOneFile(cmd *cobra.Command, file, vaultPath string, cfg *vault.Config
 		return nil, importErr(cmd, err)
 	}
 	return finishImport(cmd, vaultPath, src.Repo+":"+path.Join(src.Prefix, name), cfg, opts, rep)
+}
+
+// crawlOptions reads and checks the crawl flags. They are refused before the
+// vault is opened or anything is fetched.
+func crawlOptions(cmd *cobra.Command, arg string) (importdocs.CrawlOptions, error) {
+	if !isHTTPURL(arg) {
+		return importdocs.CrawlOptions{}, errors.New("--crawl needs an http or https URL")
+	}
+	co := importdocs.CrawlOptions{
+		MaxPages:      getConfigValueWithFlags[int](cmd, "max-pages", config.KeyAppImportMaxPages),
+		Depth:         getConfigValueWithFlags[int](cmd, "depth", config.KeyAppImportDepth),
+		Include:       getConfigValueWithFlags[[]string](cmd, "include", config.KeyAppImportInclude),
+		Exclude:       getConfigValueWithFlags[[]string](cmd, "exclude", config.KeyAppImportExclude),
+		RespectRobots: getConfigValueWithFlags[bool](cmd, "respect-robots", config.KeyAppImportRespectRobots),
+	}
+	if co.MaxPages < 1 {
+		return co, errors.New("--max-pages must be at least 1")
+	}
+	if co.Depth < 0 {
+		return co, errors.New("--depth must not be negative")
+	}
+	raw := getConfigValueWithFlags[string](cmd, "delay", config.KeyAppImportDelay)
+	d, err := time.ParseDuration(raw)
+	if err != nil || d < 0 {
+		return co, fmt.Errorf("--delay %q is not a duration such as 1s or 500ms", raw)
+	}
+	co.Delay = d
+	return co, nil
 }
 
 // isHTTPURL reports an argument the URL import handles. The check is

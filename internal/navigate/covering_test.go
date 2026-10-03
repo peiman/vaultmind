@@ -3,9 +3,7 @@ package navigate_test
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
-	"time"
 
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/navigate"
@@ -18,29 +16,6 @@ import (
 // for code in another repository. When an agent opens a file, the notes that
 // cover it are the knowledge it needs, found by the path it is already
 // reading rather than by guessing a query.
-
-func TestMatchPath(t *testing.T) {
-	for _, c := range []struct {
-		pattern, rel string
-		want         bool
-	}{
-		{"cmd/tree.go", "cmd/tree.go", true},
-		{"cmd/tree.go", "cmd/tree_test.go", false},
-		{"cmd/*.go", "cmd/tree.go", true},
-		{"cmd/*.go", "cmd/sub/tree.go", false},
-		{"internal/navigate/**", "internal/navigate/navigate.go", true},
-		{"internal/navigate/**", "internal/navigate/deep/x.go", true},
-		{"internal/navigate/**", "internal/navigator/x.go", false},
-		{"internal/navigate/", "internal/navigate/navigate.go", true},
-		{"**/*.sh", "internal/hookscripts/vault-reach.sh", true},
-		{"**/*.sh", "vault-reach.sh", true},
-		{"internal/**/embed.go", "internal/hookscripts/embed.go", true},
-		{"internal/**/embed.go", "internal/embed.go", true},
-		{"./cmd/tree.go", "cmd/tree.go", true},
-	} {
-		assert.Equal(t, c.want, navigate.MatchPath(c.pattern, c.rel), "%s vs %s", c.pattern, c.rel)
-	}
-}
 
 func coveringDB(t *testing.T) *index.DB {
 	t.Helper()
@@ -164,17 +139,6 @@ func TestResolveCodeFile_AWorktreeUsesItsMainRepositorysRemote(t *testing.T) {
 
 	got := navigate.ResolveCodeFile(filepath.Join(wt, "a.go"))
 	assert.Equal(t, navigate.CodeFile{Rel: "a.go", Repo: "vaultmind"}, withoutRoot(got))
-}
-
-// A run of ** is one **; unfolded, each extra one multiplied the search and a
-// pathological pattern took seconds per file.
-func TestMatchPath_ARunOfAnyDepthStaysFast(t *testing.T) {
-	pattern := strings.Repeat("**/", 20) + "nomatch.go"
-	rel := strings.Repeat("d/", 20) + "file.go"
-	start := time.Now()
-	assert.False(t, navigate.MatchPath(pattern, rel))
-	assert.Less(t, time.Since(start), 100*time.Millisecond)
-	assert.True(t, navigate.MatchPath("**/**/file.go", "a/b/file.go"))
 }
 
 // `vaultmind frontmatter set` writes a JSON array as a quoted string (#159);

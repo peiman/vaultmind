@@ -284,7 +284,7 @@ func TestImportURL_DryRunFetchesButWritesNothing(t *testing.T) {
 }
 
 func TestImportURL_FetchErrorsWriteNothing(t *testing.T) {
-	fetch := importdocs.HTTPFetcher()
+	fetch := importdocs.HTTPFetcher("http://127.0.0.1/") // the test servers are local
 	assertNothing := func(t *testing.T, rawURL string, want string) {
 		t.Helper()
 		vault := t.TempDir()
@@ -386,7 +386,7 @@ func TestHTTPFetcher_StopsAfterFiveRedirects(t *testing.T) {
 			_, _ = io.WriteString(w, "landed\n")
 		}))
 		t.Cleanup(srv.Close)
-		page, err := importdocs.HTTPFetcher()(t.Context(), srv.URL)
+		page, err := importdocs.HTTPFetcher(srv.URL)(t.Context(), srv.URL)
 		require.NoError(t, err)
 		assert.Equal(t, "landed\n", string(page.Body))
 		assert.Equal(t, 6, n, "the original request plus five redirects")
@@ -400,7 +400,7 @@ func TestHTTPFetcher_StopsAfterFiveRedirects(t *testing.T) {
 		t.Cleanup(srv.Close)
 		ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 		defer cancel()
-		_, err := importdocs.HTTPFetcher()(ctx, srv.URL)
+		_, err := importdocs.HTTPFetcher(srv.URL)(ctx, srv.URL)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "stopped after 5 redirects")
 		assert.NotContains(t, err.Error(), "deadline")
@@ -432,7 +432,7 @@ func TestHTTPFetcher_NamesItselfAndKeepsNoCookies(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	page, err := importdocs.HTTPFetcher()(t.Context(), srv.URL)
+	page, err := importdocs.HTTPFetcher(srv.URL)(t.Context(), srv.URL)
 	require.NoError(t, err)
 	assert.Equal(t, "ok\n", string(page.Body))
 	assert.True(t, sawUA)
@@ -447,7 +447,7 @@ func TestHTTPFetcher_DecodesTheContentTypeCharset(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	vault := t.TempDir()
-	res := importPage(t, srv.URL+"/cafe", vault, importdocs.Options{}, importdocs.HTTPFetcher())
+	res := importPage(t, srv.URL+"/cafe", vault, importdocs.Options{}, importdocs.HTTPFetcher(srv.URL))
 	require.Equal(t, 1, res.Count(importdocs.Added))
 	_, body, _ := noteFront(t, vault, res.Entries[0].Note)
 	assert.Equal(t, "café\n", body)
@@ -562,7 +562,7 @@ func TestImportURL_PDFBecomesOneNoteWithItsTextAndTitle(t *testing.T) {
 	vault := t.TempDir()
 	given := srv.URL + "/pdf/2409.04701"
 
-	res := importPage(t, given, vault, importdocs.Options{}, importdocs.HTTPFetcher())
+	res := importPage(t, given, vault, importdocs.Options{}, importdocs.HTTPFetcher(given))
 	require.Len(t, res.Entries, 1)
 	assert.Equal(t, importdocs.Added, res.Entries[0].Action)
 	fm, body, _ := noteFront(t, vault, res.Entries[0].Note)
@@ -573,7 +573,7 @@ func TestImportURL_PDFBecomesOneNoteWithItsTextAndTitle(t *testing.T) {
 	sum := sha256.Sum256([]byte(body))
 	assert.Equal(t, hex.EncodeToString(sum[:]), fm["source_hash"], "the hash is of the extracted text")
 
-	res = importPage(t, given, vault, importdocs.Options{}, importdocs.HTTPFetcher())
+	res = importPage(t, given, vault, importdocs.Options{}, importdocs.HTTPFetcher(given))
 	assert.Equal(t, 1, res.Count(importdocs.Unchanged))
 }
 

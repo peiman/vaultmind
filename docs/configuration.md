@@ -211,6 +211,13 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.import.prune` | bool | `false` | `VAULTMIND_APP_IMPORT_PRUNE` | Remove imported notes whose doc is gone |
 | `app.import.force` | bool | `false` | `VAULTMIND_APP_IMPORT_FORCE` | Overwrite imported notes edited by hand when their doc changed |
 | `app.import.json` | bool | `false` | `VAULTMIND_APP_IMPORT_JSON` | Output in JSON format |
+| `app.import.crawl` | bool | `false` | `VAULTMIND_APP_IMPORT_CRAWL` | Import the site a URL leads to, one note per page |
+| `app.import.max_pages` | int | `100` | `VAULTMIND_APP_IMPORT_MAX_PAGES` | Most pages a crawl fetches |
+| `app.import.depth` | int | `5` | `VAULTMIND_APP_IMPORT_DEPTH` | Most link hops a crawl follows from the URL (0: the URL alone) |
+| `app.import.include` | []string | `[]` | `VAULTMIND_APP_IMPORT_INCLUDE` | Crawl only URL paths matching one of these globs |
+| `app.import.exclude` | []string | `[]` | `VAULTMIND_APP_IMPORT_EXCLUDE` | Never crawl URL paths matching these globs |
+| `app.import.respect_robots` | bool | `false` | `VAULTMIND_APP_IMPORT_RESPECT_ROBOTS` | Obey robots.txt rules and Crawl-delay when crawling |
+| `app.import.delay` | string | `1s` | `VAULTMIND_APP_IMPORT_DELAY` | Pause between a crawl's requests |
 | `app.index.vault` | string | `.` | `VAULTMIND_APP_INDEX_VAULT` | Path to the vault root directory |
 | `app.index.json` | bool | `false` | `VAULTMIND_APP_INDEX_JSON` | Output in JSON format |
 | `app.index.full` | bool | `false` | `VAULTMIND_APP_INDEX_FULL` | Force full rebuild instead of incremental index |
@@ -902,6 +909,27 @@ app:
 
     # Output in JSON format
     json: false
+
+    # Import the site a URL leads to, one note per page
+    crawl: false
+
+    # Most pages a crawl fetches
+    max_pages: 100
+
+    # Most link hops a crawl follows from the URL (0: the URL alone)
+    depth: 5
+
+    # Crawl only URL paths matching one of these globs
+    include: []
+
+    # Never crawl URL paths matching these globs
+    exclude: []
+
+    # Obey robots.txt rules and Crawl-delay when crawling
+    respect_robots: false
+
+    # Pause between a crawl's requests
+    delay: 1s
 
   index:
     # Path to the vault root directory
@@ -1855,6 +1883,27 @@ export VAULTMIND_APP_IMPORT_FORCE=false
 
 # Output in JSON format
 export VAULTMIND_APP_IMPORT_JSON=false
+
+# Import the site a URL leads to, one note per page
+export VAULTMIND_APP_IMPORT_CRAWL=false
+
+# Most pages a crawl fetches
+export VAULTMIND_APP_IMPORT_MAX_PAGES=100
+
+# Most link hops a crawl follows from the URL (0: the URL alone)
+export VAULTMIND_APP_IMPORT_DEPTH=5
+
+# Crawl only URL paths matching one of these globs
+export VAULTMIND_APP_IMPORT_INCLUDE=[]
+
+# Never crawl URL paths matching these globs
+export VAULTMIND_APP_IMPORT_EXCLUDE=[]
+
+# Obey robots.txt rules and Crawl-delay when crawling
+export VAULTMIND_APP_IMPORT_RESPECT_ROBOTS=false
+
+# Pause between a crawl's requests
+export VAULTMIND_APP_IMPORT_DELAY=1s
 
 # Path to the vault root directory
 export VAULTMIND_APP_INDEX_VAULT=./my-vault

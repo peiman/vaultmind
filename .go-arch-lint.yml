@@ -137,6 +137,8 @@ components:
       - internal/identity/**
       # VaultMind release-version check (stdlib only: module-proxy query with a cached, TTL'd answer; no business deps — lets doctor say when the BINARY is behind, next to where it says the hook scripts are):
       - internal/release/**
+      # VaultMind path globs (pure: the `paths:` glob language — path.Match segments, ** for any depth; shared by the code-map hook and import --crawl's --include/--exclude):
+      - internal/pathglob/**
 
   # -------------------------------------------------------------------------
   # PROJECT-MANAGED: Business Logic Layer

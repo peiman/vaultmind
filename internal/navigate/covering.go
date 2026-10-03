@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/peiman/vaultmind/internal/pathglob"
 )
 
 // PathsField is the frontmatter field in which a note names the code it is
@@ -16,9 +17,6 @@ const PathsField = "paths"
 
 // repoSeparator splits `repo:path/glob` into the repository and the glob.
 const repoSeparator = ":"
-
-// anyDepth matches zero or more path segments.
-const anyDepth = "**"
 
 // CodeFile is the file an agent is reading: its path relative to its
 // repository root, and the repository's name (the root folder's name).
@@ -85,7 +83,7 @@ func coversAny(patterns []string, f CodeFile) bool {
 			}
 			p = rest
 		}
-		if MatchPath(p, f.Rel) {
+		if pathglob.Match(p, f.Rel) {
 			return true
 		}
 	}
@@ -132,49 +130,4 @@ func realPath(abs string) string {
 		return filepath.Join(d, filepath.Base(abs))
 	}
 	return abs
-}
-
-// MatchPath reports whether rel (slash-separated, relative to the repository
-// root) matches pattern. Segments match as in path.Match; `**` matches any
-// number of segments, and a trailing `/` covers everything beneath.
-func MatchPath(pattern, rel string) bool {
-	pattern = strings.TrimPrefix(strings.TrimSpace(pattern), "./")
-	if strings.HasSuffix(pattern, "/") {
-		pattern += anyDepth
-	}
-	return matchSegments(collapseAnyDepth(strings.Split(pattern, "/")), strings.Split(rel, "/"))
-}
-
-// collapseAnyDepth folds a run of `**` into one: they mean the same, and each
-// extra one multiplied the search (a 13-long run took seconds per file).
-func collapseAnyDepth(segs []string) []string {
-	out := segs[:0:0]
-	for _, s := range segs {
-		if s == anyDepth && len(out) > 0 && out[len(out)-1] == anyDepth {
-			continue
-		}
-		out = append(out, s)
-	}
-	return out
-}
-
-func matchSegments(pat, segs []string) bool {
-	for len(pat) > 0 {
-		if pat[0] == anyDepth {
-			for i := 0; i <= len(segs); i++ {
-				if matchSegments(pat[1:], segs[i:]) {
-					return true
-				}
-			}
-			return false
-		}
-		if len(segs) == 0 {
-			return false
-		}
-		if ok, _ := path.Match(pat[0], segs[0]); !ok {
-			return false
-		}
-		pat, segs = pat[1:], segs[1:]
-	}
-	return len(segs) == 0
 }

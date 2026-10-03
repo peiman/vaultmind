@@ -586,6 +586,27 @@ app:
     # Output in JSON format
     json: false
 
+    # Import the site a URL leads to, one note per page
+    crawl: false
+
+    # Most pages a crawl fetches
+    max_pages: 100
+
+    # Most link hops a crawl follows from the URL (0: the URL alone)
+    depth: 5
+
+    # Crawl only URL paths matching one of these globs
+    include: []
+
+    # Never crawl URL paths matching these globs
+    exclude: []
+
+    # Obey robots.txt rules and Crawl-delay when crawling
+    respect_robots: false
+
+    # Pause between a crawl's requests
+    delay: 1s
+
   index:
     # Path to the vault root directory
     vault: ./my-vault

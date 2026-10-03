@@ -5,7 +5,7 @@ import "github.com/peiman/vaultmind/.ckeletin/pkg/config"
 // ImportMetadata defines the `import` command — a folder of docs as notes.
 var ImportMetadata = config.CommandMetadata{
 	Use:   "import <dir|file|url>",
-	Short: "Import a folder of docs, PDFs and Office files, one file, or one web page or PDF, as notes and keep them in step",
+	Short: "Import a folder of docs, PDFs and Office files, one file, one web page or PDF, or a whole site, as notes and keep them in step",
 	Long: "Copy every *.md under <dir> into the vault as a note under imported/<repo>/, so " +
 		"a project's existing docs are found by search, ask and the code hooks like any " +
 		"other note. Each *.pdf in the folder becomes a note of its text, <name>-pdf.md, and " +
@@ -29,13 +29,28 @@ var ImportMetadata = config.CommandMetadata{
 		"removed only with --prune. A note edited by hand whose doc or page also changed is " +
 		"reported as a conflict and kept; --force overwrites it. Frontmatter you add to " +
 		"an imported note (tags, links) survives a re-run.\n\n" +
-		"A URL import fetches exactly the page you name and nothing else. Only http and " +
-		"https are accepted, one page per run. The body must be HTML or text of at most " +
+		"A URL import fetches exactly the page you name and nothing else, unless --crawl is " +
+		"given. Only http and https are accepted. The body must be HTML or text of at most " +
 		"5 MiB, or a PDF of at most 20 MiB; the request times out after 30 seconds, and at " +
 		"most five redirects are followed, only when they stay on http or https. Scripts on " +
 		"the page are not run. A PDF's text is read by pdfium running in a WebAssembly " +
 		"sandbox, for at most 60 seconds; a PDF with no text layer (a scan) is refused. " +
-		"The first PDF import compiles pdfium once (a few seconds) and caches it.\n\n" +
+		"The first PDF import compiles pdfium once (a few seconds) and caches it. A URL that " +
+		"names a public host never reaches a private address (localhost, 10.x, 192.168.x, " +
+		"the cloud metadata address), not even through a redirect or its DNS answer; a URL " +
+		"that names a private host is your choice, and is fetched.\n\n" +
+		"--crawl imports the site the URL leads to, one note per page, each the note a " +
+		"single-page import of that page would write. Pages come from the site's llms.txt, " +
+		"its sitemaps (from robots.txt, else /sitemap.xml), then the links on each page, " +
+		"breadth first. The crawl stays on the URL's host, in the URL's folder (/docs/intro " +
+		"and /docs/ both mean /docs/), narrowed by --include and --exclude globs on the URL " +
+		"path. Links to images, scripts, archives and other files that are not pages are not " +
+		"followed. One request is made at a time, --delay apart (default 1s); --max-pages " +
+		"(default 100) and --depth (link hops, default 5) bound it. robots.txt is read for " +
+		"its sitemaps but not obeyed unless --respect-robots is given, which also honours " +
+		"its Crawl-delay (up to 30s). A page that fails is skipped with the reason and the " +
+		"crawl goes on. Pages the crawl no longer finds are reported as orphaned only when " +
+		"it saw the whole site: no page failed and no cap stopped it.\n\n" +
 		"Left out of a folder import: hidden folders, dependency folders (node_modules, vendor), symlinks, " +
 		"and anything the vault's exclude list would hide from the index. A README is " +
 		"imported as readme.md, since vaults exclude README.md as their own meta file. " +
@@ -47,14 +62,23 @@ var ImportMetadata = config.CommandMetadata{
 		"  vaultmind import docs --vault ./knowledge --prune --json\n" +
 		"  vaultmind import papers/attention.pdf --vault ./knowledge\n" +
 		"  vaultmind import https://sqlite.org/fts5.html --vault ./kb\n" +
-		"  vaultmind import https://arxiv.org/pdf/2402.03216 --vault ./kb",
+		"  vaultmind import https://arxiv.org/pdf/2402.03216 --vault ./kb\n" +
+		"  vaultmind import https://docusaurus.io/docs --crawl --vault ./kb\n" +
+		"  vaultmind import https://example.com/docs/ --crawl --exclude 'docs/v1/**' --max-pages 300 --vault ./kb",
 	ConfigPrefix: "app.import",
 	FlagOverrides: map[string]string{
-		"app.import.vault":   "vault",
-		"app.import.dry_run": "dry-run",
-		"app.import.prune":   "prune",
-		"app.import.force":   "force",
-		"app.import.json":    "json",
+		"app.import.vault":          "vault",
+		"app.import.dry_run":        "dry-run",
+		"app.import.prune":          "prune",
+		"app.import.force":          "force",
+		"app.import.json":           "json",
+		"app.import.crawl":          "crawl",
+		"app.import.max_pages":      "max-pages",
+		"app.import.depth":          "depth",
+		"app.import.include":        "include",
+		"app.import.exclude":        "exclude",
+		"app.import.respect_robots": "respect-robots",
+		"app.import.delay":          "delay",
 	},
 }
 
@@ -66,6 +90,13 @@ func ImportOptions() []config.ConfigOption {
 		{Key: "app.import.prune", DefaultValue: false, Description: "Remove imported notes whose doc is gone", Type: "bool"},
 		{Key: "app.import.force", DefaultValue: false, Description: "Overwrite imported notes edited by hand when their doc changed", Type: "bool"},
 		{Key: "app.import.json", DefaultValue: false, Description: "Output in JSON format", Type: "bool"},
+		{Key: "app.import.crawl", DefaultValue: false, Description: "Import the site a URL leads to, one note per page", Type: "bool"},
+		{Key: "app.import.max_pages", DefaultValue: 100, Description: "Most pages a crawl fetches", Type: "int"},
+		{Key: "app.import.depth", DefaultValue: 5, Description: "Most link hops a crawl follows from the URL (0: the URL alone)", Type: "int"},
+		{Key: "app.import.include", DefaultValue: []string{}, Description: "Crawl only URL paths matching one of these globs", Type: "[]string"},
+		{Key: "app.import.exclude", DefaultValue: []string{}, Description: "Never crawl URL paths matching these globs", Type: "[]string"},
+		{Key: "app.import.respect_robots", DefaultValue: false, Description: "Obey robots.txt rules and Crawl-delay when crawling", Type: "bool"},
+		{Key: "app.import.delay", DefaultValue: "1s", Description: "Pause between a crawl's requests", Type: "string"},
 	}
 }
 
