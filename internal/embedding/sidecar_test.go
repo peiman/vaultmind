@@ -30,6 +30,12 @@ func TestMain(m *testing.M) {
 		// startup-error path that must surface the drained stderr tail.
 		fmt.Fprintln(os.Stderr, "fatal: could not load model weights")
 		os.Exit(1)
+	case "wedge":
+		// Signal ready, then ignore stdin's EOF and never exit on its own —
+		// the sidecar Close has to kill.
+		fmt.Println(`{"ready":true,"device":"cpu"}`)
+		time.Sleep(time.Hour)
+		os.Exit(0)
 	}
 	os.Exit(m.Run())
 }
@@ -133,4 +139,45 @@ func TestSidecar_StartupFailure_SurfacesStderrTail(t *testing.T) {
 	require.Error(t, err, "startup must fail when the sidecar exits before ready")
 	require.Contains(t, err.Error(), "could not load model weights",
 		"the startup error should surface the drained stderr tail")
+}
+
+// A sidecar that ignores stdin's EOF is killed, and Close returns.
+func TestSidecar_CloseKillsASidecarThatDoesNotExit(t *testing.T) {
+	saved := closeGrace
+	closeGrace = 200 * time.Millisecond
+	t.Cleanup(func() { closeGrace = saved })
+	t.Setenv("GO_WANT_SIDECAR_HELPER", "wedge")
+
+	emb, err := NewSidecarBGEM3(SidecarBGEM3Config{Python: os.Args[0], ScriptPath: os.Args[0]})
+	require.NoError(t, err)
+	start := time.Now()
+	require.NoError(t, emb.Close())
+	require.Less(t, time.Since(start), 3*time.Second, "Close must not wait out the sidecar")
+	require.NotNil(t, emb.cmd.ProcessState, "the killed sidecar is reaped")
+	require.False(t, emb.cmd.ProcessState.Success(), "it was killed, not exited cleanly")
+}
+
+func TestJoined(t *testing.T) {
+	require.True(t, joined(nil, time.Hour), "a nil channel counts as joined")
+	done := make(chan struct{})
+	require.False(t, joined(done, 10*time.Millisecond))
+	close(done)
+	require.True(t, joined(done, time.Hour))
+}
+
+// Close must let the drain read stderr to the end before cmd.Wait closes the
+// pipe (#225). With the drain held back, a Close that waits first loses the
+// tail every time; on CI it lost it about once in thousands of runs.
+func TestSidecar_StartupFailure_KeepsStderrWhenTheDrainIsSlow(t *testing.T) {
+	saved := stderrDrainStarted
+	stderrDrainStarted = func() { time.Sleep(300 * time.Millisecond) }
+	t.Cleanup(func() { stderrDrainStarted = saved })
+	t.Setenv("GO_WANT_SIDECAR_HELPER", "startup_fail")
+
+	_, err := NewSidecarBGEM3(SidecarBGEM3Config{
+		Python:     os.Args[0],
+		ScriptPath: os.Args[0],
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "could not load model weights")
 }
