@@ -2,7 +2,6 @@ package importdocs
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -79,9 +78,10 @@ func scan(src Source, root, vaultReal string) ([]doc, []Entry, error) {
 			skipped = append(skipped, Entry{Action: Skipped, Note: strconv.Quote(rel), Reason: "a control character in the doc's path"})
 			return nil
 		}
-		if isPDF(p) {
-			// One PDF that cannot become a note is reported; the folder goes on.
-			if dc, perr := readPDFDoc(src, rel, p); perr == nil {
+		if convertedKind(p) != "" {
+			// One PDF or Office file that cannot become a note is reported; the
+			// folder goes on.
+			if dc, perr := readConvertedDoc(src, rel, p); perr == nil {
 				docs = append(docs, dc)
 			} else {
 				skipped = append(skipped, Entry{Action: Skipped, Note: rel, Reason: perr.Error()})
@@ -116,31 +116,76 @@ func ignoredEntry(paths []string) Entry {
 		Reason: "git ignores them, so they were not imported (" + names + ")"}
 }
 
-// importable reports a file an import reads: markdown, or a PDF.
+// importable reports a file an import reads: markdown, a PDF, or an Office
+// document.
 func importable(p string) bool {
-	return strings.EqualFold(filepath.Ext(p), ".md") || isPDF(p)
+	return strings.EqualFold(filepath.Ext(p), ".md") || convertedKind(p) != ""
 }
 
-func isPDF(p string) bool { return strings.EqualFold(filepath.Ext(p), ".pdf") }
+// convertedKind is "pdf", "docx", "pptx" or "xlsx" for a file whose text an
+// import extracts, else "".
+func convertedKind(p string) string {
+	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(p), "."))
+	if ext == "pdf" || officeKinds[ext] {
+		return ext
+	}
+	return ""
+}
 
-// readPDFDoc reads one PDF as a doc: its extracted text is the body, and its
-// title is the PDF's own (metadata or first line), else the file name. The
-// hash is of the text, as for a PDF fetched by URL. A PDF over the size cap,
-// one pdfium cannot read, and a scan with no text are errors with the reason.
-func readPDFDoc(src Source, rel, p string) (doc, error) {
+// readPDFText reads a PDF of at most 20 MiB whole and extracts its text.
+func readPDFText(p string) (string, string, error) {
 	info, err := os.Stat(p)
 	if err != nil {
-		return doc{}, err
+		return "", "", err
 	}
 	if info.Size() > maxPDFBytes {
-		return doc{}, errors.New("PDF is larger than 20 MiB")
+		return "", "", fmt.Errorf("PDF is larger than 20 MiB")
 	}
 	// nosemgrep: go-path-traversal -- a file found by walking the folder the operator named; symlinks were skipped
 	raw, err := os.ReadFile(p) //nolint:gosec // same
 	if err != nil {
-		return doc{}, err
+		return "", "", err
 	}
-	text, pdfTitle, err := pdfText(context.Background(), raw)
+	return pdfText(context.Background(), raw)
+}
+
+// readOfficeText extracts an Office file's text straight from the file: only
+// its XML parts are read, so a deck full of pictures costs little.
+func readOfficeText(kind, p string) (string, string, error) {
+	// nosemgrep: go-path-traversal -- a file found by walking the folder the operator named; symlinks were skipped
+	f, err := os.Open(p) //nolint:gosec // same
+	if err != nil {
+		return "", "", err
+	}
+	defer func() { _ = f.Close() }()
+	info, err := f.Stat()
+	if err != nil {
+		return "", "", err
+	}
+	if info.Size() > maxOfficeBytes {
+		return "", "", fmt.Errorf("%s file is larger than %d MiB", kind, maxOfficeBytes>>20)
+	}
+	text, title, err := officeTextFrom(kind, f, info.Size())
+	if err == nil && strings.TrimSpace(text) == "" {
+		err = fmt.Errorf("the %s file holds no text", kind)
+	}
+	return text, title, err
+}
+
+// readConvertedDoc reads one PDF or Office file as a doc: its extracted text
+// is the body, and its title is the file's own (metadata, or a PDF's first
+// line), else the file name. The hash is of the text, as for a PDF fetched by
+// URL. A file over the size cap, one that cannot be read, and a PDF scan with
+// no text are errors with the reason.
+func readConvertedDoc(src Source, rel, p string) (doc, error) {
+	kind := convertedKind(p)
+	var text, pdfTitle string
+	var err error
+	if kind == "pdf" {
+		text, pdfTitle, err = readPDFText(p)
+	} else {
+		text, pdfTitle, err = readOfficeText(kind, p)
+	}
 	if err != nil {
 		return doc{}, err
 	}

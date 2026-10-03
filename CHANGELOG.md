@@ -27,6 +27,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   even if a pattern matches it. Naming an ignored folder, or a single file, imports it
   anyway. On one real repository this cut an import from 1,191 notes, mostly generated
   output, to the 229 docs the project tracks.
+- **Word, PowerPoint and Excel files import as notes.** A folder import (or `import
+  <file>`) turns each `.docx`, `.pptx` and `.xlsx` into markdown, named `<name>-docx.md`
+  and so on and tied to the file by `paths:`:
+  - `.docx`: headings (styles resolved, so a Swedish *Rubrik 1* is a heading), lists and
+    tables;
+  - `.pptx`: slides in presentation order, with their speaker notes;
+  - `.xlsx`: one table per sheet, up to 200 rows and 50 columns, saying what was cut.
+
+  Read with the standard library: no converter service, no new dependency. A broken file
+  is skipped with its reason. On 95 real Office files, all 95 became notes with text.
 - **`hooks install --agent cursor` wires Cursor** — the vault map at session start, the
   notes about a file after the agent reads or edits it, and related notes after a commit.
   Cursor's hooks cannot add context to a prompt, so there is no per-prompt recall under

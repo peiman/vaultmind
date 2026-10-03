@@ -119,15 +119,16 @@ func TestImport_AFolderWithoutMarkdownIsAJSONError(t *testing.T) {
 	assert.Contains(t, out.String(), `"no_markdown"`)
 }
 
-// A file is imported only when it is a .md or a .pdf; anything else is refused
-// with what is accepted (before PDFs and single files, every file was refused).
+// A file is imported only when it is markdown, a PDF or an Office document;
+// anything else is refused with what is accepted (before PDFs and single
+// files, every file was refused).
 func TestImport_RefusesAFileThatIsNotMarkdownOrPDF(t *testing.T) {
 	vault, repo := indexedBaselineVault(t), docsRepo(t)
 	require.NoError(t, os.WriteFile(filepath.Join(repo, "docs", "notes.txt"), []byte("text"), 0o600))
 
 	_, _, err := runRootCmd(t, "import", filepath.Join(repo, "docs", "notes.txt"), "--vault", vault)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), ".md or a .pdf")
+	assert.Contains(t, err.Error(), ".md, .pdf, .docx, .pptx or .xlsx")
 }
 
 // On a re-sync of a big folder the one doc that changed is named, not lost in
@@ -299,5 +300,5 @@ func TestImport_OneFileImportsAlone(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(repo, "docs", "image.png"), []byte("png"), 0o600))
 	_, _, err = runRootCmd(t, "import", filepath.Join(repo, "docs", "image.png"), "--vault", vault)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), ".md or a .pdf")
+	assert.Contains(t, err.Error(), ".md, .pdf, .docx, .pptx or .xlsx")
 }

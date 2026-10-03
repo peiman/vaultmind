@@ -84,8 +84,9 @@ func importDocs(cmd *cobra.Command, arg string) (*importResult, error) {
 	return finishImport(cmd, vaultPath, label, cfg, opts, rep)
 }
 
-// importOneFile imports one .md or .pdf with the repository and prefix of
-// its folder, as importing that folder would name it, and nothing else.
+// importOneFile imports one markdown, PDF or Office file with the repository
+// and prefix of its folder, as importing that folder would name it, and
+// nothing else.
 func importOneFile(cmd *cobra.Command, file, vaultPath string, cfg *vault.Config, opts importdocs.Options) (*importResult, error) {
 	src, err := importSource(filepath.Dir(file))
 	if err != nil {
