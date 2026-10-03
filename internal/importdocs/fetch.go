@@ -40,14 +40,17 @@ type Page struct {
 // without the network; the command passes HTTPFetcher.
 type Fetcher func(ctx context.Context, rawURL string) (Page, error)
 
-// HTTPFetcher fetches a page with net/http. No cookies are stored. Redirects
-// stop at five and must stay on http or https. A body over 5 MiB, a non-2xx
-// status, or a media type that is not text is an error and nothing is written.
-func HTTPFetcher() Fetcher {
+// HTTPFetcher fetches pages with net/http for a run that starts at startURL.
+// No cookies are stored. Redirects stop at five and must stay on http or
+// https. A body over 5 MiB, a non-2xx status, or a media type that is not
+// text is an error and nothing is written. Only public addresses are
+// reached, unless startURL itself names a private one (see guard.go).
+func HTTPFetcher(startURL string) Fetcher {
 	client := &http.Client{
 		Timeout:       pageTimeout,
 		CheckRedirect: redirectPolicy,
 		Jar:           nil,
+		Transport:     guardedTransport(startAllowsPrivate(context.Background(), startURL)),
 	}
 	return func(ctx context.Context, rawURL string) (Page, error) {
 		return fetchPage(ctx, client, rawURL)
@@ -92,7 +95,7 @@ func fetchPage(ctx context.Context, client *http.Client, rawURL string) (Page, e
 		return Page{}, err
 	}
 	ctype := resp.Header.Get("Content-Type")
-	if _, err := acceptedMedia(ctype); err != nil {
+	if _, err := fetchableMedia(ctype); err != nil {
 		return Page{}, err
 	}
 	body, err := readPage(resp.Body, ctype)
@@ -123,9 +126,21 @@ func doGet(ctx context.Context, client *http.Client, rawURL string) (*http.Respo
 	return resp, nil
 }
 
+// StatusError is a response whose status is not 2xx. A crawl tells a page
+// that is gone (404, 410) from one that failed, and reads robots.txt's
+// status as RFC 9309 says.
+type StatusError struct {
+	Code   int
+	Status string
+}
+
+func (e *StatusError) Error() string {
+	return "page returned " + e.Status
+}
+
 func pageStatus(resp *http.Response) error {
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return fmt.Errorf("page returned %s", resp.Status)
+		return &StatusError{Code: resp.StatusCode, Status: resp.Status}
 	}
 	return nil
 }
@@ -200,8 +215,24 @@ const pdfMediaType = "application/pdf"
 // or a PDF. The error names the type, so a zip is refused as a type rather
 // than read.
 func acceptedMedia(header string) (string, error) {
+	return mediaIn(header, textPageTypes)
+}
+
+// sitemapTypes are what a sitemap is served as.
+var sitemapTypes = map[string]bool{"application/xml": true, "text/xml": true}
+
+// fetchableMedia is what the fetcher reads: a page, or a sitemap a crawl
+// reads for links. A page import still refuses a sitemap (acceptedMedia).
+func fetchableMedia(header string) (string, error) {
+	if mt, err := mediaIn(header, sitemapTypes); err == nil {
+		return mt, nil
+	}
+	return acceptedMedia(header)
+}
+
+func mediaIn(header string, types map[string]bool) (string, error) {
 	mt, _, err := mime.ParseMediaType(header)
-	if err != nil || !textPageTypes[mt] {
+	if err != nil || !types[mt] {
 		shown := mt
 		if shown == "" {
 			shown = strings.TrimSpace(header)

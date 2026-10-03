@@ -1115,24 +1115,65 @@
         },
         "import": {
           "properties": {
+            "crawl": {
+              "default": false,
+              "description": "Import the site a URL leads to, one note per page",
+              "type": "boolean"
+            },
+            "delay": {
+              "default": "1s",
+              "description": "Pause between a crawl's requests",
+              "type": "string"
+            },
+            "depth": {
+              "default": 5,
+              "description": "Most link hops a crawl follows from the URL (0: the URL alone)",
+              "type": "integer"
+            },
             "dry_run": {
               "default": false,
               "description": "Report what the import would do and write nothing",
               "type": "boolean"
+            },
+            "exclude": {
+              "default": [],
+              "description": "Never crawl URL paths matching these globs",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
             },
             "force": {
               "default": false,
               "description": "Overwrite imported notes edited by hand when their doc changed",
               "type": "boolean"
             },
+            "include": {
+              "default": [],
+              "description": "Crawl only URL paths matching one of these globs",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
             "json": {
               "default": false,
               "description": "Output in JSON format",
               "type": "boolean"
             },
+            "max_pages": {
+              "default": 100,
+              "description": "Most pages a crawl fetches",
+              "type": "integer"
+            },
             "prune": {
               "default": false,
               "description": "Remove imported notes whose doc is gone",
+              "type": "boolean"
+            },
+            "respect_robots": {
+              "default": false,
+              "description": "Obey robots.txt rules and Crawl-delay when crawling",
               "type": "boolean"
             },
             "vault": {

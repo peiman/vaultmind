@@ -201,6 +201,13 @@ const (
 	KeyAppImportPrune                        = "app.import.prune"                         // Remove imported notes whose doc is gone
 	KeyAppImportForce                        = "app.import.force"                         // Overwrite imported notes edited by hand when their doc changed
 	KeyAppImportJson                         = "app.import.json"                          // Output in JSON format
+	KeyAppImportCrawl                        = "app.import.crawl"                         // Import the site a URL leads to, one note per page
+	KeyAppImportMaxPages                     = "app.import.max_pages"                     // Most pages a crawl fetches
+	KeyAppImportDepth                        = "app.import.depth"                         // Most link hops a crawl follows from the URL (0: the URL alone)
+	KeyAppImportInclude                      = "app.import.include"                       // Crawl only URL paths matching one of these globs
+	KeyAppImportExclude                      = "app.import.exclude"                       // Never crawl URL paths matching these globs
+	KeyAppImportRespectRobots                = "app.import.respect_robots"                // Obey robots.txt rules and Crawl-delay when crawling
+	KeyAppImportDelay                        = "app.import.delay"                         // Pause between a crawl's requests
 	KeyAppIndexVault                         = "app.index.vault"                          // Path to the vault root directory
 	KeyAppIndexJson                          = "app.index.json"                           // Output in JSON format
 	KeyAppIndexFull                          = "app.index.full"                           // Force full rebuild instead of incremental index

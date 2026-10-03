@@ -13,6 +13,7 @@ import (
 	"codeberg.org/readeck/go-readability/v2"
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 	"github.com/peiman/vaultmind/internal/vault"
+	xhtml "golang.org/x/net/html"
 )
 
 // ImportURL imports the page at rawURL as one note. fetch retrieves it;
@@ -207,7 +208,7 @@ func htmlMarkdown(html, finalURL string) (string, string, error) {
 	if err == nil && article.Node != nil {
 		var b strings.Builder
 		if renderErr := article.RenderHTML(&b); renderErr == nil && strings.TrimSpace(b.String()) != "" {
-			fragment = b.String()
+			fragment = chooseFragment(b.String(), html)
 			title = strings.TrimSpace(article.Title())
 		}
 	}
@@ -216,6 +217,107 @@ func htmlMarkdown(html, finalURL string) (string, string, error) {
 		return "", "", err
 	}
 	return normalizeMarkdown(dropLeadingLinkList(md)), title, nil
+}
+
+// chooseFragment keeps readability's pick unless the page's <main> holds at
+// least twice its text: then readability chose a navbar dropdown or a footer
+// (doc sites' category and short pages), and <main> is the content.
+//
+// It also yields to <main> when its pick is mostly link text and <main> is
+// not: on a short page the sidebar outweighs the article, and readability
+// takes the sidebar (Sphinx's one-paragraph extension pages).
+func chooseFragment(picked, page string) string {
+	main := mainElement(page)
+	if main == "" {
+		return picked
+	}
+	p, m := textStats(picked), textStats(main)
+	if 2*p.total < m.total || (p.mostlyLinks() && !m.mostlyLinks()) {
+		return main
+	}
+	return picked
+}
+
+// mainElement is the HTML of the page's first <main> (or role="main")
+// element, or "" when it has none.
+func mainElement(page string) string {
+	doc, err := xhtml.Parse(strings.NewReader(page))
+	if err != nil {
+		return ""
+	}
+	n := findMain(doc)
+	if n == nil {
+		return ""
+	}
+	var b strings.Builder
+	if xhtml.Render(&b, n) != nil {
+		return ""
+	}
+	return b.String()
+}
+
+func findMain(n *xhtml.Node) *xhtml.Node {
+	if n.Type == xhtml.ElementNode && (n.Data == "main" || hasAttr(n, "role", "main")) {
+		return n
+	}
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if m := findMain(c); m != nil {
+			return m
+		}
+	}
+	return nil
+}
+
+func hasAttr(n *xhtml.Node, key, val string) bool {
+	for _, a := range n.Attr {
+		if a.Key == key && a.Val == val {
+			return true
+		}
+	}
+	return false
+}
+
+// fragmentText is how much text an HTML fragment holds, and how much of it
+// is inside links, in non-space characters.
+type fragmentText struct {
+	total, inLinks int
+}
+
+func (f fragmentText) mostlyLinks() bool {
+	return f.total > 0 && 2*f.inLinks > f.total
+}
+
+// textStats measures a fragment's text, leaving out scripts and styles.
+func textStats(fragment string) fragmentText {
+	z := xhtml.NewTokenizer(strings.NewReader(fragment))
+	var f fragmentText
+	skip, links := false, 0
+	for {
+		switch z.Next() {
+		case xhtml.ErrorToken:
+			return f
+		case xhtml.StartTagToken:
+			name, _ := z.TagName()
+			skip = string(name) == "script" || string(name) == "style"
+			if string(name) == "a" {
+				links++
+			}
+		case xhtml.EndTagToken:
+			skip = false
+			if name, _ := z.TagName(); string(name) == "a" && links > 0 {
+				links--
+			}
+		case xhtml.TextToken:
+			if skip {
+				continue
+			}
+			n := len(strings.Join(strings.Fields(string(z.Text())), ""))
+			f.total += n
+			if links > 0 {
+				f.inLinks += n
+			}
+		}
+	}
 }
 
 // pageURL is the base readability uses for relative links. It is never nil:
@@ -230,27 +332,24 @@ func pageURL(raw string) *url.URL {
 
 // A breadcrumb item is one list marker and one inline link, nothing else.
 // Readability keeps that list at the top of pages such as go.dev's docs.
-var linkOnlyListItem = regexp.MustCompile(`^\s*(?:\d+\.|[-*+])\s+\[[^]]*\]\([^)]*\)\s*$`)
+// A bare link line counts too: Docusaurus's version dropdown opens with the
+// current version as one, and MkDocs Material puts its edit and view-source
+// icon links side by side on one.
+var linkOnlyListItem = regexp.MustCompile(`^\s*(?:(?:\d+\.|[-*+])\s+)?(?:\[[^]]*\]\([^)]*\)\s*)+$`)
 
-// dropLeadingLinkList removes a leading breadcrumb readability kept.
-// Excerpts and the recall hook show a note's opening lines, so those lines
-// have to be content. Blank lines among the items go with them. A page that
-// is only such a list keeps it, and a list after other text stays.
+// navFiller are the lines a navigation list holds besides its links: a
+// separator item, a bold label item, and html-to-markdown's marker between
+// two lists. They are dropped only among link items, never on their own.
+var navFiller = regexp.MustCompile(`^\s*(?:[-*+]\s+(?:\* \* \*|\*\*[^*]+\*\*)|<!--THE END-->)\s*$`)
+
+// dropLeadingLinkList removes a leading breadcrumb or version list
+// readability kept. Excerpts and the recall hook show a note's opening
+// lines, so those lines have to be content. Blank lines among the items go
+// with them. A page that is only such a list keeps it, and a list after
+// other text stays.
 func dropLeadingLinkList(s string) string {
 	lines := strings.Split(s, "\n")
-	end := 0
-	saw := false
-	for end < len(lines) {
-		if strings.TrimSpace(lines[end]) == "" {
-			end++
-			continue
-		}
-		if !linkOnlyListItem.MatchString(lines[end]) {
-			break
-		}
-		saw = true
-		end++
-	}
+	end, saw := leadingNavEnd(lines)
 	if !saw {
 		return s
 	}
@@ -259,6 +358,23 @@ func dropLeadingLinkList(s string) string {
 		return s
 	}
 	return rest
+}
+
+// leadingNavEnd is the index of the first line after the leading navigation
+// block, and whether that block held a link at all.
+func leadingNavEnd(lines []string) (int, bool) {
+	saw := false
+	for i, line := range lines {
+		switch {
+		case strings.TrimSpace(line) == "":
+		case linkOnlyListItem.MatchString(line):
+			saw = true
+		case saw && navFiller.MatchString(line):
+		default:
+			return i, saw
+		}
+	}
+	return len(lines), saw
 }
 
 func normalizeMarkdown(s string) string {
