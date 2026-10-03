@@ -435,13 +435,7 @@ func xlsxText(o officeParts) (string, error) {
 		if len(sh.rows) == 0 {
 			continue
 		}
-		fmt.Fprintf(&out, "## %s\n\n%s", s.Name, markdownTable(sh.rows))
-		if sh.moreRows > 0 {
-			fmt.Fprintf(&out, "(%d more rows not shown)\n\n", sh.moreRows)
-		}
-		if sh.moreCols > 0 {
-			fmt.Fprintf(&out, "(%d more columns not shown)\n\n", sh.moreCols)
-		}
+		fmt.Fprintf(&out, "## %s\n\n%s", s.Name, sheetMarkdown(sh))
 	}
 	return out.String(), nil
 }

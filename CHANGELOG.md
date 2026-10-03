@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   read for its sitemaps and obeyed with `--respect-robots`, which also honours its
   Crawl-delay. Tried on Docusaurus, MkDocs Material and Sphinx docs: every page their
   sitemaps or search index list, and a second run changes nothing.
+- **Local HTML and CSV files import as notes.** A saved page or exported HTML (`.html`,
+  `.htm`) becomes the article it holds, read exactly as a fetched page is, as
+  `<name>-html.md`; its relative links point into the source folder. A CSV or TSV becomes a
+  table like an Excel sheet (`<name>-csv.md`): the delimiter (`,` `;` or tab) and the
+  encoding (UTF-8, with or without a byte-order mark, or an Excel Windows-1252 export) are
+  detected, the first 200 rows and 50 columns are shown, and what is left out is said.
 
 ### Changed
 

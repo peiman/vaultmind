@@ -390,7 +390,7 @@ markers; `task check` fails if it drifts from the catalog. Everything outside th
 hand-written and stays.
 
 <!-- VAULTMIND:GENERATED:commands:START -->
-<!-- checksum:9df2ed3338aa68e507dcc0c7aec6027249776d5d3896b8e328dc47060e681a5e -->
+<!-- checksum:01e8213c7b42bd3e98b38a849d66a0b9debca9ebccd0a43e117e19df0abb38f0 -->
 # VaultMind Commands
 
 Every user-facing command, grouped by intent, with its when-to-use trigger.
@@ -435,7 +435,7 @@ Generated from the command tree — do not edit by hand (run `task generate:docs
 | `vaultmind frontmatter set` | Set one frontmatter field on a note | you want to set a single frontmatter field on one note, schema-validated. |
 | `vaultmind frontmatter unset` | Remove one frontmatter field from a note | you want to remove one frontmatter field from a note. |
 | `vaultmind frontmatter validate` | Check vault notes for frontmatter rule violations | you want to catch missing fields, bad statuses, unknown types, or broken refs before indexing. |
-| `vaultmind import` | Import a folder of docs, PDFs and Office files, one web page, or a whole site (--crawl), as notes and keep them in step | a project already has docs, or you want a web page or a docs site found like notes — re-run after it changes. |
+| `vaultmind import` | Import a folder of docs, PDFs, Office, HTML and CSV files, one web page, or a whole site (--crawl), as notes and keep them in step | a project already has docs, or you want a web page or a docs site found like notes — re-run after it changes. |
 | `vaultmind index` | Scan and index vault notes into SQLite, optionally embedding | vault notes changed and you need to refresh the SQLite index (and optionally embeddings). |
 | `vaultmind schema` | Query the vault's type schema | you need to discover the vault's note types, required fields, and valid statuses. |
 | `vaultmind schema list-types` | List every note type with its required fields and valid statuses | you want every registered type with its required fields and valid statuses before creating notes. |
