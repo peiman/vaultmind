@@ -218,7 +218,7 @@ func canonicalHooksWith(vaultPath string, vaults []string, scriptRef func(string
 }
 
 // SettingsStanza renders the .claude/settings.json "hooks" object that wires
-// VaultMind's five canonical hooks. The returned string is pretty-printed
+// every canonical hook (the full profile). The returned string is pretty-printed
 // valid JSON for the operator (or an agent) to merge into their settings.
 //
 // When vaultPath is non-empty, every command is prefixed with a
@@ -269,17 +269,22 @@ func SettingsStanza(vaultPath string) (string, error) {
 // SettingsStanzaForProfile renders only the hooks the declared profile runs,
 // so a knowledge vault is not wired for a persona it does not have.
 func SettingsStanzaForProfile(p Profile, vaultPath string) (string, error) {
+	return renderStanza(inProfile(canonicalHooks(vaultPath), p))
+}
+
+// inProfile keeps the hooks whose script profile p runs.
+func inProfile(hooks []canonicalHook, p Profile) []canonicalHook {
 	allowed := map[string]bool{}
 	for _, n := range ScriptsForProfile(p) {
 		allowed[n] = true
 	}
-	hooks := make([]canonicalHook, 0, len(allowed))
-	for _, ch := range canonicalHooks(vaultPath) {
+	out := make([]canonicalHook, 0, len(hooks))
+	for _, ch := range hooks {
 		if allowed[ch.Script] {
-			hooks = append(hooks, ch)
+			out = append(out, ch)
 		}
 	}
-	return renderStanza(hooks)
+	return out
 }
 
 func renderStanza(hooks []canonicalHook) (string, error) {

@@ -194,8 +194,10 @@ func Install(cfg InstallConfig) (*InstallResult, error) {
 	// .claude/settings.json — the step that was previously hand-transcribed
 	// from the onboarding doc (issue #41). Baked with VaultPath when given.
 	// A render failure must not fail the install (scripts are already
-	// written); leave the field empty and let the human output note it.
-	if stanza, stanzaErr := renderStanza(canonicalHooksFor(cfg.VaultPath, cfg.Vaults)); stanzaErr == nil {
+	// written); leave the field empty and let the human output note it. Only
+	// the profile's hooks, matching the scripts just written and what --merge
+	// would wire.
+	if stanza, stanzaErr := renderStanza(inProfile(canonicalHooksFor(cfg.VaultPath, cfg.Vaults), profile)); stanzaErr == nil {
 		res.SettingsStanza = stanza
 	}
 
