@@ -134,9 +134,22 @@ func finishImport(cmd *cobra.Command, vaultPath, label string, cfg *vault.Config
 		} else {
 			res.IndexWarnings = indexWarnings(ir, changed)
 			embedAfterWriteUpTo(cmd, vaultPath, cfg, embedOnWriteLimit+len(changed))
+			sayIfNeverEmbedded(cmd, vaultPath, dbPath)
 		}
 	}
 	return res, nil
+}
+
+// sayIfNeverEmbedded names the command that embeds a vault that has no
+// embeddings at all: until it runs, the notes just imported are found by
+// keyword only. A write into such a vault is left alone (embedAfterWriteUpTo);
+// an import is where a vault usually starts, so it says so once.
+func sayIfNeverEmbedded(cmd *cobra.Command, vaultPath, dbPath string) {
+	if model, err := index.EmbeddedModel(dbPath); err != nil || model != "" {
+		return
+	}
+	_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
+		"this vault has never been embedded, so search is keyword-only; embed it with vaultmind index --embed --vault %s\n", vaultPath)
 }
 
 // indexWarnings picks out the index problems that concern the notes the

@@ -19,7 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Folder imports take PDFs, and one file imports alone** — each `*.pdf` in an imported
   folder becomes `<name>-pdf.md`, tied to the PDF by `paths:`; a PDF that cannot be read is
   skipped with its reason and the rest still imports. `vaultmind import <file>` imports one
-  `.md` or `.pdf` without touching the folder's other notes. (#221)
+  `.md` or `.pdf` without touching the folder's other notes. (#221) Importing into a vault
+  that was never embedded says so, with the command that turns on semantic search.
 - **`hooks install --agent cursor` wires Cursor** — the vault map at session start, the
   notes about a file after the agent reads or edits it, and related notes after a commit.
   Cursor's hooks cannot add context to a prompt, so there is no per-prompt recall under
