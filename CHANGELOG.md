@@ -37,6 +37,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   Read with the standard library: no converter service, no new dependency. A broken file
   is skipped with its reason. On 95 real Office files, all 95 became notes with text.
+- **Folder overviews: the map says what each folder covers.** A note of the new built-in
+  type `overview` describes the folder it sits in. Its first sentence (up to 256 chars)
+  appears beside the folder in `tree` and the session-start map, and the rest of it is
+  there to read. A folder without one shows its most used tags. `doctor` names folders of
+  20+ notes that have no overview, with the command to write one, and overviews that most
+  of their folder has changed past. On a first-turn "does this vault cover X?" test, an
+  agent given folder overviews was right 97% of the time, against 87% with tags and 73%
+  with folder names alone.
 - **`hooks install --agent cursor` wires Cursor** — the vault map at session start, the
   notes about a file after the agent reads or edits it, and related notes after a commit.
   Cursor's hooks cannot add context to a prompt, so there is no per-prompt recall under

@@ -108,11 +108,13 @@ func Process(cfg ProcessConfig) (*ProcessResult, error) {
 
 	var warnings []string
 
-	// Load and substitute template content.
-	rawBytes, err := os.ReadFile(cfg.TemplatePath)
+	// Load and substitute template content. A type with no template
+	// configured (TemplatePath "") gets the minimal template quietly: nothing
+	// is missing. One whose configured template cannot be read is warned about.
 	var templateContent string
-	if err != nil {
-		// Template not found — generate a minimal fallback (includes required fields).
+	if cfg.TemplatePath == "" {
+		templateContent = buildMinimalTemplate(cfg.RequiredFields)
+	} else if rawBytes, err := os.ReadFile(cfg.TemplatePath); err != nil {
 		warnings = append(warnings, fmt.Sprintf("template not found at %q: using minimal fallback", cfg.TemplatePath))
 		templateContent = buildMinimalTemplate(cfg.RequiredFields)
 	} else {

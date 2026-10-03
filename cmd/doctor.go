@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -228,6 +229,12 @@ func diagnoseVault(cmd *cobra.Command, vaultPath string) (*query.DoctorResult, f
 	} else {
 		result.BadCitations = bad
 	}
+	// Folder overviews: advice, best-effort like the checks above.
+	if ov, err := query.CheckOverviews(vdb.DB); err != nil {
+		log.Debug().Err(err).Msg("overview check failed")
+	} else {
+		result.Overviews = ov
+	}
 	return result, vdb.GetIndexHash, nil
 }
 
@@ -396,6 +403,9 @@ func writeDoctorHuman(w io.Writer, result *query.DoctorResult, summaryOnly bool)
 		return err
 	}
 	if err := writeBadCitations(w, result.BadCitations); err != nil {
+		return err
+	}
+	if err := writeOverviews(w, result.Overviews, result.VaultPath); err != nil {
 		return err
 	}
 	// Errors/warnings rollup — the cold-start bottom line. Counts come from
@@ -796,6 +806,40 @@ func writeBackupStatus(w io.Writer, b *query.DoctorBackup) error {
 //
 // Both notes, every time. "3 bad citations" tells you a number; it does not
 // tell you which claim in your vault is resting on something nobody reviewed.
+// writeOverviews names the big folders without an overview, with the command
+// that writes one for the first, and the overviews their folder has outgrown.
+// Advice, not an issue: it does not count toward errors or warnings.
+func writeOverviews(w io.Writer, h *query.OverviewHealth, vaultPath string) error {
+	if h == nil || (len(h.Missing) == 0 && len(h.Stale) == 0) {
+		return nil
+	}
+	if len(h.Missing) > 0 {
+		names := make([]string, len(h.Missing))
+		for i, f := range h.Missing {
+			names[i] = fmt.Sprintf("%s/ (%d)", f.Folder, f.Notes)
+		}
+		first := h.Missing[0].Folder
+		title := path.Base(first)
+		title = strings.ToUpper(title[:1]) + title[1:]
+		// The file is named after the folder's path: note create takes the id
+		// from the file name, so every folder's "overview.md" would share one.
+		file := strings.ToLower(strings.ReplaceAll(first, "/", "-")) + "-overview.md"
+		if _, err := fmt.Fprintf(w, "Overviews:   %d folders without one: %s\n"+
+			"  The map shows a folder's overview beside it. Write one, first sentence = what the folder covers:\n"+
+			"  vaultmind note create %s/%s --type overview --field title=%q --body \"<what the folder covers, in one sentence first>\" --vault %s\n",
+			len(h.Missing), strings.Join(names, ", "), first, file, title, vaultPath); err != nil {
+			return err
+		}
+	}
+	for _, s := range h.Stale {
+		if _, err := fmt.Fprintf(w, "  ⚠ %s is stale: %d of its folder's %d notes changed since — update it\n",
+			s.Overview, s.Changed, s.Notes); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func writeBadCitations(w io.Writer, bad []query.BadCitation) error {
 	if len(bad) == 0 {
 		return nil

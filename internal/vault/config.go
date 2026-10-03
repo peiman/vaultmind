@@ -102,6 +102,9 @@ type MemoryConfig struct {
 // arcs distilled from them; embedding them would dominate index cost and noise.
 var defaultExcludes = []string{".git", ".obsidian", ".trash", "node_modules", "README.md", "episodes"}
 
+// OverviewType is the built-in note type for a folder overview.
+const OverviewType = "overview"
+
 // LoadConfig reads .vaultmind/config.yaml from the vault root.
 // Returns defaults if the config file doesn't exist.
 func LoadConfig(vaultRoot string) (*Config, error) {
@@ -133,6 +136,13 @@ func LoadConfig(vaultRoot string) (*Config, error) {
 
 	if len(cfg.Vault.Exclude) == 0 {
 		cfg.Vault.Exclude = append([]string{}, defaultExcludes...)
+	}
+
+	// A folder overview (type overview) describes the folder it sits in; the
+	// map shows its first sentence. Built in, so no vault edits its config to
+	// write one. A vault with no types is left unvalidated, as it was.
+	if _, ok := cfg.Types[OverviewType]; !ok && len(cfg.Types) > 0 {
+		cfg.Types[OverviewType] = TypeDef{Required: []string{"title"}, Optional: []string{"tags"}}
 	}
 
 	if err := validateConfigPaths(cfg); err != nil {
