@@ -119,12 +119,15 @@ func TestImport_AFolderWithoutMarkdownIsAJSONError(t *testing.T) {
 	assert.Contains(t, out.String(), `"no_markdown"`)
 }
 
-func TestImport_RefusesAFile(t *testing.T) {
+// A file is imported only when it is a .md or a .pdf; anything else is refused
+// with what is accepted (before PDFs and single files, every file was refused).
+func TestImport_RefusesAFileThatIsNotMarkdownOrPDF(t *testing.T) {
 	vault, repo := indexedBaselineVault(t), docsRepo(t)
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "docs", "notes.txt"), []byte("text"), 0o600))
 
-	_, _, err := runRootCmd(t, "import", filepath.Join(repo, "docs", "alpha.md"), "--vault", vault)
+	_, _, err := runRootCmd(t, "import", filepath.Join(repo, "docs", "notes.txt"), "--vault", vault)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not a folder")
+	assert.Contains(t, err.Error(), ".md or a .pdf")
 }
 
 // On a re-sync of a big folder the one doc that changed is named, not lost in
@@ -274,4 +277,27 @@ func TestImport_URLDryRunFetchesButWritesNothing(t *testing.T) {
 	assert.Equal(t, 1, hits, "a dry run still fetches")
 	assert.Contains(t, out.String(), "dry run, nothing written")
 	assert.NoDirExists(t, filepath.Join(vault, "imported"))
+}
+
+// One file imports alone: a markdown doc or a PDF, named by its path.
+func TestImport_OneFileImportsAlone(t *testing.T) {
+	vault, repo := indexedBaselineVault(t), docsRepo(t)
+	pdf, err := os.ReadFile(filepath.Join("..", "internal", "importdocs", "testdata", "paper.pdf"))
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "docs", "paper.pdf"), pdf, 0o600))
+
+	out, _, err := runRootCmd(t, "import", filepath.Join(repo, "docs", "paper.pdf"), "--vault", vault)
+	require.NoError(t, err)
+	assert.Contains(t, out.String(), "1 added")
+	assert.Contains(t, out.String(), "paper-pdf.md")
+
+	out, _, err = runRootCmd(t, "import", filepath.Join(repo, "docs", "alpha.md"), "--vault", vault)
+	require.NoError(t, err)
+	assert.Contains(t, out.String(), "1 added")
+	assert.NotContains(t, out.String(), "orphan", "a single-file import never reports the folder's other notes")
+
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "docs", "image.png"), []byte("png"), 0o600))
+	_, _, err = runRootCmd(t, "import", filepath.Join(repo, "docs", "image.png"), "--vault", vault)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), ".md or a .pdf")
 }
