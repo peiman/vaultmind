@@ -31,8 +31,14 @@ import (
 const maxPDFBytes = 20 << 20
 
 // pdfTimeout bounds one extraction. A PDF that keeps pdfium busy longer is
-// refused rather than allowed to hang the import.
-const pdfTimeout = 60 * time.Second
+// refused rather than allowed to hang the import. A var so a test can shorten
+// it.
+var pdfTimeout = 60 * time.Second
+
+// pdfStartTimeout bounds starting pdfium: compiling the ~20 MB module takes
+// seconds on a normal machine, far longer on a slow or instrumented one, and
+// only once when the compile cache can be written.
+const pdfStartTimeout = 5 * time.Minute
 
 // pdfMemoryPages caps pdfium's memory at 1 GiB (64 KiB WebAssembly pages).
 const pdfMemoryPages = 16384
@@ -60,18 +66,29 @@ func pdfText(ctx context.Context, data []byte) (text, title string, err error) {
 			text, title, err = "", "", fmt.Errorf("reading the PDF: %v", rec)
 		}
 	}()
-	ctx, cancel := context.WithTimeout(ctx, pdfTimeout)
+	// Starting pdfium (compiling it, when no cached module can be used) and
+	// reading the PDF have separate bounds. One bound for both timed out first
+	// imports where compiling alone ran past it: under the race detector on CI
+	// it took 64 s against 60.
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	start := time.AfterFunc(pdfStartTimeout, cancel)
 	pool, err := newPDFiumPool(ctx)
 	if err != nil {
+		start.Stop()
 		return "", "", fmt.Errorf("reading the PDF: starting pdfium: %w", err)
 	}
 	defer func() { _ = pool.Close() }()
-	inst, err := pool.GetInstance(pdfTimeout)
+	inst, err := pool.GetInstance(pdfStartTimeout)
+	if !start.Stop() && err == nil {
+		err = fmt.Errorf("starting pdfium took longer than %s", pdfStartTimeout)
+	}
 	if err != nil {
 		return "", "", fmt.Errorf("reading the PDF: %w", err)
 	}
 	defer func() { _ = inst.Close() }()
+	read := time.AfterFunc(pdfTimeout, cancel)
+	defer read.Stop()
 	pages, meta, err := readPDF(inst, data)
 	if err != nil {
 		return "", "", fmt.Errorf("reading the PDF: %w", err)

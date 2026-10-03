@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A first PDF import on a slow machine no longer times out while pdfium starts.**
+  Compiling pdfium, which happens once when its cache can be written and on every run when
+  it cannot, counted against the 60-second limit for reading a PDF. On a slow or
+  instrumented machine the compile alone ran past it (64 s under the race detector), so
+  the import failed before reading a page. Starting pdfium now has its own 5-minute bound,
+  and the 60 seconds begin once it is up.
+
 ## [0.10.2] - 2026-10-03
 
 > A vault takes in what a project holds and says what it covers.
