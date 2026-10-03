@@ -5,13 +5,17 @@ import "github.com/peiman/vaultmind/.ckeletin/pkg/config"
 // ImportMetadata defines the `import` command — a folder of docs as notes.
 var ImportMetadata = config.CommandMetadata{
 	Use:   "import <dir|file|url>",
-	Short: "Import a folder of docs, PDFs and Office files, one file, one web page or PDF, or a whole site, as notes and keep them in step",
+	Short: "Import a folder of docs, PDFs, Office, HTML and CSV files, one file, one web page or PDF, or a whole site, as notes and keep them in step",
 	Long: "Copy every *.md under <dir> into the vault as a note under imported/<repo>/, so " +
 		"a project's existing docs are found by search, ask and the code hooks like any " +
 		"other note. Each *.pdf in the folder becomes a note of its text, <name>-pdf.md, and " +
 		"each Word, PowerPoint or Excel file (.docx, .pptx, .xlsx) a markdown note of its " +
-		"headings, slides or sheets, <name>-docx.md and so on. A file that cannot be read (a " +
-		"PDF scan, a broken file, a PDF over 20 MiB or an Office file over 512 MiB) is skipped " +
+		"headings, slides or sheets, <name>-docx.md and so on. A saved web page or exported " +
+		"HTML (.html, .htm) becomes the article it holds, read as a fetched page is, " +
+		"<name>-html.md; a CSV or TSV becomes a table like an Excel sheet (the first 200 rows " +
+		"and 50 columns, its delimiter and encoding detected), <name>-csv.md. A file that " +
+		"cannot be read (a PDF scan, a broken file, a PDF over 20 MiB, an HTML file over 5 MiB " +
+		"or an Office or CSV file over 512 MiB) is skipped " +
 		"with the reason and the rest still imports. Inside a git work tree, what git ignores " +
 		"is left out (naming an ignored folder imports it). Pass one such file instead and " +
 		"only that " +

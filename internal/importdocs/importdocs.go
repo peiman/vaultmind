@@ -109,7 +109,7 @@ func (r *Result) Changed() []string {
 }
 
 // ErrNoMarkdown reports a source folder with nothing to import.
-var ErrNoMarkdown = errors.New("no markdown files or readable PDF or Office documents")
+var ErrNoMarkdown = errors.New("no markdown files or readable PDF, Office, HTML or CSV documents")
 
 // Import brings the docs under src into vaultRoot and reports what it did.
 func Import(src Source, vaultRoot string, opts Options) (*Result, error) {
@@ -256,7 +256,7 @@ func (s *syncer) syncDocs(docs []doc) []Entry {
 		e := Entry{Note: rel, Source: d.Source}
 		switch {
 		case s.written[key]:
-			e.Action, e.Reason = Skipped, "another doc maps to the same note (names that differ only in case, or a markdown file named like a PDF's or Office file's <name>-pdf.md / -docx.md)"
+			e.Action, e.Reason = Skipped, "another doc maps to the same note (names that differ only in case, or a markdown file named like a converted file's <name>-pdf.md / -docx.md / -html.md)"
 		case vault.Excluded(rel, s.opts.Excludes):
 			e.Action, e.Reason = Skipped, "the vault's exclude list hides this path from the index"
 		case s.ambiguous(rel):
@@ -452,7 +452,7 @@ func ImportFile(src Source, rel, vaultRoot string, opts Options) (*Result, error
 	}
 	rel = filepath.ToSlash(filepath.Clean(rel))
 	if !importable(rel) {
-		return nil, fmt.Errorf("%s: only a .md, .pdf, .docx, .pptx or .xlsx file can be imported", rel)
+		return nil, fmt.Errorf("%s: only a .md, .pdf, .docx, .pptx, .xlsx, .html, .htm, .csv or .tsv file can be imported", rel)
 	}
 	if strings.Contains(rel, "/") || rel == "." || rel == ".." {
 		return nil, fmt.Errorf("%s: name a file in the source folder", rel)

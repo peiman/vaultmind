@@ -122,12 +122,15 @@ func importable(p string) bool {
 	return strings.EqualFold(filepath.Ext(p), ".md") || convertedKind(p) != ""
 }
 
-// convertedKind is "pdf", "docx", "pptx" or "xlsx" for a file whose text an
-// import extracts, else "".
+// convertedKind is "pdf", "docx", "pptx", "xlsx", "html" (for .html and
+// .htm), "csv" or "tsv" for a file whose text an import extracts, else "".
 func convertedKind(p string) string {
 	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(p), "."))
-	if ext == "pdf" || officeKinds[ext] {
+	switch {
+	case ext == "pdf" || officeKinds[ext] || ext == "csv" || ext == "tsv" || ext == "html":
 		return ext
+	case ext == "htm":
+		return "html"
 	}
 	return ""
 }
@@ -172,7 +175,7 @@ func readOfficeText(kind, p string) (string, string, error) {
 	return text, title, err
 }
 
-// readConvertedDoc reads one PDF or Office file as a doc: its extracted text
+// readConvertedDoc reads one PDF, Office, HTML or CSV file as a doc: its extracted text
 // is the body, and its title is the file's own (metadata, or a PDF's first
 // line), else the file name. The hash is of the text, as for a PDF fetched by
 // URL. A file over the size cap, one that cannot be read, and a PDF scan with
@@ -181,9 +184,15 @@ func readConvertedDoc(src Source, rel, p string) (doc, error) {
 	kind := convertedKind(p)
 	var text, pdfTitle string
 	var err error
-	if kind == "pdf" {
+	docPath := path.Join(src.Prefix, rel)
+	switch kind {
+	case "pdf":
 		text, pdfTitle, err = readPDFText(p)
-	} else {
+	case "html":
+		text, pdfTitle, err = readHTMLText(docPath, p)
+	case "csv", "tsv":
+		text, pdfTitle, err = readCSVText(kind, p)
+	default:
 		text, pdfTitle, err = readOfficeText(kind, p)
 	}
 	if err != nil {
@@ -192,7 +201,6 @@ func readConvertedDoc(src Source, rel, p string) (doc, error) {
 	if pdfTitle == "" {
 		pdfTitle = strings.TrimSuffix(path.Base(rel), path.Ext(rel))
 	}
-	docPath := path.Join(src.Prefix, rel)
 	return doc{
 		Rel: rel, Path: docPath, Repo: src.Repo,
 		Source: src.Repo + ":" + docPath,
