@@ -11,9 +11,10 @@
 #
 # Why this is the principle-9 fix at per-turn cadence: instead of relying
 # on the agent to remember to query before answering, the SYSTEM queries
-# automatically. The agent sees pointers (not bodies) and chooses whether
-# to dig (explicit `vaultmind ask <id>`) or proceed without. Discipline →
-# design, applied at every turn instead of just session start.
+# automatically. The agent sees the matching notes as short excerpts (80
+# tokens each) with their ids, and chooses whether to open one
+# (`vaultmind note get <id>`) or proceed without. Discipline → design,
+# applied at every turn instead of just session start.
 #
 # Output strategy: low-noise. Skip silently when the prompt is too short
 # to be worth querying, when the substrate isn't ready, or when the query

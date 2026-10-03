@@ -98,7 +98,7 @@ WHEN YOU WANT TO ...
 
   See your own memory state
     %[1]s self                             recent / hot / stale notes
-                                                (auto-injected at session start)
+                                                (auto-injected under the persona profile)
 
   Verify vault integrity
     %[1]s doctor [--summary]               vault health overview

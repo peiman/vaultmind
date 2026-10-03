@@ -62,21 +62,30 @@ PROJECT-DIR
 
 WHAT GETS INSTALLED
 
-  All 8 embedded scripts are written to .claude/scripts/. Four are the
-  core hooks --merge wires into your settings; the rest are helpers the
-  core scripts source or that you opt into separately.
+  The profile decides which scripts are written to .claude/scripts/ and
+  wired by --merge (see --profile). The hooks, by event:
 
-  Core (wired by --merge):
-    load-persona.sh       SessionStart — loads identity context
-    vault-recall.sh       UserPromptSubmit — per-turn pointers
-    vault-track-read.sh   PreToolUse(Read) — access tracking
-    capture-episode.sh    SessionEnd — episode transcript capture
+    vaultmind-health.sh    SessionStart — vault health, the vault map, stale-hook warnings
+    load-persona.sh        SessionStart — identity context (persona and full only)
+    vault-recall.sh        UserPromptSubmit — the notes that match the prompt, as excerpts
+    vault-track-read.sh    PreToolUse(Read) — records which notes are read
+    vault-reach.sh         PreToolUse(Bash|Edit|Write|MultiEdit) — related notes before a commit,
+                           push, merge or vault write
+    vault-code-map.sh      PreToolUse(Read|Edit|Write|MultiEdit) — the notes whose paths: cover
+                           the file being opened
+    precompact-preserve.sh PreCompact — asks what to write down before context is lost
+    capture-episode.sh     SessionEnd — episode transcript capture (persona and full only)
 
-  Helpers (written, not wired by default):
+  The knowledge profile (a fresh project's default) wires health, recall,
+  read-tracking, reach, the code map and pre-compaction; persona adds the
+  identity loader and episode capture; full writes every script.
+
+  Helpers (written by the full profile, not wired):
     vault-block-read.sh   parked variant — block-and-redirect on Read
     auto-rag-guard.sh     PreToolUse drift gate (opt-in — see auto-RAG)
     auto-rag-evaluate.sh  scores auto-RAG guard decisions
     shell-strip.sh        shared helper sourced by the auto-RAG scripts
+    mesh-watch.sh         the agent-mesh watcher, run by hand
 
 After writing the scripts, this command prints the .claude/settings.json
 "hooks" stanza that wires them. Pass --merge to apply it for you instead
