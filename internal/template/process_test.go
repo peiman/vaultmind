@@ -270,6 +270,18 @@ func TestProcess_MinimalFallback_IncludesRequiredFields(t *testing.T) {
 	assert.Contains(t, result.FinalFrontmatter, "status", "required field 'status' should be present in minimal fallback")
 }
 
+// A type with no template configured (the built-in overview type) uses the
+// minimal template without a warning: nothing is missing.
+func TestProcess_NoTemplateConfiguredIsNotAWarning(t *testing.T) {
+	result, err := Process(ProcessConfig{
+		VaultPath: "/vault", Path: "concepts/concepts-overview.md", Type: "overview",
+		Fields: map[string]string{"title": "Concepts"}, RequiredFields: []string{"title"},
+	})
+	require.NoError(t, err)
+	assert.Empty(t, result.Warnings)
+	assert.Contains(t, result.FinalFrontmatter, "title")
+}
+
 func TestProcess_MinimalFallback_RequiredFieldsDoNotOverrideUserValues(t *testing.T) {
 	// I4: User-provided values must not be overwritten by empty defaults.
 	cfg := ProcessConfig{

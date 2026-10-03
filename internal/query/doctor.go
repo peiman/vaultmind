@@ -74,6 +74,10 @@ type DoctorResult struct {
 	// non-authoritative — evidence that is not allowed to be evidence. Empty
 	// unless the vault opted in by declaring a type non-authoritative.
 	BadCitations []BadCitation `json:"bad_citations,omitempty"`
+
+	// Overviews names big folders without an overview note and overviews
+	// their folder has outgrown. Advice: not counted as an issue.
+	Overviews *OverviewHealth `json:"overviews,omitempty"`
 }
 
 // DoctorMemoryUse is the memory-usage rollup doctor prints. Populated by the

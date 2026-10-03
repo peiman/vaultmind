@@ -98,9 +98,14 @@ func executeNoteCreate(cmd *cobra.Command, notePath string) error {
 	// The registry's template: value is read from disk. LoadConfig refuses an
 	// absolute or escaping value; confining the join keeps the guarantee local
 	// to the place that opens the file.
-	templatePath, err := vault.ResolveInside(vaultPath, td.Template)
-	if err != nil {
-		return fmt.Errorf("type %q template: %w", noteType, err)
+	// No template configured (the built-in overview type) stays "": the
+	// vault root is not a template.
+	templatePath := ""
+	if td.Template != "" {
+		var err error
+		if templatePath, err = vault.ResolveInside(vaultPath, td.Template); err != nil {
+			return fmt.Errorf("type %q template: %w", noteType, err)
+		}
 	}
 
 	result, err := tmpl.Process(tmpl.ProcessConfig{

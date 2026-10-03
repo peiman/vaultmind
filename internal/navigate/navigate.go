@@ -15,6 +15,7 @@ import (
 
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/memory"
+	"github.com/peiman/vaultmind/internal/vault"
 )
 
 // MaxLineRunes caps a note's one-line description so the map stays a map.
@@ -37,15 +38,32 @@ type Note struct {
 	// CodeChanged is set by `tree --for` when the file was committed to after
 	// the note was.
 	CodeChanged *CodeChange `json:"code_changed,omitempty"`
+	// Tags and Mtime feed a folder's summary and doctor's staleness check;
+	// they are not part of the printed map.
+	Tags  []string `json:"-"`
+	Mtime int64    `json:"-"`
 }
+
+// OverviewType is the note type that describes the folder it sits in: its
+// first sentence is the folder's summary in the map. Defined once, in vault.
+const OverviewType = vault.OverviewType
 
 // Dir is a folder in the map. Total counts every note beneath it.
 type Dir struct {
 	Path  string `json:"path"`
 	Total int    `json:"total"`
-	Dirs  []*Dir `json:"dirs,omitempty"`
-	Notes []Note `json:"notes,omitempty"`
+	// Summary is what the folder covers: its overview note's first sentence,
+	// else its most used tags. SummaryFrom says which ("overview", "tags").
+	Summary     string `json:"summary,omitempty"`
+	SummaryFrom string `json:"summary_from,omitempty"`
+	// Overview is the folder's overview note, kept out of Notes and Total.
+	Overview *Note  `json:"overview,omitempty"`
+	Dirs     []*Dir `json:"dirs,omitempty"`
+	Notes    []Note `json:"notes,omitempty"`
 }
+
+// maxSummaryTags is how many tags a folder without an overview is named by.
+const maxSummaryTags = 5
 
 // Filter narrows what Load returns. Empty fields do not filter.
 type Filter struct {
@@ -60,17 +78,17 @@ type Querier interface {
 
 // Load reads every indexed note matching f, with its one-line description.
 func Load(q Querier, f Filter) ([]Note, error) {
-	stmt := `SELECT id, path, COALESCE(title, ''), COALESCE(type, ''), COALESCE(body_text, '') FROM notes WHERE 1=1`
+	where := ` WHERE 1=1`
 	var args []interface{}
 	if f.PathPrefix != "" {
-		stmt += ` AND path LIKE ? ESCAPE '\'`
+		where += ` AND path LIKE ? ESCAPE '\'`
 		args = append(args, index.PathPrefixLike(f.PathPrefix))
 	}
 	if f.Type != "" {
-		stmt += ` AND type = ?`
+		where += ` AND type = ?`
 		args = append(args, f.Type)
 	}
-	stmt += ` ORDER BY path`
+	stmt := `SELECT id, path, COALESCE(title, ''), COALESCE(type, ''), COALESCE(body_text, ''), mtime FROM notes` + where + ` ORDER BY path`
 
 	rows, err := q.Query(stmt, args...)
 	if err != nil {
@@ -82,16 +100,47 @@ func Load(q Querier, f Filter) ([]Note, error) {
 	for rows.Next() {
 		var n Note
 		var body string
-		if err := rows.Scan(&n.ID, &n.Path, &n.Title, &n.Type, &body); err != nil {
+		if err := rows.Scan(&n.ID, &n.Path, &n.Title, &n.Type, &body, &n.Mtime); err != nil {
 			return nil, fmt.Errorf("reading note row: %w", err)
 		}
 		if n.Title == "" {
 			n.Title = n.ID
 		}
-		n.Line = OneLine(body)
+		if n.Type == OverviewType {
+			n.Line = summaryLine(body)
+		} else {
+			n.Line = OneLine(body)
+		}
 		notes = append(notes, n)
 	}
-	return notes, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return notes, loadTags(q, notes, where, args)
+}
+
+// loadTags fills in each note's tags, reading only those of the notes the
+// same filter selected.
+func loadTags(q Querier, notes []Note, where string, args []interface{}) error {
+	byID := make(map[string]int, len(notes))
+	for i, n := range notes {
+		byID[n.ID] = i
+	}
+	rows, err := q.Query(`SELECT note_id, tag FROM tags WHERE note_id IN (SELECT id FROM notes`+where+`) ORDER BY note_id, tag`, args...) // nosemgrep: go-sql-injection -- where is built above from constant clauses; values are bound
+	if err != nil {
+		return fmt.Errorf("listing tags: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var id, tag string
+		if err := rows.Scan(&id, &tag); err != nil {
+			return fmt.Errorf("reading tag row: %w", err)
+		}
+		if i, ok := byID[id]; ok {
+			notes[i].Tags = append(notes[i].Tags, tag)
+		}
+	}
+	return rows.Err()
 }
 
 // Build groups notes into folders. Folders and notes are sorted by path.
@@ -111,6 +160,12 @@ func Build(notes []Note) *Dir {
 	}
 	for _, n := range notes {
 		d := ensure(parentDir(n.Path))
+		if n.Type == OverviewType && d.Path != "" && (d.Overview == nil || n.Path < d.Overview.Path) {
+			// The folder's description, not one of its notes.
+			ov := n
+			d.Overview = &ov
+			continue
+		}
 		d.Notes = append(d.Notes, n)
 		for p := d.Path; ; p = parentDir(p) {
 			dirs[p].Total++
@@ -123,7 +178,54 @@ func Build(notes []Note) *Dir {
 		sort.Slice(d.Dirs, func(i, j int) bool { return d.Dirs[i].Path < d.Dirs[j].Path })
 		sort.Slice(d.Notes, func(i, j int) bool { return d.Notes[i].Path < d.Notes[j].Path })
 	}
+	describeDirs(root)
 	return root
+}
+
+// describeDirs sets each folder's summary from its overview note, else from
+// the most used tags of the notes beneath it, and returns those tag counts.
+func describeDirs(d *Dir) map[string]int {
+	counts := map[string]int{}
+	for _, n := range d.Notes {
+		for _, t := range n.Tags {
+			counts[t]++
+		}
+	}
+	for _, sub := range d.Dirs {
+		for t, c := range describeDirs(sub) {
+			counts[t] += c
+		}
+	}
+	switch {
+	case d.Overview != nil && d.Overview.Line != "":
+		d.Summary, d.SummaryFrom = d.Overview.Line, "overview"
+	case len(counts) > 0:
+		d.Summary, d.SummaryFrom = "tags: "+topTags(counts, maxSummaryTags), "tags"
+	}
+	return counts
+}
+
+// topTags names the n most used tags with their counts, most used first,
+// ties by name.
+func topTags(counts map[string]int, n int) string {
+	tags := make([]string, 0, len(counts))
+	for t := range counts {
+		tags = append(tags, t)
+	}
+	sort.Slice(tags, func(i, j int) bool {
+		if counts[tags[i]] != counts[tags[j]] {
+			return counts[tags[i]] > counts[tags[j]]
+		}
+		return tags[i] < tags[j]
+	})
+	if len(tags) > n {
+		tags = tags[:n]
+	}
+	parts := make([]string, len(tags))
+	for i, t := range tags {
+		parts[i] = fmt.Sprintf("%s %d", t, counts[t])
+	}
+	return strings.Join(parts, ", ")
 }
 
 // parentDir is the folder a path sits in, "" for the vault root.
@@ -169,7 +271,11 @@ func renderDir(w io.Writer, d *Dir, level int, o RenderOptions) error {
 		if o.Depth != 0 && level+1 > o.Depth {
 			continue
 		}
-		if _, err := fmt.Fprintf(w, "%s%s/ (%d)\n", indent, sub.Path, sub.Total); err != nil {
+		line := fmt.Sprintf("%s%s/ (%d)", indent, sub.Path, sub.Total)
+		if sub.Summary != "" && !o.Brief {
+			line += " — " + sub.Summary
+		}
+		if _, err := fmt.Fprintln(w, line); err != nil {
 			return err
 		}
 		if err := renderDir(w, sub, level+1, o); err != nil {
@@ -191,11 +297,25 @@ func noteLine(n Note, brief bool) string {
 // excerpt (the Principle section when it has one, else its opening prose),
 // on one line and capped at MaxLineRunes.
 func OneLine(body string) string {
-	text := strings.Join(strings.Fields(memory.Excerpt(body, excerptTokens)), " ")
+	return oneLine(body, MaxLineRunes, excerptTokens)
+}
+
+// MaxSummaryRunes caps a folder overview's summary: an L0 abstract, longer
+// than a note's line. The 2026-10-03 probe measured whole overview lines.
+const MaxSummaryRunes = 256
+
+// summaryLine is a folder overview's summary: its first sentence, up to
+// MaxSummaryRunes.
+func summaryLine(body string) string {
+	return oneLine(body, MaxSummaryRunes, 2*excerptTokens)
+}
+
+func oneLine(body string, maxRunes, tokens int) string {
+	text := strings.Join(strings.Fields(memory.Excerpt(body, tokens)), " ")
 	text = firstSentence(text)
 	runes := []rune(text)
-	if len(runes) > MaxLineRunes {
-		cut := strings.TrimRightFunc(string(runes[:MaxLineRunes-1]), unicode.IsSpace)
+	if len(runes) > maxRunes {
+		cut := strings.TrimRightFunc(string(runes[:maxRunes-1]), unicode.IsSpace)
 		return cut + ellipsis
 	}
 	return text

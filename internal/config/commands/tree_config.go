@@ -10,6 +10,9 @@ var TreeMetadata = config.CommandMetadata{
 		"note as `Title (id) — what it is about`. The line is the first sentence of the " +
 		"note's Principle section, or of its opening prose. Open a note with " +
 		"`vaultmind note get <id>`.\n\n" +
+		"A folder line says what the folder covers: the first sentence of its overview " +
+		"note (a note of type overview inside it, written by whoever curates the vault), " +
+		"else its most used tags. `vaultmind doctor` names big folders that have none.\n\n" +
 		"Search needs a question already formed; the map shows what is there to ask about. " +
 		"Start a large vault with --depth 1 (folders and counts), then narrow with --path " +
 		"or --type.\n\n" +

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -244,6 +245,14 @@ func populateDoctorResult(ctx context.Context, vdb *cmdutil.VaultDB, vaultPath s
 	}
 	annotateEmbeddingRuntime(ctx, result.Embeddings, doctorBackend())
 
+	// Folder overviews: advice, best-effort — here, so `doctor --all` reports
+	// them for every vault as well.
+	if ov, err := query.CheckOverviews(vdb.DB); err != nil {
+		log.Debug().Err(err).Msg("overview check failed")
+	} else {
+		result.Overviews = ov
+	}
+
 	// Fold in the per-type breakdown + errors/warnings rollup that `vault
 	// status` used to produce. Populated here in cmd/ because the vault config
 	// and schema registry live on vdb — the same reason HookDrift is populated
@@ -396,6 +405,9 @@ func writeDoctorHuman(w io.Writer, result *query.DoctorResult, summaryOnly bool)
 		return err
 	}
 	if err := writeBadCitations(w, result.BadCitations); err != nil {
+		return err
+	}
+	if err := writeOverviews(w, result.Overviews, result.VaultPath); err != nil {
 		return err
 	}
 	// Errors/warnings rollup — the cold-start bottom line. Counts come from
@@ -790,6 +802,40 @@ func writeBackupStatus(w io.Writer, b *query.DoctorBackup) error {
 	}
 	_, err := fmt.Fprintf(w, "%s\n", line)
 	return err
+}
+
+// writeOverviews names the big folders without an overview, with the command
+// that writes one for the first, and the overviews their folder has outgrown.
+// Advice, not an issue: it does not count toward errors or warnings.
+func writeOverviews(w io.Writer, h *query.OverviewHealth, vaultPath string) error {
+	if h == nil || (len(h.Missing) == 0 && len(h.Stale) == 0) {
+		return nil
+	}
+	if len(h.Missing) > 0 {
+		names := make([]string, len(h.Missing))
+		for i, f := range h.Missing {
+			names[i] = fmt.Sprintf("%s/ (%d)", f.Folder, f.Notes)
+		}
+		first := h.Missing[0].Folder
+		title := path.Base(first)
+		title = strings.ToUpper(title[:1]) + title[1:]
+		// The file is named after the folder's path: note create takes the id
+		// from the file name, so every folder's "overview.md" would share one.
+		file := strings.ToLower(strings.ReplaceAll(first, "/", "-")) + "-overview.md"
+		if _, err := fmt.Fprintf(w, "Overviews:   %d folders without one: %s\n"+
+			"  The map shows a folder's overview beside it. Write one, first sentence = what the folder covers:\n"+
+			"  vaultmind note create %q --type overview --field title=%q --body \"<what the folder covers, in one sentence first>\" --vault %q\n",
+			len(h.Missing), strings.Join(names, ", "), first+"/"+file, title, vaultPath); err != nil {
+			return err
+		}
+	}
+	for _, s := range h.Stale {
+		if _, err := fmt.Fprintf(w, "  ⚠ %s is stale: %d of its folder's %d notes changed since — update it\n",
+			s.Overview, s.Changed, s.Notes); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // writeBadCitations names every citation that is not allowed to be evidence.
