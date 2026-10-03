@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`import <url> --crawl` imports a whole docs site, one note per page.** Pages come from
+  the site's llms.txt, its sitemaps, then the links on each page, breadth first, within the
+  URL's host and folder; `--include`/`--exclude` narrow it with `paths:` globs, and
+  `--max-pages` (100), `--depth` (5) and `--delay` (1s) bound it. Each page is the note a
+  single-page import would write, so a re-run updates what changed and reports pages the
+  site no longer has as orphaned (only when the crawl saw the whole site). robots.txt is
+  read for its sitemaps and obeyed with `--respect-robots`, which also honours its
+  Crawl-delay. Tried on Docusaurus, MkDocs Material and Sphinx docs: every page their
+  sitemaps or search index list, and a second run changes nothing.
+
+### Changed
+
+- **A URL import never reaches a private address unless you named one.** A public URL that
+  redirects or resolves to localhost, a 10.x/192.168.x address, the cloud metadata address
+  or a CGNAT address is refused at connect time; a URL that names such a host yourself
+  (docs served on localhost) is fetched as before.
+- **Web pages import cleaner.** When readability takes a doc site's footer, version menu or
+  sidebar instead of the article, the page's `<main>` is used, and a leading version list
+  or row of icon links no longer opens the note.
+
 ### Fixed
 
 - **A first PDF import on a slow machine no longer times out while pdfium starts.**
