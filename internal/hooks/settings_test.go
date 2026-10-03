@@ -33,9 +33,9 @@ func TestSettingsStanza_WiresTheCanonicalHooks(t *testing.T) {
 	for _, script := range []string{"load-persona.sh", "vaultmind-health.sh", "vault-recall.sh", "vault-track-read.sh", "capture-episode.sh"} {
 		assert.Contains(t, stanza, script, "stanza must reference %s", script)
 	}
-	// PreToolUse is matched on Read; SessionStart on startup.
+	// PreToolUse is matched on Read; SessionStart on every start with an empty context.
 	assert.Contains(t, stanza, `"Read"`, "PreToolUse must match Read")
-	assert.Contains(t, stanza, `"startup"`, "SessionStart must match startup")
+	assert.Contains(t, stanza, `"startup|clear|compact"`, "SessionStart must match startup, clear and compact")
 }
 
 // SessionStart carries TWO canonical groups: the persona loader and the

@@ -3,7 +3,6 @@ package hooks
 import (
 	"encoding/json"
 	"path/filepath"
-	"strings"
 )
 
 // EventState says whether a canonical event is actually wired in the project's
@@ -67,19 +66,28 @@ func eventWiringForProfile(projectDir string, p Profile) []EventStatus {
 	}
 
 	// A script wired under a matcher an earlier release installed is not
-	// healthy: it runs, but misses tools it now needs to see.
+	// healthy: it runs, but misses tools it now needs to see. A script in
+	// several groups is hand-wired, a matcher per group: the project's choice,
+	// and the merge leaves it alone too.
 	stateOf := func(event, script string) EventState {
+		groups, stale := 0, false
 		for _, group := range parsed.Hooks[event] {
 			for _, h := range group.Hooks {
-				if strings.Contains(h.Command, script) {
-					if isLegacyMatcher(script, group.Matcher) {
-						return EventStaleMatcher
-					}
-					return EventWired
+				if commandReferencesScript(h.Command, script) {
+					groups++
+					stale = isLegacyMatcher(script, group.Matcher)
+					break
 				}
 			}
 		}
-		return EventUnwired
+		switch {
+		case groups == 0:
+			return EventUnwired
+		case groups == 1 && stale:
+			return EventStaleMatcher
+		default:
+			return EventWired
+		}
 	}
 
 	// vaultPath is only used to build command strings for install; wiring

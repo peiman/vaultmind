@@ -70,6 +70,9 @@ func codexHooks(projectDir, vaultPath string, vaults []string, p Profile) []cano
 			continue
 		}
 		g := hookGroup{Matcher: ch.Group.Matcher}
+		if ch.Event == "SessionStart" {
+			g.Matcher = codexSessionStartMatcher
+		}
 		for _, h := range ch.Group.Hooks {
 			h.Command = prefix + h.Command
 			if ch.Event == codexSessionEndEvent {

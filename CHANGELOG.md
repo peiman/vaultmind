@@ -32,6 +32,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   had already been delivered in the same conversation within 30 minutes. A note delivered
   inside that window now comes back as its title, so it can still be opened. The window is
   shared with the commit-time hook, and `VAULTMIND_RECALL_DEDUP_WINDOW` changes it.
+- **The session-start hooks run again after `/clear` and after a compaction** (matcher
+  `startup|clear|compact`), so the vault health line and the persona come back when the
+  context starts over. `resume` is left out: it restores the history, which already holds
+  them. `hooks install --merge` upgrades a startup-only install in place, and `hooks status`
+  names one until then. A script the project wired under several groups by hand is left
+  alone. Codex keeps `startup`.
 
 ### Fixed
 

@@ -20,11 +20,14 @@
 # a transformation. Compaction is a session boundary that happens mid-session,
 # and nothing fired on it until now.
 #
-# WHAT SURVIVES. Per the hook contract, PreCompact output is preserved INTO the
-# compacted context, so this directive outlives the compaction and is actionable
-# on the next turn. That is also why the identity re-anchor lives here rather
-# than on SessionStart: `source=compact` is undocumented in the local reference
-# and I could not verify it, whereas PreCompact's preservation is specified.
+# WHAT SURVIVES. Claude Code's docs say PreCompact adds no context to Claude,
+# and its output is not stored as a message. But the compaction summarizer sees
+# it: summaries written after it fired carried its asks, down to the vault it
+# named (checked against a real transcript, 2026-10-03). So the directive
+# reaches the next turn through the summary, written while the raw material
+# still exists, which is why it stays here. SessionStart on `compact` re-injects
+# the persona and the health line after the summary; it cannot ask for what the
+# summary already dropped.
 #
 # NEVER BLOCKS. Always exits 0 with continue:true. A memory hook that can break a
 # session gets disabled within a day, and then preserves nothing at all.
