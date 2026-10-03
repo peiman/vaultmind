@@ -37,7 +37,7 @@ var ImportMetadata = config.CommandMetadata{
 		"sandbox, for at most 60 seconds; a PDF with no text layer (a scan) is refused. " +
 		"The first PDF import compiles pdfium once (a few seconds) and caches it. A URL that " +
 		"names a public host never reaches a private address (localhost, 10.x, 192.168.x, " +
-		"the cloud metadata address), not even through a redirect or its DNS answer; a URL " +
+		"the cloud metadata address), not through a redirect, its DNS answer or a proxy; a URL " +
 		"that names a private host is your choice, and is fetched.\n\n" +
 		"--crawl imports the site the URL leads to, one note per page, each the note a " +
 		"single-page import of that page would write. Pages come from the site's llms.txt, " +

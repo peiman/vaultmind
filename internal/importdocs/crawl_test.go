@@ -326,3 +326,23 @@ func TestCrawl_StartScopeIsTheStartsFolder(t *testing.T) {
 	}
 	assert.NoError(t, errors.Join(errs...))
 }
+
+// A sitemap can list 50,000 URLs. The crawl queues at most ten times
+// --max-pages of them and reports the rest as over the cap.
+func TestCrawl_AHugeSitemapQueuesABoundedNumberOfPages(t *testing.T) {
+	s := newSite()
+	var b strings.Builder
+	b.WriteString("<urlset>")
+	for i := 0; i < 500; i++ {
+		fmt.Fprintf(&b, "<url><loc>%s/guide/p%d</loc></url>", docsHost, i)
+	}
+	b.WriteString("</urlset>")
+	s.text(docsHost+"/sitemap.xml", "application/xml", b.String())
+	s.html(docsHost + "/guide/")
+
+	res := crawl(t, s, docsHost+"/guide/", t.TempDir(), importdocs.Options{}, importdocs.CrawlOptions{MaxPages: 3})
+	assert.Len(t, s.pageRequests(), 3)
+	// 501 pages (the start and 500 listed): 3 fetched, 27 queued and left,
+	// 471 counted but never held.
+	assert.Contains(t, skipReasons(res), "498 page(s) — over --max-pages 3")
+}

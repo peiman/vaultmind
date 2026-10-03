@@ -54,9 +54,7 @@ func (c *crawler) discover() error {
 		sitemaps = []string{c.origin() + "/sitemap.xml"}
 	}
 	for _, sm := range sitemaps {
-		for _, l := range c.sitemapURLs(sm, true) {
-			c.enqueue(l, 1)
-		}
+		c.readSitemap(sm, true)
 	}
 	return nil
 }
@@ -122,31 +120,30 @@ type sitemapLoc struct {
 	Loc string `xml:"loc"`
 }
 
-// sitemapURLs are the page URLs a sitemap lists, following one level of
-// sitemap index when follow is set. Only sitemaps on the start's host are
-// read. A sitemap that cannot be read lists nothing.
-func (c *crawler) sitemapURLs(at string, follow bool) []string {
+// readSitemap queues the page URLs a sitemap lists, following one level of
+// sitemap index when follow is set. Each sitemap is queued as it is read,
+// so memory holds one sitemap at a time. Only sitemaps on the start's host
+// are read; one that cannot be read lists nothing.
+func (c *crawler) readSitemap(at string, follow bool) {
 	if u, ok := normalizeURL(at, nil, true); !ok || u.Host != c.start.Host {
-		return nil
+		return
 	}
 	page, err := c.get(at)
 	if err != nil {
-		return nil
+		return
 	}
 	var sm sitemap
 	if xml.Unmarshal(page.Body, &sm) != nil {
-		return nil
+		return
 	}
-	var out []string
 	for _, l := range sm.URLs {
-		out = append(out, strings.TrimSpace(l.Loc))
+		c.enqueue(strings.TrimSpace(l.Loc), 1)
 	}
 	if follow {
 		for _, child := range sm.Sitemaps[:min(len(sm.Sitemaps), maxSubSitemaps)] {
-			out = append(out, c.sitemapURLs(strings.TrimSpace(child.Loc), false)...)
+			c.readSitemap(strings.TrimSpace(child.Loc), false)
 		}
 	}
-	return out
 }
 
 // normalizeURL resolves raw against base and returns one spelling per page:

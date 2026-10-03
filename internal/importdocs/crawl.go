@@ -82,7 +82,13 @@ type crawler struct {
 
 	overCap, disallowed []string
 	failed, depthCut    bool
+	// dropped counts in-scope URLs never queued: the queue holds at most
+	// queueFactor × MaxPages, so a 50,000-URL sitemap costs no memory.
+	dropped int
 }
+
+// queueFactor bounds the queue at this many times --max-pages.
+const queueFactor = 10
 
 func newCrawler(ctx context.Context, startURL string, co CrawlOptions, fetch Fetcher) (*crawler, error) {
 	host, _, _, err := pagePlace(startURL)
@@ -136,6 +142,11 @@ func (c *crawler) enqueue(raw string, depth int) {
 	}
 	if depth > c.co.Depth {
 		c.depthCut = true
+		return
+	}
+	if len(c.seen) >= queueFactor*c.co.MaxPages {
+		c.seen[urlKey(u)] = true // counted once
+		c.dropped++
 		return
 	}
 	c.seen[urlKey(u)] = true
@@ -269,7 +280,7 @@ func (c *crawler) pageDoc(rawURL, media string, page Page) (doc, error) {
 // incomplete says why the crawl did not see the whole site, or "".
 func (c *crawler) incomplete() string {
 	switch {
-	case len(c.overCap) > 0:
+	case len(c.overCap) > 0 || c.dropped > 0:
 		return "the page cap stopped the crawl"
 	case c.failed:
 		return "a page failed, so the crawl did not see the whole site"
@@ -309,23 +320,23 @@ func (c *crawler) write(vaultRoot string, opts Options) (*Result, error) {
 // over the cap and the pages robots.txt kept out.
 func (c *crawler) summaryEntries() []Entry {
 	out := append([]Entry(nil), c.entries...)
-	if len(c.overCap) > 0 {
-		out = append(out, countEntry(c.overCap, fmt.Sprintf("over --max-pages %d; raise it to fetch them", c.co.MaxPages)))
+	if n := len(c.overCap) + c.dropped; n > 0 {
+		out = append(out, countEntry(n, c.overCap, fmt.Sprintf("over --max-pages %d; raise it to fetch them", c.co.MaxPages)))
 	}
 	if len(c.disallowed) > 0 {
-		out = append(out, countEntry(c.disallowed, "robots.txt disallows them, so they were not fetched"))
+		out = append(out, countEntry(len(c.disallowed), c.disallowed, "robots.txt disallows them, so they were not fetched"))
 	}
 	return out
 }
 
-// countEntry reports many URLs as one line, naming the first few.
-func countEntry(urls []string, why string) Entry {
+// countEntry reports n URLs as one line, naming the first few of urls.
+func countEntry(n int, urls []string, why string) Entry {
 	const shown = 3
 	names := strings.Join(urls[:min(len(urls), shown)], ", ")
-	if len(urls) > shown {
+	if n > min(len(urls), shown) {
 		names += ", …"
 	}
-	return Entry{Action: Skipped, Note: fmt.Sprintf("%d page(s)", len(urls)), Reason: why + " (" + names + ")"}
+	return Entry{Action: Skipped, Note: fmt.Sprintf("%d page(s)", n), Reason: why + " (" + names + ")"}
 }
 
 // sourceInScope reports a note's source URL inside this crawl's scope.

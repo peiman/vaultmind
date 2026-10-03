@@ -2,6 +2,7 @@ package importdocs
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -97,4 +98,26 @@ func TestURLKey_AFoldersIndexPageIsTheFolder(t *testing.T) {
 	assert.Len(t, keys, 1, "%v", keys)
 	u, _ := normalizeURL("https://d.org/usage/indexes.html", nil, false)
 	assert.NotEqual(t, "d.org/usage?", urlKey(u))
+}
+
+// The queue holds at most queueFactor × MaxPages URLs however many a
+// sitemap lists; the rest are only counted.
+func TestDiscover_AHugeSitemapIsCountedNotHeld(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("<urlset>")
+	for i := 0; i < 500; i++ {
+		b.WriteString("<url><loc>https://docs.example.com/guide/p" + strconv.Itoa(i) + "</loc></url>")
+	}
+	b.WriteString("</urlset>")
+	fetch := func(_ context.Context, u string) (Page, error) {
+		if strings.HasSuffix(u, "/sitemap.xml") {
+			return Page{FinalURL: u, ContentType: "application/xml", Body: []byte(b.String())}, nil
+		}
+		return Page{}, &StatusError{Code: 404, Status: "404 Not Found"}
+	}
+	c, err := newCrawler(t.Context(), "https://docs.example.com/guide/", CrawlOptions{MaxPages: 3, Depth: 5}, fetch)
+	require.NoError(t, err)
+	require.NoError(t, c.discover())
+	assert.Len(t, c.queue, 30, "the start and 29 listed pages")
+	assert.Equal(t, 471, c.dropped)
 }
