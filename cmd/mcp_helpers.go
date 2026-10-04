@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/mcpserver"
 )
 
@@ -21,6 +22,9 @@ func mcpServerConfig(single, list string) (mcpserver.Config, error) {
 		if paths[i], err = filepath.Abs(p); err != nil {
 			return mcpserver.Config{}, fmt.Errorf("resolving vault %s: %w", p, err)
 		}
+	}
+	if len(paths) == 1 && !cmdutil.IsVaultRoot(paths[0]) {
+		return mcpserver.Config{}, fmt.Errorf("%s is not a vault; create one with: vaultmind init %s", paths[0], paths[0])
 	}
 	if err := requireRealVaults(paths); err != nil {
 		return mcpserver.Config{}, err
