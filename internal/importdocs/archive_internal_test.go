@@ -121,3 +121,52 @@ func TestExtractArchive_WritesNoHiddenOrDependencyFolder(t *testing.T) {
 	assert.NoDirExists(t, filepath.Join(dir, "proj", ".github"))
 	assert.NoDirExists(t, filepath.Join(dir, "proj", "node_modules"))
 }
+
+// Every entry counts toward the member cap, folders and links too: a zip of
+// a million empty folders is refused like a zip of a million files.
+func TestReadArchive_FoldersCountTowardTheMemberCap(t *testing.T) {
+	tempRoot(t)
+	prev := maxArchiveMembers
+	t.Cleanup(func() { maxArchiveMembers = prev })
+	maxArchiveMembers = 3
+	p := filepath.Join(t.TempDir(), "dirs.zip")
+	writeZip(t, p, map[string]string{"d1/": "", "d2/": "", "d3/": "", "a.md": "# A\n"})
+	_, _, err := readArchiveDocs(Source{Repo: "r"}, "dirs.zip", p)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "more than 3 members")
+}
+
+// The total cap holds before a byte past it is written: the member that
+// would cross it is cut at the room left, then refused.
+func TestExtractArchive_NeverWritesPastTheTotalCap(t *testing.T) {
+	prev := maxArchiveTotal
+	t.Cleanup(func() { maxArchiveTotal = prev })
+	maxArchiveTotal = 100
+	dir := t.TempDir()
+	p := filepath.Join(t.TempDir(), "two.zip")
+	writeZip(t, p, map[string]string{"a.md": strings.Repeat("a", 60)})
+	x := &extractor{dir: dir, written: 60}
+	err := x.write("b.md", filepath.Join(dir, "b.md"), strings.NewReader(strings.Repeat("b", 60)))
+	require.Error(t, err)
+	info, statErr := os.Stat(filepath.Join(dir, "b.md"))
+	require.NoError(t, statErr)
+	assert.LessOrEqual(t, info.Size(), int64(41), "at most the room left, plus the byte that shows it ran over")
+}
+
+// On a filesystem that folds case, A.md and a.md are one file: the second
+// is reported as a name clash, not as a raw error.
+func TestExtractArchive_ACaseClashIsReportedPlainly(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "Probe"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "probe")); err != nil {
+		t.Skip("this filesystem tells case apart")
+	}
+	p := filepath.Join(t.TempDir(), "case.zip")
+	writeZip(t, p, map[string]string{"A.md": "# A\n", "a.md": "# a\n"})
+	skipped, err := extractArchive(p, filepath.Join(dir, "out"))
+	require.NoError(t, err)
+	require.Len(t, skipped, 1)
+	assert.Contains(t, skipped[0].Reason, "another member has the same name")
+}

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -116,6 +117,16 @@ func (x *extractor) skip(name, reason string) {
 	x.skipped = append(x.skipped, Entry{Note: name, Reason: reason})
 }
 
+// count counts one entry of any kind toward maxArchiveMembers: folders and
+// links cost the reader too, and bound the skip list.
+func (x *extractor) count() error {
+	x.members++
+	if x.members > maxArchiveMembers {
+		return fmt.Errorf("the archive holds more than %d members", maxArchiveMembers)
+	}
+	return nil
+}
+
 func (x *extractor) zip(p string) error {
 	zr, err := zip.OpenReader(p)
 	if err != nil {
@@ -123,6 +134,9 @@ func (x *extractor) zip(p string) error {
 	}
 	defer func() { _ = zr.Close() }()
 	for _, f := range zr.File {
+		if err := x.count(); err != nil {
+			return err
+		}
 		if f.FileInfo().IsDir() {
 			continue
 		}
@@ -167,6 +181,9 @@ func (x *extractor) tar(p string) error {
 		if err != nil {
 			return fmt.Errorf("not a readable tar file: %w", err)
 		}
+		if err := x.count(); err != nil {
+			return err
+		}
 		switch h.Typeflag {
 		case tar.TypeDir, tar.TypeXGlobalHeader, tar.TypeXHeader:
 			continue // folders and PAX metadata are not members
@@ -182,13 +199,9 @@ func (x *extractor) tar(p string) error {
 }
 
 // member writes one regular member, if it is one a folder import reads and
-// its name is safe. A member past its cap, or the archive past its total
-// or member count, refuses the archive.
+// its name is safe. A member past its cap, or the archive past its total,
+// refuses the archive.
 func (x *extractor) member(name string, open func() (io.ReadCloser, error)) error {
-	x.members++
-	if x.members > maxArchiveMembers {
-		return fmt.Errorf("the archive holds more than %d members", maxArchiveMembers)
-	}
 	dest, ok := safeMemberPath(x.dir, name)
 	switch {
 	case !ok:
@@ -217,11 +230,19 @@ func (x *extractor) write(name, dest string, r io.Reader) error {
 	}
 	// nosemgrep: go-path-traversal -- dest is checked by safeMemberPath to stay under the temporary folder
 	out, err := os.OpenFile(dest, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600) //nolint:gosec // same
+	if errors.Is(err, fs.ErrExist) {
+		x.skip(name, "another member has the same name here (names that differ only in case are one file on this filesystem)")
+		return nil
+	}
 	if err != nil {
 		x.skip(name, err.Error())
 		return nil
 	}
-	n, err := io.Copy(out, io.LimitReader(r, maxArchiveMember+1))
+	// Read at most the room left, under the member cap and under the total,
+	// and one byte more to see a member run past it: nothing past the total
+	// is ever on disk.
+	room := min(maxArchiveMember, maxArchiveTotal-x.written)
+	n, err := io.Copy(out, io.LimitReader(r, room+1))
 	if cerr := out.Close(); err == nil {
 		err = cerr
 	}
