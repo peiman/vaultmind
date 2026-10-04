@@ -154,7 +154,7 @@ var commandCatalog = map[string]catalogEntry{
 	"vaultmind import": {
 		group: groupMaintenance,
 		when:  "a project already has docs, or you want a web page or a docs site found like notes — re-run after it changes.",
-		short: "Import a folder of docs, PDFs, Office, HTML, CSV and EPUB files, one web page, or a whole site (--crawl), as notes and keep them in step",
+		short: "Import a folder or archive of docs (markdown, PDF, Office, HTML, CSV, EPUB), one web page, or a whole site (--crawl), as notes and keep them in step",
 	},
 	"vaultmind apply": {
 		group: groupMaintenance,

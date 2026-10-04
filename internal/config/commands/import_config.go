@@ -5,7 +5,7 @@ import "github.com/peiman/vaultmind/.ckeletin/pkg/config"
 // ImportMetadata defines the `import` command — a folder of docs as notes.
 var ImportMetadata = config.CommandMetadata{
 	Use:   "import <dir|file|url>",
-	Short: "Import a folder of docs, PDFs, Office, HTML, CSV and EPUB files, one file, one web page or PDF, or a whole site, as notes and keep them in step",
+	Short: "Import a folder or archive of docs (markdown, PDF, Office, HTML, CSV, EPUB), one file, one web page or PDF, or a whole site, as notes and keep them in step",
 	Long: "Copy every *.md under <dir> into the vault as a note under imported/<repo>/, so " +
 		"a project's existing docs are found by search, ask and the code hooks like any " +
 		"other note. Each *.pdf in the folder becomes a note of its text, <name>-pdf.md, and " +
@@ -16,7 +16,12 @@ var ImportMetadata = config.CommandMetadata{
 		"and 50 columns, its delimiter and encoding detected), <name>-csv.md. An EPUB book " +
 		"becomes a folder <name>-epub/ with a note per chapter, in reading order and titled " +
 		"from its table of contents (a file holding several long chapters is split at them), " +
-		"and book.md listing them; a book whose chapters are DRM-encrypted is skipped. A file that " +
+		"and book.md listing them; a book whose chapters are DRM-encrypted is skipped. A zip or " +
+		"tar archive (.zip, .tar, .tar.gz, .tgz) imports like the folder it holds, into " +
+		"<name>-zip/ or <name>-tar/: its members are unpacked to a temporary folder outside the " +
+		"vault (unsafe paths, links and encrypted members are skipped, archives inside it are " +
+		"not opened, and an archive over 512 MiB unpacked or 64 MiB in one member is refused) " +
+		"and imported as files on disk are. A file that " +
 		"cannot be read (a PDF scan, a broken file, a PDF over 20 MiB, an HTML file over 5 MiB " +
 		"or an Office or CSV file over 512 MiB) is skipped " +
 		"with the reason and the rest still imports. Inside a git work tree, what git ignores " +

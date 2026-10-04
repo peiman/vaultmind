@@ -85,8 +85,9 @@ func scan(src Source, root, vaultReal string) ([]doc, []Entry, error) {
 		if convertedKind(p) != "" {
 			// One converted file that cannot become notes is reported; the
 			// folder goes on.
-			if dcs, perr := readConvertedDocs(src, rel, p); perr == nil {
+			if dcs, members, perr := readConvertedDocs(src, rel, p); perr == nil {
 				docs = append(docs, dcs...)
+				skipped = append(skipped, members...)
 			} else {
 				skipped = append(skipped, Entry{Action: Skipped, Note: rel, Reason: perr.Error()})
 			}
@@ -127,9 +128,12 @@ func importable(p string) bool {
 }
 
 // convertedKind is "pdf", "docx", "pptx", "xlsx", "html" (for .html and
-// .htm), "csv", "tsv" or "epub" for a file whose text an import extracts,
-// else "".
+// .htm), "csv", "tsv", "epub", "zip" or "tar" (for .tar, .tar.gz and
+// .tgz) for a file whose text an import extracts, else "".
 func convertedKind(p string) string {
+	if k := archiveKind(p); k != "" {
+		return k
+	}
 	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(p), "."))
 	switch {
 	case ext == "pdf" || officeKinds[ext] || ext == "csv" || ext == "tsv" || ext == "html" || ext == "epub":
@@ -180,17 +184,22 @@ func readOfficeText(kind, p string) (string, string, error) {
 	return text, title, err
 }
 
-// readConvertedDocs reads one converted file as its docs: a book is a doc
-// per chapter and one for the book, any other file one doc.
-func readConvertedDocs(src Source, rel, p string) ([]doc, error) {
-	if convertedKind(p) == "epub" {
-		return readEPUBDocs(src, rel, p)
+// readConvertedDocs reads one converted file as its docs: an archive is
+// the docs of its members (and the members it would not read, as entries),
+// a book a doc per chapter and one for the book, any other file one doc.
+func readConvertedDocs(src Source, rel, p string) ([]doc, []Entry, error) {
+	switch convertedKind(p) {
+	case "zip", "tar":
+		return readArchiveDocs(src, rel, p)
+	case "epub":
+		docs, err := readEPUBDocs(src, rel, p)
+		return docs, nil, err
 	}
 	d, err := readConvertedDoc(src, rel, p)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return []doc{d}, nil
+	return []doc{d}, nil, nil
 }
 
 // readConvertedDoc reads one PDF, Office, HTML or CSV file as a doc: its extracted text
