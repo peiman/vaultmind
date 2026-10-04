@@ -332,3 +332,13 @@ func TestImport_TheBookNoteLinksAChapterWhoseIDWasTaken(t *testing.T) {
 	_, body := noteAt(t, vault, bookDir+"book.md")
 	assert.Contains(t, body, "[["+bookDir+"01-chapter-one-arrival|")
 }
+
+// A path the wikilink parser would cut (a # starts a heading) is not used:
+// the link falls back to the chapter's id.
+func TestImport_TheBookNoteLinksByIDWhenThePathHasAWikilinkCharacter(t *testing.T) {
+	repo, vault := srcRepo(t), t.TempDir()
+	writeEPUB(t, filepath.Join(repo, "docs", "c#-voyage.epub"), twoChapterBook(true))
+	run(t, repo, vault, importdocs.Options{})
+	_, body := noteAt(t, vault, "imported/demo-repo/docs/c#-voyage-epub/book.md")
+	assert.Contains(t, body, "[[imported-demo-repo-docs-c-voyage-epub-01-chapter-one-arrival|Chapter One: Arrival]]")
+}

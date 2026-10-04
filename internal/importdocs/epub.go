@@ -605,6 +605,9 @@ func bookDoc(src Source, b epubBook, folder, folderPath, book string, chapters [
 	// which it may suffix when another note holds the plain one.
 	for i, c := range chapters {
 		target := strings.TrimSuffix(path.Join(ImportedDir, src.Repo, src.Prefix, c.Rel), ".md")
+		if strings.ContainsAny(target, "#|^[]") {
+			target = noteID(c.Repo, c.Path) // the parser would cut the path; the id is a slug
+		}
 		fmt.Fprintf(&body, "%d. [[%s|%s]]\n", i+1, target, strings.ReplaceAll(c.Title, "|", "-"))
 	}
 	text := body.String()
