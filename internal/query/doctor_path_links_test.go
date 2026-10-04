@@ -16,7 +16,8 @@ import (
 // its sections, where filenames repeat (every split page has an
 // 01-introduction). Doctor flagged all of them as incompatible and suggested
 // the bare filename, which is the ambiguous form; it now accepts a link that
-// names the note's path. An id-form link is still flagged.
+// names the note's path, or a suffix of it (as the indexer resolves it). An
+// id-form link is still flagged.
 func TestDoctor_APathLinkIsObsidianCompatible(t *testing.T) {
 	dir := t.TempDir()
 	db, err := index.Open(dir + "/test.db")
@@ -36,6 +37,7 @@ func TestDoctor_APathLinkIsObsidianCompatible(t *testing.T) {
 		{"guide", "guide-01-introduction", "imported/web/example.com/guide/01-introduction"},
 		{"guide-01-introduction", "guide", "imported/web/example.com/guide"},
 		{"other", "guide-01-introduction", "guide-01-introduction"},
+		{"other", "guide", "example.com/guide"},
 	} {
 		_, err = db.Exec(`INSERT INTO links (src_note_id, dst_note_id, dst_raw, edge_type, resolved, confidence)
 			VALUES (?, ?, ?, 'explicit_link', TRUE, 'high')`, l[0], l[1], l[2])

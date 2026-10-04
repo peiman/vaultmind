@@ -447,9 +447,11 @@ func Doctor(db *index.DB, vaultPath string, reg *schema.Registry) (*DoctorResult
 			return nil, fmt.Errorf("scanning incompatible link: %w", scanErr)
 		}
 		filenameStem := strings.TrimSuffix(filepath.Base(dstPath), ".md")
-		// Obsidian also resolves a vault-relative path, the form import writes
-		// where filenames repeat (each split doc has an 01-introduction).
-		if dstRaw == filenameStem || dstRaw == strings.TrimSuffix(filepath.ToSlash(dstPath), ".md") {
+		// Obsidian also resolves a vault-relative path, or the end of one (as
+		// ResolveLinks does): the form import writes where filenames repeat
+		// (each split doc has an 01-introduction).
+		notePath := strings.TrimSuffix(filepath.ToSlash(dstPath), ".md")
+		if dstRaw == filenameStem || dstRaw == notePath || strings.HasSuffix(notePath, "/"+dstRaw) {
 			continue // already compatible
 		}
 		// Also skip if dst_raw contains "|" (already uses [[file|display]] format)
