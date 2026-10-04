@@ -202,7 +202,7 @@ func TestImport_APhotoWithOnlyDateAndPlaceIsKept(t *testing.T) {
 	xmp := `<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:exif="http://ns.adobe.com/exif/1.0/" exif:GPSLatitude="59,19.2N" exif:GPSLongitude="18,4.2E"/></rdf:RDF></x:xmpmeta>`
 	write(t, filepath.Join(repo, "docs", "IMG_0042.jpg"), string(jpegWithXMP(t, 320, 200, xmp)))
 	run(t, repo, vault, importdocs.Options{})
-	_, body := noteAt(t, vault, "imported/demo-repo/docs/img_0042-jpg.md")
+	_, body := noteAt(t, vault, "imported/demo-repo/docs/IMG_0042-jpg.md")
 	assert.Contains(t, body, "59.32")
 }
 
