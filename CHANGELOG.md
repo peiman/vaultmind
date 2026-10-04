@@ -42,6 +42,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   not opened, and an archive past 512 MiB unpacked, 64 MiB in one member (counted on the
   bytes written) or 10,000 members is refused. A GitHub repository zip and a release tarball
   import exactly the notes their unpacked trees do.
+- **Images import as notes of what they say.** A `.png`, `.jpg`, `.webp`, `.gif` or `.heic`
+  becomes `<name>-png.md` (and so on) with the text tesseract reads in it, the alt text the
+  import's markdown gives it (a root-relative `/img/x.png` link counts), and its metadata:
+  title, caption, keywords, people, place, creator, date taken, camera and GPS, all kept. An
+  SVG becomes the words it shows. OCR needs `tesseract` on PATH and is cached by image
+  content, so a re-import reads nothing again; without it, images are read for their
+  metadata and the import says so once. Icons under 100 pixels are not OCRed, and an image
+  with nothing but its pixels is counted, not written. A folder whose files were all
+  skipped now reports why instead of failing with "no markdown files".
+
 
 ### Changed
 
@@ -55,6 +65,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`XDG_CACHE_HOME` is honoured on macOS too**, as `XDG_DATA_HOME` and `XDG_STATE_HOME`
+  already are, so a test or a user can move vaultmind's cache.
 - **A first PDF import on a slow machine no longer times out while pdfium starts.**
   Compiling pdfium, which happens once when its cache can be written and on every run when
   it cannot, counted against the 60-second limit for reading a PDF. On a slow or

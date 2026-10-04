@@ -334,8 +334,13 @@ func dataBase() string {
 	}
 }
 
-// cacheBase returns the base cache directory.
+// cacheBase returns the base cache directory. XDG_CACHE_HOME is honored on
+// all platforms when set, as XDG_DATA_HOME and XDG_STATE_HOME are: a test
+// that set it on macOS still wrote into the real ~/Library/Caches.
 func cacheBase() string {
+	if dir := os.Getenv("XDG_CACHE_HOME"); dir != "" {
+		return dir
+	}
 	switch osName {
 	case "darwin":
 		return filepath.Join(homeDir(), "Library", "Caches")
@@ -345,9 +350,6 @@ func cacheBase() string {
 		}
 		return filepath.Join(homeDir(), "AppData", "Local")
 	default: // Linux and other Unix
-		if dir := os.Getenv("XDG_CACHE_HOME"); dir != "" {
-			return dir
-		}
 		return filepath.Join(homeDir(), ".cache")
 	}
 }

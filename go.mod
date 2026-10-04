@@ -6,6 +6,7 @@ require (
 	codeberg.org/readeck/go-readability/v2 v2.1.2
 	filippo.io/edwards25519 v1.2.0
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.2
+	github.com/bep/imagemeta v1.0.1
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/go-git/go-billy/v5 v5.9.0

@@ -12,13 +12,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// srcRepo makes a repository folder holding two docs and an image.
+// srcRepo makes a repository folder holding two docs and a file the import
+// does not read (a stylesheet; images are read since #238).
 func srcRepo(t *testing.T) string {
 	t.Helper()
 	repo := filepath.Join(t.TempDir(), "demo-repo")
 	write(t, filepath.Join(repo, "docs", "alpha.md"), "# Alpha Guide\n\nHow alpha works.\n")
 	write(t, filepath.Join(repo, "docs", "sub", "beta.md"), "No heading here.\n")
-	write(t, filepath.Join(repo, "docs", "image.png"), "not markdown")
+	write(t, filepath.Join(repo, "docs", "style.css"), "body { margin: 0 }")
 	return repo
 }
 

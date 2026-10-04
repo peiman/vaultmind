@@ -109,7 +109,7 @@ func (r *Result) Changed() []string {
 }
 
 // ErrNoMarkdown reports a source folder with nothing to import.
-var ErrNoMarkdown = errors.New("no markdown files or readable PDF, Office, HTML, CSV, EPUB or archived documents")
+var ErrNoMarkdown = errors.New("no markdown files or readable PDF, Office, HTML, CSV, EPUB, archived or image documents")
 
 // Import brings the docs under src into vaultRoot and reports what it did.
 func Import(src Source, vaultRoot string, opts Options) (*Result, error) {
@@ -126,7 +126,9 @@ func Import(src Source, vaultRoot string, opts Options) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(docs) == 0 {
+	// A folder whose files were all skipped gets the report of why; only a
+	// folder with nothing importable at all is an error.
+	if len(docs) == 0 && len(skipped) == 0 {
 		return nil, fmt.Errorf("%s: %w to import", src.Dir, ErrNoMarkdown)
 	}
 	base := path.Join(ImportedDir, src.Repo, src.Prefix)
@@ -485,7 +487,7 @@ func ImportFile(src Source, rel, vaultRoot string, opts Options) (*Result, error
 	}
 	rel = filepath.ToSlash(filepath.Clean(rel))
 	if !importable(rel) {
-		return nil, fmt.Errorf("%s: only a .md, .pdf, .docx, .pptx, .xlsx, .html, .htm, .csv, .tsv, .epub, .zip, .tar, .tar.gz or .tgz file can be imported", rel)
+		return nil, fmt.Errorf("%s: only a .md, .pdf, .docx, .pptx, .xlsx, .html, .htm, .csv, .tsv, .epub, .zip, .tar, .tar.gz, .tgz or image (.png, .jpg, .jpeg, .webp, .gif, .heic, .heif, .svg) file can be imported", rel)
 	}
 	if strings.Contains(rel, "/") || rel == "." || rel == ".." {
 		return nil, fmt.Errorf("%s: name a file in the source folder", rel)

@@ -49,6 +49,7 @@ var skippedFolders = map[string]bool{"node_modules": true, "vendor": true, "bowe
 func scan(src Source, root, vaultReal string) ([]doc, []Entry, error) {
 	var docs []doc
 	var skipped []Entry
+	var images []string // read after the walk, once every doc's alt texts are known
 	git := newGitFilter(root)
 	var ignored []string
 	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, walkErr error) error {
@@ -82,6 +83,10 @@ func scan(src Source, root, vaultReal string) ([]doc, []Entry, error) {
 			skipped = append(skipped, Entry{Action: Skipped, Note: strconv.Quote(rel), Reason: "a control character in the doc's path"})
 			return nil
 		}
+		if isImage(p) {
+			images = append(images, rel)
+			return nil
+		}
 		if convertedKind(p) != "" {
 			// One converted file that cannot become notes is reported; the
 			// folder goes on.
@@ -103,6 +108,9 @@ func scan(src Source, root, vaultReal string) ([]doc, []Entry, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("scanning %s: %w", src.Dir, err)
 	}
+	imgDocs, imgSkips := readImages(src, root, images, altTexts(docs))
+	docs = append(docs, imgDocs...)
+	skipped = append(skipped, imgSkips...)
 	if len(ignored) > 0 {
 		skipped = append(skipped, ignoredEntry(ignored))
 	}
@@ -129,12 +137,16 @@ func importable(p string) bool {
 
 // convertedKind is "pdf", "docx", "pptx", "xlsx", "html" (for .html and
 // .htm), "csv", "tsv", "epub", "zip" or "tar" (for .tar, .tar.gz and
-// .tgz) for a file whose text an import extracts, else "".
+// .tgz), an image's extension (png, jpg, jpeg, webp, gif, heic, heif, svg)
+// for a file whose text an import extracts, else "".
 func convertedKind(p string) string {
 	if k := archiveKind(p); k != "" {
 		return k
 	}
 	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(p), "."))
+	if _, ok := imageFormats[ext]; ok || ext == "svg" {
+		return ext
+	}
 	switch {
 	case ext == "pdf" || officeKinds[ext] || ext == "csv" || ext == "tsv" || ext == "html" || ext == "epub":
 		return ext
@@ -184,6 +196,50 @@ func readOfficeText(kind, p string) (string, string, error) {
 	return text, title, err
 }
 
+// isImage reports a raster image or an SVG drawing.
+func isImage(p string) bool {
+	_, raster := imageFormats[convertedKind(p)]
+	return raster || convertedKind(p) == "svg"
+}
+
+// readImages reads the walk's images, each with the alt texts the import's
+// docs give it. Those that hold no text are counted in one line, and so are
+// those read without tesseract.
+func readImages(src Source, root string, rels []string, alts map[string][]string) ([]doc, []Entry) {
+	var docs []doc
+	var skipped []Entry
+	var empty []string
+	r := newImageReading()
+	for _, rel := range rels {
+		d, ok, err := readImage(src, rel, filepath.Join(root, filepath.FromSlash(rel)), alts[rel], r)
+		switch {
+		case err != nil:
+			skipped = append(skipped, Entry{Action: Skipped, Note: rel, Reason: err.Error()})
+		case !ok:
+			empty = append(empty, rel)
+		default:
+			docs = append(docs, d)
+		}
+	}
+	if len(empty) > 0 {
+		skipped = append(skipped, countEntry(len(empty), empty, "hold no text: no words in them, no caption, no alt text"))
+		skipped[len(skipped)-1].Note = fmt.Sprintf("%d image(s)", len(empty))
+	}
+	if r.unread > 0 {
+		skipped = append(skipped, Entry{Action: Skipped, Note: fmt.Sprintf("%d image(s)", r.unread),
+			Reason: "read for their metadata only: install tesseract to read the text in them"})
+	}
+	return docs, skipped
+}
+
+// readImage reads one image or drawing.
+func readImage(src Source, rel, p string, alts []string, r *imageReading) (doc, bool, error) {
+	if convertedKind(p) == "svg" {
+		return readSVGDoc(src, rel, p)
+	}
+	return readImageDoc(src, rel, p, alts, r)
+}
+
 // readConvertedDocs reads one converted file as its docs: an archive is
 // the docs of its members (and the members it would not read, as entries),
 // a book a doc per chapter and one for the book, any other file one doc.
@@ -194,6 +250,16 @@ func readConvertedDocs(src Source, rel, p string) ([]doc, []Entry, error) {
 	case "epub":
 		docs, err := readEPUBDocs(src, rel, p)
 		return docs, nil, err
+	}
+	if isImage(p) {
+		d, ok, err := readImage(src, rel, p, nil, newImageReading())
+		if err == nil && !ok {
+			err = fmt.Errorf("the image holds no text: no words in it, no caption")
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		return []doc{d}, nil, nil
 	}
 	d, err := readConvertedDoc(src, rel, p)
 	if err != nil {

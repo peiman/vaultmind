@@ -387,8 +387,24 @@ func TestCacheBase_Darwin(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("darwin-specific test")
 	}
+	t.Setenv("XDG_CACHE_HOME", "") // a set one wins on every platform
 	base := cacheBase()
 	assert.Contains(t, base, filepath.Join("Library", "Caches"))
+}
+
+// XDG_CACHE_HOME, when set, wins on every platform: tests isolate the cache
+// with it, and on macOS it used to be ignored.
+func TestCacheBase_XDGCacheHomeWinsEverywhere(t *testing.T) {
+	orig := osName
+	t.Cleanup(func() { osName = orig })
+	explicit := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", explicit)
+	got := map[string]string{}
+	for _, name := range []string{"darwin", "windows", "linux"} {
+		osName = name
+		got[name] = cacheBase()
+	}
+	assert.Equal(t, map[string]string{"darwin": explicit, "windows": explicit, "linux": explicit}, got)
 }
 
 func TestStateBase_Darwin(t *testing.T) {
