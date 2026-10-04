@@ -128,7 +128,7 @@ func TestImport_RefusesAFileThatIsNotMarkdownOrPDF(t *testing.T) {
 
 	_, _, err := runRootCmd(t, "import", filepath.Join(repo, "docs", "notes.txt"), "--vault", vault)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), ".md, .pdf, .docx, .pptx, .xlsx, .html, .htm, .csv, .tsv, .epub, .zip, .tar, .tar.gz or .tgz")
+	assert.Contains(t, err.Error(), ".md, .pdf, .docx, .pptx, .xlsx, .html, .htm, .csv, .tsv, .epub, .zip, .tar, .tar.gz, .tgz or image (.png, .jpg, .jpeg, .webp, .gif, .heic, .heif, .svg)")
 }
 
 // On a re-sync of a big folder the one doc that changed is named, not lost in
@@ -297,8 +297,8 @@ func TestImport_OneFileImportsAlone(t *testing.T) {
 	assert.Contains(t, out.String(), "1 added")
 	assert.NotContains(t, out.String(), "orphan", "a single-file import never reports the folder's other notes")
 
-	require.NoError(t, os.WriteFile(filepath.Join(repo, "docs", "image.png"), []byte("png"), 0o600))
-	_, _, err = runRootCmd(t, "import", filepath.Join(repo, "docs", "image.png"), "--vault", vault)
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "docs", "style.css"), []byte("body {}"), 0o600))
+	_, _, err = runRootCmd(t, "import", filepath.Join(repo, "docs", "style.css"), "--vault", vault)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), ".md, .pdf, .docx, .pptx, .xlsx, .html, .htm, .csv, .tsv, .epub, .zip, .tar, .tar.gz or .tgz")
+	assert.Contains(t, err.Error(), ".md, .pdf, .docx, .pptx, .xlsx, .html, .htm, .csv, .tsv, .epub, .zip, .tar, .tar.gz, .tgz or image (.png, .jpg, .jpeg, .webp, .gif, .heic, .heif, .svg)")
 }

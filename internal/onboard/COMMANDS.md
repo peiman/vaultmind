@@ -42,7 +42,7 @@ Generated from the command tree — do not edit by hand (run `task generate:docs
 | `vaultmind frontmatter set` | Set one frontmatter field on a note | you want to set a single frontmatter field on one note, schema-validated. |
 | `vaultmind frontmatter unset` | Remove one frontmatter field from a note | you want to remove one frontmatter field from a note. |
 | `vaultmind frontmatter validate` | Check vault notes for frontmatter rule violations | you want to catch missing fields, bad statuses, unknown types, or broken refs before indexing. |
-| `vaultmind import` | Import a folder or archive of docs (markdown, PDF, Office, HTML, CSV, EPUB), one web page, or a whole site (--crawl), as notes and keep them in step | a project already has docs, or you want a web page or a docs site found like notes — re-run after it changes. |
+| `vaultmind import` | Import a folder or archive of docs (markdown, PDF, Office, HTML, CSV, EPUB, images), one web page, or a whole site (--crawl), as notes and keep them in step | a project already has docs, or you want a web page or a docs site found like notes — re-run after it changes. |
 | `vaultmind index` | Scan and index vault notes into SQLite, optionally embedding | vault notes changed and you need to refresh the SQLite index (and optionally embeddings). |
 | `vaultmind schema` | Query the vault's type schema | you need to discover the vault's note types, required fields, and valid statuses. |
 | `vaultmind schema list-types` | List every note type with its required fields and valid statuses | you want every registered type with its required fields and valid statuses before creating notes. |

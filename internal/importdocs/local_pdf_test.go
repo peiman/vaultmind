@@ -198,9 +198,9 @@ func TestImportFile_RefusesWhatIsNotAFileInTheFolder(t *testing.T) {
 
 func TestImportFile_RefusesOtherFiles(t *testing.T) {
 	repo, vault := srcRepo(t), t.TempDir()
-	_, err := importdocs.ImportFile(source(repo), "image.png", vault, importdocs.Options{})
+	_, err := importdocs.ImportFile(source(repo), "style.css", vault, importdocs.Options{})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), ".md, .pdf, .docx, .pptx, .xlsx, .html, .htm, .csv, .tsv, .epub, .zip, .tar, .tar.gz or .tgz")
+	assert.Contains(t, err.Error(), ".md, .pdf, .docx, .pptx, .xlsx, .html, .htm, .csv, .tsv, .epub, .zip, .tar, .tar.gz, .tgz or image (.png, .jpg, .jpeg, .webp, .gif, .heic, .heif, .svg)")
 
 	write(t, filepath.Join(repo, "docs", "scan.pdf"), "%PDF-1.4 truncated")
 	_, err = importdocs.ImportFile(source(repo), "scan.pdf", vault, importdocs.Options{})

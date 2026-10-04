@@ -5,7 +5,7 @@ import "github.com/peiman/vaultmind/.ckeletin/pkg/config"
 // ImportMetadata defines the `import` command — a folder of docs as notes.
 var ImportMetadata = config.CommandMetadata{
 	Use:   "import <dir|file|url>",
-	Short: "Import a folder or archive of docs (markdown, PDF, Office, HTML, CSV, EPUB), one file, one web page or PDF, or a whole site, as notes and keep them in step",
+	Short: "Import a folder or archive of docs (markdown, PDF, Office, HTML, CSV, EPUB, images), one file, one web page or PDF, or a whole site, as notes and keep them in step",
 	Long: "Copy every *.md under <dir> into the vault as a note under imported/<repo>/, so " +
 		"a project's existing docs are found by search, ask and the code hooks like any " +
 		"other note. Each *.pdf in the folder becomes a note of its text, <name>-pdf.md, and " +
@@ -21,7 +21,11 @@ var ImportMetadata = config.CommandMetadata{
 		"<name>-zip/ or <name>-tar/: its members are unpacked to a temporary folder outside the " +
 		"vault (unsafe paths, links and encrypted members are skipped, archives inside it are " +
 		"not opened, and an archive over 512 MiB unpacked or 64 MiB in one member is refused) " +
-		"and imported as files on disk are. A file that " +
+		"and imported as files on disk are. An image (.png, .jpg, .jpeg, .webp, .gif, .heic, " +
+		".heif) becomes <name>-png.md and so on, holding the text tesseract reads in it (when " +
+		"tesseract is installed; results are cached, icons under 100 pixels are not read), the alt " +
+		"text the import's markdown gives it, and its metadata, GPS included; an SVG becomes " +
+		"the words it shows. An image with nothing but its pixels is counted, not written. A file that " +
 		"cannot be read (a PDF scan, a broken file, a PDF over 20 MiB, an HTML file over 5 MiB " +
 		"or an Office or CSV file over 512 MiB) is skipped " +
 		"with the reason and the rest still imports. Inside a git work tree, what git ignores " +
