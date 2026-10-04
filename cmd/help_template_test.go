@@ -66,3 +66,22 @@ func TestRootHelp_GlobalFlagsStillRendered(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, out.String(), "GLOBAL FLAGS (apply to every subcommand)")
 }
+
+// The lead names what VaultMind is for in four groups (get knowledge in, find
+// it, give it to agents, keep it healthy), as the README does. It used to name
+// four commands (ask, note get, self, doctor), so import, the vault map, the
+// agent wiring and MCP were findable only by reading all 77 catalog entries.
+func TestRootHelp_LeadCoversTheFourThingsVaultMindDoes(t *testing.T) {
+	out, _, err := runRootCmd(t, "help")
+	require.NoError(t, err)
+	lead := out.String()
+	lead = lead[:strings.Index(lead, "ANTI-PATTERNS")]
+	for _, want := range []string{
+		"GET KNOWLEDGE IN", "vaultmind import", "--crawl", "--watch",
+		"FIND IT", "vaultmind ask", "vaultmind tree", "--for",
+		"GIVE IT TO AGENTS", "vaultmind hooks install", "vaultmind mcp",
+		"KEEP IT HEALTHY", "vaultmind doctor", "doctor heal",
+	} {
+		assert.Contains(t, lead, want)
+	}
+}
