@@ -19,6 +19,8 @@ Always use `[[filename|Display Text]]`, never `[[Title Case]]`.
 
 Obsidian resolves `[[target]]` by matching `target` against filenames (without `.md`). VaultMind resolves by ID, title, alias, AND filename stem. Using the filename format works in both systems.
 
+A vault-relative path without `.md` (`[[imported/web/example.com/guide/01-introduction]]`) also works in both, and is the right form where filenames repeat. `vaultmind import` writes it between a long document's index note and its sections, since every split document has its own `01-introduction`.
+
 ## CLI Command References
 
 CLI commands are NOT vault notes. Use backtick code format, not wikilinks:

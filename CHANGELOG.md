@@ -23,6 +23,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   any length reached. That costs a median 1.18× the tokens per prompt (32 real queries).
   Run `vaultmind hooks install --merge` to pick it up.
 
+### Fixed
+
+- **`doctor` no longer flags the links `import` writes as Obsidian-incompatible.** A long
+  doc's index note and its sections link by vault-relative path (filenames repeat: every
+  split doc has an `01-introduction`), and Obsidian resolves that form. `doctor` flagged
+  every one and suggested the bare filename, the ambiguous form; a vault with a few long
+  docs showed over a hundred false warnings.
+
 ## [0.10.3] - 2026-10-04
 
 > Any agent can use a vault, and a vault takes in what a project holds.
