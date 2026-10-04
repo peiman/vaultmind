@@ -1180,6 +1180,21 @@
               "default": ".",
               "description": "Path to vault root",
               "type": "string"
+            },
+            "vision_api_key_env": {
+              "default": "",
+              "description": "Environment variable holding the vision endpoint's key, when it needs one",
+              "type": "string"
+            },
+            "vision_endpoint": {
+              "default": "",
+              "description": "OpenAI-compatible endpoint that describes images (opt-in; e.g. http://localhost:11434/v1)",
+              "type": "string"
+            },
+            "vision_model": {
+              "default": "",
+              "description": "Model the vision endpoint describes images with",
+              "type": "string"
             }
           },
           "type": "object"

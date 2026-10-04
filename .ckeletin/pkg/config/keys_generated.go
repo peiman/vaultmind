@@ -208,6 +208,9 @@ const (
 	KeyAppImportExclude                      = "app.import.exclude"                       // Never crawl URL paths matching these globs
 	KeyAppImportRespectRobots                = "app.import.respect_robots"                // Obey robots.txt rules and Crawl-delay when crawling
 	KeyAppImportDelay                        = "app.import.delay"                         // Pause between a crawl's requests
+	KeyAppImportVisionEndpoint               = "app.import.vision_endpoint"               // OpenAI-compatible endpoint that describes images (opt-in; e.g. http://localho...
+	KeyAppImportVisionModel                  = "app.import.vision_model"                  // Model the vision endpoint describes images with
+	KeyAppImportVisionApiKeyEnv              = "app.import.vision_api_key_env"            // Environment variable holding the vision endpoint's key, when it needs one
 	KeyAppIndexVault                         = "app.index.vault"                          // Path to the vault root directory
 	KeyAppIndexJson                          = "app.index.json"                           // Output in JSON format
 	KeyAppIndexFull                          = "app.index.full"                           // Force full rebuild instead of incremental index

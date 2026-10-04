@@ -72,7 +72,7 @@ func readArchiveDocs(src Source, rel, p string) ([]doc, []Entry, error) {
 		return nil, nil, err
 	}
 	folder := archiveStem(rel) + "-" + archiveKind(rel)
-	inner := Source{Dir: tmp, Repo: src.Repo, Prefix: path.Join(src.Prefix, folder)}
+	inner := Source{Dir: tmp, Repo: src.Repo, Prefix: path.Join(src.Prefix, folder), vision: src.vision}
 	docs, innerSkips, err := scan(inner, tmp, "")
 	if err != nil {
 		return nil, nil, err

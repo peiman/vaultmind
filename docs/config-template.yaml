@@ -607,6 +607,15 @@ app:
     # Pause between a crawl's requests
     delay: 1s
 
+    # OpenAI-compatible endpoint that describes images (opt-in; e.g. http://localhost:11434/v1)
+    vision_endpoint: 
+
+    # Model the vision endpoint describes images with
+    vision_model: 
+
+    # Environment variable holding the vision endpoint's key, when it needs one
+    vision_api_key_env: 
+
   index:
     # Path to the vault root directory
     vault: ./my-vault

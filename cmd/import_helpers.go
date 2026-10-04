@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -53,6 +54,10 @@ func importDocs(cmd *cobra.Command, arg string) (*importResult, error) {
 			return nil, importErr(cmd, err)
 		}
 	}
+	vision, err := visionOptions(cmd)
+	if err != nil {
+		return nil, importErr(cmd, err)
+	}
 	vaultPath := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppImportVault)
 	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, importEnvelope)
 	if err != nil {
@@ -67,6 +72,7 @@ func importDocs(cmd *cobra.Command, arg string) (*importResult, error) {
 		Force:  getConfigValueWithFlags[bool](cmd, "force", config.KeyAppImportForce),
 		// The vault's own exclude list: a note it hides is never written.
 		Excludes: cfg.Vault.Exclude,
+		Vision:   vision,
 	}
 	if isHTTPURL(arg) {
 		var rep *importdocs.Result
@@ -140,6 +146,42 @@ func crawlOptions(cmd *cobra.Command, arg string) (importdocs.CrawlOptions, erro
 	}
 	co.Delay = d
 	return co, nil
+}
+
+// visionOptions reads the opt-in vision model. An endpoint needs a model;
+// the key is read from the variable the operator names, never from config.
+// A non-local endpoint is named on stderr: images will leave the machine.
+func visionOptions(cmd *cobra.Command) (importdocs.Vision, error) {
+	v := importdocs.Vision{
+		Endpoint: strings.TrimSpace(getConfigValueWithFlags[string](cmd, "vision-endpoint", config.KeyAppImportVisionEndpoint)),
+		Model:    strings.TrimSpace(getConfigValueWithFlags[string](cmd, "vision-model", config.KeyAppImportVisionModel)),
+	}
+	if v.Endpoint == "" {
+		return importdocs.Vision{}, nil
+	}
+	if v.Model == "" {
+		return v, errors.New("--vision-endpoint needs --vision-model: the model that describes the images")
+	}
+	if name := getConfigValueWithFlags[string](cmd, "vision-api-key-env", config.KeyAppImportVisionApiKeyEnv); name != "" {
+		v.APIKey = os.Getenv(name)
+	}
+	if visionLeavesTheMachine(v.Endpoint) {
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "images are sent to %s to be described (model %s)\n", v.Endpoint, v.Model)
+	}
+	return v, nil
+}
+
+// visionLeavesTheMachine reports an endpoint that is not this machine.
+func visionLeavesTheMachine(endpoint string) bool {
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return true
+	}
+	switch strings.ToLower(u.Hostname()) {
+	case "localhost", "127.0.0.1", "::1":
+		return false
+	}
+	return true
 }
 
 // isHTTPURL reports an argument the URL import handles. The check is

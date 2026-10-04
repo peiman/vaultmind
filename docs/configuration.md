@@ -218,6 +218,9 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.import.exclude` | []string | `[]` | `VAULTMIND_APP_IMPORT_EXCLUDE` | Never crawl URL paths matching these globs |
 | `app.import.respect_robots` | bool | `false` | `VAULTMIND_APP_IMPORT_RESPECT_ROBOTS` | Obey robots.txt rules and Crawl-delay when crawling |
 | `app.import.delay` | string | `1s` | `VAULTMIND_APP_IMPORT_DELAY` | Pause between a crawl's requests |
+| `app.import.vision_endpoint` | string | `` | `VAULTMIND_APP_IMPORT_VISION_ENDPOINT` | OpenAI-compatible endpoint that describes images (opt-in; e.g. http://localhost:11434/v1) |
+| `app.import.vision_model` | string | `` | `VAULTMIND_APP_IMPORT_VISION_MODEL` | Model the vision endpoint describes images with |
+| `app.import.vision_api_key_env` | string | `` | `VAULTMIND_APP_IMPORT_VISION_API_KEY_ENV` | Environment variable holding the vision endpoint's key, when it needs one |
 | `app.index.vault` | string | `.` | `VAULTMIND_APP_INDEX_VAULT` | Path to the vault root directory |
 | `app.index.json` | bool | `false` | `VAULTMIND_APP_INDEX_JSON` | Output in JSON format |
 | `app.index.full` | bool | `false` | `VAULTMIND_APP_INDEX_FULL` | Force full rebuild instead of incremental index |
@@ -930,6 +933,15 @@ app:
 
     # Pause between a crawl's requests
     delay: 1s
+
+    # OpenAI-compatible endpoint that describes images (opt-in; e.g. http://localhost:11434/v1)
+    vision_endpoint: 
+
+    # Model the vision endpoint describes images with
+    vision_model: 
+
+    # Environment variable holding the vision endpoint's key, when it needs one
+    vision_api_key_env: 
 
   index:
     # Path to the vault root directory
@@ -1904,6 +1916,15 @@ export VAULTMIND_APP_IMPORT_RESPECT_ROBOTS=false
 
 # Pause between a crawl's requests
 export VAULTMIND_APP_IMPORT_DELAY=1s
+
+# OpenAI-compatible endpoint that describes images (opt-in; e.g. http://localhost:11434/v1)
+export VAULTMIND_APP_IMPORT_VISION_ENDPOINT=
+
+# Model the vision endpoint describes images with
+export VAULTMIND_APP_IMPORT_VISION_MODEL=
+
+# Environment variable holding the vision endpoint's key, when it needs one
+export VAULTMIND_APP_IMPORT_VISION_API_KEY_ENV=
 
 # Path to the vault root directory
 export VAULTMIND_APP_INDEX_VAULT=./my-vault

@@ -209,7 +209,7 @@ func readImages(src Source, root string, rels []string, alts map[string][]string
 	var docs []doc
 	var skipped []Entry
 	var empty []string
-	r := newImageReading()
+	r := newImageReading(src.vision)
 	for _, rel := range rels {
 		d, ok, err := readImage(src, rel, filepath.Join(root, filepath.FromSlash(rel)), alts[rel], r)
 		switch {
@@ -224,6 +224,10 @@ func readImages(src Source, root string, rels []string, alts map[string][]string
 	if len(empty) > 0 {
 		skipped = append(skipped, countEntry(len(empty), empty, "hold no text: no words in them, no caption, no alt text"))
 		skipped[len(skipped)-1].Note = fmt.Sprintf("%d image(s)", len(empty))
+	}
+	if r.undescribed > 0 {
+		skipped = append(skipped, Entry{Action: Skipped, Note: fmt.Sprintf("%d image(s)", r.undescribed),
+			Reason: "not described: " + r.describeErr})
 	}
 	if r.unread > 0 {
 		skipped = append(skipped, Entry{Action: Skipped, Note: fmt.Sprintf("%d image(s)", r.unread),
@@ -252,7 +256,7 @@ func readConvertedDocs(src Source, rel, p string) ([]doc, []Entry, error) {
 		return docs, nil, err
 	}
 	if isImage(p) {
-		d, ok, err := readImage(src, rel, p, nil, newImageReading())
+		d, ok, err := readImage(src, rel, p, nil, newImageReading(src.vision))
 		if err == nil && !ok {
 			err = fmt.Errorf("the image holds no text: no words in it, no caption")
 		}
