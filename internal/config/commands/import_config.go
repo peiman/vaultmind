@@ -38,6 +38,10 @@ var ImportMetadata = config.CommandMetadata{
 		"line, and a failed one says why and the watch goes on. A file that " +
 		"cannot be read (a PDF scan, a broken file, a PDF over 20 MiB, an HTML file over 5 MiB " +
 		"or an Office or CSV file over 512 MiB) is skipped " +
+		"with the reason and the rest still imports. A doc, page, PDF, chapter or member past " +
+		"32,768 characters becomes an index note at its usual path plus <name>/NN-<heading>.md " +
+		"section notes, split at headings, so each part is embedded and found on its own; tables " +
+		"stay whole. A file that cannot be read is skipped " +
 		"with the reason and the rest still imports. Inside a git work tree, what git ignores " +
 		"is left out (naming an ignored folder imports it). Pass one such file instead and " +
 		"only that " +

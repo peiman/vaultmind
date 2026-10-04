@@ -147,11 +147,6 @@ func Import(src Source, vaultRoot string, opts Options) (*Result, error) {
 	}
 	s := newSyncer(src, srcRoot, base, all, opts, writer{vaultRoot: vaultAbs, dryRun: opts.DryRun})
 	res := &Result{DryRun: opts.DryRun, Entries: append(skipped, under(noteSkips, base)...)}
-	for _, d := range docs {
-		if d.PathsEntry != "" {
-			s.read[d.PathsEntry] = true
-		}
-	}
 	res.Entries = append(res.Entries, s.syncDocs(docs)...)
 	res.Entries = append(res.Entries, s.orphans()...)
 	sort.SliceStable(res.Entries, func(i, j int) bool { return res.Entries[i].Note < res.Entries[j].Note })
@@ -228,8 +223,8 @@ type syncer struct {
 	claimed map[string]bool
 	// written holds the lowercased note paths this run produced.
 	written map[string]bool
-	// read holds the paths entries of the books this run read whole: a
-	// chapter of one that produced no doc is gone from it.
+	// read holds the sources (and the files they are part of) this run read:
+	// a part of one that produced no doc is gone from it.
 	read map[string]bool
 }
 
@@ -264,8 +259,18 @@ func under(entries []Entry, base string) []Entry {
 	return out
 }
 
-// syncDocs plans and applies add / update / unchanged / conflict per doc.
+// syncDocs plans and applies add / update / unchanged / conflict per doc. A
+// long doc is written as its index and section notes (sections.go). Every
+// doc's source, and the file it is part of, is marked read: a part of it
+// this run did not produce is gone (partGone).
 func (s *syncer) syncDocs(docs []doc) []Entry {
+	docs = expandAll(docs, s.base)
+	for _, d := range docs {
+		s.read[d.Source] = true
+		if d.PathsEntry != "" {
+			s.read[d.PathsEntry] = true
+		}
+	}
 	var out []Entry
 	for _, d := range docs {
 		rel := path.Join(s.base, noteName(d.Rel))

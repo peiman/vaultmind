@@ -28,6 +28,9 @@ type doc struct {
 	// chapters have the book and the chapter as source, and the book as
 	// paths.
 	PathsEntry string
+	// NoPaths leaves `paths:` off: a long doc's sections, whose doc already
+	// brings its index note when opened.
+	NoPaths bool
 	// URL is the page address when the doc came from a URL import. Empty for
 	// a folder import, which keeps `paths:` and must stay byte-identical.
 	URL   string

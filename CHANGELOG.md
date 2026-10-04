@@ -67,6 +67,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   changes something prints a time-stamped line; a failed one says why and the watch goes on.
   Polling rather than file events: a walk costs milliseconds at docs scale and has none of
   the descriptor limits, overflows or rename-save traps.
+- **A long doc becomes one note per section.** A markdown doc, web page, PDF, Office
+  document, EPUB chapter or archive member past 32,768 characters (BGE-M3 embeds its first
+  8,192 tokens) is written as an index note at its usual path, with the same id and a link
+  per section, plus `<name>/NN-<heading>.md` section notes split at headings (1,500–6,000
+  characters each). Sections are found, ranked and delivered like any note; opening the doc
+  still brings only its index. A section the doc no longer has is reported as orphaned, for
+  folder, page, crawl and archive imports alike. Tables (CSV, TSV, spreadsheets) stay whole.
 
 
 ### Changed

@@ -381,8 +381,8 @@ func normalizeMarkdown(s string) string {
 	return strings.TrimSpace(s) + "\n"
 }
 
-// writePage runs one page through the folder import's syncer and stops
-// before the orphan pass.
+// writePage runs one page through the folder import's syncer. The only
+// orphans it judges are the page's own sections (a long page's parts).
 func writePage(vaultRoot, host string, opts Options, d doc) (*Result, error) {
 	vaultAbs, _, err := absVault(vaultRoot)
 	if err != nil {
@@ -396,6 +396,11 @@ func writePage(vaultRoot, host string, opts Options, d doc) (*Result, error) {
 	s := newSyncer(Source{Repo: "web"}, "", base, all, opts, writer{vaultRoot: vaultAbs, dryRun: opts.DryRun})
 	res := &Result{DryRun: opts.DryRun, Entries: under(noteSkips, base)}
 	res.Entries = append(res.Entries, s.syncDocs([]doc{d})...)
+	// A long page's sections it no longer has: the page's own parts, nothing
+	// else on the host, are this import's to judge.
+	res.Entries = append(res.Entries, s.crawlOrphans(func(source string) bool {
+		return strings.HasPrefix(source, d.Source+"#")
+	})...)
 	sort.SliceStable(res.Entries, func(i, j int) bool { return res.Entries[i].Note < res.Entries[j].Note })
 	return res, nil
 }
