@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A long doc's short subsections become their own notes.** A heading block now joins
+  its neighbour only under 800 characters, down from 1,500. A subsection like Effective
+  Go's "Import for side effect" was merged into its parent, below the lead paragraph an
+  excerpt shows.
+  - **Measured on the long-doc eval:** 6 of 12 answers delivered instead of 5, page
+    Hit@3 unchanged at 0.833, 179 section notes instead of 134. A cut at 400 bought
+    nothing more.
+  - Re-import a long doc to re-split it; the sections it no longer has are orphaned.
 - **The README and `vaultmind --help` lead with what VaultMind does, in four groups:** get
   knowledge in, find it, give it to agents, keep it healthy.
   - The README opens with the knowledge-vault frame and a table of commands per group.
