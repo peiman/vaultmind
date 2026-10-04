@@ -128,6 +128,8 @@ func TestImport_AnImagesTextIsReadAndItsAltTextGathered(t *testing.T) {
 	write(t, filepath.Join(repo, "docs", "img", "flow.png"), string(pngBytes(t, 640, 360)))
 	write(t, filepath.Join(repo, "docs", "design.md"), "# Design\n\n![The ingest flow, from source to note](img/flow.png)\n")
 	write(t, filepath.Join(repo, "docs", "sub", "deep.md"), "# Deep\n\n![Flow, linked from the root](/img/flow.png)\n![Elsewhere](https://example.com/img/flow.png)\n")
+	write(t, filepath.Join(repo, "docs", "img", "my flow.png"), string(pngBytes(t, 640, 360)))
+	write(t, filepath.Join(repo, "docs", "spaced.md"), "# Spaced\n\n![Bracketed name](<img/my flow.png>)\n![Encoded name](img/my%20flow.png \"a title\")\n")
 
 	run(t, repo, vault, importdocs.Options{})
 	fm, body := noteAt(t, vault, "imported/demo-repo/docs/img/flow-png.md")
@@ -137,6 +139,9 @@ func TestImport_AnImagesTextIsReadAndItsAltTextGathered(t *testing.T) {
 	assert.Contains(t, body, "The ingest flow, from source to note")
 	assert.Contains(t, body, "Flow, linked from the root", "a root-relative link starts at the source's root")
 	assert.NotContains(t, body, "Elsewhere", "a web image is another image")
+	_, spaced := noteAt(t, vault, "imported/demo-repo/docs/img/my flow-png.md")
+	assert.Contains(t, spaced, "Bracketed name", "an angle-bracket target may hold spaces")
+	assert.Contains(t, spaced, "Encoded name", "a percent-encoded target names the file it decodes to")
 	assert.Equal(t, 1, callCount(t, log))
 
 	run(t, repo, vault, importdocs.Options{})

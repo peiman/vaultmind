@@ -10,6 +10,7 @@ import (
 	_ "image/gif" // the pixel size of a GIF, which carries no metadata to read
 	_ "image/jpeg"
 	_ "image/png"
+	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -367,15 +368,30 @@ func writeOCRCache(key, text string) {
 	if err != nil {
 		return
 	}
-	if os.MkdirAll(dir, 0o750) != nil {
+	// The text is read from a person's images: the folder is theirs alone.
+	if os.MkdirAll(dir, 0o700) != nil {
+		return
+	}
+	// Written whole, then renamed into place: a concurrent import never reads
+	// half a result.
+	tmp, err := os.CreateTemp(dir, key+".*.tmp")
+	if err != nil {
+		return
+	}
+	_, werr := tmp.WriteString(text)
+	if cerr := tmp.Close(); werr != nil || cerr != nil {
+		_ = os.Remove(tmp.Name()) //nolint:gosec // the temporary file CreateTemp just made in our cache folder
 		return
 	}
 	// nosemgrep: go-path-traversal -- key is a sha256 hex string and a constant, under our own cache folder
-	_ = os.WriteFile(filepath.Join(dir, key+".txt"), []byte(text), 0o600) //nolint:gosec // same
+	if os.Rename(tmp.Name(), filepath.Join(dir, key+".txt")) != nil { //nolint:gosec // same
+		_ = os.Remove(tmp.Name()) //nolint:gosec // the temporary file CreateTemp just made in our cache folder
+	}
 }
 
-// markdownImageRef is an image a markdown doc shows: its alt text and target.
-var markdownImageRef = regexp.MustCompile(`!\[([^\]]+)\]\(\s*<?([^)\s>]+)`)
+// markdownImageRef is an image a markdown doc shows: its alt text and its
+// target, either <in angle brackets>, which may hold spaces, or bare.
+var markdownImageRef = regexp.MustCompile(`!\[([^\]]+)\]\(\s*(?:<([^>]+)>|([^)\s]+))`)
 
 // altTexts maps each image, by its path under the source, to the alt texts
 // the import's markdown docs give it. Empty alt texts are passed over.
@@ -386,11 +402,14 @@ func altTexts(docs []doc) map[string][]string {
 			continue
 		}
 		for _, m := range markdownImageRef.FindAllStringSubmatch(d.Body, -1) {
-			alt, target := strings.Join(strings.Fields(m[1]), " "), m[2]
+			alt, target := strings.Join(strings.Fields(m[1]), " "), m[2]+m[3]
 			if alt == "" {
 				continue
 			}
 			target, _, _ = strings.Cut(target, "#")
+			if dec, err := url.PathUnescape(target); err == nil {
+				target = dec // my%20flow.png is the file "my flow.png"
+			}
 			// A root-relative target starts at the source's root, as on the
 			// site the docs build. A web image's key names no file here, so it
 			// matches nothing.

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/xdg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -91,4 +92,21 @@ func TestValidUTF8Prefix_OnlyAFullPeekMayEndMidCharacter(t *testing.T) {
 	assert.True(t, validUTF8Prefix([]byte("caf\xc3"), true), "é cut in half by a full peek")
 	assert.False(t, validUTF8Prefix([]byte("caf\xc3"), false))
 	assert.True(t, validUTF8Prefix([]byte("café"), false))
+}
+
+// The OCR cache holds text read from a person's images: only they may read it.
+func TestOCRCache_IsPrivateToItsOwner(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	prev := xdg.GetAppName()
+	xdg.SetAppName("vaultmind-test")
+	t.Cleanup(func() { xdg.SetAppName(prev) })
+	writeOCRCache("abc-v1", "private words")
+	dir, err := ocrCacheDir()
+	require.NoError(t, err)
+	info, err := os.Stat(dir)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o700), info.Mode().Perm())
+	text, ok := readOCRCache("abc-v1")
+	assert.True(t, ok)
+	assert.Equal(t, "private words", text)
 }
