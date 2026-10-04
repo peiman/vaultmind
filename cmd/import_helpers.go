@@ -8,9 +8,11 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"os/signal"
 	"path"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
@@ -233,6 +235,9 @@ func finishImport(cmd *cobra.Command, vaultPath, label string, cfg *vault.Config
 // keyword only. A write into such a vault is left alone (embedAfterWriteUpTo);
 // an import is where a vault usually starts, so it says so once.
 func sayIfNeverEmbedded(cmd *cobra.Command, vaultPath, dbPath string) {
+	if watching(cmd) {
+		return // said once, after the first import, not on every re-sync
+	}
 	if model, err := index.EmbeddedModel(dbPath); err != nil || model != "" {
 		return
 	}
@@ -373,3 +378,136 @@ func listed(a importdocs.Action, many bool) bool {
 // Above it (a first import of a big folder), only the entries that need
 // attention are listed; --json has all.
 const importListLimit = 20
+
+// watchWait pauses the watch for one interval, or until it is stopped. A
+// test replaces it.
+var watchWait = func(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
+}
+
+// minURLWatch is the shortest interval a URL is re-imported on: a watch
+// should not hammer a site.
+const minURLWatch = time.Minute
+
+// checkWatchFlags refuses what --watch cannot honour, before the first
+// import: a JSON report is one document, a dry run writes nothing to watch.
+func checkWatchFlags(cmd *cobra.Command, arg string) error {
+	if !getConfigValueWithFlags[bool](cmd, "watch", config.KeyAppImportWatch) {
+		return nil
+	}
+	if getConfigValueWithFlags[bool](cmd, "json", config.KeyAppImportJson) {
+		return errors.New("import: --watch prints a line per re-sync; it cannot be combined with --json")
+	}
+	if getConfigValueWithFlags[bool](cmd, "dry-run", config.KeyAppImportDryRun) {
+		return errors.New("import: --watch cannot be combined with --dry-run")
+	}
+	_, err := watchInterval(getConfigValueWithFlags[string](cmd, "watch-interval", config.KeyAppImportWatchInterval), arg)
+	return err
+}
+
+// watchInterval is how often a watch looks: the operator's, else 2s for a
+// folder or file and 6h for a URL, never under a minute for a URL.
+func watchInterval(raw, arg string) (time.Duration, error) {
+	if raw == "" {
+		if isHTTPURL(arg) {
+			return 6 * time.Hour, nil
+		}
+		return 2 * time.Second, nil
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil || d <= 0 {
+		return 0, fmt.Errorf("import: --watch-interval %q is not a duration such as 2s or 10m", raw)
+	}
+	if isHTTPURL(arg) && d < minURLWatch {
+		return 0, fmt.Errorf("import: --watch-interval must be at least 1m for a URL, not to hammer the site")
+	}
+	return d, nil
+}
+
+// watchIfAsked keeps importing arg as it changes, until Ctrl-C.
+func watchIfAsked(cmd *cobra.Command, arg string) error {
+	if !getConfigValueWithFlags[bool](cmd, "watch", config.KeyAppImportWatch) {
+		return nil
+	}
+	interval, _ := watchInterval(getConfigValueWithFlags[string](cmd, "watch-interval", config.KeyAppImportWatchInterval), arg)
+	ctx, stop := signal.NotifyContext(importContext(cmd), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	parent := cmd.Context()
+	cmd.SetContext(context.WithValue(ctx, watchingKey{}, true))
+	defer cmd.SetContext(parent)
+	importdocs.WatchLoop(ctx, importdocs.WatchConfig{
+		Interval:    interval,
+		Fingerprint: watchFingerprint(cmd, arg),
+		Run:         func() error { return resync(cmd, arg) },
+		Wait:        watchWait,
+		OnError: func(err error) {
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "%s %v\n", time.Now().Format("15:04:05"), err)
+		},
+	})
+	return nil
+}
+
+// watchingKey marks a command context inside a watch's re-syncs.
+type watchingKey struct{}
+
+// watching reports a re-sync of a watch, where hints already said by the
+// first import are not said again.
+func watching(cmd *cobra.Command) bool {
+	if cmd == nil || cmd.Context() == nil {
+		return false
+	}
+	on, _ := cmd.Context().Value(watchingKey{}).(bool)
+	return on
+}
+
+// watchFingerprint is what a watch polls: the folder's importable files, a
+// file's own size and time, or nothing for a URL, which is re-imported on
+// each interval.
+func watchFingerprint(cmd *cobra.Command, arg string) func() (string, error) {
+	if isHTTPURL(arg) {
+		return nil
+	}
+	if info, err := os.Stat(arg); err == nil && info.Mode().IsRegular() {
+		return func() (string, error) {
+			info, err := os.Stat(arg)
+			if err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("%d %d", info.Size(), info.ModTime().UnixNano()), nil
+		}
+	}
+	vaultPath := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppImportVault)
+	return func() (string, error) {
+		src, err := importSource(arg)
+		if err != nil {
+			return "", err
+		}
+		return importdocs.Fingerprint(src, vaultPath)
+	}
+}
+
+// resync imports arg again and prints its report, time-stamped, when it
+// changed anything.
+func resync(cmd *cobra.Command, arg string) error {
+	res, err := importDocs(cmd, arg)
+	if err != nil {
+		return err
+	}
+	if res.Count(importdocs.Added)+res.Count(importdocs.Updated)+res.Count(importdocs.Pruned)+
+		res.Count(importdocs.Orphaned)+res.Count(importdocs.Conflict) == 0 {
+		return nil
+	}
+	var b strings.Builder
+	if err := writeImportText(&b, res); err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(cmd.OutOrStdout(), "%s %s", time.Now().Format("15:04:05"), b.String())
+	return err
+}

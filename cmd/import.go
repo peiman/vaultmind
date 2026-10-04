@@ -20,9 +20,15 @@ func init() {
 }
 
 func runImport(cmd *cobra.Command, args []string) error {
+	if err := checkWatchFlags(cmd, args[0]); err != nil {
+		return err
+	}
 	res, err := importDocs(cmd, args[0])
 	if err != nil {
 		return err
 	}
-	return writeImport(cmd, res)
+	if err := writeImport(cmd, res); err != nil {
+		return err
+	}
+	return watchIfAsked(cmd, args[0])
 }

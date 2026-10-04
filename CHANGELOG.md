@@ -59,6 +59,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the environment variable `--vision-api-key-env` names. Without an endpoint no image leaves
   the machine, and a non-local endpoint is named on stderr when it is used. Tried with a
   local gemma4:31b: thirteen real images described (about 50 s each), the second run instant.
+- **`import --watch` keeps a vault in step with its source until Ctrl-C.** A folder or file
+  is polled every `--watch-interval` (default 2s) through the import's own walk (hidden,
+  dependency and gitignored files never count) and re-imported once a change holds still for
+  one interval: an editor's save is one re-sync, and so is a `git checkout` of sixty files. A
+  URL or site is re-imported every interval (default 6h, at least 1m). Each re-sync that
+  changes something prints a time-stamped line; a failed one says why and the watch goes on.
+  Polling rather than file events: a walk costs milliseconds at docs scale and has none of
+  the descriptor limits, overflows or rename-save traps.
 
 
 ### Changed

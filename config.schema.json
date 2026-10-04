@@ -1195,6 +1195,16 @@
               "default": "",
               "description": "Model the vision endpoint describes images with",
               "type": "string"
+            },
+            "watch": {
+              "default": false,
+              "description": "Keep importing the source as it changes, until Ctrl-C",
+              "type": "boolean"
+            },
+            "watch_interval": {
+              "default": "",
+              "description": "How often --watch looks (default 2s for a folder or file, 6h for a URL)",
+              "type": "string"
             }
           },
           "type": "object"
