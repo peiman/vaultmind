@@ -30,6 +30,21 @@ func TestSplitSections_AtHeadingsOutsideCodeFences(t *testing.T) {
 	assert.NotContains(t, secs[1].text, "## Alpha", "a section's own heading is in its path, not its text")
 }
 
+// A subsection of about a thousand characters is its own section, not merged
+// into its parent: its lead paragraph is what an excerpt shows, and merged it
+// was buried. On the long-doc eval, Effective Go's "Import for side effect"
+// became its own note and its question was answered (6/12 against 5/12).
+func TestSplitSections_AShortSubsectionStandsAlone(t *testing.T) {
+	body := "## Imports\n\n" + prose("imports", 2500) + "\n\n" +
+		"### Import for side effect\n\n" + prose("sideeffect", 1000) + "\n\n" +
+		"## Embedding\n\n" + prose("embedding", 2500) + "\n"
+
+	secs := splitSections(body)
+	require.Len(t, secs, 3)
+	assert.Equal(t, []string{"Imports", "Import for side effect"}, secs[1].path)
+	assert.True(t, strings.HasPrefix(secs[1].text, "sideeffect"), "the subsection's own text leads its note")
+}
+
 // A fence closes only at a fence as long as its opening, so a four-backtick
 // block quoting a three-backtick one stays whole; a setext heading ("Title"
 // over "===" or "---") is a break like "#".

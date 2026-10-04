@@ -14,9 +14,15 @@ import (
 // per section, each section is retrieved, ranked and delivered like any note
 // (the 2026-10-03 probe: the exact section reached the pack for 7 of 12 deep
 // questions, against the wrong section of the right page before).
+//
+// minSectionChars is where a short block stops joining its neighbour. At 1500
+// a short subsection was merged into its parent, below the lead paragraph an
+// excerpt shows; at 800 it stands alone: 6/12 long-doc answers delivered
+// against 5/12, page Hit@3 unchanged, 179 sections against 134 (2026-10-04;
+// 400 bought nothing more).
 const (
 	longDocChars    = 32768 // ~8,192 tokens
-	minSectionChars = 1500
+	minSectionChars = 800
 	maxSectionChars = 6000
 )
 
