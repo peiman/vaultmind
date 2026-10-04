@@ -475,22 +475,14 @@ func writeContextTarget(w io.Writer, target *memory.ContextPackTarget, opts form
 		return err
 	}
 	if !opts.pointersOnly && target.Body != "" {
-		// An excerpt already carries its own budget-derived bound. Truncating it
-		// again here would cut the target — the slot the agent reads first — at
-		// 120 runes, discarding the half that carries the rule.
-		body := target.Body
-		if !target.BodyExcerpted {
-			body = Truncate(body, itemBodyPreviewRunes)
-		}
-		_, err := fmt.Fprintf(w, "%s\n", indentBody(body))
+		// The body is shown as packed: an excerpt carries its own bound, and a
+		// whole body is bounded by --budget. Cutting either for display showed
+		// the opening and hid the answer under a header saying it was delivered.
+		_, err := fmt.Fprintf(w, "%s\n", indentBody(target.Body))
 		return err
 	}
 	return nil
 }
-
-// itemBodyPreviewRunes bounds a full body rendered as a neighbour preview.
-// Excerpts skip it: they carry their own budget-derived bound.
-const itemBodyPreviewRunes = 120
 
 // writeContextItems emits one block per context-pack neighbor —
 // [type] title, plus body when included by the budget.
@@ -502,15 +494,9 @@ func writeContextItems(w io.Writer, items []memory.ContextItem, opts formatOpts)
 			return err
 		}
 		if !opts.pointersOnly && item.BodyIncluded && item.Body != "" {
-			// An excerpt is already bounded by ExcerptTokens and was chosen to be
-			// the passage worth reading. Re-truncating it here would cut it to a
-			// third and land mid-word — computing the right text and then
-			// declining to show it.
-			body := item.Body
-			if !item.BodyExcerpted {
-				body = Truncate(body, itemBodyPreviewRunes)
-			}
-			if _, err := fmt.Fprintf(w, "%s\n", indentBody(body)); err != nil {
+			// Shown as packed, like the target: the header counts these tokens
+			// as delivered, so the reader gets all of them.
+			if _, err := fmt.Fprintf(w, "%s\n", indentBody(item.Body)); err != nil {
 				return err
 			}
 		}

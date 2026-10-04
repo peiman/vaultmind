@@ -37,6 +37,8 @@ func TestMCPServerConfig_RefusesAPathThatIsNotAVault(t *testing.T) {
 	_, err := mcpServerConfig(t.TempDir(), "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not a vault")
+	assert.Contains(t, err.Error(), "vaultmind init")
+	assert.NotContains(t, err.Error(), "--vaults", "one --vault was given; the message names what was")
 }
 
 // The command is wired and documents how a client starts it.

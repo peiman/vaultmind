@@ -106,6 +106,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`ask` shows the bodies it says it delivered.** Text output said "N delivered in full" and
+  counted their tokens, then printed each whole body cut to 120 characters. On a long
+  section the answer was past the cut. Bodies now print as packed, bounded by `--budget`
+  (or `--excerpt`). `--preview` is still the one-line snippet mode, and `--json` was never
+  cut.
 - **`XDG_CACHE_HOME` is honoured on macOS too**, as `XDG_DATA_HOME` and `XDG_STATE_HOME`
   already are, so a test or a user can move vaultmind's cache.
 - **A first PDF import on a slow machine no longer times out while pdfium starts.**

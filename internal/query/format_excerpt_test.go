@@ -330,3 +330,33 @@ func TestFormatAsk_RendersExcerptedBodies(t *testing.T) {
 	assert.True(t, strings.Contains(buf.String(), "a request is a hypothesis"),
 		"an excerpt that is packed but not printed delivers nothing; got:\n%s", buf.String())
 }
+
+// A body the pack carries whole is shown whole. The header says "delivered
+// in full" and counts its tokens; cutting it to a 120-rune preview for
+// display showed an agent the opening of a long section and none of its
+// answer (the 2026-10-04 stranger test: "how long are backups kept?" found
+// the right section, said 1386 tokens delivered, and printed 270 characters
+// without "35 days"). --budget is the bound; --preview is the snippet mode.
+func TestFormatAsk_AWholeBodyRendersWhole(t *testing.T) {
+	long := strings.Repeat("Operators restart the worker pool when queue depth exceeds the threshold. ", 6) +
+		"Nightly backups run at 02:00 UTC and are kept for 35 days."
+	result := &AskResult{
+		TopHitConfidence: ConfidenceStrong,
+		Context: &memory.ContextPackResult{
+			TargetID: "ops-12", BudgetTokens: 4000, UsedTokens: 400,
+			Target: &memory.ContextPackTarget{
+				ID: "ops-12", Body: long,
+				Frontmatter: map[string]interface{}{"type": "reference", "title": "Operations › Section 12"},
+			},
+			Context: []memory.ContextItem{{
+				ID: "ops-7", BodyIncluded: true, Body: long,
+				Frontmatter: map[string]interface{}{"type": "reference", "title": "Operations › Section 7"},
+			}},
+		},
+	}
+
+	var buf bytes.Buffer
+	require.NoError(t, FormatAsk(result, &buf))
+	assert.Equal(t, 2, strings.Count(buf.String(), "kept for 35 days."), buf.String())
+	assert.NotContains(t, buf.String(), "...")
+}

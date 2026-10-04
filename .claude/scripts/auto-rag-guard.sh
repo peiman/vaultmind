@@ -257,7 +257,9 @@ VAULTMIND="${VAULTMIND_BIN:-$(command -v vaultmind 2>/dev/null || echo /tmp/vaul
 GUIDANCE=""
 HIT_IDS=""
 if [ -x "$VAULTMIND" ] && [ -d "$VAULT_ROOT/.vaultmind" ]; then
-  RAW=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=auto-rag-guard "$VAULTMIND" ask "$QUERY" --vault "$VAULT_ROOT" --max-items 2 --budget 1500 2>/dev/null || true)
+  # --excerpt 80, as the recall and reach hooks ask: each note's
+  # decision-bearing passage (its Principle, where it has one) is the guidance.
+  RAW=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=auto-rag-guard "$VAULTMIND" ask "$QUERY" --vault "$VAULT_ROOT" --max-items 2 --budget 1500 --excerpt 80 2>/dev/null || true)
   # Extract hit ids for logging from the hit lines: "  1.  <id>  <title>"
   # (rank, since the fused score stopped being shown) or "  0.NN  <id>  <title>"
   # (score, older binaries).
