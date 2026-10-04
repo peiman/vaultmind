@@ -163,9 +163,12 @@ func render(d doc, id string, prev note) []byte {
 		head.URL = d.URL
 	} else {
 		b.WriteString("# The doc is the source: edit it, then re-run the import.\n")
-		head.Paths = []string{d.Source}
-		if d.PathsEntry != "" {
+		switch {
+		case d.NoPaths:
+		case d.PathsEntry != "":
 			head.Paths = []string{d.PathsEntry}
+		default:
+			head.Paths = []string{d.Source}
 		}
 	}
 	raw, _ := yaml.Marshal(head)
