@@ -19,7 +19,7 @@ It's a single Go binary. It builds a derived index (full-text, dense, sparse and
 | Import a zip or tar of docs | `vaultmind import ./docs.zip --vault ./knowledge` |
 | Write a note | `vaultmind note create decisions/cache.md --type decision --field title="Cache in front of the API" --field status=accepted --vault ./knowledge` |
 
-A re-import brings changes across and keeps notes you edited by hand (`--force` overwrites them). `--dry-run` shows what an import would do. A long document becomes an index note plus one note per section. Images become notes of their metadata, their text (OCR) and, with `--vision-endpoint`, a description from a vision model.
+A re-import brings changes across and keeps notes you edited by hand (`--force` overwrites them). `--dry-run` shows what an import would do. A long document becomes an index note plus one note per section. Images become notes of their metadata, their text (OCR, when `tesseract` is installed) and, with `--vision-endpoint`, a description from a vision model.
 
 **Find it**
 
@@ -106,7 +106,7 @@ vaultmind hooks install . --vault ./knowledge --merge
 **Hooks deliver the vault without being asked.** `hooks install` writes scripts into the project and wires them into the agent's settings (`--merge` adds to existing hooks and never removes them; `--dry-run` previews). A knowledge vault gets: the vault map and health at session start (and again after `/clear` and compaction), the notes that match each prompt as short excerpts, the notes about a code file when the agent reads or edits it, and related notes before a commit, push or merge. Without `--vault`, the hooks look for `<project-dir>/vaultmind-identity`.
 
 - **Codex needs your approval, and skips the hooks silently without it.** Trust the project when Codex asks, then run `/hooks` inside Codex and trust the VaultMind hooks, and again after every upgrade. `vaultmind hooks status <project-dir>` checks each hook the way Codex does and fails while any would be skipped. Codex projects keep the scripts in `.vaultmind/scripts/`. Read-tracking, the code map and the pre-compaction prompt are Claude Code only.
-- **Cursor adds context only at session start and after a tool runs.** So under Cursor the agent gets the vault map at session start, the notes about a file after it reads or edits that file, and related notes after a commit, but no per-prompt recall: Cursor's hooks cannot add context to a prompt. The session-start message tells the agent to ask the vault itself, and in our tests it did.
+- **Cursor adds context only at session start and after a tool runs.** So under Cursor the agent gets the vault map at session start, the notes about a file after it reads or edits that file, and related notes after a commit, but no per-prompt recall: Cursor's hooks cannot add context to a prompt. The session-start message tells the agent to ask the vault itself, and in our tests it did. Cursor projects share `.vaultmind/scripts/` with Codex.
 
 `vaultmind hooks status <project-dir>` reports both halves: whether each script matches the copy in the binary, and whether each event is actually wired. See **[docs/AGENT_USAGE.md](docs/AGENT_USAGE.md)** for the day-to-day agent workflow.
 
