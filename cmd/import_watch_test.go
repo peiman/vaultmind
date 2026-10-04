@@ -2,6 +2,9 @@ package cmd
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -82,4 +85,54 @@ func TestWatchInterval_DefaultsByKindOfSource(t *testing.T) {
 		got[arg] = d
 	}
 	assert.Equal(t, map[string]time.Duration{"docs": 2 * time.Second, "https://example.com/": 6 * time.Hour}, got)
+}
+
+func TestImport_WatchReSyncsOneFileWhenItChanges(t *testing.T) {
+	vault, repo := indexedBaselineVault(t), docsRepo(t)
+	file := filepath.Join(repo, "docs", "alpha.md")
+	fakeWatchWait(t,
+		func() { require.NoError(t, os.WriteFile(file, []byte("# Alpha Guide\n\nRewritten.\n"), 0o600)) },
+		func() {},
+	)
+	out, _, err := runRootCmd(t, "import", file, "--vault", vault, "--watch")
+	require.NoError(t, err)
+	assert.Regexp(t, `(?m)^\d\d:\d\d:\d\d Imported .*: 1 updated$`, out.String())
+}
+
+func TestImport_WatchReImportsAURLEachIntervalAndSaysNothingWhenItIsUnchanged(t *testing.T) {
+	vault := indexedBaselineVault(t)
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits++
+		w.Header().Set("Content-Type", "text/markdown")
+		_, _ = io.WriteString(w, "# Page\n\nThe same text every time.\n")
+	}))
+	t.Cleanup(srv.Close)
+	seen := fakeWatchWait(t, func() {}, func() {})
+	out, _, err := runRootCmd(t, "import", srv.URL+"/page.md", "--vault", vault, "--watch", "--watch-interval", "1m")
+	require.NoError(t, err)
+	assert.Equal(t, 3, hits, "the first import and two re-imports")
+	assert.Equal(t, time.Minute, (*seen)[0])
+	assert.NotRegexp(t, `(?m)^\d\d:\d\d:\d\d`, out.String(), "an unchanged page prints nothing")
+}
+
+func TestImport_AFailedReSyncIsSaidAndTheWatchGoesOn(t *testing.T) {
+	vault, repo := indexedBaselineVault(t), docsRepo(t)
+	docs := filepath.Join(repo, "docs")
+	fakeWatchWait(t,
+		func() { require.NoError(t, os.RemoveAll(docs)) },
+		func() {},
+	)
+	_, errOut, err := runRootCmd(t, "import", docs, "--vault", vault, "--watch")
+	require.NoError(t, err, "a watch does not end on a failure")
+	assert.Regexp(t, `(?m)^\d\d:\d\d:\d\d .*no such file`, errOut.String())
+}
+
+func TestWatchWait_PausesOrStopsWhenTheWatchEnds(t *testing.T) {
+	start := time.Now()
+	require.NoError(t, watchWait(context.Background(), 10*time.Millisecond))
+	assert.GreaterOrEqual(t, time.Since(start), 10*time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	assert.ErrorIs(t, watchWait(ctx, time.Hour), context.Canceled)
 }
