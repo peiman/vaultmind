@@ -161,3 +161,18 @@ func TestWatchLoop_WithoutAFingerprintRunsEveryInterval(t *testing.T) {
 	})
 	assert.Equal(t, 3, runs, "a URL is re-imported on each interval")
 }
+
+// A zero interval would spin: the loop never waits less than its floor.
+func TestWatchLoop_AZeroIntervalDoesNotSpin(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	var got time.Duration
+	importdocs.WatchLoop(ctx, importdocs.WatchConfig{
+		Run: func() error { return nil },
+		Wait: func(ctx context.Context, d time.Duration) error {
+			got = d
+			cancel()
+			return ctx.Err()
+		},
+	})
+	assert.Equal(t, importdocs.MinWatchInterval, got)
+}

@@ -49,7 +49,7 @@ var skippedFolders = map[string]bool{"node_modules": true, "vendor": true, "bowe
 func scan(src Source, root, vaultReal string) ([]doc, []Entry, error) {
 	var docs []doc
 	var images []string // read after the walk, once every doc's alt texts are known
-	skipped, err := walkImportable(root, vaultReal, func(rel, p string) ([]Entry, error) {
+	skipped, ignored, err := walkImportable(root, vaultReal, func(rel, p string, _ fs.DirEntry) ([]Entry, error) {
 		if isImage(p) {
 			images = append(images, rel)
 			return nil, nil
@@ -76,17 +76,22 @@ func scan(src Source, root, vaultReal string) ([]doc, []Entry, error) {
 	}
 	imgDocs, imgSkips := readImages(src, root, images, altTexts(docs))
 	docs = append(docs, imgDocs...)
-	return docs, append(skipped, imgSkips...), nil
+	skipped = append(skipped, imgSkips...)
+	if len(ignored) > 0 {
+		skipped = append(skipped, ignoredEntry(ignored))
+	}
+	return docs, skipped, nil
 }
 
 // walkImportable calls visit for every file under root that an import reads,
-// in walk order, and returns what it left out on the way with whatever
-// visit reported. Symlinks are reported, not followed; hidden and dependency
-// folders are passed over, and so is the vault when it lives inside root;
-// in a git work tree what git ignores is left out, reported once. The import
-// and the watch's fingerprint both walk through here, so they always agree
-// on which files count.
-func walkImportable(root, vaultReal string, visit func(rel, p string) ([]Entry, error)) ([]Entry, error) {
+// in walk order, with the walk's entry for it, and returns what it left out
+// on the way with whatever visit reported, and the paths git ignores (the
+// caller reports those as one line, where it wants it). Symlinks are
+// reported, not followed; hidden and dependency folders are passed over, and
+// so is the vault when it lives inside root. The import and the watch's
+// fingerprint both walk through here, so they always agree on which files
+// count.
+func walkImportable(root, vaultReal string, visit func(rel, p string, d fs.DirEntry) ([]Entry, error)) ([]Entry, []string, error) {
 	var skipped []Entry
 	var ignored []string
 	git := newGitFilter(root)
@@ -121,14 +126,11 @@ func walkImportable(root, vaultReal string, visit func(rel, p string) ([]Entry, 
 			skipped = append(skipped, Entry{Action: Skipped, Note: strconv.Quote(rel), Reason: "a control character in the doc's path"})
 			return nil
 		}
-		more, err := visit(rel, p)
+		more, err := visit(rel, p, d)
 		skipped = append(skipped, more...)
 		return err
 	})
-	if len(ignored) > 0 {
-		skipped = append(skipped, ignoredEntry(ignored))
-	}
-	return skipped, err
+	return skipped, ignored, err
 }
 
 // ignoredEntry reports what git ignores as one line, naming the first few

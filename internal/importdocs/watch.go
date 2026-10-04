@@ -5,7 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"os"
+	"io/fs"
 	"time"
 )
 
@@ -20,10 +20,11 @@ func Fingerprint(src Source, vaultRoot string) (string, error) {
 		return "", err
 	}
 	h := sha256.New()
-	_, err = walkImportable(srcRoot, vaultReal, func(rel, p string) ([]Entry, error) {
-		// A file gone between the walk and the stat is left out: the next
+	_, _, err = walkImportable(srcRoot, vaultReal, func(rel, _ string, d fs.DirEntry) ([]Entry, error) {
+		// The walk's own entry carries the file's metadata: no second stat.
+		// A file gone between the listing and here is left out; the next
 		// poll sees it gone.
-		if info, err := os.Stat(p); err == nil {
+		if info, err := d.Info(); err == nil {
 			_, _ = fmt.Fprintf(h, "%s\x00%d\x00%d\n", rel, info.Size(), info.ModTime().UnixNano())
 		}
 		return nil, nil
@@ -33,6 +34,10 @@ func Fingerprint(src Source, vaultRoot string) (string, error) {
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
+
+// MinWatchInterval is the shortest pause WatchLoop takes between polls; a
+// shorter Interval is raised to it.
+const MinWatchInterval = 100 * time.Millisecond
 
 // WatchConfig drives WatchLoop. Fingerprint, when set, is polled every
 // Interval and Run called once a change has settled; without it Run is
@@ -52,6 +57,9 @@ type WatchConfig struct {
 // an editor's write-then-rename, or a checkout of many files, is one
 // re-sync, not one per file.
 func WatchLoop(ctx context.Context, c WatchConfig) {
+	if c.Interval < MinWatchInterval {
+		c.Interval = MinWatchInterval // a zero interval would spin
+	}
 	if c.Wait == nil {
 		c.Wait = sleep
 	}
