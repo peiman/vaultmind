@@ -110,3 +110,14 @@ func TestOCRCache_IsPrivateToItsOwner(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, "private words", text)
 }
+
+// Two models are two caches, however alike their names slug.
+func TestVisionCacheKey_TellsEveryModelApart(t *testing.T) {
+	raw := []byte("an image")
+	keys := map[string]bool{}
+	for _, m := range []string{"meta/llama3", "meta-llama3", "gpt_4o", "gpt-4o", "qwen2.5:32b", "qwen2-5-32b"} {
+		keys[visionCacheKey(raw, m)] = true
+	}
+	assert.Len(t, keys, 6)
+	assert.NotEqual(t, visionCacheKey(raw, "m"), visionCacheKey([]byte("another image"), "m"))
+}

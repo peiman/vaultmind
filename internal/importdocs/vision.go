@@ -81,9 +81,14 @@ func (r *imageReading) describe(raw []byte, kind string, w, h int, alts []string
 	return text
 }
 
+// visionCacheKey hashes the image with the exact model name and the prompt
+// version: models whose names slug alike (meta/llama3, meta-llama3) are
+// still different models.
 func visionCacheKey(raw []byte, model string) string {
-	sum := sha256.Sum256(raw)
-	return hex.EncodeToString(sum[:]) + "-" + slug(model) + "-" + visionPromptVersion
+	h := sha256.New()
+	h.Write(raw)
+	h.Write([]byte("\x00" + model + "\x00" + visionPromptVersion))
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // describeImage sends one image to the endpoint's chat completions, with

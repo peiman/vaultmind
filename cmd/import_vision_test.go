@@ -57,3 +57,16 @@ func TestVisionLeavesTheMachine(t *testing.T) {
 	assert.Equal(t, map[string]bool{"http://localhost:11434/v1": false, "http://127.0.0.1:1234/v1": false, "http://[::1]:8080/v1": false,
 		"https://api.openai.com/v1": true, "http://gpu-box.lan:11434/v1": true}, got)
 }
+
+func TestImport_AnUnsetKeyVariableIsNamed(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("MISSING_VISION_KEY", "")
+	vault := indexedBaselineVault(t)
+	dir := filepath.Join(t.TempDir(), "empty")
+	require.NoError(t, os.MkdirAll(dir, 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.md"), []byte("# A\n"), 0o600))
+	_, errOut, err := runRootCmd(t, "import", dir, "--vault", vault,
+		"--vision-endpoint", "http://localhost:1/v1", "--vision-model", "m", "--vision-api-key-env", "MISSING_VISION_KEY")
+	require.NoError(t, err)
+	assert.Contains(t, errOut.String(), "MISSING_VISION_KEY is not set")
+}

@@ -164,6 +164,9 @@ func visionOptions(cmd *cobra.Command) (importdocs.Vision, error) {
 	}
 	if name := getConfigValueWithFlags[string](cmd, "vision-api-key-env", config.KeyAppImportVisionApiKeyEnv); name != "" {
 		v.APIKey = os.Getenv(name)
+		if v.APIKey == "" {
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "%s is not set, so no key is sent to the vision endpoint\n", name)
+		}
 	}
 	if visionLeavesTheMachine(v.Endpoint) {
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "images are sent to %s to be described (model %s)\n", v.Endpoint, v.Model)
