@@ -1481,6 +1481,21 @@
           ],
           "type": "string"
         },
+        "mcp": {
+          "properties": {
+            "vault": {
+              "default": ".",
+              "description": "Path to vault root",
+              "type": "string"
+            },
+            "vaults": {
+              "default": "",
+              "description": "Serve several vaults, comma-separated (overrides --vault); writes go to the first",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
         "memorycontextpack": {
           "properties": {
             "budget": {

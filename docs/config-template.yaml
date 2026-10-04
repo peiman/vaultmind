@@ -736,6 +736,13 @@ app:
     # Number of messages to log thereafter per second
     sampling_thereafter: 100
 
+  mcp:
+    # Path to vault root
+    vault: .
+
+    # Serve several vaults, comma-separated (overrides --vault); writes go to the first
+    vaults: 
+
   memorycontextpack:
     # Path to vault root
     vault: .

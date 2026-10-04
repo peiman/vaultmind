@@ -237,6 +237,8 @@ const (
 	KeyAppLintfixlinksVault                  = "app.lintfixlinks.vault"                   // Path to vault root
 	KeyAppLintfixlinksJson                   = "app.lintfixlinks.json"                    // Output in JSON format
 	KeyAppLintfixlinksFix                    = "app.lintfixlinks.fix"                     // Apply fixes (default is dry-run)
+	KeyAppMcpVault                           = "app.mcp.vault"                            // Path to vault root
+	KeyAppMcpVaults                          = "app.mcp.vaults"                           // Serve several vaults, comma-separated (overrides --vault); writes go to the f...
 	KeyAppMemoryrecallVault                  = "app.memoryrecall.vault"                   // Path to vault root
 	KeyAppMemoryrecallJson                   = "app.memoryrecall.json"                    // Output in JSON format
 	KeyAppMemoryrecallDepth                  = "app.memoryrecall.depth"                   // Maximum traversal depth

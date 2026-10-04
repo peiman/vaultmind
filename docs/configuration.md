@@ -247,6 +247,8 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.lintfixlinks.vault` | string | `.` | `VAULTMIND_APP_LINTFIXLINKS_VAULT` | Path to vault root |
 | `app.lintfixlinks.json` | bool | `false` | `VAULTMIND_APP_LINTFIXLINKS_JSON` | Output in JSON format |
 | `app.lintfixlinks.fix` | bool | `false` | `VAULTMIND_APP_LINTFIXLINKS_FIX` | Apply fixes (default is dry-run) |
+| `app.mcp.vault` | string | `.` | `VAULTMIND_APP_MCP_VAULT` | Path to vault root |
+| `app.mcp.vaults` | string | `` | `VAULTMIND_APP_MCP_VAULTS` | Serve several vaults, comma-separated (overrides --vault); writes go to the first |
 | `app.memoryrecall.vault` | string | `.` | `VAULTMIND_APP_MEMORYRECALL_VAULT` | Path to vault root |
 | `app.memoryrecall.json` | bool | `false` | `VAULTMIND_APP_MEMORYRECALL_JSON` | Output in JSON format |
 | `app.memoryrecall.depth` | int | `1` | `VAULTMIND_APP_MEMORYRECALL_DEPTH` | Maximum traversal depth |
@@ -1064,6 +1066,13 @@ app:
 
     # Number of messages to log thereafter per second
     sampling_thereafter: 100
+
+  mcp:
+    # Path to vault root
+    vault: .
+
+    # Serve several vaults, comma-separated (overrides --vault); writes go to the first
+    vaults: 
 
   memorycontextpack:
     # Path to vault root
@@ -2011,6 +2020,12 @@ export VAULTMIND_APP_LINTFIXLINKS_JSON=false
 
 # Apply fixes (default is dry-run)
 export VAULTMIND_APP_LINTFIXLINKS_FIX=false
+
+# Path to vault root
+export VAULTMIND_APP_MCP_VAULT=.
+
+# Serve several vaults, comma-separated (overrides --vault); writes go to the first
+export VAULTMIND_APP_MCP_VAULTS=
 
 # Path to vault root
 export VAULTMIND_APP_MEMORYRECALL_VAULT=.

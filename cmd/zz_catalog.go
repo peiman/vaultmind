@@ -338,6 +338,10 @@ var commandCatalog = map[string]catalogEntry{
 		when:  "you need to install, remove, or check VaultMind's Claude Code hook scripts.",
 		short: "Manage VaultMind's Claude Code hook scripts",
 	},
+	"vaultmind mcp": {
+		group: groupLifecycle,
+		when:  "an agent without a shell (Claude Desktop, any MCP client) should use the vault — add it as an MCP server.",
+	},
 	"vaultmind hooks install": {
 		group: groupLifecycle,
 		when:  "you want to wire VaultMind into a project by writing its hook scripts.",
