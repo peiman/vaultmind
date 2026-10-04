@@ -48,10 +48,48 @@ var skippedFolders = map[string]bool{"node_modules": true, "vendor": true, "bowe
 // out too, and reported once.
 func scan(src Source, root, vaultReal string) ([]doc, []Entry, error) {
 	var docs []doc
-	var skipped []Entry
 	var images []string // read after the walk, once every doc's alt texts are known
-	git := newGitFilter(root)
+	skipped, err := walkImportable(root, vaultReal, func(rel, p string) ([]Entry, error) {
+		if isImage(p) {
+			images = append(images, rel)
+			return nil, nil
+		}
+		if convertedKind(p) != "" {
+			// One converted file that cannot become notes is reported; the
+			// folder goes on.
+			dcs, members, perr := readConvertedDocs(src, rel, p)
+			if perr == nil {
+				docs = append(docs, dcs...)
+				return members, nil
+			}
+			return []Entry{{Action: Skipped, Note: rel, Reason: perr.Error()}}, nil
+		}
+		dc, err := readDoc(src, rel, p)
+		if err != nil {
+			return nil, err
+		}
+		docs = append(docs, dc)
+		return nil, nil
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("scanning %s: %w", src.Dir, err)
+	}
+	imgDocs, imgSkips := readImages(src, root, images, altTexts(docs))
+	docs = append(docs, imgDocs...)
+	return docs, append(skipped, imgSkips...), nil
+}
+
+// walkImportable calls visit for every file under root that an import reads,
+// in walk order, and returns what it left out on the way with whatever
+// visit reported. Symlinks are reported, not followed; hidden and dependency
+// folders are passed over, and so is the vault when it lives inside root;
+// in a git work tree what git ignores is left out, reported once. The import
+// and the watch's fingerprint both walk through here, so they always agree
+// on which files count.
+func walkImportable(root, vaultReal string, visit func(rel, p string) ([]Entry, error)) ([]Entry, error) {
+	var skipped []Entry
 	var ignored []string
+	git := newGitFilter(root)
 	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -83,38 +121,14 @@ func scan(src Source, root, vaultReal string) ([]doc, []Entry, error) {
 			skipped = append(skipped, Entry{Action: Skipped, Note: strconv.Quote(rel), Reason: "a control character in the doc's path"})
 			return nil
 		}
-		if isImage(p) {
-			images = append(images, rel)
-			return nil
-		}
-		if convertedKind(p) != "" {
-			// One converted file that cannot become notes is reported; the
-			// folder goes on.
-			if dcs, members, perr := readConvertedDocs(src, rel, p); perr == nil {
-				docs = append(docs, dcs...)
-				skipped = append(skipped, members...)
-			} else {
-				skipped = append(skipped, Entry{Action: Skipped, Note: rel, Reason: perr.Error()})
-			}
-			return nil
-		}
-		dc, err := readDoc(src, rel, p)
-		if err != nil {
-			return err
-		}
-		docs = append(docs, dc)
-		return nil
+		more, err := visit(rel, p)
+		skipped = append(skipped, more...)
+		return err
 	})
-	if err != nil {
-		return nil, nil, fmt.Errorf("scanning %s: %w", src.Dir, err)
-	}
-	imgDocs, imgSkips := readImages(src, root, images, altTexts(docs))
-	docs = append(docs, imgDocs...)
-	skipped = append(skipped, imgSkips...)
 	if len(ignored) > 0 {
 		skipped = append(skipped, ignoredEntry(ignored))
 	}
-	return docs, skipped, nil
+	return skipped, err
 }
 
 // ignoredEntry reports what git ignores as one line, naming the first few

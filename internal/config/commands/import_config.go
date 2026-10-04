@@ -30,7 +30,12 @@ var ImportMetadata = config.CommandMetadata{
 		"http://localhost:11434/v1), each image is also described by that model, the description " +
 		"cached by the image's content so a re-import asks again for nothing; the key, when the " +
 		"endpoint needs one, is read from the variable --vision-api-key-env names. Without an " +
-		"endpoint no image leaves the machine, and a non-local one is named when it is used. A file that " +
+		"endpoint no image leaves the machine, and a non-local one is named when it is used. With " +
+		"--watch the import runs once, then keeps the vault in step with its source until Ctrl-C: a " +
+		"folder or file is polled every --watch-interval (default 2s) and re-imported once a change " +
+		"holds still for one interval, so a burst of edits is one re-sync; a URL is re-imported every " +
+		"interval (default 6h, at least 1m). Each re-sync that changes something prints a time-stamped " +
+		"line, and a failed one says why and the watch goes on. A file that " +
 		"cannot be read (a PDF scan, a broken file, a PDF over 20 MiB, an HTML file over 5 MiB " +
 		"or an Office or CSV file over 512 MiB) is skipped " +
 		"with the reason and the rest still imports. Inside a git work tree, what git ignores " +
@@ -103,6 +108,8 @@ var ImportMetadata = config.CommandMetadata{
 		"app.import.vision_endpoint":    "vision-endpoint",
 		"app.import.vision_model":       "vision-model",
 		"app.import.vision_api_key_env": "vision-api-key-env",
+		"app.import.watch":              "watch",
+		"app.import.watch_interval":     "watch-interval",
 	},
 }
 
@@ -124,6 +131,8 @@ func ImportOptions() []config.ConfigOption {
 		{Key: "app.import.vision_endpoint", DefaultValue: "", Description: "OpenAI-compatible endpoint that describes images (opt-in; e.g. http://localhost:11434/v1)", Type: "string"},
 		{Key: "app.import.vision_model", DefaultValue: "", Description: "Model the vision endpoint describes images with", Type: "string"},
 		{Key: "app.import.vision_api_key_env", DefaultValue: "", Description: "Environment variable holding the vision endpoint's key, when it needs one", Type: "string"},
+		{Key: "app.import.watch", DefaultValue: false, Description: "Keep importing the source as it changes, until Ctrl-C", Type: "bool"},
+		{Key: "app.import.watch_interval", DefaultValue: "", Description: "How often --watch looks (default 2s for a folder or file, 6h for a URL)", Type: "string"},
 	}
 }
 

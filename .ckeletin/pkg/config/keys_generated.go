@@ -211,6 +211,8 @@ const (
 	KeyAppImportVisionEndpoint               = "app.import.vision_endpoint"               // OpenAI-compatible endpoint that describes images (opt-in; e.g. http://localho...
 	KeyAppImportVisionModel                  = "app.import.vision_model"                  // Model the vision endpoint describes images with
 	KeyAppImportVisionApiKeyEnv              = "app.import.vision_api_key_env"            // Environment variable holding the vision endpoint's key, when it needs one
+	KeyAppImportWatch                        = "app.import.watch"                         // Keep importing the source as it changes, until Ctrl-C
+	KeyAppImportWatchInterval                = "app.import.watch_interval"                // How often --watch looks (default 2s for a folder or file, 6h for a URL)
 	KeyAppIndexVault                         = "app.index.vault"                          // Path to the vault root directory
 	KeyAppIndexJson                          = "app.index.json"                           // Output in JSON format
 	KeyAppIndexFull                          = "app.index.full"                           // Force full rebuild instead of incremental index

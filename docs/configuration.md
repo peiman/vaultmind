@@ -221,6 +221,8 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.import.vision_endpoint` | string | `` | `VAULTMIND_APP_IMPORT_VISION_ENDPOINT` | OpenAI-compatible endpoint that describes images (opt-in; e.g. http://localhost:11434/v1) |
 | `app.import.vision_model` | string | `` | `VAULTMIND_APP_IMPORT_VISION_MODEL` | Model the vision endpoint describes images with |
 | `app.import.vision_api_key_env` | string | `` | `VAULTMIND_APP_IMPORT_VISION_API_KEY_ENV` | Environment variable holding the vision endpoint's key, when it needs one |
+| `app.import.watch` | bool | `false` | `VAULTMIND_APP_IMPORT_WATCH` | Keep importing the source as it changes, until Ctrl-C |
+| `app.import.watch_interval` | string | `` | `VAULTMIND_APP_IMPORT_WATCH_INTERVAL` | How often --watch looks (default 2s for a folder or file, 6h for a URL) |
 | `app.index.vault` | string | `.` | `VAULTMIND_APP_INDEX_VAULT` | Path to the vault root directory |
 | `app.index.json` | bool | `false` | `VAULTMIND_APP_INDEX_JSON` | Output in JSON format |
 | `app.index.full` | bool | `false` | `VAULTMIND_APP_INDEX_FULL` | Force full rebuild instead of incremental index |
@@ -942,6 +944,12 @@ app:
 
     # Environment variable holding the vision endpoint's key, when it needs one
     vision_api_key_env: 
+
+    # Keep importing the source as it changes, until Ctrl-C
+    watch: false
+
+    # How often --watch looks (default 2s for a folder or file, 6h for a URL)
+    watch_interval: 
 
   index:
     # Path to the vault root directory
@@ -1925,6 +1933,12 @@ export VAULTMIND_APP_IMPORT_VISION_MODEL=
 
 # Environment variable holding the vision endpoint's key, when it needs one
 export VAULTMIND_APP_IMPORT_VISION_API_KEY_ENV=
+
+# Keep importing the source as it changes, until Ctrl-C
+export VAULTMIND_APP_IMPORT_WATCH=false
+
+# How often --watch looks (default 2s for a folder or file, 6h for a URL)
+export VAULTMIND_APP_IMPORT_WATCH_INTERVAL=
 
 # Path to the vault root directory
 export VAULTMIND_APP_INDEX_VAULT=./my-vault

@@ -616,6 +616,12 @@ app:
     # Environment variable holding the vision endpoint's key, when it needs one
     vision_api_key_env: 
 
+    # Keep importing the source as it changes, until Ctrl-C
+    watch: false
+
+    # How often --watch looks (default 2s for a folder or file, 6h for a URL)
+    watch_interval: 
+
   index:
     # Path to the vault root directory
     vault: ./my-vault
