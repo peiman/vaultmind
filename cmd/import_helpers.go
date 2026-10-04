@@ -48,6 +48,10 @@ func importDocs(cmd *cobra.Command, arg string) (*importResult, error) {
 	if err := unsupportedImportURL(arg); err != nil {
 		return nil, importErr(cmd, err)
 	}
+	publicOnly := getConfigValueWithFlags[bool](cmd, "public-only", config.KeyAppImportPublicOnly)
+	if publicOnly && !isHTTPURL(arg) {
+		return nil, importErr(cmd, fmt.Errorf("--public-only imports only http(s) URLs, not %s", arg))
+	}
 	crawl := getConfigValueWithFlags[bool](cmd, "crawl", config.KeyAppImportCrawl)
 	var co importdocs.CrawlOptions
 	if crawl {
@@ -77,11 +81,15 @@ func importDocs(cmd *cobra.Command, arg string) (*importResult, error) {
 		Vision:   vision,
 	}
 	if isHTTPURL(arg) {
+		fetch := importdocs.HTTPFetcher(arg)
+		if publicOnly {
+			fetch = importdocs.PublicFetcher()
+		}
 		var rep *importdocs.Result
 		if crawl {
-			rep, err = importdocs.Crawl(importContext(cmd), arg, vaultPath, opts, co, importdocs.HTTPFetcher(arg))
+			rep, err = importdocs.Crawl(importContext(cmd), arg, vaultPath, opts, co, fetch)
 		} else {
-			rep, err = importdocs.ImportURL(importContext(cmd), arg, vaultPath, opts, importdocs.HTTPFetcher(arg))
+			rep, err = importdocs.ImportURL(importContext(cmd), arg, vaultPath, opts, fetch)
 		}
 		if err != nil {
 			return nil, importErr(cmd, err)

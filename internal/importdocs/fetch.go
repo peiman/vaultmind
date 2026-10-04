@@ -46,11 +46,20 @@ type Fetcher func(ctx context.Context, rawURL string) (Page, error)
 // text is an error and nothing is written. Only public addresses are
 // reached, unless startURL itself names a private one (see guard.go).
 func HTTPFetcher(startURL string) Fetcher {
+	return httpFetcher(startAllowsPrivate(context.Background(), startURL))
+}
+
+// PublicFetcher is HTTPFetcher that reaches only public addresses, even when
+// the URL names a private one: for a caller that did not choose the URL
+// itself, such as an MCP client a page it read can prompt.
+func PublicFetcher() Fetcher { return httpFetcher(false) }
+
+func httpFetcher(allowPrivate bool) Fetcher {
 	client := &http.Client{
 		Timeout:       pageTimeout,
 		CheckRedirect: redirectPolicy,
 		Jar:           nil,
-		Transport:     guardedTransport(startAllowsPrivate(context.Background(), startURL)),
+		Transport:     guardedTransport(allowPrivate),
 	}
 	return func(ctx context.Context, rawURL string) (Page, error) {
 		return fetchPage(ctx, client, rawURL)

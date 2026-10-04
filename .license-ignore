@@ -1,0 +1,8 @@
+# Modules the source license check skips because go-licenses cannot classify
+# their license file. Each was read by hand; add one only with its license and
+# why. Read by .ckeletin/scripts/check-licenses-source.sh.
+#
+# MIT No Attribution (MIT-0), more permissive than MIT. Used by the MCP Go SDK's
+# JSON encoder (github.com/modelcontextprotocol/go-sdk/internal/json). Checked
+# 2026-10-04 at v1.2.1.
+github.com/segmentio/asm

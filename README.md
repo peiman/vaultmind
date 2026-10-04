@@ -116,6 +116,14 @@ Add `--dry-run` to preview the change first. Without `--merge` the scripts are w
 
 **Cursor adds context only at session start and after a tool runs.** So under Cursor the agent gets the vault map at session start, the notes about a file after it reads or edits that file, and related notes after a commit — but no per-prompt recall: Cursor's hooks cannot add context to a prompt. The session-start message tells the agent to ask the vault itself (`vaultmind ask`), and in our tests it did. Cursor projects share `.vaultmind/scripts/` with Codex.
 
+**Any MCP client, including agents without a shell.** `vaultmind mcp` serves a vault over stdio to Claude Desktop, Cursor, or any MCP client. Its tools are `ask`, `search`, `note_get`, `tree`, `links`, `note_create` and `import` (a web page or site: http(s) URLs from public addresses only, since a page the agent read could prompt it). Each one runs the vaultmind command of the same name with `--json`, so a tool answers exactly what the CLI answers. The vaults are fixed when the server starts, so a client can't point a tool at another directory.
+
+```bash
+claude mcp add vaultmind -- vaultmind mcp --vault /path/to/vault
+```
+
+Claude Desktop, Cursor (`.cursor/mcp.json`) and most other clients take the same entry: `{"mcpServers": {"vaultmind": {"command": "vaultmind", "args": ["mcp", "--vault", "/path/to/vault"]}}}`. MCP gives an agent the tools, while the hooks above deliver the vault without being asked, so use both where your agent has hooks.
+
 This installs hook scripts that load identity + current context at session start, surface relevant pointers per turn, and capture each session as an episode for later distillation. Check them with `vaultmind hooks status <project-dir>`, which reports both halves — whether each script matches the canonical copy, and whether each canonical event is actually **wired** in `settings.json`. A project can hold every script byte-identical and still run none of them; an unwired event is reported by name and fails the check. The scripts are embedded in the binary and written into `<project-dir>/.claude/scripts/` (idempotent). See **[docs/AGENT_USAGE.md](docs/AGENT_USAGE.md)** for the day-to-day agent workflow, and **[docs/building-an-identity-vault.md](docs/building-an-identity-vault.md)** for how to grow an agent's identity from scratch — the arc method, and why an identity vault is **personal** and usually shouldn't be committed to a shared repo.
 
 **Cold start — seed from your existing sessions.** A new identity vault is empty, but you've probably worked with an agent for months. Point `episode capture` at a *directory* of past Claude Code transcripts to batch-capture them into episodes (recursive; empty/non-transcript files skipped), then surface candidate arcs — so the vault starts warm, not blank:

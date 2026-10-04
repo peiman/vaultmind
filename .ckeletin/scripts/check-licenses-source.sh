@@ -27,8 +27,27 @@ if ! command -v go-licenses &> /dev/null; then
     exit 1
 fi
 
+# Modules go-licenses cannot classify but a person has checked, one per line
+# in .license-ignore at the repo root, each with its license and reason in a
+# comment (MIT-0, for one, is more permissive than MIT and still unknown to
+# go-licenses' classifier).
+IGNORE_FLAGS="--ignore='$MODULE_PATH'"
+if [ -f .license-ignore ]; then
+    while read -r mod _; do
+        case "$mod" in ''|'#'*) continue ;; esac
+        # The flags go through eval (run_check), so only a plain module path
+        # gets in; anything else would be read as shell.
+        if ! [[ "$mod" =~ ^[A-Za-z0-9._~/-]+$ ]]; then
+            check_failure ".license-ignore has an entry that is not a module path: $mod" "" \
+                "Each line is one module path, such as github.com/segmentio/asm"
+            exit 1
+        fi
+        IGNORE_FLAGS="$IGNORE_FLAGS --ignore='$mod'"
+    done < .license-ignore
+fi
+
 # Run license check
-if run_check "go-licenses check --allowed_licenses='$ALLOWED_LICENSES' --ignore='$MODULE_PATH' ./... 2>&1"; then
+if run_check "go-licenses check --allowed_licenses='$ALLOWED_LICENSES' $IGNORE_FLAGS ./... 2>&1"; then
     check_success "All dependency licenses compliant"
     check_note "Source-based check. Run 'task check:license:binary' for release verification."
     exit 0

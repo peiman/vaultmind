@@ -217,6 +217,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.import.include` | []string | `[]` | `VAULTMIND_APP_IMPORT_INCLUDE` | Crawl only URL paths matching one of these globs |
 | `app.import.exclude` | []string | `[]` | `VAULTMIND_APP_IMPORT_EXCLUDE` | Never crawl URL paths matching these globs |
 | `app.import.respect_robots` | bool | `false` | `VAULTMIND_APP_IMPORT_RESPECT_ROBOTS` | Obey robots.txt rules and Crawl-delay when crawling |
+| `app.import.public_only` | bool | `false` | `VAULTMIND_APP_IMPORT_PUBLIC_ONLY` | Import only http(s) URLs, from public addresses alone, even one naming localhost (what vaultmind mcp uses) |
 | `app.import.delay` | string | `1s` | `VAULTMIND_APP_IMPORT_DELAY` | Pause between a crawl's requests |
 | `app.import.vision_endpoint` | string | `` | `VAULTMIND_APP_IMPORT_VISION_ENDPOINT` | OpenAI-compatible endpoint that describes images (opt-in; e.g. http://localhost:11434/v1) |
 | `app.import.vision_model` | string | `` | `VAULTMIND_APP_IMPORT_VISION_MODEL` | Model the vision endpoint describes images with |
@@ -247,6 +248,8 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.lintfixlinks.vault` | string | `.` | `VAULTMIND_APP_LINTFIXLINKS_VAULT` | Path to vault root |
 | `app.lintfixlinks.json` | bool | `false` | `VAULTMIND_APP_LINTFIXLINKS_JSON` | Output in JSON format |
 | `app.lintfixlinks.fix` | bool | `false` | `VAULTMIND_APP_LINTFIXLINKS_FIX` | Apply fixes (default is dry-run) |
+| `app.mcp.vault` | string | `.` | `VAULTMIND_APP_MCP_VAULT` | Path to vault root |
+| `app.mcp.vaults` | string | `` | `VAULTMIND_APP_MCP_VAULTS` | Serve several vaults, comma-separated (overrides --vault); writes go to the first |
 | `app.memoryrecall.vault` | string | `.` | `VAULTMIND_APP_MEMORYRECALL_VAULT` | Path to vault root |
 | `app.memoryrecall.json` | bool | `false` | `VAULTMIND_APP_MEMORYRECALL_JSON` | Output in JSON format |
 | `app.memoryrecall.depth` | int | `1` | `VAULTMIND_APP_MEMORYRECALL_DEPTH` | Maximum traversal depth |
@@ -933,6 +936,9 @@ app:
     # Obey robots.txt rules and Crawl-delay when crawling
     respect_robots: false
 
+    # Import only http(s) URLs, from public addresses alone, even one naming localhost (what vaultmind mcp uses)
+    public_only: false
+
     # Pause between a crawl's requests
     delay: 1s
 
@@ -1064,6 +1070,13 @@ app:
 
     # Number of messages to log thereafter per second
     sampling_thereafter: 100
+
+  mcp:
+    # Path to vault root
+    vault: .
+
+    # Serve several vaults, comma-separated (overrides --vault); writes go to the first
+    vaults: 
 
   memorycontextpack:
     # Path to vault root
@@ -1922,6 +1935,9 @@ export VAULTMIND_APP_IMPORT_EXCLUDE=[]
 # Obey robots.txt rules and Crawl-delay when crawling
 export VAULTMIND_APP_IMPORT_RESPECT_ROBOTS=false
 
+# Import only http(s) URLs, from public addresses alone, even one naming localhost (what vaultmind mcp uses)
+export VAULTMIND_APP_IMPORT_PUBLIC_ONLY=false
+
 # Pause between a crawl's requests
 export VAULTMIND_APP_IMPORT_DELAY=1s
 
@@ -2011,6 +2027,12 @@ export VAULTMIND_APP_LINTFIXLINKS_JSON=false
 
 # Apply fixes (default is dry-run)
 export VAULTMIND_APP_LINTFIXLINKS_FIX=false
+
+# Path to vault root
+export VAULTMIND_APP_MCP_VAULT=.
+
+# Serve several vaults, comma-separated (overrides --vault); writes go to the first
+export VAULTMIND_APP_MCP_VAULTS=
 
 # Path to vault root
 export VAULTMIND_APP_MEMORYRECALL_VAULT=.

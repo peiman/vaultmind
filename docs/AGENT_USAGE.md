@@ -390,7 +390,7 @@ markers; `task check` fails if it drifts from the catalog. Everything outside th
 hand-written and stays.
 
 <!-- VAULTMIND:GENERATED:commands:START -->
-<!-- checksum:39eff21b0542159f170f4c562e17a2d3fd7278184b304d4c1868fb043106da1d -->
+<!-- checksum:ad63799dda9fc40fe77ba9ebcd3b8dd243e8e665d6d90ec20d77081882ccaa7d -->
 # VaultMind Commands
 
 Every user-facing command, grouped by intent, with its when-to-use trigger.
@@ -469,6 +469,7 @@ Generated from the command tree — do not edit by hand (run `task generate:docs
 | `vaultmind identity signer` | Run the keyless custody signer daemon (Contract-B) | you need to RUN the keyless custody signer daemon so the sign-* commands have a process to connect to. |
 | `vaultmind identity signer install` | Run the signer under launchd: start at login, restart if it dies (macOS) | your signer must survive logouts, reboots, and crashes — without it a dead signer fails every signed send until someone notices. |
 | `vaultmind init` | Scaffold a fresh vault — a project knowledge base by default, or an agent's identity vault | you are starting fresh: a project knowledge base by default, or an agent's identity vault with --profile persona. |
+| `vaultmind mcp` | Serve the vault to MCP clients (Claude Desktop, Cursor, any agent) over stdio | an agent without a shell (Claude Desktop, any MCP client) should use the vault — add it as an MCP server. |
 
 ## Setup & introspection:
 

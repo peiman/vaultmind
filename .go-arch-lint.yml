@@ -173,6 +173,8 @@ components:
       - internal/navigate/**
       # VaultMind import (vaultmind import): a folder of docs copied into the vault as notes, re-synced by hash:
       - internal/importdocs/**
+      # VaultMind MCP server (vaultmind mcp): each tool runs the vaultmind command of the same name with --json:
+      - internal/mcpserver/**
 
   # pkg/ was cleaned by task init (checkmate is now an external dependency).
   # Re-add this section if you create new public packages in pkg/.

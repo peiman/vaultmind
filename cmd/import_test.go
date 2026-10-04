@@ -302,3 +302,30 @@ func TestImport_OneFileImportsAlone(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), ".md, .pdf, .docx, .pptx, .xlsx, .html, .htm, .csv, .tsv, .epub, .zip, .tar, .tar.gz, .tgz or image (.png, .jpg, .jpeg, .webp, .gif, .heic, .heif, .svg)")
 }
+
+// --public-only is for callers that must not reach this machine or its
+// network: an MCP client, which a page it read can prompt. It imports only
+// http(s) URLs, and only from public addresses, even a URL naming
+// localhost, which a plain import allows because the operator chose it.
+func TestImport_PublicOnlyRefusesLocalPathsAndPrivateHosts(t *testing.T) {
+	vault := indexedBaselineVault(t)
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits++
+		w.Header().Set("Content-Type", "text/plain")
+		_, _ = io.WriteString(w, "Internal page.\n")
+	}))
+	t.Cleanup(srv.Close)
+
+	_, _, err := runRootCmd(t, "import", srv.URL+"/admin", "--vault", vault, "--public-only")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "refusing to connect to 127.0.0.1")
+	assert.Zero(t, hits, "the private address is never reached")
+
+	docs := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(docs, "secret.md"), []byte("# Secret\n\nKeep out.\n"), 0o600))
+	_, _, err = runRootCmd(t, "import", docs, "--vault", vault, "--public-only")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "only http(s) URLs")
+	assert.NoDirExists(t, filepath.Join(vault, "imported"))
+}
