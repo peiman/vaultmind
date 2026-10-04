@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The README and `vaultmind --help` lead with what VaultMind does, in four groups:** get
+  knowledge in, find it, give it to agents, keep it healthy.
+  - The README opens with the knowledge-vault frame and a table of commands per group.
+  - The persona detail moved to `docs/persona-vault.md`, the internals to
+    `docs/how-it-works.md`.
+  - **Measured:** fresh agents given only the README found the right command for 10 of 10
+    everyday jobs (5 of 10 before, two of those guesses). Given only the binary's help,
+    they found 10 of 10 in fewer steps.
 - **Per-prompt recall excerpts are 160 tokens, up from 80.** An excerpt is a note's lead
   paragraph (or its Principle), and the 80-token cut often landed on the answer. On the
   long-doc eval, the answer reached the agent for 5 of 12 questions instead of 3, the most

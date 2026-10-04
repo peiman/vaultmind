@@ -82,26 +82,32 @@ func installAgentRootHelp(root *cobra.Command, binary string) {
 // anti-patterns, and the one strong pairing. It ends just before the grouped
 // command catalog (which agentRootHelpCatalog renders from the live tree).
 func agentRootHelpLead(binary string) string {
-	return fmt.Sprintf(`%[1]s — your associative memory across sessions
+	return fmt.Sprintf(`%[1]s — a project's knowledge, where its agents can use it
 
 ──────────────────────────────────────────────────────────────────────────────
 WHEN YOU WANT TO ...
 ──────────────────────────────────────────────────────────────────────────────
 
-  Find what's relevant in the vault
-    %[1]s ask "<query>"                    menu + context-pack (default)
-    %[1]s ask "<query>" --pointers-only    menu only — cheapest, no bodies
-    %[1]s ask "<query>" --preview          menu + 1-line body snippets
+  GET KNOWLEDGE IN
+    %[1]s init <dir>                       start a vault
+    %[1]s import <dir|file|url>            docs, PDFs, Office, HTML, CSV, EPUB, archives, images
+    %[1]s import <url> --crawl             a whole docs site, one note per page
+    %[1]s import <dir|url> --watch         keep the vault in step as the source changes
 
-  Read a specific note by id
-    %[1]s note get <id>                    body inline, fires access tracking
+  FIND IT
+    %[1]s ask "<query>"                    ranked notes + their most relevant text
+    %[1]s ask "<query>" --pointers-only    the ranked menu only — cheapest
+    %[1]s tree [--depth 1]                 what the vault covers, one line per note
+    %[1]s tree --for <code-file>           the notes about a code file
+    %[1]s note get <id>                    read one note (tracked)
 
-  See your own memory state
-    %[1]s self                             recent / hot / stale notes
-                                                (auto-injected under the persona profile)
+  GIVE IT TO AGENTS
+    %[1]s hooks install <dir> --merge      Claude Code (--agent codex|cursor for others)
+    %[1]s mcp --vault <dir>                any MCP client, incl. Claude Desktop
 
-  Verify vault integrity
+  KEEP IT HEALTHY
     %[1]s doctor [--summary]               vault health overview
+    %[1]s doctor heal                      fix what can be fixed automatically
 
 ──────────────────────────────────────────────────────────────────────────────
 ANTI-PATTERNS

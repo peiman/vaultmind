@@ -1,10 +1,57 @@
 # VaultMind
 
-**Associative memory for AI agents — over Git-backed Markdown vaults.**
+**A project's knowledge, where its agents can use it.**
 
-AI agents start each session from zero: strong parametric knowledge, but no memory of what they did yesterday, what they decided, or what they're working toward. VaultMind turns a directory of Markdown notes into queryable, linked memory an agent can reconstruct itself from at the start of a session — and *continue* from, rather than start over.
+A codebase records what the system does. It rarely records why: the decisions and what they ruled out, how the parts work, the gotchas someone already paid for. VaultMind keeps that knowledge in a vault of plain Markdown notes in Git, and gets it to the agents that work on the project: searched, ranked and delivered into their context as they work, with no server and no LLM of its own.
 
-It's a single Go binary, local, with no server. Point it at a vault of Markdown files with Obsidian-compatible frontmatter; it builds a derived index (full-text + dense + sparse + late-interaction embeddings), resolves `[[wikilinks]]` and aliases into a knowledge graph, and answers queries with ranked, token-budgeted context. Two things it does need: the embedding model it downloads on first use (BGE-M3, about 2.3 GB, for the full hybrid; MiniLM, about 90 MB, for the pure-Go build), and — for the agent hooks — `bash` and `python3`, which the hook scripts run under.
+It's a single Go binary. It builds a derived index (full-text, dense, sparse and late-interaction embeddings) and a graph of the `[[wikilinks]]` between notes. It needs the embedding model it downloads on first use (BGE-M3, about 2.3 GB, for the full hybrid; MiniLM, about 90 MB, for the pure-Go build), and `bash` and `python3` for the agent hooks.
+
+## What you can do
+
+**Get knowledge in**
+
+| | |
+|---|---|
+| Start a vault | `vaultmind init ./knowledge` |
+| Import a folder of docs (Markdown, PDF, Word, PowerPoint, Excel, HTML, CSV, EPUB, images) | `vaultmind import ./docs --vault ./knowledge` |
+| Import a web page, or a whole docs site | `vaultmind import https://docs.example.com --vault ./knowledge --crawl` |
+| Keep the vault in step with a folder or site as it changes | `vaultmind import ./docs --vault ./knowledge --watch` |
+| Import a zip or tar of docs | `vaultmind import ./docs.zip --vault ./knowledge` |
+| Write a note | `vaultmind note create decisions/cache.md --type decision --field title="Cache in front of the API" --field status=accepted --vault ./knowledge` |
+
+A re-import brings changes across and keeps notes you edited by hand (`--force` overwrites them). `--dry-run` shows what an import would do. A long document becomes an index note plus one note per section. Images become notes of their metadata, their text (OCR, when `tesseract` is installed) and, with `--vision-endpoint`, a description from a vision model.
+
+**Find it**
+
+| | |
+|---|---|
+| Ask a question; get the ranked notes and their most relevant text | `vaultmind ask "why sqlite and not postgres?" --vault ./knowledge` |
+| Search without bodies (`--mode keyword`, `semantic` or `hybrid`) | `vaultmind search "retries" --vault ./knowledge --mode hybrid` |
+| See what the vault covers: folders, what each is about, one line per note | `vaultmind tree --vault ./knowledge --depth 1` |
+| Find the notes about a code file (via `paths:` in their frontmatter) | `vaultmind tree --vault ./knowledge --for internal/auth/token.go` |
+| Read a note | `vaultmind note get decision-sqlite --vault ./knowledge` |
+| See what links to a note, and what it links to | `vaultmind memory links decision-sqlite --in --vault ./knowledge` |
+| Ask across several vaults at once | `vaultmind ask "..." --vaults ./knowledge,./team-notes` |
+
+**Give it to agents**
+
+| | |
+|---|---|
+| Claude Code: recall on every prompt, the notes about a file as it's read, related notes before a commit | `vaultmind hooks install . --vault ./knowledge --merge` |
+| Codex CLI | `vaultmind hooks install . --vault ./knowledge --agent codex --merge` |
+| Cursor | `vaultmind hooks install . --vault ./knowledge --agent cursor --merge` |
+| Any MCP client, including Claude Desktop and agents without a shell | `vaultmind mcp --vault ./knowledge` |
+| Check that the hooks are installed and wired | `vaultmind hooks status .` |
+
+**Keep it healthy**
+
+| | |
+|---|---|
+| Check the vault: unresolved and dead links, missing required fields, notes not yet embedded, a stale index, drifted hooks | `vaultmind doctor --vault ./knowledge` |
+| Fix what can be fixed automatically | `vaultmind doctor heal --vault ./knowledge` |
+| Re-index after editing notes by hand (`--embed` refreshes embeddings) | `vaultmind index --embed --vault ./knowledge` |
+
+Every command has `--help`, and `--json` for scripts. `vaultmind --help` lists all of them by what you want to do.
 
 ## Install
 
@@ -36,131 +83,48 @@ See **[docs/embedding-backends.md](docs/embedding-backends.md)** for every backe
 ## Quickstart
 
 ```bash
-# 1. scaffold a project knowledge base (type registry, README, starter notes)
-#    — or an agent's identity vault with --profile persona
-vaultmind init ./my-vault
-
-# 2. index + embed
-vaultmind index --vault ./my-vault
-vaultmind index --embed --vault ./my-vault
-
-# 3. ask
-vaultmind ask "what did we decide about retries?" --vault ./my-vault
-```
-
-A project that already has docs doesn't have to start empty: `vaultmind import`
-copies a folder's Markdown into the vault as notes tied to their doc, and a
-re-run brings changes across. An http or https URL imports that one page.
-
-```bash
+# 1. start a vault and bring in the docs a project already has
 vaultmind init ./knowledge
-vaultmind import docs --vault ./knowledge --dry-run   # see what it would do
-vaultmind import docs --vault ./knowledge             # re-run after the docs change
-vaultmind import https://sqlite.org/fts5.html --vault ./knowledge
+vaultmind import ./docs --vault ./knowledge --dry-run   # see what it would do
+vaultmind import ./docs --vault ./knowledge             # re-run after the docs change
+
+# 2. embed it (import indexes; this adds meaning-based search)
+vaultmind index --embed --vault ./knowledge
+
+# 3. ask it, and see what it holds
+vaultmind ask "what did we decide about retries?" --vault ./knowledge
+vaultmind tree --vault ./knowledge --depth 1
+
+# 4. hand it to your agent
+vaultmind hooks install . --vault ./knowledge --merge
 ```
 
-## Try it with the example vault
+`init` writes a type registry, a README for the vault and starter notes. Add your own notes as Markdown with frontmatter; `vaultmind index` picks up hand edits.
 
-VaultMind ships a small **fictional** example vault — *Ada*, an agent that pair-programs with a developer named Sam on a toy CLI — so you can see retrieval and persona reconstruction working before you build your own.
+## Agents: hooks and MCP
 
-> These commands assume a repo checkout — run `git clone https://github.com/peiman/vaultmind && cd vaultmind` first if you installed via `go install` or the prebuilt archive. The example vault also ships **concept cards** (`concepts/`) defining the vocabulary — arc, episode, principle, and how they link.
+**Hooks deliver the vault without being asked.** `hooks install` writes scripts into the project and wires them into the agent's settings (`--merge` adds to existing hooks and never removes them; `--dry-run` previews). A knowledge vault gets: the vault map and health at session start (and again after `/clear` and compaction), the notes that match each prompt as short excerpts, the notes about a code file when the agent reads or edits it, and related notes before a commit, push or merge. Without `--vault`, the hooks look for `<project-dir>/vaultmind-identity`.
 
-```bash
-vaultmind index --vault examples/ada-vault
-vaultmind index --embed --vault examples/ada-vault     # BGE-M3 on an ORT build, MiniLM otherwise
-vaultmind ask "who are you" --vault examples/ada-vault
-vaultmind ask "what did Ada learn about scope?" --vault examples/ada-vault
-```
+- **Codex needs your approval, and skips the hooks silently without it.** Trust the project when Codex asks, then run `/hooks` inside Codex and trust the VaultMind hooks, and again after every upgrade. `vaultmind hooks status <project-dir>` checks each hook the way Codex does and fails while any would be skipped. Codex projects keep the scripts in `.vaultmind/scripts/`. Read-tracking, the code map and the pre-compaction prompt are Claude Code only.
+- **Cursor adds context only at session start and after a tool runs.** So under Cursor the agent gets the vault map at session start, the notes about a file after it reads or edits that file, and related notes after a commit, but no per-prompt recall: Cursor's hooks cannot add context to a prompt. The session-start message tells the agent to ask the vault itself, and in our tests it did. Cursor projects share `.vaultmind/scripts/` with Codex.
 
-## How it works
+`vaultmind hooks status <project-dir>` reports both halves: whether each script matches the copy in the binary, and whether each event is actually wired. See **[docs/AGENT_USAGE.md](docs/AGENT_USAGE.md)** for the day-to-day agent workflow.
 
-- **Vault** — a directory of Markdown notes with Obsidian-compatible frontmatter, tracked in Git. You curate it; the agent reads it.
-- **Index** — a derived SQLite index: full-text (FTS5), dense + sparse + ColBERT embeddings (BGE-M3), and a link/alias knowledge graph. Rebuilt with `vaultmind index`; never hand-edited.
-- **Retrieval** — Reciprocal Rank Fusion over the lanes, with top-hit confidence measured against each vault's own noise floor (the strong/moderate/weak bands are provisional: so far fit on a handful of vaults). A hit brings along the notes it links to (wikilinks, `related_ids`), so recalling one memory surfaces its neighbours. Ranking does **not** yet learn from use: usage-weighted ranking exists as an experiment, but replayed against real usage it did not improve recall, so it is not applied to results.
-- **Context packs** — `vaultmind ask` assembles ranked results into a token-budgeted block ready to drop into an agent's context.
-- **Delivery** — the pack carries note *text*, not just titles. A note larger than the remaining budget would otherwise contribute **nothing** while still being counted, which on a vault whose median note exceeds a hook's budget is every query rather than an edge case:
-
-  ```bash
-  vaultmind ask "spreading activation" --vault <path> --budget 4000 --excerpt 120
-  ```
-
-  `--excerpt N` caps each note at N tokens instead of dropping it, preferring the note's **Principle** section where it has one — arcs run trigger → push → deeper sight → principle, so the opening is story setup and the rule sits several sections down. Injecting "the first paragraph" hands an agent the anecdote and withholds the lesson. Off by default (`0`); set it when wiring a hook with a tight budget.
-
-  A weak-but-correct top hit in a tight, well-curated vault delivers its body too. Low contrast between hits is a property of a *focused* vault, not evidence the top hit is wrong. Genuinely off-topic hits still land at or below the noise floor and stay suppressed.
-
-  The context header states what actually arrived, in numbers you can recount from the output below it — `9 notes, 9 delivered as excerpts (968 tok)`. **Changed in 0.7.0** from the old `N items` form: if you parse that line, update it.
-
-Everything is `--json`-able for programmatic use; every command returns a stable envelope.
-
-## Agent integration (persona reconstruction)
-
-VaultMind wires into **Claude Code**, **Codex CLI** and **Cursor** so the agent works from its vault each session. Name the project and the vault, and let it write the wiring. `--profile persona` asks for the persona loader and episode capture; without it a fresh project gets the knowledge set (recall, decision-time reach, the code map, health), the right shape for a knowledge vault:
-
-```bash
-# Claude Code — writes <project-dir>/.claude/settings.json
-vaultmind hooks install <project-dir> --vault <your-vault> --merge
-
-# Codex CLI — writes <project-dir>/.codex/hooks.json
-vaultmind hooks install <project-dir> --vault <your-vault> --agent codex --merge
-
-# Cursor — writes <project-dir>/.cursor/hooks.json
-vaultmind hooks install <project-dir> --vault <your-vault> --agent cursor --merge
-
-# Recall across several vaults (identity + a desk, say); the persona loads the first
-vaultmind hooks install <project-dir> --vaults <identity-vault>,<desk-vault> --profile persona --merge
-```
-
-Add `--dry-run` to preview the change first. Without `--merge` the scripts are written and the wiring is printed for you to paste. Without `--vault`, the hooks look for `<project-dir>/vaultmind-identity`.
-
-**Codex needs your approval, and skips the hooks silently without it**: trust the project when Codex asks, then run `/hooks` inside Codex and trust the VaultMind hooks. Until then the agent starts with no memory and nothing says why. Approve again after upgrading: a new or changed hook is skipped until you do. `vaultmind hooks status <project-dir>` checks each VaultMind hook the way Codex does (never approved, or changed since you approved it) and fails while any would be skipped. Codex projects keep the scripts in `.vaultmind/scripts/`, not `.claude/`. Under Codex, episode capture runs when the session ends; read-tracking, the code map and the pre-compaction prompt are Claude Code only. Every capture run, under either agent, leaves a line in `~/.vaultmind/capture/capture.log` saying what happened.
-
-**Cursor adds context only at session start and after a tool runs.** So under Cursor the agent gets the vault map at session start, the notes about a file after it reads or edits that file, and related notes after a commit — but no per-prompt recall: Cursor's hooks cannot add context to a prompt. The session-start message tells the agent to ask the vault itself (`vaultmind ask`), and in our tests it did. Cursor projects share `.vaultmind/scripts/` with Codex.
-
-**Any MCP client, including agents without a shell.** `vaultmind mcp` serves a vault over stdio to Claude Desktop, Cursor, or any MCP client. Its tools are `ask`, `search`, `note_get`, `tree`, `links`, `note_create` and `import` (a web page or site: http(s) URLs from public addresses only, since a page the agent read could prompt it). Each one runs the vaultmind command of the same name with `--json`, so a tool answers exactly what the CLI answers. The vaults are fixed when the server starts, so a client can't point a tool at another directory.
+**MCP gives any client the tools.** `vaultmind mcp` serves a vault over stdio to Claude Desktop, Cursor or any MCP client. Its tools are `ask`, `search`, `note_get`, `tree`, `links`, `note_create` and `import` (a web page or site: http(s) URLs from public addresses only, since a page the agent read could prompt it). Each one runs the vaultmind command of the same name with `--json`, so a tool answers exactly what the CLI answers. The vaults are fixed when the server starts, so a client can't point a tool at another directory.
 
 ```bash
 claude mcp add vaultmind -- vaultmind mcp --vault /path/to/vault
 ```
 
-Claude Desktop, Cursor (`.cursor/mcp.json`) and most other clients take the same entry: `{"mcpServers": {"vaultmind": {"command": "vaultmind", "args": ["mcp", "--vault", "/path/to/vault"]}}}`. MCP gives an agent the tools, while the hooks above deliver the vault without being asked, so use both where your agent has hooks.
+Claude Desktop, Cursor (`.cursor/mcp.json`) and most other clients take the same entry: `{"mcpServers": {"vaultmind": {"command": "vaultmind", "args": ["mcp", "--vault", "/path/to/vault"]}}}`. MCP gives an agent the tools, while the hooks deliver the vault without being asked, so use both where your agent has hooks.
 
-This installs hook scripts that load identity + current context at session start, surface relevant pointers per turn, and capture each session as an episode for later distillation. Check them with `vaultmind hooks status <project-dir>`, which reports both halves — whether each script matches the canonical copy, and whether each canonical event is actually **wired** in `settings.json`. A project can hold every script byte-identical and still run none of them; an unwired event is reported by name and fails the check. The scripts are embedded in the binary and written into `<project-dir>/.claude/scripts/` (idempotent). See **[docs/AGENT_USAGE.md](docs/AGENT_USAGE.md)** for the day-to-day agent workflow, and **[docs/building-an-identity-vault.md](docs/building-an-identity-vault.md)** for how to grow an agent's identity from scratch — the arc method, and why an identity vault is **personal** and usually shouldn't be committed to a shared repo.
+## An agent's own identity (persona vaults)
 
-**Cold start — seed from your existing sessions.** A new identity vault is empty, but you've probably worked with an agent for months. Point `episode capture` at a *directory* of past Claude Code transcripts to batch-capture them into episodes (recursive; empty/non-transcript files skipped), then surface candidate arcs — so the vault starts warm, not blank:
+A vault can also hold who an agent is: the moments that changed how it works, its principles, and its captured sessions. Loaded at session start, it lets a new session continue as the same agent. `vaultmind init --profile persona` makes one, and `hooks install --profile persona` loads it. See **[docs/persona-vault.md](docs/persona-vault.md)** for the persona hooks, seeding a vault from past sessions, the desk, and the example vault, and **[docs/building-an-identity-vault.md](docs/building-an-identity-vault.md)** for the arc method.
 
-```bash
-vaultmind episode capture ~/.claude/projects/<project> --output-dir ~/.vaultmind/persona/episodes
-vaultmind arc candidates --vault ~/.vaultmind/persona
-```
+## How it works
 
-Codex sessions work too: each is one `rollout-*.jsonl` under `~/.codex/sessions/`. Codex keeps **every project's** sessions in that one folder, so capture the files of the project you mean rather than the whole folder, which would pull other projects' sessions into this vault. Codex's own sub-agent threads (its reviewers, spawned helpers) are passed over, the same as Claude Code's.
-
-Subagent and workflow transcripts nested under a session are passed over: they carry the parent session's id, so capturing them would overwrite the session itself. The summary reports how many. (Pass one directly if you do want it captured.)
-
-### The desk — where raw material lands
-
-`arc candidates` reads two sources. `<vault>/episodes` holds session captures, which it phrase-matches for candidate moments — guesses worth checking. **The desk** is any note in the vault whose frontmatter says `type: journal`: something the agent stopped mid-session to write down, already judged worth keeping. Episodes are found; desk entries are chosen, and the report weights them accordingly.
-
-```markdown
----
-id: journal-2026-08-15-green-means-matches-my-assumption
-type: journal
-created: 2026-08-15
-title: Green means "matches what I assumed", not "correct"
----
-Spent an hour on a bug that turned out to be the test asserting the wrong thing.
-The suite was green the whole time.
-```
-
-`type: journal` is what makes it a desk entry; the `id` is what lets you cite it later (from the arc it becomes, or via `note get`). An entry without one is still surfaced, flagged as unciteable.
-
-Add `distilled_to: <arc-id>` to an entry once you've written its arc, and it stops being surfaced — so the list stays what's *pending*, not everything ever written. Each proposal is shown with the existing arcs it most resembles, which needs embeddings (`vaultmind index --embed`); without them the proposals still appear, minus the neighbours.
-
-Keep the desk somewhere the agent owns outright. Use `--arcs-vault` when the desk and the arcs live in different vaults:
-
-```bash
-vaultmind arc candidates --vault ./agent-desk --arcs-vault ./agent-identity
-```
+Notes are the source of truth; the SQLite index is derived from them and rebuilt by `vaultmind index`. Search fuses full-text, dense, sparse and ColBERT lanes, and reports how far the top hit clears the vault's own off-topic noise floor, so "nothing relevant" is an honest answer. A hit brings along the notes it links to. See **[docs/how-it-works.md](docs/how-it-works.md)** for retrieval, context packs, excerpts and delivery.
 
 ## The local usage log
 
@@ -200,7 +164,7 @@ Sharing remains something you do on purpose: there is no automatic upload, and `
 
 `vaultmind doctor` asks the Go module proxy once a day whether a newer VaultMind exists, and prints a line if so. That is the only time VaultMind reaches the network on its own, and it sends nothing about you or your vault — it is a `GET` for a version number, the same request `go install …@latest` makes. The answer is cached for 24 hours, times out in 3 seconds, and is silent on any failure.
 
-It lives on `doctor` and nowhere else: that is the command you run to ask whether your setup is healthy, so a network call there is expected rather than a surprise — and putting it on `ask` would tax every query. Set `VAULTMIND_NO_UPDATE_CHECK=1` to opt out; the check returns before making any request, and the notice itself tells you that variable exists.
+It lives on `doctor` and nowhere else: that is the command you run to ask whether your setup is healthy, so a network call there is expected rather than a surprise — and putting it on `ask` would tax every query. Set `VAULTMIND_NO_UPDATE_CHECK=1` to opt out; the check returns before making any request, and the notice itself tells you that variable exists. (`import` reaches the network when you give it a URL, and `--vision-endpoint` sends images to the endpoint you name; neither happens on its own.)
 
 ## Contributing
 
