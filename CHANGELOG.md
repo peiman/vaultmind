@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Per-prompt recall excerpts are 160 tokens, up from 80.** An excerpt is a note's lead
+  paragraph (or its Principle), and the 80-token cut often landed on the answer. On the
+  long-doc eval, the answer reached the agent for 5 of 12 questions instead of 3, the most
+  any length reached. That costs a median 1.18× the tokens per prompt (32 real queries).
+  Run `vaultmind hooks install --merge` to pick it up.
+
 ## [0.10.3] - 2026-10-04
 
 > Any agent can use a vault, and a vault takes in what a project holds.

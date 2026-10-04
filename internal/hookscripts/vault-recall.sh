@@ -11,7 +11,7 @@
 #
 # Why this is the principle-9 fix at per-turn cadence: instead of relying
 # on the agent to remember to query before answering, the SYSTEM queries
-# automatically. The agent sees the matching notes as short excerpts (80
+# automatically. The agent sees the matching notes as short excerpts (160
 # tokens each) with their ids, and chooses whether to open one
 # (`vaultmind note get <id>`) or proceed without. Discipline → design,
 # applied at every turn instead of just session start.
@@ -180,6 +180,12 @@ fi
 # reach hook, so neither repeats what the other just delivered.
 RECALL_DEDUP_WINDOW="${VAULTMIND_RECALL_DEDUP_WINDOW:-30m}"
 
+# An excerpt is a note's lead paragraph (or its Principle). At 80 tokens the
+# cut landed on the answer: on the long-doc eval 3/12 answers reached the
+# agent at 80, 5/12 at 160 (the most any length reached), for 1.18x the
+# tokens per prompt (2026-10-04).
+RECALL_EXCERPT_TOKENS=160
+
 ASK_ERR=$(mktemp -t vaultmind-userprompt-err.XXXXXX)
 POINTERS=$(VAULTMIND_CALLER=vaultmind-userprompt-hook VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" $TIMEOUT_CMD "$VAULTMIND" ask "$QUERY" \
   "${VAULT_ARGS[@]}" \
@@ -187,7 +193,7 @@ POINTERS=$(VAULTMIND_CALLER=vaultmind-userprompt-hook VAULTMIND_USER_SESSION_ID=
   --budget 1500 \
   --quiet-on-no-match \
   --dedup-window "$RECALL_DEDUP_WINDOW" \
-  --excerpt 80 2>"$ASK_ERR")
+  --excerpt "$RECALL_EXCERPT_TOKENS" 2>"$ASK_ERR")
 ASK_STATUS=$?
 
 if [ "$ASK_STATUS" != "0" ] || [ -z "$POINTERS" ]; then
