@@ -33,6 +33,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   re-read book is reported as orphaned; a book that cannot be read keeps its notes; a
   DRM-protected book is skipped with the reason (obfuscated fonts are not DRM). Tried on two
   Project Gutenberg books: every chapter, and 99.95–100% of their words.
+- **Zip and tar archives import like the folder they hold.** A `.zip`, `.tar`, `.tar.gz` or
+  `.tgz` becomes `<name>-zip/` or `<name>-tar/` with a note per markdown, PDF, Office, HTML,
+  CSV or EPUB member, each tied to the archive; a member gone from it is reported as
+  orphaned, and an archive that cannot be read keeps its notes. Members are unpacked to a
+  temporary folder outside the vault and removed after: a path that is absolute or climbs out
+  is never written, links and encrypted members are skipped, archives inside an archive are
+  not opened, and an archive past 512 MiB unpacked, 64 MiB in one member (counted on the
+  bytes written) or 10,000 members is refused. A GitHub repository zip and a release tarball
+  import exactly the notes their unpacked trees do.
 
 ### Changed
 
