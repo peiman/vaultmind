@@ -54,6 +54,9 @@ type Source struct {
 	Repo string
 	// Prefix is Dir relative to the repository root, "" at the root.
 	Prefix string
+	// vision is how images are described, when the import's Options name a
+	// model; an archive passes it to the folder it unpacks.
+	vision Vision
 }
 
 // Options change what an import writes.
@@ -64,6 +67,9 @@ type Options struct {
 	// Excludes is the vault's exclude list: a note it would hide from the
 	// index is not written.
 	Excludes []string
+	// Vision describes images with a model, opt-in. Empty, no image leaves
+	// the machine.
+	Vision Vision
 }
 
 // Entry is one line of the report.
@@ -113,6 +119,7 @@ var ErrNoMarkdown = errors.New("no markdown files or readable PDF, Office, HTML,
 
 // Import brings the docs under src into vaultRoot and reports what it did.
 func Import(src Source, vaultRoot string, opts Options) (*Result, error) {
+	src.vision = opts.Vision
 	if err := validRepo(src.Repo); err != nil {
 		return nil, err
 	}
@@ -482,6 +489,7 @@ func noteName(rel string) string {
 // or prune. A file that cannot become a note is an error here, not a skip —
 // it is the one thing the operator asked for.
 func ImportFile(src Source, rel, vaultRoot string, opts Options) (*Result, error) {
+	src.vision = opts.Vision
 	if err := validRepo(src.Repo); err != nil {
 		return nil, err
 	}

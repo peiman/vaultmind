@@ -25,7 +25,12 @@ var ImportMetadata = config.CommandMetadata{
 		".heif) becomes <name>-png.md and so on, holding the text tesseract reads in it (when " +
 		"tesseract is installed; results are cached, icons under 100 pixels are not read), the alt " +
 		"text the import's markdown gives it, and its metadata, GPS included; an SVG becomes " +
-		"the words it shows. An image with nothing but its pixels is counted, not written. A file that " +
+		"the words it shows. An image with nothing but its pixels is counted, not written. With " +
+		"--vision-endpoint and --vision-model (an OpenAI-compatible endpoint: Ollama's is " +
+		"http://localhost:11434/v1), each image is also described by that model, the description " +
+		"cached by the image's content so a re-import asks again for nothing; the key, when the " +
+		"endpoint needs one, is read from the variable --vision-api-key-env names. Without an " +
+		"endpoint no image leaves the machine, and a non-local one is named when it is used. A file that " +
 		"cannot be read (a PDF scan, a broken file, a PDF over 20 MiB, an HTML file over 5 MiB " +
 		"or an Office or CSV file over 512 MiB) is skipped " +
 		"with the reason and the rest still imports. Inside a git work tree, what git ignores " +
@@ -83,18 +88,21 @@ var ImportMetadata = config.CommandMetadata{
 		"  vaultmind import https://example.com/docs/ --crawl --exclude 'docs/v1/**' --max-pages 300 --vault ./kb",
 	ConfigPrefix: "app.import",
 	FlagOverrides: map[string]string{
-		"app.import.vault":          "vault",
-		"app.import.dry_run":        "dry-run",
-		"app.import.prune":          "prune",
-		"app.import.force":          "force",
-		"app.import.json":           "json",
-		"app.import.crawl":          "crawl",
-		"app.import.max_pages":      "max-pages",
-		"app.import.depth":          "depth",
-		"app.import.include":        "include",
-		"app.import.exclude":        "exclude",
-		"app.import.respect_robots": "respect-robots",
-		"app.import.delay":          "delay",
+		"app.import.vault":              "vault",
+		"app.import.dry_run":            "dry-run",
+		"app.import.prune":              "prune",
+		"app.import.force":              "force",
+		"app.import.json":               "json",
+		"app.import.crawl":              "crawl",
+		"app.import.max_pages":          "max-pages",
+		"app.import.depth":              "depth",
+		"app.import.include":            "include",
+		"app.import.exclude":            "exclude",
+		"app.import.respect_robots":     "respect-robots",
+		"app.import.delay":              "delay",
+		"app.import.vision_endpoint":    "vision-endpoint",
+		"app.import.vision_model":       "vision-model",
+		"app.import.vision_api_key_env": "vision-api-key-env",
 	},
 }
 
@@ -113,6 +121,9 @@ func ImportOptions() []config.ConfigOption {
 		{Key: "app.import.exclude", DefaultValue: []string{}, Description: "Never crawl URL paths matching these globs", Type: "[]string"},
 		{Key: "app.import.respect_robots", DefaultValue: false, Description: "Obey robots.txt rules and Crawl-delay when crawling", Type: "bool"},
 		{Key: "app.import.delay", DefaultValue: "1s", Description: "Pause between a crawl's requests", Type: "string"},
+		{Key: "app.import.vision_endpoint", DefaultValue: "", Description: "OpenAI-compatible endpoint that describes images (opt-in; e.g. http://localhost:11434/v1)", Type: "string"},
+		{Key: "app.import.vision_model", DefaultValue: "", Description: "Model the vision endpoint describes images with", Type: "string"},
+		{Key: "app.import.vision_api_key_env", DefaultValue: "", Description: "Environment variable holding the vision endpoint's key, when it needs one", Type: "string"},
 	}
 }
 

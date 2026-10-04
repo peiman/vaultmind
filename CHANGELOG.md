@@ -51,6 +51,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   metadata and the import says so once. Icons under 100 pixels are not OCRed, and an image
   with nothing but its pixels is counted, not written. A folder whose files were all
   skipped now reports why instead of failing with "no markdown files".
+- **An opt-in vision model describes images.** `--vision-endpoint` and `--vision-model` name
+  any OpenAI-compatible endpoint (Ollama's `http://localhost:11434/v1`, LM Studio, OpenAI);
+  each image's note then opens with the model's description, written with the caption the
+  docs give the image as context. Descriptions are cached by the image's content, so a
+  re-import asks the model for nothing. The key, when the endpoint needs one, is read from
+  the environment variable `--vision-api-key-env` names. Without an endpoint no image leaves
+  the machine, and a non-local endpoint is named on stderr when it is used. Tried with a
+  local gemma4:31b: thirteen real images described (about 50 s each), the second run instant.
 
 
 ### Changed

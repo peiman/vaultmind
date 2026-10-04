@@ -100,13 +100,24 @@ func TestOCRCache_IsPrivateToItsOwner(t *testing.T) {
 	prev := xdg.GetAppName()
 	xdg.SetAppName("vaultmind-test")
 	t.Cleanup(func() { xdg.SetAppName(prev) })
-	writeOCRCache("abc-v1", "private words")
-	dir, err := ocrCacheDir()
+	writeCache("ocr", "abc-v1", "private words")
+	dir, err := cacheDir("ocr")
 	require.NoError(t, err)
 	info, err := os.Stat(dir)
 	require.NoError(t, err)
 	assert.Equal(t, os.FileMode(0o700), info.Mode().Perm())
-	text, ok := readOCRCache("abc-v1")
+	text, ok := readCache("ocr", "abc-v1")
 	assert.True(t, ok)
 	assert.Equal(t, "private words", text)
+}
+
+// Two models are two caches, however alike their names slug.
+func TestVisionCacheKey_TellsEveryModelApart(t *testing.T) {
+	raw := []byte("an image")
+	keys := map[string]bool{}
+	for _, m := range []string{"meta/llama3", "meta-llama3", "gpt_4o", "gpt-4o", "qwen2.5:32b", "qwen2-5-32b"} {
+		keys[visionCacheKey(raw, m)] = true
+	}
+	assert.Len(t, keys, 6)
+	assert.NotEqual(t, visionCacheKey(raw, "m"), visionCacheKey([]byte("another image"), "m"))
 }

@@ -54,16 +54,22 @@ const (
 // metadata only: tesseract has no decoder for it.
 var tesseractReads = map[string]bool{"png": true, "jpg": true, "jpeg": true, "webp": true, "gif": true}
 
-// imageReading is one import's view of OCR: whether tesseract is there, and
-// how many images went without their text because it was not.
+// imageReading is one import's view of OCR and vision: whether tesseract is
+// there, how many images went without their text because it was not, and
+// the vision model, when one is configured.
 type imageReading struct {
 	tesseract string // its path, "" when it is not on PATH
 	unread    int
+	// vision describes images when configured; undescribed counts the
+	// failures, and describeErr keeps the first one's reason.
+	vision      Vision
+	undescribed int
+	describeErr string
 }
 
-func newImageReading() *imageReading {
+func newImageReading(v Vision) *imageReading {
 	p, _ := exec.LookPath("tesseract")
-	return &imageReading{tesseract: p}
+	return &imageReading{tesseract: p, vision: v}
 }
 
 // imageField is one line of an image's metadata.
@@ -94,14 +100,15 @@ func readImageDoc(src Source, rel, p string, alts []string, r *imageReading) (do
 	}
 	fields, w, h := imageMetadata(raw, imageFormats[convertedKind(p)])
 	text := r.ocr(raw, p, w, h)
-	hasText := text != "" || len(alts) > 0
+	desc := r.describe(raw, convertedKind(p), w, h, alts)
+	hasText := text != "" || desc != "" || len(alts) > 0
 	for _, f := range fields {
 		hasText = hasText || f.text
 	}
 	if !hasText {
 		return doc{}, false, nil
 	}
-	body := imageBody(text, alts, fields)
+	body := imageBody(desc, text, alts, fields)
 	docPath := path.Join(src.Prefix, rel)
 	return doc{
 		Rel: rel, Path: docPath, Repo: src.Repo, Source: src.Repo + ":" + docPath,
@@ -247,8 +254,11 @@ func imageTitle(fields []imageField, alts []string, rel string) string {
 
 // imageBody lays out what is known of an image, each section only when it
 // has something.
-func imageBody(text string, alts []string, fields []imageField) string {
+func imageBody(desc, text string, alts []string, fields []imageField) string {
 	var b strings.Builder
+	if desc != "" {
+		fmt.Fprintf(&b, "## Description\n\n%s\n\n", desc)
+	}
 	if text != "" {
 		fmt.Fprintf(&b, "## Text in the image\n\n%s\n\n", text)
 	}
@@ -276,7 +286,7 @@ func (r *imageReading) ocr(raw []byte, p string, w, h int) string {
 		return ""
 	}
 	key := ocrCacheKey(raw)
-	if text, ok := readOCRCache(key); ok {
+	if text, ok := readCache("ocr", key); ok {
 		return text
 	}
 	if r.tesseract == "" {
@@ -287,7 +297,7 @@ func (r *imageReading) ocr(raw []byte, p string, w, h int) string {
 	if err != nil {
 		return ""
 	}
-	writeOCRCache(key, text)
+	writeCache("ocr", key, text)
 	return text
 }
 
@@ -339,19 +349,19 @@ func ocrCacheKey(raw []byte) string {
 	return hex.EncodeToString(sum[:]) + "-" + ocrCacheVersion
 }
 
-// ocrCacheDir is where read text is kept, by image content: a re-import, or
-// the same image in another folder, is not read again. A test points it
-// elsewhere through XDG_CACHE_HOME.
-func ocrCacheDir() (string, error) {
+// cacheDir is where read text (OCR) and descriptions (vision) are kept, by
+// image content: a re-import, or the same image in another folder, is not
+// read again. A test points it elsewhere through XDG_CACHE_HOME.
+func cacheDir(kind string) (string, error) {
 	dir, err := xdg.CacheDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "ocr"), nil
+	return filepath.Join(dir, kind), nil
 }
 
-func readOCRCache(key string) (string, bool) {
-	dir, err := ocrCacheDir()
+func readCache(kind, key string) (string, bool) {
+	dir, err := cacheDir(kind)
 	if err != nil {
 		return "", false
 	}
@@ -363,8 +373,8 @@ func readOCRCache(key string) (string, bool) {
 	return string(raw), true
 }
 
-func writeOCRCache(key, text string) {
-	dir, err := ocrCacheDir()
+func writeCache(kind, key, text string) {
+	dir, err := cacheDir(kind)
 	if err != nil {
 		return
 	}
