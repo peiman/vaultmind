@@ -41,8 +41,7 @@ var ImportMetadata = config.CommandMetadata{
 		"with the reason and the rest still imports. A doc, page, PDF, chapter or member past " +
 		"32,768 characters becomes an index note at its usual path plus <name>/NN-<heading>.md " +
 		"section notes, split at headings, so each part is embedded and found on its own; tables " +
-		"stay whole. A file that cannot be read is skipped " +
-		"with the reason and the rest still imports. Inside a git work tree, what git ignores " +
+		"stay whole. Inside a git work tree, what git ignores " +
 		"is left out (naming an ignored folder imports it). Pass one such file instead and " +
 		"only that " +
 		"file is imported, named as importing its folder would name it; the folder's other " +

@@ -30,6 +30,26 @@ func TestSplitSections_AtHeadingsOutsideCodeFences(t *testing.T) {
 	assert.NotContains(t, secs[1].text, "## Alpha", "a section's own heading is in its path, not its text")
 }
 
+// A fence closes only at a fence as long as its opening, so a four-backtick
+// block quoting a three-backtick one stays whole; a setext heading ("Title"
+// over "===" or "---") is a break like "#".
+func TestSplitSections_LongFencesAndSetextHeadings(t *testing.T) {
+	body := "Setext One\n==========\n\n" + prose("alpha", 2500) + "\n\n" +
+		"````md\n```sh\n# inside\n```\n# still inside\n````\n\n" +
+		"```\n```go\n# code too\n```\n\n" +
+		"A paragraph of two lines,\nnot a heading\n---\n\n" +
+		"Setext Two\n----------\n\n" + prose("beta", 2500) + "\n"
+
+	secs := splitSections(body)
+	require.Len(t, secs, 2)
+	assert.Equal(t, []string{"Setext One"}, secs[0].path)
+	assert.Contains(t, secs[0].text, "# still inside", "a line inside the long fence is text")
+	assert.Contains(t, secs[0].text, "# code too", "a fence line with an info string does not close a fence")
+	assert.Contains(t, secs[0].text, "not a heading\n---", "only a one-line paragraph over --- is a heading")
+	assert.NotContains(t, secs[0].text, "==========", "the underline belongs to the heading")
+	assert.Equal(t, []string{"Setext One", "Setext Two"}, secs[1].path, "a --- underline is a level-2 heading, under the ===")
+}
+
 // A heading's links read as their text, and a permalink (Sphinx's "¶")
 // leaves nothing, so neither reaches a section's title or file name.
 func TestSplitSections_HeadingLinksReadAsText(t *testing.T) {

@@ -88,25 +88,51 @@ func headingBlocks(body string) []section {
 		}
 		lines = nil
 	}
-	for _, line := range strings.Split(body, "\n") {
-		trimmed := strings.TrimSpace(line)
+	all := strings.Split(body, "\n")
+	for i := 0; i < len(all); i++ {
+		line, trimmed := all[i], strings.TrimSpace(all[i])
 		if fence == "" && (strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~")) {
-			fence = trimmed[:3]
-		} else if fence != "" && strings.HasPrefix(trimmed, fence) {
+			fence = trimmed[:len(trimmed)-len(strings.TrimLeft(trimmed, trimmed[:1]))]
+		} else if fence != "" && strings.HasPrefix(trimmed, fence) && strings.Trim(trimmed, fence[:1]) == "" {
 			fence = ""
-		} else if m := headingLine.FindStringSubmatch(line); fence == "" && m != nil {
+		} else if level, text := headingAt(all, i); fence == "" && level > 0 {
 			flush()
-			level := len(m[1])
 			for len(stack) > 0 && stack[len(stack)-1].level >= level {
 				stack = stack[:len(stack)-1]
 			}
-			stack = append(stack, heading{level: level, text: plainHeading(m[2])})
+			stack = append(stack, heading{level: level, text: plainHeading(text)})
+			if !strings.HasPrefix(trimmed, "#") {
+				i++ // a setext heading's underline is part of it
+			}
 			continue
 		}
 		lines = append(lines, line)
 	}
 	flush()
 	return out
+}
+
+var setextUnderline = regexp.MustCompile(`^(=+|-{3,})$`)
+
+// headingAt returns the level and text of a heading starting at line i, or
+// level 0: an ATX heading ("## Text"), or a setext one, a line after a blank
+// with "===" (level 1) or "---" (level 2) under it.
+func headingAt(lines []string, i int) (int, string) {
+	if m := headingLine.FindStringSubmatch(lines[i]); m != nil {
+		return len(m[1]), m[2]
+	}
+	text := strings.TrimSpace(lines[i])
+	if text == "" || i+1 >= len(lines) || (i > 0 && strings.TrimSpace(lines[i-1]) != "") {
+		return 0, ""
+	}
+	under := setextUnderline.FindStringSubmatch(strings.TrimSpace(lines[i+1]))
+	if under == nil {
+		return 0, ""
+	}
+	if under[1][0] == '=' {
+		return 1, text
+	}
+	return 2, text
 }
 
 var headingLink = regexp.MustCompile(`\[([^\]]*)\]\([^)]*\)`)
