@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-10-04
+
+> Any agent can use a vault, and a vault takes in what a project holds.
+>
+> - **MCP:** `vaultmind mcp` serves a vault to Claude Desktop, Cursor and any MCP
+>   client, including agents without a shell.
+> - **Import:**
+>   - whole docs sites (`--crawl`);
+>   - local HTML, CSV/TSV, EPUB books;
+>   - zip and tar archives;
+>   - images, with metadata, OCR and an opt-in vision model;
+>   - `--watch` keeps a vault in step with its source.
+> - **Long documents:** a doc past ~8,000 tokens becomes an index note plus one
+>   note per section, so each part is found and delivered on its own.
+> - **`ask`** prints the bodies its header says it delivered.
+>
+> To pick up the updated hook scripts, run `vaultmind hooks install --merge`.
+
 ### Added
 
 - **`vaultmind mcp` serves a vault to any MCP client** over stdio, so Claude Desktop and other
@@ -2607,7 +2625,9 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.1...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.3...HEAD
+[0.10.3]: https://github.com/peiman/vaultmind/compare/v0.10.2...v0.10.3
+[0.10.2]: https://github.com/peiman/vaultmind/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/peiman/vaultmind/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/peiman/vaultmind/compare/v0.9.18...v0.10.0
 [0.9.18]: https://github.com/peiman/vaultmind/compare/v0.9.17...v0.9.18
