@@ -24,6 +24,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   table like an Excel sheet (`<name>-csv.md`): the delimiter (`,` `;` or tab) and the
   encoding (UTF-8, with or without a byte-order mark, or an Excel Windows-1252 export) are
   detected, the first 200 rows and 50 columns are shown, and what is left out is said.
+- **EPUB books import as a note per chapter.** A book becomes a folder `<name>-epub/`: one
+  note per chapter in reading order (`01-chapter-i-down-the-rabbit-hole.md`), titled from
+  its table of contents, and `book.md` with its title, author and chapters linked. A file
+  that packs several long chapters together is split at its table of contents entries, so
+  each chapter is a note an embedding covers whole. Covers and picture pages are left out,
+  images become their alt text, and links inside the book their text. A chapter gone from a
+  re-read book is reported as orphaned; a book that cannot be read keeps its notes; a
+  DRM-protected book is skipped with the reason (obfuscated fonts are not DRM). Tried on two
+  Project Gutenberg books: every chapter, and 99.95–100% of their words.
 
 ### Changed
 

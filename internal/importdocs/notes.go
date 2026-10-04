@@ -164,6 +164,9 @@ func render(d doc, id string, prev note) []byte {
 	} else {
 		b.WriteString("# The doc is the source: edit it, then re-run the import.\n")
 		head.Paths = []string{d.Source}
+		if d.PathsEntry != "" {
+			head.Paths = []string{d.PathsEntry}
+		}
 	}
 	raw, _ := yaml.Marshal(head)
 	b.Write(raw)

@@ -24,6 +24,10 @@ type doc struct {
 	Path   string
 	Repo   string
 	Source string
+	// PathsEntry is the `paths:` entry when it is not Source: a book's
+	// chapters have the book and the chapter as source, and the book as
+	// paths.
+	PathsEntry string
 	// URL is the page address when the doc came from a URL import. Empty for
 	// a folder import, which keeps `paths:` and must stay byte-identical.
 	URL   string
@@ -79,10 +83,10 @@ func scan(src Source, root, vaultReal string) ([]doc, []Entry, error) {
 			return nil
 		}
 		if convertedKind(p) != "" {
-			// One PDF or Office file that cannot become a note is reported; the
+			// One converted file that cannot become notes is reported; the
 			// folder goes on.
-			if dc, perr := readConvertedDoc(src, rel, p); perr == nil {
-				docs = append(docs, dc)
+			if dcs, perr := readConvertedDocs(src, rel, p); perr == nil {
+				docs = append(docs, dcs...)
 			} else {
 				skipped = append(skipped, Entry{Action: Skipped, Note: rel, Reason: perr.Error()})
 			}
@@ -123,11 +127,12 @@ func importable(p string) bool {
 }
 
 // convertedKind is "pdf", "docx", "pptx", "xlsx", "html" (for .html and
-// .htm), "csv" or "tsv" for a file whose text an import extracts, else "".
+// .htm), "csv", "tsv" or "epub" for a file whose text an import extracts,
+// else "".
 func convertedKind(p string) string {
 	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(p), "."))
 	switch {
-	case ext == "pdf" || officeKinds[ext] || ext == "csv" || ext == "tsv" || ext == "html":
+	case ext == "pdf" || officeKinds[ext] || ext == "csv" || ext == "tsv" || ext == "html" || ext == "epub":
 		return ext
 	case ext == "htm":
 		return "html"
@@ -173,6 +178,19 @@ func readOfficeText(kind, p string) (string, string, error) {
 		err = fmt.Errorf("the %s file holds no text", kind)
 	}
 	return text, title, err
+}
+
+// readConvertedDocs reads one converted file as its docs: a book is a doc
+// per chapter and one for the book, any other file one doc.
+func readConvertedDocs(src Source, rel, p string) ([]doc, error) {
+	if convertedKind(p) == "epub" {
+		return readEPUBDocs(src, rel, p)
+	}
+	d, err := readConvertedDoc(src, rel, p)
+	if err != nil {
+		return nil, err
+	}
+	return []doc{d}, nil
 }
 
 // readConvertedDoc reads one PDF, Office, HTML or CSV file as a doc: its extracted text

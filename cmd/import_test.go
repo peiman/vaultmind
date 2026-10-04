@@ -128,7 +128,7 @@ func TestImport_RefusesAFileThatIsNotMarkdownOrPDF(t *testing.T) {
 
 	_, _, err := runRootCmd(t, "import", filepath.Join(repo, "docs", "notes.txt"), "--vault", vault)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), ".md, .pdf, .docx, .pptx, .xlsx, .html, .htm, .csv or .tsv")
+	assert.Contains(t, err.Error(), ".md, .pdf, .docx, .pptx, .xlsx, .html, .htm, .csv, .tsv or .epub")
 }
 
 // On a re-sync of a big folder the one doc that changed is named, not lost in
@@ -300,5 +300,5 @@ func TestImport_OneFileImportsAlone(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(repo, "docs", "image.png"), []byte("png"), 0o600))
 	_, _, err = runRootCmd(t, "import", filepath.Join(repo, "docs", "image.png"), "--vault", vault)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), ".md, .pdf, .docx, .pptx, .xlsx, .html, .htm, .csv or .tsv")
+	assert.Contains(t, err.Error(), ".md, .pdf, .docx, .pptx, .xlsx, .html, .htm, .csv, .tsv or .epub")
 }

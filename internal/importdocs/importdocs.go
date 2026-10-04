@@ -109,7 +109,7 @@ func (r *Result) Changed() []string {
 }
 
 // ErrNoMarkdown reports a source folder with nothing to import.
-var ErrNoMarkdown = errors.New("no markdown files or readable PDF, Office, HTML or CSV documents")
+var ErrNoMarkdown = errors.New("no markdown files or readable PDF, Office, HTML, CSV or EPUB documents")
 
 // Import brings the docs under src into vaultRoot and reports what it did.
 func Import(src Source, vaultRoot string, opts Options) (*Result, error) {
@@ -138,6 +138,11 @@ func Import(src Source, vaultRoot string, opts Options) (*Result, error) {
 	}
 	s := newSyncer(src, srcRoot, base, all, opts, writer{vaultRoot: vaultAbs, dryRun: opts.DryRun})
 	res := &Result{DryRun: opts.DryRun, Entries: append(skipped, under(noteSkips, base)...)}
+	for _, d := range docs {
+		if d.PathsEntry != "" {
+			s.read[d.PathsEntry] = true
+		}
+	}
 	res.Entries = append(res.Entries, s.syncDocs(docs)...)
 	res.Entries = append(res.Entries, s.orphans()...)
 	sort.SliceStable(res.Entries, func(i, j int) bool { return res.Entries[i].Note < res.Entries[j].Note })
@@ -214,12 +219,15 @@ type syncer struct {
 	claimed map[string]bool
 	// written holds the lowercased note paths this run produced.
 	written map[string]bool
+	// read holds the paths entries of the books this run read whole: a
+	// chapter of one that produced no doc is gone from it.
+	read map[string]bool
 }
 
 func newSyncer(src Source, srcRoot, base string, all map[string]note, opts Options, w writer) *syncer {
 	s := &syncer{src: src, srcRoot: srcRoot, base: base, opts: opts, w: w,
 		notes: map[string]note{}, folded: map[string][]string{}, taken: map[string]string{},
-		claimed: map[string]bool{}, written: map[string]bool{}}
+		claimed: map[string]bool{}, written: map[string]bool{}, read: map[string]bool{}}
 	for rel, n := range all {
 		if n.id != "" {
 			s.taken[n.id] = rel
@@ -407,7 +415,32 @@ func (s *syncer) docGone(source string) bool {
 		return false
 	}
 	_, err := os.Lstat(filepath.Join(s.srcRoot, filepath.FromSlash(strings.TrimPrefix(source, under))))
-	return errors.Is(err, fs.ErrNotExist)
+	if !errors.Is(err, fs.ErrNotExist) {
+		return false
+	}
+	return s.partGone(source, under)
+}
+
+// partGone judges a source naming part of a file (book.epub#ch1.xhtml, or
+// book.epub#ch1.xhtml#frag), whose own path does not exist. The file is the
+// shortest prefix ending before a # that exists or was read: a # may also be
+// part of a file name. The part is gone when its file was read this run, or
+// when no such file exists. A file that could not be read keeps its parts'
+// notes.
+func (s *syncer) partGone(source, under string) bool {
+	for i := 0; i < len(source); i++ {
+		if source[i] != '#' {
+			continue
+		}
+		file := source[:i]
+		if s.read[file] {
+			return true
+		}
+		if _, err := os.Lstat(filepath.Join(s.srcRoot, filepath.FromSlash(strings.TrimPrefix(file, under)))); err == nil {
+			return false
+		}
+	}
+	return true
 }
 
 // prune removes an orphan — unless it was edited by hand, when the note is
@@ -452,7 +485,7 @@ func ImportFile(src Source, rel, vaultRoot string, opts Options) (*Result, error
 	}
 	rel = filepath.ToSlash(filepath.Clean(rel))
 	if !importable(rel) {
-		return nil, fmt.Errorf("%s: only a .md, .pdf, .docx, .pptx, .xlsx, .html, .htm, .csv or .tsv file can be imported", rel)
+		return nil, fmt.Errorf("%s: only a .md, .pdf, .docx, .pptx, .xlsx, .html, .htm, .csv, .tsv or .epub file can be imported", rel)
 	}
 	if strings.Contains(rel, "/") || rel == "." || rel == ".." {
 		return nil, fmt.Errorf("%s: name a file in the source folder", rel)
@@ -469,11 +502,13 @@ func ImportFile(src Source, rel, vaultRoot string, opts Options) (*Result, error
 	if !info.Mode().IsRegular() {
 		return nil, fmt.Errorf("%s is not a regular file", rel)
 	}
-	var d doc
+	var docs []doc
 	if convertedKind(rel) != "" {
-		d, err = readConvertedDoc(src, rel, p)
+		docs, err = readConvertedDocs(src, rel, p)
 	} else {
+		var d doc
 		d, err = readDoc(src, rel, p)
+		docs = []doc{d}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", rel, err)
@@ -487,13 +522,16 @@ func ImportFile(src Source, rel, vaultRoot string, opts Options) (*Result, error
 	// Only what readNotes said about this one note: the folder's others are
 	// not this import's to report.
 	res := &Result{DryRun: opts.DryRun}
-	target := path.Join(base, noteName(rel))
+	targets := map[string]bool{}
+	for _, d := range docs {
+		targets[path.Join(base, noteName(d.Rel))] = true
+	}
 	for _, e := range noteSkips {
-		if e.Note == target {
+		if targets[e.Note] {
 			res.Entries = append(res.Entries, e)
 		}
 	}
-	res.Entries = append(res.Entries, s.syncDocs([]doc{d})...)
+	res.Entries = append(res.Entries, s.syncDocs(docs)...)
 	return res, nil
 }
 
