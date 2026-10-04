@@ -207,6 +207,7 @@ const (
 	KeyAppImportInclude                      = "app.import.include"                       // Crawl only URL paths matching one of these globs
 	KeyAppImportExclude                      = "app.import.exclude"                       // Never crawl URL paths matching these globs
 	KeyAppImportRespectRobots                = "app.import.respect_robots"                // Obey robots.txt rules and Crawl-delay when crawling
+	KeyAppImportPublicOnly                   = "app.import.public_only"                   // Import only http(s) URLs, from public addresses alone, even one naming localh...
 	KeyAppImportDelay                        = "app.import.delay"                         // Pause between a crawl's requests
 	KeyAppImportVisionEndpoint               = "app.import.vision_endpoint"               // OpenAI-compatible endpoint that describes images (opt-in; e.g. http://localho...
 	KeyAppImportVisionModel                  = "app.import.vision_model"                  // Model the vision endpoint describes images with

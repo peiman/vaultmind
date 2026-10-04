@@ -604,6 +604,9 @@ app:
     # Obey robots.txt rules and Crawl-delay when crawling
     respect_robots: false
 
+    # Import only http(s) URLs, from public addresses alone, even one naming localhost (what vaultmind mcp uses)
+    public_only: false
+
     # Pause between a crawl's requests
     delay: 1s
 

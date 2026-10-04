@@ -66,23 +66,23 @@ func TestTools_RunTheCommandAShellAgentWould(t *testing.T) {
 		want []string
 	}{
 		{"ask", map[string]any{"query": "why sqlite"},
-			[]string{"ask", "why sqlite", "--json", "--vault", "/v"}},
+			[]string{"ask", "--json", "--vault=/v", "--", "why sqlite"}},
 		{"ask", map[string]any{"query": "q", "max_items": 3, "type": "decision", "tag": "db", "path": "decisions/"},
-			[]string{"ask", "q", "--json", "--vault", "/v", "--max-items", "3", "--type", "decision", "--tag", "db", "--path", "decisions/"}},
+			[]string{"ask", "--json", "--vault=/v", "--max-items=3", "--type=decision", "--tag=db", "--path=decisions/", "--", "q"}},
 		{"search", map[string]any{"query": "q", "mode": "hybrid", "limit": 5, "type": "concept", "tag": "t"},
-			[]string{"search", "q", "--json", "--vault", "/v", "--mode", "hybrid", "--limit", "5", "--type", "concept", "--tag", "t"}},
+			[]string{"search", "--json", "--vault=/v", "--mode=hybrid", "--limit=5", "--type=concept", "--tag=t", "--", "q"}},
 		{"note_get", map[string]any{"id": "decision-sqlite"},
-			[]string{"note", "get", "decision-sqlite", "--json", "--vault", "/v"}},
+			[]string{"note", "get", "--json", "--vault=/v", "--", "decision-sqlite"}},
 		{"tree", map[string]any{},
-			[]string{"tree", "--json", "--vault", "/v"}},
+			[]string{"tree", "--json", "--vault=/v"}},
 		{"tree", map[string]any{"path": "decisions/", "type": "decision", "depth": 1},
-			[]string{"tree", "--json", "--vault", "/v", "--path", "decisions/", "--type", "decision", "--depth", "1"}},
+			[]string{"tree", "--json", "--vault=/v", "--path=decisions/", "--type=decision", "--depth=1"}},
 		{"links", map[string]any{"id": "decision-sqlite", "direction": "in"},
-			[]string{"memory", "links", "decision-sqlite", "--json", "--vault", "/v", "--in"}},
+			[]string{"memory", "links", "--json", "--vault=/v", "--in", "--", "decision-sqlite"}},
 		{"note_create", map[string]any{"path": "decisions/cache.md", "type": "decision", "body": "Why.", "fields": map[string]any{"title": "Cache", "status": "draft"}},
-			[]string{"note", "create", "decisions/cache.md", "--json", "--vault", "/v", "--type", "decision", "--body", "Why.", "--field", "status=draft", "--field", "title=Cache"}},
+			[]string{"note", "create", "--json", "--vault=/v", "--type=decision", "--body=Why.", "--field=status=draft", "--field=title=Cache", "--", "decisions/cache.md"}},
 		{"import", map[string]any{"source": "https://example.com/docs", "crawl": true},
-			[]string{"import", "https://example.com/docs", "--json", "--vault", "/v", "--crawl"}},
+			[]string{"import", "--json", "--vault=/v", "--public-only", "--crawl", "--", "https://example.com/docs"}},
 	}
 	for _, c := range cases {
 		t.Run(c.tool, func(t *testing.T) {
@@ -108,9 +108,9 @@ func TestTools_ReadAcrossVaultsWriteToTheFirst(t *testing.T) {
 	call(t, cs, "tree", map[string]any{})
 	call(t, cs, "links", map[string]any{"id": "x"})
 	call(t, cs, "note_create", map[string]any{"path": "n.md", "type": "concept"})
-	call(t, cs, "import", map[string]any{"source": "docs"})
-	for i, scope := range []string{"--vaults /a,/b", "--vaults /a,/b", "--vaults /a,/b", "--vaults /a,/b", "--vault /a", "--vault /a", "--vault /a"} {
-		assert.Contains(t, strings.Join(r.args[i], " "), " "+scope, r.args[i])
+	call(t, cs, "import", map[string]any{"source": "https://example.com/"})
+	for i, scope := range []string{"--vaults=/a,/b", "--vaults=/a,/b", "--vaults=/a,/b", "--vaults=/a,/b", "--vault=/a", "--vault=/a", "--vault=/a"} {
+		assert.Contains(t, r.args[i], scope)
 	}
 }
 
@@ -173,5 +173,40 @@ func TestLinks_RefusesAnUnknownDirection(t *testing.T) {
 	res := call(t, cs, "links", map[string]any{"id": "x", "direction": "sideways"})
 	assert.True(t, res.IsError)
 	assert.Contains(t, text(res), "use in, out or both")
+	assert.Empty(t, r.args)
+}
+
+// An argument that looks like a flag stays an argument: a client a page
+// prompted can't widen the vaults, prune or overwrite through a value.
+func TestTools_AValueThatLooksLikeAFlagStaysAValue(t *testing.T) {
+	r := &recorder{out: "{}"}
+	cs := connect(t, mcpserver.Config{Vault: "/v", Run: r.run})
+	call(t, cs, "ask", map[string]any{"query": "--vaults=/elsewhere", "type": "--config=/tmp/x"})
+	call(t, cs, "note_get", map[string]any{"id": "--frontmatter-only"})
+	call(t, cs, "import", map[string]any{"source": "https://example.com/--prune"})
+	assert.Equal(t, []string{"ask", "--json", "--vault=/v", "--type=--config=/tmp/x", "--", "--vaults=/elsewhere"}, r.args[0])
+	assert.Equal(t, []string{"note", "get", "--json", "--vault=/v", "--", "--frontmatter-only"}, r.args[1])
+	for _, args := range r.args {
+		sep := -1
+		for i, a := range args {
+			if a == "--" {
+				sep = i
+			}
+		}
+		require.GreaterOrEqual(t, sep, 0, args)
+		assert.Equal(t, len(args)-2, sep, "the one positional comes last, after --: %v", args)
+	}
+}
+
+// import takes only http(s) URLs: a local path would give an agent without
+// a shell the whole filesystem to read into the vault.
+func TestImport_RefusesALocalPath(t *testing.T) {
+	r := &recorder{out: "{}"}
+	cs := connect(t, mcpserver.Config{Vault: "/v", Run: r.run})
+	for _, src := range []string{"/etc", "~/.ssh", "docs", "file:///etc/passwd", "--prune"} {
+		res := call(t, cs, "import", map[string]any{"source": src})
+		assert.True(t, res.IsError, src)
+		assert.Contains(t, text(res), "http(s) URL", src)
+	}
 	assert.Empty(t, r.args)
 }

@@ -75,8 +75,8 @@ func New(cfg Config) *mcp.Server {
 	add(s, cfg.Run, "links", "List a note's links: what it links to (out), what links to it (in), or both.", t.links)
 	add(s, cfg.Run, "note_create", "Write a new note at a vault path (e.g. decisions/cache.md) with a type, a body and "+
 		"frontmatter fields such as title. Fails if the note exists.", t.noteCreate)
-	add(s, cfg.Run, "import", "Import a folder, file or URL into the vault as notes (markdown, PDF, Office, HTML, CSV, "+
-		"EPUB, archives, images). crawl follows a URL's site.", t.importSource)
+	add(s, cfg.Run, "import", "Import a web page (an http or https URL) into the vault as a note; crawl follows "+
+		"the site, one note per page. Public addresses only.", t.importSource)
 	return s
 }
 
@@ -99,14 +99,14 @@ func add[In any](s *mcp.Server, run Runner, name, desc string, build func(In) ([
 
 type tools struct{ cfg Config }
 
-func (t tools) readScope() []string {
+func (t tools) readScope() string {
 	if len(t.cfg.Vaults) > 1 {
-		return []string{"--vaults", strings.Join(t.cfg.Vaults, ",")}
+		return "--vaults=" + strings.Join(t.cfg.Vaults, ",")
 	}
 	return t.writeScope()
 }
 
-func (t tools) writeScope() []string { return []string{"--vault", t.cfg.Vault} }
+func (t tools) writeScope() string { return "--vault=" + t.cfg.Vault }
 
 type askIn struct {
 	Query    string `json:"query" jsonschema:"the question, in plain words"`
@@ -147,79 +147,89 @@ type noteCreateIn struct {
 }
 
 type importIn struct {
-	Source string `json:"source" jsonschema:"a folder, a file, or an http(s) URL"`
+	Source string `json:"source" jsonschema:"an http or https URL"`
 	Crawl  bool   `json:"crawl,omitempty" jsonschema:"import the site a URL leads to, one note per page"`
 }
 
-// cmdline is a command, its argument, --json and a scope.
-func cmdline(scope []string, words ...string) []string {
-	return append(append(words, "--json"), scope...)
+// command starts a vaultmind command line: its words, --json and the
+// server's vaults. Flags follow as --name=value, and withArg ends the line
+// with -- and the one positional argument, so no value a client sends can be
+// read as a flag (a query of "--vaults=/elsewhere" stays a query).
+func command(scope string, words ...string) []string {
+	return append(append(words, "--json"), scope)
 }
 
-// flag appends --name value when value is set.
+func withArg(args []string, arg string) []string { return append(args, "--", arg) }
+
+// flag appends --name=value when value is set.
 func flag(args []string, name, value string) []string {
 	if value == "" {
 		return args
 	}
-	return append(args, "--"+name, value)
+	return append(args, "--"+name+"="+value)
 }
 
 func intFlag(args []string, name string, value int) []string {
 	if value == 0 {
 		return args
 	}
-	return append(args, "--"+name, strconv.Itoa(value))
+	return flag(args, name, strconv.Itoa(value))
 }
 
 func (t tools) ask(in askIn) ([]string, error) {
-	args := cmdline(t.readScope(), "ask", in.Query)
-	args = intFlag(args, "max-items", in.MaxItems)
-	return flag(flag(flag(args, "type", in.Type), "tag", in.Tag), "path", in.Path), nil
+	args := intFlag(command(t.readScope(), "ask"), "max-items", in.MaxItems)
+	return withArg(flag(flag(flag(args, "type", in.Type), "tag", in.Tag), "path", in.Path), in.Query), nil
 }
 
 func (t tools) search(in searchIn) ([]string, error) {
-	args := flag(cmdline(t.readScope(), "search", in.Query), "mode", in.Mode)
-	args = intFlag(args, "limit", in.Limit)
-	return flag(flag(args, "type", in.Type), "tag", in.Tag), nil
+	args := intFlag(flag(command(t.readScope(), "search"), "mode", in.Mode), "limit", in.Limit)
+	return withArg(flag(flag(args, "type", in.Type), "tag", in.Tag), in.Query), nil
 }
 
 func (t tools) noteGet(in noteGetIn) ([]string, error) {
-	return cmdline(t.readScope(), "note", "get", in.ID), nil
+	return withArg(command(t.readScope(), "note", "get"), in.ID), nil
 }
 
 func (t tools) tree(in treeIn) ([]string, error) {
-	args := flag(flag(cmdline(t.readScope(), "tree"), "path", in.Path), "type", in.Type)
+	args := flag(flag(command(t.readScope(), "tree"), "path", in.Path), "type", in.Type)
 	return intFlag(args, "depth", in.Depth), nil
 }
 
 func (t tools) links(in linksIn) ([]string, error) {
-	args := cmdline(t.writeScope(), "memory", "links", in.ID)
+	args := command(t.writeScope(), "memory", "links")
 	switch in.Direction {
 	case "", "both":
-		return args, nil
 	case "in", "out":
-		return append(args, "--"+in.Direction), nil
+		args = append(args, "--"+in.Direction)
+	default:
+		return nil, fmt.Errorf("direction %q: use in, out or both", in.Direction)
 	}
-	return nil, fmt.Errorf("direction %q: use in, out or both", in.Direction)
+	return withArg(args, in.ID), nil
 }
 
 func (t tools) noteCreate(in noteCreateIn) ([]string, error) {
-	args := flag(flag(cmdline(t.writeScope(), "note", "create", in.Path), "type", in.Type), "body", in.Body)
+	args := flag(flag(command(t.writeScope(), "note", "create"), "type", in.Type), "body", in.Body)
 	keys := make([]string, 0, len(in.Fields))
 	for k := range in.Fields {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		args = append(args, "--field", k+"="+in.Fields[k])
+		args = flag(args, "field", k+"="+in.Fields[k])
 	}
-	return args, nil
+	return withArg(args, in.Path), nil
 }
 
+// importSource takes only an http(s) URL, fetched from public addresses
+// alone (--public-only): a local path or a localhost URL would give an agent
+// without a shell, which a page it read can prompt, this machine to read.
 func (t tools) importSource(in importIn) ([]string, error) {
-	args := cmdline(t.writeScope(), "import", in.Source)
+	if !strings.HasPrefix(in.Source, "http://") && !strings.HasPrefix(in.Source, "https://") {
+		return nil, fmt.Errorf("import takes an http(s) URL, not %q; import a local folder with the CLI: vaultmind import <dir>", in.Source)
+	}
+	args := append(command(t.writeScope(), "import"), "--public-only")
 	if in.Crawl {
 		args = append(args, "--crawl")
 	}
-	return args, nil
+	return withArg(args, in.Source), nil
 }

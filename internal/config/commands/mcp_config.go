@@ -14,7 +14,9 @@ var McpMetadata = config.CommandMetadata{
 	Long: "Run an MCP server on stdin/stdout, so an agent without a shell (Claude Desktop, or any " +
 		"MCP client) can use the vault. Its tools are ask, search, note_get, tree, links, " +
 		"note_create and import; each runs the vaultmind command of the same name with --json and " +
-		"returns its output, so a tool answers exactly what the CLI answers.\n\n" +
+		"returns its output, so a tool answers exactly what the CLI answers. A value a client sends " +
+		"is never read as a flag. import takes only http(s) URLs and reaches only public " +
+		"addresses (import --public-only): a page the agent read could prompt it.\n\n" +
 		"The vaults are fixed when the server starts: --vault, or --vaults a,b,c to read across " +
 		"several (writes, imports and links go to the first). A client cannot point a tool at " +
 		"another directory.\n\n" +

@@ -93,6 +93,19 @@ func TestHTTPFetcher_APublicStartCannotReachAPrivateAddress(t *testing.T) {
 	assert.Equal(t, "internal secret\n", string(page.Body))
 }
 
+// PublicFetcher never reaches a private address, even when the URL names
+// one: the start was not the operator's choice (an MCP client asked).
+func TestPublicFetcher_RefusesAPrivateURLItNames(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("internal secret\n"))
+	}))
+	t.Cleanup(srv.Close)
+
+	_, err := PublicFetcher()(t.Context(), srv.URL+"/x")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "refusing to connect to 127.0.0.1")
+}
+
 // A proxy from the environment dials the destination itself, so the dial
 // check only ever sees the proxy. The destination is checked before the
 // request goes to the proxy.

@@ -35,6 +35,13 @@ IGNORE_FLAGS="--ignore='$MODULE_PATH'"
 if [ -f .license-ignore ]; then
     while read -r mod _; do
         case "$mod" in ''|'#'*) continue ;; esac
+        # The flags go through eval (run_check), so only a plain module path
+        # gets in; anything else would be read as shell.
+        if ! [[ "$mod" =~ ^[A-Za-z0-9._~/-]+$ ]]; then
+            check_failure ".license-ignore has an entry that is not a module path: $mod" "" \
+                "Each line is one module path, such as github.com/segmentio/asm"
+            exit 1
+        fi
         IGNORE_FLAGS="$IGNORE_FLAGS --ignore='$mod'"
     done < .license-ignore
 fi

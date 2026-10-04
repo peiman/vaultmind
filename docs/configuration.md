@@ -217,6 +217,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.import.include` | []string | `[]` | `VAULTMIND_APP_IMPORT_INCLUDE` | Crawl only URL paths matching one of these globs |
 | `app.import.exclude` | []string | `[]` | `VAULTMIND_APP_IMPORT_EXCLUDE` | Never crawl URL paths matching these globs |
 | `app.import.respect_robots` | bool | `false` | `VAULTMIND_APP_IMPORT_RESPECT_ROBOTS` | Obey robots.txt rules and Crawl-delay when crawling |
+| `app.import.public_only` | bool | `false` | `VAULTMIND_APP_IMPORT_PUBLIC_ONLY` | Import only http(s) URLs, from public addresses alone, even one naming localhost (what vaultmind mcp uses) |
 | `app.import.delay` | string | `1s` | `VAULTMIND_APP_IMPORT_DELAY` | Pause between a crawl's requests |
 | `app.import.vision_endpoint` | string | `` | `VAULTMIND_APP_IMPORT_VISION_ENDPOINT` | OpenAI-compatible endpoint that describes images (opt-in; e.g. http://localhost:11434/v1) |
 | `app.import.vision_model` | string | `` | `VAULTMIND_APP_IMPORT_VISION_MODEL` | Model the vision endpoint describes images with |
@@ -934,6 +935,9 @@ app:
 
     # Obey robots.txt rules and Crawl-delay when crawling
     respect_robots: false
+
+    # Import only http(s) URLs, from public addresses alone, even one naming localhost (what vaultmind mcp uses)
+    public_only: false
 
     # Pause between a crawl's requests
     delay: 1s
@@ -1930,6 +1934,9 @@ export VAULTMIND_APP_IMPORT_EXCLUDE=[]
 
 # Obey robots.txt rules and Crawl-delay when crawling
 export VAULTMIND_APP_IMPORT_RESPECT_ROBOTS=false
+
+# Import only http(s) URLs, from public addresses alone, even one naming localhost (what vaultmind mcp uses)
+export VAULTMIND_APP_IMPORT_PUBLIC_ONLY=false
 
 # Pause between a crawl's requests
 export VAULTMIND_APP_IMPORT_DELAY=1s

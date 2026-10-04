@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`vaultmind mcp` serves a vault to any MCP client** over stdio, so Claude Desktop and other
+  agents without a shell can use it.
+  - **Tools:** `ask`, `search`, `note_get`, `tree`, `links`, `note_create`, and `import` for a
+    web page or site. Each runs the command of the same name with `--json`, so a tool answers
+    what the CLI answers.
+  - **The vaults are fixed at start:** `--vault`, or `--vaults a,b,c` with writes to the first.
+  - **A value a client sends is never read as a flag.** Flags go as `--name=value`, and the
+    one positional argument comes after `--`.
+  - **`import` takes http(s) URLs only, from public addresses only.** A local path or a
+    localhost URL would give an agent without a shell, which a page it read can prompt,
+    the machine to read.
+  - **Setup:** `claude mcp add vaultmind -- vaultmind mcp --vault <path>`, or the same
+    `mcpServers` entry in Claude Desktop or `.cursor/mcp.json`.
+  - **Tested** with headless Claude Code limited to these tools: 6/6 questions answered
+    from the vault, 0/6 without it. Cursor works too.
+- **`import --public-only`** imports only http(s) URLs, and reaches only public addresses,
+  even when the URL names localhost (a plain import allows that, since the operator chose
+  it). `vaultmind mcp` always sets it.
 - **`import <url> --crawl` imports a whole docs site, one note per page.** Pages come from
   the site's llms.txt, its sitemaps, then the links on each page, breadth first, within the
   URL's host and folder; `--include`/`--exclude` narrow it with `paths:` globs, and

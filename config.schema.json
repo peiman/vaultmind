@@ -1171,6 +1171,11 @@
               "description": "Remove imported notes whose doc is gone",
               "type": "boolean"
             },
+            "public_only": {
+              "default": false,
+              "description": "Import only http(s) URLs, from public addresses alone, even one naming localhost (what vaultmind mcp uses)",
+              "type": "boolean"
+            },
             "respect_robots": {
               "default": false,
               "description": "Obey robots.txt rules and Crawl-delay when crawling",
