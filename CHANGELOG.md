@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.4] - 2026-10-05
+
+> More of a long document's answers reach the agent, and a newcomer can find what
+> VaultMind does.
+>
+> - **Recall:** per-prompt excerpts are 160 tokens, and a long doc's short subsections
+>   are their own notes. On the long-doc eval the answer reaches the agent for 6 of 12
+>   questions, up from 3.
+> - **Docs:** the README and `vaultmind --help` lead with what VaultMind does, in four
+>   groups. Given only the README, new agents found the right command for 10 of 10
+>   everyday jobs, up from 5.
+> - **`doctor`** stops flagging the links `import` writes between a long doc's sections.
+>
+> Run `vaultmind hooks install --merge` to pick up the recall change. Re-import a long
+> doc to re-split it: sections after a newly separated subsection are renumbered (see
+> below).
+
 ### Changed
 
 - **A long doc's short subsections become their own notes.** A heading block now joins
@@ -2661,7 +2678,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.3...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.4...HEAD
+[0.10.4]: https://github.com/peiman/vaultmind/compare/v0.10.3...v0.10.4
 [0.10.3]: https://github.com/peiman/vaultmind/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/peiman/vaultmind/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/peiman/vaultmind/compare/v0.10.0...v0.10.1
