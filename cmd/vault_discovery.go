@@ -55,10 +55,8 @@ func walkUpForVault(startDir, ceiling, home string) string {
 	for dir != "" {
 		// dir is the user's CWD or an ancestor; reading a well-known dotdir
 		// under it is the same trust tier as the rest of the CLI.
-		if skip == "" || cleanDirForCompare(dir) != skip {
-			if info, err := os.Stat(filepath.Join(dir, ".vaultmind")); err == nil && info.IsDir() {
-				return dir
-			}
+		if (skip == "" || cleanDirForCompare(dir) != skip) && holdsVault(dir) {
+			return dir
 		}
 		if dir == ceiling {
 			return "" // do not inspect above the ceiling
@@ -70,6 +68,20 @@ func walkUpForVault(startDir, ceiling, home string) string {
 		dir = parent
 	}
 	return ""
+}
+
+// holdsVault reports whether dir is a vault: its .vaultmind/ holds the vault's
+// config or its index. A .vaultmind/ with only hook scripts in it is how a
+// project wired for Codex or Cursor keeps them, and taking that for a vault
+// made discovery answer from the project and `hooks install` bake the project
+// as the vault into every Codex hook.
+func holdsVault(dir string) bool {
+	for _, marker := range []string{"config.yaml", "index.db"} {
+		if info, err := os.Stat(filepath.Join(dir, ".vaultmind", marker)); err == nil && !info.IsDir() {
+			return true
+		}
+	}
+	return false
 }
 
 // cleanDirForCompare normalizes a directory path for equality comparison, so a

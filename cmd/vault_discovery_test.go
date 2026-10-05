@@ -11,11 +11,18 @@ import (
 
 func noEnv(string) string { return "" }
 
+// makeVault makes dir a vault for discovery: a .vaultmind/ holding config.
+func makeVault(t *testing.T, dir string) {
+	t.Helper()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".vaultmind"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".vaultmind", "config.yaml"), []byte("types: {}\n"), 0o600))
+}
+
 func TestWalkUpForVault_FindsNearestAncestor(t *testing.T) {
 	root := t.TempDir()
 	// root/project/.vaultmind, querying from root/project/sub/deep
 	project := filepath.Join(root, "project")
-	require.NoError(t, os.MkdirAll(filepath.Join(project, ".vaultmind"), 0o750))
+	makeVault(t, project)
 	deep := filepath.Join(project, "sub", "deep")
 	require.NoError(t, os.MkdirAll(deep, 0o750))
 
@@ -32,7 +39,7 @@ func TestWalkUpForVault_NoneFound(t *testing.T) {
 func TestWalkUpForVault_StopsAtCeiling(t *testing.T) {
 	root := t.TempDir()
 	// .vaultmind exists ABOVE the ceiling — must NOT be matched.
-	require.NoError(t, os.MkdirAll(filepath.Join(root, ".vaultmind"), 0o750))
+	makeVault(t, root)
 	mid := filepath.Join(root, "mid")
 	deep := filepath.Join(mid, "deep")
 	require.NoError(t, os.MkdirAll(deep, 0o750))
@@ -41,7 +48,7 @@ func TestWalkUpForVault_StopsAtCeiling(t *testing.T) {
 
 func TestDiscoverVaultPath_EnvWins(t *testing.T) {
 	root := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(root, ".vaultmind"), 0o750))
+	makeVault(t, root)
 	getenv := func(k string) string {
 		if k == "VAULTMIND_VAULT" {
 			return "/explicit/from/env"
@@ -54,7 +61,7 @@ func TestDiscoverVaultPath_EnvWins(t *testing.T) {
 
 func TestDiscoverVaultPath_WalkUpWhenNoEnv(t *testing.T) {
 	root := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(root, ".vaultmind"), 0o750))
+	makeVault(t, root)
 	assert.Equal(t, root, discoverVaultPath(".", noEnv, root, root, ""))
 }
 
@@ -65,7 +72,7 @@ func TestDiscoverVaultPath_FallbackWhenNothing(t *testing.T) {
 
 func TestDiscoverVaultPath_EmptyEnvIgnored(t *testing.T) {
 	root := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(root, ".vaultmind"), 0o750))
+	makeVault(t, root)
 	whitespaceEnv := func(string) string { return "   " }
 	assert.Equal(t, root, discoverVaultPath(".", whitespaceEnv, root, root, ""), "blank env is ignored; walk-up used")
 }
@@ -87,7 +94,7 @@ func TestDiscoverVaultPath_EmptyEnvIgnored(t *testing.T) {
 
 func TestWalkUpForVault_SkipsHomeDirectory(t *testing.T) {
 	home := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(home, ".vaultmind"), 0o750))
+	makeVault(t, home)
 	work := filepath.Join(home, "dev", "someproject")
 	require.NoError(t, os.MkdirAll(work, 0o750))
 
@@ -97,7 +104,7 @@ func TestWalkUpForVault_SkipsHomeDirectory(t *testing.T) {
 
 func TestWalkUpForVault_SkipsHomeEvenWhenStartDirIsHome(t *testing.T) {
 	home := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(home, ".vaultmind"), 0o750))
+	makeVault(t, home)
 
 	assert.Equal(t, "", walkUpForVault(home, home, home),
 		"standing in $HOME does not make $HOME the discovered vault")
@@ -106,9 +113,9 @@ func TestWalkUpForVault_SkipsHomeEvenWhenStartDirIsHome(t *testing.T) {
 func TestWalkUpForVault_HomeGuardDoesNotBlockVaultsBelowHome(t *testing.T) {
 	home := t.TempDir()
 	// The realistic layout: a stray vault at $HOME AND a genuine one below it.
-	require.NoError(t, os.MkdirAll(filepath.Join(home, ".vaultmind"), 0o750))
+	makeVault(t, home)
 	project := filepath.Join(home, "dev", "myproject")
-	require.NoError(t, os.MkdirAll(filepath.Join(project, ".vaultmind"), 0o750))
+	makeVault(t, project)
 	deep := filepath.Join(project, "sub", "deep")
 	require.NoError(t, os.MkdirAll(deep, 0o750))
 
@@ -118,7 +125,7 @@ func TestWalkUpForVault_HomeGuardDoesNotBlockVaultsBelowHome(t *testing.T) {
 
 func TestWalkUpForVault_EmptyHomeDisablesTheGuard(t *testing.T) {
 	root := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(root, ".vaultmind"), 0o750))
+	makeVault(t, root)
 
 	assert.Equal(t, root, walkUpForVault(root, root, ""),
 		`home="" means no home is known; the guard must not then fire on every dir`)
@@ -126,7 +133,7 @@ func TestWalkUpForVault_EmptyHomeDisablesTheGuard(t *testing.T) {
 
 func TestWalkUpForVault_HomeGuardIgnoresTrailingSeparator(t *testing.T) {
 	home := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(home, ".vaultmind"), 0o750))
+	makeVault(t, home)
 
 	// os.UserHomeDir() is normally clean, but HOME=/Users/peiman/ is legal and
 	// a raw string compare would miss it, silently restoring the old behaviour.
@@ -136,7 +143,7 @@ func TestWalkUpForVault_HomeGuardIgnoresTrailingSeparator(t *testing.T) {
 
 func TestDiscoverVaultPath_HomeVaultStillReachableViaEnv(t *testing.T) {
 	home := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(home, ".vaultmind"), 0o750))
+	makeVault(t, home)
 	getenv := func(k string) string {
 		if k == "VAULTMIND_VAULT" {
 			return home
@@ -150,10 +157,32 @@ func TestDiscoverVaultPath_HomeVaultStillReachableViaEnv(t *testing.T) {
 
 func TestDiscoverVaultPath_FallsBackWhenOnlyHomeHasAVault(t *testing.T) {
 	home := t.TempDir()
-	require.NoError(t, os.MkdirAll(filepath.Join(home, ".vaultmind"), 0o750))
+	makeVault(t, home)
 	work := filepath.Join(home, "dev", "someproject")
 	require.NoError(t, os.MkdirAll(work, 0o750))
 
 	assert.Equal(t, ".", discoverVaultPath(".", noEnv, work, home, home),
 		"with $HOME skipped and nothing else found, the caller's fallback stands")
+}
+
+// A project wired for Codex or Cursor keeps its hook scripts in
+// .vaultmind/scripts/. That folder is not a vault: discovery walked into it
+// and answered from the project, and `hooks install` baked the project as
+// the vault into every Codex hook (workhorse, 2026-10-05). A vault has its
+// config or its index under .vaultmind/.
+func TestWalkUpForVault_AScriptsOnlyDotVaultmindIsNotAVault(t *testing.T) {
+	root := t.TempDir()
+	vault := filepath.Join(root, "vault")
+	project := filepath.Join(vault, "project")
+	require.NoError(t, os.MkdirAll(filepath.Join(project, ".vaultmind", "scripts"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(project, ".vaultmind", "vaultmind-profile"), []byte("full\n"), 0o600))
+	require.NoError(t, os.MkdirAll(filepath.Join(vault, ".vaultmind"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(vault, ".vaultmind", "config.yaml"), []byte("types: {}\n"), 0o600))
+
+	assert.Equal(t, vault, walkUpForVault(project, root, ""), "walks past the scripts folder to the real vault")
+
+	indexOnly := filepath.Join(root, "indexed")
+	require.NoError(t, os.MkdirAll(filepath.Join(indexOnly, ".vaultmind"), 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(indexOnly, ".vaultmind", "index.db"), nil, 0o600))
+	assert.Equal(t, indexOnly, walkUpForVault(indexOnly, root, ""), "an index alone makes a vault")
 }

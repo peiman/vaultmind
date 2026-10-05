@@ -9,6 +9,13 @@ import (
 var hooksInstallCmd = func() *cobra.Command {
 	c := MustNewCommand(commands.HooksInstallMetadata, runHooksInstall)
 	c.Args = cobra.MaximumNArgs(1)
+	// --vault is baked into the hooks. Left out, the hooks find
+	// <project>/vaultmind-identity at run time; the vault the shell stands in
+	// is not the project's.
+	if c.Annotations == nil {
+		c.Annotations = map[string]string{}
+	}
+	c.Annotations[annotationNoVaultDiscovery] = "true"
 	return c
 }()
 
