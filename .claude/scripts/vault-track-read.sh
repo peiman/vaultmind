@@ -88,13 +88,19 @@ case "$FILE_PATH" in
 esac
 
 VAULT_ROOT=$(dirname "$FILE_PATH")
+# A vault holds its config or its index under .vaultmind/. A Codex or Cursor
+# project keeps only hook scripts there, and is not a vault: the same rule
+# vaultmind's own discovery uses.
+holds_vault() {
+  [ -f "$1/.vaultmind/config.yaml" ] || [ -f "$1/.vaultmind/index.db" ]
+}
 while [ "$VAULT_ROOT" != "/" ] && [ "$VAULT_ROOT" != "." ]; do
-  if [ -d "$VAULT_ROOT/.vaultmind" ]; then
+  if holds_vault "$VAULT_ROOT"; then
     break
   fi
   VAULT_ROOT=$(dirname "$VAULT_ROOT")
 done
-if [ ! -d "$VAULT_ROOT/.vaultmind" ]; then
+if ! holds_vault "$VAULT_ROOT"; then
   exit 0
 fi
 

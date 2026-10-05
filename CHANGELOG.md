@@ -16,7 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   asked for every hook to be approved again.
   - **Discovery now needs a real vault:** a `.vaultmind/` holding `config.yaml` or
     `index.db`. That also stops `ask` and other commands answering from a Codex
-    project's script folder.
+    project's script folder. The read hooks (`vault-track-read.sh`, the parked
+    `vault-block-read.sh`) use the same rule when they find a note's vault.
   - **`hooks install` no longer discovers a vault at all.** Its `--vault` is the path to
     bake in; left out, the hooks find `<project>/vaultmind-identity` when they run.
   - **If an earlier install baked the wrong path,** re-run it with this version, or

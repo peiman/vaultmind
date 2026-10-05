@@ -27,3 +27,13 @@ func TestHooksInstall_DoesNotBakeTheVaultItIsRunFrom(t *testing.T) {
 		assert.NotContains(t, out.String(), "VAULTMIND_VAULT", agent)
 	}
 }
+
+// An explicit --vault is still what the hooks get.
+func TestHooksInstall_BakesAnExplicitVault(t *testing.T) {
+	t.Chdir(t.TempDir())
+	project, vault := t.TempDir(), t.TempDir()
+	makeVault(t, vault)
+	out, _, err := runRootCmd(t, "hooks", "install", project, "--vault", vault, "--merge", "--dry-run", "--force")
+	require.NoError(t, err)
+	assert.Contains(t, out.String(), "VAULTMIND_VAULT='"+vault+"'")
+}
