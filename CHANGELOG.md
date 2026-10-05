@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`ask` is about a quarter faster.** ColBERT now scores the union of each other search
+  lane's top 20, not their top 100. Reading and scoring ColBERT vectors was two thirds of
+  a warm `ask`.
+  - **Speed:** a three-vault recall-hook `ask` went from 2.0 s to 1.6 s (median of 12
+    interleaved runs).
+  - **Quality:** on 32 labelled real queries Hit@5 held at 30/32 and MRR rose from 0.887
+    to 0.910. Long-doc page Hit@3 and delivery held (0.833, 6/12).
+
 ### Fixed
 
 - **Re-running `hooks install` in a Codex or Cursor project no longer points its hooks at

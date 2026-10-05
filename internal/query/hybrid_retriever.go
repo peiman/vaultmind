@@ -194,13 +194,22 @@ type CandidateSearcher interface {
 	SearchAmong(ctx context.Context, query string, limit int, filters index.SearchFilters, ids []string) ([]retrieval.ScoredResult, int, error)
 }
 
-// candidateIDs is the union of the ids the given lanes returned, in first-seen
-// order.
+// candidatesPerLane is how many of each lane's top results the candidate lane
+// scores. Reading and scoring ColBERT vectors was two thirds of a warm ask,
+// and each lane fetches 100 for fusion. At 20, on 32 labelled real queries
+// Hit@5 held (30/32) and MRR rose (0.887 -> 0.910), long-doc page Hit@3 and
+// delivery held, and a three-vault ask got 23% faster; 30 and 50 kept quality
+// but saved under 20% (2026-10-05).
+const candidatesPerLane = 20
+
+// candidateIDs is the union of each given lane's top candidatesPerLane ids, in
+// first-seen order.
 func candidateIDs(lane func(int) []retrieval.ScoredResult, indices []int) []string {
 	seen := map[string]bool{}
 	var ids []string
 	for _, i := range indices {
-		for _, r := range lane(i) {
+		results := lane(i)
+		for _, r := range results[:min(len(results), candidatesPerLane)] {
 			if !seen[r.ID] {
 				seen[r.ID] = true
 				ids = append(ids, r.ID)
