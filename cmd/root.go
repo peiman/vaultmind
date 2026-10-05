@@ -680,7 +680,7 @@ func getConfigValueWithFlags[T any](cmd *cobra.Command, flagName string, viperKe
 	// the --vault flag nor config supplied an explicit one (still the "." / ""
 	// default), resolve it from $VAULTMIND_VAULT or by walking up to the nearest
 	// .vaultmind/ — so commands and hooks work without --vault on every call.
-	if flagName == "vault" && !cmd.Flags().Changed("vault") {
+	if flagName == "vault" && !cmd.Flags().Changed("vault") && cmd.Annotations[annotationNoVaultDiscovery] != "true" {
 		if s, ok := any(value).(string); ok && (s == "" || s == ".") {
 			if rv, ok := any(resolveDiscoveredVault(s)).(T); ok {
 				return rv
@@ -690,6 +690,11 @@ func getConfigValueWithFlags[T any](cmd *cobra.Command, flagName string, viperKe
 
 	return value
 }
+
+// annotationNoVaultDiscovery marks a command whose --vault is a path to write
+// somewhere, not the vault to act on, so the working directory's vault must
+// not stand in for it (hooks install bakes --vault into hook commands).
+const annotationNoVaultDiscovery = "no-vault-discovery"
 
 // openExperimentDB resolves the XDG data path for the experiment database and
 // opens (or creates) the SQLite file. It returns an error only if the path
