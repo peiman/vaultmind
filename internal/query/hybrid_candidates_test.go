@@ -107,3 +107,25 @@ func TestHybridRetriever_ACandidateLaneScoresEachLanesTop20(t *testing.T) {
 	assert.Contains(t, colbert.among, "d19")
 	assert.NotContains(t, colbert.among, "d20")
 }
+
+// A caller asking for more than 20 results (search --limit 50, or paging with
+// --offset) gets ColBERT's vote across the window it asked for: the cut is
+// never below limit+offset.
+func TestHybridRetriever_TheCandidateCutCoversTheRequestedWindow(t *testing.T) {
+	ranked := func(prefix string, n int) []retrieval.ScoredResult {
+		out := make([]retrieval.ScoredResult, n)
+		for i := range out {
+			out[i] = retrieval.ScoredResult{ID: fmt.Sprintf("%s%02d", prefix, i)}
+		}
+		return out
+	}
+	colbert := &candidateLane{}
+	h := &query.HybridRetriever{Retrievers: []retrieval.NamedRetriever{
+		{Name: "fts", Retriever: &staticRetriever{results: ranked("f", 60)}},
+		{Name: "colbert", Retriever: colbert},
+	}}
+
+	_, _, err := h.Search(context.Background(), "q", 30, 10, index.SearchFilters{})
+	require.NoError(t, err)
+	assert.Len(t, colbert.among, 40, "limit 30 + offset 10")
+}

@@ -118,7 +118,10 @@ func (h *HybridRetriever) Search(ctx context.Context, query string, limit, offse
 		// Empty when the other lanes found nothing: the lane then searches
 		// everything rather than returning nothing.
 		lane := func(i int) []retrieval.ScoredResult { return perRetriever[i].results }
-		if err := run(narrowed, candidateIDs(lane, direct)); err != nil {
+		// Never below the window the caller asked for (search --limit 50, or
+		// paging with --offset), or ColBERT would not vote on part of it.
+		perLane := max(candidatesPerLane, limit+offset)
+		if err := run(narrowed, candidateIDs(lane, direct, perLane)); err != nil {
 			return nil, 0, err
 		}
 	}
@@ -202,14 +205,14 @@ type CandidateSearcher interface {
 // but saved under 20% (2026-10-05).
 const candidatesPerLane = 20
 
-// candidateIDs is the union of each given lane's top candidatesPerLane ids, in
+// candidateIDs is the union of each given lane's top perLane ids, in
 // first-seen order.
-func candidateIDs(lane func(int) []retrieval.ScoredResult, indices []int) []string {
+func candidateIDs(lane func(int) []retrieval.ScoredResult, indices []int, perLane int) []string {
 	seen := map[string]bool{}
 	var ids []string
 	for _, i := range indices {
 		results := lane(i)
-		for _, r := range results[:min(len(results), candidatesPerLane)] {
+		for _, r := range results[:min(len(results), perLane)] {
 			if !seen[r.ID] {
 				seen[r.ID] = true
 				ids = append(ids, r.ID)
