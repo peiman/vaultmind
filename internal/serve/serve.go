@@ -45,6 +45,9 @@ var (
 	ErrNoServer = errors.New("no vaultmind server is running")
 	// ErrAlreadyServing means another server already answers on the socket.
 	ErrAlreadyServing = errors.New("a vaultmind server is already running on this socket")
+	// ErrUnsafeDir means the socket's directory could be reached by another
+	// user; neither side uses a socket there.
+	ErrUnsafeDir = errors.New("unsafe socket directory")
 )
 
 // maxSocketPath stays under the Unix socket path limit (104 bytes on macOS).
@@ -53,7 +56,8 @@ const maxSocketPath = 100
 // SocketPath is where the server for this version listens. The version is
 // in the name, so two installed versions each get their own server and an
 // upgrade never answers from old code. A state dir too deep for a socket
-// path falls back to a short per-user name under the temp dir.
+// path falls back to a short per-user name under the temp dir. Either way the
+// socket's directory must be private to the user (see checkPrivateDir).
 func SocketPath(stateDir, version string) string {
 	name := "serve-" + strings.Map(func(r rune) rune {
 		if r == '.' || r == '-' || r == '_' || (r >= '0' && r <= '9') || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
@@ -61,7 +65,9 @@ func SocketPath(stateDir, version string) string {
 		}
 		return '_'
 	}, version) + ".sock"
-	if p := filepath.Join(stateDir, name); len(p) <= maxSocketPath {
+	// Its own directory, created 0700: the state dir itself may be readable
+	// by others (an XDG state dir is often 0755).
+	if p := filepath.Join(stateDir, "serve", name); len(p) <= maxSocketPath {
 		return p
 	}
 	sum := sha256.Sum256([]byte(stateDir + "\x00" + version))
@@ -100,13 +106,19 @@ func Serve(ctx context.Context, sock string, exec Exec, idle time.Duration) erro
 	}()
 
 	var mu sync.Mutex
+	var inFlight sync.WaitGroup
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
-			return nil // closed: idle, or ctx ended
+			// Closed: idle, or ctx ended. Finish the requests already
+			// accepted, so a signalled server still answers them.
+			inFlight.Wait()
+			return nil
 		}
 		touch(activity)
+		inFlight.Add(1)
 		go func() {
+			defer inFlight.Done()
 			defer func() { _ = conn.Close() }()
 			var req Request
 			if err := json.NewDecoder(conn).Decode(&req); err != nil {
@@ -146,14 +158,21 @@ func listen(sock string) (net.Listener, error) {
 	if err := os.MkdirAll(filepath.Dir(sock), 0o700); err != nil {
 		return nil, fmt.Errorf("creating the socket's directory: %w", err)
 	}
+	if err := checkPrivateDir(filepath.Dir(sock)); err != nil {
+		return nil, err
+	}
 	ln, err := net.Listen("unix", sock)
 	if err != nil {
-		if c, derr := net.DialTimeout("unix", sock, time.Second); derr == nil {
-			_ = c.Close()
+		if alive(sock) {
 			return nil, ErrAlreadyServing
 		}
 		_ = os.Remove(sock)
 		if ln, err = net.Listen("unix", sock); err != nil {
+			// Another server started at the same moment replaced the
+			// stale socket first.
+			if alive(sock) {
+				return nil, ErrAlreadyServing
+			}
 			return nil, fmt.Errorf("listening on %s: %w", sock, err)
 		}
 	}
@@ -164,10 +183,26 @@ func listen(sock string) (net.Listener, error) {
 	return ln, nil
 }
 
+// alive reports whether a server answers on sock.
+func alive(sock string) bool {
+	c, err := net.DialTimeout("unix", sock, time.Second)
+	if err != nil {
+		return false
+	}
+	_ = c.Close()
+	return true
+}
+
 // Forward sends req to the server on sock and returns its response. With no
 // server it returns ErrNoServer at once; a server slower than total is
 // abandoned with an error.
 func Forward(sock string, req Request, connect, total time.Duration) (Response, error) {
+	if err := checkPrivateDir(filepath.Dir(sock)); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return Response{}, ErrNoServer
+		}
+		return Response{}, err
+	}
 	conn, err := net.DialTimeout("unix", sock, connect)
 	if err != nil {
 		// Nothing there, nothing listening, or a leftover non-socket file:

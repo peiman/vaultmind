@@ -176,5 +176,56 @@ func TestServe_APanicFailsOnlyItsRequest(t *testing.T) {
 // its own socket.
 func TestSocketPath_OddVersionCharacters(t *testing.T) {
 	p := serve.SocketPath("/state", "v1.0.0+meta/x y")
-	assert.Equal(t, "/state/serve-v1.0.0_meta_x_y.sock", p)
+	assert.Equal(t, "/state/serve/serve-v1.0.0_meta_x_y.sock", p)
+}
+
+// A socket directory another user could reach is refused by both sides: the
+// server won't listen there and the client won't send its environment there.
+func TestServe_RefusesADirOthersCanReach(t *testing.T) {
+	sock := socketIn(t)
+	require.NoError(t, os.Chmod(filepath.Dir(sock), 0o777))
+	err := serve.Serve(context.Background(), sock, func(serve.Request) serve.Response { return serve.Response{} }, time.Minute)
+	assert.ErrorIs(t, err, serve.ErrUnsafeDir)
+
+	_, err = serve.Forward(sock, serve.Request{Args: []string{"ask"}}, time.Second, time.Second)
+	assert.ErrorIs(t, err, serve.ErrUnsafeDir)
+
+	// A missing directory just means no server yet.
+	_, err = serve.Forward(filepath.Join(filepath.Dir(sock), "gone", "s.sock"), serve.Request{}, time.Second, time.Second)
+	assert.ErrorIs(t, err, serve.ErrNoServer)
+}
+
+// A signalled server finishes the request it is running before it returns
+// (after which the process exits, so a request still running would be cut).
+func TestServe_FinishesInFlightRequestsOnShutdown(t *testing.T) {
+	sock := socketIn(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	entered := make(chan struct{})
+	var finished atomic.Bool
+	go func() {
+		done <- serve.Serve(ctx, sock, func(r serve.Request) serve.Response {
+			if r.Args[0] == "slow" {
+				close(entered)
+				time.Sleep(300 * time.Millisecond)
+				finished.Store(true)
+			}
+			return serve.Response{Code: 9}
+		}, time.Minute)
+	}()
+	require.Eventually(t, func() bool {
+		_, err := serve.Forward(sock, serve.Request{Args: []string{"x"}}, time.Second, time.Second)
+		return err == nil
+	}, 2*time.Second, 10*time.Millisecond)
+
+	got := make(chan serve.Response, 1)
+	go func() {
+		resp, _ := serve.Forward(sock, serve.Request{Args: []string{"slow"}}, time.Second, 5*time.Second)
+		got <- resp
+	}()
+	<-entered
+	cancel()
+	require.NoError(t, <-done)
+	assert.True(t, finished.Load(), "Serve returned while a request was still running")
+	assert.Equal(t, 9, (<-got).Code)
 }

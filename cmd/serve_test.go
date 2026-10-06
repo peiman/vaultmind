@@ -1,12 +1,15 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/serve"
 	"github.com/peiman/vaultmind/internal/testvault"
+	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
@@ -111,4 +114,41 @@ func TestResetCLIState_RebindsCommandFlags(t *testing.T) {
 	resetCLIState()
 	require.NoError(t, fs.Set("max-items", "7"))
 	assert.Equal(t, 7, viper.GetInt("app.probe.max_items"))
+}
+
+// A command's context starts empty on every run, as in a fresh process: no
+// experiment session left from the run before.
+func TestResetCLIState_ClearsCommandContexts(t *testing.T) {
+	t.Cleanup(resetCLIState)
+	askCmd.SetContext(experiment.WithSession(context.Background(), &experiment.Session{ID: "earlier"}))
+	resetCLIState()
+	assert.Nil(t, experiment.FromContext(askCmd.Context()))
+}
+
+// What the last run found as its config file is forgotten too.
+func TestResetCLIState_ForgetsTheConfigFileFound(t *testing.T) {
+	t.Cleanup(resetCLIState)
+	configFileUsed, configFileStatus = "/elsewhere/config.yaml", "Using config file"
+	resetCLIState()
+	assert.Empty(t, configFileUsed)
+	assert.Empty(t, configFileStatus)
+}
+
+// A command that panics skips the post-run hook; the request still closes
+// the experiment session it opened, so a long-lived server leaks no handles.
+func TestServeExec_APanicStillClosesTheSession(t *testing.T) {
+	probe := &cobra.Command{Use: "panic-probe", RunE: func(*cobra.Command, []string) error {
+		require.NotNil(t, experimentSession, "the pre-run hook opened a session")
+		panic("probe")
+	}}
+	RootCmd.AddCommand(probe)
+	t.Cleanup(func() { RootCmd.RemoveCommand(probe) })
+	here, err := os.Getwd()
+	require.NoError(t, err)
+
+	func() {
+		defer func() { assert.NotNil(t, recover()) }()
+		serveExec(serve.Request{Args: []string{"panic-probe"}, Dir: here, Env: env(nil)})
+	}()
+	assert.Nil(t, experimentSession)
 }

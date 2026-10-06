@@ -50,10 +50,23 @@ func serveExec(req serve.Request) serve.Response {
 	for k, v := range req.Env {
 		_ = os.Setenv(k, v)
 	}
+	// A command that panics skips the post-run hook that closes the
+	// experiment session; close it here so its handle doesn't leak.
+	defer closeExperimentSession()
 	resetCLIState()
 	var out, errw bytes.Buffer
 	code := ExecuteWithIO(req.Args, &out, &errw)
 	return serve.Response{Stdout: out.Bytes(), Stderr: errw.Bytes(), Code: code}
+}
+
+// closeExperimentSession ends and closes the open experiment session, as the
+// post-run hook does.
+func closeExperimentSession() {
+	if experimentSession != nil {
+		_ = experimentSession.DB.EndSession(experimentSession.ID)
+		_ = experimentSession.DB.Close()
+		experimentSession = nil
+	}
 }
 
 func failed(err error) serve.Response {
@@ -164,6 +177,8 @@ func serveUntilIdle(ctx context.Context, idle string) error {
 	if err != nil {
 		return fmt.Errorf("finding the server's socket: %w", err)
 	}
+	// Each ask records its own session; the server itself is not one.
+	closeExperimentSession()
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := serve.Serve(ctx, sock, serveExec, wait); err != nil && !errors.Is(err, serve.ErrAlreadyServing) {

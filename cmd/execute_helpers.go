@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -73,11 +74,24 @@ var flagBindings []flagBinding
 // search path would carry into the next.
 func resetCLIState() {
 	resetFlagsRecursive(RootCmd)
+	resetContexts(RootCmd)
 	output.SetOutputMode("")
 	output.SetCommandName("")
+	configFileUsed, configFileStatus = "", ""
 	viper.Reset()
 	for _, b := range flagBindings {
 		_ = viper.BindPFlag(b.key, b.flag)
+	}
+}
+
+// resetContexts clears every command's context. Cobra gives a command its
+// parent's context only while it has none, and the pre-run hook wraps the
+// experiment session into it, so a second run would still see the first
+// run's session (closed by then) and the chain would grow with every run.
+func resetContexts(cmd *cobra.Command) {
+	cmd.SetContext(context.Background())
+	for _, c := range cmd.Commands() {
+		resetContexts(c)
 	}
 }
 
