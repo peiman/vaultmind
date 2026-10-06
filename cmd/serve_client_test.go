@@ -1,7 +1,11 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -88,4 +92,71 @@ func TestServeUntilIdle(t *testing.T) {
 
 	assert.Error(t, serveUntilIdle(context.Background(), "soon"))
 	assert.Error(t, serveUntilIdle(context.Background(), "0s"))
+}
+
+// A server slower than the client's budget is abandoned: the ask runs here,
+// and no second server is started, since one is running.
+func TestTryServer_ASlowServerIsAbandoned(t *testing.T) {
+	started := isolatedState(t)
+	orig := serveRequestTimeout
+	serveRequestTimeout = 100 * time.Millisecond
+	t.Cleanup(func() { serveRequestTimeout = orig })
+	serveFake(t, func(r serve.Request) serve.Response {
+		if r.Args[0] == "ask" {
+			time.Sleep(time.Second)
+		}
+		return serve.Response{}
+	})
+
+	_, ok := tryServer([]string{"ask", "q"})
+	assert.False(t, ok)
+	assert.Zero(t, *started)
+}
+
+// Main answers an ask from the server, with the server's exit code.
+func TestMain_AnAskGoesToTheServer(t *testing.T) {
+	isolatedState(t)
+	serveFake(t, func(serve.Request) serve.Response { return serve.Response{Code: 5} })
+	assert.Equal(t, 5, Main([]string{"ask", "q"}))
+}
+
+// The spawned server runs `<exe> serve` from the temp dir, detached.
+func TestSpawnServer_RunsServeFromTheTempDir(t *testing.T) {
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "ran")
+	exe := filepath.Join(dir, "fake-vaultmind")
+	require.NoError(t, os.WriteFile(exe, []byte("#!/bin/sh\necho \"$1 $(pwd -P)\" > "+marker+"\n"), 0o700))
+
+	spawnServer(exe)
+	require.Eventually(t, func() bool { _, err := os.Stat(marker); return err == nil }, 5*time.Second, 20*time.Millisecond)
+	tmp, err := filepath.EvalSymlinks(os.TempDir())
+	require.NoError(t, err)
+	assert.Eventually(t, func() bool {
+		b, _ := os.ReadFile(marker)
+		return strings.TrimSpace(string(b)) == "serve "+tmp
+	}, 2*time.Second, 20*time.Millisecond)
+
+	spawnServer(filepath.Join(dir, "missing")) // a binary that can't start is no error
+}
+
+// The serve command reads --idle and rejects a value that isn't a duration.
+func TestServeCommand_RejectsABadIdle(t *testing.T) {
+	isolatedState(t)
+	resetCLIState()
+	t.Cleanup(resetCLIState)
+	var out, errw bytes.Buffer
+	assert.Equal(t, 1, ExecuteWithIO([]string{"serve", "--idle", "soon"}, &out, &errw))
+	assert.Contains(t, errw.String(), `--idle "soon"`)
+}
+
+// In JSON mode a failed command's error is an envelope on stdout, as main
+// reported it before the server existed.
+func TestExecuteWithIO_JSONErrorIsAnEnvelope(t *testing.T) {
+	isolatedState(t)
+	resetCLIState()
+	t.Cleanup(resetCLIState)
+	var out, errw bytes.Buffer
+	assert.Equal(t, 1, ExecuteWithIO([]string{"serve", "--idle", "soon", "--output-format", "json"}, &out, &errw))
+	assert.Contains(t, out.String(), `"status": "error"`)
+	assert.Contains(t, out.String(), `--idle`)
 }

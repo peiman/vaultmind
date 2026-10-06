@@ -152,3 +152,29 @@ func TestSocketPath_PerVersionAndShort(t *testing.T) {
 	long := serve.SocketPath("/"+string(make([]byte, 0))+filepath.Join("very", "long", "state", "directory", "path", "that", "keeps", "going", "and", "going", "for", "a", "while", "longer"), "v0.10.4-12-gabcdef0-dirty")
 	assert.LessOrEqual(t, len(long), 100)
 }
+
+// A request that panics fails alone; the server keeps answering.
+func TestServe_APanicFailsOnlyItsRequest(t *testing.T) {
+	sock := socketIn(t)
+	start(t, sock, func(r serve.Request) serve.Response {
+		if r.Args[0] == "boom" {
+			panic("boom")
+		}
+		return serve.Response{Code: 2}
+	}, time.Minute)
+
+	resp, err := serve.Forward(sock, serve.Request{Args: []string{"boom"}}, time.Second, 5*time.Second)
+	require.NoError(t, err)
+	assert.Equal(t, 70, resp.Code)
+	assert.Contains(t, string(resp.Stderr), "boom")
+	resp, err = serve.Forward(sock, serve.Request{Args: []string{"ask"}}, time.Second, 5*time.Second)
+	require.NoError(t, err)
+	assert.Equal(t, 2, resp.Code)
+}
+
+// A version string with characters a file name shouldn't carry still names
+// its own socket.
+func TestSocketPath_OddVersionCharacters(t *testing.T) {
+	p := serve.SocketPath("/state", "v1.0.0+meta/x y")
+	assert.Equal(t, "/state/serve-v1.0.0_meta_x_y.sock", p)
+}

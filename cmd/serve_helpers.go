@@ -22,14 +22,13 @@ import (
 // process, as before the server existed.
 const envNoServe = "VAULTMIND_NO_SERVE"
 
-const (
-	// serveConnectTimeout bounds the wait for a server that is there but slow
-	// to accept; a missing server fails at once.
-	serveConnectTimeout = 200 * time.Millisecond
-	// serveRequestTimeout bounds a whole forwarded ask. A server that takes
-	// longer is abandoned and the ask runs here instead.
-	serveRequestTimeout = 10 * time.Second
-)
+// serveConnectTimeout bounds the wait for a server that is there but slow to
+// accept; a missing server fails at once.
+const serveConnectTimeout = 200 * time.Millisecond
+
+// serveRequestTimeout bounds a whole forwarded ask. A server that takes longer
+// is abandoned and the ask runs here instead. A variable for tests.
+var serveRequestTimeout = 10 * time.Second
 
 // serveExec runs one request in this process as a fresh process would: in
 // the request's directory, with its environment, from a reset CLI. The
@@ -134,10 +133,13 @@ func tryServer(args []string) (int, bool) {
 // finds the first already serving and exits. A variable, so tests (whose
 // executable is the test binary) can stand in for it.
 var startServer = func() {
-	exe, err := os.Executable()
-	if err != nil {
-		return
+	if exe, err := os.Executable(); err == nil {
+		spawnServer(exe)
 	}
+}
+
+// spawnServer starts exe's server in its own session, without waiting for it.
+func spawnServer(exe string) {
 	// exe is os.Executable() and the arguments are fixed: nothing a caller
 	// supplies reaches the command line.
 	// nosemgrep: go-dangerous-exec -- exe is this binary; the arguments are fixed
