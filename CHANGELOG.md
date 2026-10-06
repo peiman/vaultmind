@@ -16,6 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     interleaved runs).
   - **Quality:** on 32 labelled real queries Hit@5 held at 30/32 and MRR rose from 0.887
     to 0.910. Long-doc page Hit@3 and delivery held (0.833, 6/12).
+- **`ask` is about 10% faster again, with identical answers.** Activation scoring sorted and
+  merged the session windows again for every past access of every note, tens of thousands
+  of times per `ask`. It now merges them once per scoring pass.
+  - **Speed:** a three-vault recall-hook `ask` went from 1.99 s to 1.78 s (median of 12
+    interleaved runs, load ~8). One scoring pass over a real access log went from 44.5 ms
+    to 8.0 ms.
+  - **Same answers:** every score is bit-identical to before. Checked against the old code
+    on a real experiments.db (1,054 notes × 8 parameter sets), on the 32 labelled queries,
+    and on `ask` output in 8 shapes.
 
 ### Fixed
 

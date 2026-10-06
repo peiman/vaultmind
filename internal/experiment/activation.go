@@ -22,17 +22,17 @@ type SessionWindow struct {
 // PartitionTime splits the duration [start, end] into active (overlapping sessions)
 // and idle (gaps between sessions). Windows need not be sorted.
 func PartitionTime(start, end time.Time, windows []SessionWindow) (active, idle time.Duration) {
-	total := end.Sub(start)
-	if total <= 0 {
-		return 0, 0
-	}
+	return partitionMerged(start, end, mergeWindows(windows))
+}
+
+// mergeWindows returns the windows sorted by start with overlapping and
+// touching ones joined, so no time is counted twice. It works on a copy.
+func mergeWindows(windows []SessionWindow) []SessionWindow {
 	sorted := make([]SessionWindow, len(windows))
 	copy(sorted, windows)
 	sort.Slice(sorted, func(i, j int) bool {
 		return sorted[i].Start.Before(sorted[j].Start)
 	})
-
-	// Merge overlapping windows to avoid double-counting.
 	merged := make([]SessionWindow, 0, len(sorted))
 	for _, w := range sorted {
 		if len(merged) > 0 && !w.Start.After(merged[len(merged)-1].End) {
@@ -43,7 +43,16 @@ func PartitionTime(start, end time.Time, windows []SessionWindow) (active, idle 
 			merged = append(merged, w)
 		}
 	}
+	return merged
+}
 
+// partitionMerged is PartitionTime over windows already merged by
+// mergeWindows.
+func partitionMerged(start, end time.Time, merged []SessionWindow) (active, idle time.Duration) {
+	total := end.Sub(start)
+	if total <= 0 {
+		return 0, 0
+	}
 	for _, w := range merged {
 		wStart := w.Start
 		if wStart.Before(start) {
@@ -73,13 +82,31 @@ func CompressedElapsed(active, idle time.Duration, gamma float64) time.Duration 
 // ComputeRetrieval computes Bi = ln(sum(tj_effective^(-d))).
 // Uses session windows to partition each access-to-now interval.
 // Returns 0.0 for empty accessTimes.
+//
+// The windows are merged once here, not once per access: a note's access
+// history can run to hundreds of entries, and every ask scores every
+// accessed note several times.
 func ComputeRetrieval(accessTimes []time.Time, now time.Time, windows []SessionWindow, gamma, d float64) float64 {
+	return computeRetrievalMerged(accessTimes, now, mergeWindows(windows), gamma, d)
+}
+
+// computeRetrievalMerged is ComputeRetrieval over windows already merged by
+// mergeWindows, so a batch of notes merges them once.
+func computeRetrievalMerged(accessTimes []time.Time, now time.Time, merged []SessionWindow, gamma, d float64) float64 {
+	return retrievalFrom(accessTimes, now, gamma, d, func(at time.Time) (time.Duration, time.Duration) {
+		return partitionMerged(at, now, merged)
+	})
+}
+
+// retrievalFrom is Bi = ln(sum(tj_effective^(-d))) with partition giving each
+// access's active and idle time up to now.
+func retrievalFrom(accessTimes []time.Time, now time.Time, gamma, d float64, partition func(time.Time) (time.Duration, time.Duration)) float64 {
 	if len(accessTimes) == 0 {
 		return 0.0
 	}
 	var sum float64
 	for _, at := range accessTimes {
-		active, idle := PartitionTime(at, now, windows)
+		active, idle := partition(at)
 		effective := CompressedElapsed(active, idle, gamma)
 		hours := effective.Hours()
 		if hours <= 0 {
