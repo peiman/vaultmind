@@ -97,78 +97,28 @@ func (d *DB) BatchNoteAccessTimes(noteIDs []string) (map[string][]time.Time, err
 	if len(noteIDs) == 0 {
 		return result, nil
 	}
-
-	wanted := make(map[string]bool, len(noteIDs))
-	for _, id := range noteIDs {
-		wanted[id] = true
-	}
-
-	rows, err := d.db.Query(
-		`SELECT timestamp, event_data FROM events
-		 WHERE event_type = ? ORDER BY timestamp ASC`,
-		EventNoteAccess,
-	)
+	err := d.withAccessLog(func(l *accessLog) {
+		for _, id := range noteIDs {
+			for _, at := range l.times[id] {
+				result[id] = append(result[id], at.t)
+			}
+		}
+	})
 	if err != nil {
 		return nil, fmt.Errorf("querying batch note access: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
-
-	for rows.Next() {
-		var ts, dataJSON string
-		if err := rows.Scan(&ts, &dataJSON); err != nil {
-			continue
-		}
-		var data map[string]any
-		if err := json.Unmarshal([]byte(dataJSON), &data); err != nil {
-			continue
-		}
-		noteID, ok := data["note_id"].(string)
-		if !ok || !wanted[noteID] {
-			continue
-		}
-		if !activationSignalFrom(data) {
-			continue
-		}
-		t, err := time.Parse(time.RFC3339, ts)
-		if err != nil {
-			continue
-		}
-		result[noteID] = append(result[noteID], t)
-	}
-	return result, rows.Err()
+	return result, nil
 }
 
-// AccessedNoteIDs returns all unique note IDs from note_access events.
+// AccessedNoteIDs returns all unique note IDs from note_access events that
+// count as activation signal, in the order each was first accessed.
 func (d *DB) AccessedNoteIDs() ([]string, error) {
-	rows, err := d.db.Query(
-		`SELECT event_data FROM events WHERE event_type = ?`,
-		EventNoteAccess,
-	)
+	var ids []string
+	err := d.withAccessLog(func(l *accessLog) {
+		ids = append([]string(nil), l.ids...)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("querying accessed note IDs: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
-
-	seen := make(map[string]bool)
-	var ids []string
-	for rows.Next() {
-		var dataJSON string
-		if err := rows.Scan(&dataJSON); err != nil {
-			continue
-		}
-		var data map[string]any
-		if err := json.Unmarshal([]byte(dataJSON), &data); err != nil {
-			continue
-		}
-		noteID, ok := data["note_id"].(string)
-		if !ok || seen[noteID] {
-			continue
-		}
-		if !activationSignalFrom(data) {
-			continue
-		}
-		seen[noteID] = true
-		ids = append(ids, noteID)
-	}
-	return ids, rows.Err()
+	return ids, nil
 }

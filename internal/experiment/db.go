@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/rs/zerolog/log"
 	_ "modernc.org/sqlite" // pure-Go SQLite driver
@@ -143,6 +144,11 @@ CREATE INDEX IF NOT EXISTS idx_calibration_vault ON calibration_snapshots(vault_
 // DB wraps *sql.DB with schema initialization and experiment-specific helpers.
 type DB struct {
 	db *sql.DB
+
+	// The decoded note_access history, read once and kept up to date (see
+	// accessLog).
+	accessOnce sync.Once
+	access     *accessLog
 }
 
 // MemoryPath opens a database that exists only in RAM. Used by the read path
