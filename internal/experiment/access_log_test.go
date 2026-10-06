@@ -117,12 +117,18 @@ func randomEvent(r *rand.Rand, base time.Time) (typ, ts, data string) {
 // The kept access log answers exactly as a fresh scan of the events would,
 // read after read, however events arrive in between.
 func TestAccessLog_EqualsFreshScansAcrossWrites(t *testing.T) {
+	for seed := int64(1); seed <= 6; seed++ {
+		t.Run(fmt.Sprintf("seed%d", seed), func(t *testing.T) { accessLogMatchesScans(t, seed) })
+	}
+}
+
+func accessLogMatchesScans(t *testing.T, seed int64) {
 	d, err := Open(filepath.Join(t.TempDir(), "exp.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = d.Close() })
 	sid, err := d.StartSession("/v")
 	require.NoError(t, err)
-	r := rand.New(rand.NewSource(5))
+	r := rand.New(rand.NewSource(seed))
 	base := time.Date(2026, 10, 7, 9, 0, 0, 0, time.UTC)
 
 	for step := 0; step < 120; step++ {
