@@ -25,6 +25,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Same answers:** every score is bit-identical to before. Checked against the old code
     on a real experiments.db (1,054 notes × 8 parameter sets), on the 32 labelled queries,
     and on `ask` output in 8 shapes.
+- **`ask` is about 10% faster once more, with identical answers.** Each activation score read
+  the whole access log twice, decoding every event, and an `ask` scores about three times:
+  six full decodes of a log that grows with every access. The log is now decoded once per
+  run, and later reads take only the events added since. That includes the ones the same
+  `ask` writes between its scores, so the answers are exactly those of a fresh read.
+  - **Speed:** a three-vault recall-hook `ask` went from 1.80 s to 1.62 s (median of 12
+    interleaved runs, load ~8). Together with the change above it went from 2.01 s to
+    1.63 s (−19%).
+  - **Same answers:** checked against the old reads across randomized interleaved writes,
+    and on a real experiments.db before and after writes. The 32 labelled queries and
+    `ask` output in 8 shapes are identical.
 
 ### Fixed
 
