@@ -342,6 +342,10 @@ var commandCatalog = map[string]catalogEntry{
 		group: groupLifecycle,
 		when:  "an agent without a shell (Claude Desktop, any MCP client) should use the vault — add it as an MCP server.",
 	},
+	"vaultmind serve": {
+		group: groupSetup,
+		when:  "you want to see or tune the background process that makes ask faster — ask starts it for you.",
+	},
 	"vaultmind hooks install": {
 		group: groupLifecycle,
 		when:  "you want to wire VaultMind into a project by writing its hook scripts.",

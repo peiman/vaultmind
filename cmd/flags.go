@@ -82,6 +82,7 @@ func RegisterFlagsForPrefixWithOverrides(cmd *cobra.Command, prefix string, over
 		if err := viper.BindPFlag(opt.Key, cmd.Flags().Lookup(flagName)); err != nil {
 			return fmt.Errorf("failed to bind flag %s to key %s: %w", flagName, opt.Key, err)
 		}
+		flagBindings = append(flagBindings, flagBinding{key: opt.Key, flag: cmd.Flags().Lookup(flagName)})
 	}
 
 	return nil

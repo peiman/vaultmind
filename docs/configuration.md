@@ -313,6 +313,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.search.vaults` | string | `` | `VAULTMIND_APP_SEARCH_VAULTS` | Search several vaults, comma-separated (overrides --vault); one ranked section per vault |
 | `app.self.vault` | string | `.` | `VAULTMIND_APP_SELF_VAULT` | Path to vault root |
 | `app.self.limit` | int | `10` | `VAULTMIND_APP_SELF_LIMIT` | Max rows per section (recent/hot/stale) |
+| `app.serve.idle` | string | `30m` | `VAULTMIND_APP_SERVE_IDLE` | Exit after this long without a request (a Go duration: 30m, 2h) |
 | `app.tree.vault` | string | `.` | `VAULTMIND_APP_TREE_VAULT` | Path to vault root |
 | `app.tree.vaults` | string | `` | `VAULTMIND_APP_TREE_VAULTS` | Map several vaults, comma-separated (overrides --vault) |
 | `app.tree.json` | bool | `false` | `VAULTMIND_APP_TREE_JSON` | Output in JSON format |
@@ -1281,6 +1282,10 @@ app:
     # Max rows per section (recent/hot/stale)
     limit: 10
 
+  serve:
+    # Exit after this long without a request (a Go duration: 30m, 2h)
+    idle: 30m
+
   tree:
     # Path to vault root
     vault: .
@@ -2222,6 +2227,9 @@ export VAULTMIND_APP_SELF_VAULT=.
 
 # Max rows per section (recent/hot/stale)
 export VAULTMIND_APP_SELF_LIMIT=10
+
+# Exit after this long without a request (a Go duration: 30m, 2h)
+export VAULTMIND_APP_SERVE_IDLE=30m
 
 # Path to vault root
 export VAULTMIND_APP_TREE_VAULT=.

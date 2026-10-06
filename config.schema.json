@@ -1903,6 +1903,16 @@
           },
           "type": "object"
         },
+        "serve": {
+          "properties": {
+            "idle": {
+              "default": "30m",
+              "description": "Exit after this long without a request (a Go duration: 30m, 2h)",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
         "tree": {
           "properties": {
             "brief": {

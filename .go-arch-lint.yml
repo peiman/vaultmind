@@ -175,6 +175,8 @@ components:
       - internal/importdocs/**
       # VaultMind MCP server (vaultmind mcp): each tool runs the vaultmind command of the same name with --json:
       - internal/mcpserver/**
+      # VaultMind warm server (vaultmind serve): the socket transport; cmd runs each request as a fresh process would:
+      - internal/serve/**
 
   # pkg/ was cleaned by task init (checkmate is now an external dependency).
   # Re-add this section if you create new public packages in pkg/.

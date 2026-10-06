@@ -8,8 +8,6 @@ import (
 
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/vault"
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
 )
 
@@ -229,26 +227,4 @@ func runRootCmd(t *testing.T, args ...string) (*bytes.Buffer, *bytes.Buffer, err
 	defer RootCmd.SetArgs(nil)
 	err := RootCmd.Execute()
 	return out, errOut, err
-}
-
-// resetFlagsRecursive walks cmd and all descendants, resetting every flag to
-// its declared default. Covers persistent and local flags.
-func resetFlagsRecursive(cmd *cobra.Command) {
-	reset := func(f *pflag.Flag) {
-		_ = f.Value.Set(f.DefValue)
-		f.Changed = false
-		// A flag that remembers its occurrences must forget them here: this
-		// helper exists to simulate a FRESH PROCESS, and a real one has parsed
-		// nothing yet. Order matters — clearing BEFORE the reset above would
-		// record the default assignment as a user-supplied occurrence, which
-		// made a single --vault look like a repeat.
-		if rv, ok := f.Value.(*repeatedFlagValue); ok {
-			rv.Reset()
-		}
-	}
-	cmd.Flags().VisitAll(reset)
-	cmd.PersistentFlags().VisitAll(reset)
-	for _, c := range cmd.Commands() {
-		resetFlagsRecursive(c)
-	}
 }

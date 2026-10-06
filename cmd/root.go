@@ -240,7 +240,9 @@ var RootCmd = &cobra.Command{
 		}
 
 		// Initialize logger with configuration values
-		if err := logger.Init(nil); err != nil {
+		// The command's stderr, not the process's: a warm server sends each
+		// request's log lines back to the caller that made it.
+		if err := logger.Init(cmd.ErrOrStderr()); err != nil {
 			return fmt.Errorf("failed to initialize logger: %w", err)
 		}
 
