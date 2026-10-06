@@ -92,6 +92,7 @@ func ComputeBatchScoresAt(db *DB, noteIDs []string, params ActivationParams, sim
 func ScoreFromData(noteIDs []string, accessMap map[string][]time.Time, windows []SessionWindow, now time.Time, params ActivationParams, similarities map[string]float64) (map[string]float64, map[string]map[string]float64) {
 	scores := make(map[string]float64, len(noteIDs))
 	features := make(map[string]map[string]float64, len(noteIDs))
+	merged := mergeWindows(windows) // once for the batch, not once per note
 
 	for _, noteID := range noteIDs {
 		accessTimes := accessMap[noteID]
@@ -111,7 +112,7 @@ func ScoreFromData(noteIDs []string, accessMap map[string][]time.Time, windows [
 			continue
 		}
 
-		retrieval := ComputeRetrieval(accessTimes, now, windows, params.Gamma, params.D)
+		retrieval := computeRetrievalMerged(accessTimes, now, merged, params.Gamma, params.D)
 		storage := ComputeStorage(len(accessTimes))
 		score := CombinedScore(retrieval, storage, sim, params.Alpha, params.Beta, params.Delta)
 

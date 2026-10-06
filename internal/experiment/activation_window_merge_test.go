@@ -1,6 +1,7 @@
 package experiment
 
 import (
+	"math"
 	"math/rand"
 	"sort"
 	"testing"
@@ -49,10 +50,25 @@ func partitionTimeReference(start, end time.Time, windows []SessionWindow) (acti
 	return active, idle
 }
 
+// computeRetrievalReference is ComputeRetrieval as it was, verbatim.
 func computeRetrievalReference(accessTimes []time.Time, now time.Time, windows []SessionWindow, gamma, d float64) float64 {
-	return retrievalFrom(accessTimes, now, gamma, d, func(at time.Time) (time.Duration, time.Duration) {
-		return partitionTimeReference(at, now, windows)
-	})
+	if len(accessTimes) == 0 {
+		return 0.0
+	}
+	var sum float64
+	for _, at := range accessTimes {
+		active, idle := partitionTimeReference(at, now, windows)
+		effective := CompressedElapsed(active, idle, gamma)
+		hours := effective.Hours()
+		if hours <= 0 {
+			hours = MinElapsedHours
+		}
+		sum += math.Pow(hours, -d)
+	}
+	if sum <= 0 {
+		return 0.0
+	}
+	return math.Log(sum)
 }
 
 // randomWindows returns n windows in random order, some overlapping, some
@@ -93,6 +109,56 @@ func TestComputeRetrieval_EqualsPerAccessMerging(t *testing.T) {
 			require.Equal(t, wi, gi)
 		}
 	}
+}
+
+// A batch scored with the windows merged once gives exactly the scores and
+// features of scoring each note with its own per-access merging.
+func TestScoreFromData_EqualsPerAccessMerging(t *testing.T) {
+	r := rand.New(rand.NewSource(11))
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	for trial := 0; trial < 50; trial++ {
+		windows := randomWindows(r, now, r.Intn(101))
+		ids := []string{"never-read"}
+		access := map[string][]time.Time{}
+		for n := 0; n < 20; n++ {
+			id := string(rune('a' + n))
+			ids = append(ids, id)
+			for i := 0; i < 1+r.Intn(30); i++ {
+				access[id] = append(access[id], now.Add(-time.Duration(r.Int63n(int64(40*24*time.Hour)))))
+			}
+		}
+		params := DefaultActivationParamsWithSimilarity(0.1)
+		sims := map[string]float64{"a": 0.7, "never-read": 0.4}
+		wantScores, wantFeatures := scoreFromDataReference(ids, access, windows, now, params, sims)
+		scores, features := ScoreFromData(ids, access, windows, now, params, sims)
+		require.Equal(t, wantScores, scores)
+		require.Equal(t, wantFeatures, features)
+	}
+}
+
+// scoreFromDataReference is ScoreFromData as it was, verbatim, scoring each
+// note through the per-access merging reference.
+func scoreFromDataReference(noteIDs []string, accessMap map[string][]time.Time, windows []SessionWindow, now time.Time, params ActivationParams, similarities map[string]float64) (map[string]float64, map[string]map[string]float64) {
+	scores := make(map[string]float64, len(noteIDs))
+	features := make(map[string]map[string]float64, len(noteIDs))
+	for _, noteID := range noteIDs {
+		accessTimes := accessMap[noteID]
+		sim := 0.0
+		if similarities != nil {
+			sim = similarities[noteID]
+		}
+		if len(accessTimes) == 0 {
+			scores[noteID] = CombinedScore(0.0, 0.0, sim, params.Alpha, params.Beta, params.Delta)
+			features[noteID] = map[string]float64{"retrieval_strength": 0.0, "storage_strength": 0.0, "similarity": sim, "access_count": 0.0}
+			continue
+		}
+		retrieval := computeRetrievalReference(accessTimes, now, windows, params.Gamma, params.D)
+		storage := ComputeStorage(len(accessTimes))
+		score := CombinedScore(retrieval, storage, sim, params.Alpha, params.Beta, params.Delta)
+		scores[noteID] = score
+		features[noteID] = map[string]float64{"retrieval_strength": retrieval, "storage_strength": storage, "similarity": sim, "access_count": float64(len(accessTimes))}
+	}
+	return scores, features
 }
 
 // The caller's windows are left as they were: merging works on a copy.

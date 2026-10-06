@@ -87,7 +87,12 @@ func CompressedElapsed(active, idle time.Duration, gamma float64) time.Duration 
 // history can run to hundreds of entries, and every ask scores every
 // accessed note several times.
 func ComputeRetrieval(accessTimes []time.Time, now time.Time, windows []SessionWindow, gamma, d float64) float64 {
-	merged := mergeWindows(windows)
+	return computeRetrievalMerged(accessTimes, now, mergeWindows(windows), gamma, d)
+}
+
+// computeRetrievalMerged is ComputeRetrieval over windows already merged by
+// mergeWindows, so a batch of notes merges them once.
+func computeRetrievalMerged(accessTimes []time.Time, now time.Time, merged []SessionWindow, gamma, d float64) float64 {
 	return retrievalFrom(accessTimes, now, gamma, d, func(at time.Time) (time.Duration, time.Duration) {
 		return partitionMerged(at, now, merged)
 	})
