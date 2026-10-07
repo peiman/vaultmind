@@ -949,6 +949,10 @@ app:
     # Max rows per section (recent/hot/stale)
     limit: 10
 
+  serve:
+    # Exit after this long without a request (a Go duration: 30m, 2h)
+    idle: 30m
+
   tree:
     # Path to vault root
     vault: .

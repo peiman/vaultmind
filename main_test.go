@@ -53,11 +53,8 @@ func TestMainFunction(t *testing.T) {
 				},
 			})
 
-			// Set command arguments
-			testRoot.SetArgs([]string{tt.cmd})
-
 			// EXECUTION PHASE
-			code := run()
+			code := run([]string{tt.cmd})
 
 			// ASSERTION PHASE
 			if code != tt.wantCode {
@@ -88,9 +85,7 @@ func TestRun_AlreadyWrittenEnvelopeStillExitsNonZero(t *testing.T) {
 			return cmdutil.ErrAlreadyWritten
 		},
 	})
-	testRoot.SetArgs([]string{"wrote-envelope"})
-
-	if code := run(); code != 1 {
+	if code := run([]string{"wrote-envelope"}); code != 1 {
 		t.Errorf("a written error envelope must exit non-zero; got %d", code)
 	}
 }
@@ -108,9 +103,7 @@ func TestRun_WrappedAlreadyWrittenStillExitsNonZero(t *testing.T) {
 			return fmt.Errorf("running query: %w", cmdutil.ErrAlreadyWritten)
 		},
 	})
-	testRoot.SetArgs([]string{"wrapped"})
-
-	if code := run(); code != 1 {
+	if code := run([]string{"wrapped"}); code != 1 {
 		t.Errorf("a wrapped sentinel must still exit non-zero; got %d", code)
 	}
 }

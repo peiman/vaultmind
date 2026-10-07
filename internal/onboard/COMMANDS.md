@@ -98,4 +98,5 @@ Generated from the command tree — do not edit by hand (run `task generate:docs
 | `vaultmind git` | Inspect git repository state relevant to vault operations | you want git repository state relevant to VaultMind mutation policies. |
 | `vaultmind git status` | Report git branch, dirty, and merge/rebase state for a vault | a script or agent needs to gate on the vault's branch, dirty, or merge/rebase state. |
 | `vaultmind ping` | Respond with a pong (connectivity smoke test) | you want to smoke-test that the binary runs and renders output. |
+| `vaultmind serve` | Keep vaultmind warm so ask answers faster (started for you) | you want to see or tune the background process that makes ask faster — ask starts it for you. |
 | `vaultmind version` | Print the version, commit, and build date | you want the build version, commit, and date. |
