@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`ask` runs about twice as fast once a background server is up.** The first `ask`
+  starts `vaultmind serve`, which keeps the embedding model loaded; later asks run in it.
+  - **Speed:** a three-vault recall-hook `ask` went from 1.79 s to 0.91 s (median of 12
+    runs interleaved with server-off runs, load ~8).
+  - **Same answers:** output was byte-identical to a run without the server in 8 query
+    shapes. If the server is gone, slow or another version's, `ask` runs on its own.
+  - **Cost:** the server holds about 2.4 GB of memory while idle and exits after 30 idle
+    minutes (`vaultmind serve --idle`). One server per user per installed binary, on a
+    private socket. `VAULTMIND_NO_SERVE=1` turns it off. Not offered on Windows.
+
 ## [0.10.5] - 2026-10-07
 
 > `ask` is about 20–25% faster with identical answers, and re-running `hooks install`
