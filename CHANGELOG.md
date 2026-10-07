@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.5] - 2026-10-07
+
+> `ask` is about 20–25% faster with identical answers, and re-running `hooks install`
+> in a Codex or Cursor project no longer bakes the project in as the vault.
+
 ### Changed
 
 - **`ask` is about a quarter faster.** ColBERT now scores the union of each other search
@@ -2724,7 +2729,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.4...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.5...HEAD
+[0.10.5]: https://github.com/peiman/vaultmind/compare/v0.10.4...v0.10.5
 [0.10.4]: https://github.com/peiman/vaultmind/compare/v0.10.3...v0.10.4
 [0.10.3]: https://github.com/peiman/vaultmind/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/peiman/vaultmind/compare/v0.10.1...v0.10.2
