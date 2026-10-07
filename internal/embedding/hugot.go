@@ -138,7 +138,7 @@ func NewHugotEmbedder(ctx context.Context, cfg HugotConfig) (*HugotEmbedder, err
 		}
 	}
 
-	pipeline, err := hugot.NewPipeline(session, hugot.FeatureExtractionConfig{
+	pipeline, err := session.NewPipeline(hugot.FeatureExtractionConfig{
 		ModelPath: modelPath,
 		Name:      "vaultmind-embedder",
 	})

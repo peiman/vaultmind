@@ -3,17 +3,17 @@ module github.com/peiman/vaultmind
 go 1.27.0
 
 require (
-	codeberg.org/readeck/go-readability/v2 v2.1.2
+	codeberg.org/readeck/go-readability/v2 v2.1.3
 	filippo.io/edwards25519 v1.2.0
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.2
 	github.com/bep/imagemeta v1.0.1
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/go-git/go-billy/v5 v5.9.0
+	github.com/go-git/go-billy/v5 v5.9.2
 	github.com/go-git/go-git/v5 v5.19.2
 	github.com/gowebpki/jcs v1.0.2
 	github.com/klippa-app/go-pdfium v1.21.1
-	github.com/knights-analytics/hugot v0.8.0
+	github.com/knights-analytics/hugot v0.8.1
 	github.com/mattn/go-isatty v0.0.24
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/nlpodyssey/gopickle v0.3.0
@@ -55,7 +55,6 @@ require (
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/cloudflare/circl v1.6.3 // indirect
 	github.com/cyphar/filepath-securejoin v0.6.1 // indirect
-	github.com/daulet/tokenizers v1.27.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
@@ -70,7 +69,7 @@ require (
 	github.com/gomlx/compute v0.1.14 // indirect
 	github.com/gomlx/compute-onnx v0.1.13 // indirect
 	github.com/gomlx/exceptions v0.0.3 // indirect
-	github.com/gomlx/go-huggingface v0.4.12 // indirect
+	github.com/gomlx/go-huggingface v0.4.13 // indirect
 	github.com/gomlx/go-xla v0.4.13 // indirect
 	github.com/gomlx/gomlx v0.28.16 // indirect
 	github.com/gomlx/onnx-gomlx v0.5.13 // indirect
@@ -82,13 +81,13 @@ require (
 	github.com/jolestar/go-commons-pool/v2 v2.1.2 // indirect
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
-	github.com/knights-analytics/ortgenai v0.3.2 // indirect
+	github.com/knights-analytics/ortgenai v0.3.3 // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect
 	github.com/mattn/go-runewidth v0.0.21 // indirect
 	github.com/mfridman/interpolate v0.0.2 // indirect
-	github.com/microsoft/onnxruntime/go v0.0.0-20260922015325-62e95311b771 // indirect
+	github.com/microsoft/onnxruntime/go v0.0.0-20261002084303-27f3d47e38cd // indirect
 	github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/muesli/termenv v0.16.0 // indirect
@@ -120,7 +119,7 @@ require (
 	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
-	modernc.org/libc v1.75.7 // indirect
+	modernc.org/libc v1.77.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
 )
