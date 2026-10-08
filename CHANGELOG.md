@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     minutes (`vaultmind serve --idle`). One server per user per installed binary, on a
     private socket. `VAULTMIND_NO_SERVE=1` turns it off. Not offered on Windows.
 
+### Changed
+
+- Updated the Go dependency group, including hugot v0.8.1. Both embedders now use
+  `Session.NewPipeline`, preserving their existing pipeline configuration and behavior.
+  SQLite remains at v1.59.0 because v1.60.1 does not satisfy the project's license policy.
+
 ## [0.10.5] - 2026-10-07
 
 > `ask` is about 20–25% faster with identical answers, and re-running `hooks install`

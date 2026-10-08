@@ -50,7 +50,7 @@ func NewBGEM3Embedder(ctx context.Context, cfg HugotConfig) (*BGEM3Embedder, err
 		return nil, fmt.Errorf("creating hugot session: %w", err)
 	}
 
-	pipeline, err := hugot.NewPipeline(session, hugot.FeatureExtractionConfig{
+	pipeline, err := session.NewPipeline(hugot.FeatureExtractionConfig{
 		ModelPath: modelDir,
 		Name:      "vaultmind-bgem3",
 	})
