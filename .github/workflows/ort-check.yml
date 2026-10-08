@@ -1,0 +1,38 @@
+name: ORT Toolchain Check
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+      - '.go-version'
+      - 'Taskfile.yml'
+      - '.claude/scripts/*ort*.sh'
+      - '.claude/scripts/build-vaultmind.sh'
+      - 'internal/embedding/**'
+      - 'test/integration/setup_ort_test.go'
+      - '.github/workflows/ci.yml'
+      - '.github/workflows/ort-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  ort-toolchain:
+    name: Resolve tokenizer and compile ORT
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        with:
+          go-version-file: '.go-version'
+          cache-dependency-path: 'go.sum'
+      - run: go mod download
+      - name: Test tokenizer detection
+        run: go test -run TestORTTokenizerDetection ./test/integration
+      - name: Resolve tokenizer without native downloads
+        run: bash .claude/scripts/setup-ort.sh --tokenizers-version
+      - name: Compile ORT binary
+        run: CGO_ENABLED=1 go build -tags ORT -o /tmp/vaultmind-ort .

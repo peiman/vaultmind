@@ -545,7 +545,7 @@ jobs:
       id-token: write # keyless cosign signing via OIDC
       attestations: write # SLSA build provenance for the ORT archive built here
     env:
-      ORT_VERSION: '1.29.1' # official Microsoft ONNX Runtime to bundle (dlopen'd at runtime). >= 1.29: onnxruntime_go 1.35 (via hugot 0.7.8) requests ORT API 29 (#148)
+      ORT_VERSION: '1.29.1' # official Microsoft ONNX Runtime to bundle (dlopen'd at runtime). >= 1.29: microsoft/onnxruntime/go (via hugot 0.8.1) requests ORT API 29 (#148)
     strategy:
       fail-fast: false # one platform failing must not block the other
       matrix:
@@ -617,8 +617,8 @@ jobs:
           mkdir -p ort && tar xzf ort.tgz -C ort
           LIBDIR="$(find "$PWD/ort" -type d -name lib | head -1)"
           echo "libdir=$LIBDIR" >> "$GITHUB_OUTPUT"
-          # setup-ort.sh verifies a SYSTEM libonnxruntime before fetching
-          # libtokenizers.a. Place the official lib where it looks (the build
+          # setup-ort.sh verifies a SYSTEM libonnxruntime. Place the official
+          # lib where it looks (the build
           # dlopen's at runtime, so this only satisfies the check + the
           # ORT-tagged verification test).
           sudo mkdir -p /usr/local/lib
@@ -631,7 +631,7 @@ jobs:
       - name: Download Go modules
         run: go mod download # setup-ort.sh reads hugot's go.mod from the module cache; a cold runner cache (first macos-14 run) wouldn't have it
 
-      - name: Set up ORT toolchain (libtokenizers.a)
+      - name: Set up ORT toolchain
         run: bash .claude/scripts/setup-ort.sh
 
       - name: Build ORT binary (prod, -tags ORT)

@@ -1,17 +1,20 @@
 #!/bin/bash
 # Install the ORT build dependencies for BGE-M3 indexing.
 #
-# Usage: bash .claude/scripts/setup-ort.sh [--check]
+# Usage: bash .claude/scripts/setup-ort.sh [--check | --tokenizers-version]
 #
 # Idempotent — safe to run multiple times. Steps:
 #   1. Verify libonnxruntime.{dylib,so} is on the system (homebrew or /usr/local/lib)
-#   2. Read pinned daulet/tokenizers version from hugot's go.mod (SSOT)
-#   3. Download matching libtokenizers release for this OS/arch
+#   2. Resolve hugot's tokenizer dependency and selected Go module version (SSOT)
+#   3. For legacy daulet/tokenizers only, download the matching native release
 #   4. Extract libtokenizers.a into project-local lib/
 #   5. Print the CGO_LDFLAGS that `task build:ort` will use
 #
 # With --check, steps that WOULD modify state are skipped; only verification
 # runs. Non-zero exit means `task build:ort` will not succeed.
+#
+# With --tokenizers-version, only resolve the tokenizer; no native libraries
+# are probed or installed. Used by the cheap PR toolchain check.
 #
 # Why project-local? libtokenizers.a is a single static lib; shipping it in
 # lib/ keeps the ORT build hermetic, avoids system-wide install, and keeps
@@ -38,7 +41,37 @@ FAILED=0
 echo "ORT build setup for $PROJECT_DIR"
 echo ""
 
-# Minimum ONNX Runtime: onnxruntime_go 1.35 (pinned via hugot 0.7.8) requests
+# Resolve the dependency explicitly: hugot v0.8.1 uses go-huggingface's Go
+# tokenizer for every backend. Older hugot versions used daulet's native one.
+# Use the selected module version, which can be higher than hugot's requirement.
+if ! HUGOT_GOMOD="$(go list -m -f '{{.GoMod}}' github.com/knights-analytics/hugot)" || [ ! -f "$HUGOT_GOMOD" ]; then
+  echo "$FAIL hugot module not in cache: $HUGOT_GOMOD"
+  echo "    run: go mod download github.com/knights-analytics/hugot"
+  exit 1
+fi
+TOKENIZERS_MODULE="$(awk '
+  $1 == "github.com/daulet/tokenizers" {native = $1}
+  $1 == "github.com/gomlx/go-huggingface" {go_tokenizer = $1}
+  END {print (native != "" ? native : go_tokenizer)}
+' "$HUGOT_GOMOD")"
+if [ -z "$TOKENIZERS_MODULE" ]; then
+  echo "$FAIL could not identify tokenizer dependency in $HUGOT_GOMOD (expected daulet/tokenizers or gomlx/go-huggingface)"
+  exit 1
+fi
+if ! TOKENIZERS_VERSION="$(go list -m -f '{{.Version}}' "$TOKENIZERS_MODULE")" || [ -z "$TOKENIZERS_VERSION" ]; then
+  echo "$FAIL could not resolve tokenizer version for $TOKENIZERS_MODULE required by $HUGOT_GOMOD"
+  exit 1
+fi
+if [ "$TOKENIZERS_MODULE" = "github.com/gomlx/go-huggingface" ]; then
+  echo "$PASS $TOKENIZERS_MODULE $TOKENIZERS_VERSION (Go tokenizer; no libtokenizers.a required)"
+else
+  echo "$PASS $TOKENIZERS_MODULE $TOKENIZERS_VERSION"
+fi
+if [ "${1:-}" = "--tokenizers-version" ]; then
+  exit 0
+fi
+
+# Minimum ONNX Runtime: microsoft/onnxruntime/go (pinned via hugot 0.8.1) requests
 # ORT API 29, first shipped in ONNX Runtime 1.29. Keep in step with the bundled
 # ORT_VERSION in .github/workflows/ci.yml.
 ORT_MIN_VERSION="1.29.0"
@@ -114,36 +147,15 @@ else
   fi
 fi
 
-# --- Step 3: libtokenizers version from hugot's go.mod ---------------------
-
-echo ""
-echo "2. libtokenizers version (pinned via hugot)"
-HUGOT_GOMOD="$(go env GOMODCACHE)/github.com/knights-analytics/hugot@$(
-  go list -m -f '{{.Version}}' github.com/knights-analytics/hugot
-)/go.mod"
-
-if [ ! -f "$HUGOT_GOMOD" ]; then
-  echo "$FAIL hugot module not in cache: $HUGOT_GOMOD"
-  echo "    run: go mod download github.com/knights-analytics/hugot"
-  exit 1
-fi
-
-TOKENIZERS_VERSION="$(
-  grep 'github.com/daulet/tokenizers' "$HUGOT_GOMOD" | awk '{print $2}' | tr -d '\r'
-)"
-if [ -z "$TOKENIZERS_VERSION" ]; then
-  echo "$FAIL could not read daulet/tokenizers version from $HUGOT_GOMOD"
-  exit 1
-fi
-echo "$PASS daulet/tokenizers $TOKENIZERS_VERSION"
-
 # --- Step 4: libtokenizers.a -----------------------------------------------
 
 echo ""
-echo "3. libtokenizers.a (project-local)"
+echo "2. native tokenizer (legacy hugot only)"
 
 needs_download=0
-if [ ! -f "$LIBTOKENIZERS" ]; then
+if [ "$TOKENIZERS_MODULE" = "github.com/gomlx/go-huggingface" ]; then
+  echo "$PASS Go tokenizer — native tokenizer setup skipped"
+elif [ ! -f "$LIBTOKENIZERS" ]; then
   needs_download=1
 fi
 
@@ -154,22 +166,22 @@ if [ "$needs_download" = "1" ]; then
   else
     echo "   downloading libtokenizers.${PLATFORM}.tar.gz..."
     mkdir -p "$LIB_DIR"
-    TMPDIR="$(mktemp -d)"
-    trap 'rm -rf "$TMPDIR"' EXIT
+    TOKENIZERS_TMP="$(mktemp -d)"
+    trap 'rm -rf "$TOKENIZERS_TMP"' EXIT
     URL="https://github.com/daulet/tokenizers/releases/download/${TOKENIZERS_VERSION}/libtokenizers.${PLATFORM}.tar.gz"
-    if ! curl -fsSL -o "$TMPDIR/lt.tar.gz" "$URL"; then
+    if ! curl -fsSL -o "$TOKENIZERS_TMP/lt.tar.gz" "$URL"; then
       echo "$FAIL download failed: $URL"
       exit 1
     fi
-    tar -xzf "$TMPDIR/lt.tar.gz" -C "$TMPDIR"
-    if [ ! -f "$TMPDIR/libtokenizers.a" ]; then
+    tar -xzf "$TOKENIZERS_TMP/lt.tar.gz" -C "$TOKENIZERS_TMP"
+    if [ ! -f "$TOKENIZERS_TMP/libtokenizers.a" ]; then
       echo "$FAIL archive did not contain libtokenizers.a"
       exit 1
     fi
-    mv "$TMPDIR/libtokenizers.a" "$LIBTOKENIZERS"
+    mv "$TOKENIZERS_TMP/libtokenizers.a" "$LIBTOKENIZERS"
     echo "$PASS installed $LIBTOKENIZERS ($(wc -c < "$LIBTOKENIZERS" | awk '{print int($1/1024/1024)"MB"}'))"
   fi
-else
+elif [ "$TOKENIZERS_MODULE" = "github.com/daulet/tokenizers" ]; then
   echo "$PASS $LIBTOKENIZERS already present"
 fi
 

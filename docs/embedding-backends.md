@@ -32,7 +32,7 @@ Do you need VaultMind's best retrieval (sparse + ColBERT, not just dense)?
 Apple Silicon GPU in-process (CoreML)? → BLOCKED today (issue #34). Do not rely on it.
 ```
 
-> **Key gotcha — the silent downgrade.** `task build` with no `lib/libtokenizers.a` present produces a pure-Go binary whose `DefaultModel()` returns `minilm`, not `bge-m3`. You get a working tool that is *quietly dense-only*, losing the entire 4-way hybrid. The only signal is one ⚠ line at build time and a post-hoc `doctor` warning. If you want the hybrid, you must run `task setup:ort` **first**.
+> **Key gotcha — the silent downgrade.** `task build` when `setup:ort:check` fails produces a pure-Go binary whose `DefaultModel()` returns `minilm`, not `bge-m3`. You get a working tool that is *quietly dense-only*, losing the entire 4-way hybrid. The only signal is one ⚠ line at build time and a post-hoc `doctor` warning. If you want the hybrid, you must run `task setup:ort` **first**.
 
 ## The backends
 
@@ -41,34 +41,34 @@ Apple Silicon GPU in-process (CoreML)? → BLOCKED today (issue #34). Do not rel
 - **What it is:** The default, zero-dependency backend. Compiled from `session_go.go` (`//go:build !cgo || !ORT`), where `newBGEM3Session()` calls `hugot.NewGoSession()`. `BackendName()` returns `"go"`, which makes `DefaultModel()` resolve to `"minilm"`.
 - **System deps:** None. Single static Go binary, no CGO, no native libraries.
 - **Setup steps:**
-  1. Build: `task build:fast` (always pure-Go) or `task build` (falls back to pure-Go with a ⚠ warning when `lib/libtokenizers.a` is absent).
+  1. Build: `task build:fast` (always pure-Go) or `task build` (falls back to pure-Go with a ⚠ warning when the ORT toolchain is unavailable).
   2. Index: `vaultmind index --vault <vault> --embed` (auto-selects `minilm` via `DefaultModel()`).
   3. Query: `vaultmind ask/search --vault <vault>` works on MiniLM dense vectors.
 - **Platforms:** All — macOS arm64, macOS x86_64, Linux x86_64/arm64, Windows. Pure Go, no native libs.
 - **Perf:** MiniLM query embedding ~1s for short text (fine). **BGE-M3 indexing here is "hours for ~130 notes"** and is hard-blocked: `cmd/index.go`'s `guardBGEM3SlowBackend` refuses `--model bge-m3` on this backend unless you pass `--allow-slow-backend`.
 - **Retrieval quality:** **Dense-only, MiniLM 384-dim. NOT the 4-way hybrid** — no sparse, no ColBERT. This is the weakest retrieval tier.
-- **How to select it:** Build without `-tags ORT` (the default when `libtokenizers.a` is missing). To force BGE-M3 anyway: `--model bge-m3 --allow-slow-backend` (and accept hours of indexing).
+- **How to select it:** Build without `-tags ORT` (the default when the ORT toolchain is unavailable). To force BGE-M3 anyway: `--model bge-m3 --allow-slow-backend` (and accept hours of indexing).
 - **Status:** Shipped.
 
 ### ORT in-process (CPU execution provider)
 
 - **What it is:** The intended **default fast indexing path** and the only out-of-box source of the full 4-way BGE-M3 hybrid. Compiled from `session_ort.go` (`//go:build cgo && ORT`), where `newBGEM3Session()` calls `hugot.NewORTSession(...)`. `BackendName()` returns `"ort"`, so `DefaultModel()` resolves to `"bge-m3"`.
-- **System deps:** `libonnxruntime.{dylib,so}` on the system (`brew install onnxruntime` on macOS; package/release on Linux) **plus** project-local `lib/libtokenizers.a` (downloaded by `setup-ort.sh`) **plus** a CGO toolchain (C compiler). Pinned stack: libonnxruntime 1.29.1, hugot v0.7.8, onnxruntime_go v1.35.0. **libonnxruntime must be 1.29 or newer**: onnxruntime_go 1.35 requests ORT API 29, and an older runtime fails at startup with "The requested API version [29] is not available" (#148).
+- **System deps:** `libonnxruntime.{dylib,so}` on the system (`brew install onnxruntime` on macOS; package/release on Linux) **plus** a CGO toolchain (C compiler). Pinned stack: libonnxruntime 1.29.1, hugot v0.8.1, microsoft/onnxruntime/go. The tokenizer is Go-only (`gomlx/go-huggingface` v0.4.13); no `libtokenizers.a` is required. **libonnxruntime must be 1.29 or newer**: the Go binding requests ORT API 29, and an older runtime fails at startup with "The requested API version [29] is not available" (#148).
 - **Setup steps:**
-  1. One-time deps: `task setup:ort` (downloads `libtokenizers.a`; requires `libonnxruntime` already present — install via `brew install onnxruntime` first).
-  2. Build onto PATH: `task install` (auto-selects ORT when `lib/libtokenizers.a` exists) or throwaway `task build:ort` → `/tmp/vaultmind-ort`.
+  1. One-time deps: `task setup:ort` (verifies dependencies; requires `libonnxruntime` already present — install via `brew install onnxruntime` first).
+  2. Build onto PATH: `task install` (auto-selects ORT when `setup:ort:check` passes) or throwaway `task build:ort` → `/tmp/vaultmind-ort`.
   3. Index: `vaultmind index --vault <vault> --embed` (auto-selects `bge-m3`).
   4. Verify: `vaultmind doctor --vault <vault>`.
-- **Platforms:** `setup-ort.sh` supports Darwin/arm64, Darwin/x86_64, Linux/amd64, Linux/aarch64, Linux/arm64. **No Windows path** — the script has no Windows branch and no libtokenizers download for it.
+- **Platforms:** `setup-ort.sh` supports Darwin/arm64, Darwin/x86_64, Linux/amd64, Linux/aarch64, Linux/arm64. **No Windows path** — the script has no Windows branch and only supports Unix library paths.
 - **Perf:** Accelerates BGE-M3 indexing from "hours" to **a few minutes** for ~130 notes (design estimate ~2–3 min; not formally benchmarked) — vs *hours* on pure-Go. Runs on the CPU execution provider (`Acceleration()` → `"ort+cpu"`). First `index --embed --model bge-m3` triggers a **~2.2GB model download** from HuggingFace.
 - **Retrieval quality:** **Full BGE-M3 4-way hybrid** — dense (1024) + sparse (lexical) + ColBERT (multi-vector), RRF-fused. This is the reference quality path. Implements `FullEmbedder` via `EmbedFullBatch`.
-- **How to select it:** Build with `-tags ORT` + CGO (auto when `lib/libtokenizers.a` is present). `DefaultModel()` then auto-picks `bge-m3`.
+- **How to select it:** Build with `-tags ORT` + CGO (auto when `setup:ort:check` passes). `DefaultModel()` then auto-picks `bge-m3`.
 - **Status:** Shipped.
 
 ### ORT + CoreML execution provider (Apple Silicon GPU/ANE) — BLOCKED
 
 - **What it is:** The same ORT build, with the CoreML execution provider wired in as a **runtime opt-in**: `VAULTMIND_ENABLE_COREML=1` AND `GOOS==darwin && GOARCH==arm64` (`shouldEnableCoreML`). When enabled, `newBGEM3Session()` adds `options.WithCoreML(...)` and `Acceleration()` returns `"ort+coreml"`. `BackendName()` stays `"ort"`.
-- **System deps:** Same as ORT-CPU (libonnxruntime 1.25.0 + libtokenizers.a + CGO) plus macOS CoreML frameworks. No extra adopter install — but **it does not work**.
+- **System deps:** Same as ORT-CPU (libonnxruntime + CGO) plus macOS CoreML frameworks. No extra adopter install — but **it does not work**.
 - **Setup steps:** Not adoptable today. The wiring is kept solely so a post-fix retest is one env var: `VAULTMIND_ENABLE_COREML=1` on an ORT build on darwin/arm64. Expect session-creation failure (see CoreML status section).
 - **Platforms:** macOS arm64 only (gated by GOOS/GOARCH; no-op elsewhere).
 - **Perf:** Intended to use Apple Silicon GPU/ANE. **Not measurable** — fails before inference.
@@ -112,7 +112,7 @@ Apple Silicon GPU in-process (CoreML)? → BLOCKED today (issue #34). Do not rel
 |---|---|---|---|---|---|
 | **Prebuilt ORT archive** *(from v0.1.1)* | None — libonnxruntime bundled | darwin-arm64, linux-amd64 | ~2–3 min (est.) | **Full 4-way hybrid** | **Easiest full-hybrid**: download `*_ort.tar.gz`, extract, run — no build |
 | **Pure-Go MiniLM** | None (static binary) | All incl. Windows | N/A — MiniLM only; BGE-M3 here is *hours*, hard-blocked | **Dense-only, 384-dim** | `go install …@latest`, or `task build:fast` |
-| **ORT-CPU (from source)** | libonnxruntime + libtokenizers.a + CGO | macOS arm64/x86_64, Linux x86_64/arm64 (no Windows) | ~2–3 min (est.) | **Full 4-way hybrid** | Medium: brew + setup:ort + CGO + 2.2GB model pull (for platforms without a prebuilt archive, or contributors) |
+| **ORT-CPU (from source)** | libonnxruntime + CGO | macOS arm64/x86_64, Linux x86_64/arm64 (no Windows) | ~2–3 min (est.) | **Full 4-way hybrid** | Medium: brew + setup:ort + CGO + 2.2GB model pull (for platforms without a prebuilt archive, or contributors) |
 | **ORT+CoreML** | ORT deps + macOS CoreML frameworks | macOS arm64 only | — (blocked) | Would be 4-way (none today) | **Blocked** (issue #34) |
 | **MPS sidecar** | ORT deps + Python + torch + transformers (+MPS) | Apple Silicon GPU; CPU elsewhere | ~4× ORT-CPU (+~4s start) | **Full 4-way hybrid** | Hardest working path: venv + 3 env vars + abs script path |
 | **Ollama** *(unimplemented)* | Ollama daemon only | All incl. Windows | Fast (GPU via Metal/llama.cpp) | **Dense-only, 1024-dim** | **Easiest to stand up** (one `ollama pull`); needs new `OllamaEmbedder` |
@@ -183,7 +183,7 @@ The dense lane itself *is* genuinely compatible: identical BGE-M3 weights, ident
 
 **Concrete product changes that would most reduce friction, in priority order:**
 
-1. **Prebuilt ORT release binaries** ✅ *shipping from v0.1.1* (highest leverage). A CI matrix (`ort-release` job) builds `-tags ORT` per platform (darwin-arm64, linux-amd64) and bundles the official self-contained `libonnxruntime` beside the binary; `detectORTLibDir` checks the executable's own directory so it's found with zero config. `libtokenizers` is statically linked. Adopters download `vaultmind_<ver>_<os>_<arch>_ort.tar.gz`, extract, and run — the full hybrid with no `brew`, no `setup:ort`, no source build. This collapses "clone + task build + brew + setup:ort" into "download one archive."
+1. **Prebuilt ORT release binaries** ✅ *shipping from v0.1.1* (highest leverage). A CI matrix (`ort-release` job) builds `-tags ORT` per platform (darwin-arm64, linux-amd64) and bundles the official self-contained `libonnxruntime` beside the binary; `detectORTLibDir` checks the executable's own directory so it's found with zero config. Hugot v0.8.1 uses a Go tokenizer. Adopters download `vaultmind_<ver>_<os>_<arch>_ort.tar.gz`, extract, and run — the full hybrid with no `brew`, no `setup:ort`, no source build. This collapses "clone + task build + brew + setup:ort" into "download one archive."
 2. **Add an Ollama easy-mode backend, scoped honestly.** Wire it as an `Embedder` (not `FullEmbedder`), pin to `/api/embed`, stamp as a distinct dense-only identity, and print at index time: *"⚠ Ollama backend is dense-only — BGE-M3 sparse+ColBERT lanes are disabled; retrieval quality is reduced. For full hybrid use the ORT build."* The frictionless on-ramp for evaluation, never the silent default for a hybrid vault.
 3. **Auto-detect + doctor-led backend selection.** Add `vaultmind doctor --backends` (or surface `Acceleration()`, which is computed today but has **zero callers** outside the embedding package) to probe the machine once and print a ranked, copy-pasteable plan: `libonnxruntime: found ✓ | libtokenizers.a: missing → run task setup:ort | Ollama: reachable, bge-m3 pulled (dense-only) | torch/MPS sidecar: torch not installed`. The tool already knows its acceleration state and currently hides it.
 4. **Make the silent downgrade loud at index time, not just in doctor.** When `index --embed` resolves to MiniLM via `DefaultModel()` on a pure-Go build, the quiet `[model: minilm]` substring is too easy to miss. Add: *"Indexed with MiniLM dense-only (384d). For BGE-M3 4-way hybrid: task setup:ort && task build, then re-embed."* The consumer's index quality is being decided here — surface it where the decision is made.

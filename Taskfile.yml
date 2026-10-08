@@ -72,14 +72,14 @@ tasks:
           task ckeletin:test
 
   build:
-    desc: Build the binary — ORT-tagged (BGE-M3 acceleration) when libtokenizers is installed; pure-Go fallback with loud warning otherwise.
+    desc: Build the binary — ORT-tagged (BGE-M3 acceleration) when the ORT toolchain is ready; pure-Go fallback with loud warning otherwise.
     summary: |
       Default build path. Behavior:
 
-        - When lib/libtokenizers.a is present: builds with -tags "dev ORT"
+        - When setup:ort:check passes: builds with -tags "dev ORT"
           and CGO_LDFLAGS pointing at lib/. BGE-M3 sparse + ColBERT lanes
           are enabled; indexing is ~10x faster than the pure-Go path.
-        - When libtokenizers.a is absent: prints a remediation message
+        - When the ORT toolchain is unavailable: prints a remediation message
           and falls back to pure-Go (-tags dev). The binary still works
           for queries, but BGE-M3 indexing is hour-slow.
 
@@ -100,11 +100,11 @@ tasks:
     silent: true
     cmds:
       - cmd: |
-          if [ -f "$(pwd)/lib/libtokenizers.a" ]; then
+          if bash .claude/scripts/setup-ort.sh --check > /dev/null 2>&1; then
             CGO_LDFLAGS="-L$(pwd)/lib" go build -tags "dev ORT" {{.LDFLAGS}} -o ./{{.BINARY_NAME}} . > /dev/null
             echo "✅ Built ./{{.BINARY_NAME}} with -tags ORT (BGE-M3 sparse + ColBERT acceleration enabled)"
           else
-            echo "⚠ lib/libtokenizers.a missing — falling back to pure-Go build."
+            echo "⚠ ORT toolchain unavailable — falling back to pure-Go build."
             echo "  BGE-M3 indexing on this binary will be hour-slow; MiniLM embedding is fine."
             echo "  To enable BGE-M3 acceleration: task setup:ort && task build"
             go build -tags dev {{.LDFLAGS}} -o ./{{.BINARY_NAME}} . > /dev/null
@@ -293,15 +293,11 @@ tasks:
     cmds: [task: ckeletin:run]
 
   install:
-    desc: Install the binary to $GOPATH/bin — ORT-tagged (BGE-M3 acceleration) when libtokenizers is installed; pure-Go fallback with loud warning otherwise.
+    desc: Install the binary to $GOPATH/bin — ORT-tagged (BGE-M3 acceleration) when the ORT toolchain is ready; pure-Go fallback with loud warning otherwise.
     summary: |
-      Mirrors `task build`'s smart-default at the install site. Without
-      this override, the inherited ckeletin install runs `go install ./...`
-      with no build tag, silently producing a pure-Go binary even when
-      lib/libtokenizers.a is present. The companion project caught the runtime/compile
-      disagreement on 2026-05-27: BackendName() reports "go" so
-      DefaultModel() recommends MiniLM, while the installer's project
-      already has libtokenizers ready to enable ORT.
+      Mirrors `task build`'s smart-default at the install site. A ready ORT
+      toolchain produces an ORT-tagged binary; otherwise install uses pure-Go.
+      Hugot v0.8.1 uses a Go tokenizer, so no libtokenizers.a is needed.
     vars:
       VERSION:
         sh: git describe --tags --always --dirty 2>/dev/null || echo "dev"
@@ -317,11 +313,11 @@ tasks:
     silent: true
     cmds:
       - cmd: |
-          if [ -f "$(pwd)/lib/libtokenizers.a" ]; then
+          if bash .claude/scripts/setup-ort.sh --check > /dev/null 2>&1; then
             CGO_LDFLAGS="-L$(pwd)/lib" go install -tags "dev ORT" {{.LDFLAGS}} . > /dev/null
             echo "✅ Installed {{.BINARY_NAME}} with -tags ORT (BGE-M3 sparse + ColBERT acceleration enabled)"
           else
-            echo "⚠ lib/libtokenizers.a missing — installing without -tags ORT."
+            echo "⚠ ORT toolchain unavailable — installing without -tags ORT."
             echo "  BGE-M3 indexing on this binary will be hour-slow; MiniLM embedding is fine."
             echo "  To enable BGE-M3 acceleration: task setup:ort && task install"
             go install -tags dev {{.LDFLAGS}} . > /dev/null
@@ -511,7 +507,7 @@ tasks:
   # .claude/scripts/setup-ort.sh for the install it requires.
 
   setup:ort:
-    desc: Install libtokenizers for the ORT (CGO) BGE-M3 build (idempotent)
+    desc: Set up tokenizer dependencies and verify ONNX Runtime for the ORT build
     cmds:
       - bash .claude/scripts/setup-ort.sh
 
@@ -542,7 +538,7 @@ tasks:
       Outputs /tmp/vaultmind-ort (a throwaway ORT build for indexing
       experiments). To INSTALL an ORT-tagged, version-stamped binary onto
       your PATH, run `task install` — it auto-selects ORT when
-      lib/libtokenizers.a is present (there is no separate install:ort;
+      setup:ort:check passes (there is no separate install:ort;
       ADR-000 reserves `install` as a standalone task, not an action prefix).
     cmds:
       - CGO_LDFLAGS="-L$(pwd)/lib" go build -tags ORT {{.LDFLAGS}} -o /tmp/vaultmind-ort .

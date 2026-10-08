@@ -1,14 +1,7 @@
 #!/bin/bash
-# Verify the installed vaultmind binary's ORT linkage matches the project's
-# lib/libtokenizers.a presence.
-#
-# The contract enforced here: at install time, lib/libtokenizers.a presence
-# MUST produce an ORT-tagged binary; its absence MUST produce a pure-Go
-# binary. When the two disagree, the runtime-aware DefaultModel() picks the
-# wrong default at the consumer surface — e.g. a BGE-M3 vault gets reindexed
-# with MiniLM silently because BackendName() reports "go" even though
-# libtokenizers is sitting in lib/. The companion project caught this on 2026-05-27;
-# fix is structural — install must honor build's smart-default.
+# Verify the installed binary's ORT tag matches setup-ort.sh --check.
+# A ready toolchain must produce an ORT binary; otherwise install uses pure-Go.
+# Hugot v0.8.1's Go tokenizer does not require libtokenizers.a.
 #
 # Usage:
 #   check-installed-ort-tag.sh [binary-path]
@@ -36,8 +29,10 @@ if ! command -v go >/dev/null 2>&1; then
     exit 1
 fi
 
-HAS_LIBTOK=0
-[ -f "$PROJECT_DIR/lib/libtokenizers.a" ] && HAS_LIBTOK=1
+TOOLCHAIN_READY=0
+if (cd "$PROJECT_DIR" && bash .claude/scripts/setup-ort.sh --check > /dev/null 2>&1); then
+    TOOLCHAIN_READY=1
+fi
 
 NM_OUTPUT=$(go tool nm "$BINARY" 2>&1) || {
     echo "[check-installed-ort-tag] go tool nm failed on $BINARY — binary may be stripped." >&2
@@ -49,20 +44,20 @@ if echo "$NM_OUTPUT" | grep -qE "embedding\.(shouldEnableCoreML|detectORTLibDir)
     HAS_ORT=1
 fi
 
-if [ "$HAS_LIBTOK" -eq "$HAS_ORT" ]; then
+if [ "$TOOLCHAIN_READY" -eq "$HAS_ORT" ]; then
     if [ "$HAS_ORT" -eq 1 ]; then
-        echo "OK installed binary is ORT-tagged (matches lib/libtokenizers.a presence): $BINARY"
+        echo "OK installed binary is ORT-tagged (matches ready ORT toolchain): $BINARY"
     else
-        echo "OK installed binary is pure-Go (matches lib/libtokenizers.a absence): $BINARY"
+        echo "OK installed binary is pure-Go (matches unavailable ORT toolchain): $BINARY"
     fi
     exit 0
 fi
 
-if [ "$HAS_LIBTOK" -eq 1 ]; then
+if [ "$TOOLCHAIN_READY" -eq 1 ]; then
     cat >&2 <<EOF
 [check-installed-ort-tag] MISMATCH
   binary:           $BINARY
-  lib/libtokenizers.a present: yes
+  ORT toolchain ready: yes
   binary ORT-tagged:           no
 
   Runtime check (BackendName) will report "go" and DefaultModel() will
@@ -75,10 +70,10 @@ fi
 cat >&2 <<EOF
 [check-installed-ort-tag] MISMATCH
   binary:           $BINARY
-  lib/libtokenizers.a present: no
+  ORT toolchain ready: no
   binary ORT-tagged:           yes
 
-  Binary expects libtokenizers but the project doesn't have it. Either
+  Binary is ORT-tagged but the toolchain is unavailable. Either
   restore with 'task setup:ort' or rebuild without ORT: task install
 EOF
 exit 1
