@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.6] - 2026-10-08
+
+> `ask` answers in about half the time once its background server is warm (about 0.9 s vs 1.8 s), with identical answers.
+
 ### Added
 
 - **`ask` runs about twice as fast once a background server is up.** The first `ask`
@@ -23,7 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Updated the Go dependency group, including hugot v0.8.1. Both embedders now use
   `Session.NewPipeline`, preserving their existing pipeline configuration and behavior.
-  SQLite remains at v1.59.0 because v1.60.1 does not satisfy the project's license policy.
+  `modernc.org/sqlite` remains at v1.59.0 because v1.60.1 does not satisfy the project's
+  license policy; `modernc.org/libc` is pinned to v1.75.7 to match it.
 
 ## [0.10.5] - 2026-10-07
 
@@ -2747,7 +2752,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.5...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.6...HEAD
+[0.10.6]: https://github.com/peiman/vaultmind/compare/v0.10.5...v0.10.6
 [0.10.5]: https://github.com/peiman/vaultmind/compare/v0.10.4...v0.10.5
 [0.10.4]: https://github.com/peiman/vaultmind/compare/v0.10.3...v0.10.4
 [0.10.3]: https://github.com/peiman/vaultmind/compare/v0.10.2...v0.10.3
