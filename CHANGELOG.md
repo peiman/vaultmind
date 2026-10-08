@@ -7,9 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.7] - 2026-10-08
+
+> The ORT prebuilt archives are back; ORT users should take 0.10.7, not 0.10.6. Existing indexes keep working.
+
+### Changed
+
+- Query text is now tokenized by hugot's Go tokenizer. On the 32 labelled queries,
+  Hit@1 held at 28/32, Hit@5 went from 30/32 to 31/32 and MRR from 0.910 to 0.922;
+  long-doc delivery held at 6/12. Existing indexes keep working.
+
 ### Fixed
 
-- ORT release and source builds now recognize hugot v0.8.1's Go tokenizer
+- **The ORT prebuilt archives are back.** v0.10.6 shipped without them because its
+  build looked for the Rust tokenizer library, which hugot v0.8.1 replaced with a
+  pure-Go tokenizer. ORT users should take 0.10.7, not 0.10.6.
+  Release and source builds now recognize hugot v0.8.1's Go tokenizer
   (`gomlx/go-huggingface`) without requiring the removed `daulet/tokenizers`
   static library. Legacy native tokenizer setup remains supported, and unknown
   dependencies or unresolved versions fail explicitly.
@@ -2761,7 +2774,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.6...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.7...HEAD
+[0.10.7]: https://github.com/peiman/vaultmind/compare/v0.10.6...v0.10.7
 [0.10.6]: https://github.com/peiman/vaultmind/compare/v0.10.5...v0.10.6
 [0.10.5]: https://github.com/peiman/vaultmind/compare/v0.10.4...v0.10.5
 [0.10.4]: https://github.com/peiman/vaultmind/compare/v0.10.3...v0.10.4
