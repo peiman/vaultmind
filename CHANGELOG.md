@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A dead mesh watcher no longer reports a quiet heartbeat.** When every
+  stream exits before the wall-clock ceiling, `mesh-watch.sh` prints
+  `WATCHER ERROR` with the elapsed seconds and exits 3. The quiet-heartbeat
+  re-arm line is reserved for reaching the ceiling. Re-run
+  `vaultmind hooks install --force` to update installed copies.
+
 ## [0.10.7] - 2026-10-08
 
 > The ORT prebuilt archives are back; ORT users should take 0.10.7, not 0.10.6. Existing indexes keep working.

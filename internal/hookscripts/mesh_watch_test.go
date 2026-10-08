@@ -1,11 +1,14 @@
 package hookscripts
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -442,4 +445,111 @@ func TestMeshWatch_AsksAboutItsProjectNotTheCurrentFolder(t *testing.T) {
 	got, err := os.ReadFile(seen) // #nosec G304 -- test-controlled path
 	require.NoError(t, err)
 	assert.Equal(t, project, string(got), "asked about the project, not %s", elsewhere)
+}
+
+// Empty baselines arm the shipped script; the curl stub either kills every
+// stream without a signal or returns empty long-polls until the real ceiling.
+// A dead watcher must never report the reassuring quiet-heartbeat RE-ARM line.
+func TestMeshWatch_StreamExitReason(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		mode    string
+		ceiling string
+		code    int
+	}{
+		{"all streams die before the ceiling", "die", "10", 3},
+		{"quiet streams reach the ceiling", "quiet", "2", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body, ok := Get("mesh-watch.sh")
+			require.True(t, ok)
+			dir := t.TempDir()
+			script := filepath.Join(dir, "mesh-watch.sh")
+			require.NoError(t, os.WriteFile(script, body, 0o600))
+			bin := t.TempDir()
+			InstallStub(t, bin, "vaultmind", `
+case "$*" in
+  'identity paths')
+    printf "VM_MESH_SLUG='mesh-watch-test'\nVM_MESH_SELF='agent:mesh-watch-test'\nVM_MESH_OPERATOR=''\nVM_MESH_DAEMON='http://mesh-watch-test.invalid'\nVM_MESH_REGISTRY_DAYS_LEFT=''\n"
+    for key in PID LISTEN DISARM HEARTBEAT LASTARM LASTWAKE; do
+      printf 'VM_MESH_%s=%q\n' "$key" "$VM_TEST_ROOT/$key"
+    done ;;
+  'identity fetch-registry') exit 0 ;;
+  *) exit 1 ;;
+esac
+`)
+			InstallStub(t, bin, "curl", `
+exec python3 - "$VM_TEST_ROOT/PID" "$VM_TEST_MODE" "${@: -1}" <<'PY'
+import os, pathlib, signal, subprocess, sys, time
+pid_file, mode, url = sys.argv[1:]
+if not url.startswith("http://mesh-watch-test.invalid/"):
+    sys.exit("unexpected daemon URL: " + url)
+if "/chat_read?" in url:
+    print('{"messages":[]}')
+elif "/chat_wait?" in url:
+    if mode == "quiet":
+        time.sleep(1)
+        print('{"messages":[]}')
+    else:
+        time.sleep(3)
+        supervisor = int(pathlib.Path(pid_file).read_text())
+        stream = os.getppid()
+        # Command substitution may add a shell between curl and the stream.
+        # Kill only the supervisor's direct child, never the test watcher.
+        while stream > 1 and stream != supervisor:
+            parent = int(subprocess.check_output(["ps", "-o", "ppid=", "-p", str(stream)]))
+            if parent == supervisor:
+                os.kill(stream, signal.SIGKILL)
+                break
+            stream = parent
+        else:
+            sys.exit("curl is not a descendant of the test watcher")
+else:
+    sys.exit("unexpected daemon request: " + url)
+PY
+`)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "bash", script)
+			cmd.WaitDelay = 5 * time.Second
+			cmd.Env = []string{
+				"PATH=" + bin + ":" + os.Getenv("PATH"), "HOME=" + t.TempDir(),
+				"TMPDIR=" + t.TempDir(), "AGENT_CHAT_PROJECT_PATH=" + dir,
+				"VM_TEST_ROOT=" + dir, "VM_TEST_MODE=" + tc.mode,
+				"MESH_WAIT_SECS=1", "MESH_WATCH_MAX_WALL_SECS=" + tc.ceiling,
+			}
+			started := time.Now()
+			out, err := cmd.CombinedOutput()
+			duration := time.Since(started)
+			require.NoError(t, ctx.Err(), "watcher exceeded the test timeout: %s", out)
+			code := 0
+			if err != nil {
+				var exitErr *exec.ExitError
+				require.ErrorAs(t, err, &exitErr, "%s", out)
+				code = exitErr.ExitCode()
+			}
+			t.Logf("exit %d; watcher output:\n%s", code, out)
+			assert.Equal(t, tc.code, code, "%s", out)
+			if tc.mode == "die" {
+				assert.Regexp(t, `(?m)^WATCHER ERROR: all streams exited after [0-9]+s without a message — not a quiet heartbeat\. Check the daemon at http://mesh-watch-test\.invalid; re-arm\.$`, string(out))
+				assert.NotContains(t, string(out), "(quiet heartbeat)")
+				assert.NotContains(t, string(out), "RE-ARM:")
+				// The private fix says "not a quiet heartbeat" in the error;
+				// reject the healthy line while retaining that explicit negation.
+				for _, line := range strings.Split(string(out), "\n") {
+					if strings.HasPrefix(line, "WATCHER ERROR: all streams exited after ") {
+						elapsed, parseErr := strconv.Atoi(strings.TrimSuffix(strings.Fields(line)[6], "s"))
+						require.NoError(t, parseErr)
+						assert.GreaterOrEqual(t, elapsed, 3, "report measured time, not a fixed zero")
+						assert.Less(t, elapsed, 10, "streams died before the ceiling")
+						assert.LessOrEqual(t, elapsed, int(duration.Seconds())+1)
+					}
+				}
+			} else {
+				assert.Contains(t, string(out), "RE-ARM: no relevant message within ~2s (quiet heartbeat)")
+				assert.NotContains(t, string(out), "WATCHER ERROR:")
+				assert.GreaterOrEqual(t, duration, 2*time.Second, "quiet heartbeat needs a real ceiling expiry")
+			}
+		})
+	}
 }

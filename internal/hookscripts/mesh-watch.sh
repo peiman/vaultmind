@@ -392,14 +392,18 @@ NSTREAMS=$idx
 
 date +%s > "$VM_MESH_LASTARM" 2>/dev/null || true   # the arm leaves its trace
 
-hb_failures=0
+hb_failures=0 exit_reason=""
 while true; do
-  # Exit conditions first: any signal, all children dead, or wall-clock.
-  for ((i=0; i<NSTREAMS; i++)); do [[ -f "${RUN_DIR}/s${i}.sig" ]] && break 2; done
+  # Exit conditions first: any signal, wall-clock, or all children dead.
+  for ((i=0; i<NSTREAMS; i++)); do
+    [[ -f "${RUN_DIR}/s${i}.sig" ]] && { exit_reason=signal; break 2; }
+  done
   alive_children=0
   for p in "${PIDS[@]}"; do kill -0 "$p" 2>/dev/null && alive_children=1; done
-  (( alive_children == 0 )) && break
-  (( $(date +%s) - start_ts > MAX_WALL_SECS )) && break
+  elapsed=$(( $(date +%s) - start_ts ))
+  # Streams also stop at the ceiling; that is still a quiet heartbeat.
+  (( elapsed > MAX_WALL_SECS )) && { exit_reason=wall_clock; break; }
+  (( alive_children == 0 )) && { exit_reason=streams_exited; break; }
 
   # Heartbeat ONLY when every stream proved life within the window.
   now=$(date +%s); all_alive=1
@@ -431,5 +435,11 @@ for ((i=0; i<NSTREAMS; i++)); do
 done
 
 if [[ -f "$VM_MESH_DISARM" ]]; then echo "DISARMED (sentinel present) — not re-arming."; exit 0; fi
-echo "RE-ARM: no relevant message within ~${MAX_WALL_SECS}s (quiet heartbeat) — re-launch mesh-watch.sh.$(registry_countdown)"
+if [[ "$exit_reason" == "streams_exited" ]]; then
+  echo "WATCHER ERROR: all streams exited after ${elapsed}s without a message — not a quiet heartbeat. Check the daemon at ${VM_MESH_DAEMON}; re-arm."
+  exit 3
+fi
+if [[ "$exit_reason" == "wall_clock" ]]; then
+  echo "RE-ARM: no relevant message within ~${MAX_WALL_SECS}s (quiet heartbeat) — re-launch mesh-watch.sh.$(registry_countdown)"
+fi
 exit 0
