@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- ORT release and source builds now recognize hugot v0.8.1's Go tokenizer
+  (`gomlx/go-huggingface`) without requiring the removed `daulet/tokenizers`
+  static library. Legacy native tokenizer setup remains supported, and unknown
+  dependencies or unresolved versions fail explicitly.
+- Pull requests changing Go dependencies or ORT build files now resolve the
+  tokenizer and compile an ORT binary in a path-filtered Linux check.
+
 ## [0.10.6] - 2026-10-08
 
 > `ask` answers in about half the time once its background server is warm (about 0.9 s vs 1.8 s), with identical answers.

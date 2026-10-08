@@ -1,6 +1,6 @@
 #!/bin/bash
-# Build the vaultmind binary with -tags ORT when lib/libtokenizers.a is
-# present, falling back to a plain go build otherwise.
+# Build with -tags ORT when setup-ort.sh --check passes, falling back to
+# a plain go build otherwise. Hugot v0.8.1 needs no native tokenizer lib.
 #
 # Single source of truth for "how to rebuild vaultmind correctly" — used by:
 #   - .claude/scripts/load-persona.sh (vaultmind SessionStart hook)
@@ -35,10 +35,10 @@ COMMIT="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
 DATE="$(date -u '+%Y-%m-%d_%H:%M:%S')"
 LDFLAGS="-X ${MODULE_PATH}/cmd.binaryName=vaultmind -X ${MODULE_PATH}/cmd.Version=${VERSION} -X ${MODULE_PATH}/cmd.Commit=${COMMIT} -X ${MODULE_PATH}/cmd.Date=${DATE}"
 
-if [ -f "$(pwd)/lib/libtokenizers.a" ]; then
+if bash .claude/scripts/setup-ort.sh --check > /dev/null 2>&1; then
     CGO_LDFLAGS="-L$(pwd)/lib" go build -tags ORT -ldflags="$LDFLAGS" -o "$OUTPUT" .
 else
-    echo "[build-vaultmind] WARNING: lib/libtokenizers.a missing; building without -tags ORT." >&2
+    echo "[build-vaultmind] WARNING: ORT toolchain unavailable; building without -tags ORT." >&2
     echo "[build-vaultmind] BGE-M3 sparse/colbert indexing will fail on this binary." >&2
     echo "[build-vaultmind] To fix: run 'bash .claude/scripts/setup-ort.sh' from the vaultmind source dir." >&2
     go build -ldflags="$LDFLAGS" -o "$OUTPUT" .

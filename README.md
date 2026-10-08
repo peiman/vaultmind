@@ -74,8 +74,8 @@ Download the self-contained ORT archive for your platform (`darwin-arm64`, `linu
 ```bash
 git clone https://github.com/peiman/vaultmind && cd vaultmind
 brew install onnxruntime   # macOS; Linux: install from the ONNX Runtime releases
-task setup:ort             # downloads the tokenizer static lib
-task build                 # auto-selects ORT when the tokenizer lib is present
+task setup:ort             # verifies ONNX Runtime; hugot uses a Go tokenizer
+task build                 # auto-selects ORT when the toolchain check passes
 ```
 
 See **[docs/embedding-backends.md](docs/embedding-backends.md)** for every backend, platform, performance note, and the dense-only vs. 4-way-hybrid tradeoff.
