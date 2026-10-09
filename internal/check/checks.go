@@ -192,7 +192,7 @@ func (e *checkMethods) checkLint(ctx context.Context) error {
 	return nil
 }
 
-// filterLintOutput cleans up lint output to show only the issues
+// filterLintOutput shows code findings, or the tool's diagnostics if none were found.
 func filterLintOutput(output, tool string) string {
 	lines := strings.Split(output, "\n")
 	var issues []string
@@ -220,7 +220,19 @@ func filterLintOutput(output, tool string) string {
 	}
 
 	if len(issues) == 0 {
-		return tool + " found issues"
+		var diagnostics []string
+		for _, line := range lines {
+			if trimmed := strings.TrimSpace(line); trimmed != "" {
+				diagnostics = append(diagnostics, trimmed)
+				if len(diagnostics) == 3 {
+					break
+				}
+			}
+		}
+		if len(diagnostics) == 0 {
+			return tool + " failed (not a code finding; no output)"
+		}
+		return tool + " failed (not a code finding):\n" + strings.Join(diagnostics, "\n")
 	}
 
 	var sb strings.Builder

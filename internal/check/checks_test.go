@@ -97,7 +97,11 @@ func TestFilterLintOutput(t *testing.T) {
 	tests := []struct {
 		name, output, tool, expected string
 	}{
-		{"no issues found", "", "golangci-lint", "golangci-lint found issues"},
+		{"empty failure output", " \n\t", "golangci-lint", "golangci-lint failed (not a code finding; no output)"},
+		{"lock error", " \n  Error: parallel golangci-lint is running \n\n", "golangci-lint", "golangci-lint failed (not a code finding):\nError: parallel golangci-lint is running"},
+		{"real findings", "level=warning msg=\"some warning\"\n  main.go:10:5: undefined: foo \nutils.go:20:3: unused variable (unused)\n2 issues:\n* unused: 1\n", "golangci-lint", "golangci-lint found 2 issue(s):\n  • main.go:10:5: undefined: foo\n  • utils.go:20:3: unused variable (unused)"},
+		{"failure output limited to first three lines", " \n Error: loading packages failed \n\n detail one \n\t detail two \n detail three\n", "golangci-lint", "golangci-lint failed (not a code finding):\nError: loading packages failed\ndetail one\ndetail two"},
+		{"preserves level error output", "level=error msg=\"failed to load config\"\n", "golangci-lint", "golangci-lint failed (not a code finding):\nlevel=error msg=\"failed to load config\""},
 		{"single issue", "main.go:10:5: undefined: foo", "go vet", "go vet found 1 issue(s):\n  • main.go:10:5: undefined: foo"},
 		{"multiple issues", "main.go:10:5: error 1\nutils.go:20:3: error 2", "golangci-lint", "golangci-lint found 2 issue(s):\n  • main.go:10:5: error 1\n  • utils.go:20:3: error 2"},
 		{"filters package headers", "# github.com/example/pkg\nmain.go:10:5: error here", "go vet", "go vet found 1 issue(s):\n  • main.go:10:5: error here"},

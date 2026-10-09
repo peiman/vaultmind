@@ -7,8 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Built with Go 1.27.2**, which fixes the standard-library vulnerabilities
+  govulncheck reports in Go 1.27.1. The pinned golangci-lint version moves to
+  v2.14.0 to read Go 1.27.2's export data.
+
 ### Fixed
 
+- **Lint runner errors now show their cause.** When golangci-lint fails without
+  file:line findings, `check` reports its first three non-empty output lines and
+  says it is not a code finding. Lock errors no longer disappear behind
+  `golangci-lint found issues`; real findings keep their existing format.
+- **Concurrent lint runs now wait for the lock.** A second golangci-lint run
+  waits for the first to finish instead of failing immediately and blocking
+  the check or release.
 - **A dead mesh watcher no longer reports a quiet heartbeat.** When every
   stream exits before the wall-clock ceiling, `mesh-watch.sh` prints
   `WATCHER ERROR` with the elapsed seconds and exits 3. The quiet-heartbeat
