@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.8] - 2026-10-09
+
+> Built with Go 1.27.2 for its security fixes, and the mesh watcher and the lint check now say what actually went wrong.
+
 ### Security
 
 - **Built with Go 1.27.2**, which fixes the standard-library vulnerabilities
@@ -2795,7 +2799,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.7...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.8...HEAD
+[0.10.8]: https://github.com/peiman/vaultmind/compare/v0.10.7...v0.10.8
 [0.10.7]: https://github.com/peiman/vaultmind/compare/v0.10.6...v0.10.7
 [0.10.6]: https://github.com/peiman/vaultmind/compare/v0.10.5...v0.10.6
 [0.10.5]: https://github.com/peiman/vaultmind/compare/v0.10.4...v0.10.5
