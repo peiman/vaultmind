@@ -67,7 +67,7 @@ func TestLoad_AnOverviewKeepsALongerSummary(t *testing.T) {
 	defer func() { _ = db.Close() }()
 	long := "Concepts spanning memory and neuroscience, sleep stages, consolidation, dreaming, neurons and optogenetics, and machine learning with transformers, retrieval, embeddings, agents and training."
 	require.Greater(t, len(long), navigate.MaxLineRunes)
-	_, err = db.Exec(`INSERT INTO notes (id, path, title, type, body_text, hash, mtime) VALUES ('ov', 'c/c-overview.md', 'C', 'overview', ?, 'h', 1), ('n', 'c/n.md', 'N', 'concept', ?, 'h', 1)`, long, long)
+	_, err = db.Exec(`INSERT INTO notes (id, path, title, type, body_raw, hash, mtime) VALUES ('ov', 'c/c-overview.md', 'C', 'overview', ?, 'h', 1), ('n', 'c/n.md', 'N', 'concept', ?, 'h', 1)`, long, long)
 	require.NoError(t, err)
 
 	notes, err := navigate.Load(db, navigate.Filter{})
@@ -85,7 +85,7 @@ func TestLoad_ReadsTagsAndMtime(t *testing.T) {
 	db, err := index.Open(filepath.Join(t.TempDir(), "index.db"))
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
-	_, err = db.Exec(`INSERT INTO notes (id, path, title, type, body_text, hash, mtime) VALUES ('a', 'x/a.md', 'A', 'concept', 'Body.', 'h', 42)`)
+	_, err = db.Exec(`INSERT INTO notes (id, path, title, type, body_raw, hash, mtime) VALUES ('a', 'x/a.md', 'A', 'concept', 'Body.', 'h', 42)`)
 	require.NoError(t, err)
 	_, err = db.Exec(`INSERT INTO tags (note_id, tag) VALUES ('a', 'sleep'), ('a', 'memory')`)
 	require.NoError(t, err)

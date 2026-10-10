@@ -730,7 +730,7 @@ func (idx *Indexer) Incremental() (*IndexResult, error) {
 		info, ok := stored[file.RelPath]
 
 		// Mtime fast path: skip file read entirely if mtime unchanged
-		if ok && file.ModTime.Unix() == info.MTime {
+		if ok && info.HasRawBody && file.ModTime.Unix() == info.MTime {
 			result.Skipped++
 			continue
 		}
@@ -750,7 +750,7 @@ func (idx *Indexer) Incremental() (*IndexResult, error) {
 		hash := fmt.Sprintf("%x", h[:])
 
 		// Hash unchanged — just update mtime, skip parse
-		if ok && hash == info.Hash {
+		if ok && info.HasRawBody && hash == info.Hash {
 			if mtErr := db.UpdateMTime(file.RelPath, file.ModTime.Unix()); mtErr != nil {
 				// mtime update is a performance optimization only — the file will
 				// just get re-hashed next run. Keep at Debug: not a lost memory.
@@ -767,6 +767,17 @@ func (idx *Indexer) Incremental() (*IndexResult, error) {
 			result.ErrorDetails = append(result.ErrorDetails, IndexError{
 				Path: file.RelPath, Kind: "parse", Error: parseErr.Error(),
 			})
+			continue
+		}
+
+		// Migration backfill for unchanged notes writes only the delivery column.
+		// Preserve FTS rowids, graph data, access history and every embedding.
+		if ok && hash == info.Hash && !info.HasRawBody {
+			if _, err := db.Exec("UPDATE notes SET body_raw = ?, mtime = ? WHERE path = ?",
+				parsed.Body, file.ModTime.Unix(), file.RelPath); err != nil {
+				return nil, fmt.Errorf("refreshing raw body for %q: %w", file.RelPath, err)
+			}
+			result.Skipped++
 			continue
 		}
 
@@ -1144,6 +1155,7 @@ func buildNoteRecord(file vault.ScannedFile, content []byte, parsed *parser.Pars
 		MTime:    file.ModTime.Unix(),
 		IsDomain: parsed.IsDomain,
 		BodyText: parsed.FTSBody,
+		BodyRaw:  parsed.Body,
 	}
 
 	if parsed.IsDomain {

@@ -102,9 +102,9 @@ func principleSection(body string) string {
 		if isAnySectionHeading(line) {
 			break
 		}
-		out = append(out, strings.TrimSpace(line))
+		out = append(out, line)
 	}
-	return strings.TrimSpace(strings.Join(out, " "))
+	return strings.TrimSpace(strings.Join(out, "\n"))
 }
 
 // leadParagraph returns the note's first block of actual prose.
@@ -136,18 +136,18 @@ func leadParagraph(body string) string {
 			continue
 		}
 		if isProse(text) {
-			return text
+			return strings.TrimSpace(block)
 		}
 		// Not prose-shaped, but it IS content. Hold the first such block as a
 		// fallback rather than discarding it — see below.
 		if isCitation(text) {
 			if firstCitation == "" {
-				firstCitation = text
+				firstCitation = strings.TrimSpace(block)
 			}
 			continue
 		}
 		if firstContent == "" {
-			firstContent = text
+			firstContent = strings.TrimSpace(block)
 		}
 	}
 	if firstContent == "" {

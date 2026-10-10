@@ -57,7 +57,6 @@ func (r *EmbeddingRetriever) Search(ctx context.Context, query string, limit, of
 				Type:     ne.Type,
 				Title:    ne.Title,
 				Path:     ne.Path,
-				Snippet:  truncate(ne.BodyText, snippetMaxLen),
 				Score:    sim,
 				IsDomain: ne.IsDomain,
 			},
@@ -84,6 +83,9 @@ func (r *EmbeddingRetriever) Search(ctx context.Context, query string, limit, of
 	out := make([]retrieval.ScoredResult, len(results))
 	for i, s := range results {
 		out[i] = s.result
+	}
+	if err := populateRawSnippets(r.DB, out); err != nil {
+		return nil, 0, err
 	}
 	return out, total, nil
 }

@@ -77,14 +77,15 @@ func (d *DB) Begin() (*sql.Tx, error) {
 
 // NoteHashInfo holds the content hash and modification time for a note.
 type NoteHashInfo struct {
-	Hash  string
-	MTime int64
+	Hash       string
+	MTime      int64
+	HasRawBody bool
 }
 
 // NoteHashes returns a map of note path → NoteHashInfo for all notes in the
 // database. Used by the incremental indexer to detect changed and deleted notes.
 func (d *DB) NoteHashes() (map[string]NoteHashInfo, error) {
-	rows, err := d.Query("SELECT path, hash, mtime FROM notes")
+	rows, err := d.Query("SELECT path, hash, mtime, body_raw IS NOT NULL FROM notes")
 	if err != nil {
 		return nil, fmt.Errorf("querying note hashes: %w", err)
 	}
@@ -93,10 +94,11 @@ func (d *DB) NoteHashes() (map[string]NoteHashInfo, error) {
 	for rows.Next() {
 		var path, hash string
 		var mtime int64
-		if err := rows.Scan(&path, &hash, &mtime); err != nil {
+		var hasRawBody bool
+		if err := rows.Scan(&path, &hash, &mtime, &hasRawBody); err != nil {
 			return nil, fmt.Errorf("scanning note hash: %w", err)
 		}
-		result[path] = NoteHashInfo{Hash: hash, MTime: mtime}
+		result[path] = NoteHashInfo{Hash: hash, MTime: mtime, HasRawBody: hasRawBody}
 	}
 	return result, rows.Err()
 }

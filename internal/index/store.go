@@ -17,7 +17,8 @@ type NoteRecord struct {
 	Status   string
 	Created  string
 	Updated  string
-	BodyText string
+	BodyText string // Search-normalized text: FTS and embedding input.
+	BodyRaw  string // Parsed body as written: delivery and display.
 	Hash     string
 	MTime    int64
 	IsDomain bool
@@ -219,12 +220,12 @@ func StoreNoteInTx(tx *sql.Tx, rec NoteRecord) error {
 func upsertNote(tx *sql.Tx, rec NoteRecord) error {
 	_, err := tx.Exec(`
 		INSERT INTO notes (id, path, title, type, status, created, updated,
-		  body_text, hash, mtime, is_domain)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		  body_text, body_raw, hash, mtime, is_domain)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 		  path=excluded.path, title=excluded.title, type=excluded.type,
 		  status=excluded.status, created=excluded.created, updated=excluded.updated,
-		  body_text=excluded.body_text, hash=excluded.hash, mtime=excluded.mtime,
+		  body_text=excluded.body_text, body_raw=excluded.body_raw, hash=excluded.hash, mtime=excluded.mtime,
 		  is_domain=excluded.is_domain,
 		  -- Clear stale embeddings when the note's content changes. Without
 		  -- this, semantic retrieval keeps returning hits computed from the
@@ -236,7 +237,7 @@ func upsertNote(tx *sql.Tx, rec NoteRecord) error {
 		  colbert_embedding= CASE WHEN notes.hash != excluded.hash THEN NULL ELSE notes.colbert_embedding END`,
 		rec.ID, rec.Path, nullable(rec.Title), nullable(rec.Type),
 		nullable(rec.Status), nullable(rec.Created), nullable(rec.Updated),
-		nullable(rec.BodyText), rec.Hash, rec.MTime, rec.IsDomain,
+		nullable(rec.BodyText), rec.BodyRaw, rec.Hash, rec.MTime, rec.IsDomain,
 	)
 	if err != nil {
 		return fmt.Errorf("upserting note %q: %w", rec.ID, err)

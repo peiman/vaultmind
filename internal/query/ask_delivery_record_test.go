@@ -80,14 +80,10 @@ func TestAsk_DeliveringAskRecordsDelivery(t *testing.T) {
 // A note whose body was NOT packed is not a delivery even on a delivering ask —
 // per-item text decides, not the whole-result verdict.
 //
-// Budget 500 is chosen, not arbitrary: it is where this fixture produces BOTH
-// kinds of item. The first draft of this test used 8192, where every item has
-// text — so the loop body executed zero times and the test asserted nothing at
-// all. It passed, and it could never have failed. Swept:
-//
-//	budget  200 -> 0 with text, 4 without
-//	budget  500 -> 3 with text, 1 without   <- both branches exercised
-//	budget 8192 -> 4 with text, 0 without   <- the vacuous one
+// Budget 400 is chosen so the raw-body fixture produces BOTH kinds of item.
+// The earlier normalized-body fixture used 500; faithfully delivered markup
+// changes the pack's token accounting. The first draft used 8192, where every
+// item had text and the loop asserted nothing.
 //
 // The require() below is the guard that matters more than the budget: if the
 // fixture ever drifts so that one kind disappears, this fails loudly instead of
@@ -99,7 +95,7 @@ func TestAsk_ItemsWithoutTextAreNotDeliveries(t *testing.T) {
 	resolver := graph.NewResolver(db)
 
 	result, err := query.Ask(t.Context(), &query.FTSRetriever{DB: db}, resolver, db, query.AskConfig{
-		Query: "spreading activation", Budget: 500, MaxItems: 5, SearchLimit: 5,
+		Query: "spreading activation", Budget: 400, MaxItems: 5, SearchLimit: 5,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, result.Context)

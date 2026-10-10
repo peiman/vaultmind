@@ -33,9 +33,13 @@ func TestNoteGet_ReturnsRequestedNote(t *testing.T) {
 	var env envelopeShape
 	require.NoError(t, json.Unmarshal(out.Bytes(), &env))
 	assert.Equal(t, "ok", env.Status)
-	assert.Contains(t, string(env.Result), "concept-alpha")
-	assert.Contains(t, string(env.Result), "Alpha Concept")
-	assert.NotContains(t, string(env.Result), "proj-beta", "note get must return the requested note, not a related one")
+	var note struct {
+		ID    string `json:"id"`
+		Title string `json:"title"`
+	}
+	require.NoError(t, json.Unmarshal(env.Result, &note))
+	assert.Equal(t, "concept-alpha", note.ID, "note get must return the requested note, not a related one")
+	assert.Equal(t, "Alpha Concept", note.Title)
 }
 
 // note get with an unknown id must surface a "not_found" error envelope AND a
