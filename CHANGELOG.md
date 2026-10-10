@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Agents now get each note's text as written.** Code examples, identifiers
+  like `text_factory`, `<placeholders>` and `*` survive delivery. Previously,
+  agents got the search-normalized copy, which dropped or changed them.
+  Run a plain `vaultmind index` to refresh existing vaults; no re-embedding
+  is needed.
+
 ## [0.10.8] - 2026-10-09
 
 > Built with Go 1.27.2 for its security fixes, and the mesh watcher and the lint check now say what actually went wrong.

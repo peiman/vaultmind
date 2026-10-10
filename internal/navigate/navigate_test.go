@@ -105,7 +105,7 @@ func TestLoad_APathPrefixIsLiteral(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
 	for _, p := range []string{"a_b/x.md", "axb/y.md", "100%/z.md", "100x/w.md"} {
-		_, err := db.Exec(`INSERT INTO notes (id, path, title, type, body_text, hash, mtime) VALUES (?, ?, ?, 'note', '', 'h', 0)`, p, p, p)
+		_, err := db.Exec(`INSERT INTO notes (id, path, title, type, body_raw, hash, mtime) VALUES (?, ?, ?, 'note', '', 'h', 0)`, p, p, p)
 		require.NoError(t, err)
 	}
 

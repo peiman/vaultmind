@@ -53,7 +53,7 @@ func (r *SparseRetriever) Search(ctx context.Context, query string, limit, offse
 		results = append(results, scored{
 			result: retrieval.ScoredResult{
 				ID: ne.NoteID, Type: ne.Type, Title: ne.Title,
-				Path: ne.Path, Snippet: truncate(ne.BodyText, snippetMaxLen),
+				Path:  ne.Path,
 				Score: sim, IsDomain: ne.IsDomain,
 			},
 			score: sim,
@@ -76,6 +76,9 @@ func (r *SparseRetriever) Search(ctx context.Context, query string, limit, offse
 	out := make([]retrieval.ScoredResult, len(results))
 	for i, s := range results {
 		out[i] = s.result
+	}
+	if err := populateRawSnippets(r.DB, out); err != nil {
+		return nil, 0, err
 	}
 	return out, total, nil
 }

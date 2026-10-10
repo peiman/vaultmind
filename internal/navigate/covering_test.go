@@ -31,7 +31,7 @@ func coveringDB(t *testing.T) *index.DB {
 		{"no-paths", ``},
 	}
 	for _, n := range notes {
-		_, err := db.Exec(`INSERT INTO notes (id, path, title, type, body_text, hash, mtime) VALUES (?, ?, ?, 'concept', 'Body sentence. More.', 'h', 0)`,
+		_, err := db.Exec(`INSERT INTO notes (id, path, title, type, body_raw, hash, mtime) VALUES (?, ?, ?, 'concept', 'Body sentence. More.', 'h', 0)`,
 			n.id, "concepts/"+n.id+".md", n.id)
 		require.NoError(t, err)
 		if n.paths != "" {
@@ -145,7 +145,7 @@ func TestResolveCodeFile_AWorktreeUsesItsMainRepositorysRemote(t *testing.T) {
 // such a paths value must still be read as the list it was meant to be.
 func TestCovering_ReadsAListWrittenAsAString(t *testing.T) {
 	db := coveringDB(t)
-	_, err := db.Exec(`INSERT INTO notes (id, path, title, type, body_text, hash, mtime) VALUES ('quoted', 'concepts/quoted.md', 'quoted', 'concept', 'Body.', 'h', 0)`)
+	_, err := db.Exec(`INSERT INTO notes (id, path, title, type, body_raw, hash, mtime) VALUES ('quoted', 'concepts/quoted.md', 'quoted', 'concept', 'Body.', 'h', 0)`)
 	require.NoError(t, err)
 	_, err = db.Exec(`INSERT INTO frontmatter_kv (note_id, key, value_json) VALUES ('quoted', 'paths', ?)`, `"[\"lib/q.go\"]"`)
 	require.NoError(t, err)

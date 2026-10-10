@@ -126,7 +126,6 @@ type NoteEmbedding struct {
 	Type      string
 	Title     string
 	Path      string
-	BodyText  string
 	IsDomain  bool
 }
 
@@ -159,7 +158,7 @@ func LoadEmbedding(d *DB, noteID string) ([]float32, error) {
 // LoadAllEmbeddings returns all notes that have stored embeddings, including metadata.
 // This is a single query that avoids N+1 lookups when scoring and filtering results.
 func LoadAllEmbeddings(d *DB) ([]NoteEmbedding, error) {
-	rows, err := d.Query(`SELECT id, embedding, type, title, path, body_text, is_domain
+	rows, err := d.Query(`SELECT id, embedding, type, title, path, is_domain
 		FROM notes WHERE embedding IS NOT NULL`)
 	if err != nil {
 		return nil, fmt.Errorf("loading all embeddings: %w", err)
@@ -170,8 +169,8 @@ func LoadAllEmbeddings(d *DB) ([]NoteEmbedding, error) {
 	for rows.Next() {
 		var ne NoteEmbedding
 		var data []byte
-		var noteType, title, path, bodyText sql.NullString
-		if err := rows.Scan(&ne.NoteID, &data, &noteType, &title, &path, &bodyText, &ne.IsDomain); err != nil {
+		var noteType, title, path sql.NullString
+		if err := rows.Scan(&ne.NoteID, &data, &noteType, &title, &path, &ne.IsDomain); err != nil {
 			return nil, fmt.Errorf("scanning embedding row: %w", err)
 		}
 		vec, decErr := DecodeEmbedding(data)
@@ -182,7 +181,6 @@ func LoadAllEmbeddings(d *DB) ([]NoteEmbedding, error) {
 		ne.Type = noteType.String
 		ne.Title = title.String
 		ne.Path = path.String
-		ne.BodyText = bodyText.String
 		result = append(result, ne)
 	}
 	return result, rows.Err()
@@ -260,7 +258,6 @@ type NoteSparseEmbedding struct {
 	Type     string
 	Title    string
 	Path     string
-	BodyText string
 	IsDomain bool
 }
 
@@ -271,7 +268,6 @@ type NoteColBERTEmbedding struct {
 	Type     string
 	Title    string
 	Path     string
-	BodyText string
 	IsDomain bool
 }
 
@@ -303,7 +299,7 @@ func StoreColBERTEmbedding(d *DB, noteID string, colbert [][]float32) error {
 
 // LoadAllSparseEmbeddings returns all notes that have stored sparse embeddings.
 func LoadAllSparseEmbeddings(d *DB) ([]NoteSparseEmbedding, error) {
-	rows, err := d.Query(`SELECT id, sparse_embedding, type, title, path, body_text, is_domain
+	rows, err := d.Query(`SELECT id, sparse_embedding, type, title, path, is_domain
 		FROM notes WHERE sparse_embedding IS NOT NULL`)
 	if err != nil {
 		return nil, fmt.Errorf("loading sparse embeddings: %w", err)
@@ -314,8 +310,8 @@ func LoadAllSparseEmbeddings(d *DB) ([]NoteSparseEmbedding, error) {
 	for rows.Next() {
 		var ne NoteSparseEmbedding
 		var data []byte
-		var noteType, title, path, bodyText sql.NullString
-		if err := rows.Scan(&ne.NoteID, &data, &noteType, &title, &path, &bodyText, &ne.IsDomain); err != nil {
+		var noteType, title, path sql.NullString
+		if err := rows.Scan(&ne.NoteID, &data, &noteType, &title, &path, &ne.IsDomain); err != nil {
 			return nil, fmt.Errorf("scanning sparse row: %w", err)
 		}
 		sparse, decErr := DecodeSparseEmbedding(data)
@@ -326,7 +322,6 @@ func LoadAllSparseEmbeddings(d *DB) ([]NoteSparseEmbedding, error) {
 		ne.Type = noteType.String
 		ne.Title = title.String
 		ne.Path = path.String
-		ne.BodyText = bodyText.String
 		result = append(result, ne)
 	}
 	return result, rows.Err()
@@ -335,7 +330,7 @@ func LoadAllSparseEmbeddings(d *DB) ([]NoteSparseEmbedding, error) {
 // LoadAllColBERTEmbeddings returns all notes that have stored ColBERT embeddings.
 // dims is the embedding dimensionality for decoding.
 func LoadAllColBERTEmbeddings(d *DB, dims int) ([]NoteColBERTEmbedding, error) {
-	rows, err := d.Query(`SELECT id, colbert_embedding, type, title, path, body_text, is_domain
+	rows, err := d.Query(`SELECT id, colbert_embedding, type, title, path, is_domain
 		FROM notes WHERE colbert_embedding IS NOT NULL`)
 	if err != nil {
 		return nil, fmt.Errorf("loading ColBERT embeddings: %w", err)
@@ -360,7 +355,7 @@ func LoadColBERTEmbeddingsFor(d *DB, dims int, ids []string) ([]NoteColBERTEmbed
 			args[i] = id
 		}
 		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(chunk)), ",")
-		rows, err := d.Query(`SELECT id, colbert_embedding, type, title, path, body_text, is_domain
+		rows, err := d.Query(`SELECT id, colbert_embedding, type, title, path, is_domain
 			FROM notes WHERE colbert_embedding IS NOT NULL AND id IN (`+placeholders+`)`, args...) // nosemgrep: go-sql-injection -- only "?" placeholders are concatenated; ids are bound
 		if err != nil {
 			return nil, fmt.Errorf("loading ColBERT embeddings for candidates: %w", err)
@@ -381,8 +376,8 @@ func scanColBERTRows(rows *sql.Rows, dims int) ([]NoteColBERTEmbedding, error) {
 	for rows.Next() {
 		var ne NoteColBERTEmbedding
 		var data []byte
-		var noteType, title, path, bodyText sql.NullString
-		if err := rows.Scan(&ne.NoteID, &data, &noteType, &title, &path, &bodyText, &ne.IsDomain); err != nil {
+		var noteType, title, path sql.NullString
+		if err := rows.Scan(&ne.NoteID, &data, &noteType, &title, &path, &ne.IsDomain); err != nil {
 			return nil, fmt.Errorf("scanning ColBERT row: %w", err)
 		}
 		colbert, decErr := DecodeColBERTEmbedding(data, dims)
@@ -393,7 +388,6 @@ func scanColBERTRows(rows *sql.Rows, dims int) ([]NoteColBERTEmbedding, error) {
 		ne.Type = noteType.String
 		ne.Title = title.String
 		ne.Path = path.String
-		ne.BodyText = bodyText.String
 		result = append(result, ne)
 	}
 	return result, rows.Err()

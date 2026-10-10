@@ -50,7 +50,7 @@ func SearchFTS(d *DB, query string, limit, offset int, filters ...SearchFilters)
 	}
 
 	q := `SELECT f.note_id, n.type, n.title, n.path,
-		snippet(fts_notes, -1, '...', '...', '', 32), rank, n.is_domain
+		COALESCE(substr(n.body_raw, 1, 200), ''), rank, n.is_domain
 		FROM fts_notes f
 		JOIN notes n ON n.id = f.note_id
 		WHERE fts_notes MATCH ?`

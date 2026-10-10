@@ -88,7 +88,7 @@ func Load(q Querier, f Filter) ([]Note, error) {
 		where += ` AND type = ?`
 		args = append(args, f.Type)
 	}
-	stmt := `SELECT id, path, COALESCE(title, ''), COALESCE(type, ''), COALESCE(body_text, ''), mtime FROM notes` + where + ` ORDER BY path`
+	stmt := `SELECT id, path, COALESCE(title, ''), COALESCE(type, ''), COALESCE(body_raw, ''), mtime FROM notes` + where + ` ORDER BY path`
 
 	rows, err := q.Query(stmt, args...)
 	if err != nil {

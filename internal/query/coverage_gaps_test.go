@@ -185,7 +185,7 @@ func TestEmbeddingRetriever_TruncateSnippetNoSpacePath(t *testing.T) {
 	// by injecting it directly into the DB row so the retriever returns it as
 	// a snippet.
 	longBodyNoSpaces := string(bytes.Repeat([]byte("x"), 300))
-	_, err = db.Exec(`UPDATE notes SET body_text = ? WHERE id = ?`, longBodyNoSpaces, row1.ID)
+	_, err = db.Exec(`UPDATE notes SET body_raw = ? WHERE id = ?`, longBodyNoSpaces, row1.ID)
 	require.NoError(t, err)
 	require.NoError(t, index.StoreEmbedding(db, row1.ID, []float32{1, 0}))
 

@@ -153,7 +153,7 @@ func (d *DB) QueryFullNote(id string) (*FullNote, error) {
 	var noteType, title, status, created, updated, body sql.NullString
 	var aliasesCSV, tagsCSV sql.NullString
 	err := d.QueryRow(`
-		SELECT n.id, n.type, n.title, n.path, n.status, n.created, n.updated, n.body_text, n.is_domain,
+		SELECT n.id, n.type, n.title, n.path, n.status, n.created, n.updated, n.body_raw, n.is_domain,
 			(SELECT GROUP_CONCAT(alias, char(31)) FROM aliases WHERE note_id = n.id) AS aliases_csv,
 			(SELECT GROUP_CONCAT(tag, char(31)) FROM tags WHERE note_id = n.id) AS tags_csv
 		FROM notes n
