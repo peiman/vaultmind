@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Keyword search matches any word in a question.** Long natural-language
+  questions can now find notes containing only some of their words, with BM25
+  ranking the matches. User input remains quoted as literal FTS5 terms.
 - **Agents now get each note's text as written.** Code examples, identifiers
   like `text_factory`, `<placeholders>` and `*` survive delivery. Previously,
   agents got the search-normalized copy, which dropped or changed them.
