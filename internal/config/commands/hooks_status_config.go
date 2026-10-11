@@ -13,7 +13,7 @@ import "github.com/peiman/vaultmind/.ckeletin/pkg/config"
 // matched. Two hooks stayed missing from every adopter for months that way.
 var HooksStatusMetadata = config.CommandMetadata{
 	Use:   "status [project-dir]",
-	Short: "Compare a project's installed hook scripts against the canonical ones",
+	Short: "Check installed hook scripts and wiring at project or user scope",
 	Long: `Compare the hook scripts a project has installed against the canonical
 copies embedded in this binary, and report what differs.
 
@@ -21,6 +21,19 @@ PROJECT-DIR
 
   Directory of the project to check. Defaults to the current working
   directory if omitted.
+
+SCOPE (--scope project|user)
+
+  project (default): check the selected project, unchanged. A one-line hint
+  also appears when user-scope VaultMind hooks exist; they do not change the
+  project's status or exit code.
+  user: check ~/.vaultmind/scripts against canonical scripts and the wiring
+  in ~/.claude/settings.json. Also check Codex user hooks ($CODEX_HOME/hooks.json,
+  default ~/.codex/hooks.json), including approvals, and ~/.cursor/hooks.json
+  when present. The project-dir argument is ignored. User profiles are recorded
+  in ~/.vaultmind/vaultmind-profile; undeclared older installs are judged as full.
+  Refresh differing scripts with hooks install --scope user --force --merge;
+  preview first with --dry-run.
 
 STATES
 
@@ -40,25 +53,28 @@ STATES
 
 EXIT CODE
 
-  0 when every canonical script is in sync. Non-zero when anything is
-  drifted or missing, so this is usable in a check: a status command that
+  0 when all expected scripts are in sync and events are wired, and Codex
+  hooks are approved. Non-zero when anything is drifted, missing or unwired, so this is usable in a check: a status command that
   always exits 0 cannot gate anything.
 
 EXAMPLES
 
   vaultmind hooks status                     # check the current project
   vaultmind hooks status ~/dev/myproject     # check another project
+  vaultmind hooks status --scope user        # inspect hooks across all projects
   vaultmind hooks status --json              # machine-readable
   vaultmind hooks install --force .          # the fix for drift`,
 	ConfigPrefix: "app.hooksstatus",
 	FlagOverrides: map[string]string{
-		"app.hooksstatus.json": "json",
+		"app.hooksstatus.scope": "scope",
+		"app.hooksstatus.json":  "json",
 	},
 }
 
 // HooksStatusOptions returns configuration options for `hooks status`.
 func HooksStatusOptions() []config.ConfigOption {
 	return []config.ConfigOption{
+		{Key: "app.hooksstatus.scope", DefaultValue: "project", Description: "Hook scope: project or user (across projects)", Type: "string"},
 		{
 			Key:          "app.hooksstatus.json",
 			DefaultValue: false,

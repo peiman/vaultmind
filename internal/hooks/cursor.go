@@ -63,6 +63,10 @@ type cursorHookEntry struct {
 // truth for scripts and vault settings), filtered to what Cursor can deliver
 // and to the profile.
 func cursorHooks(projectDir, vaultPath string, vaults []string, p Profile) []cursorEntry {
+	return cursorHooksForScope(projectDir, vaultPath, vaults, p, ScopeProject)
+}
+
+func cursorHooksForScope(projectDir, vaultPath string, vaults []string, p Profile, scope Scope) []cursorEntry {
 	allowed := map[string]bool{}
 	for _, n := range ScriptsForProfile(p) {
 		allowed[n] = true
@@ -76,6 +80,10 @@ func cursorHooks(projectDir, vaultPath string, vaults []string, p Profile) []cur
 		return ref
 	}
 	prefix := "export " + envProjectDir + "=" + singleQuote(projectDir) + "; "
+	// The adapter reads workspace_roots from stdin; never pin user hooks to HOME.
+	if scope == ScopeUser {
+		prefix = ""
+	}
 	var out []cursorEntry
 	for _, ch := range canonicalHooksWith(vaultPath, vaults, ref) {
 		w, ok := cursorWiring[ch.Script]

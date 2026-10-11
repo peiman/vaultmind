@@ -143,6 +143,7 @@ const (
 	KeyAppFrontmatternormalizeStripTime      = "app.frontmatternormalize.strip_time"      // Force all datetimes to date-only
 	KeyAppGitstatusVault                     = "app.gitstatus.vault"                      // Path to vault root
 	KeyAppGitstatusJson                      = "app.gitstatus.json"                       // Output in JSON format
+	KeyAppHooksinstallScope                  = "app.hooksinstall.scope"                   // Hook scope: project or user (across projects)
 	KeyAppHooksinstallForce                  = "app.hooksinstall.force"                   // Overwrite existing hook scripts (default: refuse)
 	KeyAppHooksinstallJson                   = "app.hooksinstall.json"                    // Output in JSON format
 	KeyAppHooksinstallProfile                = "app.hooksinstall.profile"                 // Capability profile to declare and install: knowledge, persona, or full. Unset...
@@ -155,6 +156,7 @@ const (
 	KeyAppHooksinstallDryrun                 = "app.hooksinstall.dryrun"                  // With --merge, print the merged result without writing it (preview/diff).
 	KeyAppHooksrecordJson                    = "app.hooksrecord.json"                     // Output in JSON format
 	KeyAppHooksrecordVault                   = "app.hooksrecord.vault"                    // Path to vault root
+	KeyAppHooksstatusScope                   = "app.hooksstatus.scope"                    // Hook scope: project or user (across projects)
 	KeyAppHooksstatusJson                    = "app.hooksstatus.json"                     // Output in JSON format
 	KeyAppHooksuninstallJson                 = "app.hooksuninstall.json"                  // Output in JSON format
 	KeyAppHooksuninstallLocal                = "app.hooksuninstall.local"                 // Target .claude/settings.local.json instead of .claude/settings.json.

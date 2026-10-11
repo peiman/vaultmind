@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **User-scope hook installs and status.** `hooks install --scope user` writes
+  scripts to `~/.vaultmind/scripts` and uses absolute script paths in the user's
+  hook config. Claude Code, Codex and Cursor are supported. Existing custom
+  scripts require `--force`; `--merge --dry-run` previews without writing.
+  `hooks status --scope user` checks scripts and wiring (plus Codex approvals),
+  and project status hints when user hooks exist too. Project scope remains
+  the default; user-scope `--vault` must be absolute.
+
 ### Fixed
 
 - **Keyword search matches any word in a question.** Long natural-language

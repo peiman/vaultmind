@@ -17,10 +17,32 @@ import "github.com/peiman/vaultmind/.ckeletin/pkg/config"
 // the same gate `vaultmind init` uses.
 var HooksInstallMetadata = config.CommandMetadata{
 	Use:   "install [project-dir]",
-	Short: "Install Claude Code hook scripts into a project",
+	Short: "Install hook scripts into a project or user scope",
 	Long: `Write VaultMind's Claude Code hook scripts to <project-dir>/.claude/scripts/.
 The scripts are embedded in the vaultmind binary; this command
 copies them out for use by Claude Code's hook system.
+
+SCOPE (--scope project|user)
+
+  project (default): the existing project install, unchanged.
+  user: install scripts under ~/.vaultmind/scripts and wire them by absolute
+  path, so they run in every project. --merge targets ~/.claude/settings.json.
+  The optional project-dir argument is ignored at user scope.
+
+  --vault must be absolute at user scope: the hook cwd varies per project.
+  Without --vault, hooks use vaultmind-identity in each active project.
+  Existing differing scripts are protected; --force overwrites them.
+  --merge --dry-run previews scripts and merged settings without writing.
+  Existing hooks and unrelated settings are preserved; reruns are idempotent.
+  --local is project-only. Profiles are recorded in ~/.vaultmind/vaultmind-profile.
+
+  User scope also supports --agent codex ($CODEX_HOME/hooks.json, default
+  ~/.codex/hooks.json) and --agent cursor (~/.cursor/hooks.json). Both use
+  absolute script paths under ~/.vaultmind/scripts, and determine the active
+  project at hook runtime. Codex user hooks still need approval in /hooks,
+  including after upgrades; project trust is required for project hooks only.
+  Verified user hook locations: https://learn.chatgpt.com/docs/hooks and
+  https://cursor.com/docs/hooks. hooks uninstall currently handles projects only.
 
 CODEX (--agent codex)
 
@@ -138,6 +160,8 @@ EXAMPLES
   vaultmind hooks install                                              # a fresh project gets the knowledge set
   vaultmind hooks install ~/dev/myproject                              # the same, into a specific project
   vaultmind hooks install --profile persona                            # an agent identity vault: persona loader + episodes
+  vaultmind hooks install --scope user --vault /absolute/knowledge --merge  # hooks in every project
+  vaultmind hooks install --scope user --merge --force --dry-run        # preview a user install upgrade
   vaultmind hooks install --force                                      # refresh after binary upgrade
   vaultmind hooks install --json                                       # machine-readable output
   vaultmind hooks install --only auto-rag-guard.sh,shell-strip.sh      # only the auto-RAG slice (companion-project pattern)
@@ -149,6 +173,7 @@ EXAMPLES
   vaultmind hooks install --profile persona --vaults ./identity,./desk --merge  # recall searches both; persona loads ./identity`,
 	ConfigPrefix: "app.hooksinstall",
 	FlagOverrides: map[string]string{
+		"app.hooksinstall.scope":   "scope",
 		"app.hooksinstall.force":   "force",
 		"app.hooksinstall.json":    "json",
 		"app.hooksinstall.only":    "only",
@@ -167,6 +192,7 @@ EXAMPLES
 // --force and --json are the flags.
 func HooksInstallOptions() []config.ConfigOption {
 	return []config.ConfigOption{
+		{Key: "app.hooksinstall.scope", DefaultValue: "project", Description: "Hook scope: project or user (across projects)", Type: "string"},
 		{
 			Key:          "app.hooksinstall.force",
 			DefaultValue: false,

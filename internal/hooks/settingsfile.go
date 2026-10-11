@@ -62,6 +62,10 @@ func MergeIntoSettingsFor(projectDir, vaultPath string, vaults []string, local, 
 // scripts the profile had just declined to write (the Codex path already
 // filtered; this one did not).
 func MergeIntoSettingsForProfile(projectDir, vaultPath string, vaults []string, p Profile, local, dryRun bool) (*MergeFileResult, error) {
+	return mergeIntoSettingsForScope(projectDir, vaultPath, vaults, p, local, dryRun, ScopeProject)
+}
+
+func mergeIntoSettingsForScope(projectDir, vaultPath string, vaults []string, p Profile, local, dryRun bool, scope Scope) (*MergeFileResult, error) {
 	path := settingsFilePath(projectDir, local)
 	existing, err := readSettingsFile(path)
 	if err != nil {
@@ -73,7 +77,7 @@ func MergeIntoSettingsForProfile(projectDir, vaultPath string, vaults []string, 
 	}
 	var wanted []canonicalHook
 	var outside []string
-	for _, ch := range canonicalHooksFor(vaultPath, vaults) {
+	for _, ch := range claudeHooksForScope(projectDir, vaultPath, vaults, scope) {
 		if allowed[ch.Script] {
 			wanted = append(wanted, ch)
 		} else {

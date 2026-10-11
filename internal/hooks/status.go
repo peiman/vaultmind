@@ -39,9 +39,13 @@ type ScriptStatus struct {
 // StatusReport is the full comparison between the hooks this binary ships and
 // the ones a project has installed.
 type StatusReport struct {
-	ProjectDir string         `json:"project_dir"`
-	Installed  bool           `json:"installed"`
-	Scripts    []ScriptStatus `json:"scripts"`
+	ProjectDir         string         `json:"project_dir"`
+	Scope              Scope          `json:"scope,omitempty"`
+	ScriptsDir         string         `json:"scripts_dir,omitempty"`
+	SettingsPath       string         `json:"settings_path,omitempty"`
+	UserScopeInstalled bool           `json:"user_scope_installed,omitempty"`
+	Installed          bool           `json:"installed"`
+	Scripts            []ScriptStatus `json:"scripts"`
 	// Events reports whether each canonical event is wired in settings.json.
 	// Script contents and event wiring are independent failures: a project can
 	// hold every script byte-identical and still run none of them.
@@ -72,22 +76,37 @@ func (r StatusReport) Counts() (inSync, drifted, missing int) {
 // copy. It is the full picture; CompareInstalled is the drift-only view that
 // doctor consumes.
 func Status(projectDir string) (StatusReport, error) {
+	return StatusForScope(projectDir, ScopeProject)
+}
+
+// StatusForScope checks scripts and wiring at the selected root (HOME for user).
+func StatusForScope(projectDir string, scope Scope) (StatusReport, error) {
 	report := StatusReport{ProjectDir: projectDir}
+	if scope == ScopeUser {
+		report.Scope = scope
+		report.ScriptsDir = scriptsDirFor(projectDir, AgentClaude, scope)
+		report.SettingsPath = settingsFilePath(projectDir, false)
+	}
 	// The DECLARED profile decides what counts as missing or unwired. Judging
 	// every adopter against the binary's full inventory reported deliberate
 	// omissions as defects on every run — and a report wrong every time is one
 	// nobody reads on the run where it is right.
-	profile, err := DeclaredProfile(projectDir)
+	profile, err := declaredProfileForScope(projectDir, scope)
 	if err != nil {
 		return StatusReport{}, err
 	}
 	report.Profile = profile
 	report.Events = eventWiringForProfile(projectDir, profile)
-	codex, err := codexApprovals(projectDir, codexHomeDir())
+	var codex CodexApproval
+	if scope == ScopeUser {
+		codex, err = codexApprovalsAt(UserCodexHooksPath(), codexHomeDir())
+	} else {
+		codex, err = codexApprovals(projectDir, codexHomeDir())
+	}
 	if err != nil {
 		return StatusReport{}, err
 	}
-	scriptsDir := ScriptsDir(projectDir, AgentClaude)
+	scriptsDir := scriptsDirFor(projectDir, AgentClaude, scope)
 	if _, err := os.Stat(scriptsDir); err == nil {
 		report.Installed = true
 	} else if !os.IsNotExist(err) {
@@ -113,7 +132,9 @@ func Status(projectDir string) (StatusReport, error) {
 	if report.Codex != nil || report.Cursor != nil {
 		if wired, _ := report.EventCounts(); wired == 0 {
 			if report.Installed {
-				report.LeftoverClaudeScripts = scriptsDir
+				if scope != ScopeUser {
+					report.LeftoverClaudeScripts = scriptsDir
+				}
 				report.Installed = false
 			}
 			report.Events = nil

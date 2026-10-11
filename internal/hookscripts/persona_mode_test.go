@@ -198,3 +198,22 @@ func TestPersonaMode_LongSessionIDStillLeavesARecord(t *testing.T) {
 
 	assert.Equal(t, []string{"explore"}, sidecarModes(t, env))
 }
+
+func TestPersona_UserScopeUsesActiveProject(t *testing.T) {
+	installed, env := installPersonaHook(t, personaCallLogStub)
+	active := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(active, "vaultmind-identity"), 0o750))
+	// No pinned vault: its default must follow the active project, not the
+	// directory from which the installed script was launched.
+	var clean []string
+	for _, e := range env {
+		if !strings.HasPrefix(e, "VAULTMIND_VAULT=") && !strings.HasPrefix(e, "CLAUDE_PROJECT_DIR=") {
+			clean = append(clean, e)
+		}
+	}
+	for _, projectVar := range []string{"CLAUDE_PROJECT_DIR", "VAULTMIND_PROJECT_DIR"} {
+		out := runPersonaHookSession(t, installed, append(clean, projectVar+"="+active, "VAULTMIND_PERSONA_MODE=explore"), projectVar)
+		assert.Contains(t, out, filepath.Join(active, "vaultmind-identity"))
+		assert.NotContains(t, out, filepath.Join(installed, "vaultmind-identity"))
+	}
+}

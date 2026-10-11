@@ -18,6 +18,7 @@ import (
 // (ADR-001) and the core has a single, named argument.
 type hooksInstallParams struct {
 	projectDir string
+	scope      string
 	force      bool
 	jsonOut    bool
 	only       string
@@ -112,6 +113,22 @@ func resolveProjectDir(args []string) string {
 // (hooks.MergeIntoSettings). Conflict-without-force surfaces the per-script
 // remediation path explicitly; an empty `only` falls through to "install all".
 func runHooksInstallCore(cmd *cobra.Command, p hooksInstallParams) error {
+	scope, err := hooks.ParseScope(p.scope)
+	p.scope = string(scope)
+	if err != nil {
+		return err
+	}
+	if scope == hooks.ScopeUser {
+		if p.local {
+			return fmt.Errorf("--local is only available with --scope project; user hooks use ~/.claude/settings.json")
+		}
+		if v := strings.TrimSpace(p.vault); v != "" && !filepath.IsAbs(v) {
+			return fmt.Errorf("--vault must be absolute with --scope user: hook working directories vary per project (got %q)", v)
+		}
+		if p.projectDir, err = os.UserHomeDir(); err != nil {
+			return fmt.Errorf("resolving user home: %w", err)
+		}
+	}
 	// --dry-run only previews the settings merge; without --merge it would
 	// silently write the scripts, the opposite of what "dry run" implies.
 	if p.dryRun && !p.merge {
@@ -141,7 +158,7 @@ func runHooksInstallCore(cmd *cobra.Command, p hooksInstallParams) error {
 	// on the very upgrade command the release notes gave. A fresh project
 	// gets knowledge, like init; see hooks.InstallProfile.
 	if strings.TrimSpace(p.profile) == "" {
-		if profile, perr = hooks.InstallProfile(p.projectDir); perr != nil {
+		if profile, perr = hooks.InstallProfileForScope(p.projectDir, scope); perr != nil {
 			return perr
 		}
 	}
@@ -171,6 +188,7 @@ func runHooksInstallCore(cmd *cobra.Command, p hooksInstallParams) error {
 
 	prov, retErr := hooks.Provision(hooks.InstallConfig{
 		ProjectDir: p.projectDir,
+		Scope:      scope,
 		Force:      p.force,
 		Only:       onlyList,
 		VaultPath:  strings.TrimSpace(p.vault),
@@ -196,7 +214,8 @@ func runHooksInstallCore(cmd *cobra.Command, p hooksInstallParams) error {
 
 	writeHooksInstallHuman(w, res, mergeRes, installGuidance{
 		rerun:        hooksInstallRerun(p, hooksAgentClaude, vaults),
-		missingVault: missingVaultWarning(p.projectDir, strings.TrimSpace(p.vault), vaults),
+		missingVault: hooksInstallVaultWarning(p, vaults),
+		settingsPath: hooksInstallSettingsPath(p),
 	})
 	return retErr
 }
@@ -258,7 +277,7 @@ func writeHooksInstallHuman(w io.Writer, res *hooks.InstallResult, mergeRes *hoo
 		// --merge is additive, idempotent, and keeps a project's own hooks.
 		// The preview flag goes in the same breath: the reason people paste by
 		// hand is not wanting a tool to edit settings.json unseen.
-		_, _ = fmt.Fprintf(w, "\nNext: wire these into .claude/settings.json.\n")
+		_, _ = fmt.Fprintf(w, "\nNext: wire these into %s.\n", g.settingsTarget())
 		_, _ = fmt.Fprintf(w, "  %s --merge --dry-run   preview the merged file, write nothing\n", g.rerun)
 		_, _ = fmt.Fprintf(w, "  %s --merge             apply it (additive — existing hooks preserved)\n", g.rerun)
 		_, _ = fmt.Fprintf(w, "\nOr paste this yourself, merging under an existing \"hooks\" key if present:\n\n%s\n", res.SettingsStanza)
@@ -297,6 +316,7 @@ func runHooksInstallAgent(cmd *cobra.Command, p hooksInstallParams, only []strin
 	vault := strings.TrimSpace(p.vault)
 	prov, retErr := hooks.Provision(hooks.InstallConfig{
 		ProjectDir: projectDir,
+		Scope:      hooks.Scope(p.scope),
 		Force:      p.force,
 		Only:       only,
 		VaultPath:  vault,
@@ -309,12 +329,37 @@ func runHooksInstallAgent(cmd *cobra.Command, p hooksInstallParams, only []strin
 	var mergeRes *hooks.MergeFileResult
 	if retErr == nil && res != nil {
 		if p.merge {
-			mergeRes, retErr = aw.merge(projectDir, vault, vaults, profile, p.dryRun)
-		} else if stanza, serr := aw.stanza(projectDir, vault, vaults, profile); serr == nil {
-			res.SettingsStanza = stanza
+			if p.scope == string(hooks.ScopeUser) {
+				mergeRes, retErr = hooks.MergeUserAgentHooks(projectDir, vault, vaults, profile, aw.agent, p.dryRun)
+			} else {
+				mergeRes, retErr = aw.merge(projectDir, vault, vaults, profile, p.dryRun)
+			}
+		} else {
+			var stanza string
+			var serr error
+			if p.scope == string(hooks.ScopeUser) {
+				stanza, serr = hooks.UserAgentStanza(projectDir, vault, vaults, profile, aw.agent)
+			} else {
+				stanza, serr = aw.stanza(projectDir, vault, vaults, profile)
+			}
+			if serr == nil {
+				res.SettingsStanza = stanza
+			}
 		}
 	}
 
+	if p.scope == string(hooks.ScopeUser) {
+		if mergeRes != nil {
+			aw.file = mergeRes.SettingsPath
+		} else if aw.agent == hooks.AgentCursor {
+			aw.file = hooks.CursorHooksPath(projectDir)
+		} else {
+			aw.file = hooks.UserCodexHooksPath()
+		}
+		if aw.agent == hooks.AgentCodex {
+			aw.notice = "\nCodex user hooks need approval: run /hooks and trust the VaultMind hooks.\nApprove again after upgrades; changed hooks are skipped until trusted.\nCheck: vaultmind hooks status --scope user\n"
+		}
+	}
 	w := cmd.OutOrStdout()
 	if p.jsonOut {
 		payload := &hooksInstallPayload{InstallResult: res, Merge: mergeRes}
@@ -328,7 +373,7 @@ func runHooksInstallAgent(cmd *cobra.Command, p hooksInstallParams, only []strin
 	}
 	writeHooksInstallAgentHuman(w, res, mergeRes, installGuidance{
 		rerun:        hooksInstallRerun(p, aw.name, vaults),
-		missingVault: missingVaultWarning(projectDir, vault, vaults),
+		missingVault: hooksInstallVaultWarning(p, vaults),
 	}, aw)
 	return retErr
 }
@@ -383,6 +428,7 @@ func parseHookVaults(raw string) ([]string, error) {
 type installGuidance struct {
 	rerun        string
 	missingVault string
+	settingsPath string
 }
 
 // hooksInstallRerun rebuilds the command the user ran, so a suggested next step
@@ -391,7 +437,9 @@ type installGuidance struct {
 // wired a different directory (stranger test, 2026-09-23).
 func hooksInstallRerun(p hooksInstallParams, agent string, vaults []string) string {
 	parts := []string{"vaultmind hooks install"}
-	if d := strings.TrimSpace(p.projectDir); d != "" && d != "." {
+	if p.scope == string(hooks.ScopeUser) {
+		parts = append(parts, "--scope user")
+	} else if d := strings.TrimSpace(p.projectDir); d != "" && d != "." {
 		parts = append(parts, shellWord(d))
 	}
 	if _, ok := agentWirings[agent]; ok {
@@ -463,4 +511,25 @@ func resolveHookVault(raw string) (string, error) {
 		return "", fmt.Errorf("--vault: resolving %q: %w", v, err)
 	}
 	return abs, nil
+}
+
+func (g installGuidance) settingsTarget() string {
+	if g.settingsPath != "" {
+		return g.settingsPath
+	}
+	return ".claude/settings.json"
+}
+
+func hooksInstallSettingsPath(p hooksInstallParams) string {
+	if p.scope == string(hooks.ScopeUser) {
+		return filepath.Join(p.projectDir, ".claude", "settings.json")
+	}
+	return ""
+}
+
+func hooksInstallVaultWarning(p hooksInstallParams, vaults []string) string {
+	if p.scope == string(hooks.ScopeUser) && strings.TrimSpace(p.vault) == "" && len(vaults) == 0 {
+		return "No --vault specified: hooks use vaultmind-identity in each active project. Use --vault /absolute/path to share a vault across projects."
+	}
+	return missingVaultWarning(p.projectDir, strings.TrimSpace(p.vault), vaults)
 }

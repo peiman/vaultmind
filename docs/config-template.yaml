@@ -396,6 +396,9 @@ app:
     json: false
 
   hooksinstall:
+    # Hook scope: project or user (across projects)
+    scope: project
+
     # Overwrite existing hook scripts (default: refuse)
     force: false
 
@@ -434,6 +437,9 @@ app:
     vault: .
 
   hooksstatus:
+    # Hook scope: project or user (across projects)
+    scope: project
+
     # Output in JSON format
     json: false
 
