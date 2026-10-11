@@ -1,6 +1,7 @@
 package hooks
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -69,17 +70,31 @@ func UserScopeInstalled(home string) bool {
 // cwd (https://learn.chatgpt.com/docs/hooks); Cursor's adapter gets the project
 // from workspace_roots (https://cursor.com/docs/hooks).
 func UserAgentStanza(home, vault string, vaults []string, p Profile, a Agent) (string, error) {
+	return SelectedAgentStanza(home, vault, vaults, p, a, ScopeUser, nil)
+}
+
+// SelectedAgentStanza renders only the scripts requested by --only.
+func SelectedAgentStanza(home, vault string, vaults []string, p Profile, a Agent, scope Scope, only []string) (string, error) {
 	if a == AgentCursor {
-		b, err := mergeCursorHooks(nil, cursorHooksForScope(home, vault, vaults, p, ScopeUser))
+		b, err := mergeCursorHooks(nil, selectedCursorHooks(cursorHooksForScope(home, vault, vaults, p, scope), only))
 		return string(b), err
 	}
-	return renderStanza(codexHooksForScope(home, vault, vaults, p, ScopeUser))
+	return renderStanza(selectedHooks(codexHooksForScope(home, vault, vaults, p, scope), only))
 }
 
 // MergeUserAgentHooks uses the same preservation/idempotency rules as the
 // corresponding project install, targeting the harness's user config.
 func MergeUserAgentHooks(home, vault string, vaults []string, p Profile, a Agent, dryRun bool) (*MergeFileResult, error) {
+	return MergeSelectedAgentHooks(home, vault, vaults, p, a, ScopeUser, dryRun, nil)
+}
+
+// MergeSelectedAgentHooks wires only the requested scripts, preserving other
+// entries; user commands are migrated only when their shape is generated.
+func MergeSelectedAgentHooks(home, vault string, vaults []string, p Profile, a Agent, scope Scope, dryRun bool, only []string) (*MergeFileResult, error) {
 	path := UserCodexHooksPath()
+	if scope != ScopeUser {
+		path = CodexHooksPath(home)
+	}
 	if a == AgentCursor {
 		path = CursorHooksPath(home)
 	}
@@ -88,16 +103,29 @@ func MergeUserAgentHooks(home, vault string, vaults []string, p Profile, a Agent
 		return nil, err
 	}
 	var merged []byte
+	original := existing
+	if scope == ScopeUser {
+		existing, err = migrateUserCommands(existing, home, a)
+		if err != nil {
+			return nil, fmt.Errorf("merging into %s: %w", path, err)
+		}
+	}
 	var changed bool
 	if a == AgentCursor {
-		merged, err = mergeCursorHooks(existing, cursorHooksForScope(home, vault, vaults, p, ScopeUser))
+		want := selectedCursorHooks(cursorHooksForScope(home, vault, vaults, p, scope), only)
+		if len(only) > 0 {
+			merged, err = mergeSelectedCursorHooks(existing, want)
+		} else {
+			merged, err = mergeCursorHooks(existing, want)
+		}
 		changed = existing == nil || !sameCursorDoc(existing, merged)
 	} else {
-		merged, changed, err = mergeHooksWith(existing, codexHooksForScope(home, vault, vaults, p, ScopeUser), true)
+		merged, changed, err = mergeHooksWith(existing, selectedHooks(codexHooksForScope(home, vault, vaults, p, scope), only), scope != ScopeUser)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("merging into %s: %w", path, err)
 	}
+	changed = changed || string(original) != string(existing)
 	res := &MergeFileResult{SettingsPath: path, Changed: changed, DryRun: dryRun, Merged: string(merged)}
 	if dryRun || !changed {
 		return res, nil
@@ -109,6 +137,59 @@ func MergeUserAgentHooks(home, vault string, vaults []string, p Profile, a Agent
 		return nil, fmt.Errorf("writing %s: %w", path, err)
 	}
 	return res, nil
+}
+
+func selectedScript(script string, only []string) bool {
+	if len(only) == 0 {
+		return true
+	}
+	for _, s := range only {
+		if s == script {
+			return true
+		}
+	}
+	return false
+}
+
+func selectedHooks(all []canonicalHook, only []string) []canonicalHook {
+	var out []canonicalHook
+	for _, h := range all {
+		if selectedScript(h.Script, only) {
+			out = append(out, h)
+		}
+	}
+	return out
+}
+
+func selectedCursorHooks(all []cursorEntry, only []string) []cursorEntry {
+	var out []cursorEntry
+	for _, h := range all {
+		if selectedScript(h.Script, only) {
+			out = append(out, h)
+		}
+	}
+	return out
+}
+
+func mergeSelectedCursorHooks(existing []byte, want []cursorEntry) ([]byte, error) {
+	d, err := parseCursorDoc(existing)
+	if err != nil {
+		return nil, err
+	}
+	for _, w := range want {
+		kept := d.hooks[w.Event][:0:0]
+		for _, raw := range d.hooks[w.Event] {
+			if cursorScriptOf(raw) != w.Script {
+				kept = append(kept, raw)
+			}
+		}
+		raw, err := json.Marshal(w.Hook)
+		if err != nil {
+			return nil, err
+		}
+		d.hooks[w.Event] = append(kept, raw)
+	}
+	return d.render()
 }
 
 // UserCodexHooksPath honors CODEX_HOME, like Codex's own config discovery.

@@ -39,13 +39,15 @@ type ScriptStatus struct {
 // StatusReport is the full comparison between the hooks this binary ships and
 // the ones a project has installed.
 type StatusReport struct {
-	ProjectDir         string         `json:"project_dir"`
-	Scope              Scope          `json:"scope,omitempty"`
-	ScriptsDir         string         `json:"scripts_dir,omitempty"`
-	SettingsPath       string         `json:"settings_path,omitempty"`
-	UserScopeInstalled bool           `json:"user_scope_installed,omitempty"`
-	Installed          bool           `json:"installed"`
-	Scripts            []ScriptStatus `json:"scripts"`
+	ProjectDir         string          `json:"project_dir"`
+	Scope              Scope           `json:"scope,omitempty"`
+	ScriptsDir         string          `json:"scripts_dir,omitempty"`
+	SettingsPath       string          `json:"settings_path,omitempty"`
+	UserScopeInstalled bool            `json:"user_scope_installed,omitempty"`
+	Overlaps           []ScopeOverlap  `json:"overlaps,omitempty"`
+	BrokenCommands     []BrokenCommand `json:"broken_commands,omitempty"`
+	Installed          bool            `json:"installed"`
+	Scripts            []ScriptStatus  `json:"scripts"`
 	// Events reports whether each canonical event is wired in settings.json.
 	// Script contents and event wiring are independent failures: a project can
 	// hold every script byte-identical and still run none of them.
@@ -86,6 +88,10 @@ func StatusForScope(projectDir string, scope Scope) (StatusReport, error) {
 		report.Scope = scope
 		report.ScriptsDir = scriptsDirFor(projectDir, AgentClaude, scope)
 		report.SettingsPath = settingsFilePath(projectDir, false)
+		var err error
+		if report.BrokenCommands, err = brokenUserCommands(projectDir); err != nil {
+			return StatusReport{}, err
+		}
 	}
 	// The DECLARED profile decides what counts as missing or unwired. Judging
 	// every adopter against the binary's full inventory reported deliberate

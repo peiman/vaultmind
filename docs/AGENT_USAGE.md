@@ -318,19 +318,28 @@ shell-quoted script paths. They do not locate scripts through
 absolute at user scope; a relative value is rejected before writing anything.
 Without it, hooks use `vaultmind-identity` in each active project. Relative
 `--vaults` entries keep the existing behavior of resolving to absolute paths
-at install time. `--local` is project-only; a positional project directory is
-ignored at user scope.
+at install time. `--local` is project-only; at user scope a positional project
+directory selects the project to compare for overlaps, without changing where
+user scripts or settings are installed.
 
 The merge preserves unrelated hooks/settings and changes nothing on an
-identical rerun. It also preserves existing commands for the same script:
-review a custom command in the dry-run preview before upgrading. Differing
+identical rerun. Generated legacy user commands are migrated to absolute script
+paths; custom commands are preserved and reported as conflicts, even with
+`--force`. `--dry-run` shows the exact resulting settings. Differing
 script contents require `--force`, including older global installs; a forced
 dry run leaves those custom scripts untouched. Status checks drift, missing
 scripts and event wiring independently. The user's declared profile lives in
 `~/.vaultmind/vaultmind-profile`; an older undeclared install retains the full
-profile. Project status adds a hint when user hooks exist too, without changing
-its own result or exit code. Keep overlapping user and project hooks in mind:
-the harness can run both copies.
+profile. User status checks the actual wired script paths too: missing paths
+and `$CLAUDE_PROJECT_DIR` references report the exact broken command and a fix.
+Status in either scope compares user wiring with the selected project (current
+directory by default), including Claude's `settings.local.json`. It reports
+each overlapping event and its scripts, names both settings files, and exits
+non-zero because the harness can run both copies. Install warns about overlaps,
+including during dry runs. Remove one scope's wiring, or use `--only` to install
+and wire non-overlapping scripts. Neither scope is removed automatically;
+`--only` preserves existing wiring outside the selection, so remove an existing
+overlap explicitly first. This applies to Claude Code, Codex and Cursor.
 
 User scope also works with `--agent codex` and `--agent cursor`, using the
 verified user hook locations in [Codex's docs](https://learn.chatgpt.com/docs/hooks)

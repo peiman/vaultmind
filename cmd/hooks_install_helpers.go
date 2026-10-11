@@ -17,18 +17,19 @@ import (
 // thin command wiring (cmd/hooks_install.go) stays under the ≤30-line cap
 // (ADR-001) and the core has a single, named argument.
 type hooksInstallParams struct {
-	projectDir string
-	scope      string
-	force      bool
-	jsonOut    bool
-	only       string
-	profile    string
-	vault      string
-	merge      bool
-	local      bool
-	dryRun     bool
-	agent      string
-	vaults     string
+	projectDir    string
+	activeProject string
+	scope         string
+	force         bool
+	jsonOut       bool
+	only          string
+	profile       string
+	vault         string
+	merge         bool
+	local         bool
+	dryRun        bool
+	agent         string
+	vaults        string
 }
 
 // Agents `hooks install` can wire.
@@ -118,6 +119,7 @@ func runHooksInstallCore(cmd *cobra.Command, p hooksInstallParams) error {
 	if err != nil {
 		return err
 	}
+	p.activeProject = p.projectDir
 	if scope == hooks.ScopeUser {
 		if p.local {
 			return fmt.Errorf("--local is only available with --scope project; user hooks use ~/.claude/settings.json")
@@ -196,6 +198,9 @@ func runHooksInstallCore(cmd *cobra.Command, p hooksInstallParams) error {
 		Profile:    profile,
 	}, p.merge, p.local, p.dryRun)
 	res, mergeRes := prov.Install, prov.Merge
+	if retErr == nil && mergeRes != nil {
+		retErr = addInstallOverlaps(p, mergeRes, hooks.AgentClaude)
+	}
 
 	w := cmd.OutOrStdout()
 	if p.jsonOut {
@@ -286,6 +291,7 @@ func writeHooksInstallHuman(w io.Writer, res *hooks.InstallResult, mergeRes *hoo
 
 // writeMergeOutcome renders the settings-merge result for human output.
 func writeMergeOutcome(w io.Writer, mergeRes *hooks.MergeFileResult) {
+	_ = renderScopeOverlaps(w, mergeRes.Overlaps)
 	switch {
 	case mergeRes.DryRun:
 		_, _ = fmt.Fprintf(w, "\nDry run — would merge into %s (nothing written):\n\n%s\n", mergeRes.SettingsPath, mergeRes.Merged)
@@ -329,16 +335,16 @@ func runHooksInstallAgent(cmd *cobra.Command, p hooksInstallParams, only []strin
 	var mergeRes *hooks.MergeFileResult
 	if retErr == nil && res != nil {
 		if p.merge {
-			if p.scope == string(hooks.ScopeUser) {
-				mergeRes, retErr = hooks.MergeUserAgentHooks(projectDir, vault, vaults, profile, aw.agent, p.dryRun)
+			if p.scope == string(hooks.ScopeUser) || len(only) > 0 {
+				mergeRes, retErr = hooks.MergeSelectedAgentHooks(projectDir, vault, vaults, profile, aw.agent, hooks.Scope(p.scope), p.dryRun, only)
 			} else {
 				mergeRes, retErr = aw.merge(projectDir, vault, vaults, profile, p.dryRun)
 			}
 		} else {
 			var stanza string
 			var serr error
-			if p.scope == string(hooks.ScopeUser) {
-				stanza, serr = hooks.UserAgentStanza(projectDir, vault, vaults, profile, aw.agent)
+			if p.scope == string(hooks.ScopeUser) || len(only) > 0 {
+				stanza, serr = hooks.SelectedAgentStanza(projectDir, vault, vaults, profile, aw.agent, hooks.Scope(p.scope), only)
 			} else {
 				stanza, serr = aw.stanza(projectDir, vault, vaults, profile)
 			}
@@ -348,6 +354,9 @@ func runHooksInstallAgent(cmd *cobra.Command, p hooksInstallParams, only []strin
 		}
 	}
 
+	if retErr == nil && mergeRes != nil {
+		retErr = addInstallOverlaps(p, mergeRes, aw.agent)
+	}
 	if p.scope == string(hooks.ScopeUser) {
 		if mergeRes != nil {
 			aw.file = mergeRes.SettingsPath
@@ -376,6 +385,19 @@ func runHooksInstallAgent(cmd *cobra.Command, p hooksInstallParams, only []strin
 		missingVault: hooksInstallVaultWarning(p, vaults),
 	}, aw)
 	return retErr
+}
+
+func addInstallOverlaps(p hooksInstallParams, res *hooks.MergeFileResult, agent hooks.Agent) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	project := p.activeProject
+	if project == "" {
+		project = p.projectDir
+	}
+	res.Overlaps, err = hooks.ScopeOverlaps(project, home, res, agent)
+	return err
 }
 
 // writeHooksInstallAgentHuman is the Codex or Cursor variant of the human

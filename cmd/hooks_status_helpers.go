@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/hooks"
@@ -16,6 +17,7 @@ func runHooksStatusCore(cmd *cobra.Command, projectDir, rawScope string, jsonOut
 		return err
 	}
 	home, homeErr := os.UserHomeDir()
+	activeProject := projectDir
 	if scope == hooks.ScopeUser {
 		if homeErr != nil {
 			return fmt.Errorf("resolving user home: %w", homeErr)
@@ -23,6 +25,9 @@ func runHooksStatusCore(cmd *cobra.Command, projectDir, rawScope string, jsonOut
 		projectDir = home
 	}
 	report, err := hooks.StatusForScope(projectDir, scope)
+	if err == nil && homeErr == nil {
+		report.Overlaps, err = hooks.ScopeOverlaps(activeProject, home, nil, "")
+	}
 	if scope == hooks.ScopeProject {
 		report.UserScopeInstalled = hooks.UserScopeInstalled(home)
 	}
@@ -61,13 +66,20 @@ func runHooksStatusCore(cmd *cobra.Command, projectDir, rawScope string, jsonOut
 		_, cursorDrifted, cursorMissing := report.Cursor.ScriptCounts()
 		unapproved += cursorDrifted + cursorMissing
 	}
-	if drifted+missing+unwired+unapproved > 0 {
+	if drifted+missing+unwired+unapproved+len(report.Overlaps)+len(report.BrokenCommands) > 0 {
 		return cmdutil.ErrAlreadyWritten
 	}
 	return nil
 }
 
 func renderHooksStatus(w io.Writer, report hooks.StatusReport) error {
+	if err := renderWiringHealth(w, report); err != nil {
+		return err
+	}
+	return renderHooksStatusScripts(w, report)
+}
+
+func renderHooksStatusScripts(w io.Writer, report hooks.StatusReport) error {
 	inSync, drifted, missing := report.Counts()
 	if report.UserScopeInstalled {
 		if _, err := fmt.Fprintln(w, "User-scope hooks are installed too; inspect them with: vaultmind hooks status --scope user"); err != nil {
@@ -277,4 +289,29 @@ func hooksStatusInstallTarget(report hooks.StatusReport) string {
 		return "--scope user"
 	}
 	return report.ProjectDir
+}
+
+func renderScopeOverlaps(w io.Writer, overlaps []hooks.ScopeOverlap) error {
+	for _, overlap := range overlaps {
+		if _, err := fmt.Fprintf(w, "  overlap %s %s -> %s\n    user: %s\n    project: %s\n", overlap.Agent, overlap.Event, strings.Join(overlap.Scripts, ", "), overlap.UserSettings, overlap.ProjectSettings); err != nil {
+			return err
+		}
+	}
+	if len(overlaps) > 0 {
+		_, err := fmt.Fprintln(w, "  Warning: hooks can fire twice; remove one scope's wiring, or install only non-overlapping scripts with --only. Neither scope is removed automatically.")
+		return err
+	}
+	return nil
+}
+
+func renderWiringHealth(w io.Writer, report hooks.StatusReport) error {
+	if err := renderScopeOverlaps(w, report.Overlaps); err != nil {
+		return err
+	}
+	for _, b := range report.BrokenCommands {
+		if _, err := fmt.Fprintf(w, "  broken %s %s (%s)\n    command: %s\n    %s\n    fix: %s\n", b.Agent, b.Event, b.SettingsPath, b.Command, b.Reason, b.Fix); err != nil {
+			return err
+		}
+	}
+	return nil
 }

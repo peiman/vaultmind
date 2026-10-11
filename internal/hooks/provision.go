@@ -31,7 +31,7 @@ func Provision(cfg InstallConfig, merge, local, dryRun bool) (*ProvisionResult, 
 	if profile == "" {
 		profile = ProfileFull
 	}
-	merged, mErr := mergeIntoSettingsForScope(cfg.ProjectDir, cfg.VaultPath, cfg.Vaults, profile, local, dryRun, cfg.Scope)
+	merged, mErr := mergeSelectedSettings(cfg.ProjectDir, cfg.VaultPath, cfg.Vaults, profile, local, dryRun, cfg.Scope, cfg.Only)
 	out.Merge = merged
 	return out, mErr
 }

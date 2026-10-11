@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **User/project hook overlap and stale global wiring.** Status in either scope
+  fails and names duplicated events/scripts for Claude Code, Codex and Cursor;
+  install warns without removing either scope. `--only` now limits wiring as
+  well as script installation. User status reports exact commands with missing
+  or project-dependent script paths. User install migrates generated legacy
+  commands to absolute paths and reports custom commands as conflicts without
+  rewriting them; dry runs preview changes without writing.
 - **Keyword search matches any word in a question.** Long natural-language
   questions can now find notes containing only some of their words, with BM25
   ranking the matches. User input remains quoted as literal FTS5 terms.

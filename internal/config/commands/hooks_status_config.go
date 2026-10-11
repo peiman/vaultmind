@@ -24,13 +24,16 @@ PROJECT-DIR
 
 SCOPE (--scope project|user)
 
-  project (default): check the selected project, unchanged. A one-line hint
-  also appears when user-scope VaultMind hooks exist; they do not change the
-  project's status or exit code.
+  project (default): check the selected project. Also compare its wiring with
+  user-scope wiring for Claude Code, Codex and Cursor. Overlapping scripts on
+  the same event are reported with both settings paths and fail status.
   user: check ~/.vaultmind/scripts against canonical scripts and the wiring
   in ~/.claude/settings.json. Also check Codex user hooks ($CODEX_HOME/hooks.json,
   default ~/.codex/hooks.json), including approvals, and ~/.cursor/hooks.json
-  when present. The project-dir argument is ignored. User profiles are recorded
+  when present. The project-dir argument (default: current directory) selects
+  the project to compare for overlaps; user scripts/settings still live in HOME.
+  Every wired script path must exist; project-variable paths are broken at user
+  scope. Broken entries name the exact command and a fix. User profiles are recorded
   in ~/.vaultmind/vaultmind-profile; undeclared older installs are judged as full.
   Refresh differing scripts with hooks install --scope user --force --merge;
   preview first with --dry-run.
@@ -54,7 +57,8 @@ STATES
 EXIT CODE
 
   0 when all expected scripts are in sync and events are wired, and Codex
-  hooks are approved. Non-zero when anything is drifted, missing or unwired, so this is usable in a check: a status command that
+  hooks are approved. Non-zero for drifted, missing, unwired, broken or
+  overlapping hooks, so this is usable in a check: a status command that
   always exits 0 cannot gate anything.
 
 EXAMPLES

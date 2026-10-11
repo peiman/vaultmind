@@ -27,13 +27,20 @@ SCOPE (--scope project|user)
   project (default): the existing project install, unchanged.
   user: install scripts under ~/.vaultmind/scripts and wire them by absolute
   path, so they run in every project. --merge targets ~/.claude/settings.json.
-  The optional project-dir argument is ignored at user scope.
+  The optional project-dir argument (default: current directory) selects the
+  project to compare for overlaps; installation still targets the user files.
 
   --vault must be absolute at user scope: the hook cwd varies per project.
   Without --vault, hooks use vaultmind-identity in each active project.
   Existing differing scripts are protected; --force overwrites them.
   --merge --dry-run previews scripts and merged settings without writing.
   Existing hooks and unrelated settings are preserved; reruns are idempotent.
+  Generated legacy user commands are migrated to absolute script paths.
+  Custom commands are reported as conflicts and never rewritten, even with
+  --force. --dry-run shows the resulting commands without writing.
+  When user and project scopes wire the same script on the same event, install
+  warns that it can fire twice. Remove one scope's wiring, or install only
+  non-overlapping scripts with --only; neither scope is removed automatically.
   --local is project-only. Profiles are recorded in ~/.vaultmind/vaultmind-profile.
 
   User scope also supports --agent codex ($CODEX_HOME/hooks.json, default
@@ -145,11 +152,13 @@ OVERWRITE PROTECTION
   refreshing after a vaultmind binary upgrade (the canonical
   source updates; existing copies become stale).
 
-  --only: comma-separated subset of canonical scripts to install
+  --only: comma-separated subset of canonical scripts to install and wire
   (e.g. --only auto-rag-guard.sh,shell-strip.sh,auto-rag-evaluate.sh).
   Consumers who've customized some hooks but want a clean canonical
   install of others — pass --only to scope the install. Unknown
   names rejected at lint time so typos surface explicitly.
+  Existing wiring for scripts outside --only is kept; remove unwanted wiring
+  explicitly before using --only to avoid an existing overlap.
 
   Doctor's hook-drift check (vaultmind doctor) flags when installed
   copies differ from the embedded canonical, so refresh-need is

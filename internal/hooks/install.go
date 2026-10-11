@@ -203,7 +203,7 @@ func Install(cfg InstallConfig) (*InstallResult, error) {
 	// written); leave the field empty and let the human output note it. Only
 	// the profile's hooks, matching the scripts just written and what --merge
 	// would wire.
-	if stanza, stanzaErr := renderStanza(inProfile(claudeHooksForScope(cfg.ProjectDir, cfg.VaultPath, cfg.Vaults, cfg.Scope), profile)); stanzaErr == nil {
+	if stanza, stanzaErr := renderStanza(selectedHooks(inProfile(claudeHooksForScope(cfg.ProjectDir, cfg.VaultPath, cfg.Vaults, cfg.Scope), profile), cfg.Only)); stanzaErr == nil {
 		res.SettingsStanza = stanza
 	}
 
