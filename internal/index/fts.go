@@ -182,5 +182,5 @@ func sanitizeFTSQuery(query string) string {
 		}
 		quoted = append(quoted, `"`+w+`"`)
 	}
-	return strings.Join(quoted, " ")
+	return strings.Join(quoted, " OR ")
 }
