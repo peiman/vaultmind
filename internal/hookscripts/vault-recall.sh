@@ -28,6 +28,168 @@ PROMPT=$(echo "$HOOK_INPUT" | python3 -c "import json,sys; print(json.load(sys.s
 # heuristic is not good enough to key anything on.
 HOOK_SESSION_ID=$(echo "$HOOK_INPUT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('session_id','') or '')" 2>/dev/null || echo "")
 
+# Harness envelopes are context, not questions. dabir measured 174 of 374
+# recall asks (47%) against task notifications in seven days (2026-10-11).
+# Skip only a whole prompt made of balanced envelopes. This predicate never
+# edits PROMPT: quoted examples and malformed blocks take the old recall path.
+# Bash 3.2 compatible; only recognized harness tags participate in the stack,
+# since their payload can contain arbitrary text/markup (task-id, user_query).
+is_envelope_only() {
+  local candidate="$1"
+  # Cheap boundary gate: trim whitespace, one leading UTF-8 BOM, then
+  # whitespace again. Never change PROMPT or parse mixed prose unnecessarily.
+  candidate="${candidate#"${candidate%%[![:space:]]*}"}"
+  candidate="${candidate#$'\xef\xbb\xbf'}"
+  candidate="${candidate#"${candidate%%[![:space:]]*}"}"
+  candidate="${candidate%"${candidate##*[![:space:]]}"}"
+  [[ "$candidate" == '<'* && "$candidate" == *'>' ]] || return 1
+
+  # awk is already a hook dependency. Split each record once and carry only
+  # parser state: no growing token buffers or scans of the unconsumed suffix.
+  # Keep the caller locale so attribute/name character classes match Bash.
+  printf '%s\n' "$candidate" | awk '
+    function reject() { bad = 1; exit 1 }
+    function finish_tag() {
+      if (closing) {
+        if (depth == 0 || stack[depth] != tag) reject()
+        delete stack[depth--]
+      } else {
+        stack[++depth] = tag
+        seen = 1
+      }
+      state = "text"
+    }
+    function character(c) {
+      if (state == "text") {
+        if (c == "<") { state = "start"; closing = 0 }
+        else if (depth == 0 && c !~ /[[:space:]]/) reject()
+      } else if (state == "start" || state == "name-first") {
+        if (state == "start" && c == "/") {
+          closing = 1; state = "name-first"
+        } else if (c ~ /[[:alpha:]]/) {
+          tag = c; state = "name"
+        } else {
+          if (depth == 0) reject()
+          state = "text"; character(c)
+        }
+      } else if (state == "name") {
+        if (c ~ /[[:alnum:]_.:-]/) {
+          # Keep one character beyond the longest harness name.
+          # Longer names are unknown payload markup; they need no buffer.
+          if (length(tag) <= longest_tag) tag = tag c
+          return
+        }
+        if (tag ~ /^(task-notification|system-reminder|cross-session-message|local-command-stdout|local-command-caveat|command-name|command-message|command-args)$/) {
+          state = closing ? "close" : "after-name"
+        } else {
+          if (depth == 0) reject()
+          state = "unknown"
+        }
+        character(c)
+      } else if (state == "unknown" || state == "quoted") {
+        if (quote != "") {
+          if (c == quote) {
+            quote = ""
+            if (state == "quoted") state = "after-value"
+          }
+        } else if (c == "\"" || c == "\047") quote = c
+        else if (c == "<") reject()
+        else if (c == ">") state = "text"
+      } else if (state == "close") {
+        if (c == ">") finish_tag()
+        else if (c !~ /[[:space:]]/) reject()
+      } else if (state == "after-name" || state == "after-value") {
+        if (c == ">") finish_tag()
+        else if (c ~ /[[:space:]]/) state = "between"
+        else reject()
+      } else if (state == "between" || state == "after-attribute") {
+        if (c ~ /[[:space:]]/) return
+        if (state == "after-attribute" && c == "=") state = "value"
+        else if (c == ">") finish_tag()
+        else if (c ~ /[[:alnum:]_:-]/) state = "attribute"
+        else reject()
+      } else if (state == "attribute") {
+        if (c ~ /[[:alnum:]_:-]/) return
+        if (c == "=") state = "value"
+        else if (c ~ /[[:space:]]/) state = "after-attribute"
+        else if (c == ">") finish_tag()
+        else reject()
+      } else if (state == "value") {
+        if (c ~ /[[:space:]]/) return
+        if (c == "\"" || c == "\047") { quote = c; state = "quoted" }
+        else if (c ~ /[<>\/=]/) reject()
+        else state = "unquoted"
+      } else if (state == "unquoted") {
+        if (c ~ /[[:space:]]/) state = "between"
+        else if (c == ">") finish_tag()
+        else if (c == "\"" || c == "\047" || c ~ /[<\/=]/) reject()
+      }
+    }
+    BEGIN {
+      state = "text"; longest_tag = length("cross-session-message")
+      # BSD awk splits UTF-8 into bytes; other awks may split into characters.
+      # Reassemble at most four bytes before locale-aware character checks.
+      byte_split = (length("\303\251") == 2)
+      if (byte_split) for (b = 128; b <= 255; b++) octet[sprintf("%c", b)] = b
+    }
+    {
+      count = split($0 "\n", chars, "")
+      for (i = 1; i <= count; i++) {
+        c = chars[i]
+        b = byte_split ? octet[c] : 0
+        if (b >= 194 && b <= 244) {
+          width = b < 224 ? 2 : (b < 240 ? 3 : 4)
+          for (j = 1; j < width; j++) {
+            b = octet[chars[i + 1]]
+            if (b < 128 || b > 191) reject()
+            c = c chars[++i]
+          }
+        }
+        character(c)
+      }
+    }
+    END { exit (bad || !seen || depth != 0 || state != "text") }
+  '
+}
+
+# Same metadata-only sidecar convention as the other hooks, but one rolling
+# JSONL holds at most 128 records. A nonblocking mkdir lock serializes writers;
+# contention or any filesystem failure simply forgoes this diagnostic record.
+# The subshell keeps umask/traps local; every failure is explicit for set -e.
+log_envelope_skip() (
+  umask 077
+  local dir="${HOME}/.vaultmind/userprompt-hook" file tmp="" timestamp
+  mkdir -p "$dir" || return 1
+  chmod 700 "$dir" || return 1
+  mkdir "$dir/.envelope-skips.lock" || return 1
+  trap 'rm -f "$tmp"; rmdir "$dir/.envelope-skips.lock"' EXIT
+  file="$dir/envelope-skips.jsonl"
+  [ ! -L "$file" ] || return 1
+  if [ -e "$file" ]; then
+    [ -f "$file" ] || return 1
+    chmod 600 "$file" || return 1
+  fi
+  tmp=$(mktemp "$dir/.envelope-skips.XXXXXX") || return 1
+  chmod 600 "$tmp" || return 1
+  if [ -f "$file" ]; then
+    tail -n 127 "$file" > "$tmp" || return 1
+  fi
+  timestamp=$(date +%Y%m%dT%H%M%S) || return 1
+  printf '{"timestamp":"%s","prompt_len":%d,"injection":false,"reason":"harness-envelope"}\n' \
+    "$timestamp" "${#PROMPT}" >> "$tmp" || return 1
+  mv -f "$tmp" "$file" || return 1
+)
+
+# Avoid even running the predicate for ordinary prose.
+case "$PROMPT" in
+  *"<task-notification"*|*"<system-reminder"*|*"<cross-session-message"*|*"<local-command-stdout"*|*"<local-command-caveat"*|*"<command-name"*|*"<command-message"*|*"<command-args"*)
+    if is_envelope_only "$PROMPT"; then
+      log_envelope_skip 2>/dev/null || :
+      exit 0
+    fi
+    ;;
+esac
+
 # Some harnesses wrap what the person typed in <user_query>…</user_query> (262 of
 # 4,686 real recall queries, 2026-09-24). That is a question: search the words
 # inside, not the wrapper. Unwrapped before the checks below so they judge the
@@ -45,29 +207,9 @@ if [ -z "$PROMPT" ] || [ "${#PROMPT}" -lt 12 ]; then
   exit 0
 fi
 
-# Not every UserPromptSubmit payload is a human asking something. Background
-# task completions, hook output and system reminders arrive through this SAME
-# `prompt` field, and ranking notes against a task-id envelope produces pointers
-# about nothing — retrieval working correctly on garbage input. These payloads
-# are long, so the length threshold above waves them straight through.
-#
-# Measured on one real session before this guard existed: 93 injections, 48% of
-# them ranked against a prompt over 250 chars that was a <task-notification>
-# envelope — roughly 103k pointer characters of noise. Half a channel's output
-# being noise is precisely how an agent learns to skip the channel, and then
-# misses the half that mattered. That is a tooling defect, not a discipline
-# problem: the fix belongs here, not in a resolution to read more carefully.
-#
-# <agent-message is another agent's report relayed into this session (seen
-# 2026-09-23, after the guard existed) — not the person asking anything.
-#
-# Matched anywhere in the prompt rather than only at the start — a notification
-# envelope is often preceded by a banner line. The ANGLE-BRACKETED form is what
-# separates a payload from prose about one, so "why does the hook skip a
-# system-reminder?" still queries; typing the brackets out does not. That is an
-# accepted, rare cost in exchange for silence on the common case.
+# Legacy non-envelope machine reports also arrive through the prompt field.
 case "$PROMPT" in
-  *"<task-notification>"*|*"<system-reminder>"*|*"<local-command-"*|*"hook success:"*|*"<agent-message"*)
+  *"hook success:"*|*"<agent-message"*)
     exit 0
     ;;
 esac

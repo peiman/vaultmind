@@ -80,7 +80,7 @@ func TestRecallHook_SkipsMachineGeneratedPrompts(t *testing.T) {
 		"task notification": `<task-notification>
 <task-id>bx22yo6wo</task-id>
 <status>completed</status>
-</task-notification> plus enough text to clear the length threshold comfortably`,
+</task-notification>`,
 		"system reminder": `<system-reminder>As you answer, remember the following context about the user's preferences and setup</system-reminder>`,
 		"local command":   `<local-command-stdout>Compacted (ctrl+o to see full summary) and some more output text here</local-command-stdout>`,
 		"hook output":     `UserPromptSubmit hook success: Success — vault pointers were already injected for this turn`,

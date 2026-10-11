@@ -17,6 +17,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and project status hints when user hooks exist too. Project scope remains
   the default; user-scope `--vault` must be absolute.
 
+### Changed
+
+- **Recall skips prompts containing only harness envelopes.** dabir found that
+  174 of 374 recall asks in seven days (47%) searched task notifications,
+  injecting about five irrelevant notes each time. Only complete, balanced
+  envelope-only prompts are skipped, including nested envelopes. Mixed or
+  malformed prompts follow the existing recall path without envelope stripping.
+  Skips are logged quietly in a private rolling JSONL capped at 128 records;
+  logging failures never interrupt the hook.
+  Run `vaultmind hooks install --force` to update installed copies.
+
 ### Fixed
 
 - **Hook wiring checks follow the executed script.** Mentioning a VaultMind
@@ -29,6 +40,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or project-dependent script paths. User install migrates generated legacy
   commands to absolute paths and reports custom commands as conflicts without
   rewriting them; dry runs preview changes without writing.
+- **Recall envelope detection no longer stalls on large prompts.** A cheap
+  boundary check leaves mixed prose on the existing recall path, and a linear
+  parser handles quoted attributes and many payload tags before the query timeout.
 - **Keyword search matches any word in a question.** Long natural-language
   questions can now find notes containing only some of their words, with BM25
   ranking the matches. User input remains quoted as literal FTS5 terms.
