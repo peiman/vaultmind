@@ -112,7 +112,10 @@ func codexHomeDir() string {
 // against the approvals in codexHome's config.toml. Hooks is empty when the
 // project has no Codex hooks file, or none of its hooks are VaultMind's.
 func codexApprovals(projectDir, codexHome string) (CodexApproval, error) {
-	hooksFile := CodexHooksPath(projectDir)
+	return codexApprovalsAt(CodexHooksPath(projectDir), codexHome)
+}
+
+func codexApprovalsAt(hooksFile, codexHome string) (CodexApproval, error) {
 	report := CodexApproval{HooksFile: hooksFile}
 	// The project's own hooks file.
 	// #nosec G304

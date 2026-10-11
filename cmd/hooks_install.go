@@ -27,6 +27,7 @@ func init() {
 func runHooksInstall(cmd *cobra.Command, args []string) error {
 	return runHooksInstallCore(cmd, hooksInstallParams{
 		projectDir: resolveProjectDir(args),
+		scope:      getConfigValueWithFlags[string](cmd, "scope", config.KeyAppHooksinstallScope),
 		force:      getConfigValueWithFlags[bool](cmd, "force", config.KeyAppHooksinstallForce),
 		jsonOut:    getConfigValueWithFlags[bool](cmd, "json", config.KeyAppHooksinstallJson),
 		only:       getConfigValueWithFlags[string](cmd, "only", config.KeyAppHooksinstallOnly),

@@ -10,7 +10,7 @@ HOOK_SESSION_ID=$(printf '%s' "$HOOK_INPUT" | python3 -c "import json,sys; print
 SESSION_ID=$(echo "$HOOK_INPUT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('session_id','unknown'))" 2>/dev/null || echo "unknown")
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_DIR="${VAULTMIND_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}}"
 
 VAULTMIND_SRC="$PROJECT_DIR"
 # Persona vault path — override per project for consumers whose

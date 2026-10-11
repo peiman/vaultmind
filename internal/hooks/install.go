@@ -28,6 +28,8 @@ type InstallConfig struct {
 	// `<ProjectDir>/.claude/scripts/`. If empty, callers should
 	// resolve to CWD before passing.
 	ProjectDir string
+	// ScopeUser treats ProjectDir as HOME and uses absolute script references.
+	Scope Scope
 	// Force overwrites existing scripts. Default false (refuse).
 	Force bool
 	// Only restricts the install to a subset of canonical scripts
@@ -123,7 +125,7 @@ func Install(cfg InstallConfig) (*InstallResult, error) {
 	// Cursor runs every hook through its adapter, so the adapter goes with
 	// whatever the profile or --only chose.
 	names = scriptsForAgent(names, cfg.Agent)
-	scriptsDir := ScriptsDir(cfg.ProjectDir, cfg.Agent)
+	scriptsDir := scriptsDirFor(cfg.ProjectDir, cfg.Agent, cfg.Scope)
 	res := &InstallResult{
 		ProjectDir: cfg.ProjectDir,
 		ScriptsDir: scriptsDir,
@@ -137,7 +139,11 @@ func Install(cfg InstallConfig) (*InstallResult, error) {
 		if err := os.MkdirAll(scriptsDir, 0o750); err != nil {
 			return nil, fmt.Errorf("creating %s: %w", scriptsDir, err)
 		}
-		if err := writeDeclaredProfileFor(cfg.ProjectDir, cfg.Agent, profile); err != nil {
+		profileAgent := cfg.Agent
+		if cfg.Scope == ScopeUser {
+			profileAgent = AgentCodex
+		}
+		if err := writeDeclaredProfileFor(cfg.ProjectDir, profileAgent, profile); err != nil {
 			return nil, err
 		}
 	}
@@ -197,7 +203,7 @@ func Install(cfg InstallConfig) (*InstallResult, error) {
 	// written); leave the field empty and let the human output note it. Only
 	// the profile's hooks, matching the scripts just written and what --merge
 	// would wire.
-	if stanza, stanzaErr := renderStanza(inProfile(canonicalHooksFor(cfg.VaultPath, cfg.Vaults), profile)); stanzaErr == nil {
+	if stanza, stanzaErr := renderStanza(selectedHooks(inProfile(claudeHooksForScope(cfg.ProjectDir, cfg.VaultPath, cfg.Vaults, cfg.Scope), profile), cfg.Only)); stanzaErr == nil {
 		res.SettingsStanza = stanza
 	}
 

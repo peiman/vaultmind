@@ -7,8 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **User-scope hook installs and status.** `hooks install --scope user` writes
+  scripts to `~/.vaultmind/scripts` and uses absolute script paths in the user's
+  hook config. Claude Code, Codex and Cursor are supported. Existing custom
+  scripts require `--force`; `--merge --dry-run` previews without writing.
+  `hooks status --scope user` checks scripts and wiring (plus Codex approvals),
+  and project status hints when user hooks exist too. Project scope remains
+  the default; user-scope `--vault` must be absolute.
+
 ### Fixed
 
+- **Hook wiring checks follow the executed script.** Mentioning a VaultMind
+  script in `printf` or another script's arguments no longer reports a scope
+  overlap, broken script path or custom-command conflict during user install.
+- **User/project hook overlap and stale global wiring.** Status in either scope
+  fails and names duplicated events/scripts for Claude Code, Codex and Cursor;
+  install warns without removing either scope. `--only` now limits wiring as
+  well as script installation. User status reports exact commands with missing
+  or project-dependent script paths. User install migrates generated legacy
+  commands to absolute paths and reports custom commands as conflicts without
+  rewriting them; dry runs preview changes without writing.
 - **Keyword search matches any word in a question.** Long natural-language
   questions can now find notes containing only some of their words, with BM25
   ranking the matches. User input remains quoted as literal FTS5 terms.

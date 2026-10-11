@@ -153,6 +153,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.frontmatternormalize.strip_time` | bool | `false` | `VAULTMIND_APP_FRONTMATTERNORMALIZE_STRIP_TIME` | Force all datetimes to date-only |
 | `app.gitstatus.vault` | string | `.` | `VAULTMIND_APP_GITSTATUS_VAULT` | Path to vault root |
 | `app.gitstatus.json` | bool | `false` | `VAULTMIND_APP_GITSTATUS_JSON` | Output in JSON format |
+| `app.hooksinstall.scope` | string | `project` | `VAULTMIND_APP_HOOKSINSTALL_SCOPE` | Hook scope: project or user (across projects) |
 | `app.hooksinstall.force` | bool | `false` | `VAULTMIND_APP_HOOKSINSTALL_FORCE` | Overwrite existing hook scripts (default: refuse) |
 | `app.hooksinstall.json` | bool | `false` | `VAULTMIND_APP_HOOKSINSTALL_JSON` | Output in JSON format |
 | `app.hooksinstall.profile` | string | `` | `VAULTMIND_APP_HOOKSINSTALL_PROFILE` | Capability profile to declare and install: knowledge, persona, or full. Unset, the project's declared profile is kept; else full if hooks are already installed (older installs were all full); else knowledge, like init. Recorded in .claude/vaultmind-profile so `hooks status` judges what you chose, not everything the binary ships. |
@@ -165,6 +166,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.hooksinstall.dryrun` | bool | `false` | `VAULTMIND_APP_HOOKSINSTALL_DRYRUN` | With --merge, print the merged result without writing it (preview/diff). |
 | `app.hooksrecord.json` | bool | `false` | `VAULTMIND_APP_HOOKSRECORD_JSON` | Output in JSON format |
 | `app.hooksrecord.vault` | string | `.` | `VAULTMIND_APP_HOOKSRECORD_VAULT` | Path to vault root |
+| `app.hooksstatus.scope` | string | `project` | `VAULTMIND_APP_HOOKSSTATUS_SCOPE` | Hook scope: project or user (across projects) |
 | `app.hooksstatus.json` | bool | `false` | `VAULTMIND_APP_HOOKSSTATUS_JSON` | Output in JSON format |
 | `app.hooksuninstall.json` | bool | `false` | `VAULTMIND_APP_HOOKSUNINSTALL_JSON` | Output in JSON format |
 | `app.hooksuninstall.local` | bool | `false` | `VAULTMIND_APP_HOOKSUNINSTALL_LOCAL` | Target .claude/settings.local.json instead of .claude/settings.json. |
@@ -729,6 +731,9 @@ app:
     json: false
 
   hooksinstall:
+    # Hook scope: project or user (across projects)
+    scope: project
+
     # Overwrite existing hook scripts (default: refuse)
     force: false
 
@@ -767,6 +772,9 @@ app:
     vault: .
 
   hooksstatus:
+    # Hook scope: project or user (across projects)
+    scope: project
+
     # Output in JSON format
     json: false
 
@@ -1748,6 +1756,9 @@ export VAULTMIND_APP_GITSTATUS_VAULT=.
 # Output in JSON format
 export VAULTMIND_APP_GITSTATUS_JSON=false
 
+# Hook scope: project or user (across projects)
+export VAULTMIND_APP_HOOKSINSTALL_SCOPE=project
+
 # Overwrite existing hook scripts (default: refuse)
 export VAULTMIND_APP_HOOKSINSTALL_FORCE=false
 
@@ -1783,6 +1794,9 @@ export VAULTMIND_APP_HOOKSRECORD_JSON=false
 
 # Path to vault root
 export VAULTMIND_APP_HOOKSRECORD_VAULT=.
+
+# Hook scope: project or user (across projects)
+export VAULTMIND_APP_HOOKSSTATUS_SCOPE=project
 
 # Output in JSON format
 export VAULTMIND_APP_HOOKSSTATUS_JSON=false

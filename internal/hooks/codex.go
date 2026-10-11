@@ -55,12 +55,19 @@ var codexScripts = map[string]bool{
 // truth for events, matchers and scripts), filtered to what works under Codex
 // and to the profile.
 func codexHooks(projectDir, vaultPath string, vaults []string, p Profile) []canonicalHook {
+	return codexHooksForScope(projectDir, vaultPath, vaults, p, ScopeProject)
+}
+
+func codexHooksForScope(projectDir, vaultPath string, vaults []string, p Profile, scope Scope) []canonicalHook {
 	allowed := map[string]bool{}
 	for _, n := range ScriptsForProfile(p) {
 		allowed[n] = true
 	}
 	noLimit := 0
 	prefix := "export " + envProjectDir + "=" + singleQuote(projectDir) + "; "
+	if scope == ScopeUser {
+		prefix = `export VAULTMIND_PROJECT_DIR="$PWD"; `
+	}
 	scriptRef := func(script string) string {
 		return singleQuote(filepath.Join(ScriptsDir(projectDir, AgentCodex), script))
 	}

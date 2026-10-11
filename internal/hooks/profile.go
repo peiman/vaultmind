@@ -182,9 +182,13 @@ func InstallProfile(projectDir string) (Profile, error) {
 // that declared full and one that declared nothing; a caller that must tell
 // them apart (init choosing hooks for the vault it just made) uses this.
 func DeclaredProfileIfAny(projectDir string) (Profile, bool, error) {
+	return declaredProfileFor(projectDir, []Agent{AgentClaude, AgentCodex})
+}
+
+func declaredProfileFor(projectDir string, agents []Agent) (Profile, bool, error) {
 	var raw []byte
 	var path string
-	for _, a := range []Agent{AgentClaude, AgentCodex} {
+	for _, a := range agents {
 		path = filepath.Join(baseDir(projectDir, a), profileFilename)
 		// projectDir is operator-supplied (same trust class as the vault path);
 		// the filename is a package constant, so no component is caller-controlled.

@@ -36,7 +36,8 @@ type MergeFileResult struct {
 	Merged string `json:"merged,omitempty"`
 	// Removed names our hooks taken out because they fall outside the
 	// profile being installed (sorted, unique; empty when none).
-	Removed []string `json:"removed,omitempty"`
+	Removed  []string       `json:"removed,omitempty"`
+	Overlaps []ScopeOverlap `json:"overlaps,omitempty"`
 }
 
 // MergeIntoSettings reads the target hook-config file (creating none if it is
@@ -62,21 +63,36 @@ func MergeIntoSettingsFor(projectDir, vaultPath string, vaults []string, local, 
 // scripts the profile had just declined to write (the Codex path already
 // filtered; this one did not).
 func MergeIntoSettingsForProfile(projectDir, vaultPath string, vaults []string, p Profile, local, dryRun bool) (*MergeFileResult, error) {
+	return mergeIntoSettingsForScope(projectDir, vaultPath, vaults, p, local, dryRun, ScopeProject)
+}
+
+func mergeIntoSettingsForScope(projectDir, vaultPath string, vaults []string, p Profile, local, dryRun bool, scope Scope) (*MergeFileResult, error) {
+	return mergeSelectedSettings(projectDir, vaultPath, vaults, p, local, dryRun, scope, nil)
+}
+
+func mergeSelectedSettings(projectDir, vaultPath string, vaults []string, p Profile, local, dryRun bool, scope Scope, only []string) (*MergeFileResult, error) {
 	path := settingsFilePath(projectDir, local)
 	existing, err := readSettingsFile(path)
 	if err != nil {
 		return nil, err
 	}
 	allowed := map[string]bool{}
+	original := existing
+	if scope == ScopeUser {
+		existing, err = migrateUserCommands(existing, projectDir, AgentClaude)
+		if err != nil {
+			return nil, fmt.Errorf("merging into %s: %w", path, err)
+		}
+	}
 	for _, n := range ScriptsForProfile(p) {
 		allowed[n] = true
 	}
 	var wanted []canonicalHook
 	var outside []string
-	for _, ch := range canonicalHooksFor(vaultPath, vaults) {
-		if allowed[ch.Script] {
+	for _, ch := range claudeHooksForScope(projectDir, vaultPath, vaults, scope) {
+		if allowed[ch.Script] && selectedScript(ch.Script, only) {
 			wanted = append(wanted, ch)
-		} else {
+		} else if !allowed[ch.Script] && len(only) == 0 {
 			outside = append(outside, ch.Script)
 		}
 	}
@@ -84,6 +100,7 @@ func MergeIntoSettingsForProfile(projectDir, vaultPath string, vaults []string, 
 	if err != nil {
 		return nil, fmt.Errorf("merging into %s: %w", path, err)
 	}
+	changed = changed || string(original) != string(merged)
 	// A narrower profile also takes out our own hooks that fall outside it:
 	// merging only ever added, so a project wired full (as 0.9.4's upgrade
 	// note did to knowledge projects) kept running a persona after the

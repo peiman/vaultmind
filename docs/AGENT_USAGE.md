@@ -299,6 +299,58 @@ hook running.
 > as well as drifted/missing ones. If you gate CI on it, expect it to start failing where
 > it was previously silent about a real problem.
 
+### Hooks across all projects (user scope)
+
+Claude Code user hooks live in `~/.claude/settings.json` and fire in every
+project. Install or upgrade them explicitly at user scope:
+
+```bash
+vaultmind hooks install --scope user --vault /absolute/path/to/knowledge --merge --dry-run
+vaultmind hooks install --scope user --vault /absolute/path/to/knowledge --merge
+vaultmind hooks status --scope user
+# Preview replacing customized/stale scripts before applying --force:
+vaultmind hooks install --scope user --vault /absolute/path/to/knowledge --merge --force --dry-run
+```
+
+Scripts go to `~/.vaultmind/scripts`, and generated commands use absolute,
+shell-quoted script paths. They do not locate scripts through
+`$CLAUDE_PROJECT_DIR`, which varies with the open project. `--vault` must be
+absolute at user scope; a relative value is rejected before writing anything.
+Without it, hooks use `vaultmind-identity` in each active project. Relative
+`--vaults` entries keep the existing behavior of resolving to absolute paths
+at install time. `--local` is project-only; at user scope a positional project
+directory selects the project to compare for overlaps, without changing where
+user scripts or settings are installed.
+
+The merge preserves unrelated hooks/settings and changes nothing on an
+identical rerun. Generated legacy user commands are migrated to absolute script
+paths; custom commands are preserved and reported as conflicts, even with
+`--force`. `--dry-run` shows the exact resulting settings. Differing
+script contents require `--force`, including older global installs; a forced
+dry run leaves those custom scripts untouched. Status checks drift, missing
+scripts and event wiring independently. The user's declared profile lives in
+`~/.vaultmind/vaultmind-profile`; an older undeclared install retains the full
+profile. User status checks the actual wired script paths too: missing paths
+and `$CLAUDE_PROJECT_DIR` references report the exact broken command and a fix.
+Status in either scope compares user wiring with the selected project (current
+directory by default), including Claude's `settings.local.json`. It reports
+each overlapping event and its scripts, names both settings files, and exits
+non-zero because the harness can run both copies. Install warns about overlaps,
+including during dry runs. Remove one scope's wiring, or use `--only` to install
+and wire non-overlapping scripts. Neither scope is removed automatically;
+`--only` preserves existing wiring outside the selection, so remove an existing
+overlap explicitly first. This applies to Claude Code, Codex and Cursor.
+
+User scope also works with `--agent codex` and `--agent cursor`, using the
+verified user hook locations in [Codex's docs](https://learn.chatgpt.com/docs/hooks)
+and [Cursor's docs](https://cursor.com/docs/hooks): `$CODEX_HOME/hooks.json`
+(default `~/.codex/hooks.json`) and `~/.cursor/hooks.json`, respectively. Scripts
+remain under `~/.vaultmind/scripts`. Codex gets the active project from its
+session working directory, and Cursor's existing adapter reads the workspace
+from the hook payload. Codex user hooks need `/hooks` approval, again after
+changes; user status checks those approvals. The existing per-agent capability
+limits still apply. `hooks uninstall` currently remains project-scoped.
+
 ### Recording that a prompting hook fired
 
 Most hooks *query* — they leave a row in the usage log by doing their job. Some hooks
