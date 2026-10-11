@@ -124,7 +124,7 @@ func isOurCursorHook(raw json.RawMessage) bool {
 	if json.Unmarshal(raw, &e) != nil {
 		return false
 	}
-	return strings.Contains(e.Command, cursorAdapterRef)
+	return strings.Contains(e.Command, cursorAdapterRef) && commandReferencesScript(e.Command, cursorAdapterScript)
 }
 
 // cursorDoc is hooks.json with every key we do not own kept as it was.
@@ -367,15 +367,16 @@ func cursorScriptOf(raw json.RawMessage) string {
 	if json.Unmarshal(raw, &e) != nil {
 		return ""
 	}
-	_, rest, ok := strings.Cut(e.Command, cursorAdapterRef)
-	if !ok {
+	words, i, ok := executedScript(e.Command)
+	if !ok || !strings.Contains(e.Command, cursorAdapterRef) ||
+		!canonicalScriptWord(e.Command, words[i]) || filepath.Base(words[i].value) != cursorAdapterScript || i+1 >= len(words) {
 		return ""
 	}
-	fields := strings.Fields(rest)
-	if len(fields) == 0 {
+	target := words[i+1]
+	if target.dynamic || target.expansion {
 		return ""
 	}
-	return fields[0]
+	return target.value
 }
 
 // installedScripts names the canonical scripts present in dir.

@@ -18,6 +18,11 @@ func TestScopeOverlaps_EventScriptAndAgent(t *testing.T) {
 	}{
 		{"same", "UserPromptSubmit", "bash /project/vault-recall.sh", AgentClaude, true},
 		{"bare basename", "UserPromptSubmit", "bash vault-recall.sh", AgentClaude, true},
+		{"printed basename", "UserPromptSubmit", "printf vault-recall.sh", AgentClaude, false},
+		{"printed path", "UserPromptSubmit", "printf /project/vault-recall.sh", AgentClaude, false},
+		{"script argument", "UserPromptSubmit", "bash other.sh vault-recall.sh", AgentClaude, false},
+		{"script path argument", "UserPromptSubmit", "bash other.sh /project/vault-recall.sh", AgentClaude, false},
+		{"generated env prefix", "UserPromptSubmit", "VAULTMIND_VAULT='/vault with spaces' bash '/project/vault-recall.sh'", AgentClaude, true},
 		{"other event", "SessionStart", "bash /project/vault-recall.sh", AgentClaude, false},
 		{"other script", "UserPromptSubmit", "bash /project/vault-reach.sh", AgentClaude, false},
 		{"prefix", "UserPromptSubmit", "bash /project/my-vault-recall.sh", AgentClaude, false},
@@ -66,6 +71,11 @@ func TestUserCommandProblem_Paths(t *testing.T) {
 		{"bash /missing/vault-recall.sh", "unavailable"},
 		{"bash /missing/no-extension", "unavailable"},
 		{"VAULTMIND_VAULT='/vault.sh' bash " + singleQuote(path), ""},
+		{"printf vault-recall.sh", ""},
+		{"printf /missing/vault-recall.sh", ""},
+		{"bash " + singleQuote(path) + " /missing/vault-reach.sh", ""},
+		{"zsh -f " + singleQuote(path), ""},
+		{`bash -e "$CLAUDE_PROJECT_DIR"/.claude/scripts/vault-recall.sh`, "must be absolute"},
 		{"bash " + singleQuote(dir), "not a regular file"},
 		{"bash " + singleQuote(filepath.Join(dir, "directory.sh")), "unavailable"},
 		{"bash relative/vault-recall.sh", "must be absolute"},
@@ -82,6 +92,95 @@ func TestUserCommandProblem_Paths(t *testing.T) {
 	}
 	require.NoError(t, os.Mkdir(filepath.Join(dir, "directory.sh"), 0o750))
 	assert.Contains(t, userCommandProblem("bash "+singleQuote(filepath.Join(dir, "directory.sh")), AgentClaude), "not a regular file")
+}
+
+func TestScriptsInCommand_ExecutedScript(t *testing.T) {
+	for _, tc := range []struct {
+		command string
+		agent   Agent
+		script  string
+	}{
+		{"printf vault-recall.sh", AgentClaude, ""},
+		{"printf '/project/vault-recall.sh'", AgentClaude, ""},
+		{"bash other.sh vault-recall.sh", AgentClaude, ""},
+		{"/project/other.sh /project/vault-recall.sh", AgentClaude, ""},
+		{"vault-recall.sh", AgentClaude, ""},
+		{"/project/vault-recall.sh ignored.sh", AgentClaude, hookUserPromptSubmitScript},
+		{"./vault-recall.sh", AgentClaude, hookUserPromptSubmitScript},
+		{"VAULTMIND_VAULT='/vault with spaces' bash '/project/vault-recall.sh'", AgentClaude, hookUserPromptSubmitScript},
+		{"A=one B='two' /bin/bash -eu -- /project/vault-recall.sh", AgentClaude, hookUserPromptSubmitScript},
+		{"sh -e /project/vault-recall.sh", AgentClaude, hookUserPromptSubmitScript},
+		{"zsh -f /project/vault-recall.sh", AgentClaude, hookUserPromptSubmitScript},
+		{"bash -o errexit /project/vault-recall.sh", AgentClaude, hookUserPromptSubmitScript},
+		{"bash -O extglob /project/vault-recall.sh", AgentClaude, hookUserPromptSubmitScript},
+		{"bash --rcfile /project/vault-reach.sh /project/vault-recall.sh", AgentClaude, hookUserPromptSubmitScript},
+		{"bash -c 'printf vault-recall.sh' /project/vault-recall.sh", AgentClaude, ""},
+		{"bash -s /project/vault-recall.sh", AgentClaude, ""},
+		{"bash -n /project/vault-recall.sh", AgentClaude, ""},
+		{"bash --unknown /project/vault-recall.sh", AgentClaude, ""},
+		{"bash -o vault-recall.sh", AgentClaude, ""},
+		{"bash", AgentClaude, ""},
+		{"", AgentClaude, ""},
+		{"A=one", AgentClaude, ""},
+		{`bash 'unterminated/vault-recall.sh`, AgentClaude, ""},
+		{`"$SHELL" /project/vault-recall.sh`, AgentClaude, ""},
+		{`bash "$SCRIPT"/vault-recall.sh`, AgentClaude, ""},
+		{"bash /project/*/vault-recall.sh", AgentClaude, ""},
+		{`bash "/project/\vault-recall.sh"`, AgentClaude, ""},
+		{`$CLAUDE_PROJECT_DIR/.claude/scripts/vault-recall.sh`, AgentClaude, hookUserPromptSubmitScript},
+		{"bash # /project/vault-recall.sh", AgentClaude, ""},
+		{"bash /project/vault-recall.sh &&", AgentClaude, ""},
+		{"bash /project/vault-recall.sh |", AgentClaude, ""},
+		{"bash /project/vault-recall.sh ;;", AgentClaude, ""},
+		{"bash\n/project/vault-recall.sh", AgentClaude, ""},
+		{`bash "$CLAUDE_PROJECT_DIR"/.claude/scripts/vault-recall.sh`, AgentClaude, hookUserPromptSubmitScript},
+		{`export VAULTMIND_PROJECT_DIR="$PWD"; bash '/project/vault-recall.sh'`, AgentCodex, hookUserPromptSubmitScript},
+		{"bash /project/vault-recall.sh --custom; echo keep", AgentClaude, hookUserPromptSubmitScript},
+		{"bash /project/cursor-adapter.sh vaultmind-health.sh", AgentCursor, hookHealthScript},
+		{"printf /project/cursor-adapter.sh vaultmind-health.sh", AgentCursor, ""},
+		{"bash other.sh /project/cursor-adapter.sh vaultmind-health.sh", AgentCursor, ""},
+	} {
+		t.Run(tc.command, func(t *testing.T) {
+			got := scriptsInCommand(tc.command, tc.agent)
+			if tc.script == "" {
+				assert.Empty(t, got)
+			} else {
+				assert.Equal(t, []string{tc.script}, got)
+			}
+		})
+	}
+}
+
+func TestUserMerge_UnrelatedScriptMentionPreserved(t *testing.T) {
+	for _, agent := range []Agent{AgentClaude, AgentCodex, AgentCursor} {
+		for _, command := range []string{"printf vault-recall.sh", "printf /missing/vault-recall.sh", "bash other.sh vault-recall.sh", "printf /missing/cursor-adapter.sh vaultmind-health.sh", "printf '/missing/.vaultmind/scripts/cursor-adapter.sh' vaultmind-health.sh"} {
+			t.Run(string(agent)+"/"+command, func(t *testing.T) {
+				home := t.TempDir()
+				t.Setenv("HOME", home)
+				t.Setenv("CODEX_HOME", filepath.Join(home, ".codex"))
+				path := wiringPaths(home, ScopeUser, agent)[0]
+				entry := map[string]any{"hooks": []any{map[string]string{"type": "command", "command": command}}}
+				if agent == AgentCursor {
+					entry = map[string]any{"command": command}
+				}
+				raw, err := json.Marshal(map[string]any{"hooks": map[string]any{"SessionStart": []any{entry}}})
+				require.NoError(t, err)
+				require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o750))
+				require.NoError(t, os.WriteFile(path, raw, 0o600))
+				if agent == AgentClaude {
+					_, err = mergeIntoSettingsForScope(home, "", nil, ProfileKnowledge, false, false, ScopeUser)
+				} else {
+					_, err = MergeUserAgentHooks(home, "", nil, ProfileKnowledge, agent, false)
+				}
+				require.NoError(t, err)
+				after, err := os.ReadFile(path)
+				require.NoError(t, err)
+				commands, err := commandsIn(after, path, agent)
+				require.NoError(t, err)
+				assert.Contains(t, commands, wiredCommand{"SessionStart", command, path})
+			})
+		}
+	}
 }
 
 func TestGeneratedUserCommand_PreservesVaultAndRejectsCustom(t *testing.T) {
@@ -126,6 +225,23 @@ func TestUserCursorCustomAdapterCommand_Preserved(t *testing.T) {
 	after, err := os.ReadFile(path)
 	require.NoError(t, err)
 	assert.Equal(t, raw, after)
+}
+
+func TestUserCursorMerge_ScriptMentionPreservedWithOnly(t *testing.T) {
+	home := t.TempDir()
+	command := "printf " + singleQuote(filepath.Join(home, ".vaultmind", "scripts", cursorAdapterScript)) + " " + hookHealthScript
+	raw, err := json.Marshal(map[string]any{"hooks": map[string]any{"sessionStart": []any{cursorHookEntry{Command: command}}}})
+	require.NoError(t, err)
+	path := CursorHooksPath(home)
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o750))
+	require.NoError(t, os.WriteFile(path, raw, 0o600))
+	_, err = MergeSelectedAgentHooks(home, "", nil, ProfileKnowledge, AgentCursor, ScopeUser, false, []string{hookHealthScript})
+	require.NoError(t, err)
+	after, err := os.ReadFile(path)
+	require.NoError(t, err)
+	commands, err := commandsIn(after, path, AgentCursor)
+	require.NoError(t, err)
+	assert.Contains(t, commands, wiredCommand{"sessionStart", command, path})
 }
 
 func TestScopeOverlaps_CursorQuotedAdapterAndFileAliases(t *testing.T) {

@@ -11,6 +11,7 @@ type commandWord struct {
 	value      string
 	start, end int
 	dynamic    bool
+	expansion  bool
 }
 
 // commandWords reads shell words without executing or expanding anything.
@@ -35,6 +36,13 @@ func commandWords(command string) ([]commandWord, bool) {
 				if i == len(command) {
 					return nil, false
 				}
+				if quote == '"' && !strings.ContainsRune("$`\"\\\n", rune(command[i])) {
+					value.WriteByte('\\')
+				}
+				if command[i] == '\n' {
+					i++
+					continue
+				}
 				value.WriteByte(command[i])
 				i++
 				continue
@@ -53,6 +61,9 @@ func commandWords(command string) ([]commandWord, bool) {
 			}
 			if quote != '\'' && (c == '$' || c == '`') {
 				w.dynamic = true
+			}
+			if quote == 0 && strings.ContainsRune("*?[{}~", rune(c)) {
+				w.expansion = true
 			}
 			value.WriteByte(c)
 			i++

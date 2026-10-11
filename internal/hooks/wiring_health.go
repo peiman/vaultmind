@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 )
 
 // ScopeOverlap names the scripts an agent dispatches from both scopes on an event.
@@ -105,28 +104,22 @@ func readWiring(root string, scope Scope, agent Agent) ([]wiredCommand, error) {
 }
 
 func scriptsInCommand(command string, agent Agent) []string {
-	words, _ := commandWords(command)
-	if agent == AgentCursor {
-		for i, word := range words {
-			if filepath.Base(word.value) == cursorAdapterScript && i+1 < len(words) {
-				s := words[i+1].value
-				if cursorWiring[s].event != "" {
-					return []string{s}
-				}
-			}
+	words, i, ok := executedScript(command)
+	if !ok || !canonicalScriptWord(command, words[i]) {
+		return nil
+	}
+	if agent == AgentCursor && filepath.Base(words[i].value) == cursorAdapterScript && i+1 < len(words) {
+		s := words[i+1]
+		if !s.dynamic && !s.expansion && cursorWiring[s.value].event != "" {
+			return []string{s.value}
 		}
 	}
-	var out []string
 	for _, name := range allScriptNames() {
-		found := commandReferencesScript(command, name)
-		for _, word := range words {
-			found = found || filepath.Base(word.value) == name
-		}
-		if found {
-			out = append(out, name)
+		if filepath.Base(words[i].value) == name {
+			return []string{name}
 		}
 	}
-	return out
+	return nil
 }
 
 // ScopeOverlaps compares actual wiring, including project-local Claude settings.
@@ -237,22 +230,24 @@ func brokenUserCommands(home string) ([]BrokenCommand, error) {
 }
 
 func userCommandProblem(command string, agent Agent) string {
-	words, ok := commandWords(command)
-	if !ok {
+	if _, ok := commandWords(command); !ok {
 		return "cannot resolve script path in command"
 	}
-	found := false
-	for i, w := range words {
-		if !isScriptWord(words, i) {
-			continue
-		}
-		found = true
+	words, i, ok := executedScript(command)
+	if !ok {
+		return ""
+	}
+	scripts := words[i : i+1]
+	if agent == AgentCursor && filepath.Base(words[i].value) == cursorAdapterScript && i+1 < len(words) {
+		scripts = words[i : i+2]
+	}
+	for j, w := range scripts {
 		path := w.value
 		// Cursor's script argument is resolved beside the adapter, not cwd.
-		if agent == AgentCursor && i > 0 && filepath.Base(words[i-1].value) == cursorAdapterScript {
-			path = filepath.Join(filepath.Dir(words[i-1].value), path)
+		if j == 1 {
+			path = filepath.Join(filepath.Dir(words[i].value), path)
 		}
-		if w.dynamic || !filepath.IsAbs(path) {
+		if w.dynamic || w.expansion || !filepath.IsAbs(path) {
 			return "user-scope script path must be absolute and independent of $CLAUDE_PROJECT_DIR: " + w.value
 		}
 		info, err := os.Stat(path)
@@ -263,22 +258,5 @@ func userCommandProblem(command string, agent Agent) string {
 			return "script path is not a regular file: " + path
 		}
 	}
-	if !found && len(scriptsInCommand(command, agent)) > 0 {
-		return "cannot resolve script path in command"
-	}
 	return ""
-}
-
-func isScriptWord(words []commandWord, i int) bool {
-	v := words[i].value
-	if strings.Contains(v, "=") && !filepath.IsAbs(v) {
-		return false
-	}
-	if i > 0 {
-		switch filepath.Base(words[i-1].value) {
-		case "bash", "sh", "python", "python3", "node", "perl", "ruby":
-			return !strings.HasPrefix(v, "-")
-		}
-	}
-	return strings.HasSuffix(v, ".sh")
 }

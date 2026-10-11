@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strings"
 )
 
@@ -201,38 +202,14 @@ func groupsReferencingScript(arr []json.RawMessage, basename string) int {
 }
 
 // commandReferencesScript reports whether a hook command invokes the VaultMind
-// script basename. It anchors on a leading path separator and a trailing token
-// boundary so a user's own script with an overlapping name is never matched —
-// neither a prefix collision (my-vault-recall.sh) nor a suffix one
-// (vault-recall.sh.bak). Every command VaultMind emits invokes the script as
-// "…/.claude/scripts/<basename>", so the name is always preceded by '/'.
+// script basename as a path, rather than merely mentioning it in an argument.
+// Exact basename matching rejects prefix and suffix collisions. Every command
+// VaultMind emits uses a path, so bare command names are not owned by us.
 // Matching foreign content here would be a data-safety bug: merge would skip
 // installing our hook, and uninstall would delete the user's hook.
 func commandReferencesScript(command, basename string) bool {
-	needle := "/" + basename
-	from := 0
-	for {
-		i := strings.Index(command[from:], needle)
-		if i < 0 {
-			return false
-		}
-		end := from + i + len(needle)
-		if end == len(command) || isCommandBoundary(command[end]) {
-			return true
-		}
-		from += i + 1
-	}
-}
-
-// isCommandBoundary reports whether b terminates a script-path token in a shell
-// command, so a trailing ".bak"/"x" suffix on an overlapping name doesn't match.
-func isCommandBoundary(b byte) bool {
-	switch b {
-	case ' ', '\t', '\n', '\r', '"', '\'', '`', ';', '&', '|', ')', '<', '>':
-		return true
-	default:
-		return false
-	}
+	words, i, ok := executedScript(command)
+	return ok && canonicalScriptWord(command, words[i]) && strings.Contains(words[i].value, "/") && filepath.Base(words[i].value) == basename
 }
 
 // orderedObject is a JSON object that preserves key order across a

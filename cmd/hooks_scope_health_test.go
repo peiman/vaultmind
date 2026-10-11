@@ -140,3 +140,27 @@ func TestHooksScopeHealth_OnlyAvoidsOverlap(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, string(settings), "vault-recall.sh")
 }
+
+func TestHooksScopeHealth_ScriptMentionDoesNotOverlapOrBlockInstall(t *testing.T) {
+	for _, command := range []string{"printf vault-recall.sh", "bash other.sh vault-recall.sh"} {
+		t.Run(command, func(t *testing.T) {
+			home := userHooksHome(t)
+			project := t.TempDir()
+			_, _, err := runRootCmd(t, "hooks", "install", project, "--merge")
+			require.NoError(t, err)
+			path := filepath.Join(home, ".claude", "settings.json")
+			raw, err := json.Marshal(map[string]any{"hooks": map[string]any{"UserPromptSubmit": []any{map[string]any{"hooks": []any{map[string]string{"type": "command", "command": command}}}}}})
+			require.NoError(t, err)
+			require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o750))
+			require.NoError(t, os.WriteFile(path, raw, 0o600))
+			out, _, err := runRootCmd(t, "hooks", "status", project)
+			require.NoError(t, err, out.String())
+			assert.NotContains(t, out.String(), "overlap claude")
+			_, _, err = runRootCmd(t, "hooks", "install", "--scope", "user", "--merge")
+			require.NoError(t, err)
+			after, err := os.ReadFile(path)
+			require.NoError(t, err)
+			assert.Contains(t, string(after), command)
+		})
+	}
+}

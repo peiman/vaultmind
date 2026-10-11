@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Hook wiring checks follow the executed script.** Mentioning a VaultMind
+  script in `printf` or another script's arguments no longer reports a scope
+  overlap, broken script path or custom-command conflict during user install.
 - **User/project hook overlap and stale global wiring.** Status in either scope
   fails and names duplicated events/scripts for Claude Code, Codex and Cursor;
   install warns without removing either scope. `--only` now limits wiring as
