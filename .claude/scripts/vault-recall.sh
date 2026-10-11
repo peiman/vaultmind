@@ -28,6 +28,37 @@ PROMPT=$(echo "$HOOK_INPUT" | python3 -c "import json,sys; print(json.load(sys.s
 # heuristic is not good enough to key anything on.
 HOOK_SESSION_ID=$(echo "$HOOK_INPUT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('session_id','') or '')" 2>/dev/null || echo "")
 
+# Harness envelopes are context, not questions. dabir measured 174 of 374
+# recall asks (47%) against task notifications in seven days (2026-10-11).
+# Strip complete blocks before unwrapping user_query or building the query;
+# text before, after or between them is still the person's question. Leave
+# incomplete blocks alone rather than accidentally swallowing user text.
+case "$PROMPT" in
+  *"<task-notification"*|*"<system-reminder"*|*"<cross-session-message"*|*"<local-command-stdout"*|*"<local-command-caveat"*|*"<command-name"*|*"<command-message"*|*"<command-args"*)
+    PROMPT_LEN=${#PROMPT}
+    USER_TEXT=$(printf '%s' "$PROMPT" | python3 -c '
+import re, sys
+text = sys.stdin.read()
+envelope = re.compile(
+    r"<(?P<tag>task-notification|system-reminder|cross-session-message|"
+    r"local-command-stdout|local-command-caveat|command-name|command-message|command-args)"
+    r"(?:\s[^>]*)?>.*?</(?P=tag)\s*>", re.S)
+print(envelope.sub(" ", text).strip())
+' 2>/dev/null || printf '%s' "$PROMPT")
+    if [ -z "$USER_TEXT" ]; then
+      # Same quiet JSON sidecar as no-match skips. Include the PID so several
+      # harness deliveries in one second remain separately countable.
+      LOG_DIR="${HOME}/.vaultmind/userprompt-hook"
+      mkdir -p "$LOG_DIR" 2>/dev/null
+      TIMESTAMP=$(date +%Y%m%dT%H%M%S)
+      { printf '{"timestamp":"%s","prompt_len":%d,"injection":false,"reason":"harness-envelope"}\n' \
+        "$TIMESTAMP" "$PROMPT_LEN" > "$LOG_DIR/${TIMESTAMP}-$$-skip.json"; } 2>/dev/null
+      exit 0
+    fi
+    PROMPT="$USER_TEXT"
+    ;;
+esac
+
 # Some harnesses wrap what the person typed in <user_query>…</user_query> (262 of
 # 4,686 real recall queries, 2026-09-24). That is a question: search the words
 # inside, not the wrapper. Unwrapped before the checks below so they judge the
@@ -45,29 +76,9 @@ if [ -z "$PROMPT" ] || [ "${#PROMPT}" -lt 12 ]; then
   exit 0
 fi
 
-# Not every UserPromptSubmit payload is a human asking something. Background
-# task completions, hook output and system reminders arrive through this SAME
-# `prompt` field, and ranking notes against a task-id envelope produces pointers
-# about nothing — retrieval working correctly on garbage input. These payloads
-# are long, so the length threshold above waves them straight through.
-#
-# Measured on one real session before this guard existed: 93 injections, 48% of
-# them ranked against a prompt over 250 chars that was a <task-notification>
-# envelope — roughly 103k pointer characters of noise. Half a channel's output
-# being noise is precisely how an agent learns to skip the channel, and then
-# misses the half that mattered. That is a tooling defect, not a discipline
-# problem: the fix belongs here, not in a resolution to read more carefully.
-#
-# <agent-message is another agent's report relayed into this session (seen
-# 2026-09-23, after the guard existed) — not the person asking anything.
-#
-# Matched anywhere in the prompt rather than only at the start — a notification
-# envelope is often preceded by a banner line. The ANGLE-BRACKETED form is what
-# separates a payload from prose about one, so "why does the hook skip a
-# system-reminder?" still queries; typing the brackets out does not. That is an
-# accepted, rare cost in exchange for silence on the common case.
+# Legacy non-envelope machine reports also arrive through the prompt field.
 case "$PROMPT" in
-  *"<task-notification>"*|*"<system-reminder>"*|*"<local-command-"*|*"hook success:"*|*"<agent-message"*)
+  *"hook success:"*|*"<agent-message"*)
     exit 0
     ;;
 esac

@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and project status hints when user hooks exist too. Project scope remains
   the default; user-scope `--vault` must be absolute.
 
+### Changed
+
+- **Recall skips prompts containing only harness envelopes.** dabir found that
+  174 of 374 recall asks in seven days (47%) searched task notifications,
+  injecting about five irrelevant notes each time. Envelopes are now stripped;
+  any user text alongside them still gets recall. Skips are logged quietly.
+  Run `vaultmind hooks install --force` to update installed copies.
+
 ### Fixed
 
 - **Hook wiring checks follow the executed script.** Mentioning a VaultMind
