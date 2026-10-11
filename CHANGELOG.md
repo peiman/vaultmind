@@ -21,8 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Recall skips prompts containing only harness envelopes.** dabir found that
   174 of 374 recall asks in seven days (47%) searched task notifications,
-  injecting about five irrelevant notes each time. Envelopes are now stripped;
-  any user text alongside them still gets recall. Skips are logged quietly.
+  injecting about five irrelevant notes each time. Only complete, balanced
+  envelope-only prompts are skipped, including nested envelopes. Mixed or
+  malformed prompts follow the existing recall path without envelope stripping.
+  Skips are logged quietly in a private rolling JSONL capped at 128 records;
+  logging failures never interrupt the hook.
   Run `vaultmind hooks install --force` to update installed copies.
 
 ### Fixed

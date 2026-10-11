@@ -30,32 +30,107 @@ HOOK_SESSION_ID=$(echo "$HOOK_INPUT" | python3 -c "import json,sys; print(json.l
 
 # Harness envelopes are context, not questions. dabir measured 174 of 374
 # recall asks (47%) against task notifications in seven days (2026-10-11).
-# Strip complete blocks before unwrapping user_query or building the query;
-# text before, after or between them is still the person's question. Leave
-# incomplete blocks alone rather than accidentally swallowing user text.
+# Skip only a whole prompt made of balanced envelopes. This predicate never
+# edits PROMPT: quoted examples and malformed blocks take the old recall path.
+# Bash 3.2 compatible; only recognized harness tags participate in the stack,
+# since their payload can contain arbitrary text/markup (task-id, user_query).
+is_envelope_only() {
+  local rest="$1" prefix closing tag attrs token quote char i known depth=0 seen=0
+  local stack=()
+  local name_re='^(/?)([[:alpha:]][[:alnum:]_.:-]*)'
+  local attrs_re="^([[:space:]]+[[:alnum:]_:-]+([[:space:]]*=[[:space:]]*(\"[^\"]*\"|'[^']*'|[^[:space:]\"'<>/=]+))?)*[[:space:]]*$"
+
+  # A UTF-8 BOM may precede the first envelope, with whitespace around it.
+  rest="${rest#"${rest%%[![:space:]]*}"}"
+  rest="${rest#$'\xef\xbb\xbf'}"
+  while [[ "$rest" == *'<'* ]]; do
+    prefix="${rest%%<*}"
+    if [ "$depth" -eq 0 ] && [[ "$prefix" == *[![:space:]]* ]]; then
+      return 1
+    fi
+    rest="${rest#*<}"
+    if [[ ! "$rest" =~ $name_re ]]; then
+      [ "$depth" -gt 0 ] || return 1
+      continue
+    fi
+    closing="${BASH_REMATCH[1]}"
+    tag="${BASH_REMATCH[2]}"
+    known=0
+    case "$tag" in
+      task-notification|system-reminder|cross-session-message|local-command-stdout|local-command-caveat|command-name|command-message|command-args) known=1 ;;
+      *) [ "$depth" -gt 0 ] || return 1 ;;
+    esac
+
+    # Find the closing > without treating a quoted attribute value as markup.
+    token="" quote=""
+    for ((i=0; i<${#rest}; i+=1)); do
+      char="${rest:i:1}"
+      if [ -n "$quote" ]; then
+        [ "$char" != "$quote" ] || quote=""
+      else
+        case "$char" in
+          \"|\') quote="$char" ;;
+          '<') return 1 ;;
+          '>') token="${rest:0:i}"; break ;;
+        esac
+      fi
+    done
+    [ -n "$token" ] || return 1
+    rest="${rest:i+1}"
+    # Consume other markup atomically too: a quoted harness-tag string in
+    # task-id/user_query attributes must never open or close an envelope.
+    [ "$known" -eq 1 ] || continue
+    attrs="${token#"$closing$tag"}"
+    if [ -n "$closing" ]; then
+      [[ "$attrs" != *[![:space:]]* ]] || return 1
+      [ "$depth" -gt 0 ] || return 1
+      [ "${stack[depth-1]}" = "$tag" ] || return 1
+      depth=$((depth-1))
+    else
+      [[ "$attrs" =~ $attrs_re ]] || return 1
+      stack[depth]="$tag"
+      depth=$((depth+1))
+      seen=1
+    fi
+  done
+  [ "$seen" -eq 1 ] && [ "$depth" -eq 0 ] && [[ "$rest" != *[![:space:]]* ]]
+}
+
+# Same metadata-only sidecar convention as the other hooks, but one rolling
+# JSONL holds at most 128 records. A nonblocking mkdir lock serializes writers;
+# contention or any filesystem failure simply forgoes this diagnostic record.
+# The subshell keeps umask/traps local; every failure is explicit for set -e.
+log_envelope_skip() (
+  umask 077
+  local dir="${HOME}/.vaultmind/userprompt-hook" file tmp="" timestamp
+  mkdir -p "$dir" || return 1
+  chmod 700 "$dir" || return 1
+  mkdir "$dir/.envelope-skips.lock" || return 1
+  trap 'rm -f "$tmp"; rmdir "$dir/.envelope-skips.lock"' EXIT
+  file="$dir/envelope-skips.jsonl"
+  [ ! -L "$file" ] || return 1
+  if [ -e "$file" ]; then
+    [ -f "$file" ] || return 1
+    chmod 600 "$file" || return 1
+  fi
+  tmp=$(mktemp "$dir/.envelope-skips.XXXXXX") || return 1
+  chmod 600 "$tmp" || return 1
+  if [ -f "$file" ]; then
+    tail -n 127 "$file" > "$tmp" || return 1
+  fi
+  timestamp=$(date +%Y%m%dT%H%M%S) || return 1
+  printf '{"timestamp":"%s","prompt_len":%d,"injection":false,"reason":"harness-envelope"}\n' \
+    "$timestamp" "${#PROMPT}" >> "$tmp" || return 1
+  mv -f "$tmp" "$file" || return 1
+)
+
+# Avoid even running the predicate for ordinary prose.
 case "$PROMPT" in
   *"<task-notification"*|*"<system-reminder"*|*"<cross-session-message"*|*"<local-command-stdout"*|*"<local-command-caveat"*|*"<command-name"*|*"<command-message"*|*"<command-args"*)
-    PROMPT_LEN=${#PROMPT}
-    USER_TEXT=$(printf '%s' "$PROMPT" | python3 -c '
-import re, sys
-text = sys.stdin.read()
-envelope = re.compile(
-    r"<(?P<tag>task-notification|system-reminder|cross-session-message|"
-    r"local-command-stdout|local-command-caveat|command-name|command-message|command-args)"
-    r"(?:\s[^>]*)?>.*?</(?P=tag)\s*>", re.S)
-print(envelope.sub(" ", text).strip())
-' 2>/dev/null || printf '%s' "$PROMPT")
-    if [ -z "$USER_TEXT" ]; then
-      # Same quiet JSON sidecar as no-match skips. Include the PID so several
-      # harness deliveries in one second remain separately countable.
-      LOG_DIR="${HOME}/.vaultmind/userprompt-hook"
-      mkdir -p "$LOG_DIR" 2>/dev/null
-      TIMESTAMP=$(date +%Y%m%dT%H%M%S)
-      { printf '{"timestamp":"%s","prompt_len":%d,"injection":false,"reason":"harness-envelope"}\n' \
-        "$TIMESTAMP" "$PROMPT_LEN" > "$LOG_DIR/${TIMESTAMP}-$$-skip.json"; } 2>/dev/null
+    if is_envelope_only "$PROMPT"; then
+      log_envelope_skip 2>/dev/null || :
       exit 0
     fi
-    PROMPT="$USER_TEXT"
     ;;
 esac
 
