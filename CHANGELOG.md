@@ -40,6 +40,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or project-dependent script paths. User install migrates generated legacy
   commands to absolute paths and reports custom commands as conflicts without
   rewriting them; dry runs preview changes without writing.
+- **Recall envelope detection no longer stalls on large prompts.** A cheap
+  boundary check leaves mixed prose on the existing recall path, and a linear
+  parser handles quoted attributes and many payload tags before the query timeout.
 - **Keyword search matches any word in a question.** Long natural-language
   questions can now find notes containing only some of their words, with BM25
   ranking the matches. User input remains quoted as literal FTS5 terms.

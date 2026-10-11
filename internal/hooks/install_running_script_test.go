@@ -24,13 +24,19 @@ func TestInstall_DoesNotCorruptAScriptThatIsRunning(t *testing.T) {
 	scripts := filepath.Join(dir, ".claude", "scripts")
 	require.NoError(t, os.MkdirAll(scripts, 0o750))
 	target := filepath.Join(scripts, "shell-strip.sh")
-	require.NoError(t, os.WriteFile(target, []byte("#!/bin/bash\nsleep 1\necho OLD-VERSION-FINISHED\n"), 0o700)) //nolint:gosec // G306: executable fixture
+	ready := filepath.Join(dir, "ready")
+	require.NoError(t, os.WriteFile(target, []byte("#!/bin/bash\nprintf ready > \"$1\"\nsleep 1\necho OLD-VERSION-FINISHED\n"), 0o700)) //nolint:gosec // G306: executable fixture
 
-	cmd := exec.Command("bash", target)
+	cmd := exec.Command("bash", target, ready)
 	cmd.Stdin = nil
 	out := make(chan []byte, 1)
 	go func() { b, _ := cmd.CombinedOutput(); out <- b }()
-	time.Sleep(300 * time.Millisecond) // bash is inside `sleep 1`, offset past line 2
+	// Wait for the old interpreter to open the script. A fixed startup delay
+	// can expire before Bash starts when the full suite runs under load.
+	require.Eventually(t, func() bool {
+		_, err := os.Stat(ready)
+		return err == nil
+	}, 10*time.Second, 10*time.Millisecond, "the old script must start before installation")
 
 	_, err := Install(InstallConfig{ProjectDir: dir, Force: true, Only: []string{"shell-strip.sh"}})
 	require.NoError(t, err)

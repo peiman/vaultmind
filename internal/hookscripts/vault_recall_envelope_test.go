@@ -5,12 +5,111 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/peiman/vaultmind/internal/hookscripts"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// Isolate the production predicate so Python startup, logging and the vault
+// query do not hide its cost. Use stock macOS bash, including under set -e.
+func envelopePredicate(t *testing.T) string {
+	t.Helper()
+	script, ok := hookscripts.Get("vault-recall.sh")
+	require.True(t, ok)
+	_, predicate, ok := strings.Cut(string(script), "is_envelope_only() {")
+	require.True(t, ok)
+	predicate, _, ok = strings.Cut(predicate, "\n}\n")
+	require.True(t, ok)
+	return "is_envelope_only() {" + predicate + "\n}\n" +
+		"prompt=$(cat); if is_envelope_only \"$prompt\"; then printf envelope; else printf recall; fi"
+}
+
+func TestRecallHook_HarnessEnvelopeParserTiming(t *testing.T) {
+	const size = 20 * 1024
+	filled := func(prefix, suffix string) string {
+		return prefix + strings.Repeat("x", size-len(prefix)-len(suffix)) + suffix
+	}
+	prefix, suffix := "<task-notification>", "</task-notification>"
+	left := size - len(prefix) - len(suffix)
+	cases := []struct {
+		name, prompt, result string
+	}{
+		{"plain", strings.Repeat("x", size), "recall"},
+		{"body", filled(prefix, suffix), "envelope"},
+		{"attribute", filled("<task-notification hint=\"", "\">x</task-notification>"), "envelope"},
+		{"many tags", prefix + strings.Repeat("<x>x</x>", left/8) + strings.Repeat(" ", left%8) + suffix, "envelope"},
+	}
+	limit := 500 * time.Millisecond
+	if os.Getenv("CI") != "" {
+		limit = 2 * time.Second // Still far below the old parser's 12–15 seconds.
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Len(t, tc.prompt, size)
+			cmd := exec.Command(stockMacBash, "-e", "-c", envelopePredicate(t))
+			cmd.Env = []string{"PATH=/usr/bin:/bin"}
+			cmd.Stdin = strings.NewReader(tc.prompt)
+			start := time.Now()
+			out, err := cmd.CombinedOutput()
+			elapsed := time.Since(start)
+			require.NoError(t, err, "%s", out)
+			assert.Equal(t, tc.result, string(out))
+			t.Logf("20480 bytes: parser %s (limit %s)", elapsed, limit)
+			assert.Less(t, elapsed, limit, "envelope detection runs before the query timeout")
+		})
+	}
+}
+
+func TestRecallHook_HarnessEnvelopeCheapGate(t *testing.T) {
+	for name, prompt := range map[string]string{
+		"prose before": "Explain <task-notification hint=\"example\">finished</task-notification>",
+		"prose after":  "<task-notification>finished</task-notification> explain the result",
+		"BOM before":   " \t\ufeff\nExplain <task-notification>finished</task-notification> \t",
+	} {
+		t.Run(name, func(t *testing.T) {
+			marker := filepath.Join(t.TempDir(), "awk.log")
+			binDir := t.TempDir()
+			// A recording dependency proves ungated prompts never start the parser.
+			hookscripts.InstallStub(t, binDir, "awk", "#!/bin/bash\nprintf invoked > "+marker+"\nexit 1\n")
+			cmd := exec.Command(stockMacBash, "-e", "-c", envelopePredicate(t))
+			cmd.Env = []string{"PATH=" + binDir + ":/usr/bin:/bin"}
+			cmd.Stdin = strings.NewReader(prompt)
+			out, err := cmd.CombinedOutput()
+			require.NoError(t, err)
+			assert.Equal(t, "recall", string(out))
+			_, err = os.Stat(marker)
+			assert.True(t, os.IsNotExist(err), "cheap gate must run before awk")
+		})
+	}
+}
+
+func TestRecallHook_HarnessEnvelopeParserLocale(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("BSD awk UTF-8 byte splitting is specific to the stock macOS hook environment")
+	}
+	// Unicode attribute names/whitespace are accepted by Bash in a UTF-8
+	// locale. BSD awk splits bytes even there, so test the same locale explicitly.
+	for _, prompt := range []string{
+		"<task-notification tür=ok>done</task-notification>",
+		"<task-notification\u00a0hint=ok>done</task-notification>",
+		"<task-notification><é hint=\"</task-notification>\">x</é>done</task-notification>",
+		"<task-notification hint=\"å中文😀\">done</task-notification>",
+	} {
+		t.Run(prompt, func(t *testing.T) {
+			cmd := exec.Command(stockMacBash, "-e", "-c", envelopePredicate(t))
+			cmd.Env = []string{"PATH=/usr/bin:/bin", "LC_ALL=C.UTF-8"}
+			cmd.Stdin = strings.NewReader(prompt)
+			out, err := cmd.CombinedOutput()
+			require.NoError(t, err)
+			assert.Equal(t, "envelope", string(out))
+		})
+	}
+}
 
 // Exercise the stock bash hook with a recording binary, not script-text checks.
 func TestRecallHook_HarnessEnvelopesOnly(t *testing.T) {
@@ -29,6 +128,9 @@ func TestRecallHook_HarnessEnvelopesOnly(t *testing.T) {
 		"BOM and whitespace":    " \t\ufeff\n<task-notification>finished</task-notification> \t",
 		"quoted angle bracket":  "<task-notification kind=\"a > b\">finished</task-notification>",
 		"quoted closing tag":    "<task-notification><task-id hint=\"</task-notification>\">abc</task-id>done</task-notification>",
+		"attribute forms":       "<task-notification enabled data-id = abc other='a < b > c' flag next = \"done\">finished</task-notification \t>",
+		"multiline attributes":  "<task-notification\n hint=\"first\n</task-notification>\nlast\"\n enabled\n>finished</task-notification\n>",
+		"unknown markup quotes": "<task-notification><task-id hint='</task-notification>'>abc</task-id>done</task-notification>",
 	}
 	for name, prompt := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -100,6 +202,13 @@ func TestRecallHook_HarnessEnvelopeRejectsMalformedInput(t *testing.T) {
 		"<task-notification><task-notification/>finished</task-notification>",
 		"<task-notification><task-notification!>finished</task-notification>",
 		"<task-notification><task-id hint=\"</task-notification>",
+		"<task-notification hint=\"done\"next=abc>finished</task-notification>",
+		"<task-notification hint=a=b>finished</task-notification>",
+		"<task-notification hint=a/b>finished</task-notification>",
+		"<task-notification hint= >finished</task-notification>",
+		"<task-notification>finished</task-notification>\ufeff",
+		"<task-notification>finished</task-notification> prose <system-reminder>done</system-reminder>",
+		"<task-notification>finished</task-notification><unknown>done</unknown>",
 		"<task-notification>finished</task-notification> user question follows",
 	}
 	for _, prompt := range cases {

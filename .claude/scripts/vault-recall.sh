@@ -35,65 +35,121 @@ HOOK_SESSION_ID=$(echo "$HOOK_INPUT" | python3 -c "import json,sys; print(json.l
 # Bash 3.2 compatible; only recognized harness tags participate in the stack,
 # since their payload can contain arbitrary text/markup (task-id, user_query).
 is_envelope_only() {
-  local rest="$1" prefix closing tag attrs token quote char i known depth=0 seen=0
-  local stack=()
-  local name_re='^(/?)([[:alpha:]][[:alnum:]_.:-]*)'
-  local attrs_re="^([[:space:]]+[[:alnum:]_:-]+([[:space:]]*=[[:space:]]*(\"[^\"]*\"|'[^']*'|[^[:space:]\"'<>/=]+))?)*[[:space:]]*$"
+  local candidate="$1"
+  # Cheap boundary gate: trim whitespace, one leading UTF-8 BOM, then
+  # whitespace again. Never change PROMPT or parse mixed prose unnecessarily.
+  candidate="${candidate#"${candidate%%[![:space:]]*}"}"
+  candidate="${candidate#$'\xef\xbb\xbf'}"
+  candidate="${candidate#"${candidate%%[![:space:]]*}"}"
+  candidate="${candidate%"${candidate##*[![:space:]]}"}"
+  [[ "$candidate" == '<'* && "$candidate" == *'>' ]] || return 1
 
-  # A UTF-8 BOM may precede the first envelope, with whitespace around it.
-  rest="${rest#"${rest%%[![:space:]]*}"}"
-  rest="${rest#$'\xef\xbb\xbf'}"
-  while [[ "$rest" == *'<'* ]]; do
-    prefix="${rest%%<*}"
-    if [ "$depth" -eq 0 ] && [[ "$prefix" == *[![:space:]]* ]]; then
-      return 1
-    fi
-    rest="${rest#*<}"
-    if [[ ! "$rest" =~ $name_re ]]; then
-      [ "$depth" -gt 0 ] || return 1
-      continue
-    fi
-    closing="${BASH_REMATCH[1]}"
-    tag="${BASH_REMATCH[2]}"
-    known=0
-    case "$tag" in
-      task-notification|system-reminder|cross-session-message|local-command-stdout|local-command-caveat|command-name|command-message|command-args) known=1 ;;
-      *) [ "$depth" -gt 0 ] || return 1 ;;
-    esac
-
-    # Find the closing > without treating a quoted attribute value as markup.
-    token="" quote=""
-    for ((i=0; i<${#rest}; i+=1)); do
-      char="${rest:i:1}"
-      if [ -n "$quote" ]; then
-        [ "$char" != "$quote" ] || quote=""
-      else
-        case "$char" in
-          \"|\') quote="$char" ;;
-          '<') return 1 ;;
-          '>') token="${rest:0:i}"; break ;;
-        esac
-      fi
-    done
-    [ -n "$token" ] || return 1
-    rest="${rest:i+1}"
-    # Consume other markup atomically too: a quoted harness-tag string in
-    # task-id/user_query attributes must never open or close an envelope.
-    [ "$known" -eq 1 ] || continue
-    attrs="${token#"$closing$tag"}"
-    if [ -n "$closing" ]; then
-      [[ "$attrs" != *[![:space:]]* ]] || return 1
-      [ "$depth" -gt 0 ] || return 1
-      [ "${stack[depth-1]}" = "$tag" ] || return 1
-      depth=$((depth-1))
-    else
-      [[ "$attrs" =~ $attrs_re ]] || return 1
-      stack[depth]="$tag"
-      depth=$((depth+1))
-      seen=1
-    fi
-  done
-  [ "$seen" -eq 1 ] && [ "$depth" -eq 0 ] && [[ "$rest" != *[![:space:]]* ]]
+  # awk is already a hook dependency. Split each record once and carry only
+  # parser state: no growing token buffers or scans of the unconsumed suffix.
+  # Keep the caller locale so attribute/name character classes match Bash.
+  printf '%s\n' "$candidate" | awk '
+    function reject() { bad = 1; exit 1 }
+    function finish_tag() {
+      if (closing) {
+        if (depth == 0 || stack[depth] != tag) reject()
+        delete stack[depth--]
+      } else {
+        stack[++depth] = tag
+        seen = 1
+      }
+      state = "text"
+    }
+    function character(c) {
+      if (state == "text") {
+        if (c == "<") { state = "start"; closing = 0 }
+        else if (depth == 0 && c !~ /[[:space:]]/) reject()
+      } else if (state == "start" || state == "name-first") {
+        if (state == "start" && c == "/") {
+          closing = 1; state = "name-first"
+        } else if (c ~ /[[:alpha:]]/) {
+          tag = c; state = "name"
+        } else {
+          if (depth == 0) reject()
+          state = "text"; character(c)
+        }
+      } else if (state == "name") {
+        if (c ~ /[[:alnum:]_.:-]/) {
+          # Keep one character beyond the longest harness name.
+          # Longer names are unknown payload markup; they need no buffer.
+          if (length(tag) <= longest_tag) tag = tag c
+          return
+        }
+        if (tag ~ /^(task-notification|system-reminder|cross-session-message|local-command-stdout|local-command-caveat|command-name|command-message|command-args)$/) {
+          state = closing ? "close" : "after-name"
+        } else {
+          if (depth == 0) reject()
+          state = "unknown"
+        }
+        character(c)
+      } else if (state == "unknown" || state == "quoted") {
+        if (quote != "") {
+          if (c == quote) {
+            quote = ""
+            if (state == "quoted") state = "after-value"
+          }
+        } else if (c == "\"" || c == "\047") quote = c
+        else if (c == "<") reject()
+        else if (c == ">") state = "text"
+      } else if (state == "close") {
+        if (c == ">") finish_tag()
+        else if (c !~ /[[:space:]]/) reject()
+      } else if (state == "after-name" || state == "after-value") {
+        if (c == ">") finish_tag()
+        else if (c ~ /[[:space:]]/) state = "between"
+        else reject()
+      } else if (state == "between" || state == "after-attribute") {
+        if (c ~ /[[:space:]]/) return
+        if (state == "after-attribute" && c == "=") state = "value"
+        else if (c == ">") finish_tag()
+        else if (c ~ /[[:alnum:]_:-]/) state = "attribute"
+        else reject()
+      } else if (state == "attribute") {
+        if (c ~ /[[:alnum:]_:-]/) return
+        if (c == "=") state = "value"
+        else if (c ~ /[[:space:]]/) state = "after-attribute"
+        else if (c == ">") finish_tag()
+        else reject()
+      } else if (state == "value") {
+        if (c ~ /[[:space:]]/) return
+        if (c == "\"" || c == "\047") { quote = c; state = "quoted" }
+        else if (c ~ /[<>\/=]/) reject()
+        else state = "unquoted"
+      } else if (state == "unquoted") {
+        if (c ~ /[[:space:]]/) state = "between"
+        else if (c == ">") finish_tag()
+        else if (c == "\"" || c == "\047" || c ~ /[<\/=]/) reject()
+      }
+    }
+    BEGIN {
+      state = "text"; longest_tag = length("cross-session-message")
+      # BSD awk splits UTF-8 into bytes; other awks may split into characters.
+      # Reassemble at most four bytes before locale-aware character checks.
+      byte_split = (length("\303\251") == 2)
+      if (byte_split) for (b = 128; b <= 255; b++) octet[sprintf("%c", b)] = b
+    }
+    {
+      count = split($0 "\n", chars, "")
+      for (i = 1; i <= count; i++) {
+        c = chars[i]
+        b = byte_split ? octet[c] : 0
+        if (b >= 194 && b <= 244) {
+          width = b < 224 ? 2 : (b < 240 ? 3 : 4)
+          for (j = 1; j < width; j++) {
+            b = octet[chars[i + 1]]
+            if (b < 128 || b > 191) reject()
+            c = c chars[++i]
+          }
+        }
+        character(c)
+      }
+    }
+    END { exit (bad || !seen || depth != 0 || state != "text") }
+  '
 }
 
 # Same metadata-only sidecar convention as the other hooks, but one rolling
