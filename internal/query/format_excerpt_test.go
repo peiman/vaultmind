@@ -360,3 +360,60 @@ func TestFormatAsk_AWholeBodyRendersWhole(t *testing.T) {
 	assert.Equal(t, 2, strings.Count(buf.String(), "kept for 35 days."), buf.String())
 	assert.NotContains(t, buf.String(), "...")
 }
+
+// A hard wrap at about 80 columns, or at about 85 once the four-space body
+// indent is counted, lands in the run of x's immediately before "- item".
+// The continuation then begins with a markdown block marker and the agent
+// reads a list item that the note never had. Raw markdown is delivered as
+// written: the excerpt's own lines, indented, with no reflow.
+func TestFormatAsk_ExcerptDoesNotHardWrapBeforeMarkdownMarker(t *testing.T) {
+	line := strings.Repeat("x", 80) + "- item stays on the original line"
+	body := line + "\n- a real list item"
+	result := &AskResult{
+		TopHitConfidence: ConfidenceStrong,
+		Context: &memory.ContextPackResult{
+			TargetID: "t", BudgetTokens: 900, UsedTokens: 100,
+			Target: &memory.ContextPackTarget{
+				ID: "t", BodyExcerpted: true, Body: body,
+				Frontmatter: map[string]interface{}{"type": "reference", "title": "Raw markdown"},
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	require.NoError(t, FormatAsk(result, &buf))
+	out := buf.String()
+
+	assert.Contains(t, out, "    "+line,
+		"the excerpt line must be emitted whole, indented, not reflowed; got:\n%s", out)
+	assert.Contains(t, out, "    - a real list item",
+		"a list line that is actually in the excerpt stays a list line")
+
+	var markerLines []string
+	for _, rendered := range strings.Split(out, "\n") {
+		trimmed := strings.TrimSpace(rendered)
+		if excerptLineStartsWithBlockMarker(trimmed) {
+			markerLines = append(markerLines, trimmed)
+		}
+	}
+	assert.Equal(t, []string{"- a real list item"}, markerLines,
+		"a wrap must not invent a continuation that starts with a markdown block marker; got:\n%s", out)
+}
+
+// excerptLineStartsWithBlockMarker reports a line an agent would parse as a
+// new block: a list item, a heading, or a blockquote. The space after the
+// bullet is required so a word that merely begins with those characters is
+// left alone.
+func excerptLineStartsWithBlockMarker(trimmed string) bool {
+	if strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ") || strings.HasPrefix(trimmed, "> ") {
+		return true
+	}
+	if strings.HasPrefix(trimmed, "#") {
+		return true
+	}
+	i := 0
+	for i < len(trimmed) && trimmed[i] >= '0' && trimmed[i] <= '9' {
+		i++
+	}
+	return i > 0 && i+1 < len(trimmed) && trimmed[i] == '.' && trimmed[i+1] == ' '
+}

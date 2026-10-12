@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Indexing a note that is already gone is not a failure.** `vaultmind index`
+  warned `failed to delete orphaned note … sql: no rows in result set` and
+  listed the file as skipped when the row had already been removed, which a
+  rename does before the orphan sweep looks up the old path. An absent row is
+  the outcome that cleanup wanted. A delete that fails for any other reason
+  still warns. Reported from a v0.10.10 user field report.
+- **Routine config-permission notes stay quiet.** A normal config file, such
+  as mode 0644, logged an info line to stderr on every command. That note is
+  now debug, matching the quiet-by-default policy. A group-writable config
+  still warns, and a world-writable config is still an error that says how to
+  fix it. Reported from a v0.10.10 user field report.
 - Ask no longer tells you to re-index a note that is already empty. Re-indexing
   is suggested only when the stored body was never filled (`body_raw` is NULL).
   An empty body, including a note that is only frontmatter, says the note has

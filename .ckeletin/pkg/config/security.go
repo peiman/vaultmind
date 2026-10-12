@@ -13,8 +13,11 @@ import (
 )
 
 // ValidateConfigFilePermissions checks if a config file has secure permissions.
-// On Unix-like systems, it ensures the file is not world-writable and warns if group-writable.
-// On Windows, this check is skipped as Windows has a different permission model.
+// On Unix-like systems, a world-writable file is an error the user must fix,
+// and a group-writable file is a warning. A merely permissive mode such as
+// 0644 is logged at debug: the default level is Info, and that note is not a
+// problem the user has to act on. On Windows, this check is skipped as
+// Windows has a different permission model.
 func ValidateConfigFilePermissions(path string) error {
 	// Skip on Windows - different permission model
 	if runtime.GOOS == "windows" {
@@ -51,9 +54,12 @@ This will set owner-only read/write permissions.`, path, perm, path)
 			Msg("Config file is group-writable, consider restricting to 0600 or 0400")
 	}
 
-	// Recommend stricter permissions if too permissive
+	// 0644 is what a normal install has. It matches this mask, and so does
+	// group-writable, which already warned above. Debug, not Info: initConfig
+	// runs while the global level is Info, so an Info line here is printed on
+	// every command.
 	if perm&0077 != 0 {
-		log.Info().
+		log.Debug().
 			Str("path", path).
 			Str("current", fmt.Sprintf("%04o", perm)).
 			Str("recommended", "0600").

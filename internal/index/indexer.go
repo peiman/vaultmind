@@ -3,6 +3,8 @@ package index
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -565,15 +567,7 @@ func (idx *Indexer) Rebuild() (*IndexResult, error) {
 			if scannedPaths[storedPath] {
 				continue
 			}
-			if delErr := DeleteNoteByPath(db, storedPath); delErr != nil {
-				log.Warn().Err(delErr).Str("path", storedPath).Msg("failed to delete orphaned note during full rebuild")
-				result.Errors++
-				result.ErrorDetails = append(result.ErrorDetails, IndexError{
-					Path: storedPath, Kind: "delete", Error: delErr.Error(),
-				})
-				continue
-			}
-			result.Deleted++
+			forgetOrphan(db, storedPath, result, "failed to delete orphaned note during full rebuild")
 		}
 	}
 
@@ -696,6 +690,30 @@ func duplicateIDHolder(db *DB, rec NoteRecord, relPath string, onDisk map[string
 	return owner, true
 }
 
+// forgetOrphan removes a stored path that is no longer on disk.
+//
+// A rename stores the note at its new path first, so the sweep then looks up
+// a path whose row has already moved. DeleteNoteByPath reports that as
+// sql.ErrNoRows. The row is gone from that path, which is what the sweep
+// asked for: not a warning, not an error, and not a skipped file. The CLI
+// prints Errors as "file(s) skipped — not indexed". A delete that fails for
+// any other reason still warns and is counted.
+func forgetOrphan(db *DB, storedPath string, result *IndexResult, warn string) {
+	delErr := DeleteNoteByPath(db, storedPath)
+	if delErr == nil {
+		result.Deleted++
+		return
+	}
+	if errors.Is(delErr, sql.ErrNoRows) {
+		return
+	}
+	log.Warn().Err(delErr).Str("path", storedPath).Msg(warn)
+	result.Errors++
+	result.ErrorDetails = append(result.ErrorDetails, IndexError{
+		Path: storedPath, Kind: "delete", Error: delErr.Error(),
+	})
+}
+
 func (idx *Indexer) Incremental() (*IndexResult, error) {
 	start := time.Now()
 
@@ -816,15 +834,7 @@ func (idx *Indexer) Incremental() (*IndexResult, error) {
 
 	for storedPath := range stored {
 		if !diskPaths[storedPath] {
-			if delErr := DeleteNoteByPath(db, storedPath); delErr != nil {
-				log.Warn().Err(delErr).Str("path", storedPath).Msg("failed to delete orphaned note")
-				result.Errors++
-				result.ErrorDetails = append(result.ErrorDetails, IndexError{
-					Path: storedPath, Kind: "delete", Error: delErr.Error(),
-				})
-				continue
-			}
-			result.Deleted++
+			forgetOrphan(db, storedPath, result, "failed to delete orphaned note")
 		}
 	}
 
