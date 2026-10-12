@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Long-document answers now reach the agent far more often (held-out 7/50 → 20/50,
+  dev 11/50 → 27/50) because `ask --excerpt` picks a passage that matches the question
+  instead of always the first one. The target keeps its first block unless the best
+  passage scores at least twice as highly; Principle sections and context excerpts
+  keep their existing behavior. Ranking is unchanged.
+
+### Fixed
+
+- Query-aware excerpts retain their governing heading path, including warnings
+  and deprecation notices, within the same token cap. Oversized sentences are
+  scored before delivery is trimmed, including late keyphrases and unspaced CJK.
+- Passage selection reuses one normalized token stream instead of indexing
+  overlapping windows. Text `ask --pointers-only` skips selection and preserves
+  the assembled-and-withheld token count; JSON delivery keeps passage selection.
+
 ## [0.10.9] - 2026-10-12
 
 > Agents now get each note's text as written (code examples, `text_factory`, `<placeholders>`), keyword search matches long questions, recall skips harness notifications, and global (user-scope) hook installs are supported.

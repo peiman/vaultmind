@@ -9,6 +9,11 @@ var AskMetadata = config.CommandMetadata{
 	Long: `Search the vault, pick the top hit, and pack token-budgeted context around it.
 One command replaces the manual search → recall → summarize chain.
 
+With --excerpt, the target keeps its first prose block unless a passage matching
+the question scores at least twice as highly; a positive match wins when the first
+block scores zero. Principle sections and context-note excerpts keep their existing
+behavior, within the same token cap.
+
 CHOOSE A RENDERING MODE BY INTENT
 
   vaultmind ask "spreading activation" --pointers-only

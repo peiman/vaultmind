@@ -64,6 +64,15 @@ default is deliberate: arcs are written trigger → push → deeper sight → pr
 opening is story setup and the decision rule sits several sections down. Injecting "the
 first paragraph" hands you the anecdote and withholds the lesson.
 
+For `ask`'s target note without a Principle section, a passage matching the question
+replaces the first block only when it scores at least twice as highly; a positive match
+wins when the first block scores zero. Context-note excerpts keep their existing behavior,
+and every excerpt stays within the same token cap. A selected later passage includes
+its governing headings, nearest first, so warnings and deprecation notices travel with
+the answer. Headings count toward the cap; the passage is shortened to fit. Oversized
+sentences are scored throughout before the winning span is trimmed for delivery.
+Text `--pointers-only` skips passage selection; JSON still delivers selected bodies.
+
 Off by default (`0`). If you are wiring a hook with a tight budget, set it — otherwise a
 small budget yields items with no content.
 

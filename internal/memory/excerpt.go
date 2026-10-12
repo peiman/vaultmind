@@ -59,6 +59,12 @@ func Excerpt(body string, maxTokens int) string {
 	return truncateToTokens(text, maxTokens)
 }
 
+// HasPrincipleSection reports whether Excerpt prefers a non-empty Principle
+// section. Query-aware ask excerpts preserve this same recognition rule.
+func HasPrincipleSection(body string) bool {
+	return principleSection(stripFrontmatter(body)) != ""
+}
+
 // frontmatterFence delimits a note's YAML frontmatter block.
 const frontmatterFence = "---"
 

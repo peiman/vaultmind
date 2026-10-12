@@ -396,6 +396,10 @@ func Ask(ctx context.Context, retriever retrieval.Retriever, resolver *graph.Res
 		return result, nil
 	}
 
+	if excerptErr := applyPassageExcerpt(db, cfg, packResult); excerptErr != nil {
+		log.Debug().Err(excerptErr).Str("note_id", hits[0].ID).Msg("passage selection unavailable; keeping original excerpt")
+	}
+
 	markShownBefore(packResult, cfg.ShownBefore)
 	result.Context = packResult
 
