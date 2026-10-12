@@ -148,7 +148,123 @@ func applyPassageExcerpt(db *index.DB, cfg AskConfig, pack *memory.ContextPackRe
 		return err
 	}
 	best := selected.Text
+	if best == target.Body {
+		title, _ := target.Frontmatter["title"].(string)
+		best = firstBlockHeadingExcerpt(raw, best, title, limit)
+	}
 	pack.UsedTokens += memory.EstimateTokens(best) - memory.EstimateTokens(target.Body)
 	target.Body = best
 	return nil
+}
+
+// firstBlockHeadingTokens bounds the nearest heading on a kept first block.
+// Sixteen tokens is at most a tenth of the 160-token excerpt, so a warning
+// can travel with its block without consuming the answer. The number was
+// fixed before measurement.
+const firstBlockHeadingTokens = 16
+
+// firstBlockHeadingExcerpt prefixes only the nearest governing heading when
+// the retained block sits under a heading other than the note title. The
+// full path is left off: a long ancestor list ate the excerpt and dropped
+// the answer. The heading is capped; the prose is what gets trimmed. A block
+// directly under the title is unchanged.
+func firstBlockHeadingExcerpt(raw, today string, title string, limit int) string {
+	first := memory.Excerpt(raw, memory.EstimateTokens(raw))
+	start := strings.Index(raw, first)
+	if first == "" || start < 0 {
+		return today
+	}
+	for _, unit := range passageUnits(raw) {
+		if unit.start <= start && start < unit.end {
+			heading := nearestGoverningHeading(unit.heading, title)
+			if heading == "" {
+				return today
+			}
+			heading = capHeadingTokens(heading, firstBlockHeadingTokens)
+			if heading == "" {
+				return today
+			}
+			return fitHeadingAndBlock(heading, today, limit)
+		}
+	}
+	return today
+}
+
+// nearestGoverningHeading returns the closest heading in a nearest-first
+// path, including a setext underline. The title is already delivered as
+// metadata, and parent headings are not part of this prefix.
+func nearestGoverningHeading(path, title string) string {
+	if path == "" {
+		return ""
+	}
+	lines := strings.Split(path, "\n")
+	n := 1
+	if len(lines) > 1 && passageSetext.MatchString(lines[1]) {
+		n = 2
+	}
+	label := strings.TrimSpace(strings.TrimLeft(lines[0], "#"))
+	if label == "" || label == title {
+		return ""
+	}
+	return strings.Join(lines[:n], "\n")
+}
+
+// capHeadingTokens cuts a heading at a word boundary and marks the cut.
+// A single token wider than the cap is cut by rune so the result still fits.
+func capHeadingTokens(heading string, maxTokens int) string {
+	if memory.EstimateTokens(heading) <= maxTokens {
+		return heading
+	}
+	const ellipsis = "…"
+	words := strings.Fields(heading)
+	var kept []string
+	for _, word := range words {
+		candidate := strings.Join(append(kept, word), " ") + ellipsis
+		if memory.EstimateTokens(candidate) > maxTokens {
+			break
+		}
+		kept = append(kept, word)
+	}
+	if len(kept) > 0 {
+		return strings.Join(kept, " ") + ellipsis
+	}
+	var b strings.Builder
+	for _, r := range heading {
+		candidate := b.String() + string(r) + ellipsis
+		if memory.EstimateTokens(candidate) > maxTokens {
+			break
+		}
+		b.WriteRune(r)
+	}
+	if b.Len() == 0 {
+		return ""
+	}
+	return b.String() + ellipsis
+}
+
+// fitHeadingAndBlock reserves the heading and trims the prose to the excerpt
+// cap. The heading is not shortened to make more of the block fit. When the
+// heading itself exceeds the cap, the packed block is left as it was.
+func fitHeadingAndBlock(heading, today string, limit int) string {
+	if memory.EstimateTokens(heading) > limit {
+		return today
+	}
+	prefix := heading + "\n\n"
+	budget := limit - memory.EstimateTokens(prefix)
+	if budget <= 0 {
+		return heading
+	}
+	text := memory.Excerpt(today, budget)
+	for text != "" && memory.EstimateTokens(prefix+text) > limit {
+		budget--
+		if budget <= 0 {
+			text = ""
+			break
+		}
+		text = memory.Excerpt(today, budget)
+	}
+	if text == "" {
+		return heading
+	}
+	return prefix + text
 }
