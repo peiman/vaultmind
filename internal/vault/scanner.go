@@ -35,11 +35,14 @@ type ScanResult struct {
 // Scan walks the vault directory and returns all .md files,
 // excluding directories that match any of the exclude patterns.
 //
-// Symlinks are never followed — see the guard below for why.
+// The root the operator named is resolved first (ResolveRoot). WalkDir does
+// not descend into a root that is a symlink, and an empty result is what
+// made index delete every note. Symlinks inside the vault are never
+// followed — see the guard below for why.
 func Scan(vaultRoot string, excludes []string) (ScanResult, error) {
-	absRoot, err := filepath.Abs(vaultRoot)
+	absRoot, err := ResolveRoot(vaultRoot)
 	if err != nil {
-		return ScanResult{}, fmt.Errorf("resolving vault root: %w", err)
+		return ScanResult{}, err
 	}
 
 	skip := newExcludeSet(excludes)

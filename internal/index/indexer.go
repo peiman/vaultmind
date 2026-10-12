@@ -450,6 +450,9 @@ func (idx *Indexer) Rebuild() (*IndexResult, error) {
 		return nil, fmt.Errorf("scanning vault: %w", err)
 	}
 	files := scan.Files
+	if err := refuseWipeOnEmptyScan(db, len(files)); err != nil {
+		return nil, err
+	}
 
 	result := &IndexResult{DBPath: idx.dbPath, SkippedSymlinks: scan.SkippedSymlinks}
 	seenIDs := make(map[string]string) // id → first path
@@ -715,6 +718,9 @@ func (idx *Indexer) Incremental() (*IndexResult, error) {
 		return nil, fmt.Errorf("scanning vault: %w", err)
 	}
 	files := scan.Files
+	if err := refuseWipeOnEmptyScan(db, len(files)); err != nil {
+		return nil, err
+	}
 
 	result := &IndexResult{DBPath: idx.dbPath, SkippedSymlinks: scan.SkippedSymlinks}
 

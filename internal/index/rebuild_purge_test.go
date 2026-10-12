@@ -62,11 +62,14 @@ func TestRebuild_PurgesNotesDeletedFromDisk(t *testing.T) {
 	assert.Equal(t, 1, keepCount, "surviving note must remain in the index")
 }
 
-// TestRebuild_PurgesAllNotesWhenVaultEmptied pins the boundary case: if every
-// source file is removed, a full rebuild empties the index (rather than leaving
-// every prior note as an orphan). Guards the sweep against an off-by-one that
-// would skip deletion when nothing remains to store.
-func TestRebuild_PurgesAllNotesWhenVaultEmptied(t *testing.T) {
+// TestRebuild_RefusesToWipeAnEmptiedVault replaces the old contract that a
+// rebuild of a vault with no notes left deleted every indexed row. A scan of
+// zero files is also what a symlinked root and an unreadable directory look
+// like, and that sweep erased a 105-note index. An emptied vault and a failed
+// scan cannot be told apart, so the index is kept. Reset by deleting
+// .vaultmind/index.db and re-indexing. Deleting one note of several is still
+// a purge — see TestRebuild_PurgesNotesDeletedFromDisk.
+func TestRebuild_RefusesToWipeAnEmptiedVault(t *testing.T) {
 	vaultDir := t.TempDir()
 	vmDir := filepath.Join(vaultDir, ".vaultmind")
 	require.NoError(t, os.MkdirAll(vmDir, 0o750))
@@ -90,16 +93,17 @@ func TestRebuild_PurgesAllNotesWhenVaultEmptied(t *testing.T) {
 	require.NoError(t, os.Remove(a))
 	require.NoError(t, os.Remove(b))
 
-	second, err := idxr.Rebuild()
-	require.NoError(t, err)
-	assert.Equal(t, 2, second.Deleted, "rebuild on an emptied vault purges every prior note")
+	_, err = idxr.Rebuild()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "nothing was deleted")
+	assert.Contains(t, err.Error(), ".vaultmind/index.db")
 
 	db, err := index.Open(dbPath)
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
 	var total int
 	require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM notes").Scan(&total))
-	assert.Equal(t, 0, total, "index must be empty after rebuilding an emptied vault")
+	assert.Equal(t, 2, total, "an emptied vault must not wipe the index")
 }
 
 // TestRebuild_PurgesNewlyExcludedNotes pins that a full rebuild honors a

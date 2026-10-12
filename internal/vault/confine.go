@@ -33,9 +33,12 @@ var ErrEscapesVault = errors.New("path escapes vault")
 //
 // The vault root itself is allowed: some callers resolve "." to mean the root.
 //
-// vaultRoot is resolved to an absolute path FIRST. The containment test is a
-// string-prefix comparison, and between two relative paths that comparison is
-// simply wrong: filepath.Join collapses the leading "./" the prefix depends on.
+// vaultRoot is resolved FIRST, to the real directory when the operator named
+// the vault through a symlink (ResolveRoot) and otherwise to an absolute
+// path. The containment test is a string-prefix comparison, and between two
+// relative paths that comparison is simply wrong: filepath.Join collapses
+// the leading "./" the prefix depends on. The same root is what Scan walks,
+// so a path confined here is a path inside the directory that was indexed.
 //
 //	ResolveInside(".", ".vaultmind/index.db")
 //	  cleanVault = "."
@@ -53,7 +56,7 @@ var ErrEscapesVault = errors.New("path escapes vault")
 // returning a relative path for a relative root — and every caller names the
 // result absPath or dbPath.
 func ResolveInside(vaultRoot, rel string) (string, error) {
-	cleanVault, err := filepath.Abs(vaultRoot)
+	cleanVault, err := ResolveRoot(vaultRoot)
 	if err != nil {
 		return "", fmt.Errorf("resolving vault root %q: %w", vaultRoot, err)
 	}

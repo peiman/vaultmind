@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `vaultmind index --vault` on a symlink to the vault scanned no files
+  (`filepath.WalkDir` does not descend into a symlink root) and then deleted
+  every indexed note as an orphan. The vault path is resolved once, when its
+  final element is a symlink, before the walk and before the confinement
+  check. `ask`, `search`, `doctor` and `note get` share that resolution:
+  doctor and index walk through `Scan`, and all four open the vault through
+  `ResolveInside`. A scan that finds no notes while the index still has some
+  now returns an error and deletes nothing. That includes a vault you emptied
+  on purpose — a failed scan looks the same — so to reset, delete
+  `.vaultmind/index.db` and run `vaultmind index` again. Deleting some notes
+  while others remain still removes the deleted ones.
 - Ask no longer tells you to re-index a note that is already empty. Re-indexing
   is suggested only when the stored body was never filled (`body_raw` is NULL).
   An empty body, including a note that is only frontmatter, says the note has
