@@ -1,0 +1,12 @@
+{"type":"user","sessionId":"evidence-session","uuid":"turn-one","timestamp":"2026-10-12T10:00:00Z","message":{"role":"user","content":"Work on the fixture; note-user is in my prompt."}}
+{"type":"attachment","sessionId":"evidence-session","timestamp":"2026-10-12T10:00:03Z","attachment":{"type":"hook_additional_context","content":"VAULT recall: note-injected note-opened note-cited note-tool note-title"}}
+{"type":"system","subtype":"hook_success","sessionId":"evidence-session","timestamp":"2026-10-12T10:00:03Z","hookAdditionalContext":"note-injected","additionalContext":"note-injected","content":"note-injected"}
+{"type":"user","isMeta":true,"sessionId":"evidence-session","timestamp":"2026-10-12T10:00:03Z","message":{"role":"user","content":"<system-reminder>note-injected</system-reminder>"}}
+{"type":"assistant","sessionId":"evidence-session","timestamp":"2026-10-12T10:00:05Z","message":{"role":"assistant","content":[{"type":"text","text":"I applied note-cited. The Governing Principle helps. note-prefix-extra is a different id."},{"type":"thinking","thinking":"note-thinking"}]}}
+{"type":"assistant","sessionId":"evidence-session","timestamp":"2026-10-12T10:00:06Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"note-metadata","name":"Bash","input":{"command":"vaultmind note get note-tool"}},{"type":"tool_use","id":"call-open","name":"Read","input":{"file_path":"/vault/notes/note-opened.md"}}]}}
+{"type":"user","sessionId":"evidence-session","timestamp":"2026-10-12T10:00:07Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"call-open","content":"note-result note-injected"}]}}
+{"type":"assistant","isSidechain":true,"agentId":"child","sessionId":"evidence-session","timestamp":"2026-10-12T10:00:08Z","message":{"role":"assistant","content":[{"type":"text","text":"note-sidechain"}]}}
+{"type":"assistant","sessionId":"other-session","timestamp":"2026-10-12T10:00:08Z","message":{"role":"assistant","content":[{"type":"text","text":"note-other-session"}]}}
+{"type":"assistant","sessionId":"evidence-session","timestamp":"2026-10-12T10:00:09Z","message":{"role":"assistant","content":"The exact id note-string is also cited."}}
+{"type":"user","sessionId":"evidence-session","uuid":"turn-two","timestamp":"2026-10-12T10:01:00Z","message":{"role":"user","content":"A different turn"}}
+{"type":"assistant","sessionId":"evidence-session","timestamp":"2026-10-12T10:01:04Z","message":{"role":"assistant","content":[{"type":"text","text":"note-later appears only on this later turn."}]}}

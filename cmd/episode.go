@@ -137,6 +137,7 @@ EXAMPLES
 			return runEpisodeCaptureDir(cmd, args[0], outputDir)
 		}
 
+		recordEpisodeUseEvidence(cmd, args[0])
 		incremental, _ := cmd.Flags().GetBool("incremental")
 		if !incremental {
 			path, err := episode.Capture(args[0], outputDir)

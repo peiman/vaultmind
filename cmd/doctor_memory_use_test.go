@@ -16,13 +16,13 @@ import (
 func TestWriteMemoryUse_PrintsEvenWhenNothingIsWrong(t *testing.T) {
 	var buf bytes.Buffer
 	require.NoError(t, writeMemoryUse(&buf, &query.DoctorMemoryUse{
-		WindowDays: 7, Injections: 100, BodiesDelivered: 100, Consumed: 60,
+		WindowDays: 7, Injections: 100, BodiesDelivered: 100, Consumed: 60, Opened: 60, Unknown: 40,
 		NotesBanked: 3, VaultNotes: 63,
 	}))
 	out := buf.String()
 	assert.Contains(t, out, "100 surfaced")
-	assert.Contains(t, out, "60 read")
-	assert.Contains(t, out, "60.0%")
+	assert.Contains(t, out, "60 opened")
+	assert.Contains(t, out, "40 unknown — not measurable from text")
 	assert.Contains(t, out, "banked")
 	assert.NotContains(t, out, "⚠", "a healthy rollup carries no warning")
 }
@@ -35,7 +35,7 @@ func TestWriteMemoryUse_NamesWithholdingWhenNoBodiesWereDelivered(t *testing.T) 
 		WindowDays: 7, Injections: 6215, BodiesDelivered: 0, Consumed: 47,
 	}))
 	out := buf.String()
-	assert.Contains(t, out, "no bodies delivered")
+	assert.Contains(t, out, "no bodies recorded as delivered")
 	assert.Contains(t, out, "withholding")
 }
 
@@ -76,4 +76,14 @@ func TestWriteMemoryUse_PropagatesWriteErrors(t *testing.T) {
 		require.Error(t, writeMemoryUse(&failAfterNWriter{ok: ok}, m),
 			"write failure at position %d must propagate", ok)
 	}
+}
+
+func TestWriteMemoryUse_EvidenceLine(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, writeMemoryUse(&buf, &query.DoctorMemoryUse{
+		WindowDays: 7, Injections: 5, BodiesDelivered: 5, Consumed: 1, Opened: 1, Cited: 2, Unknown: 2,
+	}))
+	assert.Contains(t, buf.String(), "Memory use (7d): 5 surfaced → 5 delivered → 1 opened, 2 cited (2 unknown — not measurable from text)\n")
+	assert.NotContains(t, buf.String(), "unused")
+	t.Log(buf.String())
 }

@@ -14,6 +14,7 @@ const (
 	EventContextPack = "context_pack"
 	EventNoteAccess  = "note_access"
 	EventIndexEmbed  = "index_embed"
+	EventUseEvidence = "use_evidence"
 )
 
 // Event holds the data for a single experiment event to be logged.

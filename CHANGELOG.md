@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Doctor reports opened/cited evidence for surfaced notes. Episode capture checks
+  exact note IDs in assistant output and tool inputs, excluding injected recall
+  context; logged reads take precedence. The rest is reported honestly as
+  unknown — not measurable from text, never unused.
+
 ### Changed
 
 - Long-document answers now reach the agent far more often (held-out 7/50 → 20/50,
