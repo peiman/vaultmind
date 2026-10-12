@@ -228,6 +228,14 @@ type DoctorIssues struct {
 	// layer keeps the type but doesn't import internal/hooks per
 	// ADR-009 business-business isolation.
 	LegacyHooksJSON bool `json:"legacy_hooks_json"`
+
+	// IndexRootBlocked is true when a re-index would refuse to delete the
+	// notes this report is looking at: the resolved root is not a walkable
+	// directory, or the walk visited nothing under it, and the index still
+	// holds rows. Prescribing `vaultmind index` then hands over a command
+	// that fails. ResolvedRoot is the path the walk used, set only then.
+	IndexRootBlocked bool   `json:"index_root_blocked,omitempty"`
+	ResolvedRoot     string `json:"resolved_root,omitempty"`
 }
 
 // SurfacedIssueCounts returns the error and warning counts for the issues a
@@ -530,6 +538,10 @@ func applyIndexTruth(result *DoctorResult, truth *IndexTruth) {
 	result.Issues.UnindexedFileDetails = truth.Unindexed
 	result.Issues.DuplicateIDs = len(truth.Duplicate)
 	result.Issues.DuplicateIDDetails = truth.Duplicate
+	if truth.rootBlocked {
+		result.Issues.IndexRootBlocked = true
+		result.Issues.ResolvedRoot = truth.resolvedRoot
+	}
 }
 
 // collectEmbeddingStatus inspects the index DB for per-lane embedding counts

@@ -38,6 +38,17 @@ const embeddingBackendsDocURL = "https://github.com/peiman/vaultmind/blob/main/d
 // consistent instruction.
 const staleIndexRemedy = "vaultmind index --vault <vault>"
 
+// indexRemedy is the instruction under an index finding. When a re-index
+// would refuse — the root looked empty or unwalkable — say that, and do not
+// prescribe the command that fails. otherwise is the full line used when
+// index would run, "run:" included, so that text stays unchanged.
+func indexRemedy(issues *query.DoctorIssues, otherwise string) string {
+	if issues.IndexRootBlocked {
+		return "the vault path looks empty or unwalkable (" + issues.ResolvedRoot + ")"
+	}
+	return otherwise
+}
+
 // brokenReferencesRemedy is the SSOT drill-down command for the broken-
 // references count. doctor folds broken_reference findings into the surfaced
 // warning rollup, so it must also name the command that lists the per-note
@@ -527,8 +538,8 @@ func writeStaleIndex(w io.Writer, issues *query.DoctorIssues, summaryOnly bool) 
 	}
 	if _, err := fmt.Fprintf(w,
 		"⚠ Stale index: %d note(s) changed since last index pass\n"+
-			"  run: %s\n",
-		issues.StaleIndex, staleIndexRemedy); err != nil {
+			"  %s\n",
+		issues.StaleIndex, indexRemedy(issues, "run: "+staleIndexRemedy)); err != nil {
 		return err
 	}
 	if summaryOnly {
@@ -616,8 +627,8 @@ func writeIndexReconciliation(w io.Writer, issues *query.DoctorIssues, summaryOn
 	if issues.OrphanedEntries > 0 {
 		if _, err := fmt.Fprintf(w,
 			"⚠ Orphaned index entries: %d note(s) indexed but gone from disk\n"+
-				"  they still answer queries and cannot be opened; run: %s\n",
-			issues.OrphanedEntries, staleIndexRemedy); err != nil {
+				"  %s\n",
+			issues.OrphanedEntries, indexRemedy(issues, "they still answer queries and cannot be opened; run: "+staleIndexRemedy)); err != nil {
 			return err
 		}
 		if !summaryOnly {
@@ -631,8 +642,8 @@ func writeIndexReconciliation(w io.Writer, issues *query.DoctorIssues, summaryOn
 	if issues.UnindexedFiles > 0 {
 		if _, err := fmt.Fprintf(w,
 			"⚠ Unindexed files: %d note(s) on disk with no index entry\n"+
-				"  they are in no query result; run: %s\n",
-			issues.UnindexedFiles, staleIndexRemedy); err != nil {
+				"  %s\n",
+			issues.UnindexedFiles, indexRemedy(issues, "they are in no query result; run: "+staleIndexRemedy)); err != nil {
 			return err
 		}
 		if !summaryOnly {

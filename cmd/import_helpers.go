@@ -229,13 +229,30 @@ func finishImport(cmd *cobra.Command, vaultPath, label string, cfg *vault.Config
 		ir, err := index.NewIndexer(vaultPath, dbPath, cfg).Incremental()
 		if err != nil {
 			res.IndexError = err.Error()
-		} else {
-			res.IndexWarnings = indexWarnings(ir, changed)
-			embedAfterWriteUpTo(cmd, vaultPath, cfg, embedOnWriteLimit+len(changed))
-			sayIfNeverEmbedded(cmd, vaultPath, dbPath)
+			return res, err
 		}
+		res.IndexWarnings = indexWarnings(ir, changed)
+		embedAfterWriteUpTo(cmd, vaultPath, cfg, embedOnWriteLimit+len(changed))
+		sayIfNeverEmbedded(cmd, vaultPath, dbPath)
 	}
 	return res, nil
+}
+
+// finishImportError reports an import whose re-index failed after the notes
+// were written. The process exits non-zero with that error. It does not tell
+// the operator to run vaultmind index: that is the command that just failed.
+// Text still prints the report. JSON is an error envelope, not success.
+func finishImportError(cmd *cobra.Command, res *importResult, err error) error {
+	if res == nil || res.IndexError == "" {
+		return err
+	}
+	if getConfigValueWithFlags[bool](cmd, "json", config.KeyAppImportJson) {
+		return importErr(cmd, err)
+	}
+	if werr := writeImport(cmd, res); werr != nil {
+		return werr
+	}
+	return err
 }
 
 // sayIfNeverEmbedded names the command that embeds a vault that has no
@@ -360,7 +377,7 @@ func writeImportText(w io.Writer, res *importResult) error {
 		lines = append(lines, "  warning   "+warn)
 	}
 	if res.IndexError != "" {
-		lines = append(lines, "written, but not indexed ("+res.IndexError+"); run vaultmind index --vault "+res.Vault)
+		lines = append(lines, "written, but not indexed: "+res.IndexError)
 	}
 	for _, l := range lines {
 		if _, err := fmt.Fprintln(w, l); err != nil {

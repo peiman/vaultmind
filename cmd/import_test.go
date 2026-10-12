@@ -206,6 +206,23 @@ func TestImport_ARelativeVaultPathReRunsUnchanged(t *testing.T) {
 	assert.Contains(t, out.String(), "2 unchanged")
 }
 
+// The re-index after a write is part of the command. When it fails, the
+// process exits non-zero with that error. "run vaultmind index" is not a
+// recovery: the same failure is what index would hit.
+func TestImport_IndexFailureExitsNonZero(t *testing.T) {
+	vault, repo := indexedBaselineVault(t), docsRepo(t)
+	sealed := filepath.Join(vault, "sealed")
+	require.NoError(t, os.Mkdir(sealed, 0o750))
+	require.NoError(t, os.Chmod(sealed, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(sealed, 0o750) })
+
+	out, errOut, err := runRootCmd(t, "import", filepath.Join(repo, "docs"), "--vault", vault)
+	require.Error(t, err)
+	msg := err.Error() + "\n" + errOut.String() + "\n" + out.String()
+	assert.Contains(t, msg, "sealed")
+	assert.NotContains(t, msg, "run vaultmind index")
+}
+
 // A scheme other than http or https is rejected before the vault is opened
 // and before any network call. file:// must not be read as a document.
 func TestImport_RejectsNonHTTPURLsBeforeAnyWork(t *testing.T) {

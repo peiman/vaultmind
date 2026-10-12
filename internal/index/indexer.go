@@ -452,7 +452,7 @@ func (idx *Indexer) Rebuild() (*IndexResult, error) {
 		return nil, fmt.Errorf("scanning vault: %w", err)
 	}
 	files := scan.Files
-	if err := refuseWipeOnEmptyScan(db, len(files)); err != nil {
+	if err := refuseWipeOnEmptyScan(db, scan, idx.dbPath); err != nil {
 		return nil, err
 	}
 
@@ -736,7 +736,7 @@ func (idx *Indexer) Incremental() (*IndexResult, error) {
 		return nil, fmt.Errorf("scanning vault: %w", err)
 	}
 	files := scan.Files
-	if err := refuseWipeOnEmptyScan(db, len(files)); err != nil {
+	if err := refuseWipeOnEmptyScan(db, scan, idx.dbPath); err != nil {
 		return nil, err
 	}
 

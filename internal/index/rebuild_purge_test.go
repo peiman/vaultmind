@@ -62,13 +62,11 @@ func TestRebuild_PurgesNotesDeletedFromDisk(t *testing.T) {
 	assert.Equal(t, 1, keepCount, "surviving note must remain in the index")
 }
 
-// TestRebuild_RefusesToWipeAnEmptiedVault replaces the old contract that a
-// rebuild of a vault with no notes left deleted every indexed row. A scan of
-// zero files is also what a symlinked root and an unreadable directory look
-// like, and that sweep erased a 105-note index. An emptied vault and a failed
-// scan cannot be told apart, so the index is kept. Reset by deleting
-// .vaultmind/index.db and re-indexing. Deleting one note of several is still
-// a purge — see TestRebuild_PurgesNotesDeletedFromDisk.
+// TestRebuild_RefusesToWipeAnEmptiedVault is a root the walk visited nothing
+// under. Leaving .vaultmind behind is not that case — the directory is an
+// entry, and the notes are purged. Reset names the database that was opened,
+// which here is not .vaultmind/index.db. Deleting one note of several is
+// still a purge — see TestRebuild_PurgesNotesDeletedFromDisk.
 func TestRebuild_RefusesToWipeAnEmptiedVault(t *testing.T) {
 	vaultDir := t.TempDir()
 	vmDir := filepath.Join(vaultDir, ".vaultmind")
@@ -90,20 +88,26 @@ func TestRebuild_RefusesToWipeAnEmptiedVault(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 2, first.Indexed)
 
-	require.NoError(t, os.Remove(a))
-	require.NoError(t, os.Remove(b))
+	entries, err := os.ReadDir(vaultDir)
+	require.NoError(t, err)
+	for _, e := range entries {
+		require.NoError(t, os.RemoveAll(filepath.Join(vaultDir, e.Name())))
+	}
 
 	_, err = idxr.Rebuild()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "nothing was deleted")
-	assert.Contains(t, err.Error(), ".vaultmind/index.db")
+	assert.Contains(t, err.Error(), "empty or unwalkable")
+	assert.NotContains(t, err.Error(), "unreadable")
+	assert.Contains(t, err.Error(), dbPath)
+	assert.NotContains(t, err.Error(), ".vaultmind/index.db")
 
 	db, err := index.Open(dbPath)
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
 	var total int
 	require.NoError(t, db.QueryRow("SELECT COUNT(*) FROM notes").Scan(&total))
-	assert.Equal(t, 2, total, "an emptied vault must not wipe the index")
+	assert.Equal(t, 2, total, "a root with nothing under it must not wipe the index")
 }
 
 // TestRebuild_PurgesNewlyExcludedNotes pins that a full rebuild honors a

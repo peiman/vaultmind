@@ -1,22 +1,25 @@
 package index
 
-import "fmt"
+import (
+	"fmt"
 
-// refuseWipeOnEmptyScan stops the orphan sweep when a scan saw no notes but
-// the index already holds some.
+	"github.com/peiman/vaultmind/internal/vault"
+)
+
+// refuseWipeOnEmptyScan stops the orphan sweep when the walk saw nothing and
+// the index already holds notes.
 //
-// A scan of zero files is not evidence the operator deleted the vault. It is
-// also what a symlinked root used to produce (WalkDir does not descend into
-// one) and what an exclude list that matches every note produces. Those are
-// indistinguishable from a vault that really was emptied, and the sweep
-// deleted every row — embeddings included. The index is kept.
+// The decision is scan.SawNothing, not "no indexable files". SawNothing is a
+// root that is not a walkable directory, or a walk that visited no entry
+// under it. That is the symlink wipe (WalkDir does not descend into a
+// symlink root) and a directory that is actually empty. A walk that saw
+// entries and found no notes — README, .trash, episodes, excluded or not —
+// is a vault that was emptied, and the sweep proceeds.
 //
-// There is no override. The previous contract, a rebuild of an emptied vault
-// deleting every note, is the data loss. To drop the index on purpose, delete
-// .vaultmind/index.db and run index again. Deleting some notes while others
-// remain is still a purge: this returns only when the scan found nothing.
-func refuseWipeOnEmptyScan(db *DB, scanned int) error {
-	if scanned > 0 {
+// There is no override. To drop the index on purpose, delete the database
+// this process opened (dbPath, which is index.db_path) and run index again.
+func refuseWipeOnEmptyScan(db *DB, scan vault.ScanResult, dbPath string) error {
+	if !scan.SawNothing() {
 		return nil
 	}
 	var indexed int
@@ -26,5 +29,5 @@ func refuseWipeOnEmptyScan(db *DB, scanned int) error {
 	if indexed == 0 {
 		return nil
 	}
-	return fmt.Errorf("refusing to delete %d indexed note(s): vault scan found no notes, so the vault path looks empty or unreadable; nothing was deleted. If you emptied the vault on purpose, delete .vaultmind/index.db and run vaultmind index again", indexed)
+	return fmt.Errorf("refusing to delete %d indexed note(s): vault root %s looked empty or unwalkable; nothing was deleted. If you emptied the vault on purpose, delete %s and run vaultmind index again", indexed, scan.Root, dbPath)
 }

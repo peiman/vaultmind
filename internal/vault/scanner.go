@@ -3,6 +3,7 @@ package vault
 import (
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"time"
 )
@@ -30,6 +31,29 @@ type ScanResult struct {
 	// followed. Callers are expected to REPORT these, not drop them: from the
 	// outside, a skipped note and a missing note look identical.
 	SkippedSymlinks []string
+
+	// Entries is how many filesystem entries the walk visited under the root.
+	// The root itself is not one of them. Excluded files and directories count:
+	// seeing them is evidence the vault is there. A skipped directory counts
+	// once; the walk does not visit what is inside it.
+	Entries int
+
+	// Root is the path the walk used, after ResolveRoot.
+	Root string
+
+	// Walkable is true when Root is a real directory: it exists, it is not a
+	// symlink (a broken one included), and it is a directory.
+	Walkable bool
+}
+
+// SawNothing is the one answer the wipe guard and doctor share (Principle 7).
+// True when the root is not a directory the walk can enter, or the walk
+// visited nothing under it. A walk that saw entries — a README, .trash,
+// episodes, excluded or not — saw a vault; zero indexable notes is then a
+// real purge. The zero value is SawNothing, so an unset result cannot
+// authorize a wipe.
+func (s ScanResult) SawNothing() bool {
+	return !s.Walkable || s.Entries == 0
 }
 
 // Scan walks the vault directory and returns all .md files,
@@ -49,8 +73,12 @@ func Scan(vaultRoot string, excludes []string) (ScanResult, error) {
 
 	var files []ScannedFile
 	var skippedSymlinks []string
+	var entries int
 
 	err = filepath.WalkDir(absRoot, func(path string, d fs.DirEntry, walkErr error) error {
+		if visitedUnderRoot(absRoot, path) {
+			entries++
+		}
 		if walkErr != nil {
 			return walkErr
 		}
@@ -109,5 +137,27 @@ func Scan(vaultRoot string, excludes []string) (ScanResult, error) {
 		return ScanResult{}, fmt.Errorf("scanning vault %s: %w", absRoot, err)
 	}
 
-	return ScanResult{Files: files, SkippedSymlinks: skippedSymlinks}, nil
+	return ScanResult{
+		Files:           files,
+		SkippedSymlinks: skippedSymlinks,
+		Entries:         entries,
+		Root:            absRoot,
+		Walkable:        rootWalkable(absRoot),
+	}, nil
+}
+
+// visitedUnderRoot reports a walk visit that is not the root itself.
+func visitedUnderRoot(absRoot, path string) bool {
+	rel, err := filepath.Rel(absRoot, path)
+	return err == nil && rel != "."
+}
+
+// rootWalkable reports a directory WalkDir will descend into. A symlink,
+// including a broken one, is not: WalkDir lstats its root and stops.
+func rootWalkable(path string) bool {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return false
+	}
+	return info.Mode()&os.ModeSymlink == 0 && info.IsDir()
 }

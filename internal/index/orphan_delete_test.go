@@ -67,9 +67,8 @@ func TestIncremental_AlreadyGoneOrphanIsNotAnError(t *testing.T) {
 // A delete that fails for a reason other than "already gone" is still a
 // failure the operator has to see.
 //
-// A second note stays on disk. Removing the only note makes the scan empty,
-// and an empty scan with rows in the index is refused before any delete —
-// that is the symlink-wipe guard, not this failure.
+// A second note stays on disk so the walk still visits an entry. A walk that
+// visits nothing is the wipe guard and returns before any delete.
 func TestIncremental_RealOrphanDeleteErrorStillWarns(t *testing.T) {
 	logs := withIndexLog(t)
 	vaultDir, dbPath, notePath := writeSingleNoteVault(t, "doomed.md",

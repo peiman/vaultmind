@@ -25,7 +25,7 @@ func runImport(cmd *cobra.Command, args []string) error {
 	}
 	res, err := importDocs(cmd, args[0])
 	if err != nil {
-		return err
+		return finishImportError(cmd, res, err)
 	}
 	if err := writeImport(cmd, res); err != nil {
 		return err

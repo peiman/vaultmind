@@ -70,9 +70,11 @@ func TestCommands_SymlinkedVaultIndexesAndReads(t *testing.T) {
 	assert.Positive(t, doctor.Result.TotalFiles)
 }
 
-// Emptying the vault and re-indexing must fail, leave the notes in the index,
-// and say how to reset. Exit is the command error, which is non-zero.
-func TestIndex_EmptiedVaultExitsNonZeroWithoutDeleting(t *testing.T) {
+// Deleting the notes and leaving the vault's directories (.vaultmind, and the
+// folders the notes lived in) is a walk that saw entries. Index purges.
+// note get no longer finds the note. A root with nothing under it is the
+// refusal, and the database for that case sits outside the vault.
+func TestIndex_EmptiedVaultPurgesWhenEntriesRemain(t *testing.T) {
 	isolateMeshEnv(t)
 	vault := buildIndexedTestVault(t)
 	require.NoError(t, filepath.WalkDir(vault, func(path string, d fs.DirEntry, err error) error {
@@ -88,12 +90,21 @@ func TestIndex_EmptiedVaultExitsNonZeroWithoutDeleting(t *testing.T) {
 		return nil
 	}))
 
-	_, _, err := runRootCmd(t, "index", "--vault", vault, "--json")
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "nothing was deleted")
-	assert.Contains(t, err.Error(), ".vaultmind/index.db")
+	out, _, err := runRootCmd(t, "index", "--vault", vault, "--json")
+	require.NoError(t, err)
+	var indexed struct {
+		Status string `json:"status"`
+		Result struct {
+			Index struct {
+				Deleted int `json:"deleted"`
+			} `json:"index"`
+		} `json:"result"`
+	}
+	require.NoError(t, json.Unmarshal(out.Bytes(), &indexed))
+	assert.Equal(t, "ok", indexed.Status)
+	assert.Positive(t, indexed.Result.Index.Deleted)
 
 	got, _, err := runRootCmd(t, "note", "get", "concept-alpha", "--vault", vault, "--json")
-	require.NoError(t, err)
-	assert.Contains(t, got.String(), "Alpha Concept")
+	require.Error(t, err)
+	assert.NotContains(t, got.String(), "Alpha Concept")
 }
