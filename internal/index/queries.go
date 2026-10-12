@@ -124,11 +124,14 @@ type FullNote struct {
 	Title       string                 `json:"title"`
 	Frontmatter map[string]interface{} `json:"frontmatter"`
 	Body        string                 `json:"body,omitempty"`
-	Headings    []HeadingRow           `json:"headings,omitempty"`
-	Blocks      []BlockRow             `json:"blocks,omitempty"`
-	IsDomain    bool                   `json:"is_domain_note"`
-	Aliases     []string               `json:"-"`
-	Tags        []string               `json:"-"`
+	// BodyRawUnfilled is true when body_raw IS NULL. An empty string is a
+	// stored empty body; only NULL can still be filled by a re-index.
+	BodyRawUnfilled bool         `json:"-"`
+	Headings        []HeadingRow `json:"headings,omitempty"`
+	Blocks          []BlockRow   `json:"blocks,omitempty"`
+	IsDomain        bool         `json:"is_domain_note"`
+	Aliases         []string     `json:"-"`
+	Tags            []string     `json:"-"`
 }
 
 // HeadingRow represents a heading in query results.
@@ -152,13 +155,14 @@ func (d *DB) QueryFullNote(id string) (*FullNote, error) {
 	var n FullNote
 	var noteType, title, status, created, updated, body sql.NullString
 	var aliasesCSV, tagsCSV sql.NullString
+	var rawUnfilled int
 	err := d.QueryRow(`
-		SELECT n.id, n.type, n.title, n.path, n.status, n.created, n.updated, COALESCE(n.body_raw, n.body_text), n.is_domain,
+		SELECT n.id, n.type, n.title, n.path, n.status, n.created, n.updated, COALESCE(n.body_raw, n.body_text), n.body_raw IS NULL, n.is_domain,
 			(SELECT GROUP_CONCAT(alias, char(31)) FROM aliases WHERE note_id = n.id) AS aliases_csv,
 			(SELECT GROUP_CONCAT(tag, char(31)) FROM tags WHERE note_id = n.id) AS tags_csv
 		FROM notes n
 		WHERE n.id = ?`, id,
-	).Scan(&n.ID, &noteType, &title, &n.Path, &status, &created, &updated, &body, &n.IsDomain,
+	).Scan(&n.ID, &noteType, &title, &n.Path, &status, &created, &updated, &body, &rawUnfilled, &n.IsDomain,
 		&aliasesCSV, &tagsCSV)
 	if err == sql.ErrNoRows {
 		return nil, nil //nolint:nilnil // not found
@@ -170,6 +174,7 @@ func (d *DB) QueryFullNote(id string) (*FullNote, error) {
 	n.Type = noteType.String
 	n.Title = title.String
 	n.Body = body.String
+	n.BodyRawUnfilled = rawUnfilled != 0
 	n.Frontmatter = make(map[string]interface{})
 	if status.Valid && status.String != "" {
 		n.Frontmatter["status"] = status.String

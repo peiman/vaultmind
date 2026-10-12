@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Ask no longer tells you to re-index a note that is already empty. Re-indexing
+  is suggested only when the stored body was never filled (`body_raw` is NULL).
+  An empty body, including a note that is only frontmatter, says the note has
+  no body text.
+
 ## [0.10.10] - 2026-10-12
 
 > Long-document answers reach the agent far more often because excerpts pick the paragraph that matches the question (held-out 7/50 → 20/50), v0.10.9's empty-body regression on vaults not re-indexed is fixed, and doctor reports opened/cited evidence for surfaced notes.

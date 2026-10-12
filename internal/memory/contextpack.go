@@ -62,6 +62,9 @@ type ContextPackTarget struct {
 	// BodyOmittedBudget records a non-empty body excluded by the token budget.
 	// Empty or unavailable bodies must never be described as budget losses.
 	BodyOmittedBudget bool `json:"body_omitted_budget,omitempty"`
+	// BodyRawUnfilled is true when body_raw IS NULL. The ask footer suggests
+	// re-indexing only then; a stored empty body is not unfilled.
+	BodyRawUnfilled bool `json:"-"`
 }
 
 // ContextItem holds context metadata for a single related note.
@@ -84,6 +87,8 @@ type ContextItem struct {
 	// BodyOmittedBudget records a non-empty body excluded by the token budget.
 	// Empty or unavailable bodies must never be described as budget losses.
 	BodyOmittedBudget bool `json:"body_omitted_budget,omitempty"`
+	// BodyRawUnfilled is true when body_raw IS NULL. See ContextPackTarget.
+	BodyRawUnfilled bool `json:"-"`
 }
 
 // ContextPackResult is the full output of a ContextPack operation.
@@ -278,10 +283,11 @@ func packBodyFirst(
 		}
 
 		item := ContextItem{
-			ID:          c.noteID,
-			EdgeType:    c.edgeType,
-			Confidence:  c.confidence,
-			Frontmatter: fm,
+			ID:              c.noteID,
+			EdgeType:        c.edgeType,
+			Confidence:      c.confidence,
+			Frontmatter:     fm,
+			BodyRawUnfilled: noteFull != nil && noteFull.BodyRawUnfilled,
 		}
 		*remaining -= fmTokens
 		result.UsedTokens += fmTokens
@@ -320,10 +326,11 @@ func packTwoPass(
 		}
 
 		result.Context = append(result.Context, ContextItem{
-			ID:          c.noteID,
-			EdgeType:    c.edgeType,
-			Confidence:  c.confidence,
-			Frontmatter: fm,
+			ID:              c.noteID,
+			EdgeType:        c.edgeType,
+			Confidence:      c.confidence,
+			Frontmatter:     fm,
+			BodyRawUnfilled: noteFull != nil && noteFull.BodyRawUnfilled,
 		})
 
 		*remaining -= tokens
@@ -448,8 +455,9 @@ func packTargetContent(full *index.FullNote, budget, excerptTokens int, result *
 	fmTokens := EstimateTokens(string(fmJSON))
 
 	target := &ContextPackTarget{
-		ID:          full.ID,
-		Frontmatter: fm,
+		ID:              full.ID,
+		Frontmatter:     fm,
+		BodyRawUnfilled: full.BodyRawUnfilled,
 	}
 
 	// Always account for frontmatter tokens, even if they exceed the budget.

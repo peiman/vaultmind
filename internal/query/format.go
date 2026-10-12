@@ -352,6 +352,10 @@ type deliveryCounts struct {
 	ShownBefore int
 	// BudgetOmitted counts only bodies the packer actually excluded for room.
 	BudgetOmitted int
+	// Unfilled counts title-only notes whose body_raw is NULL. Re-indexing
+	// can still fill those. Empty counts stored empty bodies, which it cannot.
+	Unfilled int
+	Empty    int
 }
 
 // TitlesOnly counts blocks with no delivered text, excluding session dedup.
@@ -387,6 +391,13 @@ func countDelivery(ctx *memory.ContextPackResult, opts formatOpts) deliveryCount
 				c.Excerpted++
 			}
 		}
+		if ctx.Target.Body == "" && !ctx.Target.ShownBefore && !ctx.Target.BodyOmittedBudget {
+			if ctx.Target.BodyRawUnfilled {
+				c.Unfilled++
+			} else {
+				c.Empty++
+			}
+		}
 	}
 	for _, item := range ctx.Context {
 		c.Notes++
@@ -400,6 +411,13 @@ func countDelivery(ctx *memory.ContextPackResult, opts formatOpts) deliveryCount
 			c.Delivered++
 			if item.BodyExcerpted {
 				c.Excerpted++
+			}
+		}
+		if item.Body == "" && !item.ShownBefore && !item.BodyOmittedBudget {
+			if item.BodyRawUnfilled {
+				c.Unfilled++
+			} else {
+				c.Empty++
 			}
 		}
 	}
@@ -559,10 +577,19 @@ func writeContextFooter(w io.Writer, ctx *memory.ContextPackResult, opts formatO
 	// An excerpted note was not omitted; it carries text. Counting it as omitted
 	// would under-report what arrived, the mirror of the header over-reporting.
 	c := countDelivery(ctx, opts)
-	if missing := c.TitlesOnly() - c.BudgetOmitted; missing > 0 {
+	if c.Unfilled > 0 {
 		if _, err := fmt.Fprintf(w,
 			"\n(%d note%s above: no body content available — re-index with `vaultmind index` to fill it)\n",
-			missing, pluralS(missing)); err != nil {
+			c.Unfilled, pluralS(c.Unfilled)); err != nil {
+			return err
+		}
+	}
+	if c.Empty > 0 {
+		phrase := "notes have no body text"
+		if c.Empty == 1 {
+			phrase = "note has no body text"
+		}
+		if _, err := fmt.Fprintf(w, "\n(%d note%s above: %s)\n", c.Empty, pluralS(c.Empty), phrase); err != nil {
 			return err
 		}
 	}
