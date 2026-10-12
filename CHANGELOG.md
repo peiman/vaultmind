@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- v0.10.9 delivered no note bodies on vaults not re-indexed after upgrading.
+  Delivery now falls back to the stored text, and doctor tells you to re-index
+  to restore each note's text as written.
+
 - Query-aware excerpts retain their governing heading path, including warnings
   and deprecation notices, within the same token cap. Oversized sentences are
   scored before delivery is trimmed, including late keyphrases and unspaced CJK.

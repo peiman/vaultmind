@@ -350,9 +350,11 @@ type deliveryCounts struct {
 	// ShownBefore is the blocks sent as a title because this conversation
 	// already received their text. Not a budget loss, so not in TitlesOnly.
 	ShownBefore int
+	// BudgetOmitted counts only bodies the packer actually excluded for room.
+	BudgetOmitted int
 }
 
-// TitlesOnly is the blocks that rendered a title and no text for lack of room.
+// TitlesOnly counts blocks with no delivered text, excluding session dedup.
 func (c deliveryCounts) TitlesOnly() int { return c.Notes - c.Delivered - c.ShownBefore }
 
 // shownBeforeSuffix follows the title of a note this conversation already has.
@@ -373,6 +375,9 @@ func countDelivery(ctx *memory.ContextPackResult, opts formatOpts) deliveryCount
 	var c deliveryCounts
 	if ctx.Target != nil {
 		c.Notes++
+		if ctx.Target.BodyOmittedBudget && !ctx.Target.ShownBefore && ctx.Target.Body == "" {
+			c.BudgetOmitted++
+		}
 		if ctx.Target.ShownBefore {
 			c.ShownBefore++
 		}
@@ -385,6 +390,9 @@ func countDelivery(ctx *memory.ContextPackResult, opts formatOpts) deliveryCount
 	}
 	for _, item := range ctx.Context {
 		c.Notes++
+		if item.BodyOmittedBudget && !item.ShownBefore && (!item.BodyIncluded || item.Body == "") {
+			c.BudgetOmitted++
+		}
 		if item.ShownBefore {
 			c.ShownBefore++
 		}
@@ -505,14 +513,13 @@ func writeContextItems(w io.Writer, items []memory.ContextItem, opts formatOpts)
 }
 
 // writeContextFooter emits the closing hint — either a budget-truncation
-// note (when bodies were omitted to fit the budget) or the pointers-only
-// menu hint. At most one fires.
+// note, missing-content remedy, or the pointers-only menu hint. A pack can
+// contain both missing bodies and bodies excluded by the budget.
 // writeContextFooter states the cause and the remedy for whatever the header
 // reported missing. The header says WHAT arrived; the footer says why the rest
 // did not and which flag changes it. A gap with no remedy is just bad news.
 //
-// The branches are mutually exclusive and ordered by what the reader can do
-// about them, most actionable first.
+// Pointers-only has its own remedy; body delivery reports each omission cause.
 func writeContextFooter(w io.Writer, ctx *memory.ContextPackResult, opts formatOpts) error {
 	if opts.pointersOnly {
 		// The pack assembled this text and then threw it away. Saying so — with
@@ -551,7 +558,15 @@ func writeContextFooter(w io.Writer, ctx *memory.ContextPackResult, opts formatO
 	}
 	// An excerpted note was not omitted; it carries text. Counting it as omitted
 	// would under-report what arrived, the mirror of the header over-reporting.
-	if omitted := countDelivery(ctx, opts).TitlesOnly(); omitted > 0 {
+	c := countDelivery(ctx, opts)
+	if missing := c.TitlesOnly() - c.BudgetOmitted; missing > 0 {
+		if _, err := fmt.Fprintf(w,
+			"\n(%d note%s above: no body content available — re-index with `vaultmind index` to fill it)\n",
+			missing, pluralS(missing)); err != nil {
+			return err
+		}
+	}
+	if omitted := c.BudgetOmitted; omitted > 0 {
 		_, err := fmt.Fprintf(w,
 			"\n(%d note%s above had no room in the %d-token budget — raise --budget, or lower --excerpt to fit more)\n",
 			omitted, pluralS(omitted), ctx.BudgetTokens)

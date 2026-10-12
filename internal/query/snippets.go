@@ -10,12 +10,14 @@ import (
 )
 
 // populateRawSnippets reads delivery text only after scoring and pagination.
+// NULL raw bodies predate migration 009: use stored search text until indexing
+// backfills them. An intentionally empty raw body must stay empty.
 // body_raw is appended after potentially large ColBERT blobs in SQLite rows;
 // loading it for every scoring candidate would traverse those overflow pages.
 func populateRawSnippets(db *index.DB, results []retrieval.ScoredResult) error {
 	for i := range results {
 		var body string
-		err := db.QueryRow("SELECT COALESCE(body_raw, '') FROM notes WHERE id = ?", results[i].ID).Scan(&body)
+		err := db.QueryRow("SELECT COALESCE(body_raw, body_text, '') FROM notes WHERE id = ?", results[i].ID).Scan(&body)
 		if errors.Is(err, sql.ErrNoRows) {
 			continue // A concurrent index pass removed the note after scoring.
 		}
