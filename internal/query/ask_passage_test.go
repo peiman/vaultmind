@@ -198,6 +198,9 @@ func TestAsk_PassageFirstBlockHeading(t *testing.T) {
 		{"cap", warning + "\n\n", "TLS_VERIFY", warning + "\n\nSet TLS_VERIFY=false.", 19, false},
 		{"long_first_block_cap", warning + "\n\n", "TLS_VERIFY", warning + "\n\nSet TLS_VERIFY=false", 160, false},
 		{"no_prose_room", warning + "\n\n", "TLS_VERIFY", warning, 13, false},
+		{"prose_does_not_fit", warning + "\n\n", "TLS_VERIFY", warning, 14, false},
+		{"heading_exceeds_limit", warning + "\n\n", "TLS_VERIFY", "Set TLS_VERIFY=false.", 11, true},
+		{"wide_token", "", "TLS_VERIFY", strings.Repeat("A", 61) + "…\n\nSet TLS_VERIFY=false.", 160, false},
 		{"oversized_heading", "## Unsafe " + strings.Repeat("warning ", 100) + "\n\n", "TLS_VERIFY", "## Unsafe warning warning warning warning warning warning…\n\nSet TLS_VERIFY=false.", 160, false},
 		{"principle", warning + "\n\n", "TLS_VERIFY", "Keep the decision rule.", 160, true},
 	}
@@ -213,6 +216,11 @@ func TestAsk_PassageFirstBlockHeading(t *testing.T) {
 					"### Middle heading that is also not the nearest\n\n" +
 					"#### Do not use this unsafe production setting locally extra words that run past the cap\n\n" +
 					first + "\n\nUnrelated ending."
+			}
+			if tt.name == "wide_token" {
+				// One token wider than 16, so the cap cuts by rune. The underline
+				// stays short enough that the heading is not itself treated as prose.
+				body = strings.Repeat("A", 65) + "\n" + strings.Repeat("-", 14) + "\n\n" + first + "\n\nUnrelated ending."
 			}
 			if tt.name == "principle" {
 				body += "\n\n## Principle\n\nKeep the decision rule."
@@ -231,20 +239,20 @@ func TestAsk_PassageFirstBlockHeading(t *testing.T) {
 				assert.Contains(t, got, tt.want)
 			}
 			assert.NotContains(t, got, "Passage title", "title is already delivered separately")
-			if tt.name != "warning" && tt.name != "no_query_overlap" && tt.name != "cap" && tt.name != "long_first_block_cap" && tt.name != "no_prose_room" {
+			if tt.name != "warning" && tt.name != "no_query_overlap" && tt.name != "cap" && tt.name != "long_first_block_cap" && tt.name != "no_prose_room" && tt.name != "prose_does_not_fit" {
 				assert.NotContains(t, got, warning)
 			}
 			assert.LessOrEqual(t, strings.Count(got, warning), 1)
 			if tt.name == "nested" {
 				assert.NotContains(t, got, "Unsafe production configuration")
 			}
-			if tt.name == "long_nearest" || tt.name == "oversized_heading" || tt.name == "setext" {
+			if tt.name == "long_nearest" || tt.name == "oversized_heading" || tt.name == "setext" || tt.name == "wide_token" {
 				head, _, _ := strings.Cut(got, "\n\n")
 				assert.LessOrEqual(t, memory.EstimateTokens(head), 16, "nearest heading is capped at 16 tokens")
 				assert.NotContains(t, got, "Ancestor qualification")
 				assert.NotContains(t, got, "Middle heading")
 			}
-			if tt.name == "no_prose_room" {
+			if tt.name == "no_prose_room" || tt.name == "prose_does_not_fit" {
 				assert.NotContains(t, got, "TLS_VERIFY", "the block is trimmed before the heading is")
 			}
 			assert.True(t, utf8.ValidString(got))
