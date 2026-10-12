@@ -25,10 +25,11 @@ func ValidateLive(vaultPath string, reg *schema.Registry) (*ValidateResult, erro
 		return nil, fmt.Errorf("vault path: %w", err)
 	}
 	// The vault the operator named may itself be a link (a "current"
-	// pointer). That is their choice of path, so it is resolved; WalkDir does
-	// not descend into a root that is a link, and would report an empty vault
-	// as clean. The never-follow rule is for links found INSIDE the vault.
-	root, err := filepath.EvalSymlinks(vaultPath)
+	// pointer). ResolveRoot is the same rule Scan and confinement use:
+	// WalkDir does not descend into a root that is a link, and would report
+	// an empty vault as clean. The never-follow rule is for links found
+	// INSIDE the vault.
+	root, err := vault.ResolveRoot(vaultPath)
 	if err != nil {
 		return nil, fmt.Errorf("vault path: %w", err)
 	}

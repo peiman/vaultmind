@@ -48,6 +48,12 @@ type IndexTruth struct {
 	// and counting it as staleness would make every vault holding one
 	// permanently unhealthy. That is how a signal gets ignored, then disabled.
 	Skipped []string `json:"skipped,omitempty"`
+
+	// rootBlocked is the wipe guard's condition while the index still holds
+	// notes: scan.SawNothing. index would refuse to delete those notes, so
+	// doctor must not prescribe it. resolvedRoot is the path the walk used.
+	rootBlocked  bool
+	resolvedRoot string
 }
 
 // OrphanedEntry names an index row whose file is gone from disk.
@@ -150,6 +156,10 @@ func ReconcileIndex(db *index.DB, vaultPath string) (*IndexTruth, error) {
 	indexedPaths, err := reconcileRows(db, vaultPath, onDisk, truth)
 	if err != nil {
 		return nil, err
+	}
+	if scan.SawNothing() && len(indexedPaths) > 0 {
+		truth.rootBlocked = true
+		truth.resolvedRoot = scan.Root
 	}
 
 	// Duplicates first: a file that lost an id contest is also, technically, a

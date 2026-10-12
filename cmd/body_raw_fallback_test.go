@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/index"
+	"github.com/peiman/vaultmind/internal/query"
 	"github.com/peiman/vaultmind/internal/vault"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -99,5 +100,5 @@ func TestBodyRawFallback_CLIDeliveryAndDoctor(t *testing.T) {
 }
 
 func TestBodyRawFallback_DoctorWriterError(t *testing.T) {
-	require.Error(t, writeMissingRawBodies(&failAfterNWriter{ok: 0}, 1))
+	require.Error(t, writeMissingRawBodies(&failAfterNWriter{ok: 0}, &query.DoctorIssues{MissingRawBodies: 1}))
 }

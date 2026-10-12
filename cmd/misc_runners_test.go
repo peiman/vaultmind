@@ -212,7 +212,7 @@ func TestDoctor_SummaryFlagSuppressesLinkDetails(t *testing.T) {
 // ready renders counts, semantic-not-ready renders the remedy line.
 func TestWriteEmbeddingStatus_NilInputIsNoop(t *testing.T) {
 	var buf bytes.Buffer
-	require.NoError(t, writeEmbeddingStatus(&buf, nil))
+	require.NoError(t, writeEmbeddingStatus(&buf, nil, nil))
 	assert.Empty(t, buf.String())
 }
 
@@ -220,7 +220,7 @@ func TestWriteEmbeddingStatus_NotReadyPrintsRemedy(t *testing.T) {
 	var buf bytes.Buffer
 	require.NoError(t, writeEmbeddingStatus(&buf, &query.DoctorEmbeddings{
 		SemanticReady: false, TotalNotes: 12,
-	}))
+	}, nil))
 	out := buf.String()
 	assert.Contains(t, out, "Embeddings: none (12 notes)")
 	assert.Contains(t, out, "vaultmind index --embed")
@@ -245,7 +245,7 @@ func TestWriteEmbeddingStatus_MixedModelSurfacesBreakdown(t *testing.T) {
 			{Model: "bge-m3", Count: 60},
 			{Model: "minilm", Count: 40},
 		},
-	}))
+	}, nil))
 	out := buf.String()
 	assert.Contains(t, out, "mixed-model state:")
 	assert.Contains(t, out, "60 bge-m3")
@@ -265,7 +265,7 @@ func TestWriteEmbeddingStatus_ModalityImbalanceSurfacesRemedy(t *testing.T) {
 		SparseCount:          80,
 		ColBERTCount:         70,
 		HasModalityImbalance: true,
-	}))
+	}, nil))
 	out := buf.String()
 	assert.Contains(t, out, "Partial BGE-M3 coverage")
 	assert.Contains(t, out, "20 note(s) missing sparse")
@@ -286,7 +286,7 @@ func TestWriteEmbeddingStatus_MixedVaultRemedyUsesFullRebuild(t *testing.T) {
 		SparseCount:          40,
 		ColBERTCount:         40,
 		HasModalityImbalance: true,
-	}))
+	}, nil))
 	out := buf.String()
 	assert.Contains(t, out, "Partial BGE-M3 coverage")
 	assert.Contains(t, out, "vaultmind index --full --embed --model bge-m3",
@@ -301,7 +301,7 @@ func TestWriteEmbeddingStatus_MiniLMSurfacesDegradedWarning(t *testing.T) {
 	require.NoError(t, writeEmbeddingStatus(&buf, &query.DoctorEmbeddings{
 		SemanticReady: true, TotalNotes: 50, Model: "minilm",
 		DenseCount: 50, SparseCount: 0, ColBERTCount: 0,
-	}))
+	}, nil))
 	out := buf.String()
 	assert.Contains(t, out, "degraded recall")
 	assert.Contains(t, out, "MiniLM")
@@ -336,7 +336,7 @@ func TestWriteEmbeddingStatus_BGEM3NoDegradedWarning(t *testing.T) {
 	require.NoError(t, writeEmbeddingStatus(&buf, &query.DoctorEmbeddings{
 		SemanticReady: true, TotalNotes: 50, Model: "bge-m3",
 		DenseCount: 50, SparseCount: 50, ColBERTCount: 50,
-	}))
+	}, nil))
 	assert.NotContains(t, buf.String(), "degraded recall")
 }
 
@@ -345,7 +345,7 @@ func TestWriteEmbeddingStatus_ReadyPrintsCounts(t *testing.T) {
 	require.NoError(t, writeEmbeddingStatus(&buf, &query.DoctorEmbeddings{
 		SemanticReady: true, TotalNotes: 10, DenseCount: 10, Model: "bge-m3",
 		SparseCount: 8, ColBERTCount: 9,
-	}))
+	}, nil))
 	out := buf.String()
 	assert.Contains(t, out, "dense 10/10")
 	assert.Contains(t, out, "bge-m3")
@@ -362,7 +362,7 @@ func TestWriteEmbeddingStatus_ImbalancePrintsWarning(t *testing.T) {
 		SemanticReady: true, TotalNotes: 24, DenseCount: 24, Model: "bge-m3",
 		SparseCount: 16, ColBERTCount: 16,
 		HasModalityImbalance: true,
-	}))
+	}, nil))
 	out := buf.String()
 	assert.Contains(t, out, "Partial BGE-M3 coverage", "must name the failure mode")
 	assert.Contains(t, out, "8 note(s) missing sparse", "must report the exact deficit")
@@ -384,7 +384,7 @@ func TestWriteEmbeddingStatus_MixedStateSurfacesBreakdown(t *testing.T) {
 			{Model: "bge-m3", Count: 31},
 		},
 		HasModalityImbalance: true,
-	}))
+	}, nil))
 	out := buf.String()
 	assert.Contains(t, out, "(mixed)", "summary line must name the model as mixed")
 	assert.Contains(t, out, "mixed-model state:", "breakdown line must appear")
@@ -400,7 +400,7 @@ func TestWriteEmbeddingStatus_FullCoverageSilent(t *testing.T) {
 		SemanticReady: true, TotalNotes: 10, DenseCount: 10, Model: "bge-m3",
 		SparseCount: 10, ColBERTCount: 10,
 		HasModalityImbalance: false,
-	}))
+	}, nil))
 	assert.NotContains(t, buf.String(), "Partial BGE-M3 coverage")
 }
 

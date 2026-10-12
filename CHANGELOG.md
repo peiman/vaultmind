@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `vaultmind index --vault` on a symlink to the vault scanned no files
+  (`filepath.WalkDir` does not descend into a symlink root) and then deleted
+  every indexed note as an orphan. The vault path is resolved once, when its
+  final element is a symlink, before the walk and before the confinement
+  check. `ask`, `search`, `doctor` and `note get` share that resolution:
+  doctor and index walk through `Scan`, and all four open the vault through
+  `ResolveInside`. Index refuses to delete notes only when that resolved root
+  is not a walkable directory (missing, not a directory, or a broken symlink)
+  or the walk visited nothing under it — no files and no subdirectories,
+  excluded or not. The error names the resolved root and the index database
+  that was opened (`index.db_path`); the reset is to delete that file and run
+  `vaultmind index` again. A vault that still has entries, including a
+  default exclude such as `README.md`, `.trash`, or `episodes`, is an emptied
+  vault and is purged. Replacing an in-vault folder with a symlink makes its
+  notes orphans, which are purged, because in-vault symlinks are never followed.
+  `vaultmind doctor` does not prescribe `vaultmind index`
+  when that command would refuse. `vaultmind import` exits non-zero with the
+  re-index error when its index step fails.
 - **Indexing a note that is already gone is not a failure.** `vaultmind index`
   warned `failed to delete orphaned note … sql: no rows in result set` and
   listed the file as skipped when the row had already been removed, which a

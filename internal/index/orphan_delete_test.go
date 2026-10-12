@@ -66,10 +66,15 @@ func TestIncremental_AlreadyGoneOrphanIsNotAnError(t *testing.T) {
 
 // A delete that fails for a reason other than "already gone" is still a
 // failure the operator has to see.
+//
+// A second note stays on disk so the walk still visits an entry. A walk that
+// visits nothing is the wipe guard and returns before any delete.
 func TestIncremental_RealOrphanDeleteErrorStillWarns(t *testing.T) {
 	logs := withIndexLog(t)
 	vaultDir, dbPath, notePath := writeSingleNoteVault(t, "doomed.md",
 		"---\nid: doomed\ntype: concept\ntitle: Doomed\ncreated: 2026-08-16\n---\nBody")
+	require.NoError(t, os.WriteFile(filepath.Join(vaultDir, "keep.md"), []byte(
+		"---\nid: kept\ntype: concept\ntitle: Kept\ncreated: 2026-08-16\n---\nStays"), 0o600))
 	cfg, err := vault.LoadConfig(vaultDir)
 	require.NoError(t, err)
 	idxr := index.NewIndexer(vaultDir, dbPath, cfg)
