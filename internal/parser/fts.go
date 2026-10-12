@@ -23,6 +23,17 @@ var (
 	reFTSMultiNewline     = regexp.MustCompile(`\n{3,}`)
 )
 
+// Shared by ordinary indexing and offset-preserving passage normalization.
+var ftsRewrites = []struct {
+	re          *regexp.Regexp
+	replacement string
+}{
+	{reFTSEmbed, ""}, {reFTSWikilinkAliased, "$1"}, {reFTSWikilink, "$1"}, {reFTSMarkdownLink, "$1"},
+	{reFTSHeading, ""}, {reFTSHRule, ""}, {reFTSBlockIDLine, ""}, {reFTSHTML, ""},
+	{reFTSInlineCode, "$1"}, {reFTSBoldItalic, ""}, {reFTSItalicStar, "$1"}, {reFTSItalicUnderscore, "$1"},
+	{reFTSBlockquote, ""}, {reFTSMultiSpace, " "}, {reFTSMultiNewline, "\n\n"},
+}
+
 // StripForFTS converts Markdown body text to plain text for full-text search indexing.
 func StripForFTS(body string) string {
 	if body == "" {
@@ -30,21 +41,9 @@ func StripForFTS(body string) string {
 	}
 
 	body = removeFencedCodeBlocks(body)
-	body = reFTSEmbed.ReplaceAllString(body, "")
-	body = reFTSWikilinkAliased.ReplaceAllString(body, "$1")
-	body = reFTSWikilink.ReplaceAllString(body, "$1")
-	body = reFTSMarkdownLink.ReplaceAllString(body, "$1")
-	body = reFTSHeading.ReplaceAllString(body, "")
-	body = reFTSHRule.ReplaceAllString(body, "")
-	body = reFTSBlockIDLine.ReplaceAllString(body, "")
-	body = reFTSHTML.ReplaceAllString(body, "")
-	body = reFTSInlineCode.ReplaceAllString(body, "$1")
-	body = reFTSBoldItalic.ReplaceAllString(body, "")
-	body = reFTSItalicStar.ReplaceAllString(body, "$1")
-	body = reFTSItalicUnderscore.ReplaceAllString(body, "$1")
-	body = reFTSBlockquote.ReplaceAllString(body, "")
-	body = reFTSMultiSpace.ReplaceAllString(body, " ")
-	body = reFTSMultiNewline.ReplaceAllString(body, "\n\n")
+	for _, rule := range ftsRewrites {
+		body = rule.re.ReplaceAllString(body, rule.replacement)
+	}
 
 	return strings.TrimSpace(body)
 }

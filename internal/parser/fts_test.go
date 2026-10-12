@@ -107,3 +107,16 @@ func TestStripForFTS_RealVaultNoteBody(t *testing.T) {
 	assert.NotContains(t, result, "**")
 	assert.NotContains(t, result, "#")
 }
+
+func TestStripForFTSOffsets(t *testing.T) {
+	for _, body := range []string{"", "ordinary", " \n\t", "Before\n```go\nignored\n```\nAfter", "~~~\nignored\n~~~", "# Heading\n\n![[embed]] [[destination|alias]] [[page]] [label](url) <em>text</em> `code` **bold** _italic_ *star* ~~strike~~\n> quote ^block\n---\n\n\n tail\t space"} {
+		text, offsets := parser.StripForFTSOffsets(body)
+		assert.Equal(t, parser.StripForFTS(body), text)
+		assert.Len(t, offsets, len(text))
+		for i, at := range offsets {
+			if text[i] != ' ' {
+				assert.Equal(t, body[at], text[i], "source mapping at %d", i)
+			}
+		}
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/peiman/vaultmind/internal/graph"
 	"github.com/peiman/vaultmind/internal/index"
@@ -35,6 +36,13 @@ func TestAsk_PassageDelivery(t *testing.T) {
 		{"raw_identifier", passageParagraph("intro", 74) + "\n\nSet `text_factory` to bytes for raw results. " + strings.Repeat("padding ", 65), "text_factory", "`text_factory`"},
 		{"unicode_keyword_normalization", passageParagraph("intro", 74) + "\n\n" + passageParagraph("CAFÉ NODE_TIMEOUT", 72), "cafe node_timeout", "CAFÉ NODE_TIMEOUT"},
 		{"long_sentence_cap", passageParagraph("intro", 74) + "\n\nThe beta answer " + strings.Repeat("padding ", 150) + "ends.", "beta", "The beta answer"},
+		{"warning_heading", passageParagraph("intro", 74) + "\n\n## Unsafe production configuration (do not use)\n\n- Disable certificate validation with TLS_VERIFY=false.", "TLS_VERIFY", "## Unsafe production configuration (do not use)"},
+		{"late_keyphrase", passageParagraph("intro", 74) + "\n\n" + strings.Repeat("background ", 120) + "Set WAL_RECOVERY=immutable to recover the database.", "WAL_RECOVERY", "WAL_RECOVERY=immutable"},
+		{"unspaced_cjk", passageParagraph("intro", 74) + "\n\n" + strings.Repeat("背景", 180) + "検索は重要である。", "検索", "検索は重要である。"},
+		{"setext_warning", passageParagraph("intro", 74) + "\n\nUnsafe (do not use)\n-------------------\n\nSet TLS_VERIFY=false.", "TLS_VERIFY", "Unsafe (do not use)\n-------------------"},
+		{"nested_warning", passageParagraph("intro", 74) + "\n\n## Deprecated (do not use)\n\n### Configuration\n\nSet TLS_VERIFY=false.", "TLS_VERIFY", "### Configuration\n## Deprecated (do not use)"},
+		{"heading_consumes_cap", passageParagraph("intro", 74) + "\n\n## Unsafe production configuration (do not use)\n\nSet TLS_VERIFY=false. " + strings.Repeat("padding ", 90), "TLS_VERIFY", "## Unsafe production configuration (do not use)"},
+		{"oversized_heading", passageParagraph("intro", 74) + "\n\n## Unsafe " + strings.Repeat("warning ", 100) + "\n\nSet TLS_VERIFY=false.", "TLS_VERIFY", passageParagraph("intro", 74)},
 		{"no_overlap", first + "\n\n" + passageParagraph("beta", 74), "absent", first},
 		{"headings_and_fences", "# Overview\n\n" + passageParagraph("intro", 74) + "\n\n```python\nbeta gamma code.\n```\n\n# Answer\n\n" + passageParagraph("beta gamma", 73), "beta gamma", "beta gamma padding"},
 		{"fenced_body_fallback", "```python\nbeta gamma code.\n```", "beta gamma", "```python\nbeta gamma code.\n```"},
@@ -51,6 +59,7 @@ func TestAsk_PassageDelivery(t *testing.T) {
 			require.NotNil(t, result.Context)
 			require.NotNil(t, result.Context.Target)
 			assert.Contains(t, result.Context.Target.Body, tt.want)
+			assert.True(t, utf8.ValidString(result.Context.Target.Body))
 			assert.LessOrEqual(t, memory.EstimateTokens(result.Context.Target.Body), 160)
 			assert.LessOrEqual(t, result.Context.UsedTokens, result.Context.BudgetTokens)
 			var out bytes.Buffer
@@ -130,4 +139,40 @@ func TestAsk_PassageFailureKeepsPackedExcerpt(t *testing.T) {
 	var out bytes.Buffer
 	require.NoError(t, query.FormatAsk(result, &out))
 	assert.Contains(t, out.String(), baseline.Target.Body)
+}
+
+func TestAsk_PassagePointersEqualMain(t *testing.T) {
+	body := passageParagraph("intro", 74) + "\n\n## Unsafe production configuration (do not use)\n\n- Disable certificate validation with TLS_VERIFY=false."
+	db := passageDB(t, body)
+	resolver := graph.NewResolver(db)
+	baseline, err := memory.ContextPack(resolver, db, memory.ContextPackConfig{Input: "target", Budget: 1500, Depth: 1, MaxItems: 3, Slim: true, ExcerptTokens: 160})
+	require.NoError(t, err)
+	retriever := &stubRetriever{results: []retrieval.ScoredResult{{ID: "target", Score: 1}}}
+	for _, jsonOutput := range []bool{false, true} {
+		result, err := query.Ask(context.Background(), retriever, resolver, db, query.AskConfig{Query: "TLS_VERIFY", Budget: 1500, MaxItems: 3, SearchLimit: 5, ExcerptTokens: 160, PointersOnly: true, JSONOutput: jsonOutput})
+		require.NoError(t, err)
+		if jsonOutput {
+			assert.Contains(t, result.Context.Target.Body, "TLS_VERIFY=false")
+			continue
+		}
+		assert.Equal(t, baseline, result.Context)
+		var actual, expected bytes.Buffer
+		require.NoError(t, query.FormatAskPointersOnly(result, &actual))
+		main := *result
+		main.Context = baseline
+		require.NoError(t, query.FormatAskPointersOnly(&main, &expected))
+		assert.Equal(t, expected.String(), actual.String(), "includes assembled-and-withheld token count")
+	}
+}
+
+func TestAsk_PassageFirstBlockUnchanged(t *testing.T) {
+	first := "Opening context. " + strings.Repeat("background ", 70) + " Set WAL_RECOVERY=immutable to recover the database."
+	db := passageDB(t, first+"\n\nUnrelated ending.")
+	resolver := graph.NewResolver(db)
+	baseline, err := memory.ContextPack(resolver, db, memory.ContextPackConfig{Input: "target", Budget: 1500, Depth: 1, MaxItems: 3, Slim: true, ExcerptTokens: 160})
+	require.NoError(t, err)
+	retriever := &stubRetriever{results: []retrieval.ScoredResult{{ID: "target", Score: 1}}}
+	result, err := query.Ask(context.Background(), retriever, resolver, db, query.AskConfig{Query: "WAL_RECOVERY", Budget: 1500, MaxItems: 3, SearchLimit: 5, ExcerptTokens: 160})
+	require.NoError(t, err)
+	assert.Equal(t, baseline, result.Context)
 }
