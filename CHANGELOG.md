@@ -22,7 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that was opened (`index.db_path`); the reset is to delete that file and run
   `vaultmind index` again. A vault that still has entries, including a
   default exclude such as `README.md`, `.trash`, or `episodes`, is an emptied
-  vault and is purged. `vaultmind doctor` does not prescribe `vaultmind index`
+  vault and is purged. Replacing an in-vault folder with a symlink makes its
+  notes orphans, which are purged, because in-vault symlinks are never followed.
+  `vaultmind doctor` does not prescribe `vaultmind index`
   when that command would refuse. `vaultmind import` exits non-zero with the
   re-index error when its index step fails.
 - **Indexing a note that is already gone is not a failure.** `vaultmind index`

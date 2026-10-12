@@ -38,12 +38,41 @@ const embeddingBackendsDocURL = "https://github.com/peiman/vaultmind/blob/main/d
 // consistent instruction.
 const staleIndexRemedy = "vaultmind index --vault <vault>"
 
+// indexRefused is scan.SawNothing while the index still holds rows
+// (DoctorIssues.IndexRootBlocked — Principle 7, one predicate). Every
+// `vaultmind index` prescription in this report goes through it. The
+// reconciliation section names the empty or unwalkable root, once; a
+// refused command is not printed again.
+func indexRefused(issues *query.DoctorIssues) bool {
+	return issues != nil && issues.IndexRootBlocked
+}
+
+// indexCommand is a `vaultmind index` prescription, or empty when that
+// command would refuse. Callers print their finding without a command
+// when this is empty, so the root is named once, under reconciliation.
+func indexCommand(issues *query.DoctorIssues, command string) string {
+	if indexRefused(issues) {
+		return ""
+	}
+	return command
+}
+
+// omitRefusedIndexCommand drops a remedy whose only action is `vaultmind
+// index` (the ORT MiniLM line). A remedy that does not name that command,
+// such as the pure-Go download path, stays.
+func omitRefusedIndexCommand(issues *query.DoctorIssues, text string) string {
+	if indexRefused(issues) && strings.Contains(text, "vaultmind index") {
+		return ""
+	}
+	return text
+}
+
 // indexRemedy is the instruction under an index finding. When a re-index
 // would refuse — the root looked empty or unwalkable — say that, and do not
 // prescribe the command that fails. otherwise is the full line used when
 // index would run, "run:" included, so that text stays unchanged.
 func indexRemedy(issues *query.DoctorIssues, otherwise string) string {
-	if issues.IndexRootBlocked {
+	if indexRefused(issues) {
 		return "the vault path looks empty or unwalkable (" + issues.ResolvedRoot + ")"
 	}
 	return otherwise
@@ -86,8 +115,9 @@ func init() {
 // remedy explicitly so users don't have to read ask's zero-hit hint to
 // discover it. When BGE-M3 coverage is imbalanced (some notes missing sparse
 // or colbert), a warning line surfaces the failure mode that silently
-// compresses hybrid RRF ranking.
-func writeEmbeddingStatus(w io.Writer, emb *query.DoctorEmbeddings) error {
+// compresses hybrid RRF ranking. issues carries the blocked-root gate; nil
+// (section tests) means index would run.
+func writeEmbeddingStatus(w io.Writer, emb *query.DoctorEmbeddings, issues *query.DoctorIssues) error {
 	if emb == nil {
 		return nil
 	}
@@ -96,12 +126,14 @@ func writeEmbeddingStatus(w io.Writer, emb *query.DoctorEmbeddings) error {
 		// (bge-m3 on ORT, minilm on pure-Go). Naming bge-m3 here would be
 		// refused on the pure-Go binary `go install` yields. The bge-m3-specific
 		// remedy below (modality imbalance) is reachable only on an ORT binary —
-		// the minilm branch returns before it.
-		_, err := fmt.Fprintf(w,
-			"Embeddings: none (%d notes) — keyword-only retrieval\n"+
-				"  run: vaultmind index --embed --vault <vault>\n",
-			emb.TotalNotes)
-		return err
+		// the minilm branch returns before it. A blocked root skips the command;
+		// reconciliation names the root once.
+		if _, err := fmt.Fprintf(w,
+			"Embeddings: none (%d notes) — keyword-only retrieval\n",
+			emb.TotalNotes); err != nil {
+			return err
+		}
+		return writeRunLine(w, indexCommand(issues, "vaultmind index --embed --vault <vault>"))
 	}
 	if _, err := fmt.Fprintf(w,
 		"Embeddings: dense %d/%d (%s), sparse %d/%d, colbert %d/%d\n",
@@ -124,11 +156,7 @@ func writeEmbeddingStatus(w io.Writer, emb *query.DoctorEmbeddings) error {
 		// can land here without ever being told their recall is degraded
 		// (focalc field report, P1). Name the cliff at the moment it matters,
 		// with a remedy tuned to the binary on PATH (minilmRemedy).
-		_, err := fmt.Fprintf(w,
-			"⚠ degraded recall: this vault is indexed with MiniLM — dense-only "+
-				"(2 lanes: full-text + dense). %s\n",
-			minilmRemedy(embedding.BackendName()))
-		return err
+		return writeMiniLMWarning(w, issues)
 	}
 	if emb.Model == "mixed" && len(emb.MixedModel) > 0 {
 		// Surface the per-model breakdown explicitly. Without this, the
@@ -150,18 +178,43 @@ func writeEmbeddingStatus(w io.Writer, emb *query.DoctorEmbeddings) error {
 		// cannot — the index-time dimension guard refuses an incremental model
 		// switch — so it needs a --full purge + re-embed. (A pure-minilm vault
 		// never reaches here; it gets the degraded-recall WARN above instead.)
-		embedCmd := "vaultmind index --embed --model bge-m3 --vault <vault>"
-		if emb.Model != embedding.ModelBGEM3 {
-			embedCmd = "vaultmind index --full --embed --model bge-m3 --vault <vault>"
-		}
-		_, err := fmt.Fprintf(w,
-			"⚠ Partial BGE-M3 coverage: %d note(s) missing sparse, %d missing colbert — "+
-				"hybrid RRF ranking will be compressed for these notes.\n"+
-				"  run: %s\n",
-			emb.DenseCount-emb.SparseCount, emb.DenseCount-emb.ColBERTCount, embedCmd)
-		return err
+		return writeModalityImbalance(w, emb, issues)
 	}
 	return nil
+}
+
+func writeMiniLMWarning(w io.Writer, issues *query.DoctorIssues) error {
+	remedy := omitRefusedIndexCommand(issues, minilmRemedy(doctorBackend()))
+	line := "⚠ degraded recall: this vault is indexed with MiniLM — dense-only (2 lanes: full-text + dense)."
+	if remedy != "" {
+		line += " " + remedy
+	}
+	_, err := fmt.Fprintln(w, line)
+	return err
+}
+
+func writeModalityImbalance(w io.Writer, emb *query.DoctorEmbeddings, issues *query.DoctorIssues) error {
+	embedCmd := "vaultmind index --embed --model bge-m3 --vault <vault>"
+	if emb.Model != embedding.ModelBGEM3 {
+		embedCmd = "vaultmind index --full --embed --model bge-m3 --vault <vault>"
+	}
+	if _, err := fmt.Fprintf(w,
+		"⚠ Partial BGE-M3 coverage: %d note(s) missing sparse, %d missing colbert — "+
+			"hybrid RRF ranking will be compressed for these notes.\n",
+		emb.DenseCount-emb.SparseCount, emb.DenseCount-emb.ColBERTCount); err != nil {
+		return err
+	}
+	return writeRunLine(w, indexCommand(issues, embedCmd))
+}
+
+// writeRunLine prints a "run:" prescription. An empty command means index
+// would refuse, and the line is omitted so the root is named once elsewhere.
+func writeRunLine(w io.Writer, command string) error {
+	if command == "" {
+		return nil
+	}
+	_, err := fmt.Fprintf(w, "  run: %s\n", command)
+	return err
 }
 
 func runDoctor(cmd *cobra.Command, _ []string) error {
@@ -377,7 +430,7 @@ func writeDoctorHuman(w io.Writer, result *query.DoctorResult, summaryOnly bool)
 	if err := writeTypeBreakdown(w, result.Types); err != nil {
 		return err
 	}
-	if err := writeEmbeddingStatus(w, result.Embeddings); err != nil {
+	if err := writeEmbeddingStatus(w, result.Embeddings, &result.Issues); err != nil {
 		return err
 	}
 	if err := writeLinkIssues(w, &result.Issues, summaryOnly); err != nil {
@@ -403,7 +456,7 @@ func writeDoctorHuman(w io.Writer, result *query.DoctorResult, summaryOnly bool)
 	if err := writeIndexReconciliation(w, &result.Issues, summaryOnly); err != nil {
 		return err
 	}
-	if err := writeMissingRawBodies(w, result.Issues.MissingRawBodies); err != nil {
+	if err := writeMissingRawBodies(w, &result.Issues); err != nil {
 		return err
 	}
 	if err := writeStaleIndex(w, &result.Issues, summaryOnly); err != nil {
@@ -881,7 +934,8 @@ const embeddingRuntimeDownFmt = "⚠ semantic search is DOWN: the embedding runt
 	"library path — replace it with the one from the release archive.\n"
 
 // doctorBackend is embedding.BackendName, swappable in tests: they run on the
-// pure-Go build, where the runtime check is (correctly) skipped.
+// pure-Go build, where the runtime check is (correctly) skipped. The MiniLM
+// remedy reads it too, so a test can stand in for an ORT binary.
 var doctorBackend = embedding.BackendName
 
 // checkEmbeddingRuntime is embedding.CheckRuntime, swappable in tests.
@@ -912,10 +966,15 @@ func annotateEmbeddingRuntime(ctx context.Context, emb *query.DoctorEmbeddings, 
 }
 
 // writeMissingRawBodies points upgraded vaults at the existing incremental backfill.
-func writeMissingRawBodies(w io.Writer, count int) error {
-	if count == 0 {
+// A blocked root keeps the count and does not prescribe the command index refuses.
+func writeMissingRawBodies(w io.Writer, issues *query.DoctorIssues) error {
+	if issues == nil || issues.MissingRawBodies == 0 {
 		return nil
 	}
-	_, err := fmt.Fprintf(w, "  ⚠ %d notes have no stored body as written — run vaultmind index\n", count)
+	line := fmt.Sprintf("  ⚠ %d notes have no stored body as written", issues.MissingRawBodies)
+	if cmd := indexCommand(issues, "vaultmind index"); cmd != "" {
+		line += " — run " + cmd
+	}
+	_, err := fmt.Fprintln(w, line)
 	return err
 }
