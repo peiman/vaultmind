@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.12] - 2026-10-12
+
+> An excerpt now keeps the heading that governs it (so a "do not use" warning isn't lost), and passage headings read top-down without repeating the note title.
+
 ### Fixed
 
 - A selected later passage prints its governing headings top-down, in document
@@ -2939,7 +2943,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.11...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.12...HEAD
+[0.10.12]: https://github.com/peiman/vaultmind/compare/v0.10.11...v0.10.12
 [0.10.11]: https://github.com/peiman/vaultmind/compare/v0.10.10...v0.10.11
 [0.10.10]: https://github.com/peiman/vaultmind/compare/v0.10.9...v0.10.10
 [0.10.9]: https://github.com/peiman/vaultmind/compare/v0.10.8...v0.10.9
