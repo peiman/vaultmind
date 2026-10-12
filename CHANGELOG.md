@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.10] - 2026-10-12
+
+> Long-document answers reach the agent far more often because excerpts pick the paragraph that matches the question (held-out 7/50 → 20/50), v0.10.9's empty-body regression on vaults not re-indexed is fixed, and doctor reports opened/cited evidence for surfaced notes.
+
 ### Added
 
 - Doctor reports opened/cited evidence for surfaced notes. Episode capture checks
@@ -2884,7 +2888,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.9...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.10...HEAD
+[0.10.10]: https://github.com/peiman/vaultmind/compare/v0.10.9...v0.10.10
 [0.10.9]: https://github.com/peiman/vaultmind/compare/v0.10.8...v0.10.9
 [0.10.8]: https://github.com/peiman/vaultmind/compare/v0.10.7...v0.10.8
 [0.10.7]: https://github.com/peiman/vaultmind/compare/v0.10.6...v0.10.7
