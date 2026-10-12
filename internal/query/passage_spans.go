@@ -28,18 +28,20 @@ var passageHeading = regexp.MustCompile(`^#{1,6}[ \t]+`)
 var passageSetext = regexp.MustCompile(`^[=-]+$`)
 var passageBlank = regexp.MustCompile(`\n\s*\n`)
 
-// Sections never cross a heading or a code fence. Preserve all governing
-// headings, nearest first: a parent warning can qualify a neutral subsection.
-func passageUnits(body string) []passageUnit {
+// Sections never cross a heading or a code fence. Preserve every governing
+// heading, top-down, so a parent warning still qualifies a subsection. An H1
+// that repeats the note title is left out: the title is already shown.
+func passageUnits(body, title string) []passageUnit {
 	var units []passageUnit
 	var headings []string
 	at, start, section, fenced := 0, 0, 0, false
 	heading := func() string {
 		var path []string
-		for i := len(headings) - 1; i >= 0; i-- {
-			if headings[i] != "" {
-				path = append(path, headings[i])
+		for level, label := range headings {
+			if label == "" || (level == 0 && h1RepeatsTitle(label, title)) {
+				continue
 			}
+			path = append(path, label)
 		}
 		return strings.Join(path, "\n")
 	}
@@ -116,8 +118,8 @@ func passageUnits(body string) []passageUnit {
 	return units
 }
 
-func passageWindows(body string, limit int, tokens []passageToken, terms []string) []passageWindow {
-	units := passageUnits(body)
+func passageWindows(body, title string, limit int, tokens []passageToken, terms []string) []passageWindow {
+	units := passageUnits(body, title)
 	var out []passageWindow
 	end := 0
 	for i, u := range units {

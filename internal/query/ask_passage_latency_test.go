@@ -51,7 +51,7 @@ func TestPassageSelectionLatency(t *testing.T) {
 			for i := 0; i < passageLatencySamples; i++ {
 				started := time.Now()
 				cpu := processCPU(t)
-				result, err = selectPassage(db, "WAL_RECOVERY", body, today, 160)
+				result, err = selectPassage(db, "WAL_RECOVERY", body, today, 160, "")
 				cpu = processCPU(t) - cpu
 				wall := time.Since(started)
 				require.NoError(t, err)

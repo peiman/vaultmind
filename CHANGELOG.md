@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A selected later passage prints its governing headings top-down, in document
+  order, and leaves out an H1 that repeats the note title. The title is
+  already on the note. The printed path is what counts toward the excerpt cap.
+  A kept first block still prefixes only its nearest heading.
 - A kept first-block excerpt now prefixes only the nearest governing heading,
   capped at 16 tokens, so a warning such as "do not use" is not lost. The
   block is trimmed to fit the excerpt; the heading is not. A block directly

@@ -29,7 +29,7 @@ func TestPassageWindowsSmallCaps(t *testing.T) {
 	tokenStart := strings.Index(body, "背景")
 	tokens := []passageToken{{term: body[tokenStart : len(body)-3], start: tokenStart, end: len(body) - 3}}
 	for limit := 1; limit <= 160; limit++ {
-		for _, w := range passageWindows(body, limit, tokens, []string{"検索"}) {
+		for _, w := range passageWindows(body, "", limit, tokens, []string{"検索"}) {
 			text := w.deliver(body, tokens, []string{"検索"})
 			assert.True(t, utf8.ValidString(text))
 			assert.LessOrEqual(t, len(text), limit*4)
