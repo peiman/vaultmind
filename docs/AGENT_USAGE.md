@@ -68,8 +68,9 @@ For `ask`'s target note without a Principle section, a passage matching the ques
 replaces the first block only when it scores at least twice as highly; a positive match
 wins when the first block scores zero. Context-note excerpts keep their existing behavior,
 and every excerpt stays within the same token cap. A selected later passage includes
-its governing headings, nearest first, so warnings and deprecation notices travel with
-the answer. Headings count toward the cap; the passage is shortened to fit. Oversized
+its governing headings in document order, so warnings and deprecation notices travel with
+the answer. An H1 that repeats the note title is left out; the title is already shown.
+Headings count toward the cap; the passage is shortened to fit. Oversized
 sentences are scored throughout before the winning span is trimmed for delivery.
 Text `--pointers-only` skips passage selection; JSON still delivers selected bodies.
 

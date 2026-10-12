@@ -21,7 +21,7 @@ func passageMarginWins(best, first, ratio float64) bool {
 // selectPassage normalizes and tokenizes the body once. SQLite supplies the
 // keyword lane's actual unicode61 folding for each distinct token; windows reuse that
 // token stream and corpus frequencies without indexing individual windows.
-func selectPassage(db *index.DB, query, raw, today string, limit int) (passageResult, error) {
+func selectPassage(db *index.DB, query, raw, today string, limit int, title string) (passageResult, error) {
 	result := passageResult{Text: today}
 	text, offsets := parser.StripForFTSOffsets(raw)
 	bounds := passageTokenBounds(text)
@@ -37,7 +37,7 @@ func selectPassage(db *index.DB, query, raw, today string, limit int) (passageRe
 	for i, b := range bounds {
 		tokens[i] = passageToken{term: lex.body[ordinals[i]], start: offsets[b[0]], end: offsets[b[1]-1] + 1}
 	}
-	cs := passageWindows(raw, limit, tokens, lex.terms)
+	cs := passageWindows(raw, title, limit, tokens, lex.terms)
 	if len(cs) == 0 {
 		return result, nil
 	}
@@ -143,13 +143,13 @@ func applyPassageExcerpt(db *index.DB, cfg AskConfig, pack *memory.ContextPackRe
 	if limit <= 0 {
 		return nil
 	}
-	selected, err := selectPassage(db, cfg.Query, raw, target.Body, limit)
+	title, _ := target.Frontmatter["title"].(string)
+	selected, err := selectPassage(db, cfg.Query, raw, target.Body, limit, title)
 	if err != nil {
 		return err
 	}
 	best := selected.Text
 	if best == target.Body {
-		title, _ := target.Frontmatter["title"].(string)
 		best = firstBlockHeadingExcerpt(raw, best, title, limit)
 	}
 	pack.UsedTokens += memory.EstimateTokens(best) - memory.EstimateTokens(target.Body)
@@ -174,7 +174,7 @@ func firstBlockHeadingExcerpt(raw, today string, title string, limit int) string
 	if first == "" || start < 0 {
 		return today
 	}
-	for _, unit := range passageUnits(raw) {
+	for _, unit := range passageUnits(raw, title) {
 		if unit.start <= start && start < unit.end {
 			heading := nearestGoverningHeading(unit.heading, title)
 			if heading == "" {
@@ -190,23 +190,60 @@ func firstBlockHeadingExcerpt(raw, today string, title string, limit int) string
 	return today
 }
 
-// nearestGoverningHeading returns the closest heading in a nearest-first
-// path, including a setext underline. The title is already delivered as
-// metadata, and parent headings are not part of this prefix.
+// nearestGoverningHeading returns the closest heading in a top-down path,
+// including a setext underline. The title is already delivered as metadata,
+// and parent headings are not part of this prefix.
 func nearestGoverningHeading(path, title string) string {
 	if path == "" {
 		return ""
 	}
 	lines := strings.Split(path, "\n")
-	n := 1
-	if len(lines) > 1 && passageSetext.MatchString(lines[1]) {
-		n = 2
+	start := len(lines) - 1
+	if start > 0 && passageSetext.MatchString(lines[start]) {
+		start--
 	}
-	label := strings.TrimSpace(strings.TrimLeft(lines[0], "#"))
+	label := strings.TrimSpace(strings.TrimLeft(lines[start], "#"))
 	if label == "" || label == title {
 		return ""
 	}
-	return strings.Join(lines[:n], "\n")
+	return strings.Join(lines[start:], "\n")
+}
+
+// h1RepeatsTitle reports whether a level-1 heading is the note title. The
+// title is already shown on the note. A setext underline, a closing hash run,
+// case, and runs of spaces do not make it a different title.
+func h1RepeatsTitle(label, title string) bool {
+	if strings.TrimSpace(title) == "" {
+		return false
+	}
+	return sameTitle(headingPlain(label), title)
+}
+
+// headingPlain is one stored heading's visible text: no ATX marker, no
+// closing hash run, and no setext underline.
+func headingPlain(label string) string {
+	line, _, _ := strings.Cut(label, "\n")
+	text := strings.TrimSpace(strings.TrimLeft(line, "#"))
+	if i := strings.LastIndex(text, " "); i >= 0 {
+		tail := strings.TrimSpace(text[i+1:])
+		if tail != "" && strings.Trim(tail, "#") == "" {
+			text = strings.TrimSpace(text[:i])
+		}
+	}
+	return text
+}
+
+func sameTitle(a, b string) bool {
+	af, bf := strings.Fields(a), strings.Fields(b)
+	if len(af) != len(bf) || len(af) == 0 {
+		return false
+	}
+	for i := range af {
+		if !strings.EqualFold(af[i], bf[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // capHeadingTokens cuts a heading at a word boundary and marks the cut.
