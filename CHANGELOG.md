@@ -27,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - v0.10.9 delivered no note bodies on vaults not re-indexed after upgrading.
   Delivery now falls back to the stored text, and doctor tells you to re-index
   to restore each note's text as written.
+- Use evidence keeps retrievals beyond a captured transcript unknown and lets
+  fuller captures correct turn attribution and false citations. Doctor respects
+  captured turn boundaries before applying its 30-minute read fallback.
+- SessionEnd evidence recording has a two-second deadline. Timed-out captures
+  commit no partial evidence and episode capture continues.
 
 - Query-aware excerpts retain their governing heading path, including warnings
   and deprecation notices, within the same token cap. Oversized sentences are

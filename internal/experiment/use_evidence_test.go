@@ -3,6 +3,7 @@ package experiment_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -38,12 +39,18 @@ func evidenceStates(t *testing.T, db *experiment.DB) map[string]string {
 	for rows.Next() {
 		var raw string
 		require.NoError(t, rows.Scan(&raw))
-		var data map[string]string
+		var data struct {
+			TurnID          string `json:"turn_id"`
+			SurfacedEventID string `json:"surfaced_event_id"`
+			UserSessionID   string `json:"user_session_id"`
+			NoteID          string `json:"note_id"`
+			Evidence        string `json:"evidence"`
+		}
 		require.NoError(t, json.Unmarshal([]byte(raw), &data))
-		require.Equal(t, "turn-one", data["turn_id"])
-		require.NotEmpty(t, data["surfaced_event_id"])
-		require.Equal(t, "evidence-session", data["user_session_id"])
-		out[data["note_id"]] = data["evidence"]
+		require.Equal(t, "turn-one", data.TurnID)
+		require.NotEmpty(t, data.SurfacedEventID)
+		require.Equal(t, "evidence-session", data.UserSessionID)
+		out[data.NoteID] = data.Evidence
 	}
 	require.NoError(t, rows.Err())
 	return out
@@ -184,4 +191,94 @@ func TestUseEvidence_CitationAnywhereInTheSameTurnIsEvidence(t *testing.T) {
 	evidenceEvent(t, db, sid, experiment.EventAsk, "/vault", at, experiment.BuildAskEventData(experiment.AskEventParams{RetrievalMode: "hybrid", TopHits: []experiment.RetrievalHit{{NoteID: "note-tool"}}}))
 	require.NoError(t, db.RecordUseEvidence("testdata/use-evidence/turns.jsonl"))
 	assert.Equal(t, "cited", evidenceStates(t, db)["note-tool"], "same-turn ID evidence does not claim the injection caused it")
+}
+
+// Exercise both capture orders and correction of evidence written before this fix.
+func TestUseEvidence_StaleTailAndReattribution(t *testing.T) {
+	for _, legacy := range []bool{false, true} {
+		t.Run(fmt.Sprintf("legacy=%t", legacy), func(t *testing.T) {
+			db := openTestExpDB(t)
+			at := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
+			sid := evidenceSession(t, db, "correction-session", "vaultmind-reach-hook", "/vault")
+			data := experiment.BuildAskEventData(experiment.AskEventParams{RetrievalMode: "keyword", TopHits: []experiment.RetrievalHit{{NoteID: "note-id"}}})
+			first := evidenceEvent(t, db, sid, experiment.EventAsk, "/vault", at.Add(time.Second), data)
+			second := evidenceEvent(t, db, sid, experiment.EventAsk, "/vault", at.Add(3*time.Second), data)
+			stale := writeEvidenceTurns(t, at, false)
+			full := writeEvidenceTurns(t, at, true)
+			require.NoError(t, db.RecordUseEvidence(stale))
+			assertAppearanceEvidence(t, db, first, "cited", "one")
+			if legacy {
+				// Simulate the erroneous final-turn attribution from the previous implementation.
+				_, err := db.Exec(`UPDATE events SET event_data=json_remove(json_set(event_data,'$.evidence','cited','$.turn_id','one'),'$.capture_through_ns') WHERE event_type='use_evidence' AND json_extract(event_data,'$.surfaced_event_id')=?`, second)
+				require.NoError(t, err)
+			} else {
+				assertAppearanceEvidence(t, db, second, "unknown", "")
+			}
+			require.NoError(t, db.RecordUseEvidence(full))
+			assertAppearanceEvidence(t, db, first, "cited", "one")
+			assertAppearanceEvidence(t, db, second, "unknown", "two")
+			require.NoError(t, db.RecordUseEvidence(stale))
+			assertAppearanceEvidence(t, db, second, "unknown", "two")
+		})
+	}
+}
+
+func writeEvidenceTurns(t *testing.T, at time.Time, full bool) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "turns.jsonl")
+	raw := fmt.Sprintf(`{"type":"user","sessionId":"correction-session","uuid":"one","timestamp":%q,"message":{"content":"First prompt"}}
+{"type":"assistant","sessionId":"correction-session","timestamp":%q,"message":{"content":"note-id"}}
+`, at.Format(time.RFC3339Nano), at.Add(2*time.Second).Format(time.RFC3339Nano))
+	if full {
+		raw += fmt.Sprintf(`{"type":"user","sessionId":"correction-session","uuid":"two","timestamp":%q,"message":{"content":"Second prompt"}}
+{"type":"assistant","sessionId":"correction-session","timestamp":%q,"message":{"content":"No citation"}}
+`, at.Add(4*time.Second).Format(time.RFC3339Nano), at.Add(5*time.Second).Format(time.RFC3339Nano))
+	}
+	require.NoError(t, os.WriteFile(path, []byte(raw), 0o600))
+	return path
+}
+
+func assertAppearanceEvidence(t *testing.T, db *experiment.DB, event, state, turn string) {
+	t.Helper()
+	var gotState, gotTurn string
+	require.NoError(t, db.QueryRow(`SELECT json_extract(event_data,'$.evidence'),json_extract(event_data,'$.turn_id') FROM events WHERE event_type='use_evidence' AND json_extract(event_data,'$.surfaced_event_id')=?`, event).Scan(&gotState, &gotTurn))
+	assert.Equal(t, state, gotState)
+	assert.Equal(t, turn, gotTurn)
+}
+
+func TestMemoryUse_MappedUnknownWinsOverNextTurnRead(t *testing.T) {
+	db := openTestExpDB(t)
+	at := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
+	sid := evidenceSession(t, db, "correction-session", "vaultmind-reach-hook", "/vault")
+	surface := evidenceEvent(t, db, sid, experiment.EventAsk, "/vault", at.Add(time.Second), experiment.BuildAskEventData(experiment.AskEventParams{RetrievalMode: "keyword", TopHits: []experiment.RetrievalHit{{NoteID: "not-cited"}}}))
+	readSID := evidenceSession(t, db, "correction-session", "cli", "/vault")
+	evidenceEvent(t, db, readSID, experiment.EventNoteAccess, "/vault", at.Add(5*time.Second), map[string]any{"note_id": "not-cited", "source": experiment.AccessSourceRead})
+	require.NoError(t, db.RecordUseEvidence(writeEvidenceTurns(t, at, true)))
+	assertAppearanceEvidence(t, db, surface, "unknown", "one")
+	use, err := db.MemoryUseSince(7)
+	require.NoError(t, err)
+	assert.Equal(t, 0, use.Opened)
+	assert.Equal(t, 1, use.Unknown)
+	require.Len(t, use.PerCaller, 1)
+	assert.Equal(t, 0, use.PerCaller[0].Opened)
+	assert.Equal(t, 1, use.PerCaller[0].Unknown)
+	assert.Equal(t, 1, use.Consumed, "legacy consumed contract is unchanged")
+}
+
+func TestUseEvidence_EqualTimestampPartialRecapture(t *testing.T) {
+	db := openTestExpDB(t)
+	at := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
+	sid := evidenceSession(t, db, "correction-session", "vaultmind-reach-hook", "/vault")
+	event := evidenceEvent(t, db, sid, experiment.EventAsk, "/vault", at, experiment.BuildAskEventData(experiment.AskEventParams{RetrievalMode: "keyword", TopHits: []experiment.RetrievalHit{{NoteID: "note-id"}}}))
+	stale := filepath.Join(t.TempDir(), "stale.jsonl")
+	full := filepath.Join(t.TempDir(), "full.jsonl")
+	prompt := fmt.Sprintf(`{"type":"user","sessionId":"correction-session","uuid":"one","timestamp":%q,"message":{"content":"Prompt"}}
+`, at.Format(time.RFC3339Nano))
+	reply := fmt.Sprintf(`{"type":"assistant","sessionId":"correction-session","timestamp":%q,"message":{"content":"note-id"}}
+`, at.Format(time.RFC3339Nano))
+	require.NoError(t, os.WriteFile(stale, []byte(prompt), 0o600))
+	require.NoError(t, os.WriteFile(full, []byte(prompt+reply), 0o600))
+	require.NoError(t, db.RecordUseEvidence(full))
+	require.NoError(t, db.RecordUseEvidence(stale))
+	assertAppearanceEvidence(t, db, event, "cited", "one")
 }

@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"os"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/experiment"
@@ -95,4 +98,37 @@ func TestCollectMemoryUse_EvidenceFields(t *testing.T) {
 	assert.Equal(t, 0, use.Unknown)
 	require.Len(t, use.PerCaller, 1)
 	assert.Equal(t, 1, use.PerCaller[0].Cited)
+}
+
+func TestEpisodeCapture_EvidenceDeadlineDoesNotBlockCapture(t *testing.T) {
+	db, err := experiment.OpenMemory()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	sid, err := db.StartSessionWithCaller("/vault", "vaultmind-reach-hook", map[string]any{experiment.MetaUserSessionID: "evidence-session"})
+	require.NoError(t, err)
+	// Occupy the only connection so evidence must wait until its deadline.
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	defer func() { _ = tx.Rollback() }()
+	cmd := episodeCaptureCmd
+	for _, name := range []string{"output-dir", "cursor-dir", "incremental"} {
+		value := cmd.Flags().Lookup(name).Value.String()
+		t.Cleanup(func() { require.NoError(t, cmd.Flags().Set(name, value)) })
+	}
+	oldContext := cmd.Context()
+	t.Cleanup(func() { cmd.SetContext(oldContext); cmd.SetOut(nil) })
+	cmd.SetContext(experiment.WithSession(context.Background(), &experiment.Session{DB: db, ID: sid}))
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	require.NoError(t, cmd.Flags().Set("output-dir", t.TempDir()))
+	require.NoError(t, cmd.Flags().Set("incremental", "false"))
+	started := time.Now()
+	require.NoError(t, cmd.RunE(cmd, []string{"../internal/experiment/testdata/use-evidence/turns.jsonl"}))
+	assert.Less(t, time.Since(started), 3*time.Second, "evidence has a two-second budget")
+	_, err = os.Stat(strings.TrimSpace(out.String()))
+	require.NoError(t, err, "episode is still written on evidence timeout")
+	require.NoError(t, tx.Rollback())
+	var count int
+	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM events WHERE event_type='use_evidence'`).Scan(&count))
+	assert.Zero(t, count)
 }

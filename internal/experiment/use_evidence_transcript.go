@@ -2,8 +2,10 @@ package experiment
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -19,6 +21,8 @@ type evidenceTurn struct {
 type evidenceTranscript struct {
 	session string
 	turns   []evidenceTurn
+	through time.Time
+	records int
 }
 
 type evidenceRecord struct {
@@ -42,10 +46,10 @@ type evidenceBlock struct {
 	Input json.RawMessage `json:"input"`
 }
 
-// readEvidenceTranscript deliberately allowlists assistant text and tool inputs.
+// readEvidenceTranscriptContext deliberately allowlists assistant text and tool inputs.
 // Attachments, hook_success/additionalContext, user/tool-result records and
 // thinking are never searched, even when they echo an entire recall block.
-func readEvidenceTranscript(path string) (*evidenceTranscript, error) {
+func readEvidenceTranscriptContext(ctx context.Context, path string) (*evidenceTranscript, error) {
 	// #nosec G304 -- explicitly supplied local transcript, read-only.
 	// nosemgrep: go-path-traversal -- operator/hook supplies the transcript path to a local CLI; same trust boundary as episode.ParseTranscript.
 	f, err := os.Open(path)
@@ -53,11 +57,34 @@ func readEvidenceTranscript(path string) (*evidenceTranscript, error) {
 		return nil, fmt.Errorf("open evidence transcript: %w", err)
 	}
 	defer func() { _ = f.Close() }()
+	stop := context.AfterFunc(ctx, func() { _ = f.Close() })
+	defer stop()
+	return parseEvidenceTranscript(ctx, f)
+}
+
+// evidenceReader checks cancellation between scanner reads, including ignored
+// or malformed records. The file is also closed on cancellation to unblock I/O.
+type evidenceReader struct {
+	ctx    context.Context
+	reader io.Reader
+}
+
+func (r evidenceReader) Read(p []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.reader.Read(p)
+}
+
+func parseEvidenceTranscript(ctx context.Context, reader io.Reader) (*evidenceTranscript, error) {
 	out := &evidenceTranscript{}
-	scanner := bufio.NewScanner(f)
+	scanner := bufio.NewScanner(evidenceReader{ctx: ctx, reader: reader})
 	scanner.Buffer(make([]byte, 1<<20), 1<<24)
 	line := 0
 	for scanner.Scan() {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		line++
 		var r evidenceRecord
 		if json.Unmarshal(scanner.Bytes(), &r) != nil {
@@ -76,6 +103,9 @@ func readEvidenceTranscript(path string) (*evidenceTranscript, error) {
 		if err != nil {
 			continue
 		}
+		if at.After(out.through) {
+			out.through = at
+		}
 		if r.Type == "user" && isEvidencePrompt(r.Message.Content) {
 			if len(out.turns) > 0 {
 				out.turns[len(out.turns)-1].next = at
@@ -93,8 +123,12 @@ func readEvidenceTranscript(path string) (*evidenceTranscript, error) {
 		turn.last = at
 		turn.texts = append(turn.texts, assistantEvidenceText(r.Message.Content)...)
 	}
+	out.records = line
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("read evidence transcript: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	if out.session == "" {
 		return nil, fmt.Errorf("evidence transcript has no Claude Code session id")

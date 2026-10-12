@@ -107,7 +107,8 @@ const memoryUseCTEs = `
  evidence AS MATERIALIZED (
   SELECT json_extract(event_data,'$.surfaced_event_id') AS surfaced_event_id,
    json_extract(event_data,'$.note_id') AS note_id,
-   json_extract(event_data,'$.evidence') AS state
+   json_extract(event_data,'$.evidence') AS state,
+   json_extract(event_data,'$.turn_id') AS turn_id
   FROM events WHERE event_type='use_evidence'
  ),
  win AS (SELECT ? AS modifier),
@@ -115,11 +116,11 @@ const memoryUseCTEs = `
   SELECT inj.*,
    EXISTS (SELECT 1 FROM acc a WHERE a.note_id=inj.note_id
     AND datetime(a.t) BETWEEN datetime(inj.t) AND datetime(inj.t, (SELECT modifier FROM win))) AS consumed,
-   (COALESCE(ev.state='opened',0) OR EXISTS (
+   (COALESCE(ev.state='opened',0) OR (COALESCE(ev.turn_id,'')='' AND EXISTS (
     SELECT 1 FROM acc a WHERE a.note_id=inj.note_id AND a.vault_path=inj.vault_path
      AND a.user_session_id=inj.user_session_id
      AND datetime(a.t) BETWEEN datetime(inj.t) AND datetime(inj.t, (SELECT modifier FROM win))
-   )) AS opened,
+   ))) AS opened,
    COALESCE(ev.state='cited',0) AS cited
   FROM inj LEFT JOIN evidence ev ON ev.surfaced_event_id=inj.event_id AND ev.note_id=inj.note_id
  )`
