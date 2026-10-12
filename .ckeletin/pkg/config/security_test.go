@@ -3,12 +3,15 @@
 package config
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/testutil"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -85,6 +88,73 @@ func TestValidateConfigFilePermissions(t *testing.T) {
 			}
 		})
 	}
+}
+
+// capturePermLog records what ValidateConfigFilePermissions emits at level.
+// Not parallel: it replaces the process logger, and sibling tests in this
+// file call t.Parallel. Run it via -run so those siblings are not started.
+func capturePermLog(t *testing.T, level zerolog.Level) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	old := log.Logger
+	log.Logger = zerolog.New(&buf).Level(level)
+	t.Cleanup(func() { log.Logger = old })
+	return &buf
+}
+
+func writePermConfig(t *testing.T, perm os.FileMode) string {
+	t.Helper()
+	testutil.SkipOnWindowsWithReason(t, "permission tests require Unix file permissions")
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(path, []byte("test: value\n"), perm))
+	require.NoError(t, os.Chmod(path, perm))
+	return path
+}
+
+// A normal 0644 config is not a problem the user must fix. The note about it
+// is diagnostic, so the default Info level — what every command runs at —
+// must not print it. v0.10.8 was quiet here.
+func TestConfigPermissions_RoutineNoteIsQuietAtInfo(t *testing.T) {
+	logs := capturePermLog(t, zerolog.InfoLevel)
+	path := writePermConfig(t, 0o644)
+	require.NoError(t, ValidateConfigFilePermissions(path))
+	assert.NotContains(t, logs.String(), "permissive permissions")
+	assert.NotContains(t, logs.String(), "recommend tightening")
+}
+
+// The same note stays available when debug logging is on. Moving it must not
+// delete the diagnostic.
+func TestConfigPermissions_RoutineNoteRemainsAtDebug(t *testing.T) {
+	logs := capturePermLog(t, zerolog.DebugLevel)
+	path := writePermConfig(t, 0o644)
+	require.NoError(t, ValidateConfigFilePermissions(path))
+	assert.Contains(t, logs.String(), "permissive permissions")
+	assert.Contains(t, logs.String(), `"level":"debug"`)
+	assert.NotContains(t, logs.String(), `"level":"info"`)
+}
+
+// Group-writable is a real problem. It stays a warning at the default level,
+// and the routine "recommend tightening" note does not ride along with it.
+func TestConfigPermissions_GroupWritableStaysAWarning(t *testing.T) {
+	logs := capturePermLog(t, zerolog.InfoLevel)
+	path := writePermConfig(t, 0o620)
+	require.NoError(t, ValidateConfigFilePermissions(path))
+	assert.Contains(t, logs.String(), "group-writable")
+	assert.Contains(t, logs.String(), `"level":"warn"`)
+	assert.NotContains(t, logs.String(), "recommend tightening")
+}
+
+// World-writable is a problem the user must fix before the command continues.
+// It stays an error that says so, not a routine permissions note.
+func TestConfigPermissions_WorldWritableStaysAnError(t *testing.T) {
+	logs := capturePermLog(t, zerolog.InfoLevel)
+	path := writePermConfig(t, 0o666)
+	err := ValidateConfigFilePermissions(path)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "world-writable")
+	assert.Contains(t, err.Error(), "Security Issue")
+	assert.Contains(t, err.Error(), "How to fix")
+	assert.NotContains(t, logs.String(), "permissive permissions")
 }
 
 func TestValidateConfigFilePermissions_NonexistentFile(t *testing.T) {
