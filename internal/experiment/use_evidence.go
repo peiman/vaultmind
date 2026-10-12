@@ -98,22 +98,34 @@ func (d *DB) recordUseEvidence(ctx context.Context, transcriptPath string) error
 				break
 			}
 		}
-		data, err := json.Marshal(map[string]any{"capture_through_ns": transcript.through.UnixNano(), "capture_records": transcript.records, "note_id": s.note, "evidence": state, "surfaced_event_id": s.event, "turn_id": turnID, "user_session_id": transcript.session})
+		data, err := json.Marshal(map[string]any{"capture_through_ns": transcript.through.UnixNano(), "capture_records": transcript.records, "turn_until_ns": until.UnixNano(), "note_id": s.note, "evidence": state, "surfaced_event_id": s.event, "turn_id": turnID, "user_session_id": transcript.session})
 		if err != nil {
 			return fmt.Errorf("marshal use evidence: %w", err)
 		}
 		id := fmt.Sprintf("use-%x", sha256.Sum256([]byte(s.event+"\x00"+s.note)))
-		// Timestamp and record count order captures, including equal-timestamp tails.
+		// Complete record count orders captures; timestamp breaks ties strictly.
 		// Fuller captures may retract a false cite; older captures cannot erase it.
 		_, err = tx.ExecContext(ctx, `INSERT INTO events (event_id,session_id,event_type,timestamp,vault_path,event_data)
    VALUES (?,?,?,?,?,?) ON CONFLICT(event_id) DO UPDATE SET event_data=excluded.event_data
-   WHERE COALESCE(json_extract(excluded.event_data,'$.capture_through_ns'),0)
-    > COALESCE(json_extract(events.event_data,'$.capture_through_ns'),0)
-    OR (json_extract(excluded.event_data,'$.capture_through_ns')=json_extract(events.event_data,'$.capture_through_ns')
-     AND json_extract(excluded.event_data,'$.capture_records')>=COALESCE(json_extract(events.event_data,'$.capture_records'),0))`,
+   WHERE json_extract(excluded.event_data,'$.capture_records')>COALESCE(json_extract(events.event_data,'$.capture_records'),0)
+    OR (json_extract(excluded.event_data,'$.capture_records')=json_extract(events.event_data,'$.capture_records')
+     AND json_extract(excluded.event_data,'$.capture_through_ns')>COALESCE(json_extract(events.event_data,'$.capture_through_ns'),0))`,
 			id, s.session, EventUseEvidence, time.Now().UTC().Format(time.RFC3339), s.vault, string(data))
 		if err != nil {
 			return fmt.Errorf("record use evidence: %w", err)
+		}
+		// New read telemetry can promote evidence independently of transcript
+		// replacement. Validate against the stored capture's turn boundary so a
+		// stale transcript cannot lend a next-turn read to this appearance.
+		for _, r := range reads {
+			if r.vault != s.vault || r.note != s.note || r.at.Before(s.at) {
+				continue
+			}
+			_, err = tx.ExecContext(ctx, `UPDATE events SET event_data=json_set(event_data,'$.evidence','opened')
+ WHERE event_id=? AND ?<json_extract(event_data,'$.turn_until_ns')`, id, r.at.UnixNano())
+			if err != nil {
+				return fmt.Errorf("record opened evidence: %w", err)
+			}
 		}
 	}
 	if err := tx.Commit(); err != nil {

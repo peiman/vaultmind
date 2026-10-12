@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -281,4 +282,130 @@ func TestUseEvidence_EqualTimestampPartialRecapture(t *testing.T) {
 	require.NoError(t, db.RecordUseEvidence(full))
 	require.NoError(t, db.RecordUseEvidence(stale))
 	assertAppearanceEvidence(t, db, event, "cited", "one")
+}
+
+func TestUseEvidence_IncompleteEqualTimestampTailPreservesCitation(t *testing.T) {
+	db := openTestExpDB(t)
+	at := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
+	sid := evidenceSession(t, db, "correction-session", "vaultmind-reach-hook", "/vault")
+	event := evidenceEvent(t, db, sid, experiment.EventAsk, "/vault", at, experiment.BuildAskEventData(experiment.AskEventParams{RetrievalMode: "keyword", TopHits: []experiment.RetrievalHit{{NoteID: "note-id"}}}))
+	prompt := fmt.Sprintf(`{"type":"user","sessionId":"correction-session","uuid":"one","timestamp":%q,"message":{"content":"Prompt"}}
+`, at.Format(time.RFC3339Nano))
+	reply := fmt.Sprintf(`{"type":"assistant","sessionId":"correction-session","timestamp":%q,"message":{"content":"note-id"}}`, at.Format(time.RFC3339Nano))
+	path := filepath.Join(t.TempDir(), "transcript.jsonl")
+	require.NoError(t, os.WriteFile(path, []byte(prompt+reply), 0o600))
+	require.NoError(t, db.RecordUseEvidence(path))
+	assertAppearanceEvidence(t, db, event, "cited", "one")
+
+	require.NoError(t, os.WriteFile(path, []byte(prompt+reply[:len(reply)-5]), 0o600))
+	require.NoError(t, db.RecordUseEvidence(path))
+	assertAppearanceEvidence(t, db, event, "cited", "one")
+}
+
+func TestUseEvidence_EqualWatermarkDoesNotReplaceCitation(t *testing.T) {
+	db := openTestExpDB(t)
+	at := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
+	sid := evidenceSession(t, db, "correction-session", "vaultmind-reach-hook", "/vault")
+	event := evidenceEvent(t, db, sid, experiment.EventAsk, "/vault", at, experiment.BuildAskEventData(experiment.AskEventParams{RetrievalMode: "keyword", TopHits: []experiment.RetrievalHit{{NoteID: "note-id"}}}))
+	path := filepath.Join(t.TempDir(), "transcript.jsonl")
+	for _, text := range []string{"note-id", "No citation"} {
+		raw := fmt.Sprintf(`{"type":"user","sessionId":"correction-session","uuid":"one","timestamp":%q,"message":{"content":"Prompt"}}
+{"type":"assistant","sessionId":"correction-session","timestamp":%q,"message":{"content":%q}}
+`, at.Format(time.RFC3339Nano), at.Format(time.RFC3339Nano), text)
+		require.NoError(t, os.WriteFile(path, []byte(raw), 0o600))
+		require.NoError(t, db.RecordUseEvidence(path))
+		assertAppearanceEvidence(t, db, event, "cited", "one")
+	}
+}
+
+func TestUseEvidence_StrictlyMoreCompleteWatermark(t *testing.T) {
+	for _, tc := range []struct {
+		name                string
+		replyLag            time.Duration
+		initialExtra, extra string
+		want                string
+	}{
+		{"more records with earlier timestamp", time.Second, "", "{}\n", "unknown"},
+		{"same records with later timestamp", 3 * time.Second, "", "", "unknown"},
+		{"same records with earlier timestamp", time.Second, "", "", "cited"},
+		{"fewer records with later timestamp", 3 * time.Second, "{}\n", "", "cited"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := openTestExpDB(t)
+			at := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
+			sid := evidenceSession(t, db, "correction-session", "vaultmind-reach-hook", "/vault")
+			event := evidenceEvent(t, db, sid, experiment.EventAsk, "/vault", at, experiment.BuildAskEventData(experiment.AskEventParams{RetrievalMode: "keyword", TopHits: []experiment.RetrievalHit{{NoteID: "note-id"}}}))
+			prompt := fmt.Sprintf(`{"type":"user","sessionId":"correction-session","uuid":"one","timestamp":%q,"message":{"content":"Prompt"}}
+`, at.Format(time.RFC3339Nano))
+			reply := func(lag time.Duration, text string) string {
+				return fmt.Sprintf(`{"type":"assistant","sessionId":"correction-session","timestamp":%q,"message":{"content":%q}}
+`, at.Add(lag).Format(time.RFC3339Nano), text)
+			}
+			initial := prompt + reply(2*time.Second, "note-id") + tc.initialExtra
+			path := filepath.Join(t.TempDir(), "transcript.jsonl")
+			require.NoError(t, os.WriteFile(path, []byte(initial), 0o600))
+			require.NoError(t, db.RecordUseEvidence(path))
+			assertAppearanceEvidence(t, db, event, "cited", "one")
+			require.NoError(t, os.WriteFile(path, []byte(prompt+reply(tc.replyLag, "No citation")+tc.extra), 0o600))
+			require.NoError(t, db.RecordUseEvidence(path))
+			assertAppearanceEvidence(t, db, event, tc.want, "one")
+		})
+	}
+}
+
+func TestUseEvidence_ConcurrentIncompleteAndCompleteCaptures(t *testing.T) {
+	db := openTestExpDB(t)
+	at := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
+	sid := evidenceSession(t, db, "correction-session", "vaultmind-reach-hook", "/vault")
+	event := evidenceEvent(t, db, sid, experiment.EventAsk, "/vault", at, experiment.BuildAskEventData(experiment.AskEventParams{RetrievalMode: "keyword", TopHits: []experiment.RetrievalHit{{NoteID: "note-id"}}}))
+	prompt := fmt.Sprintf(`{"type":"user","sessionId":"correction-session","uuid":"one","timestamp":%q,"message":{"content":"Prompt"}}
+`, at.Format(time.RFC3339Nano))
+	reply := fmt.Sprintf(`{"type":"assistant","sessionId":"correction-session","timestamp":%q,"message":{"content":"note-id"}}`, at.Format(time.RFC3339Nano))
+	full := filepath.Join(t.TempDir(), "full.jsonl")
+	stale := filepath.Join(t.TempDir(), "stale.jsonl")
+	require.NoError(t, os.WriteFile(full, []byte(prompt+reply), 0o600))
+	require.NoError(t, os.WriteFile(stale, []byte(prompt+reply[:len(reply)-5]), 0o600))
+	errors := make(chan error, 20)
+	var captures sync.WaitGroup
+	for i := 0; i < cap(errors); i++ {
+		path := full
+		if i%2 == 0 {
+			path = stale
+		}
+		captures.Add(1)
+		go func() {
+			defer captures.Done()
+			errors <- db.RecordUseEvidence(path)
+		}()
+	}
+	captures.Wait()
+	close(errors)
+	require.Len(t, errors, 20, "every concurrent capture must report a result")
+	for err := range errors {
+		require.NoError(t, err)
+	}
+	assertAppearanceEvidence(t, db, event, "cited", "one")
+}
+
+func TestUseEvidence_LateReadUsesStoredBoundaryAfterStaleCapture(t *testing.T) {
+	db := openTestExpDB(t)
+	at := time.Now().UTC().Add(-time.Hour).Truncate(time.Second)
+	sid := evidenceSession(t, db, "correction-session", "vaultmind-reach-hook", "/vault")
+	event := evidenceEvent(t, db, sid, experiment.EventAsk, "/vault", at.Add(time.Second), experiment.BuildAskEventData(experiment.AskEventParams{RetrievalMode: "keyword", TopHits: []experiment.RetrievalHit{{NoteID: "not-cited"}}}))
+	full := writeEvidenceTurns(t, at, true)
+	require.NoError(t, db.RecordUseEvidence(full))
+	assertAppearanceEvidence(t, db, event, "unknown", "one")
+	readSID := evidenceSession(t, db, "correction-session", "cli", "/vault")
+	evidenceEvent(t, db, readSID, experiment.EventNoteAccess, "/vault", at.Add(5*time.Second), map[string]any{"note_id": "not-cited", "source": experiment.AccessSourceRead})
+	// Fewer records, but a later timestamp gives the stale capture a wider
+	// apparent turn. The persisted full capture ended this turn at +4s.
+	stale := filepath.Join(t.TempDir(), "stale.jsonl")
+	raw := fmt.Sprintf(`{"type":"user","sessionId":"correction-session","uuid":"one","timestamp":%q,"message":{"content":"First prompt"}}
+{"type":"assistant","sessionId":"correction-session","timestamp":%q,"message":{"content":"No citation"}}
+`, at.Format(time.RFC3339Nano), at.Add(6*time.Second).Format(time.RFC3339Nano))
+	require.NoError(t, os.WriteFile(stale, []byte(raw), 0o600))
+	require.NoError(t, db.RecordUseEvidence(stale))
+	assertAppearanceEvidence(t, db, event, "unknown", "one")
+	require.NoError(t, db.RecordUseEvidence(full))
+	assertAppearanceEvidence(t, db, event, "unknown", "one")
 }

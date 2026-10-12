@@ -84,6 +84,7 @@ func TestEvidenceTranscript_PartialTailAndMissingTimestamps(t *testing.T) {
 	transcript, err := readEvidenceTranscriptContext(context.Background(), path)
 	require.NoError(t, err)
 	require.Len(t, transcript.turns, 1)
+	assert.Equal(t, 4, transcript.records, "only completely parsed records count toward the watermark")
 	assert.Equal(t, "line-1", transcript.turns[0].id)
 	require.Len(t, transcript.turns[0].texts, 1)
 	assert.Equal(t, "note-id", transcript.turns[0].texts[0])

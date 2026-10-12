@@ -90,6 +90,7 @@ func parseEvidenceTranscript(ctx context.Context, reader io.Reader) (*evidenceTr
 		if json.Unmarshal(scanner.Bytes(), &r) != nil {
 			continue
 		} // partial tail can be retried next capture
+		out.records++
 		if r.IsSidechain || r.AgentID != "" || r.IsMeta || r.IsCompactSummary || r.Session == "" {
 			continue
 		}
@@ -123,7 +124,6 @@ func parseEvidenceTranscript(ctx context.Context, reader io.Reader) (*evidenceTr
 		turn.last = at
 		turn.texts = append(turn.texts, assistantEvidenceText(r.Message.Content)...)
 	}
-	out.records = line
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("read evidence transcript: %w", err)
 	}

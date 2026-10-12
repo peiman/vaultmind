@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - v0.10.9 delivered no note bodies on vaults not re-indexed after upgrading.
   Delivery now falls back to the stored text, and doctor tells you to re-index
   to restore each note's text as written.
+- Incomplete transcript tails cannot erase citation evidence. Capture watermarks
+  count completely parsed records and replacement requires a strictly fuller
+  capture; late reads still upgrade evidence within the stored turn boundary.
 - Use evidence keeps retrievals beyond a captured transcript unknown and lets
   fuller captures correct turn attribution and false citations. Doctor respects
   captured turn boundaries before applying its 30-minute read fallback.
