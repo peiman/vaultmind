@@ -87,10 +87,13 @@ type DoctorMemoryUse struct {
 	WindowDays      int `json:"window_days"`
 	Injections      int `json:"injections"`
 	BodiesDelivered int `json:"bodies_delivered"`
-	Consumed        int `json:"consumed"`
+	Consumed        int `json:"consumed"` // Legacy read-window count; retained for compatibility.
+	Opened          int `json:"opened"`
+	Cited           int `json:"cited"`
+	Unknown         int `json:"unknown"`
 	NotesBanked     int `json:"notes_banked"`
 	VaultNotes      int `json:"vault_notes"`
-	// PerCaller is each hook's own verdict. The aggregate hides which of the
+	// PerCaller is each hook's own evidence. The aggregate hides which of the
 	// three injection points is earning its tokens, and they are different bets:
 	// session-start, mid-task, and compaction.
 	PerCaller []DoctorCallerUse `json:"per_caller,omitempty"`
@@ -101,6 +104,9 @@ type DoctorCallerUse struct {
 	Caller     string `json:"caller"`
 	Injections int    `json:"injections"`
 	Consumed   int    `json:"consumed"`
+	Opened     int    `json:"opened"`
+	Cited      int    `json:"cited"`
+	Unknown    int    `json:"unknown"`
 }
 
 // ConsumedRate is consumed/injections, 0 when nothing was surfaced.

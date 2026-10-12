@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Doctor reports opened/cited evidence for surfaced notes. Episode capture checks
+  exact note IDs in assistant output and tool inputs, excluding injected recall
+  context; logged reads take precedence. The rest is reported honestly as
+  unknown — not measurable from text, never unused.
+
 ### Changed
 
 - Long-document answers now reach the agent far more often (held-out 7/50 → 20/50,
@@ -20,6 +27,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - v0.10.9 delivered no note bodies on vaults not re-indexed after upgrading.
   Delivery now falls back to the stored text, and doctor tells you to re-index
   to restore each note's text as written.
+- Incomplete transcript tails cannot erase citation evidence. Capture watermarks
+  count completely parsed records and replacement requires a strictly fuller
+  capture; late reads still upgrade evidence within the stored turn boundary.
+- Use evidence keeps retrievals beyond a captured transcript unknown and lets
+  fuller captures correct turn attribution and false citations. Doctor respects
+  captured turn boundaries before applying its 30-minute read fallback.
+- SessionEnd evidence recording has a two-second deadline. Timed-out captures
+  commit no partial evidence and episode capture continues.
 
 - Query-aware excerpts retain their governing heading path, including warnings
   and deprecation notices, within the same token cap. Oversized sentences are

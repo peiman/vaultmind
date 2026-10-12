@@ -335,10 +335,12 @@ func collectMemoryUse(vdb *cmdutil.VaultDB) *query.DoctorMemoryUse {
 		Injections:      use.Injections,
 		BodiesDelivered: use.BodiesDelivered,
 		Consumed:        use.Consumed,
+		Opened:          use.Opened, Cited: use.Cited, Unknown: use.Unknown,
 	}
 	for _, c := range use.PerCaller {
 		out.PerCaller = append(out.PerCaller, query.DoctorCallerUse{
 			Caller: c.Caller, Injections: c.Injections, Consumed: c.Consumed,
+			Opened: c.Opened, Cited: c.Cited, Unknown: c.Unknown,
 		})
 	}
 	// The write side, from this vault's own index rather than the shared log:
@@ -557,22 +559,22 @@ func writeMemoryUse(w io.Writer, m *query.DoctorMemoryUse) error {
 		return nil
 	}
 	if _, err := fmt.Fprintf(w,
-		"Memory use (%dd): %d surfaced → %d bodies delivered → %d read (%.1f%%)\n",
-		m.WindowDays, m.Injections, m.BodiesDelivered, m.Consumed, m.ConsumedRate()*100); err != nil {
+		"Memory use (%dd): %d surfaced → %d delivered → %d opened, %d cited (%d unknown — not measurable from text)\n",
+		m.WindowDays, m.Injections, m.BodiesDelivered, m.Opened, m.Cited, m.Unknown); err != nil {
 		return err
 	}
 	if m.BodiesDelivered == 0 {
 		// The distinction that decides what to fix: text that was never handed
 		// over cannot have been ignored.
 		if _, err := fmt.Fprintln(w,
-			"  ⚠ no bodies delivered — every injection was pointers only, so low reads "+
-				"measure the tool withholding, not the agent ignoring"); err != nil {
+			"  ⚠ no bodies recorded as delivered — historical delivery may be unknown; "+
+				"new pointers-only events record withholding"); err != nil {
 			return err
 		}
 	}
 	for _, c := range m.PerCaller {
-		if _, err := fmt.Fprintf(w, "  %-28s %d surfaced, %d read\n",
-			c.Caller, c.Injections, c.Consumed); err != nil {
+		if _, err := fmt.Fprintf(w, "  %-28s %d surfaced, %d opened, %d cited (%d unknown)\n",
+			c.Caller, c.Injections, c.Opened, c.Cited, c.Unknown); err != nil {
 			return err
 		}
 	}

@@ -132,6 +132,21 @@ Notes are the source of truth; the SQLite index is derived from them and rebuilt
 
 VaultMind keeps a local SQLite log of retrieval events — which queries surfaced which notes, and which notes an agent then opened — as the raw material for learning from use. Today it is a record, not an input: it does not change what search returns. It is on by default, and it is worth knowing exactly what that means.
 
+`doctor` reports observable evidence over seven days:
+
+```text
+Memory use (7d): 5 surfaced → 5 delivered → 1 opened, 2 cited (2 unknown — not measurable from text)
+```
+
+`opened` is a logged read in the same conversation and vault. `cited` means the
+exact note ID appeared in that turn's assistant text or tool inputs, with reads
+taking precedence. Titles and injected recall blocks do not count. Neither
+signal proves influence, and **unknown never means unused**: applying an idea
+in other words cannot be measured from text. The check runs in `episode capture`
+(the existing SessionEnd capture hook, or Stop when wired to that path), adding
+no work to recall. See [use evidence](docs/use-evidence.md) for the event and JSON
+fields and measurement limits.
+
 **On your disk, by default:** the **full query text**, the vault path, the note ids returned, and caller metadata (`$USER`, hostname, `CLAUDE_PROJECT_DIR`). The file is created `0600` — together with the `-wal` and `-shm` sidecars SQLite writes beside it, which hold the same material — at
 
 - **macOS:** `~/Library/Application Support/vaultmind/experiments.db`

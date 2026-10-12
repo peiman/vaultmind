@@ -11,25 +11,10 @@ import (
 // that tomorrow's unrelated read does not.
 const consumptionWindow = 30 * time.Minute
 
-// MemoryUse answers the question the tool has never asked about itself: when
-// memory is surfaced to an agent, does the agent take it?
-//
-// WHAT THIS MEASURES, precisely — a note counts as consumed when it was
-// surfaced by a hook-driven retrieval and then ACCESSED within
-// consumptionWindow. It is a floor, not a truth, and it is wrong in both
-// directions:
-//
-//   - It over-counts: an access the agent would have made anyway is credited to
-//     the injection that happened to precede it.
-//   - It under-counts, and this is the larger error: an injection READ IN
-//     CONTEXT, with no note_access event, is invisible — and that is the most
-//     likely form of real use. Pointer blocks are consumed by reading, not by
-//     opening.
-//
-// It is worth having anyway. The first measurement was 5,900 injections and 26
-// accesses over seven days; whatever the true rate is, a number that moves is
-// the only way to tell whether a change to the delivery path helped. Before
-// this, the honest answer to "is VaultMind used?" was an anecdote.
+// MemoryUse measures observable evidence for hook-surfaced notes. Opened is a
+// read event in the same conversation and vault; Cited is an exact id in the
+// turn's assistant output or tool inputs, excluding injected hook context.
+// Unknown includes missing transcript observations: it never means unused.
 type MemoryUse struct {
 	// WindowDays is the period measured, for rendering.
 	WindowDays int
@@ -38,9 +23,12 @@ type MemoryUse struct {
 	// agent was shown, not the number of queries.
 	Injections int
 
-	// Consumed counts injections followed by an access to that same note
-	// within the window.
+	// Consumed preserves the legacy access-within-window count for JSON callers.
+	// It predates conversation/vault scoping; use Opened for read evidence.
 	Consumed int
+	Opened   int
+	Cited    int
+	Unknown  int
 
 	// BodiesDelivered counts injections whose event recorded that a body was
 	// actually included. Zero for every event logged before that field existed,
@@ -50,7 +38,7 @@ type MemoryUse struct {
 
 	// PerCaller breaks the same numbers down by hook, because the recall hook
 	// (every prompt) and the reach hook (decision points only) are different
-	// bets and deserve separate verdicts.
+	// bets and deserve separate observations.
 	PerCaller []CallerUse
 }
 
@@ -59,6 +47,9 @@ type CallerUse struct {
 	Caller     string
 	Injections int
 	Consumed   int
+	Opened     int
+	Cited      int
+	Unknown    int
 }
 
 // ConsumedRate returns consumed/injections as a fraction, 0 when nothing was
@@ -95,32 +86,48 @@ const hookCallerPattern = "vaultmind-%hook"
 // invisible to any correctness test — a wall-clock assertion would be the only
 // other guard, and on a shared machine a wall-clock assertion is a flaky test
 // waiting to be deleted. The plan is deterministic; the clock is not.
-const memoryUseSQL = `
-		WITH inj AS (
-			SELECT e.timestamp AS t,
-			       json_extract(r.value, '$.note_id') AS note_id,
-			       COALESCE(json_extract(e.event_data, '$.body_delivered'), 0) AS body_delivered
-			FROM events e
-			JOIN sessions s ON s.session_id = e.session_id,
-			     json_each(json_extract(e.event_data, '$.variants.hybrid.results')) r
-			WHERE s.caller LIKE ?
-			  AND e.timestamp > datetime('now', ?)
-		),
-		acc AS MATERIALIZED (
-			SELECT timestamp AS t, json_extract(event_data, '$.note_id') AS note_id
-			FROM events
-			WHERE event_type = 'note_access'
-			  AND json_extract(event_data, '$.source') = ?
-			  AND timestamp > datetime('now', ?)
-		)
-		SELECT COUNT(*),
-		       SUM(CASE WHEN EXISTS (
-		             SELECT 1 FROM acc a
-		             WHERE a.note_id = inj.note_id
-		               AND datetime(a.t) BETWEEN datetime(inj.t) AND datetime(inj.t, ?)
-		           ) THEN 1 ELSE 0 END),
-		       SUM(CASE WHEN inj.body_delivered THEN 1 ELSE 0 END)
-		FROM inj`
+// Both correlated lookup sets are materialized so doctor does not parse the
+// entire access/evidence log once per surfaced note. Keep the query-plan guard.
+const memoryUseCTEs = `
+ WITH inj AS (
+  SELECT e.event_id, s.caller, s.user_session_id, e.vault_path, e.timestamp AS t,
+   json_extract(r.value,'$.note_id') AS note_id,
+   COALESCE(json_extract(e.event_data,'$.body_delivered'),0) AS body_delivered
+  FROM events e JOIN sessions s ON s.session_id=e.session_id,
+   json_each(` + actualResultsSQL + `) r
+  WHERE s.caller LIKE ? AND e.event_type='ask' AND e.timestamp > datetime('now', ?)
+ ),
+ acc AS MATERIALIZED (
+  SELECT e.timestamp AS t, s.user_session_id, e.vault_path,
+   json_extract(e.event_data,'$.note_id') AS note_id
+  FROM events e JOIN sessions s ON s.session_id=e.session_id
+  WHERE e.event_type='note_access' AND json_extract(e.event_data,'$.source')=?
+   AND e.timestamp > datetime('now', ?)
+ ),
+ evidence AS MATERIALIZED (
+  SELECT json_extract(event_data,'$.surfaced_event_id') AS surfaced_event_id,
+   json_extract(event_data,'$.note_id') AS note_id,
+   json_extract(event_data,'$.evidence') AS state,
+   json_extract(event_data,'$.turn_id') AS turn_id
+  FROM events WHERE event_type='use_evidence'
+ ),
+ win AS (SELECT ? AS modifier),
+ observed AS (
+  SELECT inj.*,
+   EXISTS (SELECT 1 FROM acc a WHERE a.note_id=inj.note_id
+    AND datetime(a.t) BETWEEN datetime(inj.t) AND datetime(inj.t, (SELECT modifier FROM win))) AS consumed,
+   (COALESCE(ev.state='opened',0) OR (COALESCE(ev.turn_id,'')='' AND EXISTS (
+    SELECT 1 FROM acc a WHERE a.note_id=inj.note_id AND a.vault_path=inj.vault_path
+     AND a.user_session_id=inj.user_session_id
+     AND datetime(a.t) BETWEEN datetime(inj.t) AND datetime(inj.t, (SELECT modifier FROM win))
+   ))) AS opened,
+   COALESCE(ev.state='cited',0) AS cited
+  FROM inj LEFT JOIN evidence ev ON ev.surfaced_event_id=inj.event_id AND ev.note_id=inj.note_id
+ )`
+
+const memoryUseSQL = memoryUseCTEs + `
+ SELECT COUNT(*),SUM(consumed),SUM(body_delivered),SUM(opened),
+ SUM(CASE WHEN cited AND NOT opened THEN 1 ELSE 0 END) FROM observed`
 
 // MemoryUseSince computes the meter over the last windowDays.
 //
@@ -166,8 +173,8 @@ func (d *DB) MemoryUseSince(windowDays int) (*MemoryUse, error) {
 		hookCallerPattern, since, string(AccessSourceRead), since, window)
 
 	// SUM over zero rows is NULL, so these are nullable even though COUNT is not.
-	var consumed, delivered *int
-	if err := row.Scan(&out.Injections, &consumed, &delivered); err != nil {
+	var consumed, delivered, opened, cited *int
+	if err := row.Scan(&out.Injections, &consumed, &delivered, &opened, &cited); err != nil {
 		return nil, fmt.Errorf("computing memory use: %w", err)
 	}
 	if consumed != nil {
@@ -176,6 +183,14 @@ func (d *DB) MemoryUseSince(windowDays int) (*MemoryUse, error) {
 	if delivered != nil {
 		out.BodiesDelivered = *delivered
 	}
+
+	if opened != nil {
+		out.Opened = *opened
+	}
+	if cited != nil {
+		out.Cited = *cited
+	}
+	out.Unknown = out.Injections - out.Opened - out.Cited
 
 	perCaller, err := d.memoryUsePerCaller(since, window)
 	if err != nil {
@@ -189,30 +204,10 @@ func (d *DB) MemoryUseSince(windowDays int) (*MemoryUse, error) {
 // MATERIALIZED hint is invisible to correctness tests and is asserted on the
 // query plan instead. doctor calls BOTH, so fixing one and not the other would
 // have halved a five-minute command and looked like a fix.
-const memoryUsePerCallerSQL = `
-		WITH inj AS (
-			SELECT s.caller AS caller, e.timestamp AS t,
-			       json_extract(r.value, '$.note_id') AS note_id
-			FROM events e
-			JOIN sessions s ON s.session_id = e.session_id,
-			     json_each(json_extract(e.event_data, '$.variants.hybrid.results')) r
-			WHERE s.caller LIKE ?
-			  AND e.timestamp > datetime('now', ?)
-		),
-		acc AS MATERIALIZED (
-			SELECT timestamp AS t, json_extract(event_data, '$.note_id') AS note_id
-			FROM events
-			WHERE event_type = 'note_access'
-			  AND json_extract(event_data, '$.source') = ?
-			  AND timestamp > datetime('now', ?)
-		)
-		SELECT caller, COUNT(*),
-		       SUM(CASE WHEN EXISTS (
-		             SELECT 1 FROM acc a
-		             WHERE a.note_id = inj.note_id
-		               AND datetime(a.t) BETWEEN datetime(inj.t) AND datetime(inj.t, ?)
-		           ) THEN 1 ELSE 0 END)
-		FROM inj GROUP BY caller ORDER BY COUNT(*) DESC`
+const memoryUsePerCallerSQL = memoryUseCTEs + `
+ SELECT caller,COUNT(*),SUM(consumed),SUM(opened),
+ SUM(CASE WHEN cited AND NOT opened THEN 1 ELSE 0 END)
+ FROM observed GROUP BY caller ORDER BY COUNT(*) DESC`
 
 // memoryUsePerCaller is the same measurement split by hook.
 // memoryUsePerCaller carries the same MATERIALIZED hint as MemoryUseSince, for
@@ -231,13 +226,20 @@ func (d *DB) memoryUsePerCaller(since, window string) ([]CallerUse, error) {
 	var out []CallerUse
 	for rows.Next() {
 		var c CallerUse
-		var consumed *int
-		if err := rows.Scan(&c.Caller, &c.Injections, &consumed); err != nil {
+		var consumed, opened, cited *int
+		if err := rows.Scan(&c.Caller, &c.Injections, &consumed, &opened, &cited); err != nil {
 			return nil, fmt.Errorf("scanning per-caller memory use: %w", err)
 		}
 		if consumed != nil {
 			c.Consumed = *consumed
 		}
+		if opened != nil {
+			c.Opened = *opened
+		}
+		if cited != nil {
+			c.Cited = *cited
+		}
+		c.Unknown = c.Injections - c.Opened - c.Cited
 		out = append(out, c)
 	}
 	return out, rows.Err()
