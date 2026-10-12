@@ -176,3 +176,98 @@ func TestAsk_PassageFirstBlockUnchanged(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, baseline, result.Context)
 }
+
+// The verifier's first-block fixture: the qualification must travel with the
+// retained prose, even when lexical selection keeps the first block.
+func TestAsk_PassageFirstBlockHeading(t *testing.T) {
+	warning := "## Unsafe production configuration (do not use)"
+	first := "Set TLS_VERIFY=false. " + strings.Repeat("padding ", 90) + "ends."
+	tests := []struct {
+		name, lead, question, want string
+		cap                        int
+		unchanged                  bool
+	}{
+		{"warning", warning + "\n\n", "TLS_VERIFY", warning + "\n\nSet TLS_VERIFY=false.", 160, false},
+		{"no_query_overlap", warning + "\n\n", "absent", warning + "\n\nSet TLS_VERIFY=false.", 160, false},
+		{"nested", "# Passage title\n\n" + warning + "\n\n### TLS settings\n\n", "TLS_VERIFY", "### TLS settings\n\nSet TLS_VERIFY=false.", 160, false},
+		{"long_nearest", "", "TLS_VERIFY", "#### Do not use this unsafe production setting locally extra…\n\nSet TLS_VERIFY=false.", 160, false},
+		{"setext", "Do not use in production systems now\n------------------------------------\n\n", "TLS_VERIFY", "Do not use in production systems now…\n\nSet TLS_VERIFY=false.", 160, false},
+		{"setext_short", "Unsafe (do not use)\n-------------------\n\n", "TLS_VERIFY", "Unsafe (do not use)\n-------------------\n\nSet TLS_VERIFY=false.", 160, false},
+		{"title_only", "# Passage title\n\n", "TLS_VERIFY", "Set TLS_VERIFY=false.", 160, true},
+		{"setext_title_only", "Passage title\n=============\n\n", "TLS_VERIFY", "Set TLS_VERIFY=false.", 160, true},
+		{"cap", warning + "\n\n", "TLS_VERIFY", warning + "\n\nSet TLS_VERIFY=false.", 19, false},
+		{"long_first_block_cap", warning + "\n\n", "TLS_VERIFY", warning + "\n\nSet TLS_VERIFY=false", 160, false},
+		{"no_prose_room", warning + "\n\n", "TLS_VERIFY", warning, 13, false},
+		{"prose_does_not_fit", warning + "\n\n", "TLS_VERIFY", warning, 14, false},
+		{"heading_exceeds_limit", warning + "\n\n", "TLS_VERIFY", "Set TLS_VERIFY=false.", 11, true},
+		{"wide_token", "", "TLS_VERIFY", strings.Repeat("A", 61) + "…\n\nSet TLS_VERIFY=false.", 160, false},
+		{"oversized_heading", "## Unsafe " + strings.Repeat("warning ", 100) + "\n\n", "TLS_VERIFY", "## Unsafe warning warning warning warning warning warning…\n\nSet TLS_VERIFY=false.", 160, false},
+		{"principle", warning + "\n\n", "TLS_VERIFY", "Keep the decision rule.", 160, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body := tt.lead + first + "\n\nUnrelated ending."
+			if tt.name == "long_first_block_cap" {
+				body = tt.lead + strings.ReplaceAll(first, "false.", "false") + "\n\nUnrelated ending."
+			}
+			if tt.name == "long_nearest" {
+				body = "# Passage title\n\n" +
+					"## Ancestor qualification that must not travel with the block\n\n" +
+					"### Middle heading that is also not the nearest\n\n" +
+					"#### Do not use this unsafe production setting locally extra words that run past the cap\n\n" +
+					first + "\n\nUnrelated ending."
+			}
+			if tt.name == "wide_token" {
+				// One token wider than 16, so the cap cuts by rune. The underline
+				// stays short enough that the heading is not itself treated as prose.
+				body = strings.Repeat("A", 65) + "\n" + strings.Repeat("-", 14) + "\n\n" + first + "\n\nUnrelated ending."
+			}
+			if tt.name == "principle" {
+				body += "\n\n## Principle\n\nKeep the decision rule."
+			}
+			db := passageDB(t, body)
+			resolver := graph.NewResolver(db)
+			baseline, err := memory.ContextPack(resolver, db, memory.ContextPackConfig{Input: "target", Budget: 1500, Depth: 1, MaxItems: 3, Slim: true, ExcerptTokens: tt.cap})
+			require.NoError(t, err)
+			retriever := &stubRetriever{results: []retrieval.ScoredResult{{ID: "target", Title: "Passage title", Score: 1}}}
+			result, err := query.Ask(context.Background(), retriever, resolver, db, query.AskConfig{Query: tt.question, Budget: 1500, MaxItems: 3, SearchLimit: 5, ExcerptTokens: tt.cap})
+			require.NoError(t, err)
+			got := result.Context.Target.Body
+			if tt.want == "" {
+				assert.Empty(t, got)
+			} else {
+				assert.Contains(t, got, tt.want)
+			}
+			assert.NotContains(t, got, "Passage title", "title is already delivered separately")
+			if tt.name != "warning" && tt.name != "no_query_overlap" && tt.name != "cap" && tt.name != "long_first_block_cap" && tt.name != "no_prose_room" && tt.name != "prose_does_not_fit" {
+				assert.NotContains(t, got, warning)
+			}
+			assert.LessOrEqual(t, strings.Count(got, warning), 1)
+			if tt.name == "nested" {
+				assert.NotContains(t, got, "Unsafe production configuration")
+			}
+			if tt.name == "long_nearest" || tt.name == "oversized_heading" || tt.name == "setext" || tt.name == "wide_token" {
+				head, _, _ := strings.Cut(got, "\n\n")
+				assert.LessOrEqual(t, memory.EstimateTokens(head), 16, "nearest heading is capped at 16 tokens")
+				assert.NotContains(t, got, "Ancestor qualification")
+				assert.NotContains(t, got, "Middle heading")
+			}
+			if tt.name == "no_prose_room" || tt.name == "prose_does_not_fit" {
+				assert.NotContains(t, got, "TLS_VERIFY", "the block is trimmed before the heading is")
+			}
+			assert.True(t, utf8.ValidString(got))
+			assert.LessOrEqual(t, memory.EstimateTokens(got), tt.cap)
+			assert.LessOrEqual(t, result.Context.UsedTokens, result.Context.BudgetTokens)
+			assert.Equal(t, baseline.Context, result.Context.Context)
+			assert.Equal(t, baseline.UsedTokens-memory.EstimateTokens(baseline.Target.Body)+memory.EstimateTokens(got), result.Context.UsedTokens)
+			if tt.unchanged {
+				assert.Equal(t, baseline, result.Context)
+			}
+			var out bytes.Buffer
+			require.NoError(t, query.FormatAsk(result, &out))
+			if tt.want != "" {
+				assert.Contains(t, out.String(), strings.ReplaceAll(tt.want, "\n", "\n    "))
+			}
+		})
+	}
+}

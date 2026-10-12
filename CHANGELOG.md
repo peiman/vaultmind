@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A kept first-block excerpt now prefixes only the nearest governing heading,
+  capped at 16 tokens, so a warning such as "do not use" is not lost. The
+  block is trimmed to fit the excerpt; the heading is not. A block directly
+  under the title is unchanged.
+
 ## [0.10.11] - 2026-10-12
 
 > Indexing through a symlinked vault path no longer wipes the index, and a scan that sees nothing at all can never delete a populated index; field-report fixes cover quiet orphan deletes, an honest empty-note footer, import reporting index failures, and a load-robust timing test.
