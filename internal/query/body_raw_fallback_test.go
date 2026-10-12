@@ -11,6 +11,7 @@ import (
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/memory"
 	"github.com/peiman/vaultmind/internal/navigate"
+	"github.com/peiman/vaultmind/internal/parser"
 	"github.com/peiman/vaultmind/internal/query"
 	"github.com/peiman/vaultmind/internal/retrieval"
 	"github.com/stretchr/testify/assert"
@@ -101,12 +102,71 @@ func TestBodyRawFallback_FooterCauses(t *testing.T) {
 				require.NoError(t, err)
 				var out strings.Builder
 				require.NoError(t, query.FormatAsk(&query.AskResult{Query: "target", Context: pack}, &out))
-				assert.Equal(t, tc.missing, strings.Contains(out.String(), "no body content available"), out.String())
-				assert.Equal(t, tc.missing, strings.Contains(out.String(), "vaultmind index"), out.String())
+				// These rows store body_raw as a string, including "". That is an
+				// indexed empty body, not an unfilled NULL, so re-indexing
+				// cannot fill it.
+				assert.Equal(t, tc.missing, strings.Contains(out.String(), "no body text"), out.String())
+				assert.NotContains(t, out.String(), "vaultmind index", out.String())
 				assert.Equal(t, tc.budgetOmission, strings.Contains(out.String(), "no room"), out.String())
 			})
 		}
 	}
+}
+
+func askFooter(t *testing.T, db *index.DB, input string, seeds ...memory.Seed) string {
+	t.Helper()
+	pack, err := memory.ContextPack(graph.NewResolver(db), db, memory.ContextPackConfig{Input: input, Budget: 900, MaxItems: 3, Seeds: seeds})
+	require.NoError(t, err)
+	var out strings.Builder
+	require.NoError(t, query.FormatAsk(&query.AskResult{Query: input, Context: pack}, &out))
+	return out.String()
+}
+
+func openFooterDB(t *testing.T) *index.DB {
+	t.Helper()
+	db, err := index.Open(filepath.Join(t.TempDir(), "index.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	return db
+}
+
+// A stored empty body, including a note that is only frontmatter, has nothing
+// for `vaultmind index` to fill. The footer must say so and then stop.
+func TestBodyRawFallback_EmptyNoteFooter(t *testing.T) {
+	t.Run("stored empty body", func(t *testing.T) {
+		db := openFooterDB(t)
+		_, err := db.Exec(`INSERT INTO notes (id,path,title,type,body_text,body_raw,hash,mtime) VALUES ('bare','bare.md','Bare','concept','','','h',1)`)
+		require.NoError(t, err)
+		out := askFooter(t, db, "bare")
+		assert.Contains(t, out, "note has no body text", out)
+		assert.NotContains(t, out, "vaultmind index", out)
+		assert.NotContains(t, out, "re-index", out)
+	})
+	t.Run("frontmatter only", func(t *testing.T) {
+		parsed, err := parser.Parse([]byte("---\nid: bare\ntitle: Bare\ntype: concept\n---\n"))
+		require.NoError(t, err)
+		require.Empty(t, parsed.Body, "a frontmatter-only note has no body to store")
+		db := openFooterDB(t)
+		require.NoError(t, index.StoreNote(db, index.NoteRecord{
+			ID: parsed.ID, Path: "bare.md", Title: "Bare", Type: parsed.NoteType,
+			BodyRaw: parsed.Body, BodyText: parsed.FTSBody,
+		}))
+		out := askFooter(t, db, parsed.ID)
+		assert.Contains(t, out, "note has no body text", out)
+		assert.NotContains(t, out, "vaultmind index", out)
+		assert.NotContains(t, out, "re-index", out)
+	})
+}
+
+// body_raw NULL is the unfilled migration state. Nothing was stored, so
+// re-indexing can still copy the file. An empty string must not take this path.
+func TestBodyRawFallback_NullRawFooterAdvisesReindex(t *testing.T) {
+	db := openFooterDB(t)
+	_, err := db.Exec(`INSERT INTO notes (id,path,title,type,body_text,body_raw,hash,mtime) VALUES ('legacy','legacy.md','Legacy','concept','',NULL,'h',1)`)
+	require.NoError(t, err)
+	out := askFooter(t, db, "legacy")
+	assert.Contains(t, out, "no body content available — re-index with `vaultmind index` to fill it", out)
+	assert.NotContains(t, out, "no body text", out)
 }
 
 // A short-body assertion alone cannot catch a failed passage read: ask keeps
