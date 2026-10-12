@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.11] - 2026-10-12
+
+> Indexing through a symlinked vault path no longer wipes the index, and a scan that sees nothing at all can never delete a populated index; field-report fixes cover quiet orphan deletes, an honest empty-note footer, import reporting index failures, and a load-robust timing test.
+
 ### Fixed
 
 - `vaultmind index --vault` on a symlink to the vault scanned no files
@@ -2924,7 +2928,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.10...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.11...HEAD
+[0.10.11]: https://github.com/peiman/vaultmind/compare/v0.10.10...v0.10.11
 [0.10.10]: https://github.com/peiman/vaultmind/compare/v0.10.9...v0.10.10
 [0.10.9]: https://github.com/peiman/vaultmind/compare/v0.10.8...v0.10.9
 [0.10.8]: https://github.com/peiman/vaultmind/compare/v0.10.7...v0.10.8
