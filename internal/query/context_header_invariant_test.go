@@ -190,7 +190,7 @@ func TestContextHeader_NamesTheBudgetOnlyWhenItBound(t *testing.T) {
 		Target: &memory.ContextPackTarget{
 			Frontmatter: map[string]any{"type": "arc", "title": "T"}, Body: "rule", BodyExcerpted: true,
 		},
-		Context: []memory.ContextItem{{ID: "bare", Frontmatter: map[string]any{"type": "concept", "title": "B"}}},
+		Context: []memory.ContextItem{{ID: "bare", BodyOmittedBudget: true, Frontmatter: map[string]any{"type": "concept", "title": "B"}}},
 	}
 	buf.Reset()
 	require.NoError(t, writeContextHeader(&buf, bound, formatOpts{}))
@@ -207,7 +207,7 @@ func TestContext_ShownBeforeIsNamedAndNotBlamedOnTheBudget(t *testing.T) {
 	ctx := &memory.ContextPackResult{
 		TargetID: "t", BudgetTokens: 900, UsedTokens: 100,
 		Target:  &memory.ContextPackTarget{ID: "t", ShownBefore: true, Frontmatter: map[string]any{"type": "arc", "title": "Seen Target"}},
-		Context: []memory.ContextItem{{ID: "bare", Frontmatter: map[string]any{"type": "concept", "title": "Bare"}}},
+		Context: []memory.ContextItem{{ID: "bare", BodyOmittedBudget: true, Frontmatter: map[string]any{"type": "concept", "title": "Bare"}}},
 	}
 	var buf bytes.Buffer
 	require.NoError(t, writeContextTarget(&buf, ctx.Target, formatOpts{}))

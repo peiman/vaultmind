@@ -152,6 +152,8 @@ type DoctorModelBreakdown struct {
 
 // DoctorIssues holds counts of vault health issues.
 type DoctorIssues struct {
+	// MissingRawBodies counts pre-migration notes awaiting a plain index backfill.
+	MissingRawBodies          int                `json:"missing_raw_bodies"`
 	DuplicateIDs              int                `json:"duplicate_ids"`
 	BrokenReferences          int                `json:"broken_references"`
 	MissingRequiredFields     int                `json:"missing_required_fields"`
@@ -256,7 +258,8 @@ func SurfacedIssueCounts(issues DoctorIssues) (errors, warnings int) {
 	// the report prints a ⚠ line for each, and a rollup that then says "0
 	// warnings" is the H1 shape inverted — a finding on the page and a summary
 	// that denies it. Anything printed as an issue must be counted as one.
-	warnings = issues.UnresolvedLinks +
+	warnings = issues.MissingRawBodies +
+		issues.UnresolvedLinks +
 		issues.BrokenReferences +
 		issues.ObsidianIncompatibleLinks +
 		issues.StaleIndex +
@@ -338,6 +341,9 @@ func Doctor(db *index.DB, vaultPath string, reg *schema.Registry) (*DoctorResult
 		return nil, fmt.Errorf("counting domain notes: %w", err)
 	}
 	result.UnstructuredNotes = result.TotalFiles - result.DomainNotes
+	if err := db.QueryRow("SELECT COUNT(*) FROM notes WHERE body_raw IS NULL").Scan(&result.Issues.MissingRawBodies); err != nil {
+		return nil, fmt.Errorf("counting notes without raw bodies: %w", err)
+	}
 
 	// missing_required_fields and broken_references — call Validate and count.
 	// Single source of truth for what counts as "missing required field" or

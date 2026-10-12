@@ -133,7 +133,7 @@ func applyPassageExcerpt(db *index.DB, cfg AskConfig, pack *memory.ContextPackRe
 	}
 	target := pack.Target
 	var raw string
-	if err := db.QueryRow("SELECT body_raw FROM notes WHERE id = ?", target.ID).Scan(&raw); err != nil {
+	if err := db.QueryRow("SELECT COALESCE(body_raw, body_text, '') FROM notes WHERE id = ?", target.ID).Scan(&raw); err != nil {
 		return err
 	}
 	if memory.HasPrincipleSection(raw) {

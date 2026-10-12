@@ -390,6 +390,9 @@ func writeDoctorHuman(w io.Writer, result *query.DoctorResult, summaryOnly bool)
 	if err := writeIndexReconciliation(w, &result.Issues, summaryOnly); err != nil {
 		return err
 	}
+	if err := writeMissingRawBodies(w, result.Issues.MissingRawBodies); err != nil {
+		return err
+	}
 	if err := writeStaleIndex(w, &result.Issues, summaryOnly); err != nil {
 		return err
 	}
@@ -893,4 +896,13 @@ func annotateEmbeddingRuntime(ctx context.Context, emb *query.DoctorEmbeddings, 
 	if runtimeCheck.err != nil {
 		emb.RuntimeError = runtimeCheck.err.Error()
 	}
+}
+
+// writeMissingRawBodies points upgraded vaults at the existing incremental backfill.
+func writeMissingRawBodies(w io.Writer, count int) error {
+	if count == 0 {
+		return nil
+	}
+	_, err := fmt.Fprintf(w, "  ⚠ %d notes have no stored body as written — run vaultmind index\n", count)
+	return err
 }

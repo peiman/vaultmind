@@ -747,8 +747,8 @@ func TestFormatAsk_SurfacesBudgetTruncationToContextItems(t *testing.T) {
 			Context: []memory.ContextItem{
 				{ID: "a", Frontmatter: map[string]interface{}{"type": "concept", "title": "A"}, Body: "A body", BodyIncluded: true},
 				{ID: "b", Frontmatter: map[string]interface{}{"type": "concept", "title": "B"}, Body: "B body", BodyIncluded: true},
-				{ID: "c", Frontmatter: map[string]interface{}{"type": "concept", "title": "C"}, Body: "C body", BodyIncluded: false},
-				{ID: "d", Frontmatter: map[string]interface{}{"type": "concept", "title": "D"}, Body: "D body", BodyIncluded: false},
+				{ID: "c", Frontmatter: map[string]interface{}{"type": "concept", "title": "C"}, Body: "C body", BodyIncluded: false, BodyOmittedBudget: true},
+				{ID: "d", Frontmatter: map[string]interface{}{"type": "concept", "title": "D"}, Body: "D body", BodyIncluded: false, BodyOmittedBudget: true},
 			},
 		},
 	}

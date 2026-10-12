@@ -59,6 +59,9 @@ type ContextPackTarget struct {
 	// ShownBefore marks a note whose body this conversation already received
 	// recently; it is sent as its title alone. See ContextItem.ShownBefore.
 	ShownBefore bool `json:"shown_before,omitempty"`
+	// BodyOmittedBudget records a non-empty body excluded by the token budget.
+	// Empty or unavailable bodies must never be described as budget losses.
+	BodyOmittedBudget bool `json:"body_omitted_budget,omitempty"`
 }
 
 // ContextItem holds context metadata for a single related note.
@@ -78,6 +81,9 @@ type ContextItem struct {
 	// recently. It degrades to its title — never dropped, so an agent that lost
 	// the earlier copy to compaction still sees the note exists.
 	ShownBefore bool `json:"shown_before,omitempty"`
+	// BodyOmittedBudget records a non-empty body excluded by the token budget.
+	// Empty or unavailable bodies must never be described as budget losses.
+	BodyOmittedBudget bool `json:"body_omitted_budget,omitempty"`
 }
 
 // ContextPackResult is the full output of a ContextPack operation.
@@ -326,9 +332,6 @@ func packTwoPass(
 
 	// Body backfill pass: fill remaining budget with context item bodies in priority order.
 	for i := range result.Context {
-		if *remaining <= 0 {
-			break
-		}
 		fullNote, err := loadNote(result.Context[i].ID)
 		if err != nil || fullNote == nil || fullNote.Body == "" {
 			continue
@@ -348,7 +351,11 @@ func packTwoPass(
 // delivered. Excerpting is opt-in so this cannot change what an existing caller
 // receives.
 func attachBody(item *ContextItem, body string, remaining *int, excerptTokens int) int {
-	if body == "" || *remaining <= 0 {
+	if body == "" {
+		return 0
+	}
+	if *remaining <= 0 {
+		item.BodyOmittedBudget = true
 		return 0
 	}
 	// The cap is checked BEFORE the fits-whole path, not only as an overflow
@@ -363,11 +370,14 @@ func attachBody(item *ContextItem, body string, remaining *int, excerptTokens in
 			*remaining -= tokens
 			return tokens
 		}
+		item.BodyOmittedBudget = true
 		return 0
 	}
 	budget := min(excerptTokens, *remaining)
 	excerpt := Excerpt(body, budget)
 	if excerpt == "" {
+		// A policy cap or a frontmatter-only note is not a budget omission.
+		item.BodyOmittedBudget = *remaining < excerptTokens && Excerpt(body, excerptTokens) != ""
 		return 0
 	}
 	tokens := EstimateTokens(excerpt)
@@ -445,6 +455,7 @@ func packTargetContent(full *index.FullNote, budget, excerptTokens int, result *
 	// Always account for frontmatter tokens, even if they exceed the budget.
 	result.UsedTokens += fmTokens
 	remaining := budget - fmTokens
+	target.BodyOmittedBudget = full.Body != "" && remaining <= 0
 
 	if fmTokens > budget {
 		// Frontmatter alone exceeds budget — count it, mark truncated, omit body.
