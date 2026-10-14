@@ -87,9 +87,13 @@ func RunNoteGet(db *index.DB, cfg NoteGetConfig, w io.Writer) (NoteGetOutcome, e
 	// reader of access_count. Best-effort: a tracking miss is logged at
 	// debug and never fails the user query. CallerAgent because direct
 	// id-naming is the most deliberate retrieval signal we have.
-	// Strip BEFORE deciding delivery. --frontmatter-only clears the body a few
-	// lines down, and recording the access above that meant a flag on this very
-	// command falsified the "a body was delivered" it recorded.
+	// note get is an explicit raw read. It shows VaultMind's own
+	// <!-- vaultmind: markers. Delivery loads strip those: QueryFullNote.Body,
+	// raw snippets, and the FTS preview. Put the stored body back before
+	// deciding whether this read delivered text. --frontmatter-only clears
+	// the body a few lines down, and recording the access above that meant a
+	// flag on this very command falsified the "a body was delivered" it recorded.
+	note.Body = note.RawBody
 	if cfg.FrontmatterOnly {
 		note.Body = ""
 		note.Headings = nil

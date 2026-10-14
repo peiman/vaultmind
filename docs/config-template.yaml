@@ -892,6 +892,13 @@ app:
     # Omit body, headings, blocks
     frontmatter_only: false
 
+  noteaccept:
+    # Path to vault root
+    vault: .
+
+    # Output in JSON format
+    json: false
+
   notecreate:
     # Path to vault root
     vault: .
@@ -907,6 +914,22 @@ app:
 
     # Stage and commit
     commit: false
+
+  notepropose:
+    # Path to vault root
+    vault: .
+
+    # Output in JSON format
+    json: false
+
+    # Question the finding answers
+    question: 
+
+    # Finding to record as a draft
+    finding: 
+
+    # Relevance band that means the top hit is close enough to patch. The band ask already reports for that hit. Default is the strong band.
+    close_band: strong
 
   ping:
     # Default message to display for the ping command

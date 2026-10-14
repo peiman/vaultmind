@@ -292,6 +292,8 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.memorypack.max_items` | int | `0` | `VAULTMIND_APP_MEMORYPACK_MAX_ITEMS` | Max context items (0 = unlimited) |
 | `app.memorypack.excerpt` | int | `0` | `VAULTMIND_APP_MEMORYPACK_EXCERPT` | Cap each note's contribution at N tokens, preferring its decision-bearing passage — the Principle section where a note has one, else its opening prose. 0 = off, which also means a note larger than the remaining budget contributes no text at all while the pack still counts it |
 | `app.memorypack.slim` | bool | `false` | `VAULTMIND_APP_MEMORYPACK_SLIM` | Slim frontmatter (type, title, status only) |
+| `app.noteaccept.vault` | string | `.` | `VAULTMIND_APP_NOTEACCEPT_VAULT` | Path to vault root |
+| `app.noteaccept.json` | bool | `false` | `VAULTMIND_APP_NOTEACCEPT_JSON` | Output in JSON format |
 | `app.note.vault` | string | `.` | `VAULTMIND_APP_NOTE_VAULT` | Path to vault root |
 | `app.note.vaults` | string | `` | `VAULTMIND_APP_NOTE_VAULTS` | Comma-separated vaults to look in; the note is read from the one that holds the id. An id held by more than one is an error naming them. |
 | `app.note.json` | bool | `false` | `VAULTMIND_APP_NOTE_JSON` | Output in JSON format |
@@ -301,6 +303,11 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.notecreate.type` | string | `` | `VAULTMIND_APP_NOTECREATE_TYPE` | Note type (required) |
 | `app.notecreate.body` | string | `` | `VAULTMIND_APP_NOTECREATE_BODY` | Body text (overrides template body) |
 | `app.notecreate.commit` | bool | `false` | `VAULTMIND_APP_NOTECREATE_COMMIT` | Stage and commit |
+| `app.notepropose.vault` | string | `.` | `VAULTMIND_APP_NOTEPROPOSE_VAULT` | Path to vault root |
+| `app.notepropose.json` | bool | `false` | `VAULTMIND_APP_NOTEPROPOSE_JSON` | Output in JSON format |
+| `app.notepropose.question` | string | `` | `VAULTMIND_APP_NOTEPROPOSE_QUESTION` | Question the finding answers |
+| `app.notepropose.finding` | string | `` | `VAULTMIND_APP_NOTEPROPOSE_FINDING` | Finding to record as a draft |
+| `app.notepropose.close_band` | string | `strong` | `VAULTMIND_APP_NOTEPROPOSE_CLOSE_BAND` | Relevance band that means the top hit is close enough to patch. The band ask already reports for that hit. Default is the strong band. |
 | `app.ping.output_message` | string | `Pong` | `VAULTMIND_APP_PING_OUTPUT_MESSAGE` | Default message to display for the ping command |
 | `app.ping.output_color` | string | `white` | `VAULTMIND_APP_PING_OUTPUT_COLOR` | Text color for ping command output (white, red, green, blue, cyan, yellow, magenta) |
 | `app.ping.ui` | bool | `false` | `VAULTMIND_APP_PING_UI` | Enable interactive UI for the ping command |
@@ -1231,6 +1238,13 @@ app:
     # Omit body, headings, blocks
     frontmatter_only: false
 
+  noteaccept:
+    # Path to vault root
+    vault: .
+
+    # Output in JSON format
+    json: false
+
   notecreate:
     # Path to vault root
     vault: .
@@ -1246,6 +1260,22 @@ app:
 
     # Stage and commit
     commit: false
+
+  notepropose:
+    # Path to vault root
+    vault: .
+
+    # Output in JSON format
+    json: false
+
+    # Question the finding answers
+    question: 
+
+    # Finding to record as a draft
+    finding: 
+
+    # Relevance band that means the top hit is close enough to patch. The band ask already reports for that hit. Default is the strong band.
+    close_band: strong
 
   ping:
     # Default message to display for the ping command
@@ -2191,6 +2221,12 @@ export VAULTMIND_APP_MEMORYPACK_EXCERPT=0
 export VAULTMIND_APP_MEMORYPACK_SLIM=false
 
 # Path to vault root
+export VAULTMIND_APP_NOTEACCEPT_VAULT=.
+
+# Output in JSON format
+export VAULTMIND_APP_NOTEACCEPT_JSON=false
+
+# Path to vault root
 export VAULTMIND_APP_NOTE_VAULT=.
 
 # Comma-separated vaults to look in; the note is read from the one that holds the id. An id held by more than one is an error naming them.
@@ -2216,6 +2252,21 @@ export VAULTMIND_APP_NOTECREATE_BODY=
 
 # Stage and commit
 export VAULTMIND_APP_NOTECREATE_COMMIT=false
+
+# Path to vault root
+export VAULTMIND_APP_NOTEPROPOSE_VAULT=.
+
+# Output in JSON format
+export VAULTMIND_APP_NOTEPROPOSE_JSON=false
+
+# Question the finding answers
+export VAULTMIND_APP_NOTEPROPOSE_QUESTION=
+
+# Finding to record as a draft
+export VAULTMIND_APP_NOTEPROPOSE_FINDING=
+
+# Relevance band that means the top hit is close enough to patch. The band ask already reports for that hit. Default is the strong band.
+export VAULTMIND_APP_NOTEPROPOSE_CLOSE_BAND=strong
 
 # Default message to display for the ping command
 export VAULTMIND_APP_PING_OUTPUT_MESSAGE=Hello World!

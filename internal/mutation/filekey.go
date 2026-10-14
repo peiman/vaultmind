@@ -34,7 +34,7 @@ func SetFileKey(path, key string, value interface{}) error {
 	if err != nil {
 		return &MutationError{Code: "serialize_error", Message: fmt.Sprintf("serializing frontmatter: %v", err)}
 	}
-	return atomicWrite(abs, abs, SpliceFile(raw, newFM, bodyOffset), fileHash(raw))
+	return AtomicWrite(abs, abs, SpliceFile(raw, newFM, bodyOffset), FileHash(raw))
 }
 
 // frontmatterMapping returns the top-level mapping of a parsed frontmatter

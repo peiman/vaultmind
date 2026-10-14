@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/peiman/vaultmind/internal/index"
+	"github.com/peiman/vaultmind/internal/parser"
 	"github.com/peiman/vaultmind/internal/retrieval"
 )
 
@@ -24,7 +25,8 @@ func populateRawSnippets(db *index.DB, results []retrieval.ScoredResult) error {
 		if err != nil {
 			return fmt.Errorf("reading raw body preview for %q: %w", results[i].ID, err)
 		}
-		results[i].Snippet = truncate(body, snippetMaxLen)
+		// Same marker rule as QueryFullNote. This path does not load a FullNote.
+		results[i].Snippet = truncate(parser.StripVaultMindMarkers(body), snippetMaxLen)
 	}
 	return nil
 }

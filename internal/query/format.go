@@ -213,8 +213,7 @@ func writeAskHeader(w io.Writer, result *AskResult, explain, bodyDelivered bool)
 		// A confident tier on a small vault is left alone ONLY when the floor it
 		// cleared was measured. An unmeasured default (MiniLM's 0.0) makes every
 		// hit "strong", which is the default talking, not the vault.
-		if result.tooSmallToJudge() && (result.floorUnmeasured ||
-			result.TopHitConfidence == ConfidenceWeak || result.TopHitConfidence == ConfidenceNoMatch) {
+		if result.withholdsRelevanceJudgement() {
 			why := ""
 			if result.floorUnmeasured {
 				why = ", and this embedding model has no measured default floor to judge against"

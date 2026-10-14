@@ -20,9 +20,10 @@ changes.
 ## Decision
 
 **A draft is a note at its final path whose frontmatter `status` is `draft`.**
-Accepting it is flipping that field (`vaultmind frontmatter set <id> status
-accepted`, or any value other than `draft`). Same file, no copy (Principle 7 —
-one source of truth).
+Accepting a new draft is flipping that field (`vaultmind note accept <id>`, or
+`vaultmind frontmatter set <id> status accepted`). Same file, no copy
+(Principle 7 — one source of truth). A proposal draft is accepted by
+`vaultmind note accept` as well; that path is the amendment below.
 
 **Drafts stay out of recall and context delivery by default** (Principle 8 —
 the policy lives in the retrieval path, not in each command or hook).
@@ -57,8 +58,81 @@ vault that is not a git repository skips the uncommitted check and says why.
 Neither list is an error. Doctor JSON stays `schema_version` `v1`; the new
 fields are additive.
 
-**Out of scope.** `note propose` and a before/after rank preview are a later
-slice. This ADR does not add `draft` to any type's allowed-status list.
+**Out of scope.** A before/after rank preview is a later slice. This ADR does
+not add `draft` to any type's allowed-status list.
+
+## Amendment: a proposal draft, and `note accept`
+
+An accepted note cannot hold an unreviewed addition. Recall would return that
+paragraph: the draft exclusion applies to a note whose `status` is `draft`, not
+to a section inside a note that already ranks (Principle 8). Until a person
+reviews it, the addition is its own draft. After they accept it, one copy
+remains (Principle 7).
+
+`vaultmind note propose --question --finding` retrieves on the question and the
+finding the way `ask` does, drafts excluded, and reads the relevance band `ask`
+already computed for the top hit. It does not invent a score. The band that
+means close is the registry key `app.notepropose.close_band` (flag
+`--close-band`). The default is the strong band. Only a strong match is close
+enough to attach a finding to an existing note. A moderate, weak, `no_match`,
+or empty band — including a judgement `ask` withholds when the vault is small
+and the noise floor was never measured — is a new note. A typo'd close band
+fails the same way: nothing matches it, so the finding becomes a new note
+rather than a patch on the wrong one.
+
+- **patch.** The top hit is close. The draft sits next to that note, at
+  `<target-dir>/<target-id>.proposal-<yyyymmdd-hhmm>.md`. Frontmatter is
+  `status: draft`, `patches: <target-id>`, `question:`, `sources:`, and the
+  target's `type`. The body is the finding plus a Sources section.
+- **new.** Nothing is close. Frontmatter is `status: draft`, `question:`, and
+  `sources:`. The type is the top hit's type when that type is registered,
+  otherwise the vault's default knowledge type: the registered type named
+  `concept` when the schema has it, otherwise the first type in alphabetical
+  order that can hold `draft`. The built-in `overview` type is skipped. The
+  file is in the top hit's folder, or the vault root when there is no hit. The
+  id is the id `note create` would mint for a filename slugged from the
+  question. The body is expanded through that type's template, the same path
+  `note create` uses, so required fields hold.
+- **existing.** A draft already stores the same `question:` once spacing is
+  collapsed and case is folded. That draft is reported. Nothing new is written.
+
+`vaultmind note accept <id>` is how a person promotes a draft.
+
+- A new draft (no `patches` value) flips `status` to the schema's published
+  value. When the type lists statuses, that value is `accepted` if the list
+  contains it, otherwise `active` if the list contains that. A list that
+  contains neither is an error; the command does not guess `proposed`. An empty
+  list publishes as `accepted`. Same file, same id.
+- A patch draft is the draft whose `patches` field is non-empty. There is no
+  second mode field. Accept appends the proposal body under `## <question>` on
+  the target. The line immediately before that heading is the comment
+  `<!-- vaultmind:accepted <proposal-id> -->`. A retry that already finds the
+  comment skips the append and deletes the index row before the proposal file,
+  so a cleanup that failed after the write does not copy the section again. If
+  the file delete fails, the row is already gone; the retry finds the file,
+  re-indexes it, sees the marker, and only finishes cleanup. If the file is
+  already gone and the indexed row is a proposal, accept removes the row and
+  says the proposal was already gone. Delivery omits only a `<!-- vaultmind:`
+  comment and keeps every other HTML comment. `note get` still shows the
+  marker. Search text and recall excerpts still drop every HTML comment. The
+  target's other frontmatter is left as written (Principle 7:
+  `internal/mutation` is the one frontmatter writer). `sources` are added only
+  when the target's type allows that field. The write re-reads the file and
+  refuses when those bytes differ from the ones just read: nothing is written
+  and the proposal stays. After a write that lands, accept deletes the index
+  row, then the proposal file, and re-indexes the target.
+- A note that is not a draft is refused. A patch whose target is gone is refused.
+  A patch whose target is itself a draft, or is itself a proposal, is refused.
+  A `file:` source is checked the same way as a path: it must exist, and it
+  must sit inside the vault or the repository.
+
+The notes a write touched are re-indexed the way `note create` re-indexes, and
+embedded when embed-on-write is on. `vaultmind frontmatter set` still changes
+one field. It does not merge a proposal.
+
+A type with a closed status list does not gain `draft`. During the draft window
+validation warns that the status is not in the list, the same warning `note
+create` already allows a write to pass. Accepting writes a value the list allows.
 
 ## Alternatives Considered
 
@@ -161,13 +235,38 @@ file (a gitlink) is treated as not a repository.
 `TestRender_MarksADraftAndLeavesOtherStatusesAlone` fails if `tree` drops the
 `[draft]` mark or stamps it on another status.
 
+`note propose` and `note accept` are held by these tests:
+
+- `TestPropose_PatchWhenTheTopHitIsClose` (`internal/propose`) — a strong top hit writes a proposal draft next to that note.
+- `TestPropose_NewWhenNothingIsClose` (`internal/propose`) — a weaker band, and no hit, write a new draft. Inverting the band check (`band == closeBand`) turns the weaker hit into a patch and this test goes red.
+- `TestPropose_ExistingDraftOnRepeatedQuestion` (`internal/propose`) — the same question, spacing and case aside, reports the draft already written.
+- `TestPropose_WrittenNoteValidatesAndAskOmitsDrafts` (`cmd`) — the written note passes the vault schema, and a default `ask` on the real index does not return the draft.
+- `TestAccept_NewFlipsStatus` (`internal/propose`) — accepting a new draft flips status to the schema's published value.
+- `TestAccept_PatchMergesDeletesAndReindexes` (`internal/propose`) — the target body contains the addition, the proposal file is gone, and the target is re-indexed. Skipping the proposal delete leaves the file and this test goes red.
+- `TestAccept_RetryAfterCleanupFailureDoesNotDuplicate` (`internal/propose`) — when deleting the proposal fails after the target was written, a retry leaves one copy of the section. Removing the marker check appends it again and this test goes red.
+- `TestAccept_FrontmatterPreservesUnchangedKeys` (`internal/propose`) — accepting a new draft changes only the `status` line. Key order, a quoted title, a date scalar, and a comment stay byte-identical.
+- `TestAccept_PatchKeepsFrontmatterExceptSources` (`internal/propose`) — accepting a patch keeps that same frontmatter and appends `sources` when the type allows the field.
+- `TestAccept_RefusesWhenTheTargetChanged` (`internal/propose`) — a target that changed between the read and the write is left untouched. Dropping the hash check overwrites it and this test goes red.
+- `TestAccept_WriteUsesATempFile` (`internal/propose`) — the write goes through a temp file in the note's directory. A directory that cannot create one leaves the note unchanged.
+- `TestAccept_RefusesADraftTarget` (`internal/propose`) — a patch whose target is a draft is refused and left unchanged. Allowing a draft target makes this test go red.
+- `TestAccept_RefusesAProposalTarget` (`internal/propose`) — a patch whose target is itself a proposal is refused.
+- `TestAccept_NonDraftErrors` (`internal/propose`) — accepting a note that is not a draft fails.
+- `TestPropose_SourceValidation` (`internal/propose`) — a source URL must parse, and a path must exist inside the vault or the repository. `file:///etc/passwd` is rejected with the same error as `/etc/passwd`.
+- `TestSourceURL_FileScheme` (`internal/propose`) — a `file:` URL of a note inside the vault is accepted; an empty `file:` URL is not.
+- `TestStripForFTS_RemovesHTMLComments` (`internal/parser`) — the indexed text omits the accept marker, including a comment that contains `>`.
+- `TestExcerpt_DropsTheAcceptMarker` (`internal/memory`) — a recall excerpt omits the marker when it sits on the same line as the sentence it guards.
+- `TestContract_NoteProposeJSON` (`cmd`) — `note propose --json` is the v1 envelope.
+- `TestContract_NoteAcceptJSON` (`cmd`) — `note accept --json` is the v1 envelope.
+
 What stays on the honor system: not putting `draft` into a type's allowed-status
-list. That list is vault data, and a closed list already rejects unknown values
-at validation. A type with an empty list is allowed to store `draft`.
+list. That list is vault data. A closed list warns during the draft window and
+already rejects an unknown value at validation; accepting writes a value the
+list allows. A type with an empty list is allowed to store `draft`.
 
 ## References
 
 - Gap loop, item 3 (2026-10-14): drafts at the final path; accepting is a status flip.
+- Gap loop, item 2 (2026-10-14): `note propose` writes the draft; `note accept` promotes it.
 - ADR-002 and ADR-005: one registry key, generated constants, no literals in commands.
 - ADR-014: this section is the enforcement record.
 - Principle 7 (one file, one key, one filter) and Principle 8 (ranking policy in the binary).

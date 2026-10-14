@@ -3,6 +3,8 @@ package index
 import (
 	"fmt"
 	"strings"
+
+	"github.com/peiman/vaultmind/internal/parser"
 )
 
 // FTSResult represents a single full-text search hit per SRS-09.
@@ -92,6 +94,10 @@ func SearchFTS(d *DB, query string, limit, offset int, filters ...SearchFilters)
 		if path != nil {
 			r.Path = *path
 		}
+		// The preview is the first 200 characters of the stored body. A marker
+		// inside that window is bookkeeping, not the note. Author comments stay.
+		// Search text already dropped every comment when it was indexed.
+		r.Snippet = parser.StripVaultMindMarkers(r.Snippet)
 		// Normalize score: SQLite BM25 rank is negative (lower = better).
 		// Negate to make higher = better, matching SRS-09 convention.
 		if r.Score < 0 {
