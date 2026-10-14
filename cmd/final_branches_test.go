@@ -29,16 +29,14 @@ func TestIndex_FullRebuildTouchesEveryNote(t *testing.T) {
 	assert.Greater(t, env.Result.Index.Indexed, 0, "full rebuild must (re)index every note")
 }
 
-// Incremental index human output reports the skipped/updated/added/deleted
-// breakdown (tested via JSON in an earlier test, this one covers the
-// text-formatter branch of runIndex).
+// A second index of an unchanged vault says the index was already current.
+// The skipped/updated/added breakdown stays for a run that changes something
+// (TestFormatIndexResult_IncrementalChangeKeepsTheBreakdown).
 func TestIndex_IncrementalHumanOutput(t *testing.T) {
 	vault := buildIndexedTestVault(t)
 	out, _, err := runRootCmd(t, "index", "--vault", vault)
 	require.NoError(t, err)
-	text := out.String()
-	assert.Contains(t, text, "skipped")
-	assert.Contains(t, text, "Indexed")
+	assert.Contains(t, out.String(), "Index already current")
 }
 
 // Full-rebuild human output differs from incremental — it reports

@@ -399,6 +399,29 @@ func TestFormatIndexResult_FullRebuildMessage(t *testing.T) {
 	assert.Contains(t, out, "2 unstructured")
 }
 
+func TestFormatIndexResult_IncrementalNoopSaysAlreadyCurrent(t *testing.T) {
+	var buf bytes.Buffer
+	err := formatIndexResult(index.IndexAndEmbedResult{
+		Index: &index.IndexResult{Skipped: 21},
+		Embed: &index.EmbedResult{Embedded: 0, Skipped: 21},
+	}, "bge-m3", &buf)
+	require.NoError(t, err)
+	out := buf.String()
+	assert.Contains(t, out, "Index already current (21 notes)\n")
+	assert.NotContains(t, out, "Indexed 21 notes")
+	assert.Contains(t, out, "Embedded 0 notes")
+}
+
+func TestFormatIndexResult_IncrementalChangeKeepsTheBreakdown(t *testing.T) {
+	var buf bytes.Buffer
+	err := formatIndexResult(index.IndexAndEmbedResult{
+		Index: &index.IndexResult{Skipped: 20, Updated: 1},
+	}, "", &buf)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "Indexed 21 notes (20 skipped, 1 updated, 0 added, 0 deleted)")
+	assert.NotContains(t, buf.String(), "already current")
+}
+
 func TestFormatIndexResult_IncrementalMessageBreakdown(t *testing.T) {
 	var buf bytes.Buffer
 	err := formatIndexResult(index.IndexAndEmbedResult{

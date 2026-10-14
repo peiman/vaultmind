@@ -217,7 +217,7 @@ func HooksInstallOptions() []config.ConfigOption {
 		{
 			Key:          "app.hooksinstall.profile",
 			DefaultValue: "",
-			Description:  "Capability profile to declare and install: knowledge, persona, or full. Unset, the project's declared profile is kept; else full if hooks are already installed (older installs were all full); else knowledge, like init. Recorded in .claude/vaultmind-profile so `hooks status` judges what you chose, not everything the binary ships.",
+			Description:  "Capability profile to declare and install: knowledge, persona, or full. Unset, the project's declared profile is kept; else full if hooks are already installed (older installs were all full); else knowledge, like init. Recorded in .claude/vaultmind-profile so 'hooks status' judges what you chose, not everything the binary ships.",
 			Type:         "string",
 		},
 		{

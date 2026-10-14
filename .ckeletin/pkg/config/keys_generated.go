@@ -176,8 +176,8 @@ const (
 	KeyAppIdentityenrollInvite               = "app.identityenroll.invite"                // Network invite: a vmenroll1: token or enroll URL (required)
 	KeyAppIdentityenrollDisplayName          = "app.identityenroll.display_name"          // Your display name in the network (required; Unicode NFC)
 	KeyAppIdentityenrollSlug                 = "app.identityenroll.slug"                  // Your short ASCII handle/slug (required)
-	KeyAppIdentityenrollPubkey               = "app.identityenroll.pubkey"                // Your base64-std ed25519 identity pubkey from `identity init` (required)
-	KeyAppIdentityenrollTransportPubkey      = "app.identityenroll.transport_pubkey"      // Your base64-std 32-byte WireGuard pubkey from `wg pubkey` (required)
+	KeyAppIdentityenrollPubkey               = "app.identityenroll.pubkey"                // Your base64-std ed25519 identity pubkey from 'identity init' (required)
+	KeyAppIdentityenrollTransportPubkey      = "app.identityenroll.transport_pubkey"      // Your base64-std 32-byte WireGuard pubkey from 'wg pubkey' (required)
 	KeyAppIdentityenrollTransportEndpoint    = "app.identityenroll.transport_endpoint"    // Optional reachable host:port (IPv6 bracketed); omitted when empty
 	KeyAppIdentityenrollSignerSocket         = "app.identityenroll.signer_socket"         // Signer socket path (default: XDG state dir)
 	KeyAppIdentityenrollYes                  = "app.identityenroll.yes"                   // Skip the out-of-band fingerprint confirmation prompt
