@@ -195,6 +195,30 @@ func RelevanceBand(r *AskResult) string {
 	return r.TopHitConfidence
 }
 
+// BandFor is the relevance band ask would show for one hit of a Rank result.
+// Empty when the judgement is withheld, or when this hit has no band of its
+// own: a noise-floor label needs that hit's cosine, and the keyword fallback
+// labels only the top hit. floor is the embedder's shipped noise floor, the
+// same ceiling Rank used for the top hit, so that hit matches RelevanceBand
+// whenever a judgement is shown.
+func BandFor(r *AskResult, id string, floor float64) string {
+	if r == nil || id == "" || r.withholdsRelevanceJudgement() {
+		return ""
+	}
+	if r.NoiseFloorApplied {
+		cos, ok := r.Similarities[id]
+		if !ok {
+			return ""
+		}
+		_, label := noisefloor.Relevance(cos, r.NoiseFloor, r.NoiseFloorSigma, floor)
+		return label
+	}
+	if len(r.TopHits) > 0 && r.TopHits[0].ID == id {
+		return r.TopHitConfidence
+	}
+	return ""
+}
+
 // Confidence tier strings. The noisefloor package is the single source of
 // truth (Principle 7); these are aliases so the rest of the query package can
 // keep referring to query.ConfidenceX without a second literal set that could

@@ -120,6 +120,23 @@ type NoteProposeEnvelope struct {
 		ID       string `json:"id"`
 		TargetID string `json:"target_id,omitempty"`
 		NextStep string `json:"next_step"`
+		// RankCheck is additive inside schema_version v1.
+		RankCheck struct {
+			Mode   string `json:"mode"`
+			Window int    `json:"window"`
+			Before struct {
+				ID   string `json:"id"`
+				Rank int    `json:"rank"`
+				Band string `json:"band"`
+			} `json:"before"`
+			After struct {
+				ID   string `json:"id"`
+				Rank int    `json:"rank"`
+				Band string `json:"band"`
+			} `json:"after"`
+			MeasuredOn  string   `json:"measured_on"`
+			OutrankedBy []string `json:"outranked_by"`
+		} `json:"rank_check"`
 	} `json:"result"`
 	Meta struct {
 		VaultPath string `json:"vault_path"`

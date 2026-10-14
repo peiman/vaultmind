@@ -37,6 +37,16 @@ source must be a file inside the vault or the repository that contains it.
 strong band, so a weaker match becomes a new note instead of a patch on the
 wrong one.
 
+After the draft is written, propose re-runs the original question through the
+same ranking ask uses, with the same retrieval options and the default hit
+window (app.ask.search_limit). It reports where the closest existing note
+ranked with drafts excluded, and where this draft ranks with drafts included.
+A patch is measured on the proposal note, which holds the finding. The draft's
+frontmatter records rank_before, rank_after, and rank_checked_at. 0 means the
+note was not in the window. The check does not record an access. Keyword mode,
+when no embedder is available, still runs and is labeled. --json adds
+rank_check to the v1 envelope.
+
 FLAGS
 
   --question <text>   The question the finding answers.

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `note propose` checks that the draft repairs retrieval. After the draft is written it re-runs the original question through the same ranking `ask` uses, and reports the closest existing note with drafts excluded and this draft with drafts included. The draft stores `rank_before`, `rank_after`, and `rank_checked_at`. `0` means not in the hit window. The check does not record an access. `--json` adds `rank_check` to the v1 envelope.
+
 ### Fixed
 
 - Delivered note bodies hide only VaultMind's own `<!-- vaultmind:` comments. An author HTML comment is still delivered. `note get` still shows the marker. Search text still drops every HTML comment.

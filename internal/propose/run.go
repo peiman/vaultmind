@@ -14,6 +14,7 @@ import (
 
 // Run writes a draft proposal, or reports the draft that already asks this question.
 func Run(ctx context.Context, v Vault, req Request, retriever Retriever) error {
+	defer closeRanker(req)
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -115,6 +116,9 @@ func writePatch(ctx context.Context, v Vault, req Request, hit Hit, now time.Tim
 	}
 	out.Mode = modePatch
 	out.TargetID = hit.ID
+	if err := attachRankCheck(ctx, v, req, &out, now); err != nil {
+		return err
+	}
 	return renderPropose(req, v, out)
 }
 
@@ -136,6 +140,9 @@ func writeNew(ctx context.Context, v Vault, req Request, hit Hit, found bool, no
 		out, err := writeDraft(ctx, v, req, rel, noteType, "")
 		if err == nil {
 			out.Mode = modeNew
+			if err := attachRankCheck(ctx, v, req, &out, now); err != nil {
+				return err
+			}
 			return renderPropose(req, v, out)
 		}
 		if errors.Is(err, errExists) || errors.Is(err, errIDTaken) {

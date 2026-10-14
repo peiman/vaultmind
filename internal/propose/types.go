@@ -47,6 +47,10 @@ type Request struct {
 	Stdout, Stderr               io.Writer
 	Embed                        func(vaultPath string)
 	WorkDir                      string
+	// Ranker re-runs the original question after the draft is on disk.
+	// Nil skips the check. The command sets it; tests that only place a
+	// draft leave it nil so their output stays the placement report.
+	Ranker QuestionRanker
 	// beforeWrite, when set, runs after the note is read and before the
 	// conflict-checked write. Tests use it to change the file in that window.
 	beforeWrite func(abs string) error
@@ -67,6 +71,48 @@ const (
 	modeExisting = "existing"
 )
 
+// RankedHit is one note in a ranking window, rank 1 first. Band is empty
+// when ask would not show one for that hit.
+type RankedHit struct {
+	ID, Band string
+}
+
+// QuestionRank is one pass of the question through the ranking ask uses.
+// Mode is "hybrid" or "keyword". Window is the hit limit of that pass.
+// Zero means the caller asked for no cut.
+type QuestionRank struct {
+	Hits   []RankedHit
+	Mode   string
+	Window int
+}
+
+// QuestionRanker ranks a question. includeDrafts is the only difference
+// between the two passes: false is what an agent gets today, true is the
+// draft counted as if it had been accepted.
+type QuestionRanker interface {
+	RankQuestion(ctx context.Context, question string, includeDrafts bool) (QuestionRank, error)
+}
+
+// RankPlace is one side of the retrieval check. Rank 0 means the note was
+// not inside the window.
+type RankPlace struct {
+	ID   string `json:"id,omitempty"`
+	Rank int    `json:"rank"`
+	Band string `json:"band,omitempty"`
+}
+
+// RankCheck is the before/after measurement stored on the draft and
+// reported to the caller. MeasuredOn is "proposal" when the finding lives
+// on the proposal note rather than on the note it patches.
+type RankCheck struct {
+	Mode        string    `json:"mode,omitempty"`
+	Window      int       `json:"window"`
+	Before      RankPlace `json:"before"`
+	After       RankPlace `json:"after"`
+	MeasuredOn  string    `json:"measured_on,omitempty"`
+	OutrankedBy []string  `json:"outranked_by,omitempty"`
+}
+
 // outcome is one successful propose or accept.
 type outcome struct {
 	Mode     string
@@ -76,4 +122,5 @@ type outcome struct {
 	Status   string
 	Removed  string
 	Warnings []string
+	Rank     *RankCheck
 }
