@@ -55,10 +55,10 @@ func TestFaithfulDelivery_UpgradeBackfillsWithoutChangingRetrieval(t *testing.T)
 			require.NoError(t, db.QueryRow("SELECT rowid, body_text FROM fts_notes WHERE note_id='faithful'").Scan(&rowid, &fts))
 			before, err := index.SearchFTS(db, "Faithful", 10, 0)
 			require.NoError(t, err)
-			// Recreate the previous schema, then let Open apply migration 009.
+			// Recreate the previous schema, then let Open apply migrations from 009 onward.
 			_, err = db.Exec("ALTER TABLE notes DROP COLUMN body_raw")
 			require.NoError(t, err)
-			_, err = db.Exec("DELETE FROM goose_db_version WHERE version_id=9")
+			_, err = db.Exec("DELETE FROM goose_db_version WHERE version_id>=9")
 			require.NoError(t, err)
 			require.NoError(t, db.Close())
 			if touch {

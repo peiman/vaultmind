@@ -22,6 +22,11 @@ const embedOnWriteFlag = "embed-on-write"
 // A variable so a test can lower it.
 var embedOnWriteLimit = 10
 
+// embeddingBackendName is the build's embedding backend. A test points it at
+// ORT without an ORT binary: the stale-format upgrade is the one embed-on-write
+// that may exceed embedOnWriteLimit, and only on that backend.
+var embeddingBackendName = embedding.BackendName
+
 // runEmbedPass runs the incremental embed pass. A variable so tests can pin
 // what a write reports without loading a real model.
 var runEmbedPass = func(cmd *cobra.Command, vaultPath, dbPath string, cfg *vault.Config, model string) (*index.EmbedResult, error) {
@@ -53,13 +58,28 @@ func embedAfterWriteUpTo(cmd *cobra.Command, vaultPath string, cfg *vault.Config
 		return
 	}
 	finish := fmt.Sprintf("vaultmind index --embed --vault %s", vaultPath)
-	if model == embedding.ModelBGEM3 && embedding.BackendName() != embedding.BackendNameORT {
+	if model == embedding.ModelBGEM3 && embeddingBackendName() != embedding.BackendNameORT {
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "not embedded: this build has no ORT backend for BGE-M3; run %s with an ORT build\n", finish)
 		return
 	}
-	if pending, err := index.PendingEmbeddings(dbPath, model); err == nil && pending > limit {
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "not embedded: %d notes have no embeddings; embed them with %s\n", pending, finish)
-		return
+	// A stale sparse column is rewritten by the same pass that embeds pending
+	// notes, including when the pending count is over the backlog limit. That
+	// is one model load. A current stamp keeps the limit: a write must not
+	// turn into a full embed of a backlog.
+	upgradeStale := false
+	if model == embedding.ModelBGEM3 && embeddingBackendName() == embedding.BackendNameORT {
+		stale, serr := index.SparseFormatStaleFile(dbPath)
+		if serr != nil {
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "written, but not embedded (%v); run %s\n", serr, finish)
+			return
+		}
+		upgradeStale = stale
+	}
+	if !upgradeStale {
+		if pending, err := index.PendingEmbeddings(dbPath, model); err == nil && pending > limit {
+			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "not embedded: %d notes have no embeddings; embed them with %s\n", pending, finish)
+			return
+		}
 	}
 	res, err := runEmbedPass(cmd, vaultPath, dbPath, cfg, model)
 	if err != nil {

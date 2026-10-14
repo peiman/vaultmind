@@ -35,7 +35,7 @@ func TestRecallHook_MigratedIndexStillDeliversBodies(t *testing.T) {
 	require.NoError(t, err)
 	_, err = db.Exec("ALTER TABLE notes DROP COLUMN body_raw")
 	require.NoError(t, err)
-	_, err = db.Exec("DELETE FROM goose_db_version WHERE version_id=9")
+	_, err = db.Exec("DELETE FROM goose_db_version WHERE version_id>=9")
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 	env := append(h.env(false), "VM_TEST_BINARY="+binary, "VAULTMIND_NO_SERVE=1", "XDG_DATA_HOME="+t.TempDir(), "XDG_STATE_HOME="+t.TempDir())

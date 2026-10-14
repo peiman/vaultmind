@@ -25,7 +25,7 @@ func TestBodyRawFallback_CLIDeliveryAndDoctor(t *testing.T) {
 			if nullRaw {
 				_, err = db.Exec("ALTER TABLE notes DROP COLUMN body_raw")
 				require.NoError(t, err)
-				_, err = db.Exec("DELETE FROM goose_db_version WHERE version_id=9")
+				_, err = db.Exec("DELETE FROM goose_db_version WHERE version_id>=9")
 			} else {
 				_, err = db.Exec("UPDATE notes SET body_raw=''")
 			}

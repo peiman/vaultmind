@@ -3,6 +3,8 @@ package query
 import (
 	"fmt"
 	"io"
+
+	"github.com/peiman/vaultmind/internal/index"
 )
 
 // WriteKeywordOnlyHint writes a user-facing diagnostic to w when the ask
@@ -47,4 +49,19 @@ func WriteEmbedderDownNotice(w io.Writer, err error) bool {
 		"but the embedding model failed to load: %v\n", err)
 	_, _ = fmt.Fprintln(w, "  Run `vaultmind doctor` to see which runtime was loaded and how to fix it.")
 	return true
+}
+
+// WriteSparseFormatStaleNotice says the stored sparse vectors still count
+// special tokens, and names the one command that rewrites them. The caller
+// prints it before the results, on the output the reader sees.
+//
+// A hook caller is silent. UserPromptSubmit echoes this stdout into the
+// agent on every turn. doctor, a plain index, and the SessionStart health
+// hook print the same words on their own paths.
+func WriteSparseFormatStaleNotice(w io.Writer) {
+	if index.HookCaller() {
+		return
+	}
+	_, _ = fmt.Fprintf(w, "⚠ %s\n", index.SparseFormatStaleNotice)
+	_, _ = fmt.Fprintf(w, "  run: %s\n", index.SparseFormatStaleRemedy)
 }

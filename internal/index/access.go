@@ -62,6 +62,14 @@ func resolveCaller(explicit string) string {
 	return CallerAgent
 }
 
+// HookCaller reports whether VAULTMIND_CALLER names a hook. The rule is
+// containsHookSubstring, the same one resolveCaller uses to record the
+// access as CallerHook, so a new hook script is classified without a
+// second list of names.
+func HookCaller() bool {
+	return containsHookSubstring(os.Getenv(callerEnvVar))
+}
+
 // containsHookSubstring is a tiny helper kept inline so the resolver
 // doesn't pull in strings.Contains for one call.
 func containsHookSubstring(s string) bool {

@@ -136,6 +136,17 @@ func TestHealthHook_BGEM3ShowsActive(t *testing.T) {
 	assert.Contains(t, out, "full BGE-M3 hybrid")
 	assert.Contains(t, out, "vaultmind ask")
 	assert.NotContains(t, out, "degraded")
+	assert.NotContains(t, out, "sparse vectors are an older format")
+}
+
+func TestHealthHook_RelaysSparseFormatNotice(t *testing.T) {
+	doctorOut := "Embeddings: dense 50/50 (bge-m3), sparse 50/50, colbert 50/50\n" +
+		"⚠ sparse vectors are an older format; hybrid ranking still counts special tokens\n" +
+		"  run: vaultmind index --embed --vault /v"
+	out, _ := runHealthHook(t, projectWithVault(t), stubVaultmind(t, doctorOut))
+	assert.Contains(t, out, "full BGE-M3 hybrid")
+	assert.Equal(t, 1, strings.Count(out, "sparse vectors are an older format"))
+	assert.Contains(t, out, "run: vaultmind index --embed --vault /v")
 }
 
 // A mixed-model index has a MiniLM fraction running degraded 2-lane recall.
