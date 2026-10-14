@@ -36,6 +36,9 @@ types:
   principle:
     required: [title]
     template: .vaultmind/templates/concept.md
+  reference:
+    required: [title]
+    template: .vaultmind/templates/concept.md
 `
 
 var proposeNow = time.Date(2026, 10, 14, 15, 30, 0, 0, time.UTC)

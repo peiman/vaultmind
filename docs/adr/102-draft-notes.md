@@ -98,18 +98,26 @@ typo'd close band fails the same way: nothing matches it, so the finding
 becomes a new note rather than a patch on the wrong one.
 
 - **patch.** The top hit is close. The draft sits next to that note, at
-  `<target-dir>/<target-id>.proposal-<yyyymmdd-hhmm>.md`. Frontmatter is
-  `status: draft`, `patches: <target-id>`, `question:`, `sources:`, and the
-  target's `type`. The body is the finding plus a Sources section.
+  `<target-dir>/<target-id>.proposal-<yyyymmdd-hhmm>.md`. A target under the
+  import folder (`imported/`, the folder the import command writes) does not
+  hold the proposal: it is filed in the drafts folder with that same filename.
+  Frontmatter is `status: draft`, `patches: <target-id>`, `question:`,
+  `sources:`, and the target's `type`, including when that type is the import
+  type, so a vault that only registers that type can still write the proposal.
+  The body is the finding plus a Sources section.
 - **new.** Nothing is close. Frontmatter is `status: draft`, `question:`, and
   `sources:`. The type is the top hit's type when that type is registered,
-  otherwise the vault's default knowledge type: the registered type named
-  `concept` when the schema has it, otherwise the first type in alphabetical
-  order that can hold `draft`. The built-in `overview` type is skipped. The
-  file is in the top hit's folder, or the vault root when there is no hit. The
-  id is the id `note create` would mint for a filename slugged from the
-  question. The body is expanded through that type's template, the same path
-  `note create` uses, so required fields hold.
+  except the type the import command writes (`reference`). Otherwise the
+  vault's default knowledge type: the registered type named `concept` when the
+  schema has it, otherwise the first type in alphabetical order that can hold
+  `draft`. The built-in `overview` type is skipped. The file is in the top
+  hit's folder, or the vault root when there is no hit. A hit under the import
+  folder is filed in the drafts folder instead. That folder is the registry
+  key `app.notepropose.drafts_dir` (flag `--drafts-dir`, default `notes`).
+  `.` is the vault root. A drafts folder under the import folder falls back
+  to `notes`. The id is the id `note create` would mint for a filename slugged
+  from the question. The body is expanded through that type's template, the
+  same path `note create` uses, so required fields hold.
 - **existing.** A draft already stores the same `question:` once spacing is
   collapsed and case is folded. That draft is reported. Nothing new is written.
 
@@ -266,6 +274,8 @@ file (a gitlink) is treated as not a repository.
 `note propose` and `note accept` are held by these tests:
 
 - `TestPropose_PatchWhenTheTopHitIsClose` (`internal/propose`) — a strong top hit writes a proposal draft next to that note.
+- `TestPropose_NewDraftDoesNotInheritAnImport` (`internal/propose`) — a new draft whose closest note is an import is filed as `concept` under `notes/`, not in the import folder and not as the import type.
+- `TestPropose_PatchOfAnImportGoesToTheDraftsFolder` (`internal/propose`) — a patch of an imported note is filed in the drafts folder and keeps the target's type.
 - `TestPropose_NewWhenNothingIsClose` (`internal/propose`) — a band weaker than the close band, and no hit, write a new draft. Treating a moderate hit as close when the close band is strong turns it into a patch and this test goes red.
 - `TestPropose_CloseBandModerateIncludesAStrongHit` (`internal/propose`) — `--close-band moderate` writes a patch when the hit is strong.
 - `TestPropose_ExplainsANewNoteWhenTheQuestionIsStrongerThanTheFinding` (`internal/propose`) — a strong question-only rank and a moderate question-and-finding hit stay `new`, and the line says why. The question-only rank stays labeled on its own.

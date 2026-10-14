@@ -42,7 +42,10 @@ type Request struct {
 	Question, Finding, CloseBand string
 	// GapID, when set, stores closes_gap on the draft. An empty question
 	// uses the gap's stored question.
-	GapID          string
+	GapID string
+	// DraftsDir is where a draft goes when it must not sit in an import
+	// folder. Empty means notes. "." is the vault root.
+	DraftsDir      string
 	Sources        []string
 	JSON           bool
 	Now            time.Time // zero means time.Now().UTC()

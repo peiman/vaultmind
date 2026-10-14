@@ -124,6 +124,16 @@ const OverviewType = "overview"
 // TestGapType_MatchesTheIndexConstant locks them.
 const GapType = "gap"
 
+// ImportFolder is the vault folder the import command writes into.
+// importdocs.ImportedDir is this string. propose reads it here: the business
+// layer cannot import importdocs, and the folder name has one source
+// (Principle 7).
+const ImportFolder = "imported"
+
+// ImportNoteType is the type the import command assigns. A new draft does
+// not inherit it. importdocs.NoteType is this string.
+const ImportNoteType = "reference"
+
 // LoadConfig reads .vaultmind/config.yaml from the vault root.
 // Returns defaults if the config file doesn't exist.
 func LoadConfig(vaultRoot string) (*Config, error) {

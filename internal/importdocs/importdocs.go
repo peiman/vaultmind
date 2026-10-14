@@ -44,7 +44,12 @@ const (
 )
 
 // ImportedDir is the vault folder imported notes live under.
-const ImportedDir = "imported"
+// The string lives on vault so propose can reuse it without importing this
+// package (Principle 7).
+const ImportedDir = vault.ImportFolder
+
+// NoteType is the type an imported note is filed as.
+const NoteType = vault.ImportNoteType
 
 // Source names the docs to import. The command layer resolves Repo and Prefix
 // from the repository around Dir, as `paths:` does.

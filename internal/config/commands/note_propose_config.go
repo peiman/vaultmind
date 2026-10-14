@@ -17,16 +17,20 @@ It does not invent a second score.
 
   - patch, when that band is at least the close band (default: strong). A
     stronger band is also a patch: a strong hit with --close-band moderate
-    still patches. A draft is written next to the closest note. status is
+    still patches. A draft is written next to the closest note, or in
+    --drafts-dir when that note is under the import folder. status is
     draft, patches names the target, and the body is the finding plus a
     Sources section. An accepted note cannot hold the addition yet: recall
     would return it before a person had reviewed it.
   - new, when the band is weaker than the close band, empty, or missing
     (moderate against a strong close band, weak, no_match, or no band).
-    The type is the top hit's type when it has one, otherwise the vault's
-    default knowledge type (concept when the schema registers it, otherwise
-    the first type that can hold a draft). The id is the note-create id of a
-    filename slugged from the question. The file is expanded through that
+    The type is the top hit's type when that type is registered, except the
+    type the import command writes. Otherwise the vault's default knowledge
+    type (concept when the schema registers it, otherwise the first type that
+    can hold a draft). The id is the note-create id of a filename slugged
+    from the question. The file is in the top hit's folder, or the vault root
+    when there is no hit. A hit under the import folder is filed in
+    --drafts-dir instead (default notes). The file is expanded through that
     type's template, so required fields hold.
   - existing, when a draft already has the same question (spacing and case
     aside). That draft is reported and nothing new is written.
@@ -59,6 +63,7 @@ FLAGS
   --finding <text>    The finding. Required.
   --source <url|path> A source URL or a file inside the vault or its repository. Repeatable.
   --close-band <band> Weakest ask relevance band that is close enough to patch. A stronger band is also close.
+  --drafts-dir <dir>  Folder for a draft that must not sit in the import folder. Default notes. "." is the vault root.
   --gap <id>          An open gap this finding answers. The draft stores closes_gap.
                       When --question is omitted, the gap's question is used.
                       Accepting the draft closes that gap.
@@ -71,6 +76,7 @@ FLAGS
 		"app.notepropose.question":   "question",
 		"app.notepropose.finding":    "finding",
 		"app.notepropose.close_band": "close-band",
+		"app.notepropose.drafts_dir": "drafts-dir",
 		"app.notepropose.gap":        "gap",
 	},
 }
@@ -86,6 +92,12 @@ func NoteProposeOptions() []config.ConfigOption {
 			Key:          "app.notepropose.close_band",
 			DefaultValue: noisefloor.ConfidenceStrong,
 			Description:  "Weakest relevance band that is close enough to patch. A stronger band is also close. The band ask already reports for that hit. Default is the strong band.",
+			Type:         "string",
+		},
+		{
+			Key:          "app.notepropose.drafts_dir",
+			DefaultValue: "notes",
+			Description:  "Folder for a draft that must not sit in the import folder. Default is notes. \".\" is the vault root. A folder under the import folder falls back to notes.",
 			Type:         "string",
 		},
 		{Key: "app.notepropose.gap", DefaultValue: "", Description: "Open gap this finding answers. The draft stores closes_gap. When the question is omitted, the gap's question is used.", Type: "string"},

@@ -14,8 +14,15 @@ import (
 
 // defaultKnowledgeType is the scaffold's domain-knowledge type: an open status
 // list and a required title. A vault that registered it can hold a new draft
-// without inventing a type.
+// without inventing a type. A new draft does not inherit the import type
+// (vault.ImportNoteType); it uses this type when the schema registers it.
 const defaultKnowledgeType = "concept"
+
+// defaultDraftsDir is where a draft goes when it must not sit in an import
+// folder. The registry key app.notepropose.drafts_dir overrides it. "." means
+// the vault root. A drafts dir that is itself under the import folder falls
+// back here.
+const defaultDraftsDir = "notes"
 
 // bandIsClose reports whether the band ask already computed is at least the
 // band this vault treats as close enough to patch. strong is closer than
@@ -96,6 +103,58 @@ func proposalPath(targetPath, targetID string, now time.Time) string {
 	return dir + "/" + name
 }
 
+// proposalRel keeps a patch beside its target. A target under the import
+// folder cannot hold the proposal: the draft goes in the drafts folder, with
+// the same filename.
+func proposalRel(targetPath, targetID, drafts string, now time.Time) string {
+	beside := proposalPath(targetPath, targetID, now)
+	if !underImport(targetPath) {
+		return beside
+	}
+	name := beside
+	if i := strings.LastIndex(beside, "/"); i >= 0 {
+		name = beside[i+1:]
+	}
+	return joinRel(draftsDir(drafts), name)
+}
+
+func joinRel(dir, name string) string {
+	if dir == "." || dir == "" {
+		return name
+	}
+	return dir + "/" + name
+}
+
+// underImport reports a path that is the import folder or inside it.
+// imported.md at the vault root is not. The comparison is case-sensitive,
+// matching the folder the import command writes.
+func underImport(rel string) bool {
+	rel = strings.Trim(filepath.ToSlash(rel), "/")
+	folder := vault.ImportFolder
+	return rel == folder || strings.HasPrefix(rel, folder+"/")
+}
+
+func draftsDir(s string) string {
+	s = strings.Trim(filepath.ToSlash(strings.TrimSpace(s)), "/")
+	if s == "" {
+		return defaultDraftsDir
+	}
+	if s == "." {
+		return "."
+	}
+	if underImport(s) {
+		return defaultDraftsDir
+	}
+	return s
+}
+
+func newDir(hitPath, drafts string) string {
+	if underImport(hitPath) {
+		return draftsDir(drafts)
+	}
+	return hitDir(hitPath)
+}
+
 func hitDir(path string) string {
 	if path == "" {
 		return "."
@@ -124,20 +183,24 @@ func newRel(dir, slug string, n int, now time.Time) string {
 // chooseType picks the type of a new draft.
 //
 // A top hit with a registered type lends that type, including when the band is
-// not close enough to patch. Otherwise the vault's default knowledge type is
+// not close enough to patch, except the type the import command writes.
+// Otherwise the vault's default knowledge type is
 // the registered type named concept. If the vault has no concept, the first
 // type in alphabetical order that can hold a draft is used, skipping the
 // built-in overview type. A closed list that rejects draft is skipped here so
 // the new note is one the schema can accept.
 func chooseType(reg *schema.Registry, hitType string) (string, error) {
-	if hitType != "" && reg.HasType(hitType) {
+	// The import type is a projection of someone else's doc. A new answer is
+	// knowledge, so it does not inherit that type even when the schema
+	// registers it (Principle 7).
+	if hitType != "" && hitType != vault.ImportNoteType && reg.HasType(hitType) {
 		return hitType, nil
 	}
 	if reg.HasType(defaultKnowledgeType) {
 		return defaultKnowledgeType, nil
 	}
 	for _, name := range reg.ListTypes() {
-		if name == vault.OverviewType || name == vault.GapType {
+		if name == vault.OverviewType || name == vault.GapType || name == vault.ImportNoteType {
 			continue
 		}
 		if reg.ValidStatus(name, index.StatusDraft) {

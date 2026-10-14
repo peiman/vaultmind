@@ -109,7 +109,7 @@ func writePatch(ctx context.Context, v Vault, req Request, hit Hit, now time.Tim
 			return err
 		}
 	}
-	rel, err := freeRel(v, proposalPath(hit.Path, hit.ID, now))
+	rel, err := freeRel(v, proposalRel(hit.Path, hit.ID, req.DraftsDir, now))
 	if err != nil {
 		return err
 	}
@@ -130,7 +130,7 @@ func writeNew(ctx context.Context, v Vault, req Request, hit Hit, found bool, no
 	dir := "."
 	if found {
 		hitType = hit.Type
-		dir = hitDir(hit.Path)
+		dir = newDir(hit.Path, req.DraftsDir)
 	}
 	noteType, err := chooseType(v.Reg, hitType)
 	if err != nil {
