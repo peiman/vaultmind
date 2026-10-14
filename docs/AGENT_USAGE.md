@@ -237,7 +237,7 @@ After the draft is written, `propose` re-runs the original question through the 
 vaultmind note accept <id>
 ```
 
-A new draft flips `status` to the value the schema publishes (`accepted`, or `active` when that is the word the type lists). Same file, same id. A proposal is appended to the target under a heading of the question, the target's frontmatter is kept, sources are added when the type allows that field, and the proposal file is removed. One copy remains. A note that is not a draft is refused, and so is a proposal whose target is gone. The notes that changed are re-indexed.
+A new draft flips `status` to the value the schema publishes (`accepted`, or `active` when that is the word the type lists). Same file, same id. A proposal is appended to the target under a heading of the question, the target's frontmatter is kept, sources are added when the type allows that field, and the proposal file is removed. One copy remains. Accepting that same id again, after the proposal is gone from the index and from disk, reports `already accepted into <target>` and exits 0. The target is not changed. A note that is not a draft is refused, and so is a proposal whose target is gone, and so is an id that was never accepted. The notes that changed are re-indexed.
 
 `note get` still reads a draft and shows the status. So does `memory pack` of an id you named. `ask --read` only reads a hit that ranked, so a draft that did not rank is not read that way. `memory links` lists a draft's id and title and does not deliver the body. The full `tree` prints `[draft]` on its line. `tree --for` does not inject that line unless you opted in. `doctor` lists drafts awaiting review.
 

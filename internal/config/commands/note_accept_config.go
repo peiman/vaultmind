@@ -16,6 +16,8 @@ says the draft belongs in recall.
     target note, keeps the target's frontmatter, adds sources when the
     target's type allows that field, and deletes the proposal. One copy remains.
   - A note that is not a draft is refused. A patch whose target is gone is refused.
+    A proposal that was already accepted, and is gone from the index and from
+    disk, exits 0 and does not change the note that holds its marker.
 
 The notes that changed are re-indexed, and embedded when embed-on-write is on.
 

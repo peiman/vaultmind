@@ -129,7 +129,13 @@ becomes a new note rather than a patch on the wrong one.
   the file delete fails, the row is already gone; the retry finds the file,
   re-indexes it, sees the marker, and only finishes cleanup. If the file is
   already gone and the indexed row is a proposal, accept removes the row and
-  says the proposal was already gone. Delivery omits only a `<!-- vaultmind:`
+  says the proposal was already gone. When the id is gone from the index and
+  from disk, and a note's raw body contains the marker, accept reports
+  `already accepted into <target>` and exits 0. It does not rewrite, re-index,
+  or embed that note. The raw body is searched first. Search text does not
+  hold the marker. A miss then reads at most 1 MiB from the end of each vault
+  file, and at most 5000 files. An id with no marker is still not in the vault.
+  Delivery omits only a `<!-- vaultmind:`
   comment and keeps every other HTML comment. `note get` still shows the
   marker. Search text and recall excerpts still drop every HTML comment. The
   target's other frontmatter is left as written (Principle 7:
@@ -139,6 +145,8 @@ becomes a new note rather than a patch on the wrong one.
   and the proposal stays. After a write that lands, accept deletes the index
   row, then the proposal file, and re-indexes the target.
 - A note that is not a draft is refused. A patch whose target is gone is refused.
+  A proposal already accepted, with the marker on its target and the proposal
+  itself gone, exits 0 and does not change the target.
   A patch whose target is itself a draft, or is itself a proposal, is refused.
   A `file:` source is checked the same way as a path: it must exist, and it
   must sit inside the vault or the repository.
@@ -266,6 +274,7 @@ file (a gitlink) is treated as not a repository.
 - `TestAccept_NewFlipsStatus` (`internal/propose`) — accepting a new draft flips status to the schema's published value.
 - `TestAccept_PatchMergesDeletesAndReindexes` (`internal/propose`) — the target body contains the addition, the proposal file is gone, and the target is re-indexed. Skipping the proposal delete leaves the file and this test goes red.
 - `TestAccept_RetryAfterCleanupFailureDoesNotDuplicate` (`internal/propose`) — when deleting the proposal fails after the target was written, a retry leaves one copy of the section. Removing the marker check appends it again and this test goes red.
+- `TestAccept_SecondAcceptOfAnAppliedPatchChangesNothing` (`internal/propose`) — a second accept of a patch that already landed exits 0, names the target, and leaves that file byte-identical.
 - `TestAccept_FrontmatterPreservesUnchangedKeys` (`internal/propose`) — accepting a new draft changes only the `status` line. Key order, a quoted title, a date scalar, and a comment stay byte-identical.
 - `TestAccept_PatchKeepsFrontmatterExceptSources` (`internal/propose`) — accepting a patch keeps that same frontmatter and appends `sources` when the type allows the field.
 - `TestAccept_RefusesWhenTheTargetChanged` (`internal/propose`) — a target that changed between the read and the write is left untouched. Dropping the hash check overwrites it and this test goes red.
