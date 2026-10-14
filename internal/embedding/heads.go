@@ -62,6 +62,22 @@ func SparseHead(hiddenStates [][]float32, tokenIDs, specialMask []uint32, weight
 	return poolSparseWeights(SparsePositionWeights(hiddenStates, specialMask, weights, bias), tokenIDs)
 }
 
+// maskForSparse drops a presented special-token mask. The tokenizer that
+// indexes notes and embeds queries does not fill one, so CLS and SEP
+// contribute whenever their ReLU weight is positive. Passing the mask
+// through would change every sparse vector. "Specials are absent" on
+// SparseHead was never true of that path; changing it rewrites the index
+// and is a separate change.
+func maskForSparse([]uint32) []uint32 { return nil }
+
+// sparseFromForward is the one sparse reduction the forward pass uses.
+// batchMask is ignored (see maskForSparse). The position weights are the
+// ones salient selection ranks.
+func sparseFromForward(hidden [][]float32, tokenIDs, batchMask []uint32, weights []float32, bias float32) (map[int32]float32, []float32) {
+	pos := SparsePositionWeights(hidden, maskForSparse(batchMask), weights, bias)
+	return poolSparseWeights(pos, tokenIDs), pos
+}
+
 func poolSparseWeights(positionWeights []float32, tokenIDs []uint32) map[int32]float32 {
 	sparse := make(map[int32]float32)
 	for i, val := range positionWeights {

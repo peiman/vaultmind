@@ -38,8 +38,11 @@ type BGEM3Embedder struct {
 	maxTokens int
 	// preprocess tokenizes texts into a batch. In production it is
 	// pipeline.Preprocess; tests substitute a fake so the token-fitting path
-	// (#39) is exercisable without loading the 2.2GB model.
+	// (#39) is exercisable without loading the 2.2GB model. It does not ask
+	// for spans. spanTok is a second tokenizer that does, and only the
+	// query bound reads it.
 	preprocess func(*backends.PipelineBatch, []string) error
+	spanTok    *backends.Tokenizer
 	// memo makes a query text cost one forward pass however many lanes and
 	// vaults ask for it (see queryMemo).
 	memo queryMemo
@@ -101,6 +104,12 @@ func NewBGEM3Embedder(ctx context.Context, cfg HugotConfig) (*BGEM3Embedder, err
 		sBias = sparseB[0]
 	}
 
+	spanTok, err := newQuerySpanTokenizer(modelDir, safeTokenizerLimit(cfg.MaxTokens))
+	if err != nil {
+		_ = session.Destroy()
+		return nil, fmt.Errorf("loading query span tokenizer: %w", err)
+	}
+
 	return &BGEM3Embedder{
 		session:    session,
 		pipeline:   pipeline,
@@ -111,6 +120,7 @@ func NewBGEM3Embedder(ctx context.Context, cfg HugotConfig) (*BGEM3Embedder, err
 		dims:       cfg.Dims,
 		maxTokens:  cfg.MaxTokens,
 		preprocess: preprocessFor(pipeline),
+		spanTok:    spanTok,
 	}, nil
 }
 
@@ -192,10 +202,10 @@ func (e *BGEM3Embedder) EmbedFullBatch(ctx context.Context, texts []string) ([]*
 		tokenIDs := batch.Input[i].TokenIDs
 		specialMask := batch.Input[i].SpecialTokensMask
 
-		pos := SparsePositionWeights(hidden, specialMask, e.sparseW, e.sparseB)
+		sparse, pos := sparseFromForward(hidden, tokenIDs, specialMask, e.sparseW, e.sparseB)
 		out := &BGEM3Output{
 			Dense:   DenseHead(hidden),
-			Sparse:  poolSparseWeights(pos, tokenIDs),
+			Sparse:  sparse,
 			ColBERT: ColBERTHead(hidden, e.colbertW, e.colbertB),
 		}
 		colbertLen := 0
@@ -346,31 +356,35 @@ func (e *BGEM3Embedder) EmbedSparse(ctx context.Context, text string) (map[int32
 
 // AnalyzeQuery returns the per-token weights of the one forward pass for text.
 // The caller embeds that same string afterwards, and the memo makes it one pass.
+// Word spans come from the query-only tokenizer. A span-read failure leaves
+// the forward-pass weights in place and does not fail the query. Those weights
+// are the ones the forward pass produced, specials included.
 func (e *BGEM3Embedder) AnalyzeQuery(ctx context.Context, text string) (QueryTokens, error) {
 	out, err := e.EmbedFull(ctx, text)
 	if err != nil {
 		return QueryTokens{}, err
 	}
-	return QueryTokens{Weights: out.TokenWeights, Word: out.TokenWord, Words: out.Words, Offsets: out.TokenOffsets}, nil
+	q := QueryTokens{Weights: out.TokenWeights, Word: out.TokenWord, Words: out.Words, Offsets: out.TokenOffsets}
+	if offsets, _, spanErr := e.queryAnnotations(text); spanErr == nil {
+		q.Words, q.Word, q.Offsets = alignSalientSpans(text, offsets, q.Weights)
+	}
+	return q, nil
 }
 
 // TokenSpans reports content-token byte spans for text without a forward
-// pass. The model clamp in preprocessWithinTokenLimit is what keeps an
-// oversized note from hanging; this read is only where the query is cut.
+// pass. The read uses the query-only tokenizer, pre-cut to the span window,
+// and its special mask only to skip CLS and SEP in the cut. Spans are
+// clamped to that window: the tokenizer can report an end a few bytes past
+// the string it saw, and the cut must stay inside the prefix that was
+// tokenized. The model clamp in preprocessWithinTokenLimit is what keeps an
+// oversized note from hanging.
 func (e *BGEM3Embedder) TokenSpans(text string) ([][2]int, error) {
-	if e == nil || e.preprocess == nil {
-		return nil, fmt.Errorf("tokenizer unavailable")
-	}
-	batch := backends.NewBatch(1)
-	defer func() { _ = batch.Destroy() }()
-	if err := e.preprocess(batch, []string{text}); err != nil {
+	offsets, special, err := e.queryAnnotations(text)
+	if err != nil {
 		return nil, err
 	}
-	if len(batch.Input) == 0 {
-		return nil, fmt.Errorf("tokenizer returned no input")
-	}
-	in := batch.Input[0]
-	return clampSpans(text, contentTokenSpans(in.Offsets, in.SpecialTokensMask)), nil
+	window := querySpanWindow(text, e.maxTokens)
+	return clampSpans(window, contentTokenSpans(offsets, special)), nil
 }
 
 // EmbedColBERT produces only the ColBERT per-token embeddings (used by ColBERTRetriever).

@@ -31,6 +31,17 @@ func TestAlignQueryTokens_NoOffsetsSelectsNoWords(t *testing.T) {
 	assert.Equal(t, [][2]int{{-1, -1}, {-1, -1}}, offs)
 }
 
+func TestAlignSalientSpans_KeepsSepSlot(t *testing.T) {
+	// CLS, "hi", SEP. Weights already dropped CLS. The empty SEP offset is
+	// not a word, and the slot stays so its weight still counts.
+	offsets := [][2]uint{{0, 0}, {0, 2}, {0, 0}}
+	weights := []float32{0.4, 0.9}
+	words, word, aligned := alignSalientSpans("hi", offsets, weights)
+	assert.Equal(t, []string{"hi"}, words)
+	assert.Equal(t, []int{0, -1}, word)
+	assert.Len(t, aligned, len(weights))
+}
+
 func TestContentTokenSpans_SkipsSpecialsAndEmptyOffsets(t *testing.T) {
 	offsets := [][2]uint{{0, 0}, {0, 3}, {3, 6}, {6, 6}, {6, 9}}
 	special := []uint32{1, 0, 0, 0, 1}
