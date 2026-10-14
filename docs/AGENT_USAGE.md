@@ -200,17 +200,46 @@ source_ids: [ref1, ref2]   # citations when the note quotes something
 status: <value>            # for types with a status lifecycle (project, decision)
 ```
 
-`status: draft` is a note that is not ready for recall or for context. `ask`, `search`, the context pack around a hit, `memory pack`, `memory related`, `memory neighbors`, `arc recite`, and `tree --for` leave it out unless you pass `--include-drafts` (or set `app.retrieval.include_drafts`). Accepting it is editing that field off `draft` — the same file, no copy:
+`status: draft` is a note that is not ready for recall or for context. `ask`, `search`, the context pack around a hit, `memory pack`, `memory related`, `memory neighbors`, `arc recite`, and `tree --for` leave it out unless you pass `--include-drafts` (or set `app.retrieval.include_drafts`). Accepting a new draft flips that field — the same file, no copy:
 
 ```bash
-vaultmind frontmatter set <id> status accepted
+vaultmind note accept <id>
 ```
+
+`vaultmind frontmatter set <id> status accepted` still changes the one field. It does not merge a proposal.
+
+### `vaultmind note propose` — a finding becomes a reviewable draft
+
+Writing a note is a separate workflow, so a finding gets deferred. `propose` takes the question and the finding. VaultMind chooses the id, the path, and the frontmatter.
+
+```bash
+vaultmind note propose \
+  --question "How does the index stay current?" \
+  --finding "A write re-indexes the note before the command returns." \
+  --source https://example.com/index
+```
+
+It retrieves on the question and the finding the way `ask` does, and drafts are excluded. The relevance band `ask` already computed for the top hit decides the shape. The close band defaults to strong (`--close-band`, `app.notepropose.close_band`).
+
+- **patch** — the top hit is strong. A draft is written next to that note: `status: draft`, `patches` names the target, and the body is the finding plus a Sources section. An accepted note cannot hold the addition yet, because recall would return it before a person had reviewed it.
+- **new** — nothing is that close (moderate, weak, no match, or no band). The type is the top hit's type when that type is registered, otherwise the vault's default knowledge type (`concept` when the schema registers it). The file goes in the top hit's folder, or the vault root when there is no hit, and it is expanded through that type's template so required fields hold.
+- **existing** — a draft already has the same question, spacing and case aside. That draft is reported and nothing new is written.
+
+`--finding` is required. A source that contains `://` must be a URL. Any other source must be a file inside the vault or the repository that contains it.
+
+### `vaultmind note accept` — a person promotes the draft
+
+```bash
+vaultmind note accept <id>
+```
+
+A new draft flips `status` to the value the schema publishes (`accepted`, or `active` when that is the word the type lists). Same file, same id. A proposal is appended to the target under a heading of the question, the target's frontmatter is kept, sources are added when the type allows that field, and the proposal file is removed. One copy remains. A note that is not a draft is refused, and so is a proposal whose target is gone. The notes that changed are re-indexed.
 
 `note get` still reads a draft and shows the status. So does `memory pack` of an id you named. `ask --read` only reads a hit that ranked, so a draft that did not rank is not read that way. `memory links` lists a draft's id and title and does not deliver the body. The full `tree` prints `[draft]` on its line. `tree --for` does not inject that line unless you opted in. `doctor` lists drafts awaiting review.
 
 ### After saving: re-index
 
-A note made with `vaultmind note create` (or changed with `vaultmind frontmatter set`) is
+A note made with `vaultmind note create`, `vaultmind note propose`, or `vaultmind note accept` (or changed with `vaultmind frontmatter set`) is
 indexed and embedded as part of that command. A file you wrote or edited by hand is not —
 index it yourself:
 
@@ -400,6 +429,7 @@ Session trace shows caller attribution (e.g. `vaultmind-persona-hook` for the Se
 
 **Saving:**
 - Use `vaultmind note create --type <type> --body-stdin` — don't shell out to `cat > file.md` with hand-crafted YAML. The template enforces required fields.
+- When you found the answer and the note can wait for a person, use `vaultmind note propose --question --finding`. Accept it later with `vaultmind note accept <id>`.
 - Arcs carry more research value than facts. If you learned something via a transformation (mistake → insight → principle), write it as an arc.
 - Set `related_ids` when you reference other notes — those explicit edges speed up context-pack expansion.
 
@@ -460,7 +490,7 @@ markers; `task check` fails if it drifts from the catalog. Everything outside th
 hand-written and stays.
 
 <!-- VAULTMIND:GENERATED:commands:START -->
-<!-- checksum:d73136c1aa499a80d1e10a3418e1abb7b4e539ce7ef63b449d674c44a1c4eb4f -->
+<!-- checksum:0bc4958dc017063ecaa1eb2457aa3eae7c13bccfef37dbaad72e6ab0ab92e8fb -->
 # VaultMind Commands
 
 Every user-facing command, grouped by intent, with its when-to-use trigger.
@@ -478,10 +508,12 @@ Generated from the command tree — do not edit by hand (run `task generate:docs
 | `vaultmind memory pack` | Pack a note plus ranked context within a token budget | you want a token-budgeted context payload ready to ship to an agent. |
 | `vaultmind memory related` | List notes related to a target, filtered by edge type | you want a simple ranked list of directly connected notes, filtered by edge type. |
 | `vaultmind memory summarize` | Assemble material from specific note IDs for agent synthesis | you have a known list of note IDs and want their material assembled for synthesis. |
-| `vaultmind note` | Read, create, and batch-fetch notes by ID | you want to read, create, or batch-fetch a specific note by ID. |
+| `vaultmind note` | Read, create, propose, accept, and batch-fetch notes by ID | you want to read, create, propose, accept, or batch-fetch a specific note by ID. |
+| `vaultmind note accept` | Promote a draft into recall | a person has reviewed a draft and it should enter recall. |
 | `vaultmind note create` | Create a note from a template with field overrides | you want to create a new note from its type template with field overrides. |
 | `vaultmind note get` | Get one note's full content and metadata by ID | you know a note's ID or path and want its full content (with access tracking). |
 | `vaultmind note mget` | Fetch multiple notes by ID in one call | you have several note IDs and want them all in one batched fetch. |
+| `vaultmind note propose` | Turn a finding into a reviewable draft | you found the answer and want a reviewable draft, with the id, metadata, and formatting handled for you. |
 | `vaultmind resolve` | Resolve a fragment, alias, title, or path to canonical note IDs | you have a fragment, alias, title, or path and need the canonical note ID. |
 | `vaultmind search` | Search vault notes by keyword, semantic similarity, or both | you want a ranked list of hits to browse and pick from, without packed context. |
 | `vaultmind self` | Show your memory state — recent, hot, and stale notes | you want to see your own memory state — recent, hot, and stale notes. |

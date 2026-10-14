@@ -129,3 +129,15 @@ func TestFormatAsk_UnmeasuredModelAtCalibrationGateLabelsNormally(t *testing.T) 
 	require.NoError(t, FormatAsk(r, &buf))
 	assert.Contains(t, strings.SplitN(buf.String(), "\n", 2)[0], "relevance: strong")
 }
+
+// RelevanceBand is what propose reads. An unmeasured strong on a small vault
+// is the default talking, so the band is empty and propose writes a new note.
+// A measured strong on that same small vault stays strong.
+func TestRelevanceBand_WithholdsUnmeasuredStrongOnASmallVault(t *testing.T) {
+	unmeasured := smallVaultResult(6, ConfidenceStrong, 7.9)
+	unmeasured.floorUnmeasured = true
+	assert.Empty(t, RelevanceBand(unmeasured))
+
+	measured := smallVaultResult(6, ConfidenceStrong, 3.1)
+	assert.Equal(t, ConfidenceStrong, RelevanceBand(measured))
+}

@@ -171,6 +171,26 @@ func (r *AskResult) tooSmallToJudge() bool {
 	return r.NoiseFloorApplied && r.VaultNoteCount > 0 && r.VaultNoteCount < noisefloor.MinCalibNotes
 }
 
+// withholdsRelevanceJudgement is the header's rule for not quoting a band.
+// A small vault with an unmeasured floor, or a weak / no_match label, is not
+// a finding about this vault. A measured strong on a small vault still is.
+func (r *AskResult) withholdsRelevanceJudgement() bool {
+	if r == nil {
+		return false
+	}
+	return r.tooSmallToJudge() && (r.floorUnmeasured ||
+		r.TopHitConfidence == ConfidenceWeak || r.TopHitConfidence == ConfidenceNoMatch)
+}
+
+// RelevanceBand is the band ask would show for the top hit. Empty when the
+// judgement is withheld, so a caller cannot treat an unmeasured "strong" as close.
+func RelevanceBand(r *AskResult) string {
+	if r == nil || r.withholdsRelevanceJudgement() {
+		return ""
+	}
+	return r.TopHitConfidence
+}
+
 // Confidence tier strings. The noisefloor package is the single source of
 // truth (Principle 7); these are aliases so the rest of the query package can
 // keep referring to query.ConfidenceX without a second literal set that could
@@ -313,24 +333,25 @@ func relevantLaterHits(hits []retrieval.ScoredResult, r *AskResult) []memory.See
 	return seeds
 }
 
-// Ask searches the vault for the query, computes raw cosine similarities
-// (when an embedder is available), recomputes activation scores with
-// spreading activation (via ActivationFunc), then packs token-budgeted
-// context around the top hit. Context-pack failure is non-fatal.
-func Ask(ctx context.Context, retriever retrieval.Retriever, resolver *graph.Resolver, db *index.DB, cfg AskConfig) (*AskResult, error) {
+// Rank is the search and the relevance band ask computes for the top hit.
+// It does not pack context and it does not record a read. Ask calls it, then
+// packs. A caller that only needs the closest note calls Rank.
+func Rank(ctx context.Context, retriever retrieval.Retriever, db *index.DB, cfg AskConfig) (*AskResult, error) {
 	// AskHits is the one search. Dense and sparse embed the forward-bounded
 	// text; ColBERT and FTS use the salient terms when weights exist.
 	// cfg.Query stays the original for the echo.
 	result, err := AskHits(ctx, retriever, cfg.Query, cfg.SearchLimit, cfg.QueryForwardTokens, cfg.QuerySalientTerms, AnalyzerFrom(cfg.Embedder))
-	if err != nil {
-		return nil, err
+	if err != nil || result == nil || len(result.TopHits) == 0 {
+		return result, err
 	}
+	applyTopHitRelevance(ctx, result, db, cfg)
+	return result, nil
+}
+
+// applyTopHitRelevance fills the noise-floor band when a cosine is available,
+// and otherwise leaves the RRF-gap label AskHits already stored.
+func applyTopHitRelevance(ctx context.Context, result *AskResult, db *index.DB, cfg AskConfig) {
 	hits := result.TopHits
-
-	if len(hits) == 0 {
-		return result, nil
-	}
-
 	// Compute raw cosine similarities for spreading activation.
 	if cfg.Embedder != nil {
 		sims, simErr := NoteSimilarities(ctx, result.rankingQuery, cfg.Embedder, db)
@@ -391,6 +412,18 @@ func Ask(ctx context.Context, retriever retrieval.Retriever, resolver *graph.Res
 				Msg("noise floor requested but top hit has no cosine; keeping RRF-gap confidence")
 		}
 	}
+}
+
+// Ask searches the vault for the query, computes raw cosine similarities
+// (when an embedder is available), recomputes activation scores with
+// spreading activation (via ActivationFunc), then packs token-budgeted
+// context around the top hit. Context-pack failure is non-fatal.
+func Ask(ctx context.Context, retriever retrieval.Retriever, resolver *graph.Resolver, db *index.DB, cfg AskConfig) (*AskResult, error) {
+	result, err := Rank(ctx, retriever, db, cfg)
+	if err != nil || result == nil || len(result.TopHits) == 0 {
+		return result, err
+	}
+	hits := result.TopHits
 
 	// Recall floor: nothing is relevant (top hit at/below the noise floor) and
 	// the caller opted into suppression — stop here. Skipping the context pack

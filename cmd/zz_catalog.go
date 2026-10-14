@@ -96,8 +96,8 @@ var commandCatalog = map[string]catalogEntry{
 	},
 	"vaultmind note": {
 		group: groupRetrieval,
-		when:  "you want to read, create, or batch-fetch a specific note by ID.",
-		short: "Read, create, and batch-fetch notes by ID",
+		when:  "you want to read, create, propose, accept, or batch-fetch a specific note by ID.",
+		short: "Read, create, propose, accept, and batch-fetch notes by ID",
 	},
 	"vaultmind note get": {
 		group: groupRetrieval,
@@ -108,6 +108,16 @@ var commandCatalog = map[string]catalogEntry{
 		group: groupRetrieval,
 		when:  "you want to create a new note from its type template with field overrides.",
 		short: "Create a note from a template with field overrides",
+	},
+	"vaultmind note propose": {
+		group: groupRetrieval,
+		when:  "you found the answer and want a reviewable draft, with the id, metadata, and formatting handled for you.",
+		short: "Turn a finding into a reviewable draft",
+	},
+	"vaultmind note accept": {
+		group: groupRetrieval,
+		when:  "a person has reviewed a draft and it should enter recall.",
+		short: "Promote a draft into recall",
 	},
 	"vaultmind note mget": {
 		group: groupRetrieval,

@@ -337,3 +337,17 @@ func TestProcess_TitleFallback_ExplicitTitleOverridesFilename(t *testing.T) {
 	require.NotNil(t, result.FinalFrontmatter)
 	assert.Equal(t, "Payment Retries", result.FinalFrontmatter["title"])
 }
+
+func TestProcess_AnyFieldsOverrideAfterStrings(t *testing.T) {
+	cfg := ProcessConfig{
+		VaultPath: "/vault",
+		Path:      "concepts/quartz.md",
+		Type:      "concept",
+		Fields:    map[string]string{"title": "Quartz"},
+		AnyFields: map[string]interface{}{"sources": []string{"https://example.com/quartz"}},
+	}
+	result, err := Process(cfg)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"https://example.com/quartz"}, result.FinalFrontmatter["sources"])
+	assert.Contains(t, string(result.Content), "https://example.com/quartz")
+}

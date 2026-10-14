@@ -1771,6 +1771,21 @@
           },
           "type": "object"
         },
+        "noteaccept": {
+          "properties": {
+            "json": {
+              "default": false,
+              "description": "Output in JSON format",
+              "type": "boolean"
+            },
+            "vault": {
+              "default": ".",
+              "description": "Path to vault root",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
         "notecreate": {
           "properties": {
             "body": {
@@ -1791,6 +1806,36 @@
             "type": {
               "default": "",
               "description": "Note type (required)",
+              "type": "string"
+            },
+            "vault": {
+              "default": ".",
+              "description": "Path to vault root",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "notepropose": {
+          "properties": {
+            "close_band": {
+              "default": "strong",
+              "description": "Relevance band that means the top hit is close enough to patch. The band ask already reports for that hit. Default is the strong band.",
+              "type": "string"
+            },
+            "finding": {
+              "default": "",
+              "description": "Finding to record as a draft",
+              "type": "string"
+            },
+            "json": {
+              "default": false,
+              "description": "Output in JSON format",
+              "type": "boolean"
+            },
+            "question": {
+              "default": "",
+              "description": "Question the finding answers",
               "type": "string"
             },
             "vault": {

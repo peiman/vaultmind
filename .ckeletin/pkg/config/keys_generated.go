@@ -282,6 +282,8 @@ const (
 	KeyAppMemorypackMaxItems                 = "app.memorypack.max_items"                 // Max context items (0 = unlimited)
 	KeyAppMemorypackExcerpt                  = "app.memorypack.excerpt"                   // Cap each note's contribution at N tokens, preferring its decision-bearing pas...
 	KeyAppMemorypackSlim                     = "app.memorypack.slim"                      // Slim frontmatter (type, title, status only)
+	KeyAppNoteacceptVault                    = "app.noteaccept.vault"                     // Path to vault root
+	KeyAppNoteacceptJson                     = "app.noteaccept.json"                      // Output in JSON format
 	KeyAppNoteVault                          = "app.note.vault"                           // Path to vault root
 	KeyAppNoteVaults                         = "app.note.vaults"                          // Comma-separated vaults to look in; the note is read from the one that holds t...
 	KeyAppNoteJson                           = "app.note.json"                            // Output in JSON format
@@ -291,6 +293,11 @@ const (
 	KeyAppNotecreateType                     = "app.notecreate.type"                      // Note type (required)
 	KeyAppNotecreateBody                     = "app.notecreate.body"                      // Body text (overrides template body)
 	KeyAppNotecreateCommit                   = "app.notecreate.commit"                    // Stage and commit
+	KeyAppNoteproposeVault                   = "app.notepropose.vault"                    // Path to vault root
+	KeyAppNoteproposeJson                    = "app.notepropose.json"                     // Output in JSON format
+	KeyAppNoteproposeQuestion                = "app.notepropose.question"                 // Question the finding answers
+	KeyAppNoteproposeFinding                 = "app.notepropose.finding"                  // Finding to record as a draft
+	KeyAppNoteproposeCloseBand               = "app.notepropose.close_band"               // Relevance band that means the top hit is close enough to patch. The band ask ...
 	KeyAppPingOutputMessage                  = "app.ping.output_message"                  // Default message to display for the ping command
 	KeyAppPingOutputColor                    = "app.ping.output_color"                    // Text color for ping command output (white, red, green, blue, cyan, yellow, ma...
 	KeyAppPingUi                             = "app.ping.ui"                              // Enable interactive UI for the ping command
