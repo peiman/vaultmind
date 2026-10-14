@@ -62,7 +62,7 @@ func TestSharedPreprocess_OptionsMatchMain(t *testing.T) {
 	p := &pipelines.FeatureExtractionPipeline{
 		BasePipeline: &backends.BasePipeline{
 			Model: &backends.Model{
-				ModelResources: backends.ModelResources{Tokenizer: shared},
+				Tokenizer: shared,
 			},
 		},
 	}
