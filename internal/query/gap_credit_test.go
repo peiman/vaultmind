@@ -17,6 +17,9 @@ import (
 )
 
 func TestAsk_DeliversTheGapCreditLine(t *testing.T) {
+	prev := gapCreditZone
+	gapCreditZone = time.UTC
+	t.Cleanup(func() { gapCreditZone = prev })
 	db := openGapCreditDB(t)
 	opened := time.Date(2026, 10, 14, 15, 4, 0, 0, time.UTC)
 	closed := time.Date(2026, 10, 16, 0, 0, 0, 0, time.UTC)
@@ -83,6 +86,27 @@ func TestAsk_DeliversTheGapCreditLine(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestWriteGapCreditLine_UsesTheLocalDate(t *testing.T) {
+	prev := gapCreditZone
+	gapCreditZone = time.FixedZone("CEST", 2*60*60)
+	t.Cleanup(func() { gapCreditZone = prev })
+
+	opened := time.Date(2026, 10, 14, 22, 56, 57, 0, time.UTC)
+	credit := &index.GapCredit{
+		Question: "how does the index stay current",
+		OpenedAt: opened,
+		ClosedAt: time.Date(2026, 10, 16, 0, 0, 0, 0, time.UTC),
+	}
+	var buf bytes.Buffer
+	require.NoError(t, writeGapCreditLine(&buf, credit, false, true, true))
+	assert.Contains(t, buf.String(), "2026-10-15")
+	assert.NotContains(t, buf.String(), "2026-10-14")
+
+	raw, err := json.Marshal(credit)
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), `"opened_at":"2026-10-14T22:56:57Z"`)
 }
 
 func TestAsk_LoadsTheGapCreditMapOnce(t *testing.T) {

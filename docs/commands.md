@@ -36,7 +36,7 @@ When `ask` delivers a note that a closed gap names in `closed_by`, one line foll
   ↳ answers a question first investigated 2026-10-14: "how does the index stay current"
 ```
 
-The date is when the question was opened. The question is cut at 80 characters. The line is not printed for `--pointers-only`, and it is not repeated for a note already shown in the session. `--json` adds `answers_gap` with `question`, `opened_at`, and `closed_at` on the delivered target and on a context item whose body was delivered, and on a hit with the same id. It is absent when that note was already shown. A draft or a gap never carries it, even with `--include-drafts`. `schema_version` stays `v1`.
+The date is the local day the question was opened. `--json` keeps `opened_at` in UTC. The question is cut at 80 characters. The line is not printed for `--pointers-only`, and it is not repeated for a note already shown in the session. `--json` adds `answers_gap` with `question`, `opened_at`, and `closed_at` on the delivered target and on a context item whose body was delivered, and on a hit with the same id. It is absent when that note was already shown. A draft or a gap never carries it, even with `--include-drafts`. `schema_version` stays `v1`.
 
 `doctor` prints `gap-closing notes (all vaults on this machine): N surfaced, M cited` on the line after memory use. When the cite query fails those counts are `n/a`. `--json` adds `gap_loop`. `scope` is `machine` because the cite is read from the shared usage log. Opened, closed, and the median are this vault:
 
