@@ -2,6 +2,7 @@ package experiment
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -198,6 +199,73 @@ func (d *DB) MemoryUseSince(windowDays int) (*MemoryUse, error) {
 	}
 	out.PerCaller = perCaller
 	return out, nil
+}
+
+// gapClosingIDChunk keeps each cite query under SQLite's historical variable
+// limit of 999. The query already binds five parameters, so 500 ids stay
+// under it. The chunks do not overlap, and the counts add.
+const gapClosingIDChunk = 500
+
+// GapClosingUse counts hook-surfaced appearances of the given note ids over
+// the same window and the same cited-and-not-opened rule as MemoryUseSince.
+// An empty id list is zero: "no gap-closing notes" must not become "every cite".
+func (d *DB) GapClosingUse(windowDays int, noteIDs []string) (surfaced, cited int, err error) {
+	if windowDays <= 0 {
+		return 0, 0, fmt.Errorf("window must be positive, got %d", windowDays)
+	}
+	if len(noteIDs) == 0 {
+		return 0, 0, nil
+	}
+	for start := 0; start < len(noteIDs); start += gapClosingIDChunk {
+		end := start + gapClosingIDChunk
+		if end > len(noteIDs) {
+			end = len(noteIDs)
+		}
+		partSurfaced, partCited, partErr := d.gapClosingUseIDs(windowDays, noteIDs[start:end])
+		if partErr != nil {
+			return 0, 0, partErr
+		}
+		surfaced += partSurfaced
+		cited += partCited
+	}
+	return surfaced, cited, nil
+}
+
+func (d *DB) gapClosingUseIDs(windowDays int, noteIDs []string) (surfaced, cited int, err error) {
+	filter, filterArgs := gapClosingFilter(noteIDs)
+	since := fmt.Sprintf("-%d days", windowDays)
+	window := fmt.Sprintf("+%d minutes", int(consumptionWindow.Minutes()))
+	query := memoryUseCTEs + `
+ SELECT COUNT(*),
+ SUM(CASE WHEN cited AND NOT opened THEN 1 ELSE 0 END)
+ FROM observed` + filter
+	args := []any{hookCallerPattern, since, string(AccessSourceRead), since, window}
+	args = append(args, filterArgs...)
+	var citedN *int
+	if err := d.db.QueryRow(query, args...).Scan(&surfaced, &citedN); err != nil {
+		return 0, 0, fmt.Errorf("computing gap-closing use: %w", err)
+	}
+	if citedN != nil {
+		cited = *citedN
+	}
+	return surfaced, cited, nil
+}
+
+// gapClosingFilter restricts the observed set to the notes that closed a gap.
+func gapClosingFilter(noteIDs []string) (string, []any) {
+	placeholders := make([]string, len(noteIDs))
+	args := make([]any, len(noteIDs))
+	for i, id := range noteIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	return gapClosingClause(strings.Join(placeholders, ",")), args
+}
+
+// gapClosingClause is the one predicate that keeps a plain cite out of the
+// gap-closing count. An empty clause counts every cite.
+func gapClosingClause(joined string) string {
+	return " WHERE note_id IN (" + joined + ")"
 }
 
 // memoryUsePerCallerSQL — named for the same reason as memoryUseSQL: the

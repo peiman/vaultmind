@@ -14,7 +14,10 @@ note influenced an answer. Each surfaced appearance has one state:
 
 ```text
 Memory use (7d): 5 surfaced → 5 delivered → 1 opened, 2 cited (2 unknown — not measurable from text)
+gap-closing notes: 1 surfaced, 1 cited
 ```
+
+`gap-closing notes` counts the same appearances, limited to notes a closed gap names in `closed_by`. A note that was opened is not also counted as cited. There is no count of notes written.
 
 Counts describe surfaced appearances, not unique notes. The same note appearing
 in two retrievals contributes two appearances. Missing historical body-delivery
@@ -82,5 +85,13 @@ fields remain. `consumed` retains the legacy unscoped read-within-30-minutes
 measurement for compatibility; new consumers should use `opened`.
 `opened + cited + unknown = injections`, with each appearance counted once.
 No schema-version bump or field rename is required.
+
+`memory_use` also carries `gap_closing_surfaced` and `gap_closing_cited`.
+`gap_loop` carries `opened`, `closed`, `median_days_to_close`, and
+`gap_closing_cited`. `median_days_to_close` is a fraction of a day (12 hours
+is 0.5) and `null` when nothing has closed. `gap_closing_cited` is `null`
+when there is no usage log or the cite query fails, and `0` only when measured
+as zero. The cite window is the same machine-wide window as `memory_use`.
+Both are additive on schema `v1`.
 
 Part 2's sampled self-report is not included.

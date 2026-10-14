@@ -47,6 +47,8 @@ Output format (JSON):
 
 **`retrieval_mode`** tells you which lane ran. If it's `"keyword"`, the vault has no embeddings — your paraphrase queries will miss. Run `vaultmind index --embed --vault <path>` to fix (`vaultmind doctor` says which model the vault uses).
 
+A note that closed a recorded gap adds `answers_gap` (`question`, `opened_at`, `closed_at`) on the delivered target and on a context item whose body was delivered. It is absent when that note was already shown. A draft or a gap never carries it. The text form adds one line under that note: `↳ answers a question first investigated 2026-10-14: "<question>"`. `--pointers-only` omits the line. `schema_version` stays `v1`.
+
 #### `--excerpt N` — get the passage that matters when the whole note will not fit
 
 Body inclusion is otherwise all-or-nothing: a note one token over the remaining budget
