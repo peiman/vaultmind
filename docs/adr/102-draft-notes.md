@@ -70,8 +70,11 @@ finding. The check writes `rank_before`, `rank_after`, and `rank_checked_at`
 into the draft's frontmatter through the mutation writer. `0` means the note
 was not in the window. It does not record an access and it does not record an
 activation read. Keyword mode, when the embedder is unavailable, still runs
-and is labeled. The text line and the additive `rank_check` object in the v1
-envelope report both measurements. This ADR does not add `draft` to any type's
+and is labeled. The text line's before is the band that chose patch or new,
+on the question and the finding. The question-only rank is labeled separately,
+and that is what `rank_before` and `rank_check.before` store. The additive
+`rank_check` object in the v1 envelope also carries `decision` for the hit the
+mode used. This ADR does not add `draft` to any type's
 allowed-status list.
 
 ## Amendment: a proposal draft, and `note accept`
@@ -86,12 +89,13 @@ remains (Principle 7).
 finding the way `ask` does, drafts excluded, and reads the relevance band `ask`
 already computed for the top hit. It does not invent a score. The band that
 means close is the registry key `app.notepropose.close_band` (flag
-`--close-band`). The default is the strong band. Only a strong match is close
-enough to attach a finding to an existing note. A moderate, weak, `no_match`,
-or empty band — including a judgement `ask` withholds when the vault is small
-and the noise floor was never measured — is a new note. A typo'd close band
-fails the same way: nothing matches it, so the finding becomes a new note
-rather than a patch on the wrong one.
+`--close-band`). The default is the strong band. Close means at least that
+band: strong is closer than moderate, then weak, then `no_match`. A strong
+hit is a patch when the close band is moderate or weak. A band weaker than
+the close band, or an empty band — including a judgement `ask` withholds when
+the vault is small and the noise floor was never measured — is a new note. A
+typo'd close band fails the same way: nothing matches it, so the finding
+becomes a new note rather than a patch on the wrong one.
 
 - **patch.** The top hit is close. The draft sits next to that note, at
   `<target-dir>/<target-id>.proposal-<yyyymmdd-hhmm>.md`. Frontmatter is
@@ -254,7 +258,9 @@ file (a gitlink) is treated as not a repository.
 `note propose` and `note accept` are held by these tests:
 
 - `TestPropose_PatchWhenTheTopHitIsClose` (`internal/propose`) — a strong top hit writes a proposal draft next to that note.
-- `TestPropose_NewWhenNothingIsClose` (`internal/propose`) — a weaker band, and no hit, write a new draft. Inverting the band check (`band == closeBand`) turns the weaker hit into a patch and this test goes red.
+- `TestPropose_NewWhenNothingIsClose` (`internal/propose`) — a band weaker than the close band, and no hit, write a new draft. Treating a moderate hit as close when the close band is strong turns it into a patch and this test goes red.
+- `TestPropose_CloseBandModerateIncludesAStrongHit` (`internal/propose`) — `--close-band moderate` writes a patch when the hit is strong.
+- `TestPropose_ExplainsANewNoteWhenTheQuestionIsStrongerThanTheFinding` (`internal/propose`) — a strong question-only rank and a moderate question-and-finding hit stay `new`, and the line says why. The question-only rank stays labeled on its own.
 - `TestPropose_ExistingDraftOnRepeatedQuestion` (`internal/propose`) — the same question, spacing and case aside, reports the draft already written.
 - `TestPropose_WrittenNoteValidatesAndAskOmitsDrafts` (`cmd`) — the written note passes the vault schema, and a default `ask` on the real index does not return the draft.
 - `TestAccept_NewFlipsStatus` (`internal/propose`) — accepting a new draft flips status to the schema's published value.

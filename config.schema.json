@@ -1845,7 +1845,7 @@
           "properties": {
             "close_band": {
               "default": "strong",
-              "description": "Relevance band that means the top hit is close enough to patch. The band ask already reports for that hit. Default is the strong band.",
+              "description": "Weakest relevance band that is close enough to patch. A stronger band is also close. The band ask already reports for that hit. Default is the strong band.",
               "type": "string"
             },
             "finding": {

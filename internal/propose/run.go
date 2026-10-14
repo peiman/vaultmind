@@ -119,7 +119,7 @@ func writePatch(ctx context.Context, v Vault, req Request, hit Hit, now time.Tim
 	}
 	out.Mode = modePatch
 	out.TargetID = hit.ID
-	if err := attachRankCheck(ctx, v, req, &out, now); err != nil {
+	if err := attachRankCheck(ctx, v, req, &out, now, hit, true); err != nil {
 		return err
 	}
 	return renderPropose(req, v, out)
@@ -143,7 +143,7 @@ func writeNew(ctx context.Context, v Vault, req Request, hit Hit, found bool, no
 		out, err := writeDraft(ctx, v, req, rel, noteType, "")
 		if err == nil {
 			out.Mode = modeNew
-			if err := attachRankCheck(ctx, v, req, &out, now); err != nil {
+			if err := attachRankCheck(ctx, v, req, &out, now, hit, found); err != nil {
 				return err
 			}
 			return renderPropose(req, v, out)

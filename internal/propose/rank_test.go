@@ -11,6 +11,7 @@ import (
 
 	"github.com/peiman/vaultmind/internal/embedding"
 	"github.com/peiman/vaultmind/internal/index"
+	"github.com/peiman/vaultmind/internal/noisefloor"
 	"github.com/peiman/vaultmind/internal/query"
 	"github.com/peiman/vaultmind/internal/retrieval"
 	tmpl "github.com/peiman/vaultmind/internal/template"
@@ -208,7 +209,7 @@ func TestPropose_RankCheck_DraftRanksFirst(t *testing.T) {
 	assert.Equal(t, id, ranker.passes[1].Hits[0].ID)
 	assert.NotContains(t, hitIDs(ranker.passes[0].Hits), id)
 
-	wantLine := "retrieval check (hybrid): before — best answer " + targetID + " at #2; after — this draft at #1 (strong). Measured on the proposal note, which holds the finding."
+	wantLine := "retrieval check (hybrid): before — best answer " + targetID + " (strong) on the question and the finding; question alone — best answer " + targetID + " at #2; after — this draft at #1 (strong). Measured on the proposal note, which holds the finding."
 	assert.Contains(t, out.String(), wantLine)
 	assert.Equal(t, 2, *embeds)
 	assert.Equal(t, 0, accessCount(t, v.DB))
@@ -249,7 +250,7 @@ func TestPropose_RankCheck_UnrelatedDraftDoesNotRank(t *testing.T) {
 
 	rel := "concepts/where-does-quartzkeeper-live.md"
 	assert.Contains(t, out.String(), "mode: new\n")
-	assert.Contains(t, out.String(), "retrieval check (hybrid): before — best answer "+otherID+" at #1 (strong); after — this draft does not rank in the top 2 for its own question; consider adding the question's key terms or links to "+otherID+", "+targetID)
+	assert.Contains(t, out.String(), "retrieval check (hybrid): before — best answer "+targetID+" (moderate) on the question and the finding, which is not close enough for strong, so this is a new note; question alone — best answer "+otherID+" at #1 (strong); after — this draft does not rank in the top 2 for its own question; consider adding the question's key terms or links to "+otherID+", "+targetID)
 	assert.NotContains(t, out.String(), "Measured on the proposal note")
 	fm, _ := parseNote(t, v, rel)
 	assert.Equal(t, 1, asInt(t, fm["rank_before"]))
@@ -266,7 +267,7 @@ func TestPropose_RankCheck_KeywordModeStillRuns(t *testing.T) {
 	req.Ranker = ranker
 	require.NoError(t, Run(context.Background(), v, req, &stubClosest{}))
 
-	assert.Contains(t, out.String(), "retrieval check (keyword): before — no existing note in the top 5; after — this draft at #1")
+	assert.Contains(t, out.String(), "retrieval check (keyword): before — no note on the question and the finding; question alone — no existing note in the top 5; after — this draft at #1")
 	rel := "where-does-quartzkeeper-live.md"
 	fm, _ := parseNote(t, v, rel)
 	assert.Equal(t, 0, asInt(t, fm["rank_before"]))
@@ -317,6 +318,11 @@ func TestPropose_RankCheck_JSONContract(t *testing.T) {
 	assert.Equal(t, "strong", env.Result.RankCheck.After.Band)
 	assert.Equal(t, measuredOnProposal, env.Result.RankCheck.MeasuredOn)
 	assert.Empty(t, env.Result.RankCheck.OutrankedBy)
+	assert.Equal(t, "target-note", env.Result.RankCheck.Decision.ID)
+	assert.Equal(t, 1, env.Result.RankCheck.Decision.Rank)
+	assert.Equal(t, "strong", env.Result.RankCheck.Decision.Band)
+	assert.Equal(t, decisionOnQuestionAndFinding, env.Result.RankCheck.DecisionOn)
+	assert.Equal(t, noisefloor.ConfidenceStrong, env.Result.RankCheck.CloseBand)
 }
 
 func TestPropose_RankCheck_ExistingDraftSkipsTheCheck(t *testing.T) {
@@ -377,7 +383,7 @@ func TestFormatRankCheck(t *testing.T) {
 		{
 			name: "in window",
 			in:   inWindow,
-			want: "retrieval check (hybrid): before — best answer concept-memory at #3 (moderate); after — this draft at #1 (strong)",
+			want: "retrieval check (hybrid): before — no note on the question and the finding; question alone — best answer concept-memory at #3 (moderate); after — this draft at #1 (strong)",
 		},
 		{
 			name: "patch sentence",
@@ -386,7 +392,32 @@ func TestFormatRankCheck(t *testing.T) {
 				c.MeasuredOn = measuredOnProposal
 				return c
 			}(),
-			want: "retrieval check (hybrid): before — best answer concept-memory at #3 (moderate); after — this draft at #1 (strong). Measured on the proposal note, which holds the finding.",
+			want: "retrieval check (hybrid): before — no note on the question and the finding; question alone — best answer concept-memory at #3 (moderate); after — this draft at #1 (strong). Measured on the proposal note, which holds the finding.",
+		},
+		{
+			name: "decision weaker than the close band",
+			in: RankCheck{
+				Mode:       "hybrid",
+				Window:     5,
+				Decision:   RankPlace{ID: "target-note", Rank: 1, Band: "moderate"},
+				DecisionOn: decisionOnQuestionAndFinding,
+				CloseBand:  "strong",
+				Before:     RankPlace{ID: "other-note", Rank: 1, Band: "strong"},
+				After:      RankPlace{ID: "draft", Rank: 0},
+			},
+			want: "retrieval check (hybrid): before — best answer target-note (moderate) on the question and the finding, which is not close enough for strong, so this is a new note; question alone — best answer other-note at #1 (strong); after — this draft does not rank in the top 5 for its own question; consider adding the question's key terms",
+		},
+		{
+			name: "decision at least the close band",
+			in: RankCheck{
+				Mode:      "hybrid",
+				Window:    5,
+				Decision:  RankPlace{ID: "target-note", Rank: 1, Band: "strong"},
+				CloseBand: "moderate",
+				Before:    RankPlace{ID: "target-note", Rank: 2},
+				After:     RankPlace{ID: "draft", Rank: 1, Band: "strong"},
+			},
+			want: "retrieval check (hybrid): before — best answer target-note (strong) on the question and the finding; question alone — best answer target-note at #2; after — this draft at #1 (strong)",
 		},
 		{
 			name: "not in the window",
@@ -397,7 +428,7 @@ func TestFormatRankCheck(t *testing.T) {
 				After:       RankPlace{ID: "draft", Rank: 0},
 				OutrankedBy: []string{"concept-a", "concept-b"},
 			},
-			want: "retrieval check (hybrid): before — best answer concept-memory at #1 (moderate); after — this draft does not rank in the top 5 for its own question; consider adding the question's key terms or links to concept-a, concept-b",
+			want: "retrieval check (hybrid): before — no note on the question and the finding; question alone — best answer concept-memory at #1 (moderate); after — this draft does not rank in the top 5 for its own question; consider adding the question's key terms or links to concept-a, concept-b",
 		},
 		{
 			name: "no existing note",
@@ -406,7 +437,7 @@ func TestFormatRankCheck(t *testing.T) {
 				Window: 5,
 				After:  RankPlace{ID: "draft", Rank: 1},
 			},
-			want: "retrieval check (keyword): before — no existing note in the top 5; after — this draft at #1",
+			want: "retrieval check (keyword): before — no note on the question and the finding; question alone — no existing note in the top 5; after — this draft at #1",
 		},
 		{
 			name: "target missing from the window",
@@ -416,7 +447,7 @@ func TestFormatRankCheck(t *testing.T) {
 				Before: RankPlace{ID: "concept-memory", Rank: 0},
 				After:  RankPlace{ID: "draft", Rank: 1, Band: "strong"},
 			},
-			want: "retrieval check (hybrid): before — best answer concept-memory is not in the top 5; after — this draft at #1 (strong)",
+			want: "retrieval check (hybrid): before — no note on the question and the finding; question alone — best answer concept-memory is not in the top 5; after — this draft at #1 (strong)",
 		},
 		{
 			name: "empty mode and empty band",
@@ -425,7 +456,7 @@ func TestFormatRankCheck(t *testing.T) {
 				Before: RankPlace{ID: "concept-memory", Rank: 1},
 				After:  RankPlace{ID: "draft", Rank: 2},
 			},
-			want: "retrieval check: before — best answer concept-memory at #1; after — this draft at #2",
+			want: "retrieval check: before — no note on the question and the finding; question alone — best answer concept-memory at #1; after — this draft at #2",
 		},
 		{
 			name: "miss with nobody ahead",
@@ -434,7 +465,7 @@ func TestFormatRankCheck(t *testing.T) {
 				Window: 5,
 				After:  RankPlace{ID: "draft", Rank: 0},
 			},
-			want: "retrieval check (hybrid): before — no existing note in the top 5; after — this draft does not rank in the top 5 for its own question; consider adding the question's key terms",
+			want: "retrieval check (hybrid): before — no note on the question and the finding; question alone — no existing note in the top 5; after — this draft does not rank in the top 5 for its own question; consider adding the question's key terms",
 		},
 	}
 	for _, tc := range cases {

@@ -15,12 +15,14 @@ propose retrieves on the question and the finding the same way ask does, drafts
 excluded, and reads the relevance band ask already computed for the top hit.
 It does not invent a second score.
 
-  - patch, when that band is the close band (default: strong). A draft is
-    written next to the closest note. status is draft, patches names the
-    target, and the body is the finding plus a Sources section. An accepted
-    note cannot hold the addition yet: recall would return it before a person
-    had reviewed it.
-  - new, when nothing is that close (moderate, weak, no_match, or no band).
+  - patch, when that band is at least the close band (default: strong). A
+    stronger band is also a patch: a strong hit with --close-band moderate
+    still patches. A draft is written next to the closest note. status is
+    draft, patches names the target, and the body is the finding plus a
+    Sources section. An accepted note cannot hold the addition yet: recall
+    would return it before a person had reviewed it.
+  - new, when the band is weaker than the close band, empty, or missing
+    (moderate against a strong close band, weak, no_match, or no band).
     The type is the top hit's type when it has one, otherwise the vault's
     default knowledge type (concept when the schema registers it, otherwise
     the first type that can hold a draft). The id is the note-create id of a
@@ -33,14 +35,18 @@ A person reviews the draft and promotes it with: vaultmind note accept <id>
 
 --finding is required. A source that contains :// must be a URL. Any other
 source must be a file inside the vault or the repository that contains it.
---close-band names which of ask's bands counts as close. The default is the
-strong band, so a weaker match becomes a new note instead of a patch on the
-wrong one.
+--close-band names the weakest ask band that is close enough to patch. A
+stronger band is also close. The default is the strong band, so a weaker
+match becomes a new note instead of a patch on the wrong one. A band the
+vault does not know is not close.
 
 After the draft is written, propose re-runs the original question through the
 same ranking ask uses, with the same retrieval options and the default hit
-window (app.ask.search_limit). It reports where the closest existing note
-ranked with drafts excluded, and where this draft ranks with drafts included.
+window (app.ask.search_limit). The line's before is the band that chose patch
+or new, measured on the question and the finding. It then reports, labeled as
+the question alone, where the closest existing note ranked with drafts
+excluded, and where this draft ranks with drafts included. rank_before is that
+question-only rank.
 A patch is measured on the proposal note, which holds the finding. The draft's
 frontmatter records rank_before, rank_after, and rank_checked_at. 0 means the
 note was not in the window. The check does not record an access. Keyword mode,
@@ -52,7 +58,7 @@ FLAGS
   --question <text>   The question the finding answers.
   --finding <text>    The finding. Required.
   --source <url|path> A source URL or a file inside the vault or its repository. Repeatable.
-  --close-band <band> The ask relevance band that means the top hit is close enough to patch.
+  --close-band <band> Weakest ask relevance band that is close enough to patch. A stronger band is also close.
   --gap <id>          An open gap this finding answers. The draft stores closes_gap.
                       When --question is omitted, the gap's question is used.
                       Accepting the draft closes that gap.
@@ -79,7 +85,7 @@ func NoteProposeOptions() []config.ConfigOption {
 		{
 			Key:          "app.notepropose.close_band",
 			DefaultValue: noisefloor.ConfidenceStrong,
-			Description:  "Relevance band that means the top hit is close enough to patch. The band ask already reports for that hit. Default is the strong band.",
+			Description:  "Weakest relevance band that is close enough to patch. A stronger band is also close. The band ask already reports for that hit. Default is the strong band.",
 			Type:         "string",
 		},
 		{Key: "app.notepropose.gap", DefaultValue: "", Description: "Open gap this finding answers. The draft stores closes_gap. When the question is omitted, the gap's question is used.", Type: "string"},

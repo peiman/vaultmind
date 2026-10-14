@@ -17,12 +17,33 @@ import (
 // without inventing a type.
 const defaultKnowledgeType = "concept"
 
-// bandIsClose reports whether the band ask already computed is the band this
-// vault treats as close enough to patch. Equality is the whole rule: a weaker
-// band, an empty band, or a typo'd setting is not close, so the finding becomes
-// a new note instead of landing on the wrong one.
+// bandIsClose reports whether the band ask already computed is at least the
+// band this vault treats as close enough to patch. strong is closer than
+// moderate, then weak, then no_match. A weaker band, an empty band, or a
+// typo'd setting is not close, so the finding becomes a new note instead of
+// landing on the wrong one.
 func bandIsClose(band, closeBand string) bool {
-	return band == closeBand
+	got, ok := bandRank(band)
+	want, wantOK := bandRank(closeBand)
+	if !ok || !wantOK {
+		return false
+	}
+	return got >= want
+}
+
+func bandRank(band string) (int, bool) {
+	switch band {
+	case noisefloor.ConfidenceStrong:
+		return 3, true
+	case noisefloor.ConfidenceModerate:
+		return 2, true
+	case noisefloor.ConfidenceWeak:
+		return 1, true
+	case noisefloor.ConfidenceNoMatch:
+		return 0, true
+	default:
+		return 0, false
+	}
 }
 
 // closeBandOrDefault uses the strong band when the setting is empty. Only a

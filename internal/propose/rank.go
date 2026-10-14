@@ -36,7 +36,10 @@ func closeRanker(req Request) {
 // the same function ask uses (Principle 8). The three frontmatter keys go
 // through mutation, the one writer (Principle 7). A failure leaves the draft
 // on disk and names it: a retry would see the existing draft and not check again.
-func attachRankCheck(ctx context.Context, v Vault, req Request, out *outcome, now time.Time) error {
+// decisionOnQuestionAndFinding is the text the mode decision retrieved on.
+const decisionOnQuestionAndFinding = "the question and the finding"
+
+func attachRankCheck(ctx context.Context, v Vault, req Request, out *outcome, now time.Time, decision Hit, found bool) error {
 	if req.Ranker == nil || out == nil {
 		return nil
 	}
@@ -49,6 +52,13 @@ func attachRankCheck(ctx context.Context, v Vault, req Request, out *outcome, no
 		return rankCheckErr(req, out.ID, err)
 	}
 	check := measureRank(out.Mode, out.ID, out.TargetID, excluded, included)
+	// The printed before is this comparison, not the question-only rank.
+	// rank_before stays the question-only number measureRank already stored.
+	check.CloseBand = closeBandOrDefault(req.CloseBand)
+	if found && decision.ID != "" {
+		check.Decision = RankPlace{ID: decision.ID, Rank: 1, Band: decision.Band}
+		check.DecisionOn = decisionOnQuestionAndFinding
+	}
 	// The frontmatter write changes the note hash, which drops its vectors,
 	// and the re-index embeds them again. That embed borrows the process
 	// session, so this close only drops the ranker's own cleanup. It must
@@ -147,9 +157,12 @@ func writeRankKeys(ctx context.Context, v Vault, req Request, rel string, now ti
 	return reindex(ctx, v, req, rel), nil
 }
 
-// formatRankCheck is the one text line. An empty band omits its parentheses.
-// An empty mode omits its parentheses. A patch says the measurement is the
-// proposal note, because that note holds the finding.
+// formatRankCheck is the one text line. before is the comparison that chose
+// patch or new, on the question and the finding. The question-only rank is
+// labeled on its own: that is the number stored as rank_before. An empty
+// band omits its parentheses. An empty mode omits its parentheses. A patch
+// says the after measurement is the proposal note, because that note holds
+// the finding.
 func formatRankCheck(check RankCheck) string {
 	var b strings.Builder
 	b.WriteString("retrieval check")
@@ -157,6 +170,8 @@ func formatRankCheck(check RankCheck) string {
 		fmt.Fprintf(&b, " (%s)", check.Mode)
 	}
 	b.WriteString(": before — ")
+	b.WriteString(formatDecision(check))
+	b.WriteString("; question alone — ")
 	b.WriteString(formatBefore(check))
 	b.WriteString("; after — ")
 	b.WriteString(formatAfter(check))
@@ -164,6 +179,21 @@ func formatRankCheck(check RankCheck) string {
 		b.WriteString(". Measured on the proposal note, which holds the finding.")
 	}
 	return b.String()
+}
+
+func formatDecision(check RankCheck) string {
+	if check.Decision.ID == "" {
+		return "no note on the question and the finding"
+	}
+	text := "best answer " + check.Decision.ID
+	if check.Decision.Band != "" {
+		text += " (" + check.Decision.Band + ")"
+	}
+	text += " on the question and the finding"
+	if check.CloseBand != "" && !bandIsClose(check.Decision.Band, check.CloseBand) {
+		text += ", which is not close enough for " + check.CloseBand + ", so this is a new note"
+	}
+	return text
 }
 
 func formatBefore(check RankCheck) string {
