@@ -184,9 +184,9 @@ func (idx *Indexer) RunEmbed(ctx context.Context, dbPath, model string, full boo
 		var used string
 		var lerr error
 		embedder, used, lerr = loadEmbedder(model, embedding.BackendName(),
-			func() (embedding.Embedder, error) { return embedding.ConstructBGEM3(ctx, embedding.BGEM3Config()) },
+			func() (embedding.Embedder, error) { return embedding.ConstructBGEM3(ctx, embedding.HugotConfig{}) },
 			func() (embedding.Embedder, error) {
-				return embedding.ConstructMiniLM(ctx, embedding.DefaultHugotConfig())
+				return embedding.ConstructMiniLM(ctx, embedding.HugotConfig{})
 			},
 		)
 		if lerr != nil {

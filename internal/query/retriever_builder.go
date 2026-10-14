@@ -229,7 +229,7 @@ func BuildAutoRetrieverWithRerank(ctx context.Context, db *index.DB, expDB *expe
 }
 
 func newDefaultEmbedder(ctx context.Context) (embedding.Embedder, error) {
-	embedder, err := embedding.ConstructMiniLM(ctx, embedding.DefaultHugotConfig())
+	embedder, err := embedding.ConstructMiniLM(ctx, embedding.HugotConfig{})
 	if err != nil {
 		return nil, fmt.Errorf("creating embedder: %w", err)
 	}
@@ -303,7 +303,7 @@ func (ProcessEmbedder) Borrow(ctx context.Context, model string) (embedding.Embe
 // sharedBGEM3 returns the process BGE-M3 session, loading it on first use.
 func sharedBGEM3(ctx context.Context) (embedding.Embedder, func(), error) {
 	return sharedEmbedderFor(sharedKeyBGEM3, func() (embedding.Embedder, func(), error) {
-		bgem3, bgem3Err := embedding.ConstructBGEM3(ctx, embedding.BGEM3Config())
+		bgem3, bgem3Err := embedding.ConstructBGEM3(ctx, embedding.HugotConfig{})
 		if bgem3Err != nil {
 			return nil, nil, fmt.Errorf("creating BGE-M3 embedder: %w", bgem3Err)
 		}
