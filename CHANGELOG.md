@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Long prompts no longer make the recall hook fail on Linux (argument too long).
+  The query passed to `vaultmind ask` is the first 16384 characters. Linux
+  rejects a longer single argument (`MAX_ARG_STRLEN`, 128 KiB) and the hook
+  exits 126. The binary ranks on a bounded forward window, so the cut does
+  not change which notes come back.
+  Run `vaultmind hooks install --force` to update installed copies.
 - **The recall hook no longer spends 25 s and times out on subagent hand-backs.**
   A prompt that is only the harness prefix `Another Claude session sent a message:`,
   then one or more `agent-message`, `teammate-message`, or `cross-session-message`

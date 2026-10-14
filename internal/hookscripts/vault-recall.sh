@@ -413,11 +413,15 @@ fi
 # the probe's only rank regressions, so frames stay. Stripping that leaves
 # fewer than 2 words falls back to the raw prompt, as does any python failure.
 # Probe + decision record: docs/reviews/a3-query-rewrite/ (private repo).
-QUERY=$(VM_RAW_PROMPT="$PROMPT" python3 - <<'PYEOF' 2>/dev/null
-import os
+#
+# The prompt is the rewriter's stdin. An environment string is under the
+# same Linux ceiling as an argv string (MAX_ARG_STRLEN, below). bash -e
+# exits 126 on that exec failure, before the ask cap can run.
+QUERY=$(printf '%s' "$PROMPT" | python3 -c "$(cat <<'PYEOF'
+import sys
 import re
 
-q = os.environ.get("VM_RAW_PROMPT", "").strip()
+q = sys.stdin.read().strip()
 meta = re.compile(
     r"\b(?:information\s+about|records?\s+of|(?:our|my|the)\s+notes?\s+(?:about|on)"
     r"|notes?\s+(?:about|on)|anything\s+about|please|again|can\s+you\s+find"
@@ -429,8 +433,19 @@ s = meta.sub(" ", q).rstrip("?!. ")
 s = re.sub(r"\s+", " ", s).strip()
 print(s if len(s.split()) >= 2 else q)
 PYEOF
-)
+)" 2>/dev/null)
 [ -z "$QUERY" ] && QUERY="$PROMPT"
+
+# Transport cap, not a ranking choice. Linux execve rejects one argv string
+# longer than MAX_ARG_STRLEN (PAGE_SIZE * 32, 131072 bytes when the page is
+# 4 KiB) with E2BIG, and the shell exits 126. A person-written prompt over
+# that made this hook fail before the notes were consulted. 16384 characters
+# is at most 64 KiB of UTF-8, under that ceiling. ask ranks on a bounded
+# forward window (PR #279), so nothing past these characters changes ranking.
+# The index is characters in the caller locale. Under UTF-8 a slice does not
+# split a code point. On macOS bash 3.2 this slice of a 200 KB prompt took
+# 2.3 ms, so it does not need a byte-head fallback.
+QUERY="${QUERY:0:16384}"
 
 # FEDERATION. An agent's memory is not one vault: mine is three, this hook
 # searched one, and two findings from a single working week sat in the desk —
