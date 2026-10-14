@@ -15,7 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   envelopes, then whitespace or one of the two observed harness suffixes, is
   skipped. The skip is logged as `cross-session-envelope`. A person's own words
   before, after, or between those envelopes are still recalled, including a
-  sentence that only mentions `<agent-message>`.
+  sentence that only mentions `<agent-message>`. Another harness tag in that
+  shape, such as `system-reminder`, is still recalled.
+  The trim runs in the C locale. Bash 3.2's `${var#pattern}` otherwise walks
+  the prompt one UTF-8 character at a time, which took 37s on a 200 KB
+  hand-back and 11s on a 200 KB task notification. The prefix and suffix are
+  checked on bounded slices, and the envelope is parsed once.
   Run `vaultmind hooks install --force` to update installed copies.
 
 ## [0.10.12] - 2026-10-12
