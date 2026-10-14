@@ -15,6 +15,7 @@ var (
 	reFTSItalicStar       = regexp.MustCompile(`\*([^*]+)\*`)
 	reFTSItalicUnderscore = regexp.MustCompile(`_([^_]+)_`)
 	reFTSInlineCode       = regexp.MustCompile("`([^`]*)`")
+	reFTSHTMLComment      = regexp.MustCompile(`<!--[\s\S]*?-->`)
 	reFTSHTML             = regexp.MustCompile(`<[^>]+/?>`)
 	reFTSBlockIDLine      = regexp.MustCompile(`(?m)\s*\^[a-zA-Z0-9][a-zA-Z0-9\-_]*$`)
 	reFTSHRule            = regexp.MustCompile(`(?m)^(\-{3,}|\*{3,}|_{3,})\s*$`)
@@ -28,10 +29,21 @@ var ftsRewrites = []struct {
 	re          *regexp.Regexp
 	replacement string
 }{
+	{reFTSHTMLComment, ""},
 	{reFTSEmbed, ""}, {reFTSWikilinkAliased, "$1"}, {reFTSWikilink, "$1"}, {reFTSMarkdownLink, "$1"},
 	{reFTSHeading, ""}, {reFTSHRule, ""}, {reFTSBlockIDLine, ""}, {reFTSHTML, ""},
 	{reFTSInlineCode, "$1"}, {reFTSBoldItalic, ""}, {reFTSItalicStar, "$1"}, {reFTSItalicUnderscore, "$1"},
 	{reFTSBlockquote, ""}, {reFTSMultiSpace, " "}, {reFTSMultiNewline, "\n\n"},
+}
+
+// StripHTMLComments removes HTML comments. A comment is not note text: search
+// and recall excerpts both drop it, including the marker accept leaves so a
+// retried proposal is not appended twice.
+func StripHTMLComments(s string) string {
+	if !strings.Contains(s, "<!--") {
+		return s
+	}
+	return reFTSHTMLComment.ReplaceAllString(s, "")
 }
 
 // StripForFTS converts Markdown body text to plain text for full-text search indexing.

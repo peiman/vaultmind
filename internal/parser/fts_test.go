@@ -69,6 +69,28 @@ func TestStripForFTS_RemovesHTMLTags(t *testing.T) {
 	assert.NotContains(t, result, "<em>")
 }
 
+func TestStripForFTS_RemovesHTMLComments(t *testing.T) {
+	body := "Before <!-- vaultmind:accepted proposal-quartz --> after.\n<!-- keep > this whole comment -->\nDone."
+	result := parser.StripForFTS(body)
+	assert.Contains(t, result, "Before")
+	assert.Contains(t, result, "after.")
+	assert.Contains(t, result, "Done.")
+	assert.NotContains(t, result, "vaultmind:accepted")
+	assert.NotContains(t, result, "proposal-quartz")
+	assert.NotContains(t, result, "this whole comment")
+}
+
+func TestStripHTMLComments_LeavesTextWithoutAComment(t *testing.T) {
+	plain := "Quartz keeps one timeline."
+	assert.Equal(t, plain, parser.StripHTMLComments(plain))
+
+	marked := "<!-- vaultmind:accepted proposal-1 -->\nQuartz keeps one timeline."
+	got := parser.StripHTMLComments(marked)
+	assert.NotContains(t, got, "vaultmind:accepted")
+	assert.NotContains(t, got, "proposal-1")
+	assert.Contains(t, got, "Quartz keeps one timeline.")
+}
+
 func TestStripForFTS_RemovesBlockIDs(t *testing.T) {
 	result := parser.StripForFTS("An important fact. ^key-fact\n\nAnother paragraph.")
 	assert.NotContains(t, result, "^key-fact")

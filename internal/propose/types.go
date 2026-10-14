@@ -47,6 +47,9 @@ type Request struct {
 	Stdout, Stderr               io.Writer
 	Embed                        func(vaultPath string)
 	WorkDir                      string
+	// beforeWrite, when set, runs after the note is read and before the
+	// conflict-checked write. Tests use it to change the file in that window.
+	beforeWrite func(abs string) error
 }
 
 const (

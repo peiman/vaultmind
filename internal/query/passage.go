@@ -23,6 +23,7 @@ func passageMarginWins(best, first, ratio float64) bool {
 // token stream and corpus frequencies without indexing individual windows.
 func selectPassage(db *index.DB, query, raw, today string, limit int, title string) (passageResult, error) {
 	result := passageResult{Text: today}
+	raw = parser.StripHTMLComments(raw)
 	text, offsets := parser.StripForFTSOffsets(raw)
 	bounds := passageTokenBounds(text)
 	vocabulary, ordinals, distinct := passageVocabulary(text, bounds)

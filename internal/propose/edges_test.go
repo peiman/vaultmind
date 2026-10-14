@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -119,8 +121,21 @@ func TestOutput_JSONAndWarnings(t *testing.T) {
 }
 
 func TestSourceURL_FileScheme(t *testing.T) {
-	require.NoError(t, validateSourceURL("file:///vault/notes/a.md"))
-	require.EqualError(t, validateSourceURL("file://"), `source "file://" is not a valid URL`)
+	v := testVault(t)
+	writeTarget(t, v, "concepts/memory.md", "concept-memory", "concept", "Memory", "accepted", "body")
+	inside := filepath.Join(v.Path, "concepts", "memory.md")
+	require.NoError(t, validateSourceURL(v.Path, "", "file://"+inside))
+
+	bare := validateSource(v.Path, "", "/etc/passwd")
+	got := validateSourceURL(v.Path, "", "file:///etc/passwd")
+	require.EqualError(t, got, bare.Error())
+
+	require.EqualError(t, validateSourceURL(v.Path, "", "file://"), `source "file://" is not a valid URL`)
+
+	parsed, err := url.Parse("file:///C:/notes/a.md")
+	require.NoError(t, err)
+	assert.Equal(t, "C:/notes/a.md", fileURLPath(parsed))
+	assert.Empty(t, fileURLPath(nil))
 }
 
 func TestFrontmatterHelpers(t *testing.T) {

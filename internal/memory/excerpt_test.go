@@ -243,6 +243,14 @@ func TestExcerpt_PathOnlyNoteStillDelivers(t *testing.T) {
 	assert.NotEmpty(t, got, "there is nothing better to show; showing nothing is worse")
 }
 
+func TestExcerpt_DropsTheAcceptMarker(t *testing.T) {
+	body := "<!-- vaultmind:accepted proposal-1 -->\nQuartz keeps one timeline."
+	got := memory.Excerpt(body, 200)
+	assert.NotContains(t, got, "vaultmind:accepted")
+	assert.NotContains(t, got, "proposal-1")
+	assert.Contains(t, got, "Quartz keeps one timeline.")
+}
+
 func TestExcerpt_EmptyBody(t *testing.T) {
 	assert.Empty(t, memory.Excerpt("", 100))
 	assert.Empty(t, memory.Excerpt("   \n\n  ", 100))

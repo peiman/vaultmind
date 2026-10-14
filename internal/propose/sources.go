@@ -26,26 +26,40 @@ func validateSource(vaultPath, workDir, source string) error {
 	}
 	// A Windows path such as C:\notes\a.md has no "://", so it stays a path.
 	if strings.Contains(source, "://") {
-		return validateSourceURL(source)
+		return validateSourceURL(vaultPath, workDir, source)
 	}
 	return validateSourcePath(vaultPath, workDir, source)
 }
 
-func validateSourceURL(source string) error {
+func validateSourceURL(vaultPath, workDir, source string) error {
 	u, err := url.Parse(source)
 	if err != nil || u.Scheme == "" {
 		return fmt.Errorf("source %q is not a valid URL", source)
 	}
-	if u.Scheme == "file" {
-		if u.Path == "" {
+	if strings.EqualFold(u.Scheme, "file") {
+		path := fileURLPath(u)
+		if path == "" {
 			return fmt.Errorf("source %q is not a valid URL", source)
 		}
-		return nil
+		return validateSourcePath(vaultPath, workDir, path)
 	}
 	if u.Host == "" {
 		return fmt.Errorf("source %q is not a valid URL", source)
 	}
 	return nil
+}
+
+// fileURLPath is the local path of a file URL. url.URL.Path is already decoded.
+// A Windows drive URL arrives as /C:/notes/a.md; drop the slash the URL added.
+func fileURLPath(u *url.URL) string {
+	if u == nil {
+		return ""
+	}
+	p := u.Path
+	if len(p) >= 3 && p[0] == '/' && p[2] == ':' {
+		p = p[1:]
+	}
+	return p
 }
 
 func validateSourcePath(vaultPath, workDir, source string) error {

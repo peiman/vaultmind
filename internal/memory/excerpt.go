@@ -3,6 +3,8 @@ package memory
 import (
 	"strings"
 	"unicode"
+
+	"github.com/peiman/vaultmind/internal/parser"
 )
 
 // arcSections are the headings the arc discipline prescribes, in order. They are
@@ -51,7 +53,7 @@ func Excerpt(body string, maxTokens int) string {
 	if strings.TrimSpace(body) == "" || maxTokens <= 0 {
 		return ""
 	}
-	body = stripFrontmatter(body)
+	body = parser.StripHTMLComments(stripFrontmatter(body))
 	text := principleSection(body)
 	if text == "" {
 		text = leadParagraph(body)

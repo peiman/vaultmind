@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/peiman/vaultmind/internal/index"
+	"github.com/peiman/vaultmind/internal/mutation"
 	tmpl "github.com/peiman/vaultmind/internal/template"
 	"github.com/peiman/vaultmind/internal/vault"
 	"github.com/rs/zerolog/log"
@@ -121,28 +122,57 @@ func reindex(ctx context.Context, v Vault, req Request, rel string) []string {
 	return nil
 }
 
-func writeFrontmatter(abs string, fm map[string]interface{}, body string) error {
-	yamlBytes, err := yaml.Marshal(fm)
+// acceptedMarker is the invisible line accept writes in front of a proposal's
+// section. A retry that finds it skips the append and only finishes cleanup.
+func acceptedMarker(proposalID string) string {
+	return "<!-- vaultmind:accepted " + proposalID + " -->"
+}
+
+// rewriteNote changes frontmatter through the mutation package and writes the
+// file with its conflict-checked atomic rename. edit may be nil. newBody, when
+// non-nil, replaces the body; nil keeps the body bytes.
+func rewriteNote(abs, rel string, raw []byte, hook func(string) error, edit func(*yaml.Node) error, newBody *string) error {
+	doc, bodyOffset, err := mutation.ParseFrontmatterNode(raw)
 	if err != nil {
-		return fmt.Errorf("encoding frontmatter: %w", err)
+		return fmt.Errorf("parsing note %s: %w", rel, err)
 	}
-	var b strings.Builder
-	b.WriteString("---\n")
-	b.Write(yamlBytes)
-	b.WriteString("---\n")
-	if body != "" {
-		if !strings.HasPrefix(body, "\n") {
-			b.WriteByte('\n')
+	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
+		return fmt.Errorf("frontmatter of %s is not a YAML mapping", rel)
+	}
+	var fm []byte
+	if edit == nil {
+		fm = append([]byte(nil), raw[:bodyOffset]...)
+	} else {
+		if err := edit(doc.Content[0]); err != nil {
+			return err
 		}
-		b.WriteString(body)
-		if !strings.HasSuffix(body, "\n") {
-			b.WriteByte('\n')
+		fm, err = mutation.SerializeFrontmatter(doc, mutation.DetectLineEnding(raw))
+		if err != nil {
+			return fmt.Errorf("encoding frontmatter: %w", err)
 		}
 	}
-	if err := os.WriteFile(abs, []byte(b.String()), 0o640); err != nil { //nolint:gosec // caller resolved the path inside the vault
-		return fmt.Errorf("writing note: %w", err)
+	file := raw
+	if newBody != nil {
+		file = append(append([]byte{}, raw[:bodyOffset]...), []byte(*newBody)...)
+	}
+	content := mutation.SpliceFile(file, fm, bodyOffset)
+	if hook != nil {
+		if err := hook(abs); err != nil {
+			return err
+		}
+	}
+	if err := mutation.AtomicWrite(abs, rel, content, mutation.FileHash(raw)); err != nil {
+		return noteWriteErr(rel, err)
 	}
 	return nil
+}
+
+func noteWriteErr(rel string, err error) error {
+	var me *mutation.MutationError
+	if errors.As(err, &me) && me.Code == "conflict" {
+		return fmt.Errorf("note %s changed while it was being accepted; nothing was written", rel)
+	}
+	return fmt.Errorf("writing note %s: %w", rel, err)
 }
 
 func fmString(fm map[string]interface{}, key string) string {
@@ -194,11 +224,11 @@ func mergeSources(existing, add []string) []string {
 	return out
 }
 
-func appendSection(body, question, addition string) string {
+func appendSection(body, question, addition, proposalID string) string {
 	question = strings.Join(strings.Fields(question), " ")
 	addition = strings.TrimSpace(addition)
 	body = strings.TrimRight(body, "\n")
-	return body + "\n\n## " + question + "\n\n" + addition + "\n"
+	return body + "\n\n" + acceptedMarker(proposalID) + "\n## " + question + "\n\n" + addition + "\n"
 }
 
 func freeRel(v Vault, rel string) (string, error) {

@@ -305,6 +305,29 @@ func TestPropose_SourceValidation(t *testing.T) {
 		require.NoError(t, Run(context.Background(), v, req, &stubClosest{}))
 	})
 
+	t.Run("file url is checked like a path", func(t *testing.T) {
+		bare := validateSource(v.Path, "", "/etc/passwd")
+		req, _, _, embeds := reqOf("How does quartz work?", "A finding.")
+		req.Sources = []string{"file:///etc/passwd"}
+		err := Run(context.Background(), v, req, &stubClosest{ok: true, hit: Hit{Band: "strong", ID: "concept-memory", Path: "concepts/memory.md", Type: "concept"}})
+		require.EqualError(t, err, bare.Error())
+		assert.Equal(t, 0, *embeds)
+
+		req, out, _, _ := reqOf("Where is the vault file?", "A finding.")
+		req.Sources = []string{"file://" + inside}
+		req.Now = proposeNow.Add(2 * time.Minute)
+		require.NoError(t, Run(context.Background(), v, req, &stubClosest{}))
+		assert.Contains(t, out.String(), "mode: new")
+		var rel string
+		for _, line := range strings.Split(out.String(), "\n") {
+			if strings.HasPrefix(line, "path: ") {
+				rel = strings.TrimPrefix(line, "path: ")
+			}
+		}
+		fm, _ := parseNote(t, v, rel)
+		assert.Contains(t, fmStrings(fm["sources"]), "file://"+inside)
+	})
+
 	t.Run("windows path is not a url", func(t *testing.T) {
 		req, _, _, _ := reqOf("How does quartz work?", "A finding.")
 		req.Sources = []string{`C:\notes\a.md`}

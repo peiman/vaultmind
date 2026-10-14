@@ -105,10 +105,21 @@ rather than a patch on the wrong one.
   list publishes as `accepted`. Same file, same id.
 - A patch draft is the draft whose `patches` field is non-empty. There is no
   second mode field. Accept appends the proposal body under `## <question>` on
-  the target, preserves the target's frontmatter, and adds `sources` only when
-  the target's type allows that field. It then deletes the proposal file and
-  re-indexes the target.
+  the target. The line immediately before that heading is the comment
+  `<!-- vaultmind:accepted <proposal-id> -->`. A retry that already finds the
+  comment skips the append and only deletes the proposal file and its index
+  row, so a cleanup that failed after the write does not copy the section
+  again. Search text and recall excerpts drop HTML comments, so the marker is
+  not recalled. The target's other frontmatter is left as written (Principle 7:
+  `internal/mutation` is the one frontmatter writer). `sources` are added only
+  when the target's type allows that field. The write re-reads the file and
+  refuses when those bytes differ from the ones just read: nothing is written
+  and the proposal stays. After a write that lands, accept deletes the proposal
+  file and re-indexes the target.
 - A note that is not a draft is refused. A patch whose target is gone is refused.
+  A patch whose target is itself a draft, or is itself a proposal, is refused.
+  A `file:` source is checked the same way as a path: it must exist, and it
+  must sit inside the vault or the repository.
 
 The notes a write touched are re-indexed the way `note create` re-indexes, and
 embedded when embed-on-write is on. `vaultmind frontmatter set` still changes
@@ -227,8 +238,18 @@ file (a gitlink) is treated as not a repository.
 - `TestPropose_WrittenNoteValidatesAndAskOmitsDrafts` (`cmd`) — the written note passes the vault schema, and a default `ask` on the real index does not return the draft.
 - `TestAccept_NewFlipsStatus` (`internal/propose`) — accepting a new draft flips status to the schema's published value.
 - `TestAccept_PatchMergesDeletesAndReindexes` (`internal/propose`) — the target body contains the addition, the proposal file is gone, and the target is re-indexed. Skipping the proposal delete leaves the file and this test goes red.
+- `TestAccept_RetryAfterCleanupFailureDoesNotDuplicate` (`internal/propose`) — when deleting the proposal fails after the target was written, a retry leaves one copy of the section. Removing the marker check appends it again and this test goes red.
+- `TestAccept_FrontmatterPreservesUnchangedKeys` (`internal/propose`) — accepting a new draft changes only the `status` line. Key order, a quoted title, a date scalar, and a comment stay byte-identical.
+- `TestAccept_PatchKeepsFrontmatterExceptSources` (`internal/propose`) — accepting a patch keeps that same frontmatter and appends `sources` when the type allows the field.
+- `TestAccept_RefusesWhenTheTargetChanged` (`internal/propose`) — a target that changed between the read and the write is left untouched. Dropping the hash check overwrites it and this test goes red.
+- `TestAccept_WriteUsesATempFile` (`internal/propose`) — the write goes through a temp file in the note's directory. A directory that cannot create one leaves the note unchanged.
+- `TestAccept_RefusesADraftTarget` (`internal/propose`) — a patch whose target is a draft is refused and left unchanged. Allowing a draft target makes this test go red.
+- `TestAccept_RefusesAProposalTarget` (`internal/propose`) — a patch whose target is itself a proposal is refused.
 - `TestAccept_NonDraftErrors` (`internal/propose`) — accepting a note that is not a draft fails.
-- `TestPropose_SourceValidation` (`internal/propose`) — a source URL must parse, and a path must exist inside the vault or the repository.
+- `TestPropose_SourceValidation` (`internal/propose`) — a source URL must parse, and a path must exist inside the vault or the repository. `file:///etc/passwd` is rejected with the same error as `/etc/passwd`.
+- `TestSourceURL_FileScheme` (`internal/propose`) — a `file:` URL of a note inside the vault is accepted; an empty `file:` URL is not.
+- `TestStripForFTS_RemovesHTMLComments` (`internal/parser`) — the indexed text omits the accept marker, including a comment that contains `>`.
+- `TestExcerpt_DropsTheAcceptMarker` (`internal/memory`) — a recall excerpt omits the marker when it sits on the same line as the sentence it guards.
 - `TestContract_NoteProposeJSON` (`cmd`) — `note propose --json` is the v1 envelope.
 - `TestContract_NoteAcceptJSON` (`cmd`) — `note accept --json` is the v1 envelope.
 

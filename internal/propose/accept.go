@@ -1,6 +1,7 @@
 package propose
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -9,9 +10,11 @@ import (
 	"strings"
 
 	"github.com/peiman/vaultmind/internal/index"
+	"github.com/peiman/vaultmind/internal/mutation"
 	"github.com/peiman/vaultmind/internal/parser"
 	"github.com/peiman/vaultmind/internal/vault"
 	"github.com/rs/zerolog/log"
+	"gopkg.in/yaml.v3"
 )
 
 // publishWords is the order in which a type's allowed statuses are asked
@@ -74,10 +77,10 @@ func Accept(ctx context.Context, v Vault, req Request) error {
 	if patches := fmString(parsed.Frontmatter, "patches"); patches != "" {
 		return acceptPatch(ctx, v, req, row.Path, parsed, patches)
 	}
-	return acceptNew(ctx, v, req, row.Path, row.ID, parsed, abs)
+	return acceptNew(ctx, v, req, row.Path, row.ID, parsed, abs, raw)
 }
 
-func acceptNew(ctx context.Context, v Vault, req Request, rel, id string, parsed *parser.ParsedNote, abs string) error {
+func acceptNew(ctx context.Context, v Vault, req Request, rel, id string, parsed *parser.ParsedNote, abs string, raw []byte) error {
 	noteType := fmString(parsed.Frontmatter, "type")
 	td, ok := v.Reg.GetTypeDef(noteType)
 	if !ok {
@@ -87,8 +90,10 @@ func acceptNew(ctx context.Context, v Vault, req Request, rel, id string, parsed
 	if err != nil {
 		return fail(req, cmdAccept, "note_missing", err.Error())
 	}
-	parsed.Frontmatter["status"] = published
-	if err := writeFrontmatter(abs, parsed.Frontmatter, parsed.Body); err != nil {
+	err = rewriteNote(abs, rel, raw, req.beforeWrite, func(mapping *yaml.Node) error {
+		return mutation.SetKey(mapping, "status", published)
+	}, nil)
+	if err != nil {
 		return err
 	}
 	return renderAccept(req, v, outcome{
@@ -117,16 +122,15 @@ func acceptPatch(ctx context.Context, v Vault, req Request, proposalRel string, 
 	if err != nil {
 		return fmt.Errorf("parsing note %q: %w", targetID, err)
 	}
-	question := fmString(proposal.Frontmatter, "question")
-	parsed.Body = appendSection(parsed.Body, question, proposal.Body)
-	if v.Reg.IsFieldAllowed(target.Type, "sources") {
-		add := stringList(proposal.Frontmatter["sources"])
-		if len(add) > 0 {
-			parsed.Frontmatter["sources"] = mergeSources(stringList(parsed.Frontmatter["sources"]), add)
-		}
-	}
-	if err := writeFrontmatter(abs, parsed.Frontmatter, parsed.Body); err != nil {
+	if err := refusePatchTarget(req, parsed, targetID); err != nil {
 		return err
+	}
+	// The marker is the record that this proposal was already copied onto the
+	// target. A retry after a failed delete must not append the section again.
+	if !bytes.Contains(raw, []byte(acceptedMarker(req.ID))) {
+		if err := applyPatch(abs, target.Path, raw, parsed, proposal, req, v.Reg.IsFieldAllowed(target.Type, "sources")); err != nil {
+			return err
+		}
 	}
 	proposalAbs, err := vault.ResolveInside(v.Path, proposalRel)
 	if err != nil {
@@ -146,6 +150,33 @@ func acceptPatch(ctx context.Context, v Vault, req Request, proposalRel string, 
 	})
 }
 
+func refusePatchTarget(req Request, note *parser.ParsedNote, targetID string) error {
+	if fmString(note.Frontmatter, "patches") != "" {
+		return fail(req, cmdAccept, "target_draft", fmt.Sprintf("proposal %q patches %q, which is itself a proposal", req.ID, targetID))
+	}
+	if fmString(note.Frontmatter, "status") == index.StatusDraft {
+		return fail(req, cmdAccept, "target_draft", fmt.Sprintf("proposal %q patches %q, which is a draft; accept that note first", req.ID, targetID))
+	}
+	return nil
+}
+
+func applyPatch(abs, rel string, raw []byte, target, proposal *parser.ParsedNote, req Request, sourcesAllowed bool) error {
+	_, bodyOffset, err := mutation.ParseFrontmatterNode(raw)
+	if err != nil {
+		return fmt.Errorf("parsing note %s: %w", rel, err)
+	}
+	body := appendSection(string(raw[bodyOffset:]), fmString(proposal.Frontmatter, "question"), proposal.Body, req.ID)
+	var edit func(*yaml.Node) error
+	add := stringList(proposal.Frontmatter["sources"])
+	if sourcesAllowed && len(add) > 0 {
+		merged := mergeSources(stringList(target.Frontmatter["sources"]), add)
+		edit = func(mapping *yaml.Node) error {
+			return mutation.SetKey(mapping, "sources", merged)
+		}
+	}
+	return rewriteNote(abs, rel, raw, req.beforeWrite, edit, &body)
+}
+
 func deleteProposal(path string) error {
-	return os.Remove(path)
+	return os.Remove(path) //nolint:gosec // nosemgrep: go-path-traversal -- path is confined with vault.ResolveInside
 }
