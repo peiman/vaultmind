@@ -21,11 +21,18 @@ func envelopePredicate(t *testing.T) string {
 	t.Helper()
 	script, ok := hookscripts.Get("vault-recall.sh")
 	require.True(t, ok)
-	_, predicate, ok := strings.Cut(string(script), "is_envelope_only() {")
+	src := string(script)
+	// The trim helpers sit immediately above the predicate and are part of it.
+	// The isolated script has to carry them or the predicate cannot run.
+	start := strings.Index(src, "leading_drop() {")
+	fn := strings.Index(src, "is_envelope_only() {")
+	require.GreaterOrEqual(t, start, 0)
+	require.Greater(t, fn, start)
+	_, predicate, ok := strings.Cut(src, "is_envelope_only() {")
 	require.True(t, ok)
 	predicate, _, ok = strings.Cut(predicate, "\n}\n")
 	require.True(t, ok)
-	return "is_envelope_only() {" + predicate + "\n}\n" +
+	return src[start:fn] + "is_envelope_only() {" + predicate + "\n}\n" +
 		"prompt=$(cat); if is_envelope_only \"$prompt\"; then printf envelope; else printf recall; fi"
 }
 

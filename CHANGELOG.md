@@ -11,6 +11,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `ask` caps a long query where the cost is. One BGE-M3 forward pass embeds the first N tokens (default 1152), cut on a token boundary so the embedded text is a prefix of the query. A separate query-only tokenize reads those byte spans, and only to find the cut and the salient spans. The tokenizer that indexes notes and embeds short queries is unchanged, so those embeddings stay byte-identical to the previous release. Dense and sparse rank on that prefix. ColBERT scores only the K query-token vectors with the highest per-position sparse weight from that same pass (default 64), in their original order. FTS searches the K most salient words, still joined with OR. A long word with no spaces contributes those tokens' own text, not the whole word. When salient words are not chosen, FTS searches the forward prefix rather than the raw query. `0` turns each bound off. A query at or under both bounds is unchanged. The echoed query stays the full text. Activation is unchanged. A keyword-only ask has no tokenizer, so one whitespace word counts as one token.
 
+- Long prompts no longer make the recall hook fail on Linux (argument too long).
+  The query passed to `vaultmind ask` is the first 16384 characters. Linux
+  rejects a longer single argument (`MAX_ARG_STRLEN`, 128 KiB) and the hook
+  exits 126. The binary ranks on a bounded forward window, so the cut does
+  not change which notes come back.
+  Run `vaultmind hooks install --force` to update installed copies.
+- **The recall hook no longer spends 25 s and times out on subagent hand-backs.**
+  A prompt that is only the harness prefix `Another Claude session sent a message:`,
+  then one or more `agent-message`, `teammate-message`, or `cross-session-message`
+  envelopes, then whitespace or one of the two observed harness suffixes, is
+  skipped. The skip is logged as `cross-session-envelope`. A person's own words
+  before, after, or between those envelopes are still recalled, including a
+  sentence that only mentions `<agent-message>`. Another harness tag in that
+  shape, such as `system-reminder`, is still recalled.
+  The trim runs in the C locale so the indexes are bytes. A UTF-8 BOM is the
+  three bytes EF BB BF at the start: the hook compares those bytes and drops
+  three. Leading whitespace is counted on a bounded head (the prefix, one
+  BOM, and indentation) and spliced off. Trailing whitespace is counted on a
+  bounded tail and cut by length. Bash 3.2 walking a whole-prompt prefix
+  trim took 37s on a 200 KB hand-back and 11s on a 200 KB task notification.
+  The prefix and suffix are checked on bounded slices, and the envelope is
+  parsed once.
+  Run `vaultmind hooks install --force` to update installed copies.
+
 ### Added
 
 - `app.ask.query_forward_tokens` (`--query-forward-tokens`, `VAULTMIND_APP_ASK_QUERY_FORWARD_TOKENS`, default 1152) and `app.ask.query_salient_terms` (`--query-salient-terms`, `VAULTMIND_APP_ASK_QUERY_SALIENT_TERMS`, default 64). The default is the measured BGE-M3 cost of a 512-word budget: median 2.262505 content tokens per whitespace word across the 10 long qlen-probe prompts, times 512, rounded to the nearest multiple of 64. When either bound applies, the text output adds one line under the Search header and JSON adds `result.query_capped` with `embedded_tokens`, `total_tokens`, and `salient_terms`. The field is absent when neither bound applied. `schema_version` stays `v1`.
