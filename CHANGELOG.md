@@ -19,8 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shape, such as `system-reminder`, is still recalled.
   The trim runs in the C locale. Bash 3.2's `${var#pattern}` otherwise walks
   the prompt one UTF-8 character at a time, which took 37s on a 200 KB
-  hand-back and 11s on a 200 KB task notification. The prefix and suffix are
-  checked on bounded slices, and the envelope is parsed once.
+  hand-back and 11s on a 200 KB task notification. The BOM walk stops after
+  128 KiB: the mark can only be a prefix, and walking the rest still crowded
+  out the recall budget while the test suite had the CPUs. The prefix and
+  suffix are checked on bounded slices, and the envelope is parsed once.
   Run `vaultmind hooks install --force` to update installed copies.
 
 ## [0.10.12] - 2026-10-12

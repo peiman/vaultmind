@@ -82,7 +82,21 @@ is_envelope_only() {
     LC_ALL=C
     c="$candidate"
     c="${c#"${c%%[![:space:]]*}"}"
-    c="${c#$'\xef\xbb\xbf'}"
+    # A BOM is only a prefix, but bash 3.2 still walks every byte of the
+    # value. Walking all of a 200KB envelope stays expensive in the C locale
+    # once the rest of the suite has the CPUs, and it takes several seconds
+    # in UTF-8. Walk a head that is only the prefix: long enough that the
+    # UTF-8 walk still misses the recall budget, short enough that the C
+    # walk fits. The tail is not part of the match, so it is joined back.
+    bom_head=131072
+    if [ "${#c}" -gt "$bom_head" ]; then
+      head="${c:0:bom_head}"
+      rest="${c:bom_head}"
+      head="${head#$'\xef\xbb\xbf'}"
+      c="$head$rest"
+    else
+      c="${c#$'\xef\xbb\xbf'}"
+    fi
     c="${c#"${c%%[![:space:]]*}"}"
     c="${c%"${c##*[![:space:]]}"}"
     printf '%s' "$c"
