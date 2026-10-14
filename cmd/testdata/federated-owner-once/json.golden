@@ -1,0 +1,172 @@
+{
+  "command": "ask",
+  "errors": [],
+  "meta": {
+    "index_hash": "",
+    "timestamp": "",
+    "vault_path": ""
+  },
+  "result": {
+    "context": {
+      "budget_exhausted": false,
+      "budget_tokens": 1500,
+      "context": [
+        {
+          "body": "ACT-R is a cognitive architecture that models human cognition through declarative memory and procedural memory modules. Its memory model formalizes retrieval dynamics with base-level activation and [[Spreading Activation]] from the current context.",
+          "body_excerpted": true,
+          "body_included": true,
+          "confidence": "high",
+          "edge_type": "explicit_relation",
+          "frontmatter": {
+            "title": "ACT-R",
+            "type": "concept"
+          },
+          "id": "concept-act-r"
+        },
+        {
+          "body": "We needed an embedding model that supports dense, sparse, and late-interaction retrieval from a single pass, to avoid running three models.",
+          "body_excerpted": true,
+          "body_included": true,
+          "confidence": "high",
+          "edge_type": "explicit_relation",
+          "frontmatter": {
+            "status": "accepted",
+            "title": "Use BGE-M3 for hybrid retrieval",
+            "type": "decision"
+          },
+          "id": "decision-example"
+        },
+        {
+          "body": "VaultMind is the memory foundation for AI minds — a Git-backed associative memory layer over Obsidian vaults. Indexes notes, builds a knowledge graph, and serves context packs to agents through associative retrieval.",
+          "body_excerpted": true,
+          "body_included": true,
+          "confidence": "high",
+          "edge_type": "explicit_relation",
+          "frontmatter": {
+            "status": "active",
+            "title": "VaultMind",
+            "type": "project"
+          },
+          "id": "proj-vaultmind"
+        }
+      ],
+      "target": {
+        "body": "## Overview\n\nSpreading activation is the mechanism by which thinking about one concept makes related concepts more accessible. When you retrieve \"doctor\" from memory, \"nurse\" and \"hospital\" become slightly more available — that's spreading activation at work.",
+        "body_excerpted": true,
+        "frontmatter": {
+          "aliases": [
+            "Activation Spreading"
+          ],
+          "created": "2026-04-03",
+          "tags": [
+            "cognitive-science",
+            "retrieval"
+          ],
+          "title": "Spreading Activation",
+          "type": "concept"
+        },
+        "id": "concept-spreading-activation"
+      },
+      "target_id": "concept-spreading-activation",
+      "truncated": false,
+      "used_tokens": 299
+    },
+    "federated": [
+      {
+        "id": "concept-spreading-activation",
+        "is_domain_note": true,
+        "path": "concepts/spreading-activation.md",
+        "ranks": {
+          "desk": 1,
+          "research": 1
+        },
+        "rrf_score": 0.03278688524590164,
+        "score": 1,
+        "snippet": "\n## Overview\n\nSpreading activation is the mechanism by which thinking about one concept makes related concepts more accessible. When you retrieve \"doctor\" from memory, \"nurse\" and \"hospital\" become sl",
+        "title": "Spreading Activation",
+        "type": "concept",
+        "vault": "desk"
+      },
+      {
+        "id": "concept-base-level-activation",
+        "is_domain_note": true,
+        "path": "concepts/base-level-activation.md",
+        "ranks": {
+          "desk": 2,
+          "research": 2
+        },
+        "rrf_score": 0.03225806451612903,
+        "score": 0.824824498900705,
+        "snippet": "\n## Overview\n\nBase-level activation captures how recently and how often a memory has been used. In ACT-R, base-level activation determines how quickly a memory can be retrieved — recent and frequent u",
+        "title": "Base-Level Activation",
+        "type": "concept",
+        "vault": "desk"
+      },
+      {
+        "id": "concept-act-r",
+        "is_domain_note": true,
+        "path": "concepts/act-r.md",
+        "ranks": {
+          "desk": 3,
+          "research": 3
+        },
+        "rrf_score": 0.031746031746031744,
+        "score": 0,
+        "snippet": "\n## Overview\n\nACT-R is a cognitive architecture that models human cognition through declarative memory and procedural memory modules. Its memory model formalizes retrieval dynamics with base-level act",
+        "title": "ACT-R",
+        "type": "concept",
+        "vault": "desk"
+      }
+    ],
+    "federated_vaults": [
+      {
+        "contributed": true,
+        "name": "desk"
+      },
+      {
+        "contributed": false,
+        "name": "research"
+      }
+    ],
+    "noise_floor": 0,
+    "noise_floor_sigma": 0,
+    "query": "spreading activation",
+    "relevance_r": 0,
+    "relevance_z": 0,
+    "retrieval_mode": "keyword",
+    "top_hit_confidence": "strong",
+    "top_hits": [
+      {
+        "id": "concept-spreading-activation",
+        "is_domain_note": true,
+        "path": "concepts/spreading-activation.md",
+        "score": 1,
+        "snippet": "\n## Overview\n\nSpreading activation is the mechanism by which thinking about one concept makes related concepts more accessible. When you retrieve \"doctor\" from memory, \"nurse\" and \"hospital\" become sl",
+        "title": "Spreading Activation",
+        "type": "concept"
+      },
+      {
+        "id": "concept-base-level-activation",
+        "is_domain_note": true,
+        "path": "concepts/base-level-activation.md",
+        "score": 0.824824498900705,
+        "snippet": "\n## Overview\n\nBase-level activation captures how recently and how often a memory has been used. In ACT-R, base-level activation determines how quickly a memory can be retrieved — recent and frequent u",
+        "title": "Base-Level Activation",
+        "type": "concept"
+      },
+      {
+        "id": "concept-act-r",
+        "is_domain_note": true,
+        "path": "concepts/act-r.md",
+        "score": 0,
+        "snippet": "\n## Overview\n\nACT-R is a cognitive architecture that models human cognition through declarative memory and procedural memory modules. Its memory model formalizes retrieval dynamics with base-level act",
+        "title": "ACT-R",
+        "type": "concept"
+      }
+    ],
+    "vault": "desk"
+  },
+  "schema_version": "v1",
+  "status": "ok",
+  "warnings": []
+}
