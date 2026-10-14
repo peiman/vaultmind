@@ -17,12 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before, after, or between those envelopes are still recalled, including a
   sentence that only mentions `<agent-message>`. Another harness tag in that
   shape, such as `system-reminder`, is still recalled.
-  The trim runs in the C locale. Bash 3.2's `${var#pattern}` otherwise walks
-  the prompt one UTF-8 character at a time, which took 37s on a 200 KB
-  hand-back and 11s on a 200 KB task notification. The BOM walk stops after
-  128 KiB: the mark can only be a prefix, and walking the rest still crowded
-  out the recall budget while the test suite had the CPUs. The prefix and
-  suffix are checked on bounded slices, and the envelope is parsed once.
+  The trim runs in the C locale so the indexes are bytes. A UTF-8 BOM is the
+  three bytes EF BB BF at the start: the hook compares those bytes and drops
+  three. Leading whitespace is counted on a bounded head (the prefix, one
+  BOM, and indentation) and spliced off. Trailing whitespace is counted on a
+  bounded tail and cut by length. Bash 3.2 walking a whole-prompt prefix
+  trim took 37s on a 200 KB hand-back and 11s on a 200 KB task notification.
+  The prefix and suffix are checked on bounded slices, and the envelope is
+  parsed once.
   Run `vaultmind hooks install --force` to update installed copies.
 
 ## [0.10.12] - 2026-10-12
