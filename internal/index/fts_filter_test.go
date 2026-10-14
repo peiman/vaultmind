@@ -93,6 +93,53 @@ func insertFTSNote(t *testing.T, db *index.DB, id, path, body string) {
 	require.NoError(t, err)
 }
 
+// insertFTSNoteStatus adds a searchable note with an explicit frontmatter status.
+// An empty status is a published note: drafts are exactly the value "draft".
+func insertFTSNoteStatus(t *testing.T, db *index.DB, id, path, body, status string) {
+	t.Helper()
+	_, err := db.Exec(
+		`INSERT INTO notes (id, path, title, type, status, body_text, hash, mtime) VALUES (?, ?, ?, 'concept', ?, ?, 'h', 0)`,
+		id, path, id, status, body)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO fts_notes (note_id, title, body_text) VALUES (?, ?, ?)`, id, id, body)
+	require.NoError(t, err)
+}
+
+func ftsIDs(results []index.FTSResult) []string {
+	ids := make([]string, len(results))
+	for i, r := range results {
+		ids[i] = r.ID
+	}
+	return ids
+}
+
+// A draft packed with the query term would rank first. Ranking drops it unless
+// the caller opts in. Other status values, including none, stay rankable.
+func TestSearchFTS_ExcludesDraftsUnlessAsked(t *testing.T) {
+	db := rebuildTestIndex(t)
+	const q = "quartzdrafttoken"
+	insertFTSNoteStatus(t, db, "draft-rank", "concepts/draft-rank.md",
+		strings.Repeat(q+" ", 12), "draft")
+	insertFTSNoteStatus(t, db, "published-rank", "concepts/published-rank.md", q, "")
+	insertFTSNoteStatus(t, db, "active-rank", "concepts/active-rank.md", q, "active")
+
+	got, err := index.SearchFTS(db, q, 10, 0)
+	require.NoError(t, err)
+	ids := ftsIDs(got)
+	assert.NotContains(t, ids, "draft-rank", "a draft is out of ranking by default")
+	assert.ElementsMatch(t, []string{"published-rank", "active-rank"}, ids,
+		"a missing status and any other status stay in the results")
+	count, err := index.CountFTS(db, q)
+	require.NoError(t, err)
+	assert.Equal(t, 2, count, "the total counts only notes that pass the filter")
+
+	with, err := index.SearchFTS(db, q, 10, 0, index.SearchFilters{IncludeDrafts: true})
+	require.NoError(t, err)
+	require.NotEmpty(t, with)
+	assert.Equal(t, "draft-rank", with[0].ID, "opt-in returns the draft, and it would have ranked first")
+	assert.Contains(t, ftsIDs(with), "published-rank")
+}
+
 func TestSearchFTS_FilterByPathPrefix(t *testing.T) {
 	db := rebuildTestIndex(t)
 

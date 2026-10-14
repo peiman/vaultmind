@@ -203,6 +203,9 @@ app:
     # Override the wake-watcher heartbeat file path used for mesh watcher-liveness
     mesh_heartbeat: 
 
+    # Flag .md files git reports as untracked or modified when their working-tree age is more than this many days. Skipped when the vault is not a git repository.
+    uncommitted_days: 7
+
   doctorheal:
     # Path to vault root
     vault: .
@@ -921,6 +924,10 @@ app:
 
     # Output in JSON format
     json: false
+
+  retrieval:
+    # Rank notes whose status is draft. Off by default: a draft stays out of ask and search until its status is changed.
+    include_drafts: false
 
   schema:
     # Path to vault root

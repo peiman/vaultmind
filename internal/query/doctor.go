@@ -78,6 +78,17 @@ type DoctorResult struct {
 	// Overviews names big folders without an overview note and overviews
 	// their folder has outgrown. Advice: not counted as an issue.
 	Overviews *OverviewHealth `json:"overviews,omitempty"`
+
+	// Drafts are notes waiting to be accepted: status is exactly "draft".
+	// Accepting one is flipping that status. Listed here, not counted as an
+	// issue. Omitted until the cmd layer measured them (a nil Notes slice).
+	Drafts DoctorDrafts `json:"drafts,omitempty"`
+
+	// UncommittedNotes are markdown files git reports as untracked or modified
+	// whose working-tree mtime is older than the threshold. Skipped is set when
+	// the vault is not a git repository, so an empty list is not "clean".
+	// Omitted until measured.
+	UncommittedNotes DoctorUncommitted `json:"uncommitted_notes,omitempty"`
 }
 
 // DoctorMemoryUse is the memory-usage rollup doctor prints. Populated by the

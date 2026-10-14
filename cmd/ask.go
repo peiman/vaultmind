@@ -27,6 +27,9 @@ func init() {
 	// --vault B` used to search B alone and report "nothing relevant" without
 	// ever opening A. Tracking the occurrences is what lets runAsk say so.
 	trackRepeats(askCmd, "vault")
+	// One registry key (app.retrieval.include_drafts), registered by hand
+	// because the key is not under app.ask. Search carries the same flag.
+	askCmd.Flags().Bool("include-drafts", false, commands.IncludeDraftsDescription)
 }
 
 // retrievalModeLabel reports the retriever kind for event logging. Ask uses an

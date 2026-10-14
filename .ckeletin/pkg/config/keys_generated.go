@@ -80,6 +80,7 @@ const (
 	KeyAppDoctorMeshRegistry                 = "app.doctor.mesh_registry"                 // Verify an offline Contract-B signed-registry file instead of fetching from th...
 	KeyAppDoctorMeshSlug                     = "app.doctor.mesh_slug"                     // Override the agent slug used to resolve your binding in the mesh registry (de...
 	KeyAppDoctorMeshHeartbeat                = "app.doctor.mesh_heartbeat"                // Override the wake-watcher heartbeat file path used for mesh watcher-liveness
+	KeyAppDoctorUncommittedDays              = "app.doctor.uncommitted_days"              // Flag .md files git reports as untracked or modified when their working-tree a...
 	KeyAppDoctorhealVault                    = "app.doctorheal.vault"                     // Path to vault root
 	KeyAppDoctorhealJson                     = "app.doctorheal.json"                      // Output in JSON format
 	KeyAppDoctorhealDryRun                   = "app.doctorheal.dry_run"                   // Preview repairs without writing (default applies)
@@ -295,6 +296,7 @@ const (
 	KeyAppPingUi                             = "app.ping.ui"                              // Enable interactive UI for the ping command
 	KeyAppResolveVault                       = "app.resolve.vault"                        // Path to the vault root directory
 	KeyAppResolveJson                        = "app.resolve.json"                         // Output in JSON format
+	KeyAppRetrievalIncludeDrafts             = "app.retrieval.include_drafts"             // Rank notes whose status is draft. Off by default: a draft stays out of ask an...
 	KeyAppSchemaVault                        = "app.schema.vault"                         // Path to vault root
 	KeyAppSchemaJson                         = "app.schema.json"                          // Output in JSON format
 	KeyAppSearchVault                        = "app.search.vault"                         // Path to vault root

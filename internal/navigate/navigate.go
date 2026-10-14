@@ -30,11 +30,12 @@ const ellipsis = "…"
 
 // Note is one entry in the map.
 type Note struct {
-	ID    string `json:"id"`
-	Path  string `json:"path"`
-	Title string `json:"title"`
-	Type  string `json:"type"`
-	Line  string `json:"line,omitempty"`
+	ID     string `json:"id"`
+	Path   string `json:"path"`
+	Title  string `json:"title"`
+	Type   string `json:"type"`
+	Status string `json:"status,omitempty"`
+	Line   string `json:"line,omitempty"`
 	// CodeChanged is set by `tree --for` when the file was committed to after
 	// the note was.
 	CodeChanged *CodeChange `json:"code_changed,omitempty"`
@@ -88,7 +89,7 @@ func Load(q Querier, f Filter) ([]Note, error) {
 		where += ` AND type = ?`
 		args = append(args, f.Type)
 	}
-	stmt := `SELECT id, path, COALESCE(title, ''), COALESCE(type, ''), COALESCE(body_raw, body_text, ''), mtime FROM notes` + where + ` ORDER BY path`
+	stmt := `SELECT id, path, COALESCE(title, ''), COALESCE(type, ''), COALESCE(status, ''), COALESCE(body_raw, body_text, ''), mtime FROM notes` + where + ` ORDER BY path`
 
 	rows, err := q.Query(stmt, args...)
 	if err != nil {
@@ -100,7 +101,7 @@ func Load(q Querier, f Filter) ([]Note, error) {
 	for rows.Next() {
 		var n Note
 		var body string
-		if err := rows.Scan(&n.ID, &n.Path, &n.Title, &n.Type, &body, &n.Mtime); err != nil {
+		if err := rows.Scan(&n.ID, &n.Path, &n.Title, &n.Type, &n.Status, &body, &n.Mtime); err != nil {
 			return nil, fmt.Errorf("reading note row: %w", err)
 		}
 		if n.Title == "" {
@@ -289,6 +290,9 @@ func noteLine(n Note, brief bool) string {
 	s := fmt.Sprintf("%s (%s)", n.Title, n.ID)
 	if !brief && n.Line != "" {
 		s += " — " + n.Line
+	}
+	if n.Status == index.StatusDraft {
+		s += " [draft]"
 	}
 	return s
 }

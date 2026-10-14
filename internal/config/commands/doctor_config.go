@@ -33,7 +33,13 @@ and chat reachability. Green is reserved for a cryptographically authenticated
 binding; everything else is a warning (doctor stays exit-0). --mesh-root-pubkey
 pins the root explicitly (otherwise the enroll-persisted anchor is used),
 --mesh-registry verifies an offline registry file, --mesh-slug overrides the
-agents.yaml slug, and --mesh-heartbeat overrides the wake-watcher heartbeat path.`,
+agents.yaml slug, and --mesh-heartbeat overrides the wake-watcher heartbeat path.
+
+Doctor also lists notes whose status is draft (awaiting review: id, path, age)
+and .md files git reports as untracked or modified for more than
+--uncommitted-days (default 7). Neither list is an error. Accepting a draft
+is editing its status off "draft" — the same file, no copy. The uncommitted
+check is skipped, with a reason, when the vault is not a git repository.`,
 	ConfigPrefix: "app.doctor",
 	FlagOverrides: map[string]string{
 		"app.doctor.vault":            "vault",
@@ -45,6 +51,7 @@ agents.yaml slug, and --mesh-heartbeat overrides the wake-watcher heartbeat path
 		"app.doctor.mesh_registry":    "mesh-registry",
 		"app.doctor.mesh_slug":        "mesh-slug",
 		"app.doctor.mesh_heartbeat":   "mesh-heartbeat",
+		"app.doctor.uncommitted_days": "uncommitted-days",
 	},
 }
 
@@ -60,6 +67,7 @@ func DoctorOptions() []config.ConfigOption {
 		{Key: "app.doctor.mesh_registry", DefaultValue: "", Description: "Verify an offline Contract-B signed-registry file instead of fetching from the local daemon", Type: "string"},
 		{Key: "app.doctor.mesh_slug", DefaultValue: "", Description: "Override the agent slug used to resolve your binding in the mesh registry (default: agents.yaml)", Type: "string"},
 		{Key: "app.doctor.mesh_heartbeat", DefaultValue: "", Description: "Override the wake-watcher heartbeat file path used for mesh watcher-liveness", Type: "string"},
+		{Key: "app.doctor.uncommitted_days", DefaultValue: 7, Description: "Flag .md files git reports as untracked or modified when their working-tree age is more than this many days. Skipped when the vault is not a git repository.", Type: "int"},
 	}
 }
 

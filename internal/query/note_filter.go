@@ -6,11 +6,12 @@ import (
 	"github.com/peiman/vaultmind/internal/index"
 )
 
-// noteFilter returns the predicate every retrieval lane applies for the type,
-// tag and path filters. One definition, because a lane that judged a note
-// differently fed it into the fusion anyway: three lanes once ignored the tag,
-// so a tag-filtered hybrid search returned notes without it. The tag set and
-// the path set are loaded once per search, and only when asked for.
+// noteFilter returns the predicate every in-memory retrieval lane applies for
+// the type, tag, path and draft filters. FTS applies the same policy in SQL
+// (appendSearchFilters) because filtering after LIMIT would drop the top hit
+// and return a short page. Both sites ask filters.ExcludesDrafts, so a lane
+// cannot rank a draft the others hid. The sets are loaded once per search,
+// and only when asked for.
 func noteFilter(db *index.DB, filters index.SearchFilters) (func(id, noteType string) bool, error) {
 	var tagged map[string]bool
 	if filters.Tag != "" {
@@ -26,7 +27,17 @@ func noteFilter(db *index.DB, filters index.SearchFilters) (func(id, noteType st
 			return nil, fmt.Errorf("loading path prefix: %w", err)
 		}
 	}
+	var drafts map[string]bool
+	if filters.ExcludesDrafts() {
+		var err error
+		if drafts, err = noteIDsWithStatus(db, index.StatusDraft); err != nil {
+			return nil, fmt.Errorf("loading drafts: %w", err)
+		}
+	}
 	return func(id, noteType string) bool {
+		if drafts[id] {
+			return false
+		}
 		if filters.Type != "" && noteType != filters.Type {
 			return false
 		}
@@ -35,6 +46,25 @@ func noteFilter(db *index.DB, filters index.SearchFilters) (func(id, noteType st
 		}
 		return filters.Tag == "" || tagged[id]
 	}, nil
+}
+
+// noteIDsWithStatus returns the set of note IDs whose stored status is exactly
+// status. A missing status is not a match.
+func noteIDsWithStatus(db *index.DB, status string) (map[string]bool, error) {
+	rows, err := db.Query("SELECT id FROM notes WHERE status = ?", status)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	ids := make(map[string]bool)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids[id] = true
+	}
+	return ids, rows.Err()
 }
 
 // noteIDsUnderPrefix returns the set of note IDs whose vault path starts with

@@ -31,7 +31,7 @@ type CodeFile struct {
 // Covering returns the notes whose `paths:` cover f, each with its line.
 func Covering(q Querier, f CodeFile) ([]Note, error) {
 	rows, err := q.Query(`SELECT n.id, n.path, COALESCE(n.title, ''), COALESCE(n.type, ''),
-		COALESCE(n.body_raw, n.body_text, ''), kv.value_json
+		COALESCE(n.status, ''), COALESCE(n.body_raw, n.body_text, ''), kv.value_json
 		FROM frontmatter_kv kv JOIN notes n ON n.id = kv.note_id
 		WHERE kv.key = ? ORDER BY n.path`, PathsField)
 	if err != nil {
@@ -43,7 +43,7 @@ func Covering(q Querier, f CodeFile) ([]Note, error) {
 	for rows.Next() {
 		var n Note
 		var body, patterns string
-		if err := rows.Scan(&n.ID, &n.Path, &n.Title, &n.Type, &body, &patterns); err != nil {
+		if err := rows.Scan(&n.ID, &n.Path, &n.Title, &n.Type, &n.Status, &body, &patterns); err != nil {
 			return nil, fmt.Errorf("reading note row: %w", err)
 		}
 		if !coversAny(decodePatterns(patterns), f) {

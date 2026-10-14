@@ -57,6 +57,11 @@ SCOPE THE SEARCH
       vault under --vaults. The context pack around the top hit still follows
       its links, so a neighbour of another type or folder can appear there.
 
+DRAFTS
+
+  A note with status: draft is excluded from ranking. --include-drafts puts
+  it back. Accepting a draft is editing that status (one file, no copy).
+
 ANTI-PATTERN — AVOID
 
   vaultmind ask "X" --budget 3000 | tail -20

@@ -16,12 +16,21 @@ type FTSResult struct {
 	IsDomain bool    `json:"is_domain_note"`
 }
 
+// StatusDraft is the frontmatter status of a note that has not been accepted.
+// Accepting a draft is flipping this value. Other status values are unchanged.
+const StatusDraft = "draft"
+
 // SearchFilters holds optional filters for FTS search.
 type SearchFilters struct {
-	Type       string // Filter by note type (empty = no filter)
-	Tag        string // Filter by tag (empty = no filter)
-	PathPrefix string // Only notes whose vault path starts with this prefix (empty = no filter)
+	Type          string // Filter by note type (empty = no filter)
+	Tag           string // Filter by tag (empty = no filter)
+	PathPrefix    string // Only notes whose vault path starts with this prefix (empty = no filter)
+	IncludeDrafts bool   // Rank notes whose status is draft. Off by default.
 }
+
+// ExcludesDrafts reports whether a search drops status:draft notes.
+// Every retrieval lane calls this, so CLI, MCP, serve and federation agree.
+func (f SearchFilters) ExcludesDrafts() bool { return !f.IncludeDrafts }
 
 // PathPrefixLike is the LIKE pattern for a vault-path prefix: %, _ and \ in
 // the prefix match literally, and the pattern ends in %. tree --path and
@@ -55,19 +64,7 @@ func SearchFTS(d *DB, query string, limit, offset int, filters ...SearchFilters)
 		JOIN notes n ON n.id = f.note_id
 		WHERE fts_notes MATCH ?`
 	args := []interface{}{query}
-
-	if f.Type != "" {
-		q += " AND n.type = ?"
-		args = append(args, f.Type)
-	}
-	if f.Tag != "" {
-		q += " AND n.id IN (SELECT note_id FROM tags WHERE tag = ?)"
-		args = append(args, f.Tag)
-	}
-	if f.PathPrefix != "" {
-		q += ` AND n.path LIKE ? ESCAPE '\'`
-		args = append(args, PathPrefixLike(f.PathPrefix))
-	}
+	q, args = appendSearchFilters(q, args, f)
 
 	q += " ORDER BY rank LIMIT ? OFFSET ?"
 	args = append(args, limit, offset)
@@ -148,7 +145,19 @@ func CountFTS(d *DB, query string, filters ...SearchFilters) (int, error) {
 		  JOIN notes n ON n.id = f.note_id
 		  WHERE fts_notes MATCH ?`
 	args := []interface{}{query}
+	q, args = appendSearchFilters(q, args, f)
 
+	var count int
+	if err := d.QueryRow(q, args...).Scan(&count); err != nil {
+		return 0, fmt.Errorf("FTS count: %w", err)
+	}
+	return count, nil
+}
+
+// appendSearchFilters is the one SQL predicate for type, tag, path and drafts.
+// SearchFTS and CountFTS both call it, so a page and its total cannot disagree,
+// and the draft clause is applied before LIMIT.
+func appendSearchFilters(q string, args []interface{}, f SearchFilters) (string, []interface{}) {
 	if f.Type != "" {
 		q += " AND n.type = ?"
 		args = append(args, f.Type)
@@ -161,12 +170,13 @@ func CountFTS(d *DB, query string, filters ...SearchFilters) (int, error) {
 		q += ` AND n.path LIKE ? ESCAPE '\'`
 		args = append(args, PathPrefixLike(f.PathPrefix))
 	}
-
-	var count int
-	if err := d.QueryRow(q, args...).Scan(&count); err != nil {
-		return 0, fmt.Errorf("FTS count: %w", err)
+	if f.ExcludesDrafts() {
+		// NULL is not equal to 'draft' in SQL, so a missing status would drop
+		// out of ranking. IFNULL keeps a note with no status searchable.
+		q += " AND IFNULL(n.status, '') != ?"
+		args = append(args, StatusDraft)
 	}
-	return count, nil
+	return q, args
 }
 
 // sanitizeFTSQuery wraps each word in double quotes for literal FTS5 matching.

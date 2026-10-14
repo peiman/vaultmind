@@ -385,6 +385,11 @@
               "description": "Print summary counts only (suppress per-link details)",
               "type": "boolean"
             },
+            "uncommitted_days": {
+              "default": 7,
+              "description": "Flag .md files git reports as untracked or modified when their working-tree age is more than this many days. Skipped when the vault is not a git repository.",
+              "type": "integer"
+            },
             "vault": {
               "default": ".",
               "description": "Path to vault root",
@@ -1844,6 +1849,16 @@
               "default": ".",
               "description": "Path to the vault root directory",
               "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "retrieval": {
+          "properties": {
+            "include_drafts": {
+              "default": false,
+              "description": "Rank notes whose status is draft. Off by default: a draft stays out of ask and search until its status is changed.",
+              "type": "boolean"
             }
           },
           "type": "object"

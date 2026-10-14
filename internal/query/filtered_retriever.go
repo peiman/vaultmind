@@ -28,5 +28,11 @@ func (f FilteredRetriever) Search(ctx context.Context, query string, limit, offs
 	if filters.PathPrefix == "" {
 		filters.PathPrefix = f.Filters.PathPrefix
 	}
+	// IncludeDrafts defaults to false, which means "exclude". A zero value from
+	// the caller is that default, not an explicit choice, so an opt-in on the
+	// retriever must survive it. An explicit true from the caller stays true.
+	if !filters.IncludeDrafts {
+		filters.IncludeDrafts = f.Filters.IncludeDrafts
+	}
 	return f.Base.Search(ctx, query, limit, offset, filters)
 }

@@ -119,6 +119,10 @@ var globalOwners = map[string][]string{
 	"root.go": {"app.log", "app.log_level", "app.output_format"},
 	// Every command that writes a note embeds it; the switch is one setting.
 	"write_helpers.go": {"app.embed_on_write"},
+	// Ask and search share one draft switch. A second key under each command
+	// would split the default. The read lives in this file, not in ask.go or
+	// search.go (ADR-102).
+	"retrieval.go": {"app.retrieval"},
 }
 
 // ownedPrefixes resolves which namespaces a command file may read from.

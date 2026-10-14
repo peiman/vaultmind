@@ -200,6 +200,14 @@ source_ids: [ref1, ref2]   # citations when the note quotes something
 status: <value>            # for types with a status lifecycle (project, decision)
 ```
 
+`status: draft` is a note that is not ready for recall. `ask` and `search` leave it out unless you pass `--include-drafts` (or set `app.retrieval.include_drafts`). Accepting it is editing that field off `draft` — the same file, no copy:
+
+```bash
+vaultmind frontmatter set <id> status accepted
+```
+
+`note get` still reads a draft and shows the status. `tree` prints `[draft]` on its line. `doctor` lists drafts awaiting review.
+
 ### After saving: re-index
 
 A note made with `vaultmind note create` (or changed with `vaultmind frontmatter set`) is
