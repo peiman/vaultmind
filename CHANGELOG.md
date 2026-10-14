@@ -36,6 +36,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The recall hook sidecar records the prompt kind and the length passed to
+  `ask`, and never the prompt text. `kind` is the first harness tag name when
+  the prompt starts with one, after the cross-session prefix when that prefix
+  is present. A `<user_query>` wrapper is `user_query`. Anything else is
+  `prose`. The kind is read from a bounded head (4096 bytes), the same bound
+  the envelope skip already uses. `query_chars` is the length of the query
+  after the 16384-character transport cap. An envelope skip never calls
+  `ask`, so that record stores `query_chars` 0.
+  Run `vaultmind hooks install --force` to update installed copies.
 - `app.ask.query_forward_tokens` (`--query-forward-tokens`, `VAULTMIND_APP_ASK_QUERY_FORWARD_TOKENS`, default 1152) and `app.ask.query_salient_terms` (`--query-salient-terms`, `VAULTMIND_APP_ASK_QUERY_SALIENT_TERMS`, default 64). The default is the measured BGE-M3 cost of a 512-word budget: median 2.262505 content tokens per whitespace word across the 10 long qlen-probe prompts, times 512, rounded to the nearest multiple of 64. When either bound applies, the text output adds one line under the Search header and JSON adds `result.query_capped` with `embedded_tokens`, `total_tokens`, and `salient_terms`. The field is absent when neither bound applied. `schema_version` stays `v1`.
 
 ## [0.10.12] - 2026-10-12
