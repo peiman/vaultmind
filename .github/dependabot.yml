@@ -44,3 +44,12 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    # modernc.org/sqlite v1.60+ carries BSD-3-Clause-Clear and
+    # BSD-3-Clause-Attribution files, which the binary license check does not
+    # allow (docs/licenses.md). Hold sqlite and its paired libc at the last
+    # compliant versions until that policy is decided.
+    ignore:
+      - dependency-name: "modernc.org/sqlite"
+        versions: [">= 1.60.0"]
+      - dependency-name: "modernc.org/libc"
+        versions: [">= 1.76.0"]
