@@ -125,5 +125,9 @@ type outcome struct {
 	Status   string
 	Removed  string
 	Warnings []string
-	Rank     *RankCheck
+	// MissingGap is a closes_gap id that is not in the vault. Accept still
+	// publishes the note. The warning names this id. An empty string means
+	// there was nothing to warn about.
+	MissingGap string
+	Rank       *RankCheck
 }

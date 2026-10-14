@@ -156,19 +156,31 @@ func TestNoteGap_ProposeAcceptClosesIt(t *testing.T) {
 	require.NotNil(t, doctor.Result.Gaps.Median)
 }
 
+func possibleGapLogs(t *testing.T, state string) []string {
+	t.Helper()
+	matches, err := filepath.Glob(filepath.Join(state, "vaultmind", "possible-gaps", "*.jsonl"))
+	require.NoError(t, err)
+	return matches
+}
+
 func TestRecordPossibleGap_LogsWeakAsksOnly(t *testing.T) {
+	isolateXDG(t)
+	state := os.Getenv("XDG_STATE_HOME")
 	dir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".vaultmind"), 0o750))
 	const queryText = "secret question"
 	recordPossibleGap(askCmd, dir, queryText, &query.AskResult{TopHitConfidence: noisefloor.ConfidenceStrong})
 	recordPossibleGap(askCmd, dir, queryText, &query.AskResult{TopHitConfidence: noisefloor.ConfidenceModerate})
 	recordPossibleGap(askCmd, dir, queryText, nil)
+	assert.Empty(t, possibleGapLogs(t, state))
 	_, err := os.Stat(filepath.Join(dir, ".vaultmind", "possible-gaps.jsonl"))
 	assert.ErrorIs(t, err, os.ErrNotExist)
 
 	recordPossibleGap(askCmd, dir, queryText, &query.AskResult{TopHitConfidence: noisefloor.ConfidenceWeak})
 	recordPossibleGap(askCmd, dir, queryText, &query.AskResult{TopHitConfidence: noisefloor.ConfidenceNoMatch})
-	raw, err := os.ReadFile(filepath.Join(dir, ".vaultmind", "possible-gaps.jsonl"))
+	logs := possibleGapLogs(t, state)
+	require.Len(t, logs, 1)
+	raw, err := os.ReadFile(logs[0])
 	require.NoError(t, err)
 	assert.NotContains(t, string(raw), queryText)
 	assert.Contains(t, string(raw), `"band":"weak"`)
@@ -177,7 +189,7 @@ func TestRecordPossibleGap_LogsWeakAsksOnly(t *testing.T) {
 	viper.Set(config.KeyAppAskGapStoreQuery, true)
 	t.Cleanup(func() { viper.Set(config.KeyAppAskGapStoreQuery, false) })
 	recordPossibleGap(askCmd, dir, queryText, &query.AskResult{TopHitConfidence: noisefloor.ConfidenceWeak})
-	raw, err = os.ReadFile(filepath.Join(dir, ".vaultmind", "possible-gaps.jsonl"))
+	raw, err = os.ReadFile(logs[0])
 	require.NoError(t, err)
 	assert.Contains(t, string(raw), queryText)
 
@@ -195,7 +207,6 @@ func TestAsk_AppendsAPossibleGapForATie(t *testing.T) {
 	writeVaultNote(t, dir, "concepts/one.md", "concept-one", "One", "accepted", repeatQuery("tiequerytoken"))
 	writeVaultNote(t, dir, "concepts/two.md", "concept-two", "Two", "accepted", repeatQuery("tiequerytoken"))
 	rebuildVault(t, dir)
-	logPath := filepath.Join(dir, ".vaultmind", "possible-gaps.jsonl")
 
 	out, errOut, err := runRootCmd(t, "ask", "tiequerytoken", "--vault", dir, "--json")
 	require.NoError(t, err, errOut.String())
@@ -205,12 +216,39 @@ func TestAsk_AppendsAPossibleGapForATie(t *testing.T) {
 		} `json:"result"`
 	}
 	require.NoError(t, json.Unmarshal(out.Bytes(), &env))
-	raw, readErr := os.ReadFile(logPath)
+	logs := possibleGapLogs(t, os.Getenv("XDG_STATE_HOME"))
+	_, vaultErr := os.Stat(filepath.Join(dir, ".vaultmind", "possible-gaps.jsonl"))
+	assert.ErrorIs(t, vaultErr, os.ErrNotExist)
 	if env.Result.TopHitConfidence == noisefloor.ConfidenceWeak || env.Result.TopHitConfidence == noisefloor.ConfidenceNoMatch {
+		require.Len(t, logs, 1)
+		raw, readErr := os.ReadFile(logs[0])
 		require.NoError(t, readErr)
 		assert.NotContains(t, string(raw), "tiequerytoken")
 		assert.Contains(t, string(raw), env.Result.TopHitConfidence)
 		return
 	}
-	assert.ErrorIs(t, readErr, os.ErrNotExist, "band %q must not be logged", env.Result.TopHitConfidence)
+	assert.Empty(t, logs, "band %q must not be logged", env.Result.TopHitConfidence)
+}
+
+func TestRecordPossibleGap_SkipsHookCallers(t *testing.T) {
+	isolateXDG(t)
+	state := os.Getenv("XDG_STATE_HOME")
+	dir := t.TempDir()
+	const queryText = "secret question"
+	for _, caller := range []string{"vaultmind-userprompt-hook", "auto-rag-guard"} {
+		t.Run(caller, func(t *testing.T) {
+			t.Setenv("VAULTMIND_CALLER", caller)
+			recordPossibleGap(askCmd, dir, queryText, &query.AskResult{TopHitConfidence: noisefloor.ConfidenceWeak})
+			recordPossibleGap(askCmd, dir, queryText, &query.AskResult{TopHitConfidence: noisefloor.ConfidenceNoMatch})
+			assert.Empty(t, possibleGapLogs(t, state))
+		})
+	}
+	t.Setenv("VAULTMIND_CALLER", "")
+	recordPossibleGap(askCmd, dir, queryText, &query.AskResult{TopHitConfidence: noisefloor.ConfidenceWeak})
+	logs := possibleGapLogs(t, state)
+	require.Len(t, logs, 1)
+	raw, err := os.ReadFile(logs[0])
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), `"band":"weak"`)
+	assert.NotContains(t, string(raw), queryText)
 }

@@ -119,8 +119,11 @@ app:
     # ColBERT and FTS use the K tokens with the highest sparse weight from that forward pass. A spaced word stays one FTS term. A long word with no spaces contributes the text of its salient tokens, not the whole word. 0 turns the bound off.
     query_salient_terms: 64
 
-    # Store the raw query text in the vault's possible-gap hint log. Off by default: the log keeps a hash and a length. Config file or environment only, not a flag.
+    # Store the raw query text in the possible-gap hint log. Off by default: the log keeps a salted hash and a length. The log is per-user state, outside the vault. Config file or environment only, not a flag.
     gap_store_query: false
+
+    # Most records kept in the possible-gap hint log. The file may grow to twice this many, then it is rewritten to the newest this many. Config file or environment only, not a flag.
+    gap_log_limit: 1000
 
   check:
     # Stop on first failed check

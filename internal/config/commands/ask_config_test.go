@@ -5,6 +5,7 @@ import (
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/internal/config/commands"
+	"github.com/peiman/vaultmind/internal/gap"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -48,4 +49,24 @@ func TestAskOptions_QueryShapeBounds(t *testing.T) {
 		})
 	}
 	assert.NotContains(t, commands.AskMetadata.Long, "query-max-words")
+}
+
+func TestAskOptions_GapHintLog(t *testing.T) {
+	var store, limit config.ConfigOption
+	for _, candidate := range commands.AskOptions() {
+		switch candidate.Key {
+		case "app.ask.gap_store_query":
+			store = candidate
+		case "app.ask.gap_log_limit":
+			limit = candidate
+		}
+	}
+	require.Equal(t, "app.ask.gap_store_query", store.Key)
+	assert.Equal(t, false, store.DefaultValue)
+	assert.True(t, store.NoFlag)
+	require.Equal(t, "app.ask.gap_log_limit", limit.Key)
+	assert.Equal(t, gap.DefaultLogLimit, limit.DefaultValue)
+	assert.Equal(t, "int", limit.Type)
+	assert.True(t, limit.NoFlag)
+	assert.Empty(t, commands.AskMetadata.FlagOverrides["app.ask.gap_log_limit"])
 }

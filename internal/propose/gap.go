@@ -63,45 +63,59 @@ func openGapQuestion(v Vault, id string) (string, error) {
 	return question, nil
 }
 
+// missingGapWarning is the one sentence for a closes_gap id that is not in
+// the vault. Text and JSON both use it. The note is still accepted: the
+// finding is the knowledge, and a missing gap must not leave it a draft.
+func missingGapWarning(id string) string {
+	return fmt.Sprintf("gap %q is not in the vault; accepted the note anyway", id)
+}
+
 // closeLinkedGap flips the gap named by closes_gap. closedBy is the accepted
 // note: the draft itself, or the note a patch lands on. Already closed is a
 // no-op, so a retry after a failed accept finishes the draft and leaves the
 // gap closed. The gap is closed before the draft changes, so a failed accept
 // can be retried while the draft is still a draft.
-func closeLinkedGap(ctx context.Context, v Vault, req Request, note *parser.ParsedNote, closedBy string) error {
+//
+// A confirmed absence (the id is not in the index) returns that id and a nil
+// error. Accept publishes the note and warns. A lookup error is not absence:
+// the gap might still be there, so accept fails with gap_missing. A note that
+// is not a gap, a path outside the vault, and a file that cannot be parsed
+// fail with gap_invalid. A file that cannot be read fails with gap_unreadable.
+// Those failures leave the draft a draft.
+func closeLinkedGap(ctx context.Context, v Vault, req Request, note *parser.ParsedNote, closedBy string) (string, error) {
 	gapID := fmString(note.Frontmatter, "closes_gap")
 	if strings.TrimSpace(gapID) == "" {
-		return nil
+		return "", nil
 	}
 	gapID = strings.TrimSpace(gapID)
 	row, err := v.DB.QueryNoteByID(gapID)
 	if err != nil {
 		log.Debug().Err(err).Str("id", gapID).Msg("close gap lookup failed")
-		return fmt.Errorf("reading gap %q: %w", gapID, err)
+		return "", failOp(req, cmdAccept, "gap_missing", fmt.Errorf("reading gap %q: %w", gapID, err))
 	}
 	if row == nil {
-		return fmt.Errorf("gap %q is not in the vault", gapID)
+		return gapID, nil
 	}
 	if row.Type != index.TypeGap {
-		return fmt.Errorf("note %q is not a gap", gapID)
+		return "", failOp(req, cmdAccept, "gap_invalid", fmt.Errorf("note %q is not a gap", gapID))
 	}
 	abs, err := vault.ResolveInside(v.Path, row.Path)
 	if err != nil {
-		return err
+		return "", failOp(req, cmdAccept, "gap_invalid", err)
 	}
 	raw, err := os.ReadFile(abs) //nolint:gosec // nosemgrep: go-path-traversal -- path is confined with vault.ResolveInside
 	if err != nil {
-		return fmt.Errorf("reading gap %q: %w", gapID, err)
+		return "", failOp(req, cmdAccept, "gap_unreadable", fmt.Errorf("reading gap %q: %w", gapID, err))
 	}
 	parsed, err := parser.Parse(raw)
 	if err != nil {
-		return fmt.Errorf("parsing gap %q: %w", gapID, err)
+		return "", failOp(req, cmdAccept, "gap_invalid", fmt.Errorf("parsing gap %q: %w", gapID, err))
 	}
 	if fmString(parsed.Frontmatter, "status") == gapStatusClosed {
 		if row.Status != gapStatusClosed {
 			_ = reindex(ctx, v, req, row.Path)
 		}
-		return nil
+		return "", nil
 	}
 	closedAt := clock(req).UTC().Format(time.RFC3339)
 	err = rewriteNote(abs, row.Path, raw, nil, func(mapping *yaml.Node) error {
@@ -114,8 +128,8 @@ func closeLinkedGap(ctx context.Context, v Vault, req Request, note *parser.Pars
 		return mutation.SetKey(mapping, "closed_by", closedBy)
 	}, nil)
 	if err != nil {
-		return err
+		return "", err
 	}
 	_ = reindex(ctx, v, req, row.Path)
-	return nil
+	return "", nil
 }

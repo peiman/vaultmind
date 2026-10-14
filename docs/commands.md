@@ -30,7 +30,9 @@ A vault that already defines note types gets `gap` when the config is loaded, wi
 
 `doctor` lists each open gap (id, question, age in days), the count of gaps opened, the count closed, the median days to close, and how many weak asks have been hinted since the earliest one. `--json` adds a `gaps` object. `schema_version` stays `v1`.
 
-A weak or no-match `ask` appends one line to `.vaultmind/possible-gaps.jsonl`. That file is a hint, not a note. The line stores a hash of the query and its length. The raw query is stored only when `app.ask.gap_store_query` is true (default false; `VAULTMIND_APP_ASK_GAP_STORE_QUERY`). There is no flag.
+A weak or no-match `ask` from the CLI appends one line under the XDG state directory, in `vaultmind/possible-gaps/<vault-key>.jsonl` (mode 0600). That file is per-user state, not part of the vault, and a hook does not append. The line stores a salted hash of the query and its length. The raw query is stored only when `app.ask.gap_store_query` is true (default false; `VAULTMIND_APP_ASK_GAP_STORE_QUERY`). At most `app.ask.gap_log_limit` records are kept (default 1000). There is no flag for either setting.
+
+`note accept` still accepts a draft when its linked gap is not in the vault. The text warns, and `--json` adds a `warnings` entry with code `gap_missing` that names the id. `schema_version` stays `v1`. A linked note that is not a gap, or a gap that cannot be read, fails in that envelope and leaves the draft a draft.
 
 ## `ping` Command
 

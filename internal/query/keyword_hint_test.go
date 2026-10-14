@@ -36,7 +36,7 @@ func TestWriteKeywordOnlyHint_SilentWhenKeywordReturnsHits(t *testing.T) {
 }
 
 func TestWriteSparseFormatStaleNotice_HookCallerIsSilent(t *testing.T) {
-	for _, caller := range []string{"vaultmind-userprompt-hook", "vaultmind-persona-hook", "vaultmind-reach-hook"} {
+	for _, caller := range []string{"vaultmind-userprompt-hook", "vaultmind-persona-hook", "vaultmind-reach-hook", "auto-rag-guard"} {
 		t.Run(caller, func(t *testing.T) {
 			t.Setenv("VAULTMIND_CALLER", caller)
 			var buf bytes.Buffer

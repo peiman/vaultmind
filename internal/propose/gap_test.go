@@ -1,12 +1,16 @@
 package propose
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/envelope"
+	"github.com/peiman/vaultmind/internal/index"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -132,4 +136,144 @@ func TestPropose_RejectsAGapThatIsNotOpen(t *testing.T) {
 			assert.Empty(t, matches, "a rejected gap writes no draft")
 		})
 	}
+}
+
+func draftClosing(id, gapID string) string {
+	return "---\nid: " + id + "\ntype: concept\ntitle: Finding\nstatus: draft\ncloses_gap: " + gapID + "\ncreated: 2026-04-03\n---\n\nThe finding.\n"
+}
+
+func TestAccept_MissingGapWarnsAndStillPublishes(t *testing.T) {
+	const id = "concept-finding"
+	const gapID = "gap-gone"
+	const want = `gap "gap-gone" is not in the vault; accepted the note anyway`
+
+	t.Run("text", func(t *testing.T) {
+		v := testVault(t)
+		writeRawNote(t, v, "finding.md", draftClosing(id, gapID))
+		req, out, errOut, _ := reqOf("", "")
+		req.ID = id
+		require.NoError(t, Accept(context.Background(), v, req))
+		assert.Contains(t, errOut.String(), "warning: "+want)
+		assert.Contains(t, out.String(), "accepted "+id)
+		fm, _ := parseNote(t, v, "finding.md")
+		assert.Equal(t, "accepted", fm["status"])
+	})
+
+	t.Run("json", func(t *testing.T) {
+		v := testVault(t)
+		writeRawNote(t, v, "finding.md", draftClosing(id, gapID))
+		req, out, _, _ := reqOf("", "")
+		req.JSON = true
+		req.ID = id
+		require.NoError(t, Accept(context.Background(), v, req))
+		warning := decodeAcceptWarning(t, out.Bytes())
+		assert.Equal(t, "warning", warning.Status)
+		require.Len(t, warning.Warnings, 1)
+		assert.Equal(t, "gap_missing", warning.Warnings[0].Code)
+		assert.Equal(t, want, warning.Warnings[0].Message)
+		assert.Equal(t, gapID, warning.Warnings[0].Field)
+		assert.NotContains(t, out.String(), "reindex_failed")
+		fm, _ := parseNote(t, v, "finding.md")
+		assert.Equal(t, "accepted", fm["status"])
+	})
+
+	t.Run("patch", func(t *testing.T) {
+		v := testVault(t)
+		writeTarget(t, v, "concepts/memory.md", "concept-memory", "concept", "Memory", "accepted", "The original body.")
+		body := strings.Replace(proposalNote("proposal-memory", "concept-memory", "How does quartz work?", "Quartz keeps one timeline.\n", nil), "status: draft\n", "status: draft\ncloses_gap: "+gapID+"\n", 1)
+		writeRawNote(t, v, "proposals/memory.md", body)
+		req, out, _, _ := reqOf("", "")
+		req.JSON = true
+		req.ID = "proposal-memory"
+		require.NoError(t, Accept(context.Background(), v, req))
+		warning := decodeAcceptWarning(t, out.Bytes())
+		require.Len(t, warning.Warnings, 1)
+		assert.Equal(t, "gap_missing", warning.Warnings[0].Code)
+		assert.Equal(t, want, warning.Warnings[0].Message)
+		_, statErr := os.Stat(filepath.Join(v.Path, "proposals", "memory.md"))
+		assert.ErrorIs(t, statErr, os.ErrNotExist)
+	})
+}
+
+func decodeAcceptWarning(t *testing.T, raw []byte) struct {
+	Status   string `json:"status"`
+	Warnings []struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+		Field   string `json:"field"`
+	} `json:"warnings"`
+} {
+	t.Helper()
+	var env struct {
+		Status   string `json:"status"`
+		Warnings []struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+			Field   string `json:"field"`
+		} `json:"warnings"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &env))
+	return env
+}
+
+func TestAccept_LinkedNoteThatIsNotAGapStaysADraft(t *testing.T) {
+	v := testVault(t)
+	writeTarget(t, v, "concepts/other.md", "concept-other", "concept", "Other", "accepted", "body")
+	writeRawNote(t, v, "finding.md", draftClosing("concept-finding", "concept-other"))
+	var buf bytes.Buffer
+	req, _, _, _ := reqOf("", "")
+	req.JSON = true
+	req.Stdout = &buf
+	req.ID = "concept-finding"
+	err := Accept(context.Background(), v, req)
+	require.ErrorIs(t, err, envelope.ErrAlreadyWritten)
+	assert.Contains(t, buf.String(), `"code":"gap_invalid"`)
+	assert.Contains(t, buf.String(), "not a gap")
+	fm, _ := parseNote(t, v, "finding.md")
+	assert.Equal(t, index.StatusDraft, fm["status"])
+}
+
+func TestAccept_UnreadableGapStaysADraft(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses mode 000")
+	}
+	v := testVault(t)
+	const gapID = "gap-hidden"
+	rel := "gaps/hidden.md"
+	writeRawNote(t, v, rel, gapFrontmatter(gapID, "Hidden?"))
+	abs := filepath.Join(v.Path, filepath.FromSlash(rel))
+	t.Cleanup(func() { _ = os.Chmod(abs, 0o644) })
+	require.NoError(t, os.Chmod(abs, 0))
+	writeRawNote(t, v, "finding.md", draftClosing("concept-finding", gapID))
+	var buf bytes.Buffer
+	req, _, _, _ := reqOf("", "")
+	req.JSON = true
+	req.Stdout = &buf
+	req.ID = "concept-finding"
+	err := Accept(context.Background(), v, req)
+	require.ErrorIs(t, err, envelope.ErrAlreadyWritten)
+	assert.Contains(t, buf.String(), `"code":"gap_unreadable"`)
+	fm, _ := parseNote(t, v, "finding.md")
+	assert.Equal(t, index.StatusDraft, fm["status"])
+}
+
+func TestAccept_UnparseableGapStaysADraft(t *testing.T) {
+	v := testVault(t)
+	const gapID = "gap-broken"
+	rel := "gaps/broken.md"
+	writeRawNote(t, v, rel, gapFrontmatter(gapID, "Broken?"))
+	abs := filepath.Join(v.Path, filepath.FromSlash(rel))
+	require.NoError(t, os.WriteFile(abs, []byte("---\n[\n---\n"), 0o644))
+	writeRawNote(t, v, "finding.md", draftClosing("concept-finding", gapID))
+	var buf bytes.Buffer
+	req, _, _, _ := reqOf("", "")
+	req.JSON = true
+	req.Stdout = &buf
+	req.ID = "concept-finding"
+	err := Accept(context.Background(), v, req)
+	require.ErrorIs(t, err, envelope.ErrAlreadyWritten)
+	assert.Contains(t, buf.String(), `"code":"gap_invalid"`)
+	assert.Contains(t, buf.String(), "parsing gap")
+	fm, _ := parseNote(t, v, "finding.md")
+	assert.Equal(t, index.StatusDraft, fm["status"])
 }
