@@ -10,11 +10,12 @@ import (
 )
 
 type proposeResult struct {
-	Mode     string `json:"mode"`
-	Path     string `json:"path"`
-	ID       string `json:"id"`
-	TargetID string `json:"target_id,omitempty"`
-	NextStep string `json:"next_step"`
+	Mode      string     `json:"mode"`
+	Path      string     `json:"path"`
+	ID        string     `json:"id"`
+	TargetID  string     `json:"target_id,omitempty"`
+	NextStep  string     `json:"next_step"`
+	RankCheck *RankCheck `json:"rank_check,omitempty"`
 }
 
 type acceptResult struct {
@@ -60,13 +61,17 @@ func renderPropose(req Request, v Vault, o outcome) error {
 		if o.TargetID != "" {
 			fmt.Fprintf(&b, "target: %s\n", o.TargetID)
 		}
+		if o.Rank != nil {
+			b.WriteString(formatRankCheck(*o.Rank))
+			b.WriteByte('\n')
+		}
 		b.WriteString(next)
 		b.WriteByte('\n')
 		_, err := io.WriteString(stdout(req), b.String())
 		return err
 	}
 	env := envelope.OK(cmdPropose, proposeResult{
-		Mode: o.Mode, Path: o.Path, ID: o.ID, TargetID: o.TargetID, NextStep: next,
+		Mode: o.Mode, Path: o.Path, ID: o.ID, TargetID: o.TargetID, NextStep: next, RankCheck: o.Rank,
 	})
 	return writeEnvelope(req, v, env, o.Warnings)
 }

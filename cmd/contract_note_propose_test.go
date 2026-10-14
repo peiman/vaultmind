@@ -58,6 +58,19 @@ func TestContract_NoteProposeJSON(t *testing.T) {
 	assert.Contains(t, env.Result.NextStep, "vaultmind note accept "+env.Result.ID)
 	assert.Equal(t, dir, env.Meta.VaultPath)
 	assert.NotEmpty(t, env.Meta.IndexHash)
+	assert.Equal(t, "keyword", env.Result.RankCheck.Mode)
+	assert.Equal(t, 5, env.Result.RankCheck.Window)
+	assert.Equal(t, env.Result.ID, env.Result.RankCheck.After.ID)
+	assert.Equal(t, 1, env.Result.RankCheck.After.Rank)
+	assert.Equal(t, 0, env.Result.RankCheck.Before.Rank)
+	assert.Empty(t, env.Result.RankCheck.MeasuredOn)
+
+	db, err := index.Open(filepath.Join(dir, ".vaultmind", "index.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	var accesses int
+	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM note_accesses`).Scan(&accesses))
+	assert.Equal(t, 0, accesses, "the retrieval check must not record an access")
 }
 
 func TestContract_NoteAcceptJSON(t *testing.T) {

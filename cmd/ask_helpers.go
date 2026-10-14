@@ -34,17 +34,25 @@ var openAskIndex = func(cmd *cobra.Command, _ string, db *index.DB) query.AutoRe
 	return askRetriever(cmd, db)
 }
 
+// askSearchFilters is the type, tag, and path scope ask applies, plus the
+// draft switch for this one search. note propose ranks through the same
+// filters, so the check and ask agree. The draft switch is an argument:
+// the two passes of the retrieval check differ only in that bit.
+func askSearchFilters(cmd *cobra.Command, includeDrafts bool) index.SearchFilters {
+	return index.SearchFilters{
+		Type:          getConfigValueWithFlags[string](cmd, "type", config.KeyAppAskType),
+		Tag:           getConfigValueWithFlags[string](cmd, "tag", config.KeyAppAskTag),
+		PathPrefix:    getConfigValueWithFlags[string](cmd, "path", config.KeyAppAskPath),
+		IncludeDrafts: includeDrafts,
+	}
+}
+
 // askRetriever builds the vault's retriever, scoped by --type, --tag and --path.
 // Every ask path — direct, --read and each federated vault — builds through
 // here, so none of them can search unscoped.
 func askRetriever(cmd *cobra.Command, db *index.DB) query.AutoRetrieverResult {
 	ret := query.BuildAutoRetrieverFull(cmd.Context(), db)
-	filters := index.SearchFilters{
-		Type:          getConfigValueWithFlags[string](cmd, "type", config.KeyAppAskType),
-		Tag:           getConfigValueWithFlags[string](cmd, "tag", config.KeyAppAskTag),
-		PathPrefix:    getConfigValueWithFlags[string](cmd, "path", config.KeyAppAskPath),
-		IncludeDrafts: retrievalIncludeDrafts(cmd),
-	}
+	filters := askSearchFilters(cmd, retrievalIncludeDrafts(cmd))
 	if filters != (index.SearchFilters{}) {
 		ret.Retriever = query.FilteredRetriever{Base: ret.Retriever, Filters: filters}
 	}

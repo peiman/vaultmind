@@ -225,6 +225,8 @@ It retrieves on the question and the finding the way `ask` does, and drafts are 
 - **new** — nothing is that close (moderate, weak, no match, or no band). The type is the top hit's type when that type is registered, otherwise the vault's default knowledge type (`concept` when the schema registers it). The file goes in the top hit's folder, or the vault root when there is no hit, and it is expanded through that type's template so required fields hold.
 - **existing** — a draft already has the same question, spacing and case aside. That draft is reported and nothing new is written.
 
+After the draft is written, `propose` re-runs the original question through the same ranking `ask` uses, with the same retrieval options and the default hit window (`app.ask.search_limit`). One line reports both measurements. Before is the closest existing note with drafts excluded: the patch target, or, for a new note, the best note that is not a draft. After is this draft with drafts included, which answers whether accepting it would make the question find this content. A patch is measured on the proposal note, which holds the finding. The same three numbers are written into the draft through the frontmatter writer: `rank_before`, `rank_after`, and `rank_checked_at`. `0` means the note was not in the window. The check does not record an access. When the embedder is unavailable the check still runs and the line says keyword. `--json` adds `rank_check` to the v1 envelope.
+
 `--finding` is required. A source that contains `://` must be a URL. Any other source must be a file inside the vault or the repository that contains it.
 
 ### `vaultmind note accept` — a person promotes the draft

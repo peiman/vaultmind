@@ -26,6 +26,9 @@ func runPropose(cmd *cobra.Command) error {
 		return err
 	}
 	defer cleanup()
+	if v.DB != nil {
+		req.Ranker = newAskRanker(cmd, v.DB, v.Path)
+	}
 	return propose.Run(cmd.Context(), v, req, newAskClosest(cmd))
 }
 
@@ -97,6 +100,9 @@ func newAskClosest(cmd *cobra.Command) propose.Retriever {
 
 func (a askClosest) Closest(ctx context.Context, vaultPath string, db *index.DB, text string) (propose.Hit, bool, error) {
 	ret := query.BuildAutoRetrieverFull(ctx, db)
+	// Cleanup leaves the shared ONNX session loaded. The draft is embedded
+	// on write, and that pass cannot start a session while this one is held.
+	defer query.CloseSharedEmbedder()
 	defer ret.Cleanup()
 	limit, forward, salient := askRankingBounds(a.cmd)
 	noise, sigma, has, low := 0.0, 0.0, false, false

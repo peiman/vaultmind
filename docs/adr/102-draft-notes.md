@@ -58,8 +58,21 @@ vault that is not a git repository skips the uncommitted check and says why.
 Neither list is an error. Doctor JSON stays `schema_version` `v1`; the new
 fields are additive.
 
-**Out of scope.** A before/after rank preview is a later slice. This ADR does
-not add `draft` to any type's allowed-status list.
+**Retrieval check.** After the draft is written, `note propose` re-runs the
+original question through the same ranking `ask` uses (`query.Rank`), with the
+same retrieval options and the default hit window (`app.ask.search_limit`).
+One pass excludes drafts and records the rank of the closest existing note:
+the patch target, or, for a new note, the best note that is not a draft. A
+second pass includes drafts and records the rank of the draft itself. That
+second rank answers whether accepting the draft would make the question find
+this content. A patch is measured on the proposal note, which holds the
+finding. The check writes `rank_before`, `rank_after`, and `rank_checked_at`
+into the draft's frontmatter through the mutation writer. `0` means the note
+was not in the window. It does not record an access and it does not record an
+activation read. Keyword mode, when the embedder is unavailable, still runs
+and is labeled. The text line and the additive `rank_check` object in the v1
+envelope report both measurements. This ADR does not add `draft` to any type's
+allowed-status list.
 
 ## Amendment: a proposal draft, and `note accept`
 
@@ -255,8 +268,12 @@ file (a gitlink) is treated as not a repository.
 - `TestSourceURL_FileScheme` (`internal/propose`) — a `file:` URL of a note inside the vault is accepted; an empty `file:` URL is not.
 - `TestStripForFTS_RemovesHTMLComments` (`internal/parser`) — the indexed text omits the accept marker, including a comment that contains `>`.
 - `TestExcerpt_DropsTheAcceptMarker` (`internal/memory`) — a recall excerpt omits the marker when it sits on the same line as the sentence it guards.
-- `TestContract_NoteProposeJSON` (`cmd`) — `note propose --json` is the v1 envelope.
+- `TestContract_NoteProposeJSON` (`cmd`) — `note propose --json` is the v1 envelope, and `rank_check` names the draft's rank. The check writes no `note_accesses` row.
 - `TestContract_NoteAcceptJSON` (`cmd`) — `note accept --json` is the v1 envelope.
+- `TestPropose_RankCheck_DraftRanksFirst` (`internal/propose`) — a draft that answers its question ranks first with drafts included, and the patch target's before-rank is the excluded-draft ranking. The frontmatter gains only `rank_before`, `rank_after`, and `rank_checked_at`. Computing the after rank with drafts excluded makes this test go red.
+- `TestPropose_RankCheck_UnrelatedDraftDoesNotRank` (`internal/propose`) — a draft whose body does not answer the question is rank 0, and the line names the notes that outranked it.
+- `TestPropose_RankCheck_KeywordModeStillRuns` (`internal/propose`) — with no embedder the check still runs and the line says keyword.
+- `TestBandFor_WithheldJudgementIsEmpty` (`internal/query`) — a small vault with an unmeasured floor shows no band.
 
 What stays on the honor system: not putting `draft` into a type's allowed-status
 list. That list is vault data. A closed list warns during the draft window and
@@ -265,6 +282,7 @@ list allows. A type with an empty list is allowed to store `draft`.
 
 ## References
 
+- Gap loop, item 4 (2026-10-14): `note propose` checks that the draft repairs retrieval.
 - Gap loop, item 3 (2026-10-14): drafts at the final path; accepting is a status flip.
 - Gap loop, item 2 (2026-10-14): `note propose` writes the draft; `note accept` promotes it.
 - ADR-002 and ADR-005: one registry key, generated constants, no literals in commands.

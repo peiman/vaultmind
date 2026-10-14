@@ -11,7 +11,7 @@ vaultmind note propose --question "How does the index stay current?" --finding "
 vaultmind note accept <id>
 ```
 
-`propose` retrieves the way `ask` does. A close match (the strong relevance band, by default) becomes a proposal draft next to that note. Anything less close becomes a new draft, expanded through the note template. `accept` flips a new draft to the schema's published status, or appends a proposal onto its target and removes the proposal file. `--json` returns the v1 envelope.
+`propose` retrieves the way `ask` does. A close match (the strong relevance band, by default) becomes a proposal draft next to that note. Anything less close becomes a new draft, expanded through the note template. After the draft is written, propose re-runs the original question through the same ranking `ask` uses and reports whether that question would find the draft. The ranks are stored on the draft as `rank_before`, `rank_after`, and `rank_checked_at`. `0` means not in the hit window. The check does not record an access. `accept` flips a new draft to the schema's published status, or appends a proposal onto its target and removes the proposal file. `--json` returns the v1 envelope, including `rank_check`.
 
 ## `ping` Command
 
