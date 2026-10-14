@@ -432,7 +432,7 @@ gap never carries it, even with `--include-drafts`. `schema_version` stays
 `doctor` counts cites of those notes with the same rule as other cites: a
 read wins, and an appearance that was not cited is only surfaced. The cite
 window is the machine-wide window `memory_use` already uses (7 days,
-`experiments.db`). `gap-closing notes: N surfaced, M cited` follows the
+`experiments.db`). `gap-closing notes (all vaults on this machine): N surfaced, M cited` follows the
 memory-use line. `--json` puts gaps opened, gaps closed, median days to
 close, and gap-closing notes cited on `gap_loop`. Median days is a fraction
 of a day (12 hours is 0.5). `median_days_to_close` is null when nothing has
@@ -450,7 +450,7 @@ is not a score.
 - `TestGapClosingUse_CountsOnlyGapClosingCites` (`internal/experiment`) — a plain cite is not counted, and an opened gap-closing note is not a cite. An empty id list is zero. Returning an empty clause, so every cite counts, makes this test red.
 - `TestGapClosingUse_CountsPastAThousandIDs` (`internal/experiment`) — ids past the first chunk are still counted.
 - `TestAsk_CreditsTheNoteThatClosedAGap` (`cmd`) — accepting the draft that closes a gap, then asking, prints the line. `--pointers-only` does not. `--json` is `v1` and carries `answers_gap`. A hook caller still sees the line. The second ask in the same session does not repeat it.
-- `TestDoctor_GapLoopReadsTheClaim` (`cmd`) — `doctor --json` `gap_loop` has `opened`, `closed`, `median_days_to_close`, and `gap_closing_cited`. The text line is `gap-closing notes: N surfaced, M cited`.
+- `TestDoctor_GapLoopReadsTheClaim` (`cmd`) — `doctor --json` `gap_loop` has `opened`, `closed`, `median_days_to_close`, and `gap_closing_cited`. The text line is `gap-closing notes (all vaults on this machine): N surfaced, M cited`.
 - `TestDoctor_GapClosingCitedIsNullWithoutALog` (`cmd`) — with no usage log, `gap_closing_cited` is null. Reporting 0 instead makes this test red.
 - `TestGapClosingCounts_QueryErrorIsNull` (`cmd`) — a failed cite query is null, and the failure is logged.
 

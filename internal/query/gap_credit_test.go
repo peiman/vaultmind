@@ -123,6 +123,8 @@ func TestDoctorGapLoop_JSONKeepsTheFourClaimFields(t *testing.T) {
 	}
 	assert.Nil(t, fields["median_days_to_close"])
 	assert.Nil(t, fields["gap_closing_cited"], "an unmeasured cite is null, not zero")
+	_, hasScope := fields["scope"]
+	assert.False(t, hasScope, "an unset scope stays absent")
 
 	zero := 0
 	measured, err := json.Marshal(DoctorGapLoop{GapClosingCited: &zero})

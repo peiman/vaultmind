@@ -455,6 +455,7 @@ func collectMemoryUse(vdb *cmdutil.VaultDB) *query.DoctorMemoryUse {
 	// Nil counts mean the cite query failed. A pointer to zero was measured.
 	surfaced, cited := gapClosingCounts(vdb.DB, expDB)
 	out := &query.DoctorMemoryUse{
+		Scope:           query.UsageScopeMachine,
 		WindowDays:      use.WindowDays,
 		Injections:      use.Injections,
 		BodiesDelivered: use.BodiesDelivered,
@@ -669,9 +670,9 @@ func writeStaleIndex(w io.Writer, issues *query.DoctorIssues, summaryOnly bool) 
 	return nil
 }
 
-// writeMemoryUse prints whether this vault is actually being used as memory:
-// how much was surfaced to an agent, how much of it carried a body, how much
-// was then read, and how many notes were written back.
+// writeMemoryUse prints whether memory is being used. The surfaced, delivered,
+// opened, and cited counts are the shared usage log: every vault on this
+// machine. Notes banked are this vault.
 //
 // It prints on every run with data, not only when something is wrong. The other
 // sections are exception reports — silence means healthy — but "nobody is
@@ -685,11 +686,11 @@ func writeMemoryUse(w io.Writer, m *query.DoctorMemoryUse) error {
 		return nil
 	}
 	if _, err := fmt.Fprintf(w,
-		"Memory use (%dd): %d surfaced → %d delivered → %d opened, %d cited (%d unknown — not measurable from text)\n",
+		"Memory use (%dd, all vaults on this machine): %d surfaced → %d delivered → %d opened, %d cited (%d unknown — not measurable from text)\n",
 		m.WindowDays, m.Injections, m.BodiesDelivered, m.Opened, m.Cited, m.Unknown); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(w, "gap-closing notes: %s surfaced, %s cited\n",
+	if _, err := fmt.Fprintf(w, "gap-closing notes (all vaults on this machine): %s surfaced, %s cited\n",
 		gapCountText(m.GapClosingSurfaced), gapCountText(m.GapClosingCited)); err != nil {
 		return err
 	}

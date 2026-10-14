@@ -103,10 +103,16 @@ type DoctorResult struct {
 	GapLoop *DoctorGapLoop `json:"gap_loop,omitempty"`
 }
 
+// UsageScopeMachine marks counts read from the shared usage log. That log
+// covers every vault on this machine, not the vault doctor was pointed at.
+const UsageScopeMachine = "machine"
+
 // DoctorGapLoop is the claim meter. MedianDaysToClose is null, not omitted,
 // when nothing has closed. GapClosingCited is null, not omitted, when the
 // cite was not measured, so a reader can tell "unmeasured" from "zero".
+// Scope applies to the cite: opened, closed, and the median are this vault.
 type DoctorGapLoop struct {
+	Scope             string   `json:"scope,omitempty"`
 	Opened            int      `json:"opened"`
 	Closed            int      `json:"closed"`
 	MedianDaysToClose *float64 `json:"median_days_to_close"`
@@ -136,15 +142,18 @@ type DoctorGapNote struct {
 // cmd layer (which owns the experiment-DB handle) so query.Doctor's signature
 // stays stable — the same arrangement HookDrift and MeshIdentity use.
 type DoctorMemoryUse struct {
-	WindowDays      int `json:"window_days"`
-	Injections      int `json:"injections"`
-	BodiesDelivered int `json:"bodies_delivered"`
-	Consumed        int `json:"consumed"` // Legacy read-window count; retained for compatibility.
-	Opened          int `json:"opened"`
-	Cited           int `json:"cited"`
-	Unknown         int `json:"unknown"`
-	NotesBanked     int `json:"notes_banked"`
-	VaultNotes      int `json:"vault_notes"`
+	// Scope is "machine" when these counts come from the shared usage log.
+	// NotesBanked and VaultNotes are this vault. Omitted until set.
+	Scope           string `json:"scope,omitempty"`
+	WindowDays      int    `json:"window_days"`
+	Injections      int    `json:"injections"`
+	BodiesDelivered int    `json:"bodies_delivered"`
+	Consumed        int    `json:"consumed"` // Legacy read-window count; retained for compatibility.
+	Opened          int    `json:"opened"`
+	Cited           int    `json:"cited"`
+	Unknown         int    `json:"unknown"`
+	NotesBanked     int    `json:"notes_banked"`
+	VaultNotes      int    `json:"vault_notes"`
 	// Gap-closing counts share the memory-use window. Nil is unmeasured
 	// (no log, or the cite query failed). A pointer to zero is a measurement,
 	// so the keys stay present either way.
