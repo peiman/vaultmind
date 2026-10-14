@@ -13,7 +13,8 @@ type FTSRetriever struct {
 }
 
 // Search runs FTS5 search and count, converting results to ScoredResult.
-func (r *FTSRetriever) Search(_ context.Context, query string, limit, offset int, filters index.SearchFilters) ([]retrieval.ScoredResult, int, error) {
+func (r *FTSRetriever) Search(ctx context.Context, query string, limit, offset int, filters index.SearchFilters) ([]retrieval.ScoredResult, int, error) {
+	query = ftsTextFrom(ctx, query)
 	results, err := index.SearchFTS(r.DB, query, limit, offset, filters)
 	if err != nil {
 		return nil, 0, err

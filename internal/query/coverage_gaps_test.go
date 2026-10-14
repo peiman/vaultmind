@@ -45,7 +45,7 @@ func TestAskHits_ReturnsHitsAndNilContext(t *testing.T) {
 	db := buildRetrieverTestDB(t)
 	retriever := &query.FTSRetriever{DB: db}
 
-	result, err := query.AskHits(context.Background(), retriever, "memory", 5)
+	result, err := query.AskHits(context.Background(), retriever, "memory", 5, 0, 0, nil)
 	require.NoError(t, err)
 
 	assert.Equal(t, "memory", result.Query)
@@ -58,7 +58,7 @@ func TestAskHits_NoMatchReturnsEmptyHits(t *testing.T) {
 	db := buildRetrieverTestDB(t)
 	retriever := &query.FTSRetriever{DB: db}
 
-	result, err := query.AskHits(context.Background(), retriever, "xyzzy_nonexistent_42987", 5)
+	result, err := query.AskHits(context.Background(), retriever, "xyzzy_nonexistent_42987", 5, 0, 0, nil)
 	require.NoError(t, err)
 	assert.Empty(t, result.TopHits)
 	assert.Nil(t, result.Context)
@@ -71,7 +71,7 @@ func TestAskHits_PopulatesConfidenceFromRRFGap(t *testing.T) {
 	retriever := &query.FTSRetriever{DB: db}
 
 	// "memory" reliably returns multiple hits from the test vault.
-	result, err := query.AskHits(context.Background(), retriever, "memory", 10)
+	result, err := query.AskHits(context.Background(), retriever, "memory", 10, 0, 0, nil)
 	require.NoError(t, err)
 
 	if len(result.TopHits) >= 2 {
@@ -94,7 +94,7 @@ func TestAskHits_PropagatesRetrieverError(t *testing.T) {
 	_ = db.Close()
 
 	retriever := &query.FTSRetriever{DB: db}
-	_, err := query.AskHits(context.Background(), retriever, "memory", 5)
+	_, err := query.AskHits(context.Background(), retriever, "memory", 5, 0, 0, nil)
 	require.Error(t, err, "closed DB must propagate a retriever error")
 }
 

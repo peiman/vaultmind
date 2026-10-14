@@ -96,6 +96,26 @@ func TestSparseHead_DuplicateTokenKeepsMax(t *testing.T) {
 	assert.InDelta(t, 2.0, sparse[500], 1e-6, "should keep maximum weight for duplicate token")
 }
 
+func TestSparsePositionWeights_StayPerPositionWhileThePoolKeepsTheMax(t *testing.T) {
+	hiddenStates := [][]float32{
+		{0, 0},
+		{1.0, 0.0},
+		{2.0, 0.0},
+	}
+	tokenIDs := []uint32{101, 500, 500}
+	specialMask := []uint32{1, 0, 0}
+	weights := []float32{1.0, 0.0}
+
+	pos := embedding.SparsePositionWeights(hiddenStates, specialMask, weights, 0)
+	require.Len(t, pos, 3)
+	assert.Equal(t, float32(0), pos[0], "a special token contributes no weight")
+	assert.InDelta(t, 1.0, float64(pos[1]), 1e-6)
+	assert.InDelta(t, 2.0, float64(pos[2]), 1e-6, "the two positions stay distinct before pooling")
+
+	sparse := embedding.SparseHead(hiddenStates, tokenIDs, specialMask, weights, 0)
+	assert.InDelta(t, 2.0, float64(sparse[500]), 1e-6, "the pooled map still keeps the max")
+}
+
 func TestColBERTHead(t *testing.T) {
 	hiddenStates := [][]float32{
 		{1, 0},

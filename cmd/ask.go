@@ -120,6 +120,8 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	// packs the body, applies ITS noise floor and records the access, so there
 	// is no merged pseudo-vault whose calibration belongs to nobody.
 	searchLimitForFederation := getConfigValueWithFlags[int](cmd, "search-limit", config.KeyAppAskSearchLimit)
+	forwardTokens := getConfigValueWithFlags[int](cmd, "query-forward-tokens", config.KeyAppAskQueryForwardTokens)
+	salientTerms := getConfigValueWithFlags[int](cmd, "query-salient-terms", config.KeyAppAskQuerySalientTerms)
 	vaultPaths, verr := resolveAskVaultPaths(vaultPath,
 		getConfigValueWithFlags[string](cmd, "vaults", config.KeyAppAskVaults))
 	if verr != nil {
@@ -135,7 +137,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		vaultPath = vaultPaths[0]
 	}
 	if len(vaultPaths) > 1 {
-		hits, statuses, owner, ferr := federateAndPickOwner(cmd, args[0], vaultPaths, searchLimitForFederation)
+		hits, statuses, owner, ferr := federateAndPickOwner(cmd, args[0], vaultPaths, searchLimitForFederation, forwardTokens, salientTerms)
 		if ferr != nil {
 			return ferr
 		}
@@ -165,7 +167,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	// mis-attribution that would happen if Ask packed context around
 	// the top hit when the agent intended to read a different rank.
 	if readArg := getConfigValueWithFlags[string](cmd, "read", config.KeyAppAskRead); readArg != "" {
-		return runAskRead(cmd, args[0], readArg, ret, vdb, federatedRead{
+		return runAskRead(cmd, args[0], readArg, ret, vdb, forwardTokens, salientTerms, federatedRead{
 			hits:      federated,
 			vaults:    federatedVaults,
 			paths:     vaultPaths,
@@ -198,18 +200,20 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	}
 
 	result, err := query.Ask(cmd.Context(), ret.Retriever, resolver, vdb.DB, query.AskConfig{
-		Query:             args[0],
-		Budget:            getConfigValueWithFlags[int](cmd, "budget", config.KeyAppAskBudget),
-		MaxItems:          getConfigValueWithFlags[int](cmd, "max-items", config.KeyAppAskMaxItems),
-		SearchLimit:       getConfigValueWithFlags[int](cmd, "search-limit", config.KeyAppAskSearchLimit),
-		ActivationScores:  activationScores,
-		Embedder:          ret.Embedder,
-		NoiseFloor:        noiseFloor,
-		NoiseFloorSigma:   noiseFloorSigma,
-		HasNoiseFloor:     hasNoiseFloor,
-		VaultLowContrast:  lowContrast,
-		SuppressOnNoMatch: quietOnNoMatch,
-		ExcerptTokens:     getConfigValueWithFlags[int](cmd, "excerpt", config.KeyAppAskExcerpt),
+		Query:              args[0],
+		Budget:             getConfigValueWithFlags[int](cmd, "budget", config.KeyAppAskBudget),
+		MaxItems:           getConfigValueWithFlags[int](cmd, "max-items", config.KeyAppAskMaxItems),
+		SearchLimit:        getConfigValueWithFlags[int](cmd, "search-limit", config.KeyAppAskSearchLimit),
+		ActivationScores:   activationScores,
+		Embedder:           ret.Embedder,
+		NoiseFloor:         noiseFloor,
+		NoiseFloorSigma:    noiseFloorSigma,
+		HasNoiseFloor:      hasNoiseFloor,
+		VaultLowContrast:   lowContrast,
+		SuppressOnNoMatch:  quietOnNoMatch,
+		ExcerptTokens:      getConfigValueWithFlags[int](cmd, "excerpt", config.KeyAppAskExcerpt),
+		QueryForwardTokens: forwardTokens,
+		QuerySalientTerms:  salientTerms,
 		// The output mode decides whether text reaches the caller, and the access
 		// ledger is written inside Ask. Without these it inferred delivery from
 		// "the pack has a body", which is true under --pointers-only precisely

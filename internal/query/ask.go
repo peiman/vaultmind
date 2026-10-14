@@ -66,6 +66,13 @@ type AskConfig struct {
 	// They stay in the pack as titles (see memory.ContextItem.ShownBefore);
 	// their text is not sent again and their access is not a delivered read.
 	ShownBefore map[string]bool
+
+	// QueryForwardTokens bounds the text of one forward pass. 0 leaves it
+	// unchanged. The library zero is off; the CLI default lives in the registry.
+	QueryForwardTokens int
+	// QuerySalientTerms is how many highest-weight tokens and words ColBERT
+	// and FTS use from that pass. 0 leaves those lanes on the embedded text.
+	QuerySalientTerms int
 }
 
 // AskResult is the combined output of a search + context-pack operation.
@@ -141,6 +148,12 @@ type AskResult struct {
 	// FederatedVaults reports every vault that was SEARCHED and what its own
 	// floor said, so a reader can tell an empty vault from an unsearched one.
 	FederatedVaults []FederatedVaultStatus `json:"federated_vaults,omitempty"`
+	// QueryCapped is set only when a bound shortened ranking.
+	// Query itself stays the caller's original text.
+	QueryCapped *QueryCapped `json:"query_capped,omitempty"`
+	// rankingQuery is the text the forward pass embedded. The cosine uses it,
+	// so it stays the same string the dense lane embedded and the memo hits.
+	rankingQuery string
 }
 
 // tooSmallToJudge reports whether the vault holds too few notes for the
@@ -240,13 +253,26 @@ func computeTopHitConfidenceRRFGap(hits []retrieval.ScoredResult) string {
 // mis-attribute access events to a note the agent didn't read. The
 // caller is responsible for firing access on whatever it chooses to
 // read.
-func AskHits(ctx context.Context, retriever retrieval.Retriever, query string, searchLimit int) (*AskResult, error) {
+func AskHits(ctx context.Context, retriever retrieval.Retriever, query string, searchLimit, forwardTokens, salientTerms int, analyzer QueryAnalyzer) (*AskResult, error) {
+	shaped := ShapeQuery(ctx, query, forwardTokens, salientTerms, analyzer)
+	if shaped.Report != nil {
+		log.Debug().
+			Int("embedded_tokens", shaped.Report.EmbeddedTokens).
+			Int("total_tokens", shaped.Report.TotalTokens).
+			Int("salient_terms", shaped.Report.SalientTerms).
+			Msg("ask ranking query shaped")
+	}
+	ctx = contextWithPlan(ctx, shapedPlan{embed: shaped.EmbedText, fts: shaped.FTSText, keep: shaped.Keep})
+	// The argument stays the original. Lanes that honor the plan read it from
+	// the context; activation ignores the string, and still receives it whole.
 	hits, _, err := retriever.Search(ctx, query, searchLimit, 0, index.SearchFilters{})
 	if err != nil {
 		return nil, err
 	}
 	return &AskResult{
 		Query:            query,
+		rankingQuery:     shaped.EmbedText,
+		QueryCapped:      shaped.Report,
 		TopHits:          hits,
 		TopHitConfidence: computeTopHitConfidenceRRFGap(hits),
 	}, nil
@@ -286,16 +312,14 @@ func relevantLaterHits(hits []retrieval.ScoredResult, r *AskResult) []memory.See
 // spreading activation (via ActivationFunc), then packs token-budgeted
 // context around the top hit. Context-pack failure is non-fatal.
 func Ask(ctx context.Context, retriever retrieval.Retriever, resolver *graph.Resolver, db *index.DB, cfg AskConfig) (*AskResult, error) {
-	hits, _, err := retriever.Search(ctx, cfg.Query, cfg.SearchLimit, 0, index.SearchFilters{})
+	// AskHits is the one search. Dense and sparse embed the forward-bounded
+	// text; ColBERT and FTS use the salient terms when weights exist.
+	// cfg.Query stays the original for the echo.
+	result, err := AskHits(ctx, retriever, cfg.Query, cfg.SearchLimit, cfg.QueryForwardTokens, cfg.QuerySalientTerms, AnalyzerFrom(cfg.Embedder))
 	if err != nil {
 		return nil, err
 	}
-
-	result := &AskResult{
-		Query:            cfg.Query,
-		TopHits:          hits,
-		TopHitConfidence: computeTopHitConfidenceRRFGap(hits),
-	}
+	hits := result.TopHits
 
 	if len(hits) == 0 {
 		return result, nil
@@ -303,7 +327,7 @@ func Ask(ctx context.Context, retriever retrieval.Retriever, resolver *graph.Res
 
 	// Compute raw cosine similarities for spreading activation.
 	if cfg.Embedder != nil {
-		sims, simErr := NoteSimilarities(ctx, cfg.Query, cfg.Embedder, db)
+		sims, simErr := NoteSimilarities(ctx, result.rankingQuery, cfg.Embedder, db)
 		if simErr != nil {
 			log.Debug().Err(simErr).Msg("note similarities unavailable; spreading activation disabled for this query")
 		} else {

@@ -161,6 +161,16 @@
               "description": "Render a one-line body snippet under each ranked hit; bridges --pointers-only (titles only) and the full context-pack output",
               "type": "boolean"
             },
+            "query_forward_tokens": {
+              "default": 1152,
+              "description": "Embed the first N tokens of the query in one forward pass. Dense and sparse rank on that text. The cut is on a token boundary, so the embedded text is a prefix of the query. 0 turns the bound off.",
+              "type": "integer"
+            },
+            "query_salient_terms": {
+              "default": 64,
+              "description": "ColBERT and FTS use the K tokens with the highest sparse weight from that forward pass. A spaced word stays one FTS term. A long word with no spaces contributes the text of its salient tokens, not the whole word. 0 turns the bound off.",
+              "type": "integer"
+            },
             "quiet_on_nomatch": {
               "default": false,
               "description": "Print nothing when the top hit is at/below the noise floor (no_match). For ambient recall: inject silence instead of irrelevant pointers when the prompt is off-domain. Also skips the context-pack and access fan-out so off-domain prompts don't reinforce irrelevant notes.",

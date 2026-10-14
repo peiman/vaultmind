@@ -31,12 +31,13 @@ func DenseHead(hiddenStates [][]float32) []float32 {
 	return L2Normalize(hiddenStates[0])
 }
 
-// SparseHead computes learned lexical weights per token.
-// For each non-special token: weight = ReLU(dot(hidden, w) + bias).
-// Weights scattered to vocabulary positions via tokenIDs.
-// Duplicate token IDs keep the maximum weight.
-func SparseHead(hiddenStates [][]float32, tokenIDs, specialMask []uint32, weights []float32, bias float32) map[int32]float32 {
-	sparse := make(map[int32]float32)
+// SparsePositionWeights is the per-position ReLU(dot(hidden, w)+bias), before
+// vocab-id max-pooling. Index i aligns with hiddenStates[i], CLS included.
+// Specials and non-positive values are 0. Salient-term selection uses these
+// weights, not the pooled map: pooling would give every occurrence of a token
+// id the same weight.
+func SparsePositionWeights(hiddenStates [][]float32, specialMask []uint32, weights []float32, bias float32) []float32 {
+	out := make([]float32, len(hiddenStates))
 	for i, hidden := range hiddenStates {
 		if i < len(specialMask) && specialMask[i] == 1 {
 			continue
@@ -48,7 +49,39 @@ func SparseHead(hiddenStates [][]float32, tokenIDs, specialMask []uint32, weight
 			}
 		}
 		val += bias
-		if val <= 0 {
+		if val > 0 {
+			out[i] = val
+		}
+	}
+	return out
+}
+
+// SparseHead pools SparsePositionWeights by vocabulary id.
+// Duplicate token IDs keep the maximum weight. Specials are absent.
+func SparseHead(hiddenStates [][]float32, tokenIDs, specialMask []uint32, weights []float32, bias float32) map[int32]float32 {
+	return poolSparseWeights(SparsePositionWeights(hiddenStates, specialMask, weights, bias), tokenIDs)
+}
+
+// maskForSparse drops a presented special-token mask. The tokenizer that
+// indexes notes and embeds queries does not fill one, so CLS and SEP
+// contribute whenever their ReLU weight is positive. Passing the mask
+// through would change every sparse vector. "Specials are absent" on
+// SparseHead was never true of that path; changing it rewrites the index
+// and is a separate change.
+func maskForSparse([]uint32) []uint32 { return nil }
+
+// sparseFromForward is the one sparse reduction the forward pass uses.
+// batchMask is ignored (see maskForSparse). The position weights are the
+// ones salient selection ranks.
+func sparseFromForward(hidden [][]float32, tokenIDs, batchMask []uint32, weights []float32, bias float32) (map[int32]float32, []float32) {
+	pos := SparsePositionWeights(hidden, maskForSparse(batchMask), weights, bias)
+	return poolSparseWeights(pos, tokenIDs), pos
+}
+
+func poolSparseWeights(positionWeights []float32, tokenIDs []uint32) map[int32]float32 {
+	sparse := make(map[int32]float32)
+	for i, val := range positionWeights {
+		if val <= 0 || i >= len(tokenIDs) {
 			continue
 		}
 		tid := tokenIDs[i]

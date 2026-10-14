@@ -29,6 +29,7 @@ import (
 	"github.com/peiman/vaultmind/internal/xdg"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/cast"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -603,10 +604,14 @@ func getConfigValueWithFlags[T any](cmd *cobra.Command, flagName string, viperKe
 		}
 	}
 
-	// Get the value from viper first (this will be from config file or env var)
+	// Get the value from viper first (this will be from config file or env var).
+	// AutomaticEnv returns a raw string. An int key would otherwise fail the
+	// type assert and stay 0, which for ask's query cap means "off".
 	if v := viper.Get(viperKey); v != nil {
 		if typedValue, ok := v.(T); ok {
 			value = typedValue
+		} else if coerced, ok := coerceConfigValue[T](v); ok {
+			value = coerced
 		}
 	}
 
@@ -691,6 +696,23 @@ func getConfigValueWithFlags[T any](cmd *cobra.Command, flagName string, viperKe
 	}
 
 	return value
+}
+
+// coerceConfigValue converts a viper env string into T. ToIntE rejects a
+// non-numeric string, so a bad value is not silently read as 0.
+func coerceConfigValue[T any](v any) (T, bool) {
+	var zero T
+	switch any(zero).(type) {
+	case int:
+		n, err := cast.ToIntE(v)
+		if err != nil {
+			return zero, false
+		}
+		out, ok := any(n).(T)
+		return out, ok
+	default:
+		return zero, false
+	}
 }
 
 // annotationNoVaultDiscovery marks a command whose --vault is a path to write

@@ -189,8 +189,10 @@ func SearchAndJudge(
 	floors FloorResolver,
 	queryText string,
 	limit int,
+	forwardTokens int,
+	salientTerms int,
 ) (hits []retrieval.ScoredResult, verdict string, relevanceZ float64, err error) {
-	res, err := AskHits(ctx, ret, queryText, limit)
+	res, err := AskHits(ctx, ret, queryText, limit, forwardTokens, salientTerms, AnalyzerFrom(emb))
 	if err != nil {
 		return nil, "", 0, err
 	}
@@ -207,7 +209,7 @@ func SearchAndJudge(
 	// every note in the vault to read a single entry — O(N) work for an O(1)
 	// need, paid per vault on every federated query. On the 415-note research
 	// vault that scan was most of the per-vault cost.
-	topCosine, ok, simErr := topHitCosine(ctx, queryText, hits[0].ID, emb, db)
+	topCosine, ok, simErr := topHitCosine(ctx, res.rankingQuery, hits[0].ID, emb, db)
 	if simErr != nil || !ok {
 		// Unmeasured, not irrelevant. The vault cannot be judged; the gate
 		// keeps it, and the header says unmeasured rather than pretending it

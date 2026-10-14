@@ -100,5 +100,9 @@ func cloneOutput(o *BGEM3Output) *BGEM3Output {
 			c.ColBERT[i] = append([]float32(nil), tok...)
 		}
 	}
+	c.TokenWeights = append([]float32(nil), o.TokenWeights...)
+	c.TokenWord = append([]int(nil), o.TokenWord...)
+	c.Words = append([]string(nil), o.Words...)
+	c.TokenOffsets = append([][2]int(nil), o.TokenOffsets...)
 	return c
 }

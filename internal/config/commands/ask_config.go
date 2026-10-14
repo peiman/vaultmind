@@ -67,6 +67,17 @@ ANTI-PATTERN — AVOID
         --preview                 if you want a menu with body snippets
         --budget=N (no tail)      if you really want N tokens of context
 
+LONG QUERIES
+
+  One forward pass embeds the first N tokens (--query-forward-tokens, default
+  1152). The cut is a token boundary, so the embedded text is a prefix of the
+  query. Dense and sparse rank on that text, so a prompt's later content stays
+  in the ranking. ColBERT and FTS use the K most salient terms of that pass
+  (--query-salient-terms, default 64). A long word with no spaces contributes
+  those tokens' own text, not the whole word. 0 turns each bound off. A query
+  already within both bounds is ranked unchanged. The echoed query stays the
+  full text, and the Search header reports when a bound applied.
+
 OUTPUT INCLUDES
 
   Search:    [top-hit confidence: strong|moderate|weak]
@@ -74,22 +85,24 @@ OUTPUT INCLUDES
   Context:   target frontmatter + body, then ranked context items (default mode only)`,
 	ConfigPrefix: "app.ask",
 	FlagOverrides: map[string]string{
-		"app.ask.vault":            "vault",
-		"app.ask.vaults":           "vaults",
-		"app.ask.json":             "json",
-		"app.ask.budget":           "budget",
-		"app.ask.max_items":        "max-items",
-		"app.ask.search_limit":     "search-limit",
-		"app.ask.explain":          "explain",
-		"app.ask.pointers_only":    "pointers-only",
-		"app.ask.preview":          "preview",
-		"app.ask.read":             "read",
-		"app.ask.quiet_on_nomatch": "quiet-on-no-match",
-		"app.ask.excerpt":          "excerpt",
-		"app.ask.type":             "type",
-		"app.ask.tag":              "tag",
-		"app.ask.path":             "path",
-		"app.ask.dedup_window":     "dedup-window",
+		"app.ask.vault":                "vault",
+		"app.ask.vaults":               "vaults",
+		"app.ask.json":                 "json",
+		"app.ask.budget":               "budget",
+		"app.ask.max_items":            "max-items",
+		"app.ask.search_limit":         "search-limit",
+		"app.ask.explain":              "explain",
+		"app.ask.pointers_only":        "pointers-only",
+		"app.ask.preview":              "preview",
+		"app.ask.read":                 "read",
+		"app.ask.quiet_on_nomatch":     "quiet-on-no-match",
+		"app.ask.excerpt":              "excerpt",
+		"app.ask.type":                 "type",
+		"app.ask.tag":                  "tag",
+		"app.ask.path":                 "path",
+		"app.ask.dedup_window":         "dedup-window",
+		"app.ask.query_forward_tokens": "query-forward-tokens",
+		"app.ask.query_salient_terms":  "query-salient-terms",
 	},
 }
 
@@ -112,6 +125,20 @@ func AskOptions() []config.ConfigOption {
 		{Key: "app.ask.tag", DefaultValue: "", Description: "Rank only notes carrying this tag", Type: "string"},
 		{Key: "app.ask.path", DefaultValue: "", Description: "Rank only notes under this vault folder (path prefix, e.g. decisions/) — the same match as tree --path", Type: "string"},
 		{Key: "app.ask.dedup_window", DefaultValue: "", Description: "Send a note as its title alone when this conversation (VAULTMIND_USER_SESSION_ID) received its text within this long, e.g. 10m. Empty = off. For hooks that fire in bursts.", Type: "string"},
+		// Default 1152 is the measured BGE-M3 cost of a 512-word budget, not a
+		// tuned constant. Content tokens are non-special tokens with a non-empty
+		// span. The 10 long qlen-probe prompts (L01–L10) tokenize at these
+		// content tokens per whitespace word:
+		//   L01 2.041190  L02 2.800693  L03 2.003333  L04 2.237660
+		//   L05 2.783985  L06 3.443015  L07 2.125341  L08 2.243849
+		//   L09 2.281161  L10 2.565153
+		// Median of the 10 is the mean of L08 and L09:
+		//   (2.243849 + 2.281161) / 2 = 2.262505
+		//   2.262505 × 512 = 1158.402534
+		//   1158.402534 / 64 = 18.100, which rounds to 18
+		//   18 × 64 = 1152
+		{Key: "app.ask.query_forward_tokens", DefaultValue: 1152, Description: "Embed the first N tokens of the query in one forward pass. Dense and sparse rank on that text. The cut is on a token boundary, so the embedded text is a prefix of the query. 0 turns the bound off.", Type: "int"},
+		{Key: "app.ask.query_salient_terms", DefaultValue: 64, Description: "ColBERT and FTS use the K tokens with the highest sparse weight from that forward pass. A spaced word stays one FTS term. A long word with no spaces contributes the text of its salient tokens, not the whole word. 0 turns the bound off.", Type: "int"},
 	}
 }
 

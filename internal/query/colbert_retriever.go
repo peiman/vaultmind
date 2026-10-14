@@ -24,10 +24,11 @@ type ColBERTRetriever struct {
 // Search embeds the query as per-token ColBERT vectors, computes MaxSim scoring against
 // all stored ColBERT embeddings, and returns the top results sorted by score descending.
 func (r *ColBERTRetriever) Search(ctx context.Context, query string, limit, offset int, filters index.SearchFilters) ([]retrieval.ScoredResult, int, error) {
-	queryTokens, err := r.EmbedColBERT(ctx, query)
+	queryTokens, err := r.EmbedColBERT(ctx, embedTextFrom(ctx, query))
 	if err != nil {
 		return nil, 0, fmt.Errorf("embedding query (ColBERT): %w", err)
 	}
+	queryTokens = gatherColBERT(queryTokens, colbertKeepFrom(ctx))
 
 	all, err := index.LoadAllColBERTEmbeddings(r.DB, r.Dims)
 	if err != nil {
@@ -39,15 +40,32 @@ func (r *ColBERTRetriever) Search(ctx context.Context, query string, limit, offs
 // SearchAmong scores only the notes named in ids, reading only their vectors.
 // The hybrid retriever passes the other lanes' results (see CandidateSearcher).
 func (r *ColBERTRetriever) SearchAmong(ctx context.Context, query string, limit int, filters index.SearchFilters, ids []string) ([]retrieval.ScoredResult, int, error) {
-	queryTokens, err := r.EmbedColBERT(ctx, query)
+	queryTokens, err := r.EmbedColBERT(ctx, embedTextFrom(ctx, query))
 	if err != nil {
 		return nil, 0, fmt.Errorf("embedding query (ColBERT): %w", err)
 	}
+	queryTokens = gatherColBERT(queryTokens, colbertKeepFrom(ctx))
 	some, err := index.LoadColBERTEmbeddingsFor(r.DB, r.Dims, ids)
 	if err != nil {
 		return nil, 0, err
 	}
 	return r.score(queryTokens, some, limit, 0, filters)
+}
+
+// gatherColBERT keeps the salient query-token vectors in their original
+// order. A nil keep is the short-query path: every token, including the
+// trailing specials the head already returned, is scored as today.
+func gatherColBERT(tokens [][]float32, keep []int) [][]float32 {
+	if keep == nil {
+		return tokens
+	}
+	out := make([][]float32, 0, len(keep))
+	for _, i := range keep {
+		if i >= 0 && i < len(tokens) {
+			out = append(out, tokens[i])
+		}
+	}
+	return out
 }
 
 // score ranks notes by MaxSim against the query tokens.

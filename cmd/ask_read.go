@@ -30,10 +30,13 @@ import (
 // context around the top hit." Round-2 inter-agent review surfaced the
 // missing third workflow shape between probe (--pointers-only) and
 // full context-pack — this is it.
-func runAskRead(cmd *cobra.Command, queryStr, readArg string, ret query.AutoRetrieverResult, vdb *cmdutil.VaultDB, fed federatedRead) error {
+func runAskRead(cmd *cobra.Command, queryStr, readArg string, ret query.AutoRetrieverResult, vdb *cmdutil.VaultDB, forwardTokens, salientTerms int, fed federatedRead) error {
 	hits, err := query.AskHits(cmd.Context(), ret.Retriever,
 		queryStr,
 		getConfigValueWithFlags[int](cmd, "search-limit", config.KeyAppAskSearchLimit),
+		forwardTokens,
+		salientTerms,
+		query.AnalyzerFrom(ret.Embedder),
 	)
 	if err != nil {
 		return fmt.Errorf("ask --read: %w", err)
@@ -43,7 +46,9 @@ func runAskRead(cmd *cobra.Command, queryStr, readArg string, ret query.AutoRetr
 	// owning vault here made rank N mean two different notes: the menu said
 	// one thing and --read delivered another, from another vault, silently.
 	if len(fed.hits) > 0 {
+		capped := hits.QueryCapped
 		hits = fed.asAskResult(queryStr, hits.RetrievalMode)
+		hits.QueryCapped = capped
 	}
 	chosen, err := resolveAskReadTarget(hits.TopHits, readArg)
 	if err != nil {

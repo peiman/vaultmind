@@ -19,7 +19,12 @@ type AskEnvelope struct {
 	Status        string `json:"status"`
 	Command       string `json:"command"`
 	Result        struct {
-		Query         string `json:"query"`
+		Query       string `json:"query"`
+		QueryCapped *struct {
+			EmbeddedTokens int `json:"embedded_tokens"`
+			TotalTokens    int `json:"total_tokens"`
+			SalientTerms   int `json:"salient_terms"`
+		} `json:"query_capped,omitempty"`
 		RetrievalMode string `json:"retrieval_mode"`
 		TopHits       []struct {
 			ID    string  `json:"id"`

@@ -64,6 +64,8 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.ask.tag` | string | `` | `VAULTMIND_APP_ASK_TAG` | Rank only notes carrying this tag |
 | `app.ask.path` | string | `` | `VAULTMIND_APP_ASK_PATH` | Rank only notes under this vault folder (path prefix, e.g. decisions/) — the same match as tree --path |
 | `app.ask.dedup_window` | string | `` | `VAULTMIND_APP_ASK_DEDUP_WINDOW` | Send a note as its title alone when this conversation (VAULTMIND_USER_SESSION_ID) received its text within this long, e.g. 10m. Empty = off. For hooks that fire in bursts. |
+| `app.ask.query_forward_tokens` | int | `1152` | `VAULTMIND_APP_ASK_QUERY_FORWARD_TOKENS` | Embed the first N tokens of the query in one forward pass. Dense and sparse rank on that text. The cut is on a token boundary, so the embedded text is a prefix of the query. 0 turns the bound off. |
+| `app.ask.query_salient_terms` | int | `64` | `VAULTMIND_APP_ASK_QUERY_SALIENT_TERMS` | ColBERT and FTS use the K tokens with the highest sparse weight from that forward pass. A spaced word stays one FTS term. A long word with no spaces contributes the text of its salient tokens, not the whole word. 0 turns the bound off. |
 | `app.check.fail_fast` | bool | `false` | `VAULTMIND_APP_CHECK_FAIL_FAST` | Stop on first failed check |
 | `app.check.verbose` | bool | `false` | `VAULTMIND_APP_CHECK_VERBOSE` | Show verbose output including command details |
 | `app.check.parallel` | bool | `true` | `VAULTMIND_APP_CHECK_PARALLEL` | Run checks within each category in parallel (disable with --parallel=false) |
@@ -447,6 +449,12 @@ app:
 
     # Send a note as its title alone when this conversation (VAULTMIND_USER_SESSION_ID) received its text within this long, e.g. 10m. Empty = off. For hooks that fire in bursts.
     dedup_window: 
+
+    # Embed the first N tokens of the query in one forward pass. Dense and sparse rank on that text. The cut is on a token boundary, so the embedded text is a prefix of the query. 0 turns the bound off.
+    query_forward_tokens: 1152
+
+    # ColBERT and FTS use the K tokens with the highest sparse weight from that forward pass. A spaced word stays one FTS term. A long word with no spaces contributes the text of its salient tokens, not the whole word. 0 turns the bound off.
+    query_salient_terms: 64
 
   check:
     # Stop on first failed check
@@ -1488,6 +1496,12 @@ export VAULTMIND_APP_ASK_PATH=
 
 # Send a note as its title alone when this conversation (VAULTMIND_USER_SESSION_ID) received its text within this long, e.g. 10m. Empty = off. For hooks that fire in bursts.
 export VAULTMIND_APP_ASK_DEDUP_WINDOW=
+
+# Embed the first N tokens of the query in one forward pass. Dense and sparse rank on that text. The cut is on a token boundary, so the embedded text is a prefix of the query. 0 turns the bound off.
+export VAULTMIND_APP_ASK_QUERY_FORWARD_TOKENS=1152
+
+# ColBERT and FTS use the K tokens with the highest sparse weight from that forward pass. A spaced word stays one FTS term. A long word with no spaces contributes the text of its salient tokens, not the whole word. 0 turns the bound off.
+export VAULTMIND_APP_ASK_QUERY_SALIENT_TERMS=64
 
 # Stop on first failed check
 export VAULTMIND_APP_CHECK_FAIL_FAST=true
