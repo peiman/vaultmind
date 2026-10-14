@@ -27,6 +27,9 @@ func init() {
 	// --vault B` used to search B alone and report "nothing relevant" without
 	// ever opening A. Tracking the occurrences is what lets runAsk say so.
 	trackRepeats(askCmd, "vault")
+	// One registry key (app.retrieval.include_drafts), registered by hand
+	// because the key is not under app.ask. Search carries the same flag.
+	registerIncludeDrafts(askCmd)
 }
 
 // retrievalModeLabel reports the retriever kind for event logging. Ask uses an
@@ -218,9 +221,10 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		// ledger is written inside Ask. Without these it inferred delivery from
 		// "the pack has a body", which is true under --pointers-only precisely
 		// when nothing is handed over.
-		PointersOnly: pointersOnly,
-		JSONOutput:   jsonOut,
-		ShownBefore:  shown.recent(),
+		PointersOnly:  pointersOnly,
+		JSONOutput:    jsonOut,
+		ShownBefore:   shown.recent(),
+		IncludeDrafts: retrievalIncludeDrafts(cmd),
 		ActivationFunc: func(sims map[string]float64) map[string]float64 {
 			return computeActivationScores(cmd.Context(), sims, delta)
 		},

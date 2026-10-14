@@ -73,6 +73,12 @@ type AskConfig struct {
 	// QuerySalientTerms is how many highest-weight tokens and words ColBERT
 	// and FTS use from that pass. 0 leaves those lanes on the embedded text.
 	QuerySalientTerms int
+
+	// IncludeDrafts lets the context pack deliver a status:draft neighbor.
+	// Ranking reads the same choice from the retriever's SearchFilters.
+	// Zero excludes. The top hit is a ranked note, so a draft reaches it
+	// only when that ranking also opted in.
+	IncludeDrafts bool
 }
 
 // AskResult is the combined output of a search + context-pack operation.
@@ -414,6 +420,7 @@ func Ask(ctx context.Context, retriever retrieval.Retriever, resolver *graph.Res
 		ActivationScores: activationScores,
 		ExcerptTokens:    cfg.ExcerptTokens,
 		Seeds:            relevantLaterHits(hits, result),
+		IncludeDrafts:    cfg.IncludeDrafts,
 	})
 	if packErr != nil {
 		log.Debug().Err(packErr).Str("note_id", hits[0].ID).Msg("context-pack failed; returning search results only")

@@ -14,8 +14,9 @@ import "github.com/peiman/vaultmind/.ckeletin/pkg/config"
 var ArcReciteMetadata = config.CommandMetadata{
 	Use:   "recite",
 	Short: "Load every arc as a body — the whole identity layer, unranked and ungated",
-	Long: "Emit EVERY arc in the vault as a token-bounded pack. Not top-K, not " +
-		"relevance-gated, not a search.\n\n" +
+	Long: "Emit EVERY accepted arc in the vault as a token-bounded pack. Not top-K, not " +
+		"relevance-gated, not a search. A status: draft arc is a proposal and is not " +
+		"recited unless --include-drafts is set.\n\n" +
 		"WHY THIS IS NOT `ask`\n\n" +
 		"  `ask` is retrieval: it ranks notes against a query and returns the best few. That is " +
 		"the right shape for \"what do I know about X?\" and the wrong shape for \"who am I?\". " +

@@ -19,6 +19,7 @@ var memoryRelatedCmd = MustNewCommand(commands.MemoryRelatedMetadata, runMemoryR
 func init() {
 	memoryCmd.AddCommand(memoryRelatedCmd)
 	setupCommandConfig(memoryRelatedCmd)
+	registerIncludeDrafts(memoryRelatedCmd)
 }
 
 func runMemoryRelated(cmd *cobra.Command, args []string) error {
@@ -35,8 +36,9 @@ func runMemoryRelated(cmd *cobra.Command, args []string) error {
 	jsonOut := getConfigValueWithFlags[bool](cmd, "json", config.KeyAppMemoryrelatedJson)
 	resolver := graph.NewResolver(vdb.DB)
 	result, err := memory.Related(resolver, vdb.DB, memory.RelatedConfig{
-		Input: args[0],
-		Mode:  getConfigValueWithFlags[string](cmd, "mode", config.KeyAppMemoryrelatedMode),
+		Input:         args[0],
+		Mode:          getConfigValueWithFlags[string](cmd, "mode", config.KeyAppMemoryrelatedMode),
+		IncludeDrafts: retrievalIncludeDrafts(cmd),
 	})
 	if err != nil {
 		if jsonOut {

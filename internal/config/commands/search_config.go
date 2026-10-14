@@ -28,6 +28,7 @@ FLAGS
   --mode string     Search mode: keyword, semantic, or hybrid (default "keyword")
   --type string     Filter results to notes of this type (e.g. concept, source)
   --tag string      Filter results to notes with this tag
+  --include-drafts  Include notes whose status is draft (default false)
   --limit int       Maximum number of results to return (default 20)
   --offset int      Skip the first N results for pagination (default 0)
   --vaults string   Search several vaults, comma-separated — one ranked section per vault

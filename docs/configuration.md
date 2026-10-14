@@ -90,6 +90,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.doctor.mesh_registry` | string | `` | `VAULTMIND_APP_DOCTOR_MESH_REGISTRY` | Verify an offline Contract-B signed-registry file instead of fetching from the local daemon |
 | `app.doctor.mesh_slug` | string | `` | `VAULTMIND_APP_DOCTOR_MESH_SLUG` | Override the agent slug used to resolve your binding in the mesh registry (default: agents.yaml) |
 | `app.doctor.mesh_heartbeat` | string | `` | `VAULTMIND_APP_DOCTOR_MESH_HEARTBEAT` | Override the wake-watcher heartbeat file path used for mesh watcher-liveness |
+| `app.doctor.uncommitted_days` | int | `7` | `VAULTMIND_APP_DOCTOR_UNCOMMITTED_DAYS` | Flag .md files git reports as untracked or modified when their working-tree age is more than this many days. Skipped when the vault is not a git repository. |
 | `app.doctorheal.vault` | string | `.` | `VAULTMIND_APP_DOCTORHEAL_VAULT` | Path to vault root |
 | `app.doctorheal.json` | bool | `false` | `VAULTMIND_APP_DOCTORHEAL_JSON` | Output in JSON format |
 | `app.doctorheal.dry_run` | bool | `false` | `VAULTMIND_APP_DOCTORHEAL_DRY_RUN` | Preview repairs without writing (default applies) |
@@ -305,6 +306,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.ping.ui` | bool | `false` | `VAULTMIND_APP_PING_UI` | Enable interactive UI for the ping command |
 | `app.resolve.vault` | string | `.` | `VAULTMIND_APP_RESOLVE_VAULT` | Path to the vault root directory |
 | `app.resolve.json` | bool | `false` | `VAULTMIND_APP_RESOLVE_JSON` | Output in JSON format |
+| `app.retrieval.include_drafts` | bool | `false` | `VAULTMIND_APP_RETRIEVAL_INCLUDE_DRAFTS` | Include notes whose status is draft in ranking and in graph and context delivery. Off by default: a draft stays out until its status is changed. |
 | `app.schema.vault` | string | `.` | `VAULTMIND_APP_SCHEMA_VAULT` | Path to vault root |
 | `app.schema.json` | bool | `false` | `VAULTMIND_APP_SCHEMA_JSON` | Output in JSON format |
 | `app.search.vault` | string | `.` | `VAULTMIND_APP_SEARCH_VAULT` | Path to vault root |
@@ -539,6 +541,9 @@ app:
 
     # Override the wake-watcher heartbeat file path used for mesh watcher-liveness
     mesh_heartbeat: 
+
+    # Flag .md files git reports as untracked or modified when their working-tree age is more than this many days. Skipped when the vault is not a git repository.
+    uncommitted_days: 7
 
   doctorheal:
     # Path to vault root
@@ -1259,6 +1264,10 @@ app:
     # Output in JSON format
     json: false
 
+  retrieval:
+    # Include notes whose status is draft in ranking and in graph and context delivery. Off by default: a draft stays out until its status is changed.
+    include_drafts: false
+
   schema:
     # Path to vault root
     vault: .
@@ -1574,6 +1583,9 @@ export VAULTMIND_APP_DOCTOR_MESH_SLUG=
 
 # Override the wake-watcher heartbeat file path used for mesh watcher-liveness
 export VAULTMIND_APP_DOCTOR_MESH_HEARTBEAT=
+
+# Flag .md files git reports as untracked or modified when their working-tree age is more than this many days. Skipped when the vault is not a git repository.
+export VAULTMIND_APP_DOCTOR_UNCOMMITTED_DAYS=7
 
 # Path to vault root
 export VAULTMIND_APP_DOCTORHEAL_VAULT=.
@@ -2219,6 +2231,9 @@ export VAULTMIND_APP_RESOLVE_VAULT=.
 
 # Output in JSON format
 export VAULTMIND_APP_RESOLVE_JSON=false
+
+# Include notes whose status is draft in ranking and in graph and context delivery. Off by default: a draft stays out until its status is changed.
+export VAULTMIND_APP_RETRIEVAL_INCLUDE_DRAFTS=false
 
 # Path to vault root
 export VAULTMIND_APP_SCHEMA_VAULT=.

@@ -56,6 +56,9 @@ type ReciteConfig struct {
 	Budget int
 	// ExcerptTokens caps each note's contribution. 0 means whole bodies.
 	ExcerptTokens int
+	// IncludeDrafts recites a status:draft note. Off by default: a draft arc
+	// is a proposal, not identity, until its status changes.
+	IncludeDrafts bool
 }
 
 // Recite returns every note of cfg.Type, ordered by id, excerpted and bounded.
@@ -70,6 +73,19 @@ func Recite(db *index.DB, cfg ReciteConfig) (*ReciteResult, error) {
 	ids, err := noteIDsOfType(db, cfg.Type)
 	if err != nil {
 		return nil, err
+	}
+	if !cfg.IncludeDrafts {
+		drafts, loadErr := index.DraftIDs(db)
+		if loadErr != nil {
+			return nil, fmt.Errorf("recite: loading drafts: %w", loadErr)
+		}
+		kept := make([]string, 0, len(ids))
+		for _, id := range ids {
+			if drafts.Visible(id, false) {
+				kept = append(kept, id)
+			}
+		}
+		ids = kept
 	}
 	sort.Strings(ids)
 

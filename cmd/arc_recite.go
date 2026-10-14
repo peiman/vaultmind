@@ -19,6 +19,7 @@ var arcReciteCmd = MustNewCommand(commands.ArcReciteMetadata, runArcRecite)
 
 func init() {
 	arcCmd.AddCommand(arcReciteCmd)
+	registerIncludeDrafts(arcReciteCmd)
 }
 
 // runArcRecite loads the whole arc layer as bodies.
@@ -37,6 +38,7 @@ func runArcRecite(cmd *cobra.Command, _ []string) error {
 		Type:          getConfigValueWithFlags[string](cmd, "type", config.KeyAppArcReciteType),
 		Budget:        getConfigValueWithFlags[int](cmd, "budget", config.KeyAppArcReciteBudget),
 		ExcerptTokens: getConfigValueWithFlags[int](cmd, "excerpt", config.KeyAppArcReciteExcerpt),
+		IncludeDrafts: retrievalIncludeDrafts(cmd),
 	})
 	if err != nil {
 		return err

@@ -9,7 +9,8 @@ var MemoryRecallMetadata = config.CommandMetadata{
 	Long: `Perform a breadth-first traversal starting from a target note and return all
 neighbors within the specified depth. Every node in the result carries its
 full frontmatter, so callers get a rich, typed neighborhood without follow-up
-note-get calls.
+note-get calls. A note whose status is draft is not a neighbor unless you
+pass --include-drafts. The note you named is still returned.
 
 BFS (breadth-first search) means depth=1 returns only direct neighbors,
 depth=2 includes their neighbors as well, and so on.
@@ -74,7 +75,8 @@ var MemoryRelatedMetadata = config.CommandMetadata{
 	Short: "List notes related to the target, filtered by edge type",
 	Long: `Return all notes directly related to the target, with each result showing
 the edge type and confidence level. Use --mode to filter by how the
-relationship was established.
+relationship was established. A note whose status is draft is left out
+unless you pass --include-drafts. The note you named is still the target.
 
 MODES
 
@@ -135,7 +137,8 @@ var MemoryContextPackMetadata = config.CommandMetadata{
 	Long: `Load a target note, then fill a token budget with its ranked neighbors,
 stopping when the budget is exhausted. Designed to produce an agent-ready
 payload: the target is always included, followed by context items in
-priority order (explicit relations first, then inferred edges).
+priority order (explicit relations first, then inferred edges). A neighbor
+whose status is draft is left out unless you pass --include-drafts.
 
 TOKEN BUDGET
 
@@ -247,6 +250,8 @@ var MemoryLinksMetadata = config.CommandMetadata{
 	Short: "List directed wikilink edges for a note (outbound, inbound, or both)",
 	Long: `List the directed link edges of a note. By default shows both directions;
 use --out for outbound edges only or --in for inbound edges (backlinks) only.
+This listing includes a draft's id and title. It does not deliver the body.
+memory neighbors and memory pack omit a draft unless --include-drafts is set.
 
 Outbound edges are the notes this note references, cites, or extends.
 Inbound edges (backlinks) are the notes that reference this one — useful for
@@ -298,6 +303,8 @@ var MemoryNeighborsMetadata = config.CommandMetadata{
 	Long: `Perform a breadth-first traversal starting from a target note and return all
 neighbors within the specified depth. Every node carries its full frontmatter,
 so callers get a rich, typed neighborhood without follow-up note-get calls.
+A note whose status is draft is not a neighbor unless you pass
+--include-drafts. The note you named is still returned.
 
 BFS (breadth-first search) means depth=1 returns only direct neighbors,
 depth=2 includes their neighbors as well, and so on.
@@ -314,6 +321,7 @@ FLAGS
   --depth <n>            Maximum traversal depth. Default: 1.
   --max-nodes <n>        Safety limit on result size. Default: 50.
   --min-confidence <l>   Minimum edge confidence (low, medium, high). Default: high.
+  --include-drafts       Include notes whose status is draft. Default: false.
   --vault <path>         Path to vault root. Default: ".".
   --json                 Output as a JSON envelope instead of text.
 
@@ -351,7 +359,8 @@ var MemoryPackMetadata = config.CommandMetadata{
 	Long: `Load a target note, then fill a token budget with its ranked neighbors,
 stopping when the budget is exhausted. Designed to produce an agent-ready
 payload: the target is always included, followed by context items in
-priority order (explicit relations first, then inferred edges).
+priority order (explicit relations first, then inferred edges). A neighbor
+whose status is draft is left out unless you pass --include-drafts.
 
 TOKEN BUDGET
 

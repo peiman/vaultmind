@@ -6,11 +6,12 @@ import (
 	"github.com/peiman/vaultmind/internal/index"
 )
 
-// noteFilter returns the predicate every retrieval lane applies for the type,
-// tag and path filters. One definition, because a lane that judged a note
-// differently fed it into the fusion anyway: three lanes once ignored the tag,
-// so a tag-filtered hybrid search returned notes without it. The tag set and
-// the path set are loaded once per search, and only when asked for.
+// noteFilter returns the predicate every in-memory retrieval lane applies for
+// the type, tag, path and draft filters. FTS applies the same policy in SQL
+// (appendSearchFilters) because filtering after LIMIT would drop the top hit
+// and return a short page. Both sites ask filters.ExcludesDrafts, so a lane
+// cannot rank a draft the others hid. The sets are loaded once per search,
+// and only when asked for.
 func noteFilter(db *index.DB, filters index.SearchFilters) (func(id, noteType string) bool, error) {
 	var tagged map[string]bool
 	if filters.Tag != "" {
@@ -26,7 +27,17 @@ func noteFilter(db *index.DB, filters index.SearchFilters) (func(id, noteType st
 			return nil, fmt.Errorf("loading path prefix: %w", err)
 		}
 	}
+	var drafts index.DraftSet
+	if filters.ExcludesDrafts() {
+		var err error
+		if drafts, err = index.DraftIDs(db); err != nil {
+			return nil, fmt.Errorf("loading drafts: %w", err)
+		}
+	}
 	return func(id, noteType string) bool {
+		if drafts.Contains(id) {
+			return false
+		}
 		if filters.Type != "" && noteType != filters.Type {
 			return false
 		}

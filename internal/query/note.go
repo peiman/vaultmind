@@ -107,7 +107,7 @@ func RunNoteGet(db *index.DB, cfg NoteGetConfig, w io.Writer) (NoteGetOutcome, e
 		return outcome, json.NewEncoder(w).Encode(env)
 	}
 
-	if _, err = fmt.Fprintf(w, "%s (%s) — %s\n", note.ID, note.Type, note.Title); err != nil {
+	if _, err = fmt.Fprintf(w, "%s\n", noteGetHeader(note)); err != nil {
 		return outcome, err
 	}
 	// Render the body in human mode unless the caller asked for
@@ -121,4 +121,14 @@ func RunNoteGet(db *index.DB, cfg NoteGetConfig, w io.Writer) (NoteGetOutcome, e
 		}
 	}
 	return outcome, nil
+}
+
+// noteGetHeader is the text-mode first line. A draft says so; every other
+// status, including none, keeps the line the callers already parse.
+func noteGetHeader(note *index.FullNote) string {
+	header := fmt.Sprintf("%s (%s) — %s", note.ID, note.Type, note.Title)
+	if status, _ := note.Frontmatter["status"].(string); status == index.StatusDraft {
+		header += " [draft]"
+	}
+	return header
 }

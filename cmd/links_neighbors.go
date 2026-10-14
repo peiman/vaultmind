@@ -31,4 +31,5 @@ var linksNeighborsCmd = newDeprecatedAlias(commands.LinksNeighborsMetadata,
 func init() {
 	linksCmd.AddCommand(linksNeighborsCmd)
 	setupCommandConfig(linksNeighborsCmd)
+	registerIncludeDrafts(linksNeighborsCmd)
 }

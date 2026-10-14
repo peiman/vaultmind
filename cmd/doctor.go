@@ -267,7 +267,7 @@ func diagnoseVault(cmd *cobra.Command, vaultPath string) (*query.DoctorResult, f
 	}
 	defer vdb.Close()
 
-	result, err := populateDoctorResult(cmd.Context(), vdb, vaultPath)
+	result, err := populateDoctorResult(cmd.Context(), vdb, vaultPath, doctorUncommittedDays(cmd))
 	if err != nil {
 		return nil, noIndexHash, err
 	}
@@ -302,7 +302,11 @@ func diagnoseVault(cmd *cobra.Command, vaultPath string) (*query.DoctorResult, f
 // populating. Shared by the single-vault path (diagnoseVault) and the
 // multi-vault path (runDoctorAll) so the diagnosis is computed identically
 // (SSOT).
-func populateDoctorResult(ctx context.Context, vdb *cmdutil.VaultDB, vaultPath string) (*query.DoctorResult, error) {
+func doctorUncommittedDays(cmd *cobra.Command) int {
+	return getConfigValueWithFlags[int](cmd, "uncommitted-days", config.KeyAppDoctorUncommittedDays)
+}
+
+func populateDoctorResult(ctx context.Context, vdb *cmdutil.VaultDB, vaultPath string, uncommittedDays int) (*query.DoctorResult, error) {
 	result, err := query.Doctor(vdb.DB, vaultPath, vdb.Reg)
 	if err != nil {
 		return nil, fmt.Errorf("running doctor: %w", err)
@@ -361,8 +365,34 @@ func populateDoctorResult(ctx context.Context, vdb *cmdutil.VaultDB, vaultPath s
 	}
 
 	result.MemoryUse = collectMemoryUse(vdb)
+	attachDraftReview(result, vdb, vaultPath, uncommittedDays)
 
 	return result, nil
+}
+
+// attachDraftReview fills the draft list and the uncommitted-notes check.
+// A failure is reported on the result, not by failing doctor: an empty list
+// must not be read as "nothing waiting".
+func attachDraftReview(result *query.DoctorResult, vdb *cmdutil.VaultDB, vaultPath string, uncommittedDays int) {
+	now := time.Now()
+	if drafts, err := query.ListDraftNotes(vdb.DB, vaultPath, now); err != nil {
+		log.Debug().Err(err).Msg("draft list failed")
+		result.Drafts = query.DoctorDrafts{Notes: []query.DoctorDraftNote{}}
+	} else {
+		result.Drafts = drafts
+	}
+	pending, err := query.CheckUncommittedNotes(vaultPath, uncommittedDays, now)
+	if err != nil {
+		log.Debug().Err(err).Msg("uncommitted-notes check failed")
+		result.UncommittedNotes = query.DoctorUncommitted{
+			ThresholdDays: uncommittedDays,
+			Notes:         []query.DoctorUncommittedNote{},
+			Skipped:       true,
+			Reason:        err.Error(),
+		}
+		return
+	}
+	result.UncommittedNotes = pending
 }
 
 // memoryUseWindowDays is the reporting window for the memory-use section. A
@@ -476,7 +506,7 @@ func writeDoctorHuman(w io.Writer, result *query.DoctorResult, summaryOnly bool)
 	if err := writeBadCitations(w, result.BadCitations); err != nil {
 		return err
 	}
-	if err := writeOverviews(w, result.Overviews, result.VaultPath); err != nil {
+	if err := writeClosingReview(w, result); err != nil {
 		return err
 	}
 	// Errors/warnings rollup — the cold-start bottom line. Counts come from

@@ -19,6 +19,8 @@ var searchCmd = MustNewCommand(commands.SearchMetadata, runSearch)
 
 func init() {
 	MustAddToRoot(searchCmd)
+	// Same key as ask. See ask.go.
+	registerIncludeDrafts(searchCmd)
 }
 
 func runSearch(cmd *cobra.Command, args []string) error {
@@ -121,13 +123,14 @@ func writeSearchSection(w io.Writer, i int, vaultPath string, total int, rendere
 // buildSearchConfig assembles the SearchConfig from command flags.
 func buildSearchConfig(cmd *cobra.Command, queryText, vaultPath string) query.SearchConfig {
 	return query.SearchConfig{
-		Query:      queryText,
-		Limit:      getConfigValueWithFlags[int](cmd, "limit", config.KeyAppSearchLimit),
-		Offset:     getConfigValueWithFlags[int](cmd, "offset", config.KeyAppSearchOffset),
-		TypeFilter: getConfigValueWithFlags[string](cmd, "type", config.KeyAppSearchType),
-		TagFilter:  getConfigValueWithFlags[string](cmd, "tag", config.KeyAppSearchTag),
-		JSONOutput: getConfigValueWithFlags[bool](cmd, "json", config.KeyAppSearchJson),
-		VaultPath:  vaultPath,
+		Query:         queryText,
+		Limit:         getConfigValueWithFlags[int](cmd, "limit", config.KeyAppSearchLimit),
+		Offset:        getConfigValueWithFlags[int](cmd, "offset", config.KeyAppSearchOffset),
+		TypeFilter:    getConfigValueWithFlags[string](cmd, "type", config.KeyAppSearchType),
+		TagFilter:     getConfigValueWithFlags[string](cmd, "tag", config.KeyAppSearchTag),
+		IncludeDrafts: retrievalIncludeDrafts(cmd),
+		JSONOutput:    getConfigValueWithFlags[bool](cmd, "json", config.KeyAppSearchJson),
+		VaultPath:     vaultPath,
 	}
 }
 

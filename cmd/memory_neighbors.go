@@ -19,6 +19,7 @@ var memoryNeighborsCmd = MustNewCommand(commands.MemoryNeighborsMetadata, runMem
 func init() {
 	memoryCmd.AddCommand(memoryNeighborsCmd)
 	setupCommandConfig(memoryNeighborsCmd)
+	registerIncludeDrafts(memoryNeighborsCmd)
 }
 
 // neighborsKeys names the viper keys a neighbors invocation reads its
@@ -68,6 +69,7 @@ func runNeighborsWithKeys(cmd *cobra.Command, args []string, keys neighborsKeys)
 		Depth:         getConfigValueWithFlags[int](cmd, "depth", keys.depthKey),
 		MinConfidence: getConfigValueWithFlags[string](cmd, "min-confidence", keys.minConfidenceKey),
 		MaxNodes:      getConfigValueWithFlags[int](cmd, "max-nodes", keys.maxNodesKey),
+		IncludeDrafts: retrievalIncludeDrafts(cmd),
 	})
 	if err != nil {
 		if jsonOut {

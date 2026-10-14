@@ -66,7 +66,7 @@ func diagnoseAll(cmd *cobra.Command, paths []string) ([]*query.DoctorResult, []q
 			fail(p, err)
 			continue
 		}
-		result, derr := populateDoctorResult(cmd.Context(), vdb, p)
+		result, derr := populateDoctorResult(cmd.Context(), vdb, p, doctorUncommittedDays(cmd))
 		vdb.Close()
 		if derr != nil {
 			fail(p, derr)

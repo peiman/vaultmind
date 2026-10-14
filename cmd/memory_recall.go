@@ -14,4 +14,5 @@ var memoryRecallCmd = newDeprecatedAlias(commands.MemoryRecallMetadata,
 func init() {
 	memoryCmd.AddCommand(memoryRecallCmd)
 	setupCommandConfig(memoryRecallCmd)
+	registerIncludeDrafts(memoryRecallCmd)
 }

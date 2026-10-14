@@ -200,6 +200,14 @@ source_ids: [ref1, ref2]   # citations when the note quotes something
 status: <value>            # for types with a status lifecycle (project, decision)
 ```
 
+`status: draft` is a note that is not ready for recall or for context. `ask`, `search`, the context pack around a hit, `memory pack`, `memory related`, `memory neighbors`, `arc recite`, and `tree --for` leave it out unless you pass `--include-drafts` (or set `app.retrieval.include_drafts`). Accepting it is editing that field off `draft` — the same file, no copy:
+
+```bash
+vaultmind frontmatter set <id> status accepted
+```
+
+`note get` still reads a draft and shows the status. So does `memory pack` of an id you named. `ask --read` only reads a hit that ranked, so a draft that did not rank is not read that way. `memory links` lists a draft's id and title and does not deliver the body. The full `tree` prints `[draft]` on its line. `tree --for` does not inject that line unless you opted in. `doctor` lists drafts awaiting review.
+
 ### After saving: re-index
 
 A note made with `vaultmind note create` (or changed with `vaultmind frontmatter set`) is
