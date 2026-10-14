@@ -50,6 +50,16 @@ func largeHumanMention(n int) string {
 	return strings.Repeat("h", pad/2) + mid + strings.Repeat("h", pad-pad/2)
 }
 
+// largeBareHandback is the envelope the hook receives: no transcript prefix
+// and no suffix. The report starts with "<", which the tag parser rejects,
+// so a skip that parses the body falls through to recall.
+func largeBareHandback(n int) string {
+	open := "<agent-message from=\"agent-1\">\n"
+	closeTag := "\n</agent-message>"
+	gap := n - len(open) - len(closeTag) - 1
+	return open + "<" + strings.Repeat("y", gap) + closeTag
+}
+
 func TestRecallHook_LargePromptSkipsQuickly(t *testing.T) {
 	if _, err := os.Stat("/bin/bash"); err != nil {
 		t.Skip("no /bin/bash")
@@ -63,6 +73,7 @@ func TestRecallHook_LargePromptSkipsQuickly(t *testing.T) {
 		leak       string
 	}{
 		{"hand-back", largeHandback(largePromptBytes), "cross-session-envelope", "agent-message", 0, strings.Repeat("y", 80)},
+		{"bare hand-back", largeBareHandback(largePromptBytes), "cross-session-envelope", "agent-message", 0, strings.Repeat("y", 80)},
 		{"task-notification", largeTaskNotification(largePromptBytes), "harness-envelope", "task-notification", 0, strings.Repeat("z", 80)},
 		{"human mention", largeHumanMention(largePromptBytes), "", "prose", float64(recallQueryCharCap), strings.Repeat("h", 80)},
 	}
