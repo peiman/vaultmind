@@ -37,6 +37,12 @@ import "sort"
 // batching efficiency, never correctness.
 const embedPaddedBudgetPerSlot = 8192
 
+// embedBatchSize is the count cap EmbedNotes uses for a regular batch.
+// The BGE-M3 full embed pass lowers it, because peak memory is
+// batch × sequence × hidden size. The sparse-format re-embed uses this
+// same cap rather than a second copy of the number.
+const embedBatchSize = 32
+
 // planEmbedBatches groups note indices into batches by padded cost.
 //
 // Input is each note's body length. Returns batches of indices into that

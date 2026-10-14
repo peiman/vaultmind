@@ -61,7 +61,7 @@ Apple Silicon GPU in-process (CoreML)? → BLOCKED today (issue #34). Do not rel
   4. Verify: `vaultmind doctor --vault <vault>`.
 - **Platforms:** `setup-ort.sh` supports Darwin/arm64, Darwin/x86_64, Linux/amd64, Linux/aarch64, Linux/arm64. **No Windows path** — the script has no Windows branch and only supports Unix library paths.
 - **Perf:** Accelerates BGE-M3 indexing from "hours" to **a few minutes** for ~130 notes (design estimate ~2–3 min; not formally benchmarked) — vs *hours* on pure-Go. Runs on the CPU execution provider (`Acceleration()` → `"ort+cpu"`). First `index --embed --model bge-m3` triggers a **~2.2GB model download** from HuggingFace.
-- **Retrieval quality:** **Full BGE-M3 4-way hybrid** — dense (1024) + sparse (lexical) + ColBERT (multi-vector), RRF-fused. This is the reference quality path. Implements `FullEmbedder` via `EmbedFullBatch`.
+- **Retrieval quality:** **Full BGE-M3 4-way hybrid** — dense (1024) + sparse (lexical) + ColBERT (multi-vector), RRF-fused. This is the reference quality path. Implements `FullEmbedder` via `EmbedFullBatch`. The sparse lane drops the tokenizer's CLS, SEP, PAD, and UNK ids, matching the model's reference sparse output. Dense and ColBERT are unchanged. An index written by an older build still stores those ids; `vaultmind index --embed` rewrites only the sparse column once (one forward pass per note, about as long as one full embed) and leaves the dense and ColBERT bytes in place. A plain `vaultmind index` warns and does not mix the two formats. `doctor` and `ask` warn the same way. The remedy is `vaultmind index --embed`.
 - **How to select it:** Build with `-tags ORT` + CGO (auto when `setup:ort:check` passes). `DefaultModel()` then auto-picks `bge-m3`.
 - **Status:** Shipped.
 

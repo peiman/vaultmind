@@ -159,6 +159,10 @@ type DoctorEmbeddings struct {
 	// would load their model fails to start — semantic search is down while
 	// every count above looks healthy. Populated by the cmd layer.
 	RuntimeError string `json:"runtime_error,omitempty"`
+	// SparseFormatStale is true when stored sparse vectors predate the format
+	// that drops CLS, SEP, PAD, and UNK. Absent when current or when the vault
+	// has no sparse vectors. schema_version stays v1.
+	SparseFormatStale bool `json:"sparse_format_stale,omitempty"`
 }
 
 // DoctorModelBreakdown is one entry in DoctorEmbeddings.MixedModel.
@@ -605,6 +609,11 @@ func collectEmbeddingStatus(db *index.DB, total int) (*DoctorEmbeddings, error) 
 		(emb.SparseCount < emb.DenseCount || emb.ColBERTCount < emb.DenseCount) {
 		emb.HasModalityImbalance = true
 	}
+	stale, err := index.SparseFormatStale(db)
+	if err != nil {
+		return nil, fmt.Errorf("checking sparse format: %w", err)
+	}
+	emb.SparseFormatStale = stale
 	return emb, nil
 }
 

@@ -46,6 +46,12 @@ type BGEM3Embedder struct {
 	// memo makes a query text cost one forward pass however many lanes and
 	// vaults ask for it (see queryMemo).
 	memo queryMemo
+	// sparseSpecials is CLS, SEP, PAD, and UNK (and BOS when distinct).
+	// The shared tokenizer is not asked to fill a special-token mask.
+	// Nil means a hand-built embedder: the sparse lane then keeps every
+	// position, which is the pre-change behavior. NewBGEM3Embedder always
+	// sets the map.
+	sparseSpecials map[uint32]struct{}
 }
 
 // NewBGEM3Embedder creates a BGE-M3 embedder with all three heads.
@@ -109,19 +115,36 @@ func NewBGEM3Embedder(ctx context.Context, cfg HugotConfig) (*BGEM3Embedder, err
 		_ = session.Destroy()
 		return nil, fmt.Errorf("loading query span tokenizer: %w", err)
 	}
+	specials, err := sparseSpecialsFromPipeline(pipeline)
+	if err != nil {
+		_ = session.Destroy()
+		return nil, fmt.Errorf("reading sparse special token ids: %w", err)
+	}
 
 	return &BGEM3Embedder{
-		session:    session,
-		pipeline:   pipeline,
-		sparseW:    sparseW[0], // [1][1024] -> [1024]
-		sparseB:    sBias,
-		colbertW:   colbertW,
-		colbertB:   colbertB,
-		dims:       cfg.Dims,
-		maxTokens:  cfg.MaxTokens,
-		preprocess: preprocessFor(pipeline),
-		spanTok:    spanTok,
+		session:        session,
+		pipeline:       pipeline,
+		sparseW:        sparseW[0], // [1][1024] -> [1024]
+		sparseB:        sBias,
+		colbertW:       colbertW,
+		colbertB:       colbertB,
+		dims:           cfg.Dims,
+		maxTokens:      cfg.MaxTokens,
+		preprocess:     preprocessFor(pipeline),
+		spanTok:        spanTok,
+		sparseSpecials: specials,
 	}, nil
+}
+
+// sparseSpecialsFromPipeline reads the special-token ids without changing
+// the shared tokenizer's options. A missing tokenizer is an error: the
+// sparse lane must not silently keep CLS, SEP, PAD, and UNK.
+func sparseSpecialsFromPipeline(p *pipelines.FeatureExtractionPipeline) (map[uint32]struct{}, error) {
+	if p == nil || p.Model == nil || p.Model.Tokenizer == nil ||
+		p.Model.Tokenizer.GoTokenizer == nil || p.Model.Tokenizer.GoTokenizer.Tokenizer == nil {
+		return nil, fmt.Errorf("BGE-M3 tokenizer is missing")
+	}
+	return sparseSpecialIDs(p.Model.Tokenizer.GoTokenizer.Tokenizer)
 }
 
 // Embed returns the dense embedding (Embedder interface compatibility).
@@ -200,7 +223,11 @@ func (e *BGEM3Embedder) EmbedFullBatch(ctx context.Context, texts []string) ([]*
 	outputs := make([]*BGEM3Output, len(texts))
 	for i, hidden := range hiddenStates {
 		tokenIDs := batch.Input[i].TokenIDs
-		specialMask := batch.Input[i].SpecialTokensMask
+		// The shared tokenizer is not asked for a special-token mask: that
+		// option stays off so note and query ids stay byte-identical
+		// (vaultmind#279). The sparse lane builds its own mask from the
+		// token ids and the tokenizer's special-token map.
+		specialMask := sparseMaskFromTokenIDs(tokenIDs, e.sparseSpecials)
 
 		sparse, pos := sparseFromForward(hidden, tokenIDs, specialMask, e.sparseW, e.sparseB)
 		out := &BGEM3Output{
@@ -358,7 +385,7 @@ func (e *BGEM3Embedder) EmbedSparse(ctx context.Context, text string) (map[int32
 // The caller embeds that same string afterwards, and the memo makes it one pass.
 // Word spans come from the query-only tokenizer. A span-read failure leaves
 // the forward-pass weights in place and does not fail the query. Those weights
-// are the ones the forward pass produced, specials included.
+// already have CLS, SEP, PAD, and UNK zeroed.
 func (e *BGEM3Embedder) AnalyzeQuery(ctx context.Context, text string) (QueryTokens, error) {
 	out, err := e.EmbedFull(ctx, text)
 	if err != nil {
