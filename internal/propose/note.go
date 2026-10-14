@@ -61,6 +61,9 @@ func writeDraft(ctx context.Context, v Vault, req Request, rel, noteType, patche
 	if patches != "" {
 		fields["patches"] = patches
 	}
+	if strings.TrimSpace(req.GapID) != "" {
+		fields["closes_gap"] = strings.TrimSpace(req.GapID)
+	}
 	sources := req.Sources
 	if sources == nil {
 		sources = []string{}

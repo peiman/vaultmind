@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,14 +15,18 @@ import (
 )
 
 const (
-	anchorID     = "concept-foo-anchor"
-	graphDraft   = "concept-foo-draft"
-	draftBody    = "DRAFTBODYSECRET"
-	draftArcID   = "arc-proposed-self"
-	draftArcBody = "DRAFTARCSECRET"
-	coverDraft   = "concept-covers-draft"
-	coverSecret  = "DRAFTCOVERSECRET"
-	graphQuery   = "fooanchorquery"
+	anchorID       = "concept-foo-anchor"
+	graphDraft     = "concept-foo-draft"
+	draftBody      = "DRAFTBODYSECRET"
+	draftArcID     = "arc-proposed-self"
+	draftArcBody   = "DRAFTARCSECRET"
+	coverDraft     = "concept-covers-draft"
+	coverSecret    = "DRAFTCOVERSECRET"
+	graphQuery     = "fooanchorquery"
+	gapNeighbor    = "gap-foo-neighbor"
+	gapBody        = "GAPBODYSECRET"
+	gapCover       = "gap-covers-file"
+	gapCoverSecret = "GAPCOVERSECRET"
 )
 
 func osWrite(t *testing.T, path string, data []byte) error {
@@ -120,6 +125,32 @@ created: 2026-04-03
 ---
 
 `+draftArcBody+`
+`)
+	writeRawNote(t, vault, "gaps/foo-neighbor.md", `---
+id: gap-foo-neighbor
+type: gap
+title: Foo Gap
+status: open
+question: Where is the anchor?
+created: 2026-04-03
+---
+
+[[concept-foo-anchor]]
+
+`+gapBody+`
+`+repeatQuery(graphQuery))
+	writeRawNote(t, vault, "gaps/covers-file.md", `---
+id: gap-covers-file
+type: gap
+title: Gap Cover
+status: open
+question: What covers the file?
+paths:
+  - internal/a.go
+created: 2026-04-03
+---
+
+`+gapCoverSecret+`
 `)
 	repo := filepath.Join(t.TempDir(), "code-repo")
 	require.NoError(t, osMkdir(t, filepath.Join(repo, ".git")))
@@ -268,4 +299,100 @@ func TestDraftGraph_MCPAskOmitsTheNeighbor(t *testing.T) {
 	assert.NotContains(t, text, graphDraft)
 	assert.NotContains(t, text, draftBody)
 	assert.Contains(t, text, anchorID)
+}
+
+// A gap that is a real neighbor, and that would rank on the same query, stays
+// out of recall even when drafts are opted in. The full tree still lists it.
+func TestGapGraph_StaysOutOfRecallEvenWhenDraftsAreIncluded(t *testing.T) {
+	isolateXDG(t)
+	vault, file := graphNeighborVault(t)
+	requireGapEdge(t, vault)
+
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{"ask", []string{"ask", graphQuery, "--vault", vault, "--json", "--budget", "8000", "--max-items", "10"}},
+		{"search", []string{"search", graphQuery, "--vault", vault, "--json", "--limit", "10"}},
+		{"memory pack", []string{"memory", "pack", anchorID, "--vault", vault, "--json", "--budget", "8000"}},
+		{"memory context-pack", []string{"memory", "context-pack", anchorID, "--vault", vault, "--json", "--budget", "8000"}},
+		{"memory related", []string{"memory", "related", anchorID, "--vault", vault, "--json"}},
+		{"memory neighbors", []string{"memory", "neighbors", anchorID, "--vault", vault, "--json", "--min-confidence", "low"}},
+		{"links neighbors", []string{"links", "neighbors", anchorID, "--vault", vault, "--json", "--min-confidence", "low"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, extra := range [][]string{nil, {"--include-drafts"}} {
+				out, errOut, err := runRootCmd(t, append(tc.args, extra...)...)
+				require.NoError(t, err, errOut.String())
+				assert.NotContains(t, out.String(), gapNeighbor)
+				assert.NotContains(t, out.String(), gapBody)
+				assert.Contains(t, out.String(), anchorID)
+			}
+		})
+	}
+
+	recited, errOut, err := runRootCmd(t, "arc", "recite", "--type", "gap", "--vault", vault, "--json", "--include-drafts")
+	require.NoError(t, err, errOut.String())
+	var env struct {
+		Result struct {
+			Total int `json:"total"`
+		} `json:"result"`
+	}
+	require.NoError(t, json.Unmarshal(recited.Bytes(), &env))
+	assert.Equal(t, 0, env.Result.Total)
+	assert.NotContains(t, recited.String(), gapNeighbor)
+	assert.NotContains(t, recited.String(), gapBody)
+
+	listed, errOut, err := runRootCmd(t, "tree", "--vault", vault)
+	require.NoError(t, err, errOut.String())
+	assert.Contains(t, listed.String(), gapNeighbor)
+	assert.Contains(t, listed.String(), "[gap]")
+
+	for _, extra := range [][]string{nil, {"--include-drafts"}} {
+		covered, errOut, err := runRootCmd(t, append([]string{"tree", "--vault", vault, "--for", file}, extra...)...)
+		require.NoError(t, err, errOut.String())
+		assert.NotContains(t, covered.String(), gapCover)
+		assert.NotContains(t, covered.String(), gapCoverSecret)
+		assert.Contains(t, covered.String(), "concept-covers-file")
+	}
+
+	got, errOut, err := runRootCmd(t, "note", "get", gapNeighbor, "--vault", vault)
+	require.NoError(t, err, errOut.String())
+	assert.Contains(t, got.String(), gapNeighbor)
+	assert.Contains(t, got.String(), gapBody)
+	assert.Contains(t, got.String(), "[gap]")
+
+	runner := func(_ context.Context, args []string) ([]byte, error) {
+		out, errOut, err := runRootCmd(t, args...)
+		if err != nil {
+			return nil, fmt.Errorf("%w\n%s", err, errOut.String())
+		}
+		return out.Bytes(), nil
+	}
+	cs := connectDraftMCP(t, mcpserver.Config{Vault: vault, Run: runner})
+	res := callDraftMCP(t, cs, "ask", map[string]any{"query": graphQuery})
+	text := draftMCPText(res)
+	assert.NotContains(t, text, gapNeighbor)
+	assert.NotContains(t, text, gapBody)
+	searchRes := callDraftMCP(t, cs, "search", map[string]any{"query": graphQuery})
+	searchText := draftMCPText(searchRes)
+	assert.NotContains(t, searchText, gapNeighbor)
+	assert.NotContains(t, searchText, gapBody)
+}
+
+func requireGapEdge(t *testing.T, vault string) {
+	t.Helper()
+	db, err := index.Open(filepath.Join(vault, ".vaultmind", "index.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	var n int
+	require.NoError(t, db.QueryRow(
+		`SELECT COUNT(*) FROM links WHERE src_note_id = ? AND dst_note_id = ? AND edge_type = 'explicit_link'`,
+		gapNeighbor, anchorID).Scan(&n))
+	require.Equal(t, 1, n, "the gap must be a real wikilink neighbor, or absence proves nothing")
+	var paths string
+	require.NoError(t, db.QueryRow(
+		`SELECT value_json FROM frontmatter_kv WHERE note_id = ? AND key = 'paths'`, gapCover).Scan(&paths))
+	assert.Contains(t, paths, "internal/a.go")
 }

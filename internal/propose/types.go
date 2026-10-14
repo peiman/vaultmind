@@ -40,13 +40,16 @@ type Vault struct {
 // Request is one propose or accept call.
 type Request struct {
 	Question, Finding, CloseBand string
-	Sources                      []string
-	JSON                         bool
-	Now                          time.Time // zero means time.Now().UTC()
-	ID                           string    // accept: the draft id
-	Stdout, Stderr               io.Writer
-	Embed                        func(vaultPath string)
-	WorkDir                      string
+	// GapID, when set, stores closes_gap on the draft. An empty question
+	// uses the gap's stored question.
+	GapID          string
+	Sources        []string
+	JSON           bool
+	Now            time.Time // zero means time.Now().UTC()
+	ID             string    // accept: the draft id
+	Stdout, Stderr io.Writer
+	Embed          func(vaultPath string)
+	WorkDir        string
 	// Ranker re-runs the original question after the draft is on disk.
 	// Nil skips the check. The command sets it; tests that only place a
 	// draft leave it nil so their output stays the placement report.

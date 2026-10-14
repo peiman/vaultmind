@@ -119,6 +119,9 @@ app:
     # ColBERT and FTS use the K tokens with the highest sparse weight from that forward pass. A spaced word stays one FTS term. A long word with no spaces contributes the text of its salient tokens, not the whole word. 0 turns the bound off.
     query_salient_terms: 64
 
+    # Store the raw query text in the vault's possible-gap hint log. Off by default: the log keeps a hash and a length. Config file or environment only, not a flag.
+    gap_store_query: false
+
   check:
     # Stop on first failed check
     fail_fast: true
@@ -915,6 +918,13 @@ app:
     # Stage and commit
     commit: false
 
+  notegap:
+    # Path to vault root
+    vault: .
+
+    # Output in JSON format
+    json: false
+
   notepropose:
     # Path to vault root
     vault: .
@@ -930,6 +940,9 @@ app:
 
     # Relevance band that means the top hit is close enough to patch. The band ask already reports for that hit. Default is the strong band.
     close_band: strong
+
+    # Open gap this finding answers. The draft stores closes_gap. When the question is omitted, the gap's question is used.
+    gap: 
 
   ping:
     # Default message to display for the ping command

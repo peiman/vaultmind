@@ -50,6 +50,8 @@ var recognizedFields = []string{
 	"title", "status", "aliases", "tags",
 	"parent_id", "related_ids", "source_ids",
 	"created", "updated", "paths",
+	// closes_gap names the open gap a draft will close when it is accepted.
+	"closes_gap",
 }
 
 // CreatedDateFormat is the canonical format for the `created` field —

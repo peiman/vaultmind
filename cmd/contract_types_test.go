@@ -158,6 +158,29 @@ type NoteAcceptEnvelope struct {
 	} `json:"result"`
 }
 
+// NoteGapEnvelope is the contract shape for `vaultmind note gap --json`.
+// schema_version stays v1. median_days_to_close is omitted until a gap closes.
+type NoteGapEnvelope struct {
+	SchemaVersion string `json:"schema_version"`
+	Command       string `json:"command"`
+	Status        string `json:"status"`
+	Result        struct {
+		Mode              string   `json:"mode"`
+		Path              string   `json:"path"`
+		ID                string   `json:"id"`
+		Question          string   `json:"question"`
+		Status            string   `json:"status"`
+		AskedHits         []string `json:"asked_hits"`
+		Opened            int      `json:"opened"`
+		Closed            int      `json:"closed"`
+		MedianDaysToClose *float64 `json:"median_days_to_close"`
+	} `json:"result"`
+	Meta struct {
+		VaultPath string `json:"vault_path"`
+		IndexHash string `json:"index_hash"`
+	} `json:"meta"`
+}
+
 // NoteGetEnvelope is the contract shape for `vaultmind note get --json`.
 type NoteGetEnvelope struct {
 	SchemaVersion string `json:"schema_version"`

@@ -116,7 +116,7 @@ func chooseType(reg *schema.Registry, hitType string) (string, error) {
 		return defaultKnowledgeType, nil
 	}
 	for _, name := range reg.ListTypes() {
-		if name == vault.OverviewType {
+		if name == vault.OverviewType || name == vault.GapType {
 			continue
 		}
 		if reg.ValidStatus(name, index.StatusDraft) {

@@ -26,9 +26,11 @@ func writeDraftReview(w io.Writer, result *query.DoctorResult) error {
 		}
 	}
 	if result.UncommittedNotes.Notes != nil || result.UncommittedNotes.Skipped {
-		return writeUncommittedNotes(w, result.UncommittedNotes)
+		if err := writeUncommittedNotes(w, result.UncommittedNotes); err != nil {
+			return err
+		}
 	}
-	return nil
+	return writeGapReview(w, result.Gaps)
 }
 
 func writeDrafts(w io.Writer, d query.DoctorDrafts) error {

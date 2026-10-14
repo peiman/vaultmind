@@ -93,6 +93,9 @@ func acceptNew(ctx context.Context, v Vault, req Request, rel, id string, parsed
 	if err != nil {
 		return fail(req, cmdAccept, "note_missing", err.Error())
 	}
+	if err := closeLinkedGap(ctx, v, req, parsed, id); err != nil {
+		return err
+	}
 	err = rewriteNote(abs, rel, raw, req.beforeWrite, func(mapping *yaml.Node) error {
 		return mutation.SetKey(mapping, "status", published)
 	}, nil)
@@ -126,6 +129,9 @@ func acceptPatch(ctx context.Context, v Vault, req Request, proposalRel string, 
 		return fmt.Errorf("parsing note %q: %w", targetID, err)
 	}
 	if err := refusePatchTarget(req, parsed, targetID); err != nil {
+		return err
+	}
+	if err := closeLinkedGap(ctx, v, req, proposal, target.ID); err != nil {
 		return err
 	}
 	// The marker is the record that this proposal was already copied onto the

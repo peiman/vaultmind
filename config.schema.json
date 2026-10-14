@@ -136,6 +136,11 @@
               "description": "Show per-lane RRF contributions for each hit",
               "type": "boolean"
             },
+            "gap_store_query": {
+              "default": false,
+              "description": "Store the raw query text in the vault's possible-gap hint log. Off by default: the log keeps a hash and a length. Config file or environment only, not a flag.",
+              "type": "boolean"
+            },
             "json": {
               "default": false,
               "description": "Output in JSON format",
@@ -1816,6 +1821,21 @@
           },
           "type": "object"
         },
+        "notegap": {
+          "properties": {
+            "json": {
+              "default": false,
+              "description": "Output in JSON format",
+              "type": "boolean"
+            },
+            "vault": {
+              "default": ".",
+              "description": "Path to vault root",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
         "notepropose": {
           "properties": {
             "close_band": {
@@ -1826,6 +1846,11 @@
             "finding": {
               "default": "",
               "description": "Finding to record as a draft",
+              "type": "string"
+            },
+            "gap": {
+              "default": "",
+              "description": "Open gap this finding answers. The draft stores closes_gap. When the question is omitted, the gap's question is used.",
               "type": "string"
             },
             "json": {

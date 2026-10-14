@@ -7,11 +7,10 @@ import (
 )
 
 // noteFilter returns the predicate every in-memory retrieval lane applies for
-// the type, tag, path and draft filters. FTS applies the same policy in SQL
-// (appendSearchFilters) because filtering after LIMIT would drop the top hit
-// and return a short page. Both sites ask filters.ExcludesDrafts, so a lane
-// cannot rank a draft the others hid. The sets are loaded once per search,
-// and only when asked for.
+// the type, tag, path and non-knowledge filters. FTS applies the same policy
+// in SQL (appendSearchFilters) because filtering after LIMIT would drop the
+// top hit and return a short page. The set is loaded once per search. A gap
+// is always hidden. A draft is hidden unless the caller opted in.
 func noteFilter(db *index.DB, filters index.SearchFilters) (func(id, noteType string) bool, error) {
 	var tagged map[string]bool
 	if filters.Tag != "" {
@@ -27,15 +26,12 @@ func noteFilter(db *index.DB, filters index.SearchFilters) (func(id, noteType st
 			return nil, fmt.Errorf("loading path prefix: %w", err)
 		}
 	}
-	var drafts index.DraftSet
-	if filters.ExcludesDrafts() {
-		var err error
-		if drafts, err = index.DraftIDs(db); err != nil {
-			return nil, fmt.Errorf("loading drafts: %w", err)
-		}
+	drafts, err := index.DraftIDs(db)
+	if err != nil {
+		return nil, fmt.Errorf("loading drafts: %w", err)
 	}
 	return func(id, noteType string) bool {
-		if drafts.Contains(id) {
+		if !drafts.Visible(id, filters.IncludeDrafts) {
 			return false
 		}
 		if filters.Type != "" && noteType != filters.Type {

@@ -266,6 +266,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("ask: %w", err)
 	}
+	recordPossibleGap(cmd, vaultPath, args[0], result)
 	if !suppressed {
 		shown.record(result, pointersOnly, jsonOut)
 	}
