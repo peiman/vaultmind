@@ -41,12 +41,25 @@ func legacyCacheDir() string {
 // permissions), the legacy directory keeps being used rather than silently
 // starting an empty cache beside a full one.
 func DefaultCacheDir() string {
+	cacheRoot, pathErr := xdg.CacheDirPath()
+	legacy := legacyCacheDir()
+	if pathErr != nil {
+		// The app name is unset, so there is no XDG cache to migrate into.
+		// Return the legacy directory and do not create or rename anything.
+		return legacy
+	}
+	target := filepath.Join(cacheRoot, "models")
+	// Before CacheDir's MkdirAll and before the rename. Under go test this
+	// panics when a path is still under the home the process started with.
+	xdg.GuardTestIsolation(legacy)
+	xdg.GuardTestIsolation(cacheRoot)
+	xdg.GuardTestIsolation(target)
+
 	xdgCache, err := xdg.CacheDir()
 	if err != nil {
-		return legacyCacheDir()
+		return legacy
 	}
-	target := filepath.Join(xdgCache, "models")
-	legacy := legacyCacheDir()
+	target = filepath.Join(xdgCache, "models")
 
 	migrateLegacyCache(legacy, target)
 

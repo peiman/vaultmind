@@ -9,19 +9,23 @@ import (
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/output"
 	"github.com/peiman/vaultmind/internal/cmdutil"
+	"github.com/peiman/vaultmind/internal/query"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
-// Main runs the CLI for args and returns its exit code. An ask goes to this
-// version's warm server when one is running (see serve); otherwise the
-// command runs in this process, exactly as before.
+// Main runs one OS process. An ask goes to this version's warm server when
+// one is running (see serve); otherwise the command runs here. The process
+// embedder is released after that command returns. A request the resident
+// server handles calls ExecuteWithIO, not Main, so it does not release.
 func Main(args []string) int {
 	if code, ok := tryServer(args); ok {
 		return code
 	}
-	return ExecuteWithIO(args, os.Stdout, os.Stderr)
+	code := ExecuteWithIO(args, os.Stdout, os.Stderr)
+	query.CloseSharedEmbedder()
+	return code
 }
 
 // ExecuteWithIO runs the CLI for args with its output on out and errw, and

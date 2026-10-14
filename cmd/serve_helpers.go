@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/peiman/vaultmind/internal/query"
 	"github.com/peiman/vaultmind/internal/serve"
 	"github.com/peiman/vaultmind/internal/xdg"
 )
@@ -181,7 +182,7 @@ func serveUntilIdle(ctx context.Context, idle string) error {
 	closeExperimentSession()
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if err := serve.Serve(ctx, sock, serveExec, wait); err != nil && !errors.Is(err, serve.ErrAlreadyServing) {
+	if err := serve.Serve(ctx, sock, serveExec, wait, serve.WithShutdown(query.CloseSharedEmbedder)); err != nil && !errors.Is(err, serve.ErrAlreadyServing) {
 		return err
 	}
 	return nil

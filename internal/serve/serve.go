@@ -39,6 +39,26 @@ type Response struct {
 // Exec runs one request.
 type Exec func(Request) Response
 
+// Shutdown releases what the resident process holds. Serve calls it once,
+// after the accept loop ends: the idle timeout, or ctx ending.
+type Shutdown func()
+
+// Option configures Serve.
+type Option func(*serveOptions)
+
+type serveOptions struct {
+	onShutdown Shutdown
+}
+
+// WithShutdown sets the function Serve calls when it stops after it has
+// taken the socket. A process that never takes the socket — another server
+// already answers, or the directory is unsafe — does not call it.
+func WithShutdown(fn Shutdown) Option {
+	return func(o *serveOptions) {
+		o.onShutdown = fn
+	}
+}
+
 var (
 	// ErrNoServer means nothing answers on the socket; the caller runs the
 	// command itself.
@@ -75,13 +95,24 @@ func SocketPath(stateDir, version string) string {
 }
 
 // Serve answers requests on sock until ctx ends or no request arrives for
-// idle, then removes the socket. Requests run one at a time.
-func Serve(ctx context.Context, sock string, exec Exec, idle time.Duration) error {
+// idle, then removes the socket. Requests run one at a time. WithShutdown
+// runs once the accept loop ends, and not when this process never takes
+// the socket.
+func Serve(ctx context.Context, sock string, exec Exec, idle time.Duration, opts ...Option) error {
+	var opt serveOptions
+	for _, o := range opts {
+		o(&opt)
+	}
 	ln, err := listen(sock)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = os.Remove(sock) }()
+	defer func() {
+		if opt.onShutdown != nil {
+			opt.onShutdown()
+		}
+	}()
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
