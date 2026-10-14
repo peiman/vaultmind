@@ -107,15 +107,20 @@ rather than a patch on the wrong one.
   second mode field. Accept appends the proposal body under `## <question>` on
   the target. The line immediately before that heading is the comment
   `<!-- vaultmind:accepted <proposal-id> -->`. A retry that already finds the
-  comment skips the append and only deletes the proposal file and its index
-  row, so a cleanup that failed after the write does not copy the section
-  again. Search text and recall excerpts drop HTML comments, so the marker is
-  not recalled. The target's other frontmatter is left as written (Principle 7:
+  comment skips the append and deletes the index row before the proposal file,
+  so a cleanup that failed after the write does not copy the section again. If
+  the file delete fails, the row is already gone; the retry finds the file,
+  re-indexes it, sees the marker, and only finishes cleanup. If the file is
+  already gone and the indexed row is a proposal, accept removes the row and
+  says the proposal was already gone. Delivery omits only a `<!-- vaultmind:`
+  comment and keeps every other HTML comment. `note get` still shows the
+  marker. Search text and recall excerpts still drop every HTML comment. The
+  target's other frontmatter is left as written (Principle 7:
   `internal/mutation` is the one frontmatter writer). `sources` are added only
   when the target's type allows that field. The write re-reads the file and
   refuses when those bytes differ from the ones just read: nothing is written
-  and the proposal stays. After a write that lands, accept deletes the proposal
-  file and re-indexes the target.
+  and the proposal stays. After a write that lands, accept deletes the index
+  row, then the proposal file, and re-indexes the target.
 - A note that is not a draft is refused. A patch whose target is gone is refused.
   A patch whose target is itself a draft, or is itself a proposal, is refused.
   A `file:` source is checked the same way as a path: it must exist, and it

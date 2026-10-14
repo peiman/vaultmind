@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/peiman/vaultmind/internal/envelope"
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/mutation"
 	"github.com/peiman/vaultmind/internal/parser"
@@ -50,7 +53,7 @@ func Accept(ctx context.Context, v Vault, req Request) error {
 	if v.DB == nil || v.Reg == nil {
 		return fmt.Errorf("vault is not open")
 	}
-	row, err := v.DB.QueryNoteByID(req.ID)
+	row, err := lookupAcceptNote(ctx, v, req.ID)
 	if err != nil {
 		log.Debug().Err(err).Str("id", req.ID).Msg("accept lookup failed")
 		return failOp(req, cmdAccept, "note_missing", fmt.Errorf("reading note %q: %w", req.ID, err))
@@ -64,7 +67,7 @@ func Accept(ctx context.Context, v Vault, req Request) error {
 	}
 	raw, err := os.ReadFile(abs) //nolint:gosec // nosemgrep: go-path-traversal -- path is confined with vault.ResolveInside
 	if err != nil {
-		return fail(req, cmdAccept, "note_missing", fmt.Sprintf("note %q is not in the vault", req.ID))
+		return missingAcceptFile(req, v, row, err)
 	}
 	parsed, err := parser.Parse(raw)
 	if err != nil {
@@ -136,13 +139,14 @@ func acceptPatch(ctx context.Context, v Vault, req Request, proposalRel string, 
 	if err != nil {
 		return err
 	}
-	if err := deleteProposal(proposalAbs); err != nil {
-		return fmt.Errorf("removing proposal %s: %w", proposalRel, err)
-	}
-	if err := index.DeleteNoteByPath(v.DB, proposalRel); err != nil && !errors.Is(err, sql.ErrNoRows) {
+	// The row goes first. If this fails, the file is still there and a retry
+	// reads it. If the file delete fails after this, a retry finds the file
+	// (re-indexed, or by path) and only finishes cleanup.
+	if err := removeProposalRow(req, v.DB, proposalRel); err != nil {
 		return fmt.Errorf("removing proposal %s from the index: %w", proposalRel, err)
-	} else if err != nil {
-		log.Debug().Err(err).Str("path", proposalRel).Msg("proposal row already gone")
+	}
+	if err := removeProposalFile(req, proposalAbs); err != nil {
+		return fmt.Errorf("removing proposal %s: %w", proposalRel, err)
 	}
 	return renderAccept(req, v, outcome{
 		Mode: modePatch, Path: target.Path, ID: target.ID, TargetID: target.ID,
@@ -177,6 +181,138 @@ func applyPatch(abs, rel string, raw []byte, target, proposal *parser.ParsedNote
 	return rewriteNote(abs, rel, raw, req.beforeWrite, edit, &body)
 }
 
+// lookupAcceptNote returns the indexed draft. The row is deleted before the
+// file, so a retry after a failed file delete finds no row: the file is
+// re-indexed and cleanup finishes. A missing id stays a missing id.
+func lookupAcceptNote(ctx context.Context, v Vault, id string) (*index.NoteRow, error) {
+	row, err := v.DB.QueryNoteByID(id)
+	if err != nil || row != nil {
+		return row, err
+	}
+	return reindexUnindexedProposal(ctx, v, id)
+}
+
+func missingAcceptFile(req Request, v Vault, row *index.NoteRow, err error) error {
+	if os.IsNotExist(err) {
+		return finishMissingProposal(req, v, row)
+	}
+	return fail(req, cmdAccept, "note_missing", fmt.Sprintf("note %q is not in the vault", req.ID))
+}
+
 func deleteProposal(path string) error {
 	return os.Remove(path) //nolint:gosec // nosemgrep: go-path-traversal -- path is confined with vault.ResolveInside
+}
+
+func removeProposalRow(req Request, db *index.DB, rel string) error {
+	var err error
+	if req.deleteIndexed != nil {
+		err = req.deleteIndexed(db, rel)
+	} else {
+		err = index.DeleteNoteByPath(db, rel)
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		log.Debug().Err(err).Str("path", rel).Msg("proposal row already gone")
+		return nil
+	}
+	return err
+}
+
+func removeProposalFile(req Request, path string) error {
+	if req.removeFile != nil {
+		return req.removeFile(path)
+	}
+	return deleteProposal(path)
+}
+
+// finishMissingProposal removes the index row of a proposal whose file is
+// already gone, and says so. Any other missing file is still "not in the vault":
+// a draft that is not a proposal is left indexed.
+func finishMissingProposal(req Request, v Vault, row *index.NoteRow) error {
+	proposal, err := indexedProposal(v.DB, row.ID)
+	if err != nil {
+		log.Debug().Err(err).Str("id", row.ID).Msg("accept proposal lookup failed")
+		return failOp(req, cmdAccept, "note_missing", fmt.Errorf("reading note %q: %w", req.ID, err))
+	}
+	if !proposal {
+		return fail(req, cmdAccept, "note_missing", fmt.Sprintf("note %q is not in the vault", req.ID))
+	}
+	if err := removeProposalRow(req, v.DB, row.Path); err != nil {
+		return fmt.Errorf("removing proposal %s from the index: %w", row.Path, err)
+	}
+	return renderProposalGone(req, v, row)
+}
+
+func indexedProposal(db *index.DB, id string) (bool, error) {
+	var raw string
+	err := db.QueryRow(`SELECT value_json FROM frontmatter_kv WHERE note_id = ? AND key = 'patches'`, id).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return patchesNonEmpty(raw), nil
+}
+
+// patchesNonEmpty reports a stored patches value. A value that is not a JSON
+// string is not a proposal: the row stays, and accept does not delete it.
+func patchesNonEmpty(raw string) bool {
+	var value string
+	if json.Unmarshal([]byte(raw), &value) != nil {
+		return false
+	}
+	return strings.TrimSpace(value) != ""
+}
+
+// reindexUnindexedProposal finds a proposal file the index no longer has.
+// Accept deletes the row before the file, so a failed file delete leaves the
+// file on disk and the id unknown. The retry reads that file, sees the marker
+// on the target, and only finishes cleanup.
+func reindexUnindexedProposal(ctx context.Context, v Vault, id string) (*index.NoteRow, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if v.Config == nil {
+		return nil, nil //nolint:nilnil // no vault config: treat the id as not found
+	}
+	scanned, err := vault.Scan(v.Path, v.Config.Vault.Exclude)
+	if err != nil {
+		return nil, fmt.Errorf("looking for proposal %s: %w", id, err)
+	}
+	for _, file := range scanned.Files {
+		abs, err := vault.ResolveInside(v.Path, file.RelPath)
+		if err != nil {
+			continue
+		}
+		raw, err := os.ReadFile(abs) //nolint:gosec // nosemgrep: go-path-traversal -- path is confined with vault.ResolveInside
+		if err != nil {
+			continue
+		}
+		parsed, err := parser.Parse(raw)
+		if err != nil || fmString(parsed.Frontmatter, "id") != id {
+			continue
+		}
+		if fmString(parsed.Frontmatter, "status") != index.StatusDraft || fmString(parsed.Frontmatter, "patches") == "" {
+			return nil, nil //nolint:nilnil // the file is this id and is not a proposal
+		}
+		dbPath := filepath.Join(v.Path, v.Config.Index.DBPath)
+		// IndexFile opens the index through Open. Open does not accept a context.
+		// Same boundary as reindex.
+		if err := index.NewIndexer(v.Path, dbPath, v.Config).IndexFile(file.RelPath); err != nil { //nolint:contextcheck // IndexFile calls Open, which does not accept a context
+			return nil, fmt.Errorf("re-indexing proposal %s: %w", file.RelPath, err)
+		}
+		log.Debug().Str("id", id).Str("path", file.RelPath).Msg("re-indexed proposal whose row was missing")
+		return v.DB.QueryNoteByID(id)
+	}
+	return nil, nil //nolint:nilnil // no proposal file has this id
+}
+
+func renderProposalGone(req Request, v Vault, row *index.NoteRow) error {
+	if !req.JSON {
+		_, err := fmt.Fprintf(stdout(req), "proposal %s was already gone; removed its index row\n", req.ID)
+		return err
+	}
+	return writeEnvelope(req, v, envelope.OK(cmdAccept, acceptResult{
+		Mode: "cleanup", Path: row.Path, ID: req.ID,
+	}), nil)
 }

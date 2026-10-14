@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/peiman/vaultmind/internal/parser"
 )
 
 // NoteRow is a lightweight note record returned by query methods.
@@ -123,7 +125,13 @@ type FullNote struct {
 	Path        string                 `json:"path"`
 	Title       string                 `json:"title"`
 	Frontmatter map[string]interface{} `json:"frontmatter"`
-	Body        string                 `json:"body,omitempty"`
+	// Body is the text an agent receives. VaultMind bookkeeping comments are
+	// removed. An author HTML comment stays. RawBody is the indexed text
+	// before that removal.
+	Body string `json:"body,omitempty"`
+	// RawBody is the stored body, markers included. note get prints this
+	// because it is an explicit raw read. Delivery paths use Body.
+	RawBody string `json:"-"`
 	// BodyRawUnfilled is true when body_raw IS NULL. An empty string is a
 	// stored empty body; only NULL can still be filled by a re-index.
 	BodyRawUnfilled bool         `json:"-"`
@@ -173,7 +181,12 @@ func (d *DB) QueryFullNote(id string) (*FullNote, error) {
 
 	n.Type = noteType.String
 	n.Title = title.String
-	n.Body = body.String
+	// One strip for every path that loads a FullNote to hand text to an agent:
+	// the ask target, memory pack, arc recite, ask --read, summarize, and MCP
+	// ask. Snippets do not come from here; they call StripVaultMindMarkers
+	// themselves. note get puts RawBody back. See RunNoteGet.
+	n.RawBody = body.String
+	n.Body = parser.StripVaultMindMarkers(n.RawBody)
 	n.BodyRawUnfilled = rawUnfilled != 0
 	n.Frontmatter = make(map[string]interface{})
 	if status.Valid && status.String != "" {

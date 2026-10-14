@@ -80,6 +80,28 @@ func TestStripForFTS_RemovesHTMLComments(t *testing.T) {
 	assert.NotContains(t, result, "this whole comment")
 }
 
+func TestStripVaultMindMarkers(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "plain text", in: "Quartz keeps one timeline.", want: "Quartz keeps one timeline."},
+		{name: "marker", in: "<!-- vaultmind:accepted proposal-1 -->\nQuartz keeps one timeline.", want: "\nQuartz keeps one timeline."},
+		{name: "author comment", in: "<!-- todo -->\nQuartz", want: "<!-- todo -->\nQuartz"},
+		{name: "marker and author comment", in: "<!-- todo -->\n<!-- vaultmind:accepted proposal-1 -->\nQuartz", want: "<!-- todo -->\n\nQuartz"},
+		{name: "vaultmind word inside an author comment", in: "<!-- note vaultmind:accepted -->\nQuartz", want: "<!-- note vaultmind:accepted -->\nQuartz"},
+		{name: "two markers", in: "<!-- vaultmind:accepted a -->\n<!-- vaultmind:accepted b -->\nDone", want: "\n\nDone"},
+		{name: "no space after the comment open", in: "<!--vaultmind:accepted a-->\nDone", want: "\nDone"},
+		{name: "unclosed comment stays", in: "<!-- vaultmind:accepted proposal-1\nDone", want: "<!-- vaultmind:accepted proposal-1\nDone"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, parser.StripVaultMindMarkers(tc.in))
+		})
+	}
+}
+
 func TestStripHTMLComments_LeavesTextWithoutAComment(t *testing.T) {
 	plain := "Quartz keeps one timeline."
 	assert.Equal(t, plain, parser.StripHTMLComments(plain))

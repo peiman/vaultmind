@@ -50,6 +50,12 @@ type Request struct {
 	// beforeWrite, when set, runs after the note is read and before the
 	// conflict-checked write. Tests use it to change the file in that window.
 	beforeWrite func(abs string) error
+	// deleteIndexed removes the proposal's index row. Nil uses
+	// index.DeleteNoteByPath. Tests set it to fail one delete.
+	deleteIndexed func(db *index.DB, rel string) error
+	// removeFile removes the proposal file. Nil uses os.Remove. Tests set
+	// it to fail one delete.
+	removeFile func(path string) error
 }
 
 const (
