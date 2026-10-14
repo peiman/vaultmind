@@ -126,8 +126,28 @@ func TestAskRankerClose_DoesNotReleaseASessionItDidNotAcquire(t *testing.T) {
 	require.NoError(t, ranker.Close())
 	assert.Zero(t, emb.closed, "a ranker that never acquired the session leaves it loaded")
 
+	// The guard that can fail is the hold, not a flag on the ranker. A hold
+	// that acquired nothing leaves the session alone. A hold from a session
+	// that has since been replaced leaves the new one alone. The current
+	// hold releases it, and a second close does not.
+	var stranger query.SharedHold
+	require.False(t, stranger.Acquired())
+	stranger.Close()
+	assert.Zero(t, emb.closed, "a hold that did not acquire the session leaves it loaded")
+
+	previous := query.CurrentSharedHold()
+	require.True(t, previous.Acquired())
 	query.CloseSharedEmbedder()
 	assert.Equal(t, 1, emb.closed)
-	query.CloseSharedEmbedder()
-	assert.Equal(t, 1, emb.closed)
+
+	ret = query.BuildAutoRetrieverFull(context.Background(), db)
+	require.NotNil(t, ret.Embedder)
+	ret.Cleanup()
+	require.Equal(t, 2, *loads)
+	previous.Close()
+	assert.Equal(t, 1, emb.closed, "a hold from the previous session does not close the new one")
+	query.CurrentSharedHold().Close()
+	assert.Equal(t, 2, emb.closed)
+	query.CurrentSharedHold().Close()
+	assert.Equal(t, 2, emb.closed, "closing the current hold twice is a no-op")
 }

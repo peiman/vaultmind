@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The resident server keeps the embedding model loaded across asks. It used to unload the model after every request, so the next ask loaded it again. The model is released when the server exits, on idle or on a signal. A one-shot command still releases it when the process exits. `note propose` still loads the model once.
 - Delivered note bodies hide only VaultMind's own `<!-- vaultmind:` comments. An author HTML comment is still delivered. `note get` still shows the marker. Search text still drops every HTML comment.
 - `note accept` deletes a proposal's index row before its file. A retry after a failed file delete finds the file, sees the marker, and only finishes cleanup. A proposal whose file is already gone is finished by removing its index row.
 - The sparse lane no longer counts special tokens, matching the model's reference behavior.

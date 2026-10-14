@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/peiman/vaultmind/internal/embedding"
+	"github.com/rs/zerolog/log"
 )
 
 // shared holds the one embedding model this process has loaded.
@@ -30,6 +31,7 @@ func sharedEmbedderFor(key string, build func() (embedding.Embedder, func(), err
 	shared.mu.Lock()
 	defer shared.mu.Unlock()
 	if shared.emb != nil && shared.key == key {
+		log.Debug().Str("model", key).Msg("reusing embedding model")
 		return shared.emb, func() {}, nil
 	}
 	releaseSharedLocked()
@@ -39,6 +41,7 @@ func sharedEmbedderFor(key string, build func() (embedding.Embedder, func(), err
 	}
 	shared.gen++
 	shared.key, shared.emb, shared.close = key, emb, closeFn
+	log.Debug().Str("model", key).Msg("loaded embedding model")
 	return emb, func() {}, nil
 }
 

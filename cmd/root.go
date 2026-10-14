@@ -26,7 +26,6 @@ import (
 	"github.com/peiman/vaultmind/.ckeletin/pkg/logger"
 	"github.com/peiman/vaultmind/.ckeletin/pkg/output"
 	"github.com/peiman/vaultmind/internal/experiment"
-	"github.com/peiman/vaultmind/internal/query"
 	"github.com/peiman/vaultmind/internal/xdg"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -322,10 +321,11 @@ var RootCmd = &cobra.Command{
 }
 
 func Execute() error {
-	// Ensure logger cleanup on exit. The process embedder closes with it:
-	// one release, after ranking and embed-on-write have both finished.
+	// Logger cleanup runs per command. The process embedder does not:
+	// the resident server calls Execute for every request and must keep
+	// the model. The process releases it when Main returns, and the
+	// server releases it when the server stops.
 	defer logger.Cleanup()
-	defer query.CloseSharedEmbedder()
 
 	info, ok := debug.ReadBuildInfo()
 	v, c, d := buildVersionInfo(Version, Commit, Date, info, ok)

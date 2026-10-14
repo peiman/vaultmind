@@ -23,7 +23,6 @@ type askQuestionRanker struct {
 	once                    sync.Once
 	ret                     query.AutoRetrieverResult
 	limit, forward, salient int
-	acquired                bool
 }
 
 func newAskRanker(cmd *cobra.Command, db *index.DB, vaultPath string) propose.QuestionRanker {
@@ -34,23 +33,17 @@ func (a *askQuestionRanker) ensure(ctx context.Context) {
 	a.once.Do(func() {
 		a.ret = query.BuildAutoRetrieverFull(ctx, a.db)
 		a.limit, a.forward, a.salient = askRankingBounds(a.cmd)
-		a.acquired = a.ret.Embedder != nil
 	})
 }
 
 // Close drops this ranker's retriever cleanup. It does not unload the process
-// embedder: embed-on-write borrows that session. A ranker that never acquired
-// it returns before any release, so it cannot close a session another caller
-// holds. The process releases the session on exit. A second Close is a no-op.
+// embedder. Embed-on-write borrows that session, and the process releases it
+// on exit. A second Close is a no-op.
 func (a *askQuestionRanker) Close() error {
 	if a.ret.Cleanup != nil {
 		a.ret.Cleanup()
 		a.ret.Cleanup = nil
 	}
-	if !a.acquired {
-		return nil
-	}
-	a.acquired = false
 	return nil
 }
 
