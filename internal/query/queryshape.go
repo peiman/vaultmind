@@ -221,8 +221,8 @@ func applyUnderCountCut(text string, forwardTokens int, spans [][2]int, embed st
 // those weights skips salient selection and still applies the forward bound.
 func ShapeQuery(ctx context.Context, text string, forwardTokens, salient int, analyzer QueryAnalyzer) ShapedQuery {
 	original := text
-	// The echoed query is the caller's string. Only the ranking text is collapsed.
-	text = embedding.CollapseRepeatedNonAlnum(text)
+	// The echoed query is the caller's string. Only the ranking text is capped.
+	text = embedding.CapSymbolRuns(text)
 	spans := tokenSpansOf(analyzer, text, forwardTokens)
 	embed, embTokens, total, forwardApplied := ForwardQuery(text, forwardTokens, spans)
 	embed, embTokens, total, forwardApplied = applyUnderCountCut(text, forwardTokens, spans, embed, embTokens, total, forwardApplied)

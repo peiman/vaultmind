@@ -175,7 +175,8 @@ func reembedSparseNotes(ctx context.Context, db *DB, full embedding.FullEmbedder
 	for _, idxs := range planEmbedBatches(lengths, embedBatchSize, embedBatchSize*embedPaddedBudgetPerSlot) {
 		texts := make([]string, len(idxs))
 		for j, i := range idxs {
-			texts[j] = notes[i].body
+			// Same cap as EmbedNotes. The stored body stays as indexed.
+			texts[j] = embedding.CapSymbolRuns(notes[i].body)
 		}
 		outs, err := full.EmbedFullBatch(ctx, texts)
 		if err != nil {

@@ -21,6 +21,7 @@ type sparseScript struct {
 	failOn  string
 	emptyOn string
 	sparse  map[int32]float32
+	texts   []string
 }
 
 func (s *sparseScript) Embed(context.Context, string) ([]float32, error) {
@@ -44,6 +45,7 @@ func (s *sparseScript) EmbedFull(ctx context.Context, text string) (*embedding.B
 }
 func (s *sparseScript) EmbedFullBatch(_ context.Context, texts []string) ([]*embedding.BGEM3Output, error) {
 	s.calls += len(texts)
+	s.texts = append(s.texts, texts...)
 	for _, text := range texts {
 		if s.failOn != "" && text == s.failOn {
 			return nil, errInterrupted
@@ -96,6 +98,22 @@ func blobs(t *testing.T, db *index.DB, id string) (dense, sparse, colbert []byte
 	t.Helper()
 	require.NoError(t, db.QueryRow(`SELECT embedding, sparse_embedding, colbert_embedding FROM notes WHERE id = ?`, id).Scan(&dense, &sparse, &colbert))
 	return dense, sparse, colbert
+}
+
+func TestReembedStaleSparse_CapsSymbolRunsOnTheTextSentToTheEmbedder(t *testing.T) {
+	db := openSparseDB(t)
+	body := "before " + strings.Repeat(".-", 30) + " after"
+	insertSparseNote(t, db, "mix", body, map[int32]float32{1: 0.2})
+
+	var buf bytes.Buffer
+	script := &sparseScript{}
+	_, err := (&index.Indexer{}).ReembedStaleSparse(context.Background(), db, script, &buf)
+	require.NoError(t, err)
+	require.Equal(t, []string{"before " + strings.Repeat(".-", embedding.RepeatedNonAlnumCap/2) + " after"}, script.texts)
+
+	var stored string
+	require.NoError(t, db.QueryRow(`SELECT body_text FROM notes WHERE id = 'mix'`).Scan(&stored))
+	require.Equal(t, body, stored)
 }
 
 func TestReembedStaleSparse_RewritesSparseOnlyAndStamps(t *testing.T) {

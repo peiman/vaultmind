@@ -88,7 +88,7 @@ func TestShapeQuery_LowDensityHeadStillAppliesForwardBound(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			text := tc.head + prose
-			require.Equal(t, tc.head, embedding.CollapseRepeatedNonAlnum(tc.head))
+			require.Equal(t, tc.head, embedding.CapSymbolRuns(tc.head))
 			window := embedding.QuerySpanWindow(text, forward)
 			modelWindow := embedding.QuerySpanWindow(text, embedding.BGEM3MaxTokens)
 			require.Less(t, len(window), len(tc.head), "forward window must end inside the head")
@@ -110,8 +110,41 @@ func TestShapeQuery_LowDensityHeadStillAppliesForwardBound(t *testing.T) {
 	}
 }
 
+// TestShapeQuery_MixedSymbolRunStaysFast: 12,000 unspaced mixed punctuation
+// characters plus prose must shape in under two seconds with the real
+// tokenizer. A cap that only shortens a run of one character leaves this
+// text untouched, and this test goes red.
+func TestShapeQuery_MixedSymbolRunStaysFast(t *testing.T) {
+	emb := requireSpanEmbedder(t)
+	prose := " alpha beta gamma"
+	symbols := strings.Repeat(".-", 6_000)
+	require.Equal(t, 12_000, utf8.RuneCountInString(symbols))
+	text := symbols + prose
+	// Stop at 2s. A same-character-only cap leaves this run intact, and
+	// tokenizing it runs for minutes; waiting that out would hide the miss.
+	type shaped struct {
+		got     ShapedQuery
+		elapsed time.Duration
+	}
+	ch := make(chan shaped, 1)
+	go func() {
+		start := time.Now()
+		got := ShapeQuery(context.Background(), text, 1152, 0, emb)
+		ch <- shaped{got, time.Since(start)}
+	}()
+	select {
+	case res := <-ch:
+		t.Logf("shaping 12000 mixed symbols took %s", res.elapsed)
+		require.Lessf(t, res.elapsed, 2*time.Second, "shaping 12000 mixed symbols took %s", res.elapsed)
+		require.Equal(t, strings.Repeat(".-", embedding.RepeatedNonAlnumCap/2)+prose, res.got.EmbedText)
+		require.NotContains(t, res.got.EmbedText, strings.Repeat(".-", 9))
+	case <-time.After(2 * time.Second):
+		t.Fatal("shaping 12000 mixed symbols exceeded 2s")
+	}
+}
+
 // TestShapeQuery_RepeatedCharacterRunStaysFast: 12,000 dots plus prose must
-// shape in under two seconds with the real tokenizer. Removing the collapse
+// shape in under two seconds with the real tokenizer. Removing the cap
 // tokenizes a multi-kilobyte run of one character and this test goes red.
 func TestShapeQuery_RepeatedCharacterRunStaysFast(t *testing.T) {
 	emb := requireSpanEmbedder(t)
