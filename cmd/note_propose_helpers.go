@@ -100,9 +100,7 @@ func newAskClosest(cmd *cobra.Command) propose.Retriever {
 
 func (a askClosest) Closest(ctx context.Context, vaultPath string, db *index.DB, text string) (propose.Hit, bool, error) {
 	ret := query.BuildAutoRetrieverFull(ctx, db)
-	// Cleanup leaves the shared ONNX session loaded. The draft is embedded
-	// on write, and that pass cannot start a session while this one is held.
-	defer query.CloseSharedEmbedder()
+	// Cleanup does not unload the process session. Embed-on-write borrows it.
 	defer ret.Cleanup()
 	limit, forward, salient := askRankingBounds(a.cmd)
 	noise, sigma, has, low := 0.0, 0.0, false, false

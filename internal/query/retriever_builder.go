@@ -228,8 +228,8 @@ func BuildAutoRetrieverWithRerank(ctx context.Context, db *index.DB, expDB *expe
 	}
 }
 
-func newDefaultEmbedder(ctx context.Context) (*embedding.HugotEmbedder, error) {
-	embedder, err := embedding.NewHugotEmbedder(ctx, embedding.DefaultHugotConfig())
+func newDefaultEmbedder(ctx context.Context) (embedding.Embedder, error) {
+	embedder, err := embedding.ConstructMiniLM(ctx, embedding.DefaultHugotConfig())
 	if err != nil {
 		return nil, fmt.Errorf("creating embedder: %w", err)
 	}
@@ -269,15 +269,46 @@ func detectEmbedderForDB(ctx context.Context, db *index.DB) (embedding.Embedder,
 		log.Warn().Msg("vault is in mixed-model state (MiniLM + BGE-M3); loading BGE-M3 — run 'vaultmind index --full --embed --model bge-m3' to converge")
 	}
 	if hasBGEM3 {
-		return sharedEmbedderFor(sharedKeyBGEM3, func() (embedding.Embedder, func(), error) {
-			bgem3, bgem3Err := embedding.NewBGEM3Embedder(ctx, embedding.BGEM3Config())
-			if bgem3Err != nil {
-				return nil, nil, fmt.Errorf("creating BGE-M3 embedder: %w", bgem3Err)
-			}
-			return bgem3, func() { _ = bgem3.Close() }, nil
-		})
+		return sharedBGEM3(ctx)
 	}
 	return newMiniLMEmbedder(ctx)
+}
+
+// ProcessEmbedder lends the process-wide embedder to a write. The caller
+// must not Close it. CloseSharedEmbedder releases it at process end.
+type ProcessEmbedder struct{}
+
+// Borrow returns the loaded model for model, building it on first use.
+// ok is false when model is unknown or the session failed to load, so the
+// caller can build its own and apply the usual fallback.
+func (ProcessEmbedder) Borrow(ctx context.Context, model string) (embedding.Embedder, bool) {
+	var (
+		emb embedding.Embedder
+		err error
+	)
+	switch model {
+	case embedding.ModelBGEM3:
+		emb, _, err = sharedBGEM3(ctx)
+	case embedding.ModelMiniLM:
+		emb, _, err = newMiniLMEmbedder(ctx)
+	default:
+		return nil, false
+	}
+	if err != nil || emb == nil {
+		return nil, false
+	}
+	return emb, true
+}
+
+// sharedBGEM3 returns the process BGE-M3 session, loading it on first use.
+func sharedBGEM3(ctx context.Context) (embedding.Embedder, func(), error) {
+	return sharedEmbedderFor(sharedKeyBGEM3, func() (embedding.Embedder, func(), error) {
+		bgem3, bgem3Err := embedding.ConstructBGEM3(ctx, embedding.BGEM3Config())
+		if bgem3Err != nil {
+			return nil, nil, fmt.Errorf("creating BGE-M3 embedder: %w", bgem3Err)
+		}
+		return bgem3, func() { _ = bgem3.Close() }, nil
+	})
 }
 
 // Keys for the process's shared model (see sharedEmbedderFor).

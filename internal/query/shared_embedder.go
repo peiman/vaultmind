@@ -19,6 +19,7 @@ var shared struct {
 	key   string
 	emb   embedding.Embedder
 	close func()
+	gen   uint64
 }
 
 // sharedEmbedderFor returns the loaded model for key, building it on first
@@ -36,11 +37,49 @@ func sharedEmbedderFor(key string, build func() (embedding.Embedder, func(), err
 	if err != nil {
 		return nil, nil, err
 	}
+	shared.gen++
 	shared.key, shared.emb, shared.close = key, emb, closeFn
 	return emb, func() {}, nil
 }
 
+// SharedHold is one caller's claim on the process embedder.
+// The zero value acquired nothing.
+type SharedHold struct {
+	gen uint64
+}
+
+// Acquired reports whether this hold took the loaded session.
+func (h SharedHold) Acquired() bool { return h.gen != 0 }
+
+// Close releases the process embedder only when h acquired the session that
+// is still loaded. A hold that never acquired, or that acquired a session
+// already replaced, leaves the current one alone. A second Close is a no-op.
+func (h SharedHold) Close() {
+	if h.gen == 0 {
+		return
+	}
+	shared.mu.Lock()
+	defer shared.mu.Unlock()
+	if shared.gen != h.gen || shared.emb == nil {
+		return
+	}
+	releaseSharedLocked()
+}
+
+// CurrentSharedHold returns the hold for the session that is loaded.
+// It is the zero hold when nothing is loaded.
+func CurrentSharedHold() SharedHold {
+	shared.mu.Lock()
+	defer shared.mu.Unlock()
+	if shared.emb == nil {
+		return SharedHold{}
+	}
+	return SharedHold{gen: shared.gen}
+}
+
 // CloseSharedEmbedder releases the process's model, if one is loaded.
+// A second call is a no-op. Callers that never acquired the session use
+// SharedHold.Close instead, which leaves a holder they do not own in place.
 func CloseSharedEmbedder() {
 	shared.mu.Lock()
 	defer shared.mu.Unlock()

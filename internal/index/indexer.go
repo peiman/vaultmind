@@ -171,13 +171,22 @@ func (idx *Indexer) RunEmbed(ctx context.Context, dbPath, model string, full boo
 		}
 	}
 	modelUsed := model
+	borrowed := false
+	if embedder == nil && idx.embedderSource != nil {
+		// The process already owns one session. Borrow it when the model
+		// matches and do not close it: one owner of the lifetime (Principle 7).
+		if got, ok := idx.embedderSource.Borrow(ctx, model); ok && got != nil {
+			embedder = got
+			borrowed = true
+		}
+	}
 	if embedder == nil {
 		var used string
 		var lerr error
 		embedder, used, lerr = loadEmbedder(model, embedding.BackendName(),
-			func() (embedding.Embedder, error) { return embedding.NewBGEM3Embedder(ctx, embedding.BGEM3Config()) },
+			func() (embedding.Embedder, error) { return embedding.ConstructBGEM3(ctx, embedding.BGEM3Config()) },
 			func() (embedding.Embedder, error) {
-				return embedding.NewHugotEmbedder(ctx, embedding.DefaultHugotConfig())
+				return embedding.ConstructMiniLM(ctx, embedding.DefaultHugotConfig())
 			},
 		)
 		if lerr != nil {
@@ -185,7 +194,9 @@ func (idx *Indexer) RunEmbed(ctx context.Context, dbPath, model string, full boo
 		}
 		modelUsed = used
 	}
-	defer func() { _ = embedder.Close() }()
+	if !borrowed {
+		defer func() { _ = embedder.Close() }()
+	}
 
 	// Write-path guardrail: a bge-m3 to minilm fallback on a vault that ALREADY
 	// holds bge-m3 embeddings would write 384-dim minilm dense vectors into a
@@ -476,6 +487,13 @@ func guardEmbeddingModel(dbPath, model string) error {
 	return nil
 }
 
+// EmbedderSource lends an embedder for a model token. RunEmbed does not Close
+// a borrowed embedder: the source owns the session lifetime. ok is false when
+// the source will not supply that model, and RunEmbed builds one and closes it.
+type EmbedderSource interface {
+	Borrow(ctx context.Context, model string) (embedding.Embedder, bool)
+}
+
 // Indexer orchestrates vault scanning, parsing, and SQLite storage.
 type Indexer struct {
 	vaultRoot string
@@ -483,6 +501,16 @@ type Indexer struct {
 	cfg       *vault.Config
 	// Progress receives the sparse-format re-embed line. Nil writes to stderr.
 	Progress io.Writer
+	// embedderSource, when set, lends the process embedder. Nil means this
+	// pass builds and closes its own session, which is what a long
+	// `vaultmind index --embed` does so the model is released at the end.
+	embedderSource EmbedderSource
+}
+
+// SetEmbedderSource installs the process embedder for this pass. The indexer
+// does not close what Borrow returns.
+func (idx *Indexer) SetEmbedderSource(src EmbedderSource) {
+	idx.embedderSource = src
 }
 
 // NewIndexer creates an Indexer for the given vault.

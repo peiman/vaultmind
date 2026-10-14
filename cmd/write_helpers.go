@@ -7,6 +7,7 @@ import (
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/internal/embedding"
 	"github.com/peiman/vaultmind/internal/index"
+	"github.com/peiman/vaultmind/internal/query"
 	"github.com/peiman/vaultmind/internal/vault"
 	"github.com/spf13/cobra"
 )
@@ -30,7 +31,11 @@ var embeddingBackendName = embedding.BackendName
 // runEmbedPass runs the incremental embed pass. A variable so tests can pin
 // what a write reports without loading a real model.
 var runEmbedPass = func(cmd *cobra.Command, vaultPath, dbPath string, cfg *vault.Config, model string) (*index.EmbedResult, error) {
-	return index.NewIndexer(vaultPath, dbPath, cfg).RunEmbed(cmd.Context(), dbPath, model, false)
+	idxr := index.NewIndexer(vaultPath, dbPath, cfg)
+	// Ranking already holds the process session. Borrow it instead of
+	// opening a second one that cannot exist beside the first.
+	idxr.SetEmbedderSource(query.ProcessEmbedder{})
+	return idxr.RunEmbed(cmd.Context(), dbPath, model, false)
 }
 
 // embedAfterWrite embeds the notes a write left without embeddings, with the

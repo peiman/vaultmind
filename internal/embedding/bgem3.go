@@ -8,6 +8,7 @@ import (
 	"github.com/knights-analytics/hugot"
 	"github.com/knights-analytics/hugot/backends"
 	"github.com/knights-analytics/hugot/pipelines"
+	"github.com/rs/zerolog/log"
 )
 
 // BGEM3Output contains all three embedding types from a BGE-M3 forward pass.
@@ -121,6 +122,7 @@ func NewBGEM3Embedder(ctx context.Context, cfg HugotConfig) (*BGEM3Embedder, err
 		return nil, fmt.Errorf("reading sparse special token ids: %w", err)
 	}
 
+	log.Debug().Msg("bge-m3 embedder session created")
 	return &BGEM3Embedder{
 		session:        session,
 		pipeline:       pipeline,
