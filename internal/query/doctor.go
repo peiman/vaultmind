@@ -365,6 +365,11 @@ func ResultSurfacedIssueCounts(result *DoctorResult) (errs, warns int) {
 	if result.IndexStatus == IndexStatusUnknown {
 		warns++
 	}
+	// The stale-sparse line is printed from Embeddings, not from Issues, so
+	// it is counted here for the same reason as the unknown banner.
+	if result.Embeddings != nil && result.Embeddings.SparseFormatStale {
+		warns++
+	}
 	return errs + mErrs, warns + mWarns
 }
 

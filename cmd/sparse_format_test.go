@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/embedding"
@@ -86,8 +87,22 @@ func TestDoctorAndAsk_ReportStaleSparseFormat(t *testing.T) {
 
 	out, _, err := runRootCmd(t, "doctor", "--vault", vault)
 	require.NoError(t, err)
-	assert.Contains(t, out.String(), index.SparseFormatStaleNotice)
-	assert.Contains(t, out.String(), "vaultmind index --embed")
+	text := out.String()
+	assert.Contains(t, text, index.SparseFormatStaleNotice)
+	assert.Contains(t, text, "vaultmind index --embed")
+	noticeAt := strings.Index(text, index.SparseFormatStaleNotice)
+	require.GreaterOrEqual(t, noticeAt, 0)
+	afterNotice := text[noticeAt+len(index.SparseFormatStaleNotice):]
+	nl := strings.Index(afterNotice, "\n")
+	require.GreaterOrEqual(t, nl, 0)
+	runLine := afterNotice[nl+1:]
+	if end := strings.Index(runLine, "\n"); end >= 0 {
+		runLine = runLine[:end]
+	}
+	assert.Equal(t, "  run: "+index.SparseFormatStaleRemedy+" --vault "+vault, runLine,
+		"the stale-sparse remedy is the shared command with this vault's path")
+	assert.NotRegexp(t, `Issues: \d+ errors, 0 warnings`, text,
+		"a printed stale-sparse warning counts as a warning")
 
 	jsonOut, _, err := runRootCmd(t, "doctor", "--vault", vault, "--json")
 	require.NoError(t, err)
@@ -220,7 +235,7 @@ func TestFormatIndexResult_StaleWarningWriteError(t *testing.T) {
 
 func TestWriteEmbeddingStatus_StaleWarningWriteError(t *testing.T) {
 	notReady := &query.DoctorEmbeddings{SemanticReady: false, SparseFormatStale: true, TotalNotes: 3}
-	require.Error(t, writeEmbeddingStatus(&failAfterNWriter{ok: 1}, notReady, nil))
+	require.Error(t, writeEmbeddingStatus(&failAfterNWriter{ok: 1}, notReady, nil, ""))
 
 	ready := &query.DoctorEmbeddings{
 		SemanticReady:     true,
@@ -231,7 +246,7 @@ func TestWriteEmbeddingStatus_StaleWarningWriteError(t *testing.T) {
 		SparseCount:       1,
 		ColBERTCount:      1,
 	}
-	require.Error(t, writeEmbeddingStatus(&failAfterNWriter{ok: 1}, ready, nil))
+	require.Error(t, writeEmbeddingStatus(&failAfterNWriter{ok: 1}, ready, nil, ""))
 }
 
 func TestAsk_UnreadableSparseStampLeavesTheFieldUnset(t *testing.T) {

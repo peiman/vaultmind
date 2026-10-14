@@ -118,7 +118,7 @@ func init() {
 // or colbert), a warning line surfaces the failure mode that silently
 // compresses hybrid RRF ranking. issues carries the blocked-root gate; nil
 // (section tests) means index would run.
-func writeEmbeddingStatus(w io.Writer, emb *query.DoctorEmbeddings, issues *query.DoctorIssues) error {
+func writeEmbeddingStatus(w io.Writer, emb *query.DoctorEmbeddings, issues *query.DoctorIssues, vaultPath string) error {
 	if emb == nil {
 		return nil
 	}
@@ -134,7 +134,7 @@ func writeEmbeddingStatus(w io.Writer, emb *query.DoctorEmbeddings, issues *quer
 			emb.TotalNotes); err != nil {
 			return err
 		}
-		if err := writeSparseFormatWarning(w, emb, issues); err != nil {
+		if err := writeSparseFormatWarning(w, emb, issues, vaultPath); err != nil {
 			return err
 		}
 		return writeRunLine(w, indexCommand(issues, "vaultmind index --embed --vault <vault>"))
@@ -146,7 +146,7 @@ func writeEmbeddingStatus(w io.Writer, emb *query.DoctorEmbeddings, issues *quer
 		emb.ColBERTCount, emb.TotalNotes); err != nil {
 		return err
 	}
-	if err := writeSparseFormatWarning(w, emb, issues); err != nil {
+	if err := writeSparseFormatWarning(w, emb, issues, vaultPath); err != nil {
 		return err
 	}
 	if emb.RuntimeError != "" {
@@ -190,14 +190,24 @@ func writeEmbeddingStatus(w io.Writer, emb *query.DoctorEmbeddings, issues *quer
 	return nil
 }
 
-func writeSparseFormatWarning(w io.Writer, emb *query.DoctorEmbeddings, issues *query.DoctorIssues) error {
+func writeSparseFormatWarning(w io.Writer, emb *query.DoctorEmbeddings, issues *query.DoctorIssues, vaultPath string) error {
 	if emb == nil || !emb.SparseFormatStale {
 		return nil
 	}
 	if _, err := fmt.Fprintf(w, "⚠ %s\n", index.SparseFormatStaleNotice); err != nil {
 		return err
 	}
-	return writeRunLine(w, indexCommand(issues, "vaultmind index --embed --vault <vault>"))
+	return writeRunLine(w, indexCommand(issues, sparseFormatRunCommand(vaultPath)))
+}
+
+// sparseFormatRunCommand is the shared stale-sparse remedy with this vault's
+// path. An empty path keeps the remedy alone. The words come from
+// index.SparseFormatStaleRemedy so doctor, ask, and index name one command.
+func sparseFormatRunCommand(vaultPath string) string {
+	if vaultPath == "" {
+		return index.SparseFormatStaleRemedy
+	}
+	return index.SparseFormatStaleRemedy + " --vault " + shellWord(vaultPath)
 }
 
 func writeMiniLMWarning(w io.Writer, issues *query.DoctorIssues) error {
@@ -482,7 +492,7 @@ func writeDoctorHuman(w io.Writer, result *query.DoctorResult, summaryOnly bool)
 	if err := writeTypeBreakdown(w, result.Types); err != nil {
 		return err
 	}
-	if err := writeEmbeddingStatus(w, result.Embeddings, &result.Issues); err != nil {
+	if err := writeEmbeddingStatus(w, result.Embeddings, &result.Issues, result.VaultPath); err != nil {
 		return err
 	}
 	if err := writeLinkIssues(w, &result.Issues, summaryOnly); err != nil {

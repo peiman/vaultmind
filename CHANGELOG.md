@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `doctor` counts a stale sparse format as a warning. Its `run:` line is `vaultmind index --embed` with this vault's path, the same remedy `ask` and `index` print. A path the shell would split is quoted. When index would refuse, that line is omitted. Other index remedies still say `<vault>`.
 - The `ask` text header no longer echoes a long query in full. The `Search:` line quotes the first 160 characters and then `… (N chars)`. A shorter query is the same line as before. `result.query` in `--json` stays the full text. The recall hook injects that stdout, so a pasted prompt is not written back into the next turn.
 - Tests that build an embedder no longer rename `~/.vaultmind/models` into the XDG cache. A test that would do that panics unless `HOME` and `XDG_CACHE_HOME` are outside the home the process started with. Tokenizer tests read the legacy file and do not migrate it.
 - The resident server keeps the embedding model loaded across asks. It used to unload the model after every request, so the next ask loaded it again. The model is released when the server exits, on idle or on a signal. A one-shot command still releases it when the process exits. `note propose` still loads the model once.
