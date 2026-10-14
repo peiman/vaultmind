@@ -15,10 +15,12 @@ Generated from the command tree — do not edit by hand (run `task generate:docs
 | `vaultmind memory pack` | Pack a note plus ranked context within a token budget | you want a token-budgeted context payload ready to ship to an agent. |
 | `vaultmind memory related` | List notes related to a target, filtered by edge type | you want a simple ranked list of directly connected notes, filtered by edge type. |
 | `vaultmind memory summarize` | Assemble material from specific note IDs for agent synthesis | you have a known list of note IDs and want their material assembled for synthesis. |
-| `vaultmind note` | Read, create, and batch-fetch notes by ID | you want to read, create, or batch-fetch a specific note by ID. |
+| `vaultmind note` | Read, create, propose, accept, and batch-fetch notes by ID | you want to read, create, propose, accept, or batch-fetch a specific note by ID. |
+| `vaultmind note accept` | Promote a draft into recall | a person has reviewed a draft and it should enter recall. |
 | `vaultmind note create` | Create a note from a template with field overrides | you want to create a new note from its type template with field overrides. |
 | `vaultmind note get` | Get one note's full content and metadata by ID | you know a note's ID or path and want its full content (with access tracking). |
 | `vaultmind note mget` | Fetch multiple notes by ID in one call | you have several note IDs and want them all in one batched fetch. |
+| `vaultmind note propose` | Turn a finding into a reviewable draft | you found the answer and want a reviewable draft, with the id, metadata, and formatting handled for you. |
 | `vaultmind resolve` | Resolve a fragment, alias, title, or path to canonical note IDs | you have a fragment, alias, title, or path and need the canonical note ID. |
 | `vaultmind search` | Search vault notes by keyword, semantic similarity, or both | you want a ranked list of hits to browse and pick from, without packed context. |
 | `vaultmind self` | Show your memory state — recent, hot, and stale notes | you want to see your own memory state — recent, hot, and stale notes. |

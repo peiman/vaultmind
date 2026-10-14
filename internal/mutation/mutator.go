@@ -38,7 +38,7 @@ func (m *Mutator) Run(req MutationRequest) (*MutationResult, error) {
 	if err != nil {
 		return nil, &MutationError{Code: "read_error", Message: fmt.Sprintf("reading %s: %v", relPath, err)}
 	}
-	preHash := fileHash(raw)
+	preHash := FileHash(raw)
 	lineEnding := DetectLineEnding(raw)
 
 	doc, bodyOffset, err := ParseFrontmatterNode(raw)
@@ -94,11 +94,11 @@ func (m *Mutator) Run(req MutationRequest) (*MutationResult, error) {
 	}
 	result.Warnings = append(result.Warnings, warnings...)
 
-	if err := atomicWrite(absPath, relPath, newContent, preHash); err != nil {
+	if err := AtomicWrite(absPath, relPath, newContent, preHash); err != nil {
 		return nil, err
 	}
 
-	result.WriteHash = fileHash(newContent)
+	result.WriteHash = FileHash(newContent)
 	result.Git = m.gitInfo(relPath)
 
 	// Step 7: Post-write — commit if requested
@@ -155,16 +155,17 @@ func applyOperation(req MutationRequest, mapping *yaml.Node, result *MutationRes
 	return nil
 }
 
-// atomicWrite performs conflict detection, writes content to a temp file, renames
-// it into place, and restores the original file permissions.
-func atomicWrite(absPath, relPath string, newContent []byte, preHash string) error {
+// AtomicWrite re-reads absPath and refuses when those bytes no longer match
+// preHash, then replaces the file by renaming a temp file in the same directory.
+// Callers pass a path they have already confined.
+func AtomicWrite(absPath, relPath string, newContent []byte, preHash string) error {
 	// Conflict detection: re-read file and verify hash unchanged.
-	// absPath is validated against path traversal in resolveTarget before reaching here.
-	reread, err := os.ReadFile(absPath) //nolint:gosec // path validated in resolveTarget
+	// absPath is validated against path traversal by the caller before reaching here.
+	reread, err := os.ReadFile(absPath) //nolint:gosec // caller confined the path
 	if err != nil {
 		return &MutationError{Code: "read_error", Message: fmt.Sprintf("re-reading %s for conflict check: %v", relPath, err)}
 	}
-	if fileHash(reread) != preHash {
+	if FileHash(reread) != preHash {
 		return &MutationError{Code: "conflict", Message: fmt.Sprintf("file %s was modified concurrently", relPath)}
 	}
 
@@ -370,8 +371,8 @@ func (m *Mutator) gitInfo(targetPath string) GitInfo {
 	return info
 }
 
-// fileHash computes the SHA-256 hex digest of data.
-func fileHash(data []byte) string {
+// FileHash is the SHA-256 hex digest AtomicWrite compares.
+func FileHash(data []byte) string {
 	h := sha256.Sum256(data)
 	return fmt.Sprintf("%x", h)
 }

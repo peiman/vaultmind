@@ -107,6 +107,39 @@ type SearchEnvelope struct {
 	} `json:"result"`
 }
 
+// NoteProposeEnvelope is the contract shape for `vaultmind note propose --json`.
+// schema_version stays v1: the result fields are additive.
+type NoteProposeEnvelope struct {
+	SchemaVersion string `json:"schema_version"`
+	Command       string `json:"command"`
+	Status        string `json:"status"`
+	Result        struct {
+		Mode     string `json:"mode"`
+		Path     string `json:"path"`
+		ID       string `json:"id"`
+		TargetID string `json:"target_id,omitempty"`
+		NextStep string `json:"next_step"`
+	} `json:"result"`
+	Meta struct {
+		VaultPath string `json:"vault_path"`
+		IndexHash string `json:"index_hash"`
+	} `json:"meta"`
+}
+
+// NoteAcceptEnvelope is the contract shape for `vaultmind note accept --json`.
+type NoteAcceptEnvelope struct {
+	SchemaVersion string `json:"schema_version"`
+	Command       string `json:"command"`
+	Status        string `json:"status"`
+	Result        struct {
+		Mode     string `json:"mode"`
+		Path     string `json:"path"`
+		ID       string `json:"id"`
+		TargetID string `json:"target_id,omitempty"`
+		Status   string `json:"status,omitempty"`
+	} `json:"result"`
+}
+
 // NoteGetEnvelope is the contract shape for `vaultmind note get --json`.
 type NoteGetEnvelope struct {
 	SchemaVersion string `json:"schema_version"`

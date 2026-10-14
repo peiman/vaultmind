@@ -15,6 +15,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// askRankingBounds reads the ranking knobs ask already uses. They live here,
+// with the rest of app.ask, so note propose can rank the same way without
+// reading another command's keys. The propose command has no copies of these
+// flags; an unset flag leaves the registry value ask would use.
+func askRankingBounds(cmd *cobra.Command) (searchLimit, forwardTokens, salientTerms int) {
+	searchLimit = getConfigValueWithFlags[int](cmd, "search-limit", config.KeyAppAskSearchLimit)
+	forwardTokens = getConfigValueWithFlags[int](cmd, "query-forward-tokens", config.KeyAppAskQueryForwardTokens)
+	salientTerms = getConfigValueWithFlags[int](cmd, "query-salient-terms", config.KeyAppAskQuerySalientTerms)
+	return
+}
+
 // openAskIndex opens one vault's retriever and embedder. Tests replace it to
 // count searches. The per-vault pass and the delivery pass both call it, and
 // a given vault path gets the same embedder back: the query embedding is

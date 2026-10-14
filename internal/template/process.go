@@ -29,13 +29,14 @@ var varPattern = regexp.MustCompile(`<%=(\w+)%>`)
 
 // ProcessConfig holds all inputs needed to process a note template.
 type ProcessConfig struct {
-	VaultPath      string            // absolute path to vault root (for metadata)
-	Path           string            // vault-relative path of the new note
-	Type           string            // note type (e.g. "project", "decision")
-	Fields         map[string]string // field overrides (includes optional "title", "id", …)
-	Body           string            // explicit body override; empty means use template body
-	TemplatePath   string            // absolute path to the template file
-	RequiredFields []string          // type-specific required fields (for minimal fallback)
+	VaultPath      string                 // absolute path to vault root (for metadata)
+	Path           string                 // vault-relative path of the new note
+	Type           string                 // note type (e.g. "project", "decision")
+	Fields         map[string]string      // field overrides (includes optional "title", "id", …)
+	AnyFields      map[string]interface{} // overrides that are not strings, such as a list; applied after Fields
+	Body           string                 // explicit body override; empty means use template body
+	TemplatePath   string                 // absolute path to the template file
+	RequiredFields []string               // type-specific required fields (for minimal fallback)
 }
 
 // ProcessResult is the output of a successful Process call.
@@ -135,6 +136,9 @@ func Process(cfg ProcessConfig) (*ProcessResult, error) {
 
 	// Apply field overrides from cfg.Fields (these win over template values).
 	for k, v := range cfg.Fields {
+		fm[k] = v
+	}
+	for k, v := range cfg.AnyFields {
 		fm[k] = v
 	}
 
