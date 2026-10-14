@@ -266,6 +266,7 @@ func AskHits(ctx context.Context, retriever retrieval.Retriever, query string, s
 		log.Debug().
 			Int("embedded_tokens", shaped.Report.EmbeddedTokens).
 			Int("total_tokens", shaped.Report.TotalTokens).
+			Int("total_chars", shaped.Report.TotalChars).
 			Int("salient_terms", shaped.Report.SalientTerms).
 			Msg("ask ranking query shaped")
 	}

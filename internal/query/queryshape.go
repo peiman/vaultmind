@@ -12,11 +12,14 @@ import (
 
 // QueryCapped reports that a bound shortened ranking. It is present on an
 // ask result only when the forward bound or the salient-term bound applied.
-// The ints are always serialized: a zero would otherwise vanish, and zero
-// means "that bound did not apply."
+// EmbeddedTokens and SalientTerms are always serialized: zero means that
+// bound did not apply. TotalTokens is the counted token total and is omitted
+// when the tail was not tokenized. TotalChars is then the query's character
+// count, and is omitted when the token total was counted.
 type QueryCapped struct {
 	EmbeddedTokens int `json:"embedded_tokens"`
-	TotalTokens    int `json:"total_tokens"`
+	TotalTokens    int `json:"total_tokens,omitempty"`
+	TotalChars     int `json:"total_chars,omitempty"`
 	SalientTerms   int `json:"salient_terms"`
 }
 
@@ -207,7 +210,9 @@ func applyUnderCountCut(text string, forwardTokens int, spans [][2]int, embed st
 		Int("window_bytes", len(window)).
 		Int("text_bytes", len(text)).
 		Msg("ask query shape: span window under-counted; cutting at the window")
-	return window, forwardTokens, forwardTokens + 1, true
+	// The tokens past the window were not read. Zero says the total is
+	// unknown; the caller reports the query's character count instead.
+	return window, forwardTokens, 0, true
 }
 
 // ShapeQuery is the only place the ranking-query shape is decided.
@@ -215,6 +220,9 @@ func applyUnderCountCut(text string, forwardTokens int, spans [][2]int, embed st
 // embedder has per-token weights, limits ColBERT and FTS. A failure to read
 // those weights skips salient selection and still applies the forward bound.
 func ShapeQuery(ctx context.Context, text string, forwardTokens, salient int, analyzer QueryAnalyzer) ShapedQuery {
+	original := text
+	// The echoed query is the caller's string. Only the ranking text is collapsed.
+	text = embedding.CollapseRepeatedNonAlnum(text)
 	spans := tokenSpansOf(analyzer, text, forwardTokens)
 	embed, embTokens, total, forwardApplied := ForwardQuery(text, forwardTokens, spans)
 	embed, embTokens, total, forwardApplied = applyUnderCountCut(text, forwardTokens, spans, embed, embTokens, total, forwardApplied)
@@ -256,9 +264,14 @@ func ShapeQuery(ctx context.Context, text string, forwardTokens, salient int, an
 	if salientApplied {
 		reported = salient
 	}
+	totalChars := 0
+	if forwardApplied && total == 0 {
+		totalChars = utf8.RuneCountInString(original)
+	}
 	out.Report = &QueryCapped{
 		EmbeddedTokens: embTokens,
 		TotalTokens:    total,
+		TotalChars:     totalChars,
 		SalientTerms:   reported,
 	}
 	return out

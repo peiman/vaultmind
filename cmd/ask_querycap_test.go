@@ -70,6 +70,8 @@ func TestAskQueryCap_JSONAndText(t *testing.T) {
 	assert.Equal(t, 1160, env.Result.QueryCapped.TotalTokens)
 	assert.Equal(t, 0, env.Result.QueryCapped.SalientTerms, "a keyword vault has no sparse weights")
 	assert.Contains(t, string(raw), `"salient_terms":0`)
+	assert.Contains(t, string(raw), `"total_tokens":1160`)
+	assert.NotContains(t, string(raw), "total_chars")
 	assert.NotContains(t, string(raw), "used_words")
 
 	out, _, err := runRootCmd(t, "ask", query, "--vault", vault, "--pointers-only", "--max-items", "1", "--budget", "200")

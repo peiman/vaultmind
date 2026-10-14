@@ -44,6 +44,22 @@ func TestWriteAskHeader_QueryCappedLineSitsUnderSearch(t *testing.T) {
 	assert.Contains(t, buf.String(), "[federated:")
 }
 
+func TestWriteAskHeader_UnknownTotalUsesTheCharacterCount(t *testing.T) {
+	unknown := cappedHeaderResult()
+	unknown.QueryCapped = &QueryCapped{EmbeddedTokens: 1152, TotalChars: 41230, SalientTerms: 64}
+	var buf bytes.Buffer
+	require.NoError(t, writeAskHeader(&buf, unknown, false, false))
+	assert.Contains(t, buf.String(), "  [long query: ranked on its first 1152 tokens of a 41,230-character query; ColBERT and FTS on its 64 most salient terms]\n")
+
+	forward := cappedHeaderResult()
+	forward.QueryCapped = &QueryCapped{EmbeddedTokens: 1152, TotalChars: 41230}
+	buf.Reset()
+	require.NoError(t, writeAskHeader(&buf, forward, false, false))
+	assert.Contains(t, buf.String(), "  [long query: ranked on its first 1152 tokens of a 41,230-character query]\n")
+	assert.NotContains(t, buf.String(), "salient")
+	assert.NotContains(t, buf.String(), "of 0 tokens")
+}
+
 func TestWriteAskHeader_LongQueryLineNamesOnlyWhatApplied(t *testing.T) {
 	forward := cappedHeaderResult()
 	forward.QueryCapped = &QueryCapped{EmbeddedTokens: 1152, TotalTokens: 1400, SalientTerms: 0}

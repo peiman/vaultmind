@@ -135,8 +135,14 @@ func TestAskJSONContract_QueryCappedIsAdditive(t *testing.T) {
 	assert.Equal(t, query, env.Result.Query)
 	require.NotNil(t, env.Result.QueryCapped)
 	assert.Equal(t, 1152, env.Result.QueryCapped.EmbeddedTokens)
+	// Every token of this query was counted, so total_tokens stays and
+	// total_chars is absent. total_chars is added only when the tail was
+	// not tokenized, and total_tokens is then omitted. schema_version stays v1.
 	assert.Equal(t, 1160, env.Result.QueryCapped.TotalTokens)
+	assert.Equal(t, 0, env.Result.QueryCapped.TotalChars)
 	assert.Equal(t, 0, env.Result.QueryCapped.SalientTerms)
+	assert.Contains(t, out.String(), `"total_tokens":1160`)
+	assert.NotContains(t, out.String(), "total_chars")
 	assert.Contains(t, out.String(), `"salient_terms":0`)
 	assert.NotContains(t, out.String(), "used_words")
 }
