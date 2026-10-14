@@ -162,7 +162,13 @@ func TestRecallHook_HarnessEnvelopesOnly(t *testing.T) {
 			require.NoError(t, err)
 			var entry map[string]any
 			require.NoError(t, json.Unmarshal(raw, &entry))
-			assert.Equal(t, "harness-envelope", entry["reason"])
+			reason := "harness-envelope"
+			if name == "cross session" {
+				// A bare cross-session-message envelope is opaque. The report
+				// is not parsed, and the skip is logged as cross-session-envelope.
+				reason = "cross-session-envelope"
+			}
+			assert.Equal(t, reason, entry["reason"])
 			assert.Equal(t, false, entry["injection"])
 			assert.Equal(t, float64(len(prompt)), entry["prompt_len"])
 			assert.NotEmpty(t, entry["timestamp"])
