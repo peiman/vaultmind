@@ -64,6 +64,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.ask.tag` | string | `` | `VAULTMIND_APP_ASK_TAG` | Rank only notes carrying this tag |
 | `app.ask.path` | string | `` | `VAULTMIND_APP_ASK_PATH` | Rank only notes under this vault folder (path prefix, e.g. decisions/) — the same match as tree --path |
 | `app.ask.dedup_window` | string | `` | `VAULTMIND_APP_ASK_DEDUP_WINDOW` | Send a note as its title alone when this conversation (VAULTMIND_USER_SESSION_ID) received its text within this long, e.g. 10m. Empty = off. For hooks that fire in bursts. |
+| `app.ask.query_max_words` | int | `64` | `VAULTMIND_APP_ASK_QUERY_MAX_WORDS` | Rank on the first N words of the query across dense, sparse, ColBERT, FTS and activation. The echoed query stays the full text, and the Search header reports used vs total words. 0 turns the cap off. |
 | `app.check.fail_fast` | bool | `false` | `VAULTMIND_APP_CHECK_FAIL_FAST` | Stop on first failed check |
 | `app.check.verbose` | bool | `false` | `VAULTMIND_APP_CHECK_VERBOSE` | Show verbose output including command details |
 | `app.check.parallel` | bool | `true` | `VAULTMIND_APP_CHECK_PARALLEL` | Run checks within each category in parallel (disable with --parallel=false) |
@@ -447,6 +448,9 @@ app:
 
     # Send a note as its title alone when this conversation (VAULTMIND_USER_SESSION_ID) received its text within this long, e.g. 10m. Empty = off. For hooks that fire in bursts.
     dedup_window: 
+
+    # Rank on the first N words of the query across dense, sparse, ColBERT, FTS and activation. The echoed query stays the full text, and the Search header reports used vs total words. 0 turns the cap off.
+    query_max_words: 64
 
   check:
     # Stop on first failed check
@@ -1488,6 +1492,9 @@ export VAULTMIND_APP_ASK_PATH=
 
 # Send a note as its title alone when this conversation (VAULTMIND_USER_SESSION_ID) received its text within this long, e.g. 10m. Empty = off. For hooks that fire in bursts.
 export VAULTMIND_APP_ASK_DEDUP_WINDOW=
+
+# Rank on the first N words of the query across dense, sparse, ColBERT, FTS and activation. The echoed query stays the full text, and the Search header reports used vs total words. 0 turns the cap off.
+export VAULTMIND_APP_ASK_QUERY_MAX_WORDS=64
 
 # Stop on first failed check
 export VAULTMIND_APP_CHECK_FAIL_FAST=true

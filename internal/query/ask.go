@@ -66,6 +66,10 @@ type AskConfig struct {
 	// They stay in the pack as titles (see memory.ContextItem.ShownBefore);
 	// their text is not sent again and their access is not a delivered read.
 	ShownBefore map[string]bool
+
+	// QueryMaxWords caps the text sent to ranking. 0 leaves the query unchanged.
+	// The library zero is off; the CLI default lives in the config registry.
+	QueryMaxWords int
 }
 
 // AskResult is the combined output of a search + context-pack operation.
@@ -141,6 +145,12 @@ type AskResult struct {
 	// FederatedVaults reports every vault that was SEARCHED and what its own
 	// floor said, so a reader can tell an empty vault from an unsearched one.
 	FederatedVaults []FederatedVaultStatus `json:"federated_vaults,omitempty"`
+	// QueryCapped is set only when ranking used a shorter query than Query.
+	// Query itself stays the caller's original text.
+	QueryCapped *QueryCapped `json:"query_capped,omitempty"`
+	// rankingQuery is the text retrieval and query-embedding actually used.
+	// It equals Query when the cap is off or the query is already short enough.
+	rankingQuery string
 }
 
 // tooSmallToJudge reports whether the vault holds too few notes for the
@@ -240,13 +250,22 @@ func computeTopHitConfidenceRRFGap(hits []retrieval.ScoredResult) string {
 // mis-attribute access events to a note the agent didn't read. The
 // caller is responsible for firing access on whatever it chooses to
 // read.
-func AskHits(ctx context.Context, retriever retrieval.Retriever, query string, searchLimit int) (*AskResult, error) {
-	hits, _, err := retriever.Search(ctx, query, searchLimit, 0, index.SearchFilters{})
+func AskHits(ctx context.Context, retriever retrieval.Retriever, query string, searchLimit, queryMaxWords int) (*AskResult, error) {
+	ranking, report := CapRankingQuery(query, queryMaxWords)
+	if report != nil {
+		log.Debug().
+			Int("used_words", report.UsedWords).
+			Int("total_words", report.TotalWords).
+			Msg("ask ranking query capped")
+	}
+	hits, _, err := retriever.Search(ctx, ranking, searchLimit, 0, index.SearchFilters{})
 	if err != nil {
 		return nil, err
 	}
 	return &AskResult{
 		Query:            query,
+		rankingQuery:     ranking,
+		QueryCapped:      report,
 		TopHits:          hits,
 		TopHitConfidence: computeTopHitConfidenceRRFGap(hits),
 	}, nil
@@ -286,16 +305,13 @@ func relevantLaterHits(hits []retrieval.ScoredResult, r *AskResult) []memory.See
 // spreading activation (via ActivationFunc), then packs token-budgeted
 // context around the top hit. Context-pack failure is non-fatal.
 func Ask(ctx context.Context, retriever retrieval.Retriever, resolver *graph.Resolver, db *index.DB, cfg AskConfig) (*AskResult, error) {
-	hits, _, err := retriever.Search(ctx, cfg.Query, cfg.SearchLimit, 0, index.SearchFilters{})
+	// AskHits is the one search. Every ranking lane, and the cosine below,
+	// sees the same capped text. cfg.Query stays the original for the echo.
+	result, err := AskHits(ctx, retriever, cfg.Query, cfg.SearchLimit, cfg.QueryMaxWords)
 	if err != nil {
 		return nil, err
 	}
-
-	result := &AskResult{
-		Query:            cfg.Query,
-		TopHits:          hits,
-		TopHitConfidence: computeTopHitConfidenceRRFGap(hits),
-	}
+	hits := result.TopHits
 
 	if len(hits) == 0 {
 		return result, nil
@@ -303,7 +319,7 @@ func Ask(ctx context.Context, retriever retrieval.Retriever, resolver *graph.Res
 
 	// Compute raw cosine similarities for spreading activation.
 	if cfg.Embedder != nil {
-		sims, simErr := NoteSimilarities(ctx, cfg.Query, cfg.Embedder, db)
+		sims, simErr := NoteSimilarities(ctx, result.rankingQuery, cfg.Embedder, db)
 		if simErr != nil {
 			log.Debug().Err(simErr).Msg("note similarities unavailable; spreading activation disabled for this query")
 		} else {

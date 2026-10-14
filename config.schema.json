@@ -161,6 +161,11 @@
               "description": "Render a one-line body snippet under each ranked hit; bridges --pointers-only (titles only) and the full context-pack output",
               "type": "boolean"
             },
+            "query_max_words": {
+              "default": 64,
+              "description": "Rank on the first N words of the query across dense, sparse, ColBERT, FTS and activation. The echoed query stays the full text, and the Search header reports used vs total words. 0 turns the cap off.",
+              "type": "integer"
+            },
             "quiet_on_nomatch": {
               "default": false,
               "description": "Print nothing when the top hit is at/below the noise floor (no_match). For ambient recall: inject silence instead of irrelevant pointers when the prompt is off-domain. Also skips the context-pack and access fan-out so off-domain prompts don't reinforce irrelevant notes.",

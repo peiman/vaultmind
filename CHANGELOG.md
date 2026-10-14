@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `ask` ranks a long query on its first N words, default 64, so a prompt of several thousand characters no longer runs past the recall hook's timeout. `0` turns the cap off. The echoed query stays the full text. Dense, sparse, ColBERT, FTS and activation all rank on the shorter text.
+
+### Added
+
+- `app.ask.query_max_words`, `--query-max-words`, and `VAULTMIND_APP_ASK_QUERY_MAX_WORDS`. When the cap shortens a query, the text output adds one line under the Search header and JSON adds `result.query_capped` with `used_words` and `total_words`. The field is absent when nothing was capped. `schema_version` stays `v1`.
+
 ## [0.10.12] - 2026-10-12
 
 > An excerpt now keeps the heading that governs it (so a "do not use" warning isn't lost), and passage headings read top-down without repeating the note title.

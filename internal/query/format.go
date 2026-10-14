@@ -702,6 +702,15 @@ func writeLaneBreakdown(w io.Writer, components map[string]float64) error {
 // it silently vanished. A single emit point makes "some return forgot it"
 // structurally impossible rather than a thing to remember.
 func emitAskHeader(w io.Writer, header string, result *AskResult) error {
+	if result.QueryCapped != nil {
+		line := fmt.Sprintf("  [query capped: ranked on the first %d of %d words]",
+			result.QueryCapped.UsedWords, result.QueryCapped.TotalWords)
+		if i := strings.IndexByte(header, '\n'); i >= 0 {
+			header = header[:i] + "\n" + line + header[i:]
+		} else {
+			header += "\n" + line
+		}
+	}
 	if len(result.Federated) > 0 {
 		header += "\n" + strings.TrimRight(formatFederationBlock(result), "\n")
 	}

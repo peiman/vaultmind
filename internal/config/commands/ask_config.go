@@ -67,6 +67,13 @@ ANTI-PATTERN — AVOID
         --preview                 if you want a menu with body snippets
         --budget=N (no tail)      if you really want N tokens of context
 
+LONG QUERIES
+
+  Ranking uses the first N words (--query-max-words, default 64). 0 turns the
+  cap off. Dense, sparse, ColBERT, FTS and activation all see that shorter
+  text. The echoed query stays the full text, and the Search header reports
+  how many words were used.
+
 OUTPUT INCLUDES
 
   Search:    [top-hit confidence: strong|moderate|weak]
@@ -90,6 +97,7 @@ OUTPUT INCLUDES
 		"app.ask.tag":              "tag",
 		"app.ask.path":             "path",
 		"app.ask.dedup_window":     "dedup-window",
+		"app.ask.query_max_words":  "query-max-words",
 	},
 }
 
@@ -112,6 +120,7 @@ func AskOptions() []config.ConfigOption {
 		{Key: "app.ask.tag", DefaultValue: "", Description: "Rank only notes carrying this tag", Type: "string"},
 		{Key: "app.ask.path", DefaultValue: "", Description: "Rank only notes under this vault folder (path prefix, e.g. decisions/) — the same match as tree --path", Type: "string"},
 		{Key: "app.ask.dedup_window", DefaultValue: "", Description: "Send a note as its title alone when this conversation (VAULTMIND_USER_SESSION_ID) received its text within this long, e.g. 10m. Empty = off. For hooks that fire in bursts.", Type: "string"},
+		{Key: "app.ask.query_max_words", DefaultValue: 64, Description: "Rank on the first N words of the query across dense, sparse, ColBERT, FTS and activation. The echoed query stays the full text, and the Search header reports used vs total words. 0 turns the cap off.", Type: "int"},
 	}
 }
 

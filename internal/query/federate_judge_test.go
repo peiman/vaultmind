@@ -62,7 +62,7 @@ func TestSearchAndJudge_SearchesTheVaultExactlyOnce(t *testing.T) {
 	ret := &countingRetriever{inner: &query.FTSRetriever{DB: db}}
 
 	hits, verdict, _, err := query.SearchAndJudge(
-		context.Background(), ret, emb, db, flatFloor(0.1, 0.05), "spreading activation", 5)
+		context.Background(), ret, emb, db, flatFloor(0.1, 0.05), "spreading activation", 5, 0)
 
 	require.NoError(t, err)
 	require.NotEmpty(t, hits, "fixture must return hits or the count below proves nothing")
@@ -79,7 +79,7 @@ func TestSearchAndJudge_NoEmbedderIsUnmeasuredNotZeroRelevance(t *testing.T) {
 	ret := &countingRetriever{inner: &query.FTSRetriever{DB: db}}
 
 	hits, verdict, z, err := query.SearchAndJudge(
-		context.Background(), ret, nil, db, flatFloor(0.1, 0.05), "spreading activation", 5)
+		context.Background(), ret, nil, db, flatFloor(0.1, 0.05), "spreading activation", 5, 0)
 
 	require.NoError(t, err)
 	assert.NotEmpty(t, hits, "keyword search still works without an embedder")
@@ -97,10 +97,10 @@ func TestSearchAndJudge_UsesTheSuppliedFloorNotADefault(t *testing.T) {
 	// Same query, same hits, two different calibrations. A floor far above the
 	// top hit's cosine must judge it no_match; a floor far below must not.
 	_, strictVerdict, strictZ, err := query.SearchAndJudge(
-		context.Background(), ret, emb, db, flatFloor(0.99, 0.01), "spreading activation", 5)
+		context.Background(), ret, emb, db, flatFloor(0.99, 0.01), "spreading activation", 5, 0)
 	require.NoError(t, err)
 	_, looseVerdict, looseZ, err := query.SearchAndJudge(
-		context.Background(), ret, emb, db, flatFloor(-0.5, 0.01), "spreading activation", 5)
+		context.Background(), ret, emb, db, flatFloor(-0.5, 0.01), "spreading activation", 5, 0)
 	require.NoError(t, err)
 
 	assert.Greater(t, looseZ, strictZ,
