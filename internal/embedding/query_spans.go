@@ -14,18 +14,42 @@ import (
 // read. fitTextsWithinTokenLimit pre-cuts at approxCharsPerToken (4) and
 // then measures real tokens; this read does not loop, so the estimate is
 // wider. Eight characters per token covers English prose and still bounds a
-// multi-megabyte query. Text past the window is not tokenized, and the token
-// count the forward bound sees is the count inside the window.
+// multi-megabyte query. Text past the window is not tokenized. The forward
+// bound sizes that window; a model-cap window can count a low-density head
+// as short enough that the bound never applies.
 const querySpanCharsPerToken = 8
 
-// querySpanWindow returns the prefix the query-only tokenizer may see.
-// maxTokens <= 0 leaves the text unchanged: a caller that has not set a
-// model budget (the CJK unit fixture) still reads the whole string.
-func querySpanWindow(text string, maxTokens int) string {
-	if maxTokens <= 0 || text == "" {
+// QuerySpanWindow returns the prefix a span read may see for forwardTokens.
+// forwardTokens <= 0 leaves the text unchanged. The width is
+// querySpanCharsPerToken bytes per token, broken on a word when one is near
+// the cut. Callers compare a bounded embed against this prefix.
+func QuerySpanWindow(text string, forwardTokens int) string {
+	if forwardTokens <= 0 || text == "" {
 		return text
 	}
-	return truncateToChars(text, maxTokens*querySpanCharsPerToken)
+	return truncateToChars(text, forwardTokens*querySpanCharsPerToken)
+}
+
+// querySpanWindow is QuerySpanWindow. TokenSpans passes the forward bound in
+// use. queryAnnotations passes the model cap: AnalyzeQuery runs on text
+// ShapeQuery has already cut, and the cap is only a safety bound on that prefix.
+func querySpanWindow(text string, maxTokens int) string {
+	return QuerySpanWindow(text, maxTokens)
+}
+
+// NewSpanEmbedder builds an embedder that can only read token spans. It does
+// not load the ONNX model. modelMax is the model cap stored on the embedder.
+// TokenSpans sizes its window from the forward bound it is given. A test
+// passes BGEM3MaxTokens so a mutation back to that cap is the real model limit.
+func NewSpanEmbedder(tokenizerJSON []byte, modelMax int) (*BGEM3Embedder, error) {
+	if modelMax <= 0 {
+		modelMax = BGEM3MaxTokens
+	}
+	tok, err := querySpanTokenizerFromBytes(tokenizerJSON, modelMax)
+	if err != nil {
+		return nil, fmt.Errorf("building span tokenizer: %w", err)
+	}
+	return &BGEM3Embedder{spanTok: tok, maxTokens: modelMax}, nil
 }
 
 // newQuerySpanTokenizer loads a second tokenizer from the model directory.
@@ -65,20 +89,29 @@ func querySpanTokenizerFromBytes(raw []byte, maxLen int) (*backends.Tokenizer, e
 	}, nil
 }
 
-// queryAnnotations tokenizes the span window on the query-only tokenizer.
-// Offsets are byte ranges into that window, which is a prefix of text, so
-// they stay valid on text. The special mask is for the forward-bound cut
-// only; sparse weights never see it.
-func (e *BGEM3Embedder) queryAnnotations(text string) ([][2]uint, []uint32, error) {
-	if e == nil || e.spanTok == nil {
+// tokenizeSpanWindow tokenizes one prefix on the query-only tokenizer.
+// Offsets are byte ranges into that prefix.
+func tokenizeSpanWindow(tok *backends.Tokenizer, window string) ([][2]uint, []uint32, error) {
+	if tok == nil {
 		return nil, nil, fmt.Errorf("tokenizer unavailable")
 	}
-	window := querySpanWindow(text, e.maxTokens)
 	batch := backends.NewBatch(1)
 	defer func() { _ = batch.Destroy() }()
-	backends.TokenizeInputs(batch, e.spanTok, []string{window})
+	backends.TokenizeInputs(batch, tok, []string{window})
 	if len(batch.Input) == 0 {
 		return nil, nil, fmt.Errorf("tokenizer returned no input")
 	}
 	return batch.Input[0].Offsets, batch.Input[0].SpecialTokensMask, nil
+}
+
+// queryAnnotations tokenizes the model-cap window on the query-only tokenizer.
+// AnalyzeQuery runs on text ShapeQuery has already cut, so this window is a
+// safety bound, not the forward bound. Offsets are byte ranges into that
+// window, which is a prefix of text, so they stay valid on text. The special
+// mask is for the forward-bound cut only; sparse weights never see it.
+func (e *BGEM3Embedder) queryAnnotations(text string) ([][2]uint, []uint32, error) {
+	if e == nil || e.spanTok == nil {
+		return nil, nil, fmt.Errorf("tokenizer unavailable")
+	}
+	return tokenizeSpanWindow(e.spanTok, querySpanWindow(text, e.maxTokens))
 }

@@ -1033,7 +1033,11 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 		texts := make([]string, len(idxs))
 		for j, idx := range idxs {
 			batch[j] = pending[idx]
-			texts[j] = pending[idx].body
+			// The stored body stays as indexed. A long symbol run is capped
+			// only on the text the embedder tokenizes. That run has no
+			// ranking signal and stalls the tokenizer. Same rule as the
+			// ranking query (Principle 7).
+			texts[j] = embedding.CapSymbolRuns(pending[idx].body)
 		}
 		i := idxs[0] // for log context: where this batch started in the input
 		if isFull {

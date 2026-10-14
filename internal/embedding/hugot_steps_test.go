@@ -3,7 +3,6 @@ package embedding
 import (
 	"context"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -30,7 +29,7 @@ func TestEnableContentTokenSpans_CJKRunIsManyTokens(t *testing.T) {
 	require.Empty(t, bare.SpecialTokensMask)
 
 	e := &BGEM3Embedder{spanTok: spanTok}
-	spans, err := e.TokenSpans(text)
+	spans, err := e.TokenSpans(text, 0)
 	require.NoError(t, err)
 	require.Greater(t, len(spans), len(strings.Fields(text)))
 	for _, sp := range spans {
@@ -93,23 +92,37 @@ func TestSharedPreprocess_OptionsMatchMain(t *testing.T) {
 }
 
 // TestTokenSpans_PreCutBoundsTheRead: the query-only span read must not
-// tokenize a multi-megabyte input whole. The window is maxTokens × 8
-// characters, the same kind of estimate fitTextsWithinTokenLimit uses.
+// tokenize a multi-megabyte input whole. The window is the forward bound
+// passed in, times querySpanCharsPerToken, not the model cap on the embedder.
+// Ignoring the argument and sizing from maxTokens fails this test: the
+// embedder's cap is BGEM3MaxTokens, and the bound under test is 8.
 func TestTokenSpans_PreCutBoundsTheRead(t *testing.T) {
 	require.Equal(t, 8, querySpanCharsPerToken)
 	raw := readBGEM3Tokenizer(t)
 	spanTok, err := querySpanTokenizerFromBytes(raw, 8192)
 	require.NoError(t, err)
 	text := strings.Repeat("a", 4000)
-	const maxTokens = 8
-	e := &BGEM3Embedder{maxTokens: maxTokens, spanTok: spanTok}
-	spans, err := e.TokenSpans(text)
+	const bound = 8
+	e := &BGEM3Embedder{maxTokens: BGEM3MaxTokens, spanTok: spanTok}
+	spans, err := e.TokenSpans(text, bound)
 	require.NoError(t, err)
 	require.NotEmpty(t, spans)
-	limit := maxTokens * querySpanCharsPerToken
+	limit := bound * querySpanCharsPerToken
 	for _, sp := range spans {
 		require.LessOrEqual(t, sp[1], limit)
 	}
+}
+
+func TestNewSpanEmbedder_ReadsSpansWithoutTheModel(t *testing.T) {
+	raw := readBGEM3Tokenizer(t)
+	e, err := NewSpanEmbedder(raw, 0)
+	require.NoError(t, err)
+	require.Equal(t, BGEM3MaxTokens, e.maxTokens)
+	spans, err := e.TokenSpans("hello world", 0)
+	require.NoError(t, err)
+	require.NotEmpty(t, spans)
+	_, err = NewSpanEmbedder([]byte("not-json"), BGEM3MaxTokens)
+	require.Error(t, err)
 }
 
 func TestQuerySpanWindow_CutsByCharacters(t *testing.T) {
@@ -139,7 +152,7 @@ func TestSharedTokenizer_SpanReadLeavesOptions(t *testing.T) {
 	require.Empty(t, before.Spans)
 	require.Empty(t, before.SpecialTokensMask)
 
-	spans, err := e.TokenSpans(strings.Repeat("日本語の文章", 40))
+	spans, err := e.TokenSpans(strings.Repeat("日本語の文章", 40), 0)
 	require.NoError(t, err)
 	require.NotEmpty(t, spans)
 
@@ -157,10 +170,13 @@ func TestSharedTokenizer_SpanReadLeavesOptions(t *testing.T) {
 
 func readBGEM3Tokenizer(t *testing.T) []byte {
 	t.Helper()
-	path := filepath.Join(DefaultCacheDir(), "BAAI_bge-m3", "tokenizer.json")
-	raw, err := os.ReadFile(path)
+	raw, err := ReadBGEM3Tokenizer()
 	if err != nil {
-		t.Skip("bge-m3 tokenizer.json is not in the model cache")
+		msg := TokenizerFetchHint() + ": " + err.Error()
+		if TokenizerMissIsFatal(os.Getenv("CI")) {
+			t.Fatal(msg)
+		}
+		t.Skip(msg)
 	}
 	return raw
 }

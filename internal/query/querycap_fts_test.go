@@ -44,7 +44,7 @@ func (a *spanAnalyzer) AnalyzeQuery(_ context.Context, text string) (embedding.Q
 	return a.tokens, nil
 }
 
-func (a *spanAnalyzer) TokenSpans(text string) ([][2]int, error) {
+func (a *spanAnalyzer) TokenSpans(text string, _ int) ([][2]int, error) {
 	if !a.perRune {
 		return nil, nil
 	}

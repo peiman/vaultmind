@@ -5,6 +5,7 @@ import (
 	"io"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/peiman/vaultmind/internal/index"
@@ -703,8 +704,11 @@ func formatLongQuery(c *QueryCapped) string {
 		return ""
 	}
 	var parts []string
-	if c.EmbeddedTokens < c.TotalTokens {
+	switch {
+	case c.TotalTokens > c.EmbeddedTokens:
 		parts = append(parts, fmt.Sprintf("ranked on its first %d of %d tokens", c.EmbeddedTokens, c.TotalTokens))
+	case c.TotalChars > 0:
+		parts = append(parts, fmt.Sprintf("ranked on its first %d tokens of a %s-character query", c.EmbeddedTokens, groupThousands(c.TotalChars)))
 	}
 	if c.SalientTerms > 0 {
 		parts = append(parts, fmt.Sprintf("ColBERT and FTS on its %d most salient terms", c.SalientTerms))
@@ -713,6 +717,25 @@ func formatLongQuery(c *QueryCapped) string {
 		return ""
 	}
 	return "  [long query: " + strings.Join(parts, "; ") + "]"
+}
+
+// groupThousands renders n with commas, so 41230 is "41,230".
+func groupThousands(n int) string {
+	s := strconv.Itoa(n)
+	if len(s) <= 3 {
+		return s
+	}
+	lead := len(s) % 3
+	if lead == 0 {
+		lead = 3
+	}
+	var b strings.Builder
+	b.WriteString(s[:lead])
+	for i := lead; i < len(s); i += 3 {
+		b.WriteByte(',')
+		b.WriteString(s[i : i+3])
+	}
+	return b.String()
 }
 
 // emitAskHeader is the ONE place a header reaches the writer. writeAskHeader

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/embedding"
@@ -41,6 +42,44 @@ func (f fakeDenseEmbedder) Dims() int    { return f.dims }
 func (f fakeDenseEmbedder) Close() error { return nil }
 
 var _ embedding.Embedder = fakeDenseEmbedder{}
+
+// TestEmbedNotes_SymbolRunIsCappedForTheEmbedderOnly: a long run of one
+// punctuation character, and an unspaced mix of punctuation, are shortened
+// on the text sent to the embedder. The stored body keeps the note as written.
+func TestEmbedNotes_SymbolRunIsCappedForTheEmbedderOnly(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".vaultmind"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".vaultmind", "config.yaml"), []byte(`
+types:
+  concept:
+    required: [title]
+`), 0o644))
+	dots := strings.Repeat(".", 40)
+	mixed := strings.Repeat(".-", 30)
+	body := "before " + dots + " mid " + mixed + " after"
+	content := "---\nid: concept-dots\ntype: concept\ntitle: Dots\n---\n" + body + "\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "dots.md"), []byte(content), 0o644))
+	cfg, err := vault.LoadConfig(dir)
+	require.NoError(t, err)
+	dbPath := filepath.Join(dir, cfg.Index.DBPath)
+	require.NoError(t, os.MkdirAll(filepath.Dir(dbPath), 0o755))
+	idxr := index.NewIndexer(dir, dbPath, cfg)
+	_, err = idxr.Rebuild()
+	require.NoError(t, err)
+
+	emb := &recordingBodyEmbedder{fakeDenseEmbedder: fakeDenseEmbedder{dims: 8}}
+	_, err = idxr.EmbedNotes(context.Background(), dbPath, emb)
+	require.NoError(t, err)
+	require.Len(t, emb.texts, 1)
+	assert.Equal(t, "before "+strings.Repeat(".", embedding.RepeatedNonAlnumCap)+" mid "+strings.Repeat(".-", embedding.RepeatedNonAlnumCap/2)+" after", emb.texts[0])
+
+	db, err := index.Open(dbPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	var stored string
+	require.NoError(t, db.QueryRow("SELECT body_text FROM notes WHERE id = 'concept-dots'").Scan(&stored))
+	assert.Equal(t, body, stored)
+}
 
 // buildEmbedTestVault returns the dbPath of a freshly indexed tempdir vault
 // with three domain notes, no embeddings yet.

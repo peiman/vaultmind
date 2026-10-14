@@ -399,19 +399,28 @@ func (e *BGEM3Embedder) AnalyzeQuery(ctx context.Context, text string) (QueryTok
 }
 
 // TokenSpans reports content-token byte spans for text without a forward
-// pass. The read uses the query-only tokenizer, pre-cut to the span window,
-// and its special mask only to skip CLS and SEP in the cut. Spans are
+// pass. The read uses the query-only tokenizer, pre-cut to the span window
+// for forwardTokens (the bound in use, not the model cap). forwardTokens <= 0
+// reads the whole string. The special mask only skips CLS and SEP. Spans are
 // clamped to that window: the tokenizer can report an end a few bytes past
 // the string it saw, and the cut must stay inside the prefix that was
-// tokenized. The model clamp in preprocessWithinTokenLimit is what keeps an
-// oversized note from hanging.
-func (e *BGEM3Embedder) TokenSpans(text string) ([][2]int, error) {
-	offsets, special, err := e.queryAnnotations(text)
+// tokenized. An empty content list is a non-nil slice, so the caller can
+// tell "tokenized, nothing" from a tokenizer error. The model clamp in
+// preprocessWithinTokenLimit is what keeps an oversized note from hanging.
+func (e *BGEM3Embedder) TokenSpans(text string, forwardTokens int) ([][2]int, error) {
+	if e == nil || e.spanTok == nil {
+		return nil, fmt.Errorf("tokenizer unavailable")
+	}
+	window := querySpanWindow(text, forwardTokens)
+	offsets, special, err := tokenizeSpanWindow(e.spanTok, window)
 	if err != nil {
 		return nil, err
 	}
-	window := querySpanWindow(text, e.maxTokens)
-	return clampSpans(window, contentTokenSpans(offsets, special)), nil
+	spans := contentTokenSpans(offsets, special)
+	if spans == nil {
+		spans = [][2]int{}
+	}
+	return clampSpans(window, spans), nil
 }
 
 // EmbedColBERT produces only the ColBERT per-token embeddings (used by ColBERTRetriever).
