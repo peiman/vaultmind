@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Subagent hand-backs whose report contains a `<` character were sent to recall and timed out; they're skipped again.
+- Subagent hand-backs whose report contains a `<` character were sent to recall and timed out; they're skipped again. The hook receives a hand-back as a bare `agent-message`, `teammate-message`, or `cross-session-message` envelope, and treats everything between its opening and closing tag as the report, unparsed. A question typed inside those tags is therefore skipped with it; text before the opening tag or after the closing tag is still recalled.
   A prompt that is only an `agent-message`, `teammate-message`, or `cross-session-message` envelope is skipped without reading the report. The skip is logged as `cross-session-envelope`. Words before the opening tag or after the closing tag are still recalled, including a sentence that only mentions the tag.
   Run `vaultmind hooks install --force` to update installed copies.
 - A federated `ask` searches the owning vault once. The first pass already has that vault's hits and the shaped query embedding. Delivery packs the context and records access from that pass, so three vaults are three searches. The hits, their order, the context pack, and the access rows stay the same.
