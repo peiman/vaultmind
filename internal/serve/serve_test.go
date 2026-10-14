@@ -229,3 +229,58 @@ func TestServe_FinishesInFlightRequestsOnShutdown(t *testing.T) {
 	assert.True(t, finished.Load(), "Serve returned while a request was still running")
 	assert.Equal(t, 9, (<-got).Code)
 }
+
+// Shutdown runs once when the server stops, on idle and on cancel, and not
+// when this process never takes the socket.
+func TestServe_ShutdownRunsWhenTheServerStops(t *testing.T) {
+	t.Run("idle", func(t *testing.T) {
+		assert.Equal(t, int32(1), shutdownCalls(t, 120*time.Millisecond, func(context.CancelFunc) {}))
+	})
+	t.Run("signal", func(t *testing.T) {
+		assert.Equal(t, int32(1), shutdownCalls(t, time.Minute, func(cancel context.CancelFunc) { cancel() }))
+	})
+	t.Run("already serving", func(t *testing.T) {
+		sock := socketIn(t)
+		start(t, sock, func(serve.Request) serve.Response { return serve.Response{} }, time.Minute)
+		var calls atomic.Int32
+		err := serve.Serve(context.Background(), sock, func(serve.Request) serve.Response { return serve.Response{} }, time.Minute, serve.WithShutdown(func() { calls.Add(1) }))
+		assert.ErrorIs(t, err, serve.ErrAlreadyServing)
+		assert.Zero(t, calls.Load())
+	})
+	t.Run("unsafe directory", func(t *testing.T) {
+		sock := socketIn(t)
+		require.NoError(t, os.Chmod(filepath.Dir(sock), 0o777))
+		var calls atomic.Int32
+		err := serve.Serve(context.Background(), sock, func(serve.Request) serve.Response { return serve.Response{} }, time.Minute, serve.WithShutdown(func() { calls.Add(1) }))
+		assert.ErrorIs(t, err, serve.ErrUnsafeDir)
+		assert.Zero(t, calls.Load())
+	})
+}
+
+func shutdownCalls(t *testing.T, idle time.Duration, stop func(context.CancelFunc)) int32 {
+	t.Helper()
+	sock := socketIn(t)
+	var calls atomic.Int32
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- serve.Serve(ctx, sock, func(serve.Request) serve.Response { return serve.Response{} }, idle, serve.WithShutdown(func() { calls.Add(1) }))
+	}()
+	require.Eventually(t, func() bool {
+		c, err := net.Dial("unix", sock)
+		if err == nil {
+			_ = c.Close()
+		}
+		return err == nil
+	}, 2*time.Second, 10*time.Millisecond)
+	stop(cancel)
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		cancel()
+		t.Fatal("the server did not exit")
+	}
+	cancel()
+	return calls.Load()
+}

@@ -47,6 +47,18 @@ var (
 	// osName holds the operating system name. Defaults to runtime.GOOS.
 	// Overridden in tests to cover platform-specific branches.
 	osName = runtime.GOOS
+
+	// processHome is the home directory when the process started.
+	// DefaultCacheDir compares cache paths to this snapshot. A test isolates
+	// by setting HOME and XDG_CACHE_HOME to directories outside it. The home
+	// at call time is the one the test just set, so it cannot tell a temp
+	// directory from the real one (Principle 9 — the check has to be executable).
+	processHome = func() string {
+		if h, err := os.UserHomeDir(); err == nil && h != "" {
+			return h
+		}
+		return os.Getenv("HOME")
+	}()
 )
 
 // SetAppName sets the application name used for XDG directories.
@@ -148,6 +160,9 @@ func guardTestIsolation(dir string) {
 	if !testing.Testing() {
 		return
 	}
+	// Model-cache check first. It uses the process-start home, so a failure
+	// to read the current home must not skip it.
+	guardModelCache(dir)
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {
 		return
@@ -176,6 +191,57 @@ func guardTestIsolation(dir string) {
 	}
 }
 
+// GuardTestIsolation is the test-binary check DataDir and StateDir run before
+// they create a directory. DefaultCacheDir runs it on the model cache before
+// any mkdir or rename. Outside a test binary it does nothing.
+func GuardTestIsolation(dir string) {
+	guardTestIsolation(dir)
+}
+
+// guardModelCache panics when a test would create or rename the model cache
+// under the home this process started with. DefaultCacheDir renames
+// ~/.vaultmind/models into the XDG cache. A test that reached it with the app
+// name set and HOME left alone moved the file CI had fetched, and on a
+// developer machine it would move the weights.
+//
+// The comparison is the process-start home, not the current one. Setting HOME
+// to a temp directory makes the current home look real to a check that asks
+// for it now, and both the legacy directory and the default cache live under
+// HOME. A path outside processHome is an isolated test and is allowed.
+func guardModelCache(dir string) {
+	if processHome == "" || dir == "" {
+		return
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return
+	}
+	abs = filepath.Clean(abs)
+	home := filepath.Clean(processHome)
+	sep := string(filepath.Separator)
+	for _, base := range []string{
+		filepath.Join(home, "Library", "Caches"),
+		filepath.Join(home, ".cache"),
+		filepath.Join(home, "AppData", "Local"),
+		filepath.Join(home, ".vaultmind", "models"),
+	} {
+		base = filepath.Clean(base)
+		if abs != base && !strings.HasPrefix(abs, base+sep) {
+			continue
+		}
+		panic(fmt.Sprintf(
+			"vaultmind test isolation: this test would create or rename the model cache "+
+				"under the home this process started with, at %s.\n"+
+				"That renames ~/.vaultmind/models. The tokenizer tests then miss the file "+
+				"CI fetched, and a developer machine moves the real weights.\n"+
+				"Fix: point HOME and XDG_CACHE_HOME outside that home before resolving the cache:\n"+
+				"    t.Setenv(\"HOME\", t.TempDir())\n"+
+				"    t.Setenv(\"XDG_CACHE_HOME\", t.TempDir())\n"+
+				"A test that only reads tokenizer.json must use the legacy path. It must not call DefaultCacheDir.",
+			abs))
+	}
+}
+
 // DataFile returns the path to a data file.
 func DataFile(filename string) (string, error) {
 	dir, err := DataDir()
@@ -185,15 +251,23 @@ func DataFile(filename string) (string, error) {
 	return filepath.Join(dir, filename), nil
 }
 
-// CacheDir returns the directory for cache files.
-// Creates the directory if it doesn't exist.
-func CacheDir() (string, error) {
+// CacheDirPath is the directory CacheDir would use, without creating it.
+// DefaultCacheDir checks it before any mkdir or rename.
+func CacheDirPath() (string, error) {
 	name, err := getAppName()
 	if err != nil {
 		return "", err
 	}
-	base := cacheBase()
-	dir := filepath.Join(base, name)
+	return filepath.Join(cacheBase(), name), nil
+}
+
+// CacheDir returns the directory for cache files.
+// Creates the directory if it doesn't exist.
+func CacheDir() (string, error) {
+	dir, err := CacheDirPath()
+	if err != nil {
+		return "", err
+	}
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return "", err
 	}

@@ -1,6 +1,7 @@
 package embedding_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -69,4 +70,48 @@ func TestDefaultCacheDir_PrefersTheMigratedCacheOverALingeringLegacyOne(t *testi
 	second := embedding.DefaultCacheDir()
 	assert.Equal(t, first, second, "the migrated cache stays the answer")
 	assert.FileExists(t, filepath.Join(second, "stale.onnx"), "and still holds the migrated weights")
+}
+
+// An unisolated DefaultCacheDir renames ~/.vaultmind/models into the XDG
+// cache. The guard has to panic before that rename, including on a machine
+// where the XDG directory does not exist yet. A unique app name is the case
+// that would move the real directory: the usual name is a no-op once its
+// target already exists.
+func TestDefaultCacheDir_PanicsInsteadOfMovingAnUnisolatedHome(t *testing.T) {
+	const probe = "vm-cache-guard-probe"
+	prev := xdg.GetAppName()
+	xdg.SetAppName(probe)
+	t.Cleanup(func() { xdg.SetAppName(prev) })
+
+	home, err := os.UserHomeDir()
+	require.NoError(t, err)
+	root, err := xdg.CacheDirPath()
+	require.NoError(t, err)
+	require.Contains(t, root, probe)
+	_, statErr := os.Stat(root)
+	if !os.IsNotExist(statErr) {
+		t.Fatalf("probe cache %s already exists; refusing to run", root)
+	}
+	legacy := filepath.Join(home, ".vaultmind", "models")
+	before, beforeErr := os.Stat(legacy)
+
+	defer func() {
+		r := recover()
+		require.NotNil(t, r, "DefaultCacheDir returned instead of refusing to touch the process home")
+		msg := fmt.Sprint(r)
+		assert.Contains(t, msg, "HOME")
+		assert.Contains(t, msg, "XDG_CACHE_HOME")
+		_, afterRoot := os.Stat(root)
+		assert.True(t, os.IsNotExist(afterRoot), "created %s before refusing", root)
+		after, afterErr := os.Stat(legacy)
+		if beforeErr != nil {
+			assert.True(t, os.IsNotExist(afterErr), "legacy model cache appeared: %v", afterErr)
+			return
+		}
+		require.NoError(t, afterErr, "legacy model cache was moved")
+		assert.True(t, before.ModTime().Equal(after.ModTime()), "legacy model cache was touched")
+	}()
+
+	_ = embedding.DefaultCacheDir()
+	t.Fatal("expected a panic")
 }

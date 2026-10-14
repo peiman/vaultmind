@@ -321,7 +321,10 @@ var RootCmd = &cobra.Command{
 }
 
 func Execute() error {
-	// Ensure logger cleanup on exit
+	// Logger cleanup runs per command. The process embedder does not:
+	// the resident server calls Execute for every request and must keep
+	// the model. The process releases it when Main returns, and the
+	// server releases it when the server stops.
 	defer logger.Cleanup()
 
 	info, ok := debug.ReadBuildInfo()

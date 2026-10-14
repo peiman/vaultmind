@@ -49,10 +49,11 @@ func attachRankCheck(ctx context.Context, v Vault, req Request, out *outcome, no
 		return rankCheckErr(req, out.ID, err)
 	}
 	check := measureRank(out.Mode, out.ID, out.TargetID, excluded, included)
-	// The ranker holds the one ONNX session. The frontmatter write changes
-	// the note hash, which drops its vectors, and the re-index embeds them
-	// again. That embed needs the session, so release it first. Run also
-	// closes the ranker when it returns; Close is idempotent.
+	// The frontmatter write changes the note hash, which drops its vectors,
+	// and the re-index embeds them again. That embed borrows the process
+	// session, so this close only drops the ranker's own cleanup. It must
+	// not unload the session. Run closes the ranker again on return; Close
+	// is idempotent.
 	closeRanker(req)
 	warnings, err := writeRankKeys(ctx, v, req, out.Path, now, check)
 	if err != nil {

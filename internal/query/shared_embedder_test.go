@@ -69,6 +69,39 @@ func TestSharedEmbedder_AnotherModelReplacesTheLoadedOne(t *testing.T) {
 	assert.Equal(t, 1, second.closed)
 }
 
+func TestCloseSharedEmbedder_IdempotentAndSkipsNonAcquirer(t *testing.T) {
+	CloseSharedEmbedder()
+	t.Cleanup(CloseSharedEmbedder)
+	held := &countingEmbedder{}
+	_, _, err := sharedEmbedderFor("test-model-held", func() (embedding.Embedder, func(), error) {
+		return held, func() { _ = held.Close() }, nil
+	})
+	require.NoError(t, err)
+	owner := CurrentSharedHold()
+	require.True(t, owner.Acquired())
+
+	var stranger SharedHold
+	stranger.Close()
+	assert.Zero(t, held.closed, "a holder that did not acquire the session does not close it")
+
+	CloseSharedEmbedder()
+	assert.Equal(t, 1, held.closed)
+	CloseSharedEmbedder()
+	assert.Equal(t, 1, held.closed, "a second close is a no-op")
+
+	next := &countingEmbedder{}
+	_, _, err = sharedEmbedderFor("test-model-next", func() (embedding.Embedder, func(), error) {
+		return next, func() { _ = next.Close() }, nil
+	})
+	require.NoError(t, err)
+	owner.Close()
+	assert.Zero(t, next.closed, "a hold from the previous session does not close the new one")
+	CurrentSharedHold().Close()
+	assert.Equal(t, 1, next.closed)
+	CurrentSharedHold().Close()
+	assert.Equal(t, 1, next.closed, "closing the current hold twice is a no-op")
+}
+
 func TestSharedEmbedder_AFailedLoadIsNotCached(t *testing.T) {
 	CloseSharedEmbedder() // other tests in the package load real models into the slot
 	t.Cleanup(CloseSharedEmbedder)

@@ -8,8 +8,9 @@ import (
 	"github.com/peiman/vaultmind/cmd"
 )
 
-// run is the whole program: cmd.Main runs the CLI and maps its result to an
-// exit code, the same mapping the warm server uses for each request it runs.
+// run is one OS process. cmd.Main runs the CLI and releases the process
+// embedder when that command returns. A request inside the resident server
+// does not call Main, so it does not release the model.
 func run(args []string) int {
 	return cmd.Main(args)
 }

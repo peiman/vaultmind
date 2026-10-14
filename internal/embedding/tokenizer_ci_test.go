@@ -29,6 +29,33 @@ func TestTokenizerMissIsFatal(t *testing.T) {
 	}
 }
 
+// Reading the tokenizer must not rename the legacy cache. CI fetches
+// tokenizer.json into ~/.vaultmind/models, and a test that only tokenizes
+// has to leave that file where it was. Resolving the path through
+// DefaultCacheDir renames the directory into the XDG cache when the app
+// name is set.
+func TestBGEM3TokenizerPath_ReadsTheLegacyFileWithoutMovingIt(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, "xdg-cache"))
+	prev := xdg.GetAppName()
+	xdg.SetAppName("vaultmind")
+	t.Cleanup(func() { xdg.SetAppName(prev) })
+
+	legacyDir := filepath.Join(home, ".vaultmind", "models", "BAAI_bge-m3")
+	require.NoError(t, os.MkdirAll(legacyDir, 0o750))
+	tok := filepath.Join(legacyDir, "tokenizer.json")
+	require.NoError(t, os.WriteFile(tok, []byte(`{"pad":true}`), 0o600))
+
+	require.Equal(t, tok, BGEM3TokenizerPath())
+	raw, err := ReadBGEM3Tokenizer()
+	require.NoError(t, err)
+	require.Equal(t, []byte(`{"pad":true}`), raw)
+	require.FileExists(t, tok)
+	_, err = os.Stat(filepath.Join(home, "xdg-cache", "vaultmind", "models"))
+	require.True(t, os.IsNotExist(err), "reading the tokenizer renamed the legacy cache")
+}
+
 func TestBGEM3Tokenizer_LegacyPathAndHint(t *testing.T) {
 	prev := xdg.GetAppName()
 	xdg.SetAppName("")

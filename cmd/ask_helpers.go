@@ -32,9 +32,8 @@ func askRankingBounds(cmd *cobra.Command) (searchLimit, forwardTokens, salientTe
 // caller wraps the retriever. Gaps stay out through the shared predicate.
 func askRank(cmd *cobra.Command, ctx context.Context, vaultPath string, db *index.DB, text string) (*query.AskResult, error) {
 	ret := query.BuildAutoRetrieverFull(ctx, db)
-	// Cleanup leaves the shared ONNX session loaded. A later embed cannot
-	// start a session while this one is held.
-	defer query.CloseSharedEmbedder()
+	// Cleanup does not unload the process session. Embed-on-write borrows
+	// it, and the process releases it on exit.
 	defer ret.Cleanup()
 	limit, forward, salient := askRankingBounds(cmd)
 	noise, sigma, has, low := 0.0, 0.0, false, false

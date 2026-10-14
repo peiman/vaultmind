@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Tests that build an embedder no longer rename `~/.vaultmind/models` into the XDG cache. A test that would do that panics unless `HOME` and `XDG_CACHE_HOME` are outside the home the process started with. Tokenizer tests read the legacy file and do not migrate it.
+- The resident server keeps the embedding model loaded across asks. It used to unload the model after every request, so the next ask loaded it again. The model is released when the server exits, on idle or on a signal. A one-shot command still releases it when the process exits. `note propose` still loads the model once.
 - Delivered note bodies hide only VaultMind's own `<!-- vaultmind:` comments. An author HTML comment is still delivered. `note get` still shows the marker. Search text still drops every HTML comment.
 - `note accept` deletes a proposal's index row before its file. A retry after a failed file delete finds the file, sees the marker, and only finishes cleanup. A proposal whose file is already gone is finished by removing its index row.
 - The sparse lane no longer counts special tokens, matching the model's reference behavior.
@@ -75,6 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `note propose` loads the embedding model once. Ranking and embed-on-write share that session, so writing the draft does not cold-load the model again. The vectors and the index contents are unchanged. `vaultmind index --embed` still builds its own session and releases it at the end of the pass.
 - On upgrade, `vaultmind index --embed` re-embeds the sparse vector of every note once. Dense and ColBERT bytes stay. The pass is one forward pass per note, about as long as one full embed: a few minutes for ~130 notes on ORT, hours on pure-Go. A plain `vaultmind index` does not load the model and does not mix formats; it warns, and so do `doctor` and `ask`, with the remedy `vaultmind index --embed`. The first embed-on-write after the upgrade does the same sparse pass when the ORT backend is available, even if a backlog would otherwise defer embedding. An older binary on another machine can write old-format sparse vectors without resetting the stamp. Upgrade every machine that writes the vault, then run `vaultmind index --full --embed`.
 
 ## [0.10.12] - 2026-10-12

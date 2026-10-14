@@ -36,16 +36,14 @@ func (a *askQuestionRanker) ensure(ctx context.Context) {
 	})
 }
 
-// Close releases the model. It is safe before the model loads and safe twice.
-// BuildAutoRetrieverFull's own cleanup leaves the shared ONNX session loaded,
-// and a write cannot embed while that session is held, so close the shared
-// one here too.
+// Close drops this ranker's retriever cleanup. It does not unload the process
+// embedder. Embed-on-write borrows that session, and the process releases it
+// on exit. A second Close is a no-op.
 func (a *askQuestionRanker) Close() error {
 	if a.ret.Cleanup != nil {
 		a.ret.Cleanup()
 		a.ret.Cleanup = nil
 	}
-	query.CloseSharedEmbedder()
 	return nil
 }
 

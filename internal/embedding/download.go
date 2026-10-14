@@ -89,11 +89,12 @@ func BGEM3TokenizerPin() (revision, sum, url string) {
 	return m.revision, f.sha256, url
 }
 
-// BGEM3TokenizerPath is the cache file ReadBGEM3Tokenizer reads. When the
-// XDG app name is unset, DefaultCacheDir is the legacy cache,
-// ~/.vaultmind/models. Tests and CI both read that path.
+// BGEM3TokenizerPath is the legacy cache file ReadBGEM3Tokenizer reads.
+// CI fetches tokenizer.json into ~/.vaultmind/models. Reading that file must
+// not rename the directory into the XDG cache, so this does not call
+// DefaultCacheDir.
 func BGEM3TokenizerPath() string {
-	return filepath.Join(hugotModelDir(DefaultCacheDir(), BGEM3ModelName), "tokenizer.json")
+	return filepath.Join(hugotModelDir(legacyCacheDir(), BGEM3ModelName), "tokenizer.json")
 }
 
 // ReadBGEM3Tokenizer reads the pinned tokenizer.json from the model cache.

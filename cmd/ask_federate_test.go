@@ -18,12 +18,21 @@ import (
 // These cover the parsing half: which vaults a run will actually search.
 
 // isolateVaultsFlag stops a test's --vaults from leaking into the rest of the
-// package. NewCommand binds every flag into the GLOBAL viper, so a value set
-// here is still returned by viper.Get long after the test ends — which sent
-// five unrelated `ask --read` tests down the federation path and made them
-// fail only in a full package run, never alone.
+// package. NewCommand binds every flag into the GLOBAL viper, and that binding
+// is replayed by resetCLIState, so clearing viper alone is not enough: the
+// flag still holds the value and the next reset puts it back. That sent later
+// asks, including a served-ask test, down the federation path.
 func isolateVaultsFlag(t *testing.T) {
-	t.Cleanup(func() { viper.Set(config.KeyAppAskVaults, "") })
+	t.Cleanup(func() {
+		for _, b := range flagBindings {
+			if b.key != config.KeyAppAskVaults || b.flag == nil {
+				continue
+			}
+			_ = b.flag.Value.Set(b.flag.DefValue)
+			b.flag.Changed = false
+		}
+		viper.Set(config.KeyAppAskVaults, "")
+	})
 }
 
 func TestResolveAskVaultPaths_SingleVaultUnchanged(t *testing.T) {
