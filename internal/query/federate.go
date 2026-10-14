@@ -181,6 +181,62 @@ type FloorResolver func(dims int) (floor, sigma float64)
 // Returns an empty verdict when the vault has no embedder. Unmeasured is not
 // no_match: the gate keeps such a vault rather than reading a missing
 // measurement as evidence of irrelevance.
+// VaultSearch is one vault's single retrieval. Ranked is that pass's result,
+// including an empty hit list, so delivery can pack and record access without
+// searching the owner again.
+type VaultSearch struct {
+	Hits       []retrieval.ScoredResult
+	Verdict    string
+	RelevanceZ float64
+	Ranked     *AskResult
+}
+
+// SearchVault searches a vault once and judges its top hit against that
+// vault's own noise floor. Ranked keeps the shaped query and the hits.
+func SearchVault(
+	ctx context.Context,
+	ret retrieval.Retriever,
+	emb embedding.Embedder,
+	db *index.DB,
+	floors FloorResolver,
+	queryText string,
+	limit int,
+	forwardTokens int,
+	salientTerms int,
+) (VaultSearch, error) {
+	res, err := AskHits(ctx, ret, queryText, limit, forwardTokens, salientTerms, AnalyzerFrom(emb))
+	if err != nil {
+		return VaultSearch{}, err
+	}
+	if res == nil || len(res.TopHits) == 0 {
+		return VaultSearch{Ranked: res}, nil
+	}
+	out := VaultSearch{Hits: res.TopHits, Ranked: res}
+	if emb == nil {
+		return out, nil
+	}
+	// ONE embedding, not the whole corpus. The verdict needs exactly the top
+	// hit's cosine, and computing it via NoteSimilarities loaded and scored
+	// every note in the vault to read a single entry — O(N) work for an O(1)
+	// need, paid per vault on every federated query. On the 415-note research
+	// vault that scan was most of the per-vault cost.
+	topCosine, ok, simErr := topHitCosine(ctx, res.rankingQuery, out.Hits[0].ID, emb, db)
+	if simErr != nil || !ok {
+		// Unmeasured, not irrelevant. The vault cannot be judged; the gate
+		// keeps it, and the header says unmeasured rather than pretending it
+		// had nothing.
+		log.Debug().Err(simErr).Str("id", out.Hits[0].ID).Msg("federated: top hit not measurable; vault reported unmeasured")
+		return out, nil
+	}
+	floor, sigma := floors(emb.Dims())
+	z, label := noisefloor.Relevance(topCosine, floor, sigma, noisefloor.DefaultNoiseFloor(emb.Dims()))
+	out.Verdict = label
+	out.RelevanceZ = z
+	return out, nil
+}
+
+// SearchAndJudge is SearchVault without the prepared result. Callers that
+// only need the merge inputs stay on this signature.
 func SearchAndJudge(
 	ctx context.Context,
 	ret retrieval.Retriever,
@@ -192,34 +248,11 @@ func SearchAndJudge(
 	forwardTokens int,
 	salientTerms int,
 ) (hits []retrieval.ScoredResult, verdict string, relevanceZ float64, err error) {
-	res, err := AskHits(ctx, ret, queryText, limit, forwardTokens, salientTerms, AnalyzerFrom(emb))
+	searched, err := SearchVault(ctx, ret, emb, db, floors, queryText, limit, forwardTokens, salientTerms)
 	if err != nil {
 		return nil, "", 0, err
 	}
-	if res == nil || len(res.TopHits) == 0 {
-		return nil, "", 0, nil
-	}
-	hits = res.TopHits
-
-	if emb == nil {
-		return hits, "", 0, nil
-	}
-	// ONE embedding, not the whole corpus. The verdict needs exactly the top
-	// hit's cosine, and computing it via NoteSimilarities loaded and scored
-	// every note in the vault to read a single entry — O(N) work for an O(1)
-	// need, paid per vault on every federated query. On the 415-note research
-	// vault that scan was most of the per-vault cost.
-	topCosine, ok, simErr := topHitCosine(ctx, res.rankingQuery, hits[0].ID, emb, db)
-	if simErr != nil || !ok {
-		// Unmeasured, not irrelevant. The vault cannot be judged; the gate
-		// keeps it, and the header says unmeasured rather than pretending it
-		// had nothing.
-		log.Debug().Err(simErr).Str("id", hits[0].ID).Msg("federated: top hit not measurable; vault reported unmeasured")
-		return hits, "", 0, nil
-	}
-	floor, sigma := floors(emb.Dims())
-	z, label := noisefloor.Relevance(topCosine, floor, sigma, noisefloor.DefaultNoiseFloor(emb.Dims()))
-	return hits, label, z, nil
+	return searched.Hits, searched.Verdict, searched.RelevanceZ, nil
 }
 
 // FederatedVaultStatus records what happened to one vault in a federated
