@@ -65,6 +65,76 @@ trailing_ws() {
   printf '%s' "${#tw}"
 }
 
+# Sidecar kind, from a bounded head. A whole-prompt prefix trim is what took
+# 37s on a 200 KB hand-back; the pattern-trim guard rejects that. The name is
+# the first harness tag, user_query for that wrapper, or prose. The head is
+# the same 4096-byte bound as the envelope trim. Nothing from the prompt is
+# printed: the result is one of the names below, or prose.
+kind_from_head() {
+  # $1 is a bounded head, already past whitespace, one BOM, and the
+  # cross-session prefix. A name character continues the tag, so
+  # <task-notification-extra> is not task-notification. The end of the
+  # head is not a boundary: the slice may have cut the name.
+  local head="$1"
+  local tag open next
+  for tag in \
+    cross-session-message \
+    local-command-caveat \
+    local-command-stdout \
+    task-notification \
+    teammate-message \
+    system-reminder \
+    command-message \
+    agent-message \
+    command-name \
+    command-args \
+    user_query
+  do
+    open="<$tag"
+    if [ "${#head}" -le "${#open}" ]; then
+      continue
+    fi
+    if [ "${head:0:${#open}}" != "$open" ]; then
+      continue
+    fi
+    next="${head:${#open}:1}"
+    case "$next" in
+      [A-Za-z0-9_.:-]*) continue ;;
+    esac
+    printf '%s' "$tag"
+    return 0
+  done
+  printf '%s' prose
+}
+
+prompt_kind() {
+  local src="$1"
+  local kind
+  kind=$(
+    LC_ALL=C
+    c="$src"
+    edge=4096
+    head="${c:0:edge}"
+    skip=$(leading_drop "$head")
+    head="${head:skip}"
+    plen=${#CROSS_SESSION_PREFIX}
+    if [ "${#head}" -ge "$plen" ] && [ "${head:0:$plen}" = "$CROSS_SESSION_PREFIX" ]; then
+      head="${head:$plen}"
+      skip=$(leading_drop "$head")
+      head="${head:skip}"
+    fi
+    kind_from_head "$head"
+  )
+  case "$kind" in
+    prose|user_query|task-notification|system-reminder|cross-session-message|local-command-stdout|local-command-caveat|command-name|command-message|command-args|agent-message|teammate-message)
+      printf '%s' "$kind"
+      ;;
+    *)
+      printf '%s' prose
+      ;;
+  esac
+}
+
 is_envelope_only() {
   local candidate="$1"
   # $2 narrows which recognized tags may open at depth 0. Unset means all of
@@ -237,8 +307,9 @@ log_envelope_skip() (
     tail -n 127 "$file" > "$tmp" || return 1
   fi
   timestamp=$(date +%Y%m%dT%H%M%S) || return 1
-  printf '{"timestamp":"%s","prompt_len":%d,"injection":false,"reason":"%s"}\n' \
-    "$timestamp" "${#PROMPT}" "$reason" >> "$tmp" || return 1
+  # kind is the last conversion so dropping it cannot feed the tag name to %d.
+  printf '{"timestamp":"%s","prompt_len":%d,"injection":false,"reason":"%s","query_chars":%d,"kind":"%s"}\n' \
+    "$timestamp" "${#PROMPT}" "$reason" 0 "$PROMPT_KIND" >> "$tmp" || return 1
   mv -f "$tmp" "$file" || return 1
 )
 
@@ -258,7 +329,7 @@ is_cross_session_envelope() {
   body=$(
     LC_ALL=C
     c="$candidate"
-    prefix=$'Another Claude session sent a message:\n'
+    prefix=$CROSS_SESSION_PREFIX
     edge=4096
     n=${#c}
     head="${c:0:edge}"
@@ -304,6 +375,13 @@ is_cross_session_envelope() {
   # Top-level tags only. Nested harness tags stay in the parser's full list.
   is_envelope_only "$body" 'agent-message|teammate-message|cross-session-message'
 }
+
+# One prefix, shared with the skip predicate. Kind is computed before the
+# user_query unwrap replaces PROMPT, so a wrapped question stays user_query
+# and a leading harness tag stays that tag. Ask is not run for an envelope
+# skip, so that record's query_chars is 0.
+CROSS_SESSION_PREFIX=$'Another Claude session sent a message:\n'
+PROMPT_KIND=$(prompt_kind "$PROMPT")
 
 # Avoid even running the predicate for ordinary prose.
 case "$PROMPT" in
@@ -446,6 +524,7 @@ PYEOF
 # split a code point. On macOS bash 3.2 this slice of a 200 KB prompt took
 # 2.3 ms, so it does not need a byte-head fallback.
 QUERY="${QUERY:0:16384}"
+QUERY_CHARS=${#QUERY}
 
 # FEDERATION. An agent's memory is not one vault: mine is three, this hook
 # searched one, and two findings from a single working week sat in the desk —
@@ -505,8 +584,9 @@ if [ "$ASK_STATUS" != "0" ] || [ -z "$POINTERS" ]; then
     fi
   fi
   # Log to the sidecar too, so the failure is diagnosable after the fact.
-  printf '{"timestamp":"%s","prompt_len":%d,"ask_status":%d,"injection":false,"error":%s}\n' \
+  printf '{"timestamp":"%s","prompt_len":%d,"ask_status":%d,"injection":false,"error":%s,"query_chars":%d,"kind":"%s"}\n' \
     "$TIMESTAMP" "${#PROMPT}" "$ASK_STATUS" "$(cat "$ASK_ERR" | python3 -c "import json,sys; print(json.dumps(sys.stdin.read()))" 2>/dev/null || echo '""')" \
+    "$QUERY_CHARS" "$PROMPT_KIND" \
     > "$LOG_DIR/${TIMESTAMP}-skip.json" 2>/dev/null
   rm -f "$ASK_ERR"
   exit 0
@@ -526,6 +606,6 @@ echo ""
 echo "(the note's own text — a Principle section where it has one, else its opening lines. Full note: vaultmind note get <id> $NOTE_GET_WHERE)"
 
 # Log the successful injection
-printf '{"timestamp":"%s","prompt_len":%d,"ask_status":0,"injection":true,"pointer_chars":%d}\n' \
-  "$TIMESTAMP" "${#PROMPT}" "${#POINTERS}" \
+printf '{"timestamp":"%s","prompt_len":%d,"ask_status":0,"injection":true,"pointer_chars":%d,"query_chars":%d,"kind":"%s"}\n' \
+  "$TIMESTAMP" "${#PROMPT}" "${#POINTERS}" "$QUERY_CHARS" "$PROMPT_KIND" \
   > "$LOG_DIR/${TIMESTAMP}-inject.json" 2>/dev/null

@@ -2,6 +2,7 @@ package query
 
 import (
 	"context"
+	"errors"
 
 	"github.com/peiman/vaultmind/internal/embedding"
 	"github.com/peiman/vaultmind/internal/graph"
@@ -334,8 +335,9 @@ func relevantLaterHits(hits []retrieval.ScoredResult, r *AskResult) []memory.See
 }
 
 // Rank is the search and the relevance band ask computes for the top hit.
-// It does not pack context and it does not record a read. Ask calls it, then
-// packs. A caller that only needs the closest note calls Rank.
+// It does not pack context and it does not record a read. Ask applies the
+// same band inside finishAsk, then packs. A caller that only needs the
+// closest note calls Rank.
 func Rank(ctx context.Context, retriever retrieval.Retriever, db *index.DB, cfg AskConfig) (*AskResult, error) {
 	// AskHits is the one search. Dense and sparse embed the forward-bounded
 	// text; ColBERT and FTS use the salient terms when weights exist.
@@ -419,11 +421,40 @@ func applyTopHitRelevance(ctx context.Context, result *AskResult, db *index.DB, 
 // spreading activation (via ActivationFunc), then packs token-budgeted
 // context around the top hit. Context-pack failure is non-fatal.
 func Ask(ctx context.Context, retriever retrieval.Retriever, resolver *graph.Resolver, db *index.DB, cfg AskConfig) (*AskResult, error) {
-	result, err := Rank(ctx, retriever, db, cfg)
-	if err != nil || result == nil || len(result.TopHits) == 0 {
-		return result, err
+	// AskHits is the one search. Dense and sparse embed the forward-bounded
+	// text; ColBERT and FTS use the salient terms when weights exist.
+	// cfg.Query stays the original for the echo.
+	result, err := AskHits(ctx, retriever, cfg.Query, cfg.SearchLimit, cfg.QueryForwardTokens, cfg.QuerySalientTerms, AnalyzerFrom(cfg.Embedder))
+	if err != nil {
+		return nil, err
 	}
+	return finishAsk(ctx, resolver, db, cfg, result)
+}
+
+// errNoPreparedRank refuses to search as a fallback. A nil rank means the
+// caller lost the first pass; searching here would put the owner's second
+// hybrid search back.
+var errNoPreparedRank = errors.New("ask from rank: no prepared result")
+
+// AskFromRank packs context and records access from a search that already
+// ran. It does not search. ranked.rankingQuery is the text that search
+// embedded, so the delivery cosine hits the same memo entry.
+func AskFromRank(ctx context.Context, resolver *graph.Resolver, db *index.DB, cfg AskConfig, ranked *AskResult) (*AskResult, error) {
+	if ranked == nil {
+		return nil, errNoPreparedRank
+	}
+	ranked.Query = cfg.Query
+	return finishAsk(ctx, resolver, db, cfg, ranked)
+}
+
+// finishAsk is the delivery half of Ask: similarities, noise floor, context
+// pack, and access rows. The search that produced result has already run.
+func finishAsk(ctx context.Context, resolver *graph.Resolver, db *index.DB, cfg AskConfig, result *AskResult) (*AskResult, error) {
 	hits := result.TopHits
+	if len(hits) == 0 {
+		return result, nil
+	}
+	applyTopHitRelevance(ctx, result, db, cfg)
 
 	// Recall floor: nothing is relevant (top hit at/below the noise floor) and
 	// the caller opted into suppression — stop here. Skipping the context pack

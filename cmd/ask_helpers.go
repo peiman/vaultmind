@@ -26,6 +26,14 @@ func askRankingBounds(cmd *cobra.Command) (searchLimit, forwardTokens, salientTe
 	return
 }
 
+// openAskIndex opens one vault's retriever and embedder. Tests replace it to
+// count searches. The per-vault pass and the delivery pass both call it, and
+// a given vault path gets the same embedder back: the query embedding is
+// memoized on that instance, and a fresh one would forward again.
+var openAskIndex = func(cmd *cobra.Command, _ string, db *index.DB) query.AutoRetrieverResult {
+	return askRetriever(cmd, db)
+}
+
 // askRetriever builds the vault's retriever, scoped by --type, --tag and --path.
 // Every ask path — direct, --read and each federated vault — builds through
 // here, so none of them can search unscoped.

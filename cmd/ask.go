@@ -119,9 +119,9 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	vaultPath := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppAskVault)
 
 	// FEDERATION. With --vaults, search them all and let the merge choose which
-	// vault delivers. Everything below is unchanged: the winner's own pipeline
-	// packs the body, applies ITS noise floor and records the access, so there
-	// is no merged pseudo-vault whose calibration belongs to nobody.
+	// vault delivers. The winner's first-pass result packs the body, applies
+	// ITS noise floor and records the access. The owner is not searched again,
+	// so there is no merged pseudo-vault whose calibration belongs to nobody.
 	searchLimitForFederation := getConfigValueWithFlags[int](cmd, "search-limit", config.KeyAppAskSearchLimit)
 	forwardTokens := getConfigValueWithFlags[int](cmd, "query-forward-tokens", config.KeyAppAskQueryForwardTokens)
 	salientTerms := getConfigValueWithFlags[int](cmd, "query-salient-terms", config.KeyAppAskQuerySalientTerms)
@@ -132,6 +132,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	}
 	var federated []query.FederatedHit
 	var federatedVaults []query.FederatedVaultStatus
+	var ownerRank *query.AskResult
 	// A single --vaults entry is just a single-vault search — but it still has
 	// to BE one. Federation used to engage only at len>1, so one path fell
 	// through to the unset --vault and died with `no vault found: "."`. The
@@ -140,11 +141,11 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		vaultPath = vaultPaths[0]
 	}
 	if len(vaultPaths) > 1 {
-		hits, statuses, owner, ferr := federateAndPickOwner(cmd, args[0], vaultPaths, searchLimitForFederation, forwardTokens, salientTerms)
+		hits, statuses, owner, ranked, ferr := federateAndPickOwner(cmd, args[0], vaultPaths, searchLimitForFederation, forwardTokens, salientTerms)
 		if ferr != nil {
 			return ferr
 		}
-		federated, federatedVaults, vaultPath = hits, statuses, owner
+		federated, federatedVaults, vaultPath, ownerRank = hits, statuses, owner, ranked
 	}
 
 	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, "ask")
@@ -153,7 +154,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	}
 	defer vdb.Close()
 
-	ret := askRetriever(cmd, vdb.DB)
+	ret := openAskIndex(cmd, vaultPath, vdb.DB)
 	defer ret.Cleanup()
 
 	resolver := graph.NewResolver(vdb.DB)
@@ -202,7 +203,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	result, err := query.Ask(cmd.Context(), ret.Retriever, resolver, vdb.DB, query.AskConfig{
+	cfg := query.AskConfig{
 		Query:              args[0],
 		Budget:             getConfigValueWithFlags[int](cmd, "budget", config.KeyAppAskBudget),
 		MaxItems:           getConfigValueWithFlags[int](cmd, "max-items", config.KeyAppAskMaxItems),
@@ -228,7 +229,13 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		ActivationFunc: func(sims map[string]float64) map[string]float64 {
 			return computeActivationScores(cmd.Context(), sims, delta)
 		},
-	})
+	}
+	var result *query.AskResult
+	if ownerRank != nil {
+		result, err = query.AskFromRank(cmd.Context(), resolver, vdb.DB, cfg, ownerRank)
+	} else {
+		result, err = query.Ask(cmd.Context(), ret.Retriever, resolver, vdb.DB, cfg)
+	}
 
 	mode := retrievalModeLabel(ret)
 	if result != nil {

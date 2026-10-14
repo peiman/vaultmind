@@ -55,13 +55,16 @@ func TestRecallHook_LargePromptSkipsQuickly(t *testing.T) {
 		t.Skip("no /bin/bash")
 	}
 	cases := []struct {
-		name   string
-		prompt string
-		reason string // empty means the stub vaultmind must be called
+		name       string
+		prompt     string
+		reason     string // empty means the stub vaultmind must be called
+		kind       string
+		queryChars float64
+		leak       string
 	}{
-		{"hand-back", largeHandback(largePromptBytes), "cross-session-envelope"},
-		{"task-notification", largeTaskNotification(largePromptBytes), "harness-envelope"},
-		{"human mention", largeHumanMention(largePromptBytes), ""},
+		{"hand-back", largeHandback(largePromptBytes), "cross-session-envelope", "agent-message", 0, strings.Repeat("y", 80)},
+		{"task-notification", largeTaskNotification(largePromptBytes), "harness-envelope", "task-notification", 0, strings.Repeat("z", 80)},
+		{"human mention", largeHumanMention(largePromptBytes), "", "prose", float64(recallQueryCharCap), strings.Repeat("h", 80)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -81,6 +84,12 @@ func TestRecallHook_LargePromptSkipsQuickly(t *testing.T) {
 			t.Logf("%s: %d bytes in %s", tc.name, len(tc.prompt), elapsed)
 			assert.Less(t, elapsed, largePromptBudget, "skip logic must stay inside the hook budget")
 
+			entry, raw := promptKindRecord(t, h.home)
+			keys := recallEnvelopeKeys
+			if tc.reason == "" {
+				keys = recallInjectKeys
+			}
+			assertPromptKindRecord(t, entry, raw, tc.kind, tc.queryChars, keys, []string{tc.leak, "Another Claude"})
 			_, statErr := os.Stat(marker)
 			if tc.reason == "" {
 				assert.NoError(t, statErr, "a large human prompt that only mentions the tag must still call vaultmind")
@@ -89,13 +98,6 @@ func TestRecallHook_LargePromptSkipsQuickly(t *testing.T) {
 			}
 			assert.True(t, os.IsNotExist(statErr), "recall must not run")
 			assert.Empty(t, string(out))
-			logs, globErr := filepath.Glob(filepath.Join(h.home, ".vaultmind", "userprompt-hook", "envelope-skips.jsonl"))
-			require.NoError(t, globErr)
-			require.Len(t, logs, 1)
-			raw, readErr := os.ReadFile(logs[0]) //nolint:gosec // test-owned temporary directory
-			require.NoError(t, readErr)
-			var entry map[string]any
-			require.NoError(t, json.Unmarshal(raw, &entry))
 			assert.Equal(t, tc.reason, entry["reason"])
 			assert.Equal(t, false, entry["injection"])
 		})
