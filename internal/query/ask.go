@@ -475,9 +475,23 @@ func AskFromRank(ctx context.Context, resolver *graph.Resolver, db *index.DB, cf
 	return finishAsk(ctx, resolver, db, cfg, ranked)
 }
 
-// finishAsk is the delivery half of Ask: similarities, noise floor, context
-// pack, and access rows. The search that produced result has already run.
+// finishAsk delivers the answer, then stamps which notes closed a recorded
+// gap. The stamp is one lookup for the command, including the early returns
+// below. A lookup failure is logged and the answer still returns: the credit
+// line is evidence, not a gate on the answer.
 func finishAsk(ctx context.Context, resolver *graph.Resolver, db *index.DB, cfg AskConfig, result *AskResult) (*AskResult, error) {
+	delivered, err := deliverAsk(ctx, resolver, db, cfg, result)
+	if delivered != nil {
+		if creditErr := attachGapCredits(db, delivered); creditErr != nil {
+			log.Debug().Err(creditErr).Msg("gap credit lookup failed")
+		}
+	}
+	return delivered, err
+}
+
+// deliverAsk is the delivery half of Ask: similarities, noise floor, context
+// pack, and access rows. The search that produced result has already run.
+func deliverAsk(ctx context.Context, resolver *graph.Resolver, db *index.DB, cfg AskConfig, result *AskResult) (*AskResult, error) {
 	hits := result.TopHits
 	if len(hits) == 0 {
 		return result, nil

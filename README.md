@@ -136,6 +136,7 @@ VaultMind keeps a local SQLite log of retrieval events — which queries surface
 
 ```text
 Memory use (7d): 5 surfaced → 5 delivered → 1 opened, 2 cited (2 unknown — not measurable from text)
+gap-closing notes: 1 surfaced, 1 cited
 ```
 
 `opened` is a logged read in the same conversation and vault. `cited` means the

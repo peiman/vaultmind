@@ -70,6 +70,9 @@ type ContextPackTarget struct {
 	// BodyRawUnfilled is true when body_raw IS NULL. The ask footer suggests
 	// re-indexing only then; a stored empty body is not unfilled.
 	BodyRawUnfilled bool `json:"-"`
+	// AnswersGap is the recorded question this note closed. The text line is
+	// printed only when the body is delivered; the field stays on the note.
+	AnswersGap *index.GapCredit `json:"answers_gap,omitempty"`
 }
 
 // ContextItem holds context metadata for a single related note.
@@ -94,6 +97,8 @@ type ContextItem struct {
 	BodyOmittedBudget bool `json:"body_omitted_budget,omitempty"`
 	// BodyRawUnfilled is true when body_raw IS NULL. See ContextPackTarget.
 	BodyRawUnfilled bool `json:"-"`
+	// AnswersGap is the recorded question this note closed.
+	AnswersGap *index.GapCredit `json:"answers_gap,omitempty"`
 }
 
 // ContextPackResult is the full output of a ContextPack operation.

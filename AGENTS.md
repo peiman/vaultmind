@@ -163,6 +163,10 @@ A companion project's persona hook consumes `vaultmind ask`'s **stdout as raw
 text**. The contract is: exit code 0, non-empty stdout, `"Search:"`
 header line present, at-least-one hit ID in stdout when content matches,
 and stderr never bleeds into stdout. See `cmd/contract_ask_test.go`.
+A delivered note that closed a recorded gap adds one text line under that
+note and `answers_gap` on the hit and context item. `doctor --json` adds
+`gap_loop` (`opened`, `closed`, `median_days_to_close`, `gap_closing_cited`).
+Both are additive on `schema_version` `v1`.
 
 **Changing the contract:**
 1. Rename or remove a field → bump `schema_version` (see

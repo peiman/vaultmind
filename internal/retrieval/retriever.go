@@ -30,6 +30,9 @@ type ScoredResult struct {
 	Score      float64            `json:"score"`
 	IsDomain   bool               `json:"is_domain_note"`
 	Components map[string]float64 `json:"components,omitempty"`
+	// AnswersGap is set when a closed gap names this note in closed_by.
+	// Omitted for every other hit, including search, which does not credit.
+	AnswersGap *index.GapCredit `json:"answers_gap,omitempty"`
 }
 
 // Retriever abstracts a retrieval backend (FTS, embedding, hybrid).

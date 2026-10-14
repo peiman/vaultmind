@@ -409,8 +409,41 @@ absent:
 - `TestHookCaller_AutoRagGuardIsAHook` (`internal/index`) — `auto-rag-guard` is a hook without renaming `VAULTMIND_CALLER`.
 - `TestAsk_AppendsAPossibleGapForATie` (`cmd`) — an `ask` whose band is weak or no-match appends a line that does not contain the raw query, and the line is not inside the vault.
 
+## Amendment: credit the note that closed the gap
+
+A note is gap-closing when a closed gap stores `closed_by` as that note id.
+`ask` loads the map once from `frontmatter_kv` (the question, `opened_at`,
+`closed_at`). It does not read the gap files at delivery time. When the text
+answer includes that note's body, as the target or as a context item, one
+line follows it:
+
+```text
+  ↳ answers a question first investigated 2026-10-14: "<question>"
+```
+
+The date is `opened_at`, in UTC, cut to the calendar day. The question is
+cut at 80 characters. `--pointers-only` does not print the line. A note
+already shown in the session is not credited again. `--json` adds
+`answers_gap` on the hit and the context item. `schema_version` stays `v1`.
+
+`doctor` counts cites of those notes with the same rule as other cites: a
+read wins, and an appearance that was not cited is only surfaced.
+`gap-closing notes: N surfaced, M cited` follows the memory-use line.
+`--json` puts gaps opened, gaps closed, median days to close, and
+gap-closing notes cited on `gap_loop`. Writing a note is not a score.
+
+## Enforcement (credit)
+
+- `TestGapClosures_MapsTheNoteThatClosedTheGap` (`internal/index`) — one query builds the map. An open gap, a non-gap, and a row that does not parse are absent. Two gaps naming one note keep the earlier `opened_at`, then the lower gap id.
+- `TestAsk_DeliversTheGapCreditLine` (`internal/query`) — the line is under the target and the context item, absent for a normal note, absent for `--pointers-only`, and absent when the note was shown earlier. `answers_gap` is present on the gap-closing note and absent on the other. Replacing the lookup with an empty map makes this test red.
+- `TestAsk_LoadsTheGapCreditMapOnce` (`internal/query`) — the lookup runs once per command. A lookup error does not fail the answer.
+- `TestGapClosingUse_CountsOnlyGapClosingCites` (`internal/experiment`) — a plain cite is not counted, and an opened gap-closing note is not a cite. An empty id list is zero. Returning an empty clause, so every cite counts, makes this test red.
+- `TestAsk_CreditsTheNoteThatClosedAGap` (`cmd`) — accepting the draft that closes a gap, then asking, prints the line. `--pointers-only` does not. `--json` is `v1` and carries `answers_gap`. A hook caller still sees the line. The second ask in the same session does not repeat it.
+- `TestDoctor_GapLoopReadsTheClaim` (`cmd`) — `doctor --json` `gap_loop` has `opened`, `closed`, `median_days_to_close`, and `gap_closing_cited`. The text line is `gap-closing notes: N surfaced, M cited`.
+
 ## References
 
+- Gap loop, item 5 (2026-10-14): a delivered note that closed a gap names the question, and doctor counts cites of those notes.
 - Gap loop, item 1 (2026-10-14): `note gap` records the question; accepting the draft that answers it closes the gap.
 - Gap loop, item 4 (2026-10-14): `note propose` checks that the draft repairs retrieval.
 - Gap loop, item 3 (2026-10-14): drafts at the final path; accepting is a status flip.

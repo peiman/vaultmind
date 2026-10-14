@@ -24,6 +24,7 @@ func TestWriteMemoryUse_PrintsEvenWhenNothingIsWrong(t *testing.T) {
 	assert.Contains(t, out, "60 opened")
 	assert.Contains(t, out, "40 unknown — not measurable from text")
 	assert.Contains(t, out, "banked")
+	assert.Contains(t, out, "gap-closing notes: 0 surfaced, 0 cited")
 	assert.NotContains(t, out, "⚠", "a healthy rollup carries no warning")
 }
 
@@ -72,7 +73,7 @@ func TestWriteMemoryUse_PropagatesWriteErrors(t *testing.T) {
 		WindowDays: 7, Injections: 10, BodiesDelivered: 0, Consumed: 1,
 		PerCaller: []query.DoctorCallerUse{{Caller: "h", Injections: 10, Consumed: 1}},
 	}
-	for ok := 0; ok < 4; ok++ {
+	for ok := 0; ok < 5; ok++ {
 		require.Error(t, writeMemoryUse(&failAfterNWriter{ok: ok}, m),
 			"write failure at position %d must propagate", ok)
 	}
@@ -84,6 +85,7 @@ func TestWriteMemoryUse_EvidenceLine(t *testing.T) {
 		WindowDays: 7, Injections: 5, BodiesDelivered: 5, Consumed: 1, Opened: 1, Cited: 2, Unknown: 2,
 	}))
 	assert.Contains(t, buf.String(), "Memory use (7d): 5 surfaced → 5 delivered → 1 opened, 2 cited (2 unknown — not measurable from text)\n")
+	assert.Contains(t, buf.String(), "gap-closing notes: 0 surfaced, 0 cited\n")
 	assert.NotContains(t, buf.String(), "unused")
 	t.Log(buf.String())
 }

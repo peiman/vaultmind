@@ -504,10 +504,12 @@ func writeContextTarget(w io.Writer, target *memory.ContextPackTarget, opts form
 		// The body is shown as packed: an excerpt carries its own bound, and a
 		// whole body is bounded by --budget. Cutting either for display showed
 		// the opening and hid the answer under a header saying it was delivered.
-		_, err := fmt.Fprintf(w, "%s\n", indentBody(target.Body))
-		return err
+		if _, err := fmt.Fprintf(w, "%s\n", indentBody(target.Body)); err != nil {
+			return err
+		}
 	}
-	return nil
+	return writeGapCreditLine(w, target.AnswersGap, target.ShownBefore,
+		!opts.pointersOnly && !target.ShownBefore && target.Body != "")
 }
 
 // writeContextItems emits one block per context-pack neighbor —
@@ -525,6 +527,10 @@ func writeContextItems(w io.Writer, items []memory.ContextItem, opts formatOpts)
 			if _, err := fmt.Fprintf(w, "%s\n", indentBody(item.Body)); err != nil {
 				return err
 			}
+		}
+		if err := writeGapCreditLine(w, item.AnswersGap, item.ShownBefore,
+			!opts.pointersOnly && !item.ShownBefore && item.BodyIncluded && item.Body != ""); err != nil {
+			return err
 		}
 	}
 	return nil

@@ -442,12 +442,15 @@ func collectMemoryUse(vdb *cmdutil.VaultDB) *query.DoctorMemoryUse {
 	if err != nil {
 		return nil
 	}
+	surfaced, cited := gapClosingCounts(vdb.DB, expDB)
 	out := &query.DoctorMemoryUse{
 		WindowDays:      use.WindowDays,
 		Injections:      use.Injections,
 		BodiesDelivered: use.BodiesDelivered,
 		Consumed:        use.Consumed,
 		Opened:          use.Opened, Cited: use.Cited, Unknown: use.Unknown,
+		GapClosingSurfaced: surfaced,
+		GapClosingCited:    cited,
 	}
 	for _, c := range use.PerCaller {
 		out.PerCaller = append(out.PerCaller, query.DoctorCallerUse{
@@ -673,6 +676,10 @@ func writeMemoryUse(w io.Writer, m *query.DoctorMemoryUse) error {
 	if _, err := fmt.Fprintf(w,
 		"Memory use (%dd): %d surfaced → %d delivered → %d opened, %d cited (%d unknown — not measurable from text)\n",
 		m.WindowDays, m.Injections, m.BodiesDelivered, m.Opened, m.Cited, m.Unknown); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "gap-closing notes: %d surfaced, %d cited\n",
+		m.GapClosingSurfaced, m.GapClosingCited); err != nil {
 		return err
 	}
 	if m.BodiesDelivered == 0 {
