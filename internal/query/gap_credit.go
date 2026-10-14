@@ -16,9 +16,11 @@ const gapCreditQuestionRunes = 80
 // counting stub. Production is index.GapClosures.
 var loadGapClosures = index.GapClosures
 
-// attachGapCredits stamps every delivered hit with the gap it closed.
-// One lookup covers the target, the context items, and the hit list.
-// A nil db is an empty map: there is nothing to credit.
+// attachGapCredits stamps a delivered note with the gap it closed, and only
+// where the text line would be: the target, or a context item whose body was
+// delivered, and not a note already shown. A hit gets the field only when
+// that same note does. A draft or a gap never carries it. One lookup covers
+// the command. A nil db is an empty map: there is nothing to credit.
 func attachGapCredits(db *index.DB, result *AskResult) error {
 	if result == nil {
 		return nil
@@ -30,24 +32,42 @@ func attachGapCredits(db *index.DB, result *AskResult) error {
 	if len(credits) == 0 {
 		return nil
 	}
-	for i := range result.TopHits {
-		result.TopHits[i].AnswersGap = gapCreditFor(credits, result.TopHits[i].ID)
+	hidden, err := index.DraftIDs(gapCreditQuery(db))
+	if err != nil {
+		return err
 	}
-	if result.Context == nil {
-		return nil
-	}
-	if target := result.Context.Target; target != nil {
-		id := target.ID
-		if id == "" {
-			id = result.Context.TargetID
+	credited := map[string]*index.GapCredit{}
+	if result.Context != nil {
+		if target := result.Context.Target; target != nil {
+			id := target.ID
+			if id == "" {
+				id = result.Context.TargetID
+			}
+			target.AnswersGap = lineCredit(credits, hidden, id, target.ShownBefore, target.Body != "")
+			if target.AnswersGap != nil {
+				credited[id] = target.AnswersGap
+			}
 		}
-		target.AnswersGap = gapCreditFor(credits, id)
+		for i := range result.Context.Context {
+			item := &result.Context.Context[i]
+			item.AnswersGap = lineCredit(credits, hidden, item.ID, item.ShownBefore, item.BodyIncluded && item.Body != "")
+			if item.AnswersGap != nil {
+				credited[item.ID] = item.AnswersGap
+			}
+		}
 	}
-	for i := range result.Context.Context {
-		item := &result.Context.Context[i]
-		item.AnswersGap = gapCreditFor(credits, item.ID)
+	for i := range result.TopHits {
+		result.TopHits[i].AnswersGap = credited[result.TopHits[i].ID]
 	}
 	return nil
+}
+
+// lineCredit returns the credit only when the text line would name this note.
+func lineCredit(credits map[string]index.GapCredit, hidden index.DraftSet, id string, shownBefore, delivered bool) *index.GapCredit {
+	if shownBefore || !delivered || hidden.Contains(id) {
+		return nil
+	}
+	return gapCreditFor(credits, id)
 }
 
 // gapCreditQuery passes a nil interface for a nil *DB. A nil pointer stored
@@ -71,9 +91,9 @@ func gapCreditFor(credits map[string]index.GapCredit, id string) *index.GapCredi
 // writeGapCreditLine is the one line under a gap-closing note whose body
 // was delivered. Pointers-only and a note already shown this session stay
 // quiet: the line is evidence the agent can read, not a repeated banner.
-// JSON still carries answers_gap on the note.
-func writeGapCreditLine(w io.Writer, credit *index.GapCredit, shownBefore, delivered bool) error {
-	if credit == nil || shownBefore || !delivered {
+// A draft or a gap is not knowledge, so it never carries the line.
+func writeGapCreditLine(w io.Writer, credit *index.GapCredit, shownBefore, delivered, knowledge bool) error {
+	if credit == nil || shownBefore || !delivered || !knowledge {
 		return nil
 	}
 	question := credit.Question
@@ -83,4 +103,16 @@ func writeGapCreditLine(w io.Writer, credit *index.GapCredit, shownBefore, deliv
 	_, err := fmt.Fprintf(w, "  ↳ answers a question first investigated %s: %q\n",
 		credit.OpenedAt.UTC().Format(time.DateOnly), question)
 	return err
+}
+
+// knowledgeNote is false for a draft or a gap. Empty frontmatter is knowledge:
+// the non-knowledge set is what attach already applied.
+func knowledgeNote(frontmatter map[string]any) bool {
+	if noteType, _ := frontmatter["type"].(string); noteType == index.TypeGap {
+		return false
+	}
+	if status, _ := frontmatter["status"].(string); status == index.StatusDraft {
+		return false
+	}
+	return true
 }

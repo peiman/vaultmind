@@ -509,7 +509,8 @@ func writeContextTarget(w io.Writer, target *memory.ContextPackTarget, opts form
 		}
 	}
 	return writeGapCreditLine(w, target.AnswersGap, target.ShownBefore,
-		!opts.pointersOnly && !target.ShownBefore && target.Body != "")
+		!opts.pointersOnly && !target.ShownBefore && target.Body != "",
+		knowledgeNote(target.Frontmatter))
 }
 
 // writeContextItems emits one block per context-pack neighbor —
@@ -529,7 +530,8 @@ func writeContextItems(w io.Writer, items []memory.ContextItem, opts formatOpts)
 			}
 		}
 		if err := writeGapCreditLine(w, item.AnswersGap, item.ShownBefore,
-			!opts.pointersOnly && !item.ShownBefore && item.BodyIncluded && item.Body != ""); err != nil {
+			!opts.pointersOnly && !item.ShownBefore && item.BodyIncluded && item.Body != "",
+			knowledgeNote(item.Frontmatter)); err != nil {
 			return err
 		}
 	}

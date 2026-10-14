@@ -201,6 +201,11 @@ func (d *DB) MemoryUseSince(windowDays int) (*MemoryUse, error) {
 	return out, nil
 }
 
+// gapClosingIDChunk keeps each cite query under SQLite's historical variable
+// limit of 999. The query already binds five parameters, so 500 ids stay
+// under it. The chunks do not overlap, and the counts add.
+const gapClosingIDChunk = 500
+
 // GapClosingUse counts hook-surfaced appearances of the given note ids over
 // the same window and the same cited-and-not-opened rule as MemoryUseSince.
 // An empty id list is zero: "no gap-closing notes" must not become "every cite".
@@ -211,6 +216,22 @@ func (d *DB) GapClosingUse(windowDays int, noteIDs []string) (surfaced, cited in
 	if len(noteIDs) == 0 {
 		return 0, 0, nil
 	}
+	for start := 0; start < len(noteIDs); start += gapClosingIDChunk {
+		end := start + gapClosingIDChunk
+		if end > len(noteIDs) {
+			end = len(noteIDs)
+		}
+		partSurfaced, partCited, partErr := d.gapClosingUseIDs(windowDays, noteIDs[start:end])
+		if partErr != nil {
+			return 0, 0, partErr
+		}
+		surfaced += partSurfaced
+		cited += partCited
+	}
+	return surfaced, cited, nil
+}
+
+func (d *DB) gapClosingUseIDs(windowDays int, noteIDs []string) (surfaced, cited int, err error) {
 	filter, filterArgs := gapClosingFilter(noteIDs)
 	since := fmt.Sprintf("-%d days", windowDays)
 	window := fmt.Sprintf("+%d minutes", int(consumptionWindow.Minutes()))

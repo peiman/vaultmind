@@ -14,13 +14,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// attachGapReview fills the gap meter. A failure is reported as an empty
-// measured list, not by failing doctor.
+// attachGapReview fills the gap meter. A failure to list gaps is reported as
+// an empty measured list, not by failing doctor. The cite count is copied
+// from memory use and stays null when that section was not measured.
 func attachGapReview(result *query.DoctorResult, vdb *cmdutil.VaultDB, vaultPath string) {
-	cited := 0
-	if result.MemoryUse != nil {
-		cited = result.MemoryUse.GapClosingCited
-	}
+	cited := citedFromMemory(result.MemoryUse)
 	report, err := gap.Measure(vdb.DB, vaultPath, time.Now())
 	if err != nil {
 		log.Debug().Err(err).Msg("gap list failed")
@@ -48,27 +46,49 @@ func attachGapReview(result *query.DoctorResult, vdb *cmdutil.VaultDB, vaultPath
 	}
 }
 
+// citedFromMemory copies a measured cite count. No usage log is unmeasured:
+// a zero there would be a guess (Principle 1).
+func citedFromMemory(use *query.DoctorMemoryUse) *int {
+	if use == nil {
+		return nil // no log: unmeasured, not zero
+	}
+	return use.GapClosingCited
+}
+
 // gapClosingCounts is the cite half of the claim. The id set is the same
-// lookup ask uses. A failure is zero, not a failed doctor.
-func gapClosingCounts(vault *index.DB, exp *experiment.DB) (surfaced, cited int) {
+// lookup ask uses. A failed lookup or cite query is unmeasured, not zero,
+// and does not fail doctor.
+func gapClosingCounts(vault *index.DB, exp *experiment.DB) (surfaced, cited *int) {
 	if vault == nil || exp == nil {
-		return 0, 0
+		return nil, nil
 	}
 	credits, err := index.GapClosures(vault)
 	if err != nil {
 		log.Debug().Err(err).Msg("gap credit lookup failed")
-		return 0, 0
+		return nil, nil
 	}
 	ids := make([]string, 0, len(credits))
 	for id := range credits {
 		ids = append(ids, id)
 	}
-	surfaced, cited, err = exp.GapClosingUse(memoryUseWindowDays, ids)
+	nSurfaced, nCited, err := exp.GapClosingUse(memoryUseWindowDays, ids)
 	if err != nil {
 		log.Debug().Err(err).Msg("gap-closing use failed")
-		return 0, 0
+		return nil, nil
 	}
-	return surfaced, cited
+	return countPtr(nSurfaced), countPtr(nCited)
+}
+
+func countPtr(n int) *int {
+	v := n
+	return &v
+}
+
+func gapCountText(n *int) string {
+	if n == nil {
+		return "n/a"
+	}
+	return strconv.Itoa(*n)
 }
 
 func writeGapReview(w io.Writer, g *query.DoctorGaps) error {

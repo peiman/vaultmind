@@ -15,9 +15,11 @@ import (
 // memory goes unused for months. Silence is exactly how that state hides.
 func TestWriteMemoryUse_PrintsEvenWhenNothingIsWrong(t *testing.T) {
 	var buf bytes.Buffer
+	zero := 0
 	require.NoError(t, writeMemoryUse(&buf, &query.DoctorMemoryUse{
 		WindowDays: 7, Injections: 100, BodiesDelivered: 100, Consumed: 60, Opened: 60, Unknown: 40,
 		NotesBanked: 3, VaultNotes: 63,
+		GapClosingSurfaced: &zero, GapClosingCited: &zero,
 	}))
 	out := buf.String()
 	assert.Contains(t, out, "100 surfaced")
@@ -81,8 +83,10 @@ func TestWriteMemoryUse_PropagatesWriteErrors(t *testing.T) {
 
 func TestWriteMemoryUse_EvidenceLine(t *testing.T) {
 	var buf bytes.Buffer
+	zero := 0
 	require.NoError(t, writeMemoryUse(&buf, &query.DoctorMemoryUse{
 		WindowDays: 7, Injections: 5, BodiesDelivered: 5, Consumed: 1, Opened: 1, Cited: 2, Unknown: 2,
+		GapClosingSurfaced: &zero, GapClosingCited: &zero,
 	}))
 	assert.Contains(t, buf.String(), "Memory use (7d): 5 surfaced → 5 delivered → 1 opened, 2 cited (2 unknown — not measurable from text)\n")
 	assert.Contains(t, buf.String(), "gap-closing notes: 0 surfaced, 0 cited\n")

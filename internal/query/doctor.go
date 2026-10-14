@@ -97,18 +97,20 @@ type DoctorResult struct {
 
 	// GapLoop is the two-week claim in one object: gaps opened, gaps closed,
 	// median days to close, and how many gap-closing notes were cited.
-	// Nil means unmeasured. A measured object keeps every key, including a
-	// null median when nothing has closed.
+	// Nil means unmeasured. A measured object keeps every key. A null median
+	// means nothing has closed. A null cite count means the usage log was
+	// absent or the cite query failed; a measured zero stays 0.
 	GapLoop *DoctorGapLoop `json:"gap_loop,omitempty"`
 }
 
 // DoctorGapLoop is the claim meter. MedianDaysToClose is null, not omitted,
-// when nothing has closed, so a reader can tell "unclosed" from "missing".
+// when nothing has closed. GapClosingCited is null, not omitted, when the
+// cite was not measured, so a reader can tell "unmeasured" from "zero".
 type DoctorGapLoop struct {
 	Opened            int      `json:"opened"`
 	Closed            int      `json:"closed"`
 	MedianDaysToClose *float64 `json:"median_days_to_close"`
-	GapClosingCited   int      `json:"gap_closing_cited"`
+	GapClosingCited   *int     `json:"gap_closing_cited"`
 }
 
 // DoctorGaps is the additive gap section. Notes lists open gaps. Opened
@@ -143,10 +145,11 @@ type DoctorMemoryUse struct {
 	Unknown         int `json:"unknown"`
 	NotesBanked     int `json:"notes_banked"`
 	VaultNotes      int `json:"vault_notes"`
-	// Gap-closing counts are appearances of notes that closed a recorded gap,
-	// inside the same window. Zero is a measurement, so the keys stay present.
-	GapClosingSurfaced int `json:"gap_closing_surfaced"`
-	GapClosingCited    int `json:"gap_closing_cited"`
+	// Gap-closing counts share the memory-use window. Nil is unmeasured
+	// (no log, or the cite query failed). A pointer to zero is a measurement,
+	// so the keys stay present either way.
+	GapClosingSurfaced *int `json:"gap_closing_surfaced"`
+	GapClosingCited    *int `json:"gap_closing_cited"`
 	// PerCaller is each hook's own evidence. The aggregate hides which of the
 	// three injection points is earning its tokens, and they are different bets:
 	// session-start, mid-task, and compaction.

@@ -1,6 +1,7 @@
 package experiment_test
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -44,4 +45,30 @@ func TestGapClosingUse_CountsOnlyGapClosingCites(t *testing.T) {
 
 	_, _, err = db.GapClosingUse(0, []string{"gap-note"})
 	require.Error(t, err)
+}
+
+func TestGapClosingUse_CountsPastAThousandIDs(t *testing.T) {
+	db := openTestExpDB(t)
+	at := time.Now().UTC().Add(-time.Minute)
+	sid := evidenceSession(t, db, "credit-session", "vaultmind-userprompt-hook", "/vault")
+	surface := evidenceEvent(t, db, sid, experiment.EventAsk, "/vault", at, experiment.BuildAskEventData(experiment.AskEventParams{
+		RetrievalMode: "keyword", BodyDelivered: true,
+		TopHits: []experiment.RetrievalHit{{NoteID: "gap-note"}, {NoteID: "gap-late"}},
+	}))
+	for _, note := range []string{"gap-note", "gap-late"} {
+		evidenceEvent(t, db, sid, experiment.EventUseEvidence, "/vault", at.Add(time.Second), map[string]any{
+			"note_id": note, "evidence": "cited", "surfaced_event_id": surface,
+		})
+	}
+
+	ids := make([]string, 0, 1002)
+	for i := 0; i < 1000; i++ {
+		ids = append(ids, fmt.Sprintf("filler-%04d", i))
+	}
+	ids = append(ids, "gap-note", "gap-late")
+
+	surfaced, cited, err := db.GapClosingUse(7, ids)
+	require.NoError(t, err)
+	assert.Equal(t, 2, surfaced)
+	assert.Equal(t, 2, cited, "ids past the first chunk are still counted")
 }

@@ -88,7 +88,10 @@ No schema-version bump or field rename is required.
 
 `memory_use` also carries `gap_closing_surfaced` and `gap_closing_cited`.
 `gap_loop` carries `opened`, `closed`, `median_days_to_close`, and
-`gap_closing_cited`. `median_days_to_close` is `null` when nothing has closed.
+`gap_closing_cited`. `median_days_to_close` is a fraction of a day (12 hours
+is 0.5) and `null` when nothing has closed. `gap_closing_cited` is `null`
+when there is no usage log or the cite query fails, and `0` only when measured
+as zero. The cite window is the same machine-wide window as `memory_use`.
 Both are additive on schema `v1`.
 
 Part 2's sampled self-report is not included.

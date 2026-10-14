@@ -442,6 +442,7 @@ func collectMemoryUse(vdb *cmdutil.VaultDB) *query.DoctorMemoryUse {
 	if err != nil {
 		return nil
 	}
+	// Nil counts mean the cite query failed. A pointer to zero was measured.
 	surfaced, cited := gapClosingCounts(vdb.DB, expDB)
 	out := &query.DoctorMemoryUse{
 		WindowDays:      use.WindowDays,
@@ -678,8 +679,8 @@ func writeMemoryUse(w io.Writer, m *query.DoctorMemoryUse) error {
 		m.WindowDays, m.Injections, m.BodiesDelivered, m.Opened, m.Cited, m.Unknown); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(w, "gap-closing notes: %d surfaced, %d cited\n",
-		m.GapClosingSurfaced, m.GapClosingCited); err != nil {
+	if _, err := fmt.Fprintf(w, "gap-closing notes: %s surfaced, %s cited\n",
+		gapCountText(m.GapClosingSurfaced), gapCountText(m.GapClosingCited)); err != nil {
 		return err
 	}
 	if m.BodiesDelivered == 0 {

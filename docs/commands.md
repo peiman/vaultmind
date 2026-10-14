@@ -36,15 +36,15 @@ When `ask` delivers a note that a closed gap names in `closed_by`, one line foll
   ↳ answers a question first investigated 2026-10-14: "how does the index stay current"
 ```
 
-The date is when the question was opened. The question is cut at 80 characters. The line is not printed for `--pointers-only`, and it is not repeated for a note already shown in the session. `--json` adds `answers_gap` with `question`, `opened_at`, and `closed_at` on that hit and on a context item that carries a body. `schema_version` stays `v1`.
+The date is when the question was opened. The question is cut at 80 characters. The line is not printed for `--pointers-only`, and it is not repeated for a note already shown in the session. `--json` adds `answers_gap` with `question`, `opened_at`, and `closed_at` on the delivered target and on a context item whose body was delivered, and on a hit with the same id. It is absent when that note was already shown. A draft or a gap never carries it, even with `--include-drafts`. `schema_version` stays `v1`.
 
-`doctor` prints `gap-closing notes: N surfaced, M cited` on the line after memory use. `--json` adds `gap_loop`:
+`doctor` prints `gap-closing notes: N surfaced, M cited` on the line after memory use. When the cite query fails those counts are `n/a`. `--json` adds `gap_loop`:
 
 ```json
-{"opened": 1, "closed": 1, "median_days_to_close": 0, "gap_closing_cited": 1}
+{"opened": 1, "closed": 1, "median_days_to_close": 0.5, "gap_closing_cited": 1}
 ```
 
-`median_days_to_close` is `null` when nothing has closed. `gap_closing_cited` counts cites of notes that closed a gap, not notes written.
+`median_days_to_close` is days as a fraction (12 hours is 0.5), and `null` when nothing has closed. `gap_closing_cited` counts cites of notes that closed a gap, not notes written. It is `null` when there is no usage log or the cite query fails, and `0` only when the count was measured as zero. The cite window is the same machine-wide window as `memory_use`. The credit follows the note id (`closed_by`), not the gap id.
 
 A weak or no-match `ask` from the CLI appends one line under the XDG state directory, in `vaultmind/possible-gaps/<vault-key>.jsonl` (mode 0600). That file is per-user state, not part of the vault, and a hook does not append. The line stores a salted hash of the query and its length. The raw query is stored only when `app.ask.gap_store_query` is true (default false; `VAULTMIND_APP_ASK_GAP_STORE_QUERY`). At most `app.ask.gap_log_limit` records are kept (default 1000). There is no flag for either setting.
 

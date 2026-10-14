@@ -1,12 +1,17 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
+	"path/filepath"
 	"regexp"
 	"testing"
 	"time"
 
 	"github.com/peiman/vaultmind/internal/experiment"
+	"github.com/peiman/vaultmind/internal/index"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -51,6 +56,26 @@ func TestAsk_CreditsTheNoteThatClosedAGap(t *testing.T) {
 	assert.NotContains(t, second.String(), "↳ answers a question", "dedup does not repeat the credit line")
 }
 
+func TestDoctor_GapClosingCitedIsNullWithoutALog(t *testing.T) {
+	dir := gapCommandVault(t)
+	// The command pre-run creates a usage log unless telemetry is off. Off
+	// leaves no log, which is the unmeasured case.
+	t.Setenv(EnvPrefix()+"_EXPERIMENTS_TELEMETRY", experiment.TelemetryOff)
+
+	raw, errOut, err := runRootCmd(t, "doctor", "--vault", dir, "--json")
+	require.NoError(t, err, errOut.String())
+	var env struct {
+		Result struct {
+			GapLoop   map[string]json.RawMessage `json:"gap_loop"`
+			MemoryUse json.RawMessage            `json:"memory_use"`
+		} `json:"result"`
+	}
+	require.NoError(t, json.Unmarshal(raw.Bytes(), &env))
+	assert.True(t, len(env.Result.MemoryUse) == 0 || string(env.Result.MemoryUse) == "null")
+	require.Contains(t, env.Result.GapLoop, "gap_closing_cited")
+	assert.Equal(t, "null", string(env.Result.GapLoop["gap_closing_cited"]))
+}
+
 func TestDoctor_GapLoopReadsTheClaim(t *testing.T) {
 	dir := gapCommandVault(t)
 	t.Setenv(experiment.EnvCaller, "")
@@ -93,6 +118,74 @@ func TestDoctor_GapLoopReadsTheClaim(t *testing.T) {
 	for _, key := range []string{"opened", "closed", "median_days_to_close", "gap_closing_cited"} {
 		_, ok := loop[key]
 		assert.True(t, ok, "gap_loop.%s", key)
+	}
+}
+
+func TestGapClosingCounts_QueryErrorIsNull(t *testing.T) {
+	vault, err := index.Open(filepath.Join(t.TempDir(), "index.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = vault.Close() })
+	seedGapClosure(t, vault, "gap-1", "answer")
+
+	exp, err := experiment.Open(filepath.Join(t.TempDir(), "experiments.db"))
+	require.NoError(t, err)
+	require.NoError(t, exp.Close())
+
+	prevLevel := zerolog.GlobalLevel()
+	oldLogger := log.Logger
+	var logs bytes.Buffer
+	log.Logger = zerolog.New(&logs).Level(zerolog.DebugLevel)
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	t.Cleanup(func() {
+		zerolog.SetGlobalLevel(prevLevel)
+		log.Logger = oldLogger
+	})
+
+	surfaced, cited := gapClosingCounts(vault, exp)
+	assert.Nil(t, surfaced)
+	assert.Nil(t, cited)
+	assert.Contains(t, logs.String(), "gap-closing use failed")
+}
+
+func TestGapClosingCounts_MeasuredZeroStaysZero(t *testing.T) {
+	vault, err := index.Open(filepath.Join(t.TempDir(), "index.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = vault.Close() })
+	exp, err := experiment.Open(filepath.Join(t.TempDir(), "experiments.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = exp.Close() })
+
+	surfaced, cited := gapClosingCounts(vault, exp)
+	require.NotNil(t, surfaced)
+	require.NotNil(t, cited)
+	assert.Equal(t, 0, *surfaced)
+	assert.Equal(t, 0, *cited)
+
+	missing, alsoMissing := gapClosingCounts(vault, nil)
+	assert.Nil(t, missing)
+	assert.Nil(t, alsoMissing)
+}
+
+func seedGapClosure(t *testing.T, db *index.DB, gapID, closedBy string) {
+	t.Helper()
+	_, err := db.Exec(
+		`INSERT INTO notes (id, path, hash, mtime, status, type) VALUES (?, ?, 'h', 1, 'closed', ?)`,
+		gapID, gapID+".md", index.TypeGap)
+	require.NoError(t, err)
+	opened := time.Now().UTC().Add(-time.Hour).Format(time.RFC3339)
+	closed := time.Now().UTC().Format(time.RFC3339)
+	for _, kv := range []struct{ key, value string }{
+		{"closed_by", closedBy},
+		{"question", "what closed"},
+		{"opened_at", opened},
+		{"closed_at", closed},
+	} {
+		raw, mErr := json.Marshal(kv.value)
+		require.NoError(t, mErr)
+		_, err = db.Exec(
+			`INSERT INTO frontmatter_kv (note_id, key, value_json) VALUES (?, ?, ?)`,
+			gapID, kv.key, string(raw))
+		require.NoError(t, err)
 	}
 }
 
