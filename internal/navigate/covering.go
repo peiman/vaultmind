@@ -42,12 +42,10 @@ func CoveringIncludingDrafts(q Querier, f CodeFile) ([]Note, error) {
 }
 
 func covering(q Querier, f CodeFile, includeDrafts bool) ([]Note, error) {
-	var drafts index.DraftSet
-	if !includeDrafts {
-		var err error
-		if drafts, err = index.DraftIDs(q); err != nil {
-			return nil, fmt.Errorf("loading drafts: %w", err)
-		}
+	// Always loaded. includeDrafts reveals drafts and never a gap.
+	drafts, err := index.DraftIDs(q)
+	if err != nil {
+		return nil, fmt.Errorf("loading drafts: %w", err)
 	}
 	rows, err := q.Query(`SELECT n.id, n.path, COALESCE(n.title, ''), COALESCE(n.type, ''),
 		COALESCE(n.status, ''), COALESCE(n.body_raw, n.body_text, ''), kv.value_json

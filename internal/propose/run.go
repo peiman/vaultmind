@@ -18,11 +18,14 @@ func Run(ctx context.Context, v Vault, req Request, retriever Retriever) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if strings.TrimSpace(req.Question) == "" {
-		return fail(req, cmdPropose, "question_required", "question is required")
-	}
 	if strings.TrimSpace(req.Finding) == "" {
 		return fail(req, cmdPropose, "finding_required", "--finding is required")
+	}
+	if err := bindGap(v, &req); err != nil {
+		return err
+	}
+	if strings.TrimSpace(req.Question) == "" {
+		return fail(req, cmdPropose, "question_required", "question is required")
 	}
 	if err := validateSources(v.Path, workDir(req), req.Sources); err != nil {
 		return fail(req, cmdPropose, "invalid_source", err.Error())

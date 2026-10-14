@@ -121,10 +121,22 @@ func TestListAccessedNotesExcludingCaller_FiltersHookAccessesFromAgentView(t *te
 	assert.Equal(t, 1, ids["mixed"], "mixed: only the agent access counted, hook excluded")
 }
 
+func TestHookCaller_AutoRagGuardIsAHook(t *testing.T) {
+	t.Setenv("VAULTMIND_CALLER", "auto-rag-guard")
+	assert.True(t, index.HookCaller())
+	t.Setenv("VAULTMIND_CALLER", "vaultmind-userprompt-hook")
+	assert.True(t, index.HookCaller())
+	t.Setenv("VAULTMIND_CALLER", "")
+	assert.False(t, index.HookCaller())
+	t.Setenv("VAULTMIND_CALLER", "cli")
+	assert.False(t, index.HookCaller())
+}
+
 // VAULTMIND_CALLER env var routes to the hook bucket when its value
 // contains "hook". Pre-existing persona scripts already set
 // VAULTMIND_CALLER=vaultmind-persona-hook so this is what makes them
-// classify correctly without touching the scripts.
+// classify correctly without touching the scripts. auto-rag-guard does
+// not contain "hook"; classification still stores the access as hook.
 func TestRecordNoteAccess_ClassifiesEnvHookCallerAsHook(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")

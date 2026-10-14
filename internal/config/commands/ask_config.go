@@ -146,6 +146,20 @@ func AskOptions() []config.ConfigOption {
 		//   18 × 64 = 1152
 		{Key: "app.ask.query_forward_tokens", DefaultValue: 1152, Description: "Embed the first N tokens of the query in one forward pass. Dense and sparse rank on that text. The cut is on a token boundary, so the embedded text is a prefix of the query. 0 turns the bound off.", Type: "int"},
 		{Key: "app.ask.query_salient_terms", DefaultValue: 64, Description: "ColBERT and FTS use the K tokens with the highest sparse weight from that forward pass. A spaced word stays one FTS term. A long word with no spaces contributes the text of its salient tokens, not the whole word. 0 turns the bound off.", Type: "int"},
+		{
+			Key:          "app.ask.gap_store_query",
+			DefaultValue: false,
+			Description:  "Store the raw query text in the possible-gap hint log. Off by default: the log keeps a salted hash and a length. The log is per-user state, outside the vault. Config file or environment only, not a flag.",
+			Type:         "bool",
+			NoFlag:       true,
+		},
+		{
+			Key:          "app.ask.gap_log_limit",
+			DefaultValue: 1000,
+			Description:  "Most records kept in the possible-gap hint log. The file may grow to twice this many, then it is rewritten to the newest this many. Config file or environment only, not a flag.",
+			Type:         "int",
+			NoFlag:       true,
+		},
 	}
 }
 

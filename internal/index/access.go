@@ -29,8 +29,9 @@ const (
 
 // callerEnvVar is the env-var key the persona/recall hooks set so their
 // fan-out accesses are distinguishable from the agent's deliberate
-// queries. The persona script writes "vaultmind-persona-hook" today;
-// any value that ends with "-hook" classifies as a hook caller.
+// queries. The persona script writes "vaultmind-persona-hook" today.
+// hookCallerName is the classification: a value that contains "hook",
+// and the exact value auto-rag-guard. That value is not renamed.
 const callerEnvVar = "VAULTMIND_CALLER"
 
 // resolveCaller maps explicit-arg + env-var input to a normalised
@@ -41,16 +42,19 @@ const callerEnvVar = "VAULTMIND_CALLER"
 // this whole layer is designed to prevent.
 //
 // Precedence:
-//  1. Env var matching "hook" substring → CallerHook (harness override)
+//  1. Env var classified as a hook → CallerHook (harness override)
 //  2. Explicit caller arg if non-empty → returned verbatim
 //  3. Env var (any other value) → returned verbatim
 //  4. Otherwise → CallerAgent (default for explicit deliberate access)
 //
 // The "hook" substring rule keeps the persona script's existing
 // VAULTMIND_CALLER=vaultmind-persona-hook value working unchanged.
+// auto-rag-guard is classified here too. Its env value does not contain
+// "hook" and is not renamed, so rows already stored under that caller
+// still match the script.
 func resolveCaller(explicit string) string {
 	envCaller := os.Getenv(callerEnvVar)
-	if envCaller != "" && containsHookSubstring(envCaller) {
+	if envCaller != "" && hookCallerName(envCaller) {
 		return CallerHook
 	}
 	if explicit != "" {
@@ -62,12 +66,23 @@ func resolveCaller(explicit string) string {
 	return CallerAgent
 }
 
+// autoRagGuardCaller is the VAULTMIND_CALLER value auto-rag-guard.sh sets.
+// The value stays as written. Classification, not a rename, is what makes
+// it a hook: the stale-sparse notice (#289) and the possible-gap log both
+// ask HookCaller, and this name does not contain "hook".
+const autoRagGuardCaller = "auto-rag-guard"
+
 // HookCaller reports whether VAULTMIND_CALLER names a hook. The rule is
-// containsHookSubstring, the same one resolveCaller uses to record the
-// access as CallerHook, so a new hook script is classified without a
-// second list of names.
+// hookCallerName, the same one resolveCaller uses to record the access as
+// CallerHook, so a new hook script is classified without a second list.
 func HookCaller() bool {
-	return containsHookSubstring(os.Getenv(callerEnvVar))
+	return hookCallerName(os.Getenv(callerEnvVar))
+}
+
+// hookCallerName is the one classification of a caller string. A value that
+// contains "hook" is a hook. auto-rag-guard is a hook whose value does not.
+func hookCallerName(s string) bool {
+	return containsHookSubstring(s) || s == autoRagGuardCaller
 }
 
 // containsHookSubstring is a tiny helper kept inline so the resolver

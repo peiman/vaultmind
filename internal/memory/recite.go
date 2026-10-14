@@ -74,19 +74,18 @@ func Recite(db *index.DB, cfg ReciteConfig) (*ReciteResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !cfg.IncludeDrafts {
-		drafts, loadErr := index.DraftIDs(db)
-		if loadErr != nil {
-			return nil, fmt.Errorf("recite: loading drafts: %w", loadErr)
-		}
-		kept := make([]string, 0, len(ids))
-		for _, id := range ids {
-			if drafts.Visible(id, false) {
-				kept = append(kept, id)
-			}
-		}
-		ids = kept
+	// Always loaded. IncludeDrafts reveals a draft and never a gap.
+	drafts, loadErr := index.DraftIDs(db)
+	if loadErr != nil {
+		return nil, fmt.Errorf("recite: loading drafts: %w", loadErr)
 	}
+	kept := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if drafts.Visible(id, cfg.IncludeDrafts) {
+			kept = append(kept, id)
+		}
+	}
+	ids = kept
 	sort.Strings(ids)
 
 	result := &ReciteResult{

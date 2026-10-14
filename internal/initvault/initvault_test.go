@@ -224,7 +224,7 @@ func TestScaffold_RegistersEveryDocumentedNoteType(t *testing.T) {
 	cfg, err := vault.LoadConfig(dir)
 	require.NoError(t, err)
 
-	for _, want := range []string{"identity", "principle", "arc", "reference", "concept", "source", "decision", "journal"} {
+	for _, want := range []string{"identity", "principle", "arc", "reference", "concept", "source", "decision", "journal", "gap"} {
 		_, ok := cfg.Types[want]
 		assert.True(t, ok, "a fresh vault must register %q — the docs tell agents to use it", want)
 	}

@@ -5,13 +5,13 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"path/filepath"
 	"time"
 
 	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/noisefloor"
 	"github.com/peiman/vaultmind/internal/query"
+	"github.com/peiman/vaultmind/internal/vault"
 )
 
 // calibrateVaultNoiseFloor measures the vault's noise floor N + note-to-note
@@ -78,23 +78,10 @@ func calibrateVaultNoiseFloor(ctx context.Context, vaultPath, dbPath, model stri
 	})
 }
 
-// canonicalVaultKey turns a vault path into a stable key for calibration
-// scoping, used identically on the write side (here) and the read side (ask) so
-// they agree. The default vault path is "." (relative), so without
-// canonicalization two vaults indexed from different working directories would
-// both store "." and collide — one reading the other's noise floor. filepath.Abs
-// resolves to an absolute path; EvalSymlinks collapses symlinked aliases of the
-// same directory. Both fall back gracefully so a path that doesn't exist yet
-// still yields a deterministic key.
+// canonicalVaultKey is vault.CanonicalKey. Calibration and ask both call it,
+// so a relative vault path and a symlinked alias stay one key.
 func canonicalVaultKey(vaultPath string) string {
-	abs, err := filepath.Abs(vaultPath)
-	if err != nil {
-		return filepath.Clean(vaultPath)
-	}
-	if resolved, evalErr := filepath.EvalSymlinks(abs); evalErr == nil {
-		return resolved
-	}
-	return abs
+	return vault.CanonicalKey(vaultPath)
 }
 
 func randomHexID() (string, error) {

@@ -66,6 +66,8 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.ask.dedup_window` | string | `` | `VAULTMIND_APP_ASK_DEDUP_WINDOW` | Send a note as its title alone when this conversation (VAULTMIND_USER_SESSION_ID) received its text within this long, e.g. 10m. Empty = off. For hooks that fire in bursts. |
 | `app.ask.query_forward_tokens` | int | `1152` | `VAULTMIND_APP_ASK_QUERY_FORWARD_TOKENS` | Embed the first N tokens of the query in one forward pass. Dense and sparse rank on that text. The cut is on a token boundary, so the embedded text is a prefix of the query. 0 turns the bound off. |
 | `app.ask.query_salient_terms` | int | `64` | `VAULTMIND_APP_ASK_QUERY_SALIENT_TERMS` | ColBERT and FTS use the K tokens with the highest sparse weight from that forward pass. A spaced word stays one FTS term. A long word with no spaces contributes the text of its salient tokens, not the whole word. 0 turns the bound off. |
+| `app.ask.gap_store_query` | bool | `false` | `VAULTMIND_APP_ASK_GAP_STORE_QUERY` | Store the raw query text in the possible-gap hint log. Off by default: the log keeps a salted hash and a length. The log is per-user state, outside the vault. Config file or environment only, not a flag. |
+| `app.ask.gap_log_limit` | int | `1000` | `VAULTMIND_APP_ASK_GAP_LOG_LIMIT` | Most records kept in the possible-gap hint log. The file may grow to twice this many, then it is rewritten to the newest this many. Config file or environment only, not a flag. |
 | `app.check.fail_fast` | bool | `false` | `VAULTMIND_APP_CHECK_FAIL_FAST` | Stop on first failed check |
 | `app.check.verbose` | bool | `false` | `VAULTMIND_APP_CHECK_VERBOSE` | Show verbose output including command details |
 | `app.check.parallel` | bool | `true` | `VAULTMIND_APP_CHECK_PARALLEL` | Run checks within each category in parallel (disable with --parallel=false) |
@@ -303,11 +305,14 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.notecreate.type` | string | `` | `VAULTMIND_APP_NOTECREATE_TYPE` | Note type (required) |
 | `app.notecreate.body` | string | `` | `VAULTMIND_APP_NOTECREATE_BODY` | Body text (overrides template body) |
 | `app.notecreate.commit` | bool | `false` | `VAULTMIND_APP_NOTECREATE_COMMIT` | Stage and commit |
+| `app.notegap.vault` | string | `.` | `VAULTMIND_APP_NOTEGAP_VAULT` | Path to vault root |
+| `app.notegap.json` | bool | `false` | `VAULTMIND_APP_NOTEGAP_JSON` | Output in JSON format |
 | `app.notepropose.vault` | string | `.` | `VAULTMIND_APP_NOTEPROPOSE_VAULT` | Path to vault root |
 | `app.notepropose.json` | bool | `false` | `VAULTMIND_APP_NOTEPROPOSE_JSON` | Output in JSON format |
 | `app.notepropose.question` | string | `` | `VAULTMIND_APP_NOTEPROPOSE_QUESTION` | Question the finding answers |
 | `app.notepropose.finding` | string | `` | `VAULTMIND_APP_NOTEPROPOSE_FINDING` | Finding to record as a draft |
 | `app.notepropose.close_band` | string | `strong` | `VAULTMIND_APP_NOTEPROPOSE_CLOSE_BAND` | Relevance band that means the top hit is close enough to patch. The band ask already reports for that hit. Default is the strong band. |
+| `app.notepropose.gap` | string | `` | `VAULTMIND_APP_NOTEPROPOSE_GAP` | Open gap this finding answers. The draft stores closes_gap. When the question is omitted, the gap's question is used. |
 | `app.ping.output_message` | string | `Pong` | `VAULTMIND_APP_PING_OUTPUT_MESSAGE` | Default message to display for the ping command |
 | `app.ping.output_color` | string | `white` | `VAULTMIND_APP_PING_OUTPUT_COLOR` | Text color for ping command output (white, red, green, blue, cyan, yellow, magenta) |
 | `app.ping.ui` | bool | `false` | `VAULTMIND_APP_PING_UI` | Enable interactive UI for the ping command |
@@ -464,6 +469,12 @@ app:
 
     # ColBERT and FTS use the K tokens with the highest sparse weight from that forward pass. A spaced word stays one FTS term. A long word with no spaces contributes the text of its salient tokens, not the whole word. 0 turns the bound off.
     query_salient_terms: 64
+
+    # Store the raw query text in the possible-gap hint log. Off by default: the log keeps a salted hash and a length. The log is per-user state, outside the vault. Config file or environment only, not a flag.
+    gap_store_query: false
+
+    # Most records kept in the possible-gap hint log. The file may grow to twice this many, then it is rewritten to the newest this many. Config file or environment only, not a flag.
+    gap_log_limit: 1000
 
   check:
     # Stop on first failed check
@@ -1261,6 +1272,13 @@ app:
     # Stage and commit
     commit: false
 
+  notegap:
+    # Path to vault root
+    vault: .
+
+    # Output in JSON format
+    json: false
+
   notepropose:
     # Path to vault root
     vault: .
@@ -1276,6 +1294,9 @@ app:
 
     # Relevance band that means the top hit is close enough to patch. The band ask already reports for that hit. Default is the strong band.
     close_band: strong
+
+    # Open gap this finding answers. The draft stores closes_gap. When the question is omitted, the gap's question is used.
+    gap: 
 
   ping:
     # Default message to display for the ping command
@@ -1541,6 +1562,12 @@ export VAULTMIND_APP_ASK_QUERY_FORWARD_TOKENS=1152
 
 # ColBERT and FTS use the K tokens with the highest sparse weight from that forward pass. A spaced word stays one FTS term. A long word with no spaces contributes the text of its salient tokens, not the whole word. 0 turns the bound off.
 export VAULTMIND_APP_ASK_QUERY_SALIENT_TERMS=64
+
+# Store the raw query text in the possible-gap hint log. Off by default: the log keeps a salted hash and a length. The log is per-user state, outside the vault. Config file or environment only, not a flag.
+export VAULTMIND_APP_ASK_GAP_STORE_QUERY=false
+
+# Most records kept in the possible-gap hint log. The file may grow to twice this many, then it is rewritten to the newest this many. Config file or environment only, not a flag.
+export VAULTMIND_APP_ASK_GAP_LOG_LIMIT=1000
 
 # Stop on first failed check
 export VAULTMIND_APP_CHECK_FAIL_FAST=true
@@ -2254,6 +2281,12 @@ export VAULTMIND_APP_NOTECREATE_BODY=
 export VAULTMIND_APP_NOTECREATE_COMMIT=false
 
 # Path to vault root
+export VAULTMIND_APP_NOTEGAP_VAULT=.
+
+# Output in JSON format
+export VAULTMIND_APP_NOTEGAP_JSON=false
+
+# Path to vault root
 export VAULTMIND_APP_NOTEPROPOSE_VAULT=.
 
 # Output in JSON format
@@ -2267,6 +2300,9 @@ export VAULTMIND_APP_NOTEPROPOSE_FINDING=
 
 # Relevance band that means the top hit is close enough to patch. The band ask already reports for that hit. Default is the strong band.
 export VAULTMIND_APP_NOTEPROPOSE_CLOSE_BAND=strong
+
+# Open gap this finding answers. The draft stores closes_gap. When the question is omitted, the gap's question is used.
+export VAULTMIND_APP_NOTEPROPOSE_GAP=
 
 # Default message to display for the ping command
 export VAULTMIND_APP_PING_OUTPUT_MESSAGE=Hello World!

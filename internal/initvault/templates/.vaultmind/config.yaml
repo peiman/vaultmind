@@ -80,6 +80,13 @@ types:
     required: [title, status]
     optional: [related_ids, source_ids, tags]
     statuses: [proposed, accepted, rejected, superseded]
+  # An unanswered question. Not knowledge, and not citable. note gap writes
+  # these; recall never returns them. No template: the minimal note is enough.
+  gap:
+    required: [title, question]
+    optional: [opened_at, session, asked_hits, closed_at, closed_by, tags]
+    statuses: [open, closed]
+    authoritative: false
 
 git:
   policy:

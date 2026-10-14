@@ -93,6 +93,10 @@ func acceptNew(ctx context.Context, v Vault, req Request, rel, id string, parsed
 	if err != nil {
 		return fail(req, cmdAccept, "note_missing", err.Error())
 	}
+	missing, err := closeLinkedGap(ctx, v, req, parsed, id)
+	if err != nil {
+		return err
+	}
 	err = rewriteNote(abs, rel, raw, req.beforeWrite, func(mapping *yaml.Node) error {
 		return mutation.SetKey(mapping, "status", published)
 	}, nil)
@@ -100,7 +104,8 @@ func acceptNew(ctx context.Context, v Vault, req Request, rel, id string, parsed
 		return err
 	}
 	return renderAccept(req, v, outcome{
-		Mode: modeNew, Path: rel, ID: id, Status: published, Warnings: reindex(ctx, v, req, rel),
+		Mode: modeNew, Path: rel, ID: id, Status: published,
+		Warnings: reindex(ctx, v, req, rel), MissingGap: missing,
 	})
 }
 
@@ -128,6 +133,10 @@ func acceptPatch(ctx context.Context, v Vault, req Request, proposalRel string, 
 	if err := refusePatchTarget(req, parsed, targetID); err != nil {
 		return err
 	}
+	missing, err := closeLinkedGap(ctx, v, req, proposal, target.ID)
+	if err != nil {
+		return err
+	}
 	// The marker is the record that this proposal was already copied onto the
 	// target. A retry after a failed delete must not append the section again.
 	if !bytes.Contains(raw, []byte(acceptedMarker(req.ID))) {
@@ -151,6 +160,7 @@ func acceptPatch(ctx context.Context, v Vault, req Request, proposalRel string, 
 	return renderAccept(req, v, outcome{
 		Mode: modePatch, Path: target.Path, ID: target.ID, TargetID: target.ID,
 		Removed: proposalRel, Warnings: reindex(ctx, v, req, target.Path),
+		MissingGap: missing,
 	})
 }
 

@@ -179,6 +179,8 @@ components:
       - internal/serve/**
       # VaultMind propose (vaultmind note propose / note accept): a finding becomes a reviewable draft, and a person promotes it.
       - internal/propose/**
+      # VaultMind gaps (vaultmind note gap): an unanswered question recorded as a note, and the hint log of weak asks.
+      - internal/gap/**
 
   # pkg/ was cleaned by task init (checkmate is now an external dependency).
   # Re-add this section if you create new public packages in pkg/.

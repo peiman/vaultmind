@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -24,6 +25,34 @@ func askRankingBounds(cmd *cobra.Command) (searchLimit, forwardTokens, salientTe
 	forwardTokens = getConfigValueWithFlags[int](cmd, "query-forward-tokens", config.KeyAppAskQueryForwardTokens)
 	salientTerms = getConfigValueWithFlags[int](cmd, "query-salient-terms", config.KeyAppAskQuerySalientTerms)
 	return
+}
+
+// askRank runs the ranking ask uses for one question: the same retriever,
+// the same bounds, and the same noise floor. Drafts stay out unless a
+// caller wraps the retriever. Gaps stay out through the shared predicate.
+func askRank(cmd *cobra.Command, ctx context.Context, vaultPath string, db *index.DB, text string) (*query.AskResult, error) {
+	ret := query.BuildAutoRetrieverFull(ctx, db)
+	// Cleanup leaves the shared ONNX session loaded. A later embed cannot
+	// start a session while this one is held.
+	defer query.CloseSharedEmbedder()
+	defer ret.Cleanup()
+	limit, forward, salient := askRankingBounds(cmd)
+	noise, sigma, has, low := 0.0, 0.0, false, false
+	if ret.Embedder != nil {
+		noise, sigma, low = resolveNoiseFloor(ctx, vaultPath, ret.Embedder.Dims())
+		has = true
+	}
+	return query.Rank(ctx, ret.Retriever, db, query.AskConfig{
+		Query:              text,
+		SearchLimit:        limit,
+		Embedder:           ret.Embedder,
+		NoiseFloor:         noise,
+		NoiseFloorSigma:    sigma,
+		HasNoiseFloor:      has,
+		VaultLowContrast:   low,
+		QueryForwardTokens: forward,
+		QuerySalientTerms:  salient,
+	})
 }
 
 // openAskIndex opens one vault's retriever and embedder. Tests replace it to

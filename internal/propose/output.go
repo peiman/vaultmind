@@ -77,8 +77,14 @@ func renderPropose(req Request, v Vault, o outcome) error {
 }
 
 func renderAccept(req Request, v Vault, o outcome) error {
+	// A missing linked gap is its own warning. writeEnvelope tags every
+	// string in Warnings as reindex_failed, and this one is not a reindex.
+	textWarnings := o.Warnings
+	if o.MissingGap != "" {
+		textWarnings = append([]string{missingGapWarning(o.MissingGap)}, o.Warnings...)
+	}
 	if !req.JSON {
-		writeWarnings(req, o.Warnings)
+		writeWarnings(req, textWarnings)
 		var err error
 		if o.Mode == modePatch {
 			_, err = fmt.Fprintf(stdout(req), "accepted %s — added the proposal to it and removed %s\n", o.ID, o.Removed)
@@ -92,7 +98,11 @@ func renderAccept(req Request, v Vault, o outcome) error {
 		result.TargetID = o.TargetID
 		result.Status = ""
 	}
-	return writeEnvelope(req, v, envelope.OK(cmdAccept, result), o.Warnings)
+	env := envelope.OK(cmdAccept, result)
+	if o.MissingGap != "" {
+		env.AddWarning("gap_missing", missingGapWarning(o.MissingGap), o.MissingGap)
+	}
+	return writeEnvelope(req, v, env, o.Warnings)
 }
 
 func writeWarnings(req Request, warnings []string) {

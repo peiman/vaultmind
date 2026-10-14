@@ -160,9 +160,15 @@ func CountFTS(d *DB, query string, filters ...SearchFilters) (int, error) {
 	return count, nil
 }
 
-// appendSearchFilters is the one SQL predicate for type, tag, path and drafts.
-// SearchFTS and CountFTS both call it, so a page and its total cannot disagree,
-// and the draft clause is applied before LIMIT.
+// gapExcludeSQL is the type half of the one search predicate. The literal is
+// TypeGap. Dropping this clause is what lets a gap rank. A draft is the
+// other half of the same predicate, and only while the caller has not opted in.
+const gapExcludeSQL = "IFNULL(n.type, '') = 'gap' OR "
+
+// appendSearchFilters is the one SQL predicate for type, tag, path, drafts
+// and gaps. SearchFTS and CountFTS both call it, so a page and its total
+// cannot disagree, and the non-knowledge clause is applied before LIMIT.
+// A gap is never ranked. A draft is ranked only when the caller opted in.
 func appendSearchFilters(q string, args []interface{}, f SearchFilters) (string, []interface{}) {
 	if f.Type != "" {
 		q += " AND n.type = ?"
@@ -176,12 +182,14 @@ func appendSearchFilters(q string, args []interface{}, f SearchFilters) (string,
 		q += ` AND n.path LIKE ? ESCAPE '\'`
 		args = append(args, PathPrefixLike(f.PathPrefix))
 	}
-	if f.ExcludesDrafts() {
-		// NULL is not equal to 'draft' in SQL, so a missing status would drop
-		// out of ranking. IFNULL keeps a note with no status searchable.
-		q += " AND IFNULL(n.status, '') != ?"
-		args = append(args, StatusDraft)
+	// NULL is not equal to 'draft' or 'gap'. IFNULL keeps a note with a
+	// missing status or type searchable. include = 0 drops drafts.
+	include := 0
+	if f.IncludeDrafts {
+		include = 1
 	}
+	q += " AND NOT (" + gapExcludeSQL + "(IFNULL(n.status, '') = ? AND ? = 0))"
+	args = append(args, StatusDraft, include)
 	return q, args
 }
 

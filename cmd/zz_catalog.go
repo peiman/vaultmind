@@ -96,8 +96,8 @@ var commandCatalog = map[string]catalogEntry{
 	},
 	"vaultmind note": {
 		group: groupRetrieval,
-		when:  "you want to read, create, propose, accept, or batch-fetch a specific note by ID.",
-		short: "Read, create, propose, accept, and batch-fetch notes by ID",
+		when:  "you want to read, create, propose, accept, record a gap, or batch-fetch a specific note by ID.",
+		short: "Read, create, propose, accept, record a gap, and batch-fetch notes by ID",
 	},
 	"vaultmind note get": {
 		group: groupRetrieval,
@@ -118,6 +118,11 @@ var commandCatalog = map[string]catalogEntry{
 		group: groupRetrieval,
 		when:  "a person has reviewed a draft and it should enter recall.",
 		short: "Promote a draft into recall",
+	},
+	"vaultmind note gap": {
+		group: groupRetrieval,
+		when:  "an answer did not settle the question and you want that question kept until a later draft closes it.",
+		short: "Record a question the vault did not answer",
 	},
 	"vaultmind note mget": {
 		group: groupRetrieval,
