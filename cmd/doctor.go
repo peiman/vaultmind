@@ -383,6 +383,7 @@ func populateDoctorResult(ctx context.Context, vdb *cmdutil.VaultDB, vaultPath s
 
 	result.MemoryUse = collectMemoryUse(vdb)
 	attachDraftReview(result, vdb, vaultPath, uncommittedDays)
+	attachGapReview(result, vdb, vaultPath)
 
 	return result, nil
 }

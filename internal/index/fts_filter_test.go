@@ -140,6 +140,44 @@ func TestSearchFTS_ExcludesDraftsUnlessAsked(t *testing.T) {
 	assert.Contains(t, ftsIDs(with), "published-rank")
 }
 
+// A gap packed with the query term would rank first. Ranking drops it even
+// when the caller asks for drafts. Dropping the type half of the predicate
+// lets this note through.
+func TestSearchFTS_ExcludesGapsEvenWhenDraftsAreIncluded(t *testing.T) {
+	db := rebuildTestIndex(t)
+	const q = "gapexcludetokenxyz"
+	insertFTSNoteTyped(t, db, "gap-rank", "gaps/gap-rank.md", strings.Repeat(q+" ", 12), index.TypeGap, "open")
+	insertFTSNoteTyped(t, db, "draft-beside", "concepts/draft-beside.md", q, "concept", "draft")
+	insertFTSNoteTyped(t, db, "published-beside", "concepts/published-beside.md", q, "concept", "")
+
+	got, err := index.SearchFTS(db, q, 10, 0)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"published-beside"}, ftsIDs(got))
+	count, err := index.CountFTS(db, q)
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+
+	with, err := index.SearchFTS(db, q, 10, 0, index.SearchFilters{IncludeDrafts: true})
+	require.NoError(t, err)
+	ids := ftsIDs(with)
+	assert.NotContains(t, ids, "gap-rank")
+	assert.Contains(t, ids, "draft-beside")
+	assert.Contains(t, ids, "published-beside")
+	withCount, err := index.CountFTS(db, q, index.SearchFilters{IncludeDrafts: true})
+	require.NoError(t, err)
+	assert.Equal(t, 2, withCount)
+}
+
+func insertFTSNoteTyped(t *testing.T, db *index.DB, id, path, body, noteType, status string) {
+	t.Helper()
+	_, err := db.Exec(
+		`INSERT INTO notes (id, path, title, type, status, body_text, hash, mtime) VALUES (?, ?, ?, ?, ?, ?, 'h', 0)`,
+		id, path, id, noteType, status, body)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO fts_notes (note_id, title, body_text) VALUES (?, ?, ?)`, id, id, body)
+	require.NoError(t, err)
+}
+
 func TestSearchFTS_FilterByPathPrefix(t *testing.T) {
 	db := rebuildTestIndex(t)
 

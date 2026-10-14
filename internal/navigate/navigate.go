@@ -294,6 +294,9 @@ func noteLine(n Note, brief bool) string {
 	if n.Status == index.StatusDraft {
 		s += " [draft]"
 	}
+	if n.Type == index.TypeGap {
+		s += " [gap]"
+	}
 	return s
 }
 

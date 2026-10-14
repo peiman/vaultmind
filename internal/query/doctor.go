@@ -89,6 +89,30 @@ type DoctorResult struct {
 	// the vault is not a git repository, so an empty list is not "clean".
 	// Omitted until measured.
 	UncommittedNotes DoctorUncommitted `json:"uncommitted_notes,omitempty"`
+
+	// Gaps is the knowledge-gap meter. Nil means the cmd layer did not measure
+	// it, so existing doctor JSON stays unchanged. A measured report is present
+	// even when every count is zero.
+	Gaps *DoctorGaps `json:"gaps,omitempty"`
+}
+
+// DoctorGaps is the additive gap section. Notes lists open gaps. Opened
+// counts open and closed. MedianDaysToClose is omitted when nothing is closed.
+// Possible is a count of weak asks in local state, not a note.
+type DoctorGaps struct {
+	Notes             []DoctorGapNote `json:"notes"`
+	Opened            int             `json:"opened"`
+	Closed            int             `json:"closed"`
+	MedianDaysToClose *float64        `json:"median_days_to_close,omitempty"`
+	Possible          int             `json:"possible"`
+	PossibleSince     string          `json:"possible_since,omitempty"`
+}
+
+// DoctorGapNote is one open gap.
+type DoctorGapNote struct {
+	ID       string `json:"id"`
+	Question string `json:"question"`
+	AgeDays  int    `json:"age_days"`
 }
 
 // DoctorMemoryUse is the memory-usage rollup doctor prints. Populated by the

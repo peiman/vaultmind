@@ -67,6 +67,20 @@ type TypeDef struct {
 	Authoritative *bool `yaml:"authoritative,omitempty" json:"authoritative,omitempty"`
 }
 
+// GapTypeDef is the built-in gap type. No template path: the minimal
+// template is enough, and an existing vault does not have a gap template
+// file on disk. A gap is not citable evidence. Its statuses are open and
+// closed, never draft.
+func GapTypeDef() TypeDef {
+	authoritative := false
+	return TypeDef{
+		Required:      []string{"title", "question"},
+		Optional:      []string{"opened_at", "session", "asked_hits", "closed_at", "closed_by", "tags"},
+		Statuses:      []string{"open", "closed"},
+		Authoritative: &authoritative,
+	}
+}
+
 // IsAuthoritative reports whether a type may be cited as evidence.
 // An undeclared type is authoritative, so existing vaults are unaffected.
 func (c *Config) IsAuthoritative(typeName string) bool {
@@ -105,6 +119,11 @@ var defaultExcludes = []string{".git", ".obsidian", ".trash", "node_modules", "R
 // OverviewType is the built-in note type for a folder overview.
 const OverviewType = "overview"
 
+// GapType is the built-in note type for a question the vault did not answer.
+// index.TypeGap is the same string. The packages cannot import each other;
+// TestGapType_MatchesTheIndexConstant locks them.
+const GapType = "gap"
+
 // LoadConfig reads .vaultmind/config.yaml from the vault root.
 // Returns defaults if the config file doesn't exist.
 func LoadConfig(vaultRoot string) (*Config, error) {
@@ -141,8 +160,19 @@ func LoadConfig(vaultRoot string) (*Config, error) {
 	// A folder overview (type overview) describes the folder it sits in; the
 	// map shows its first sentence. Built in, so no vault edits its config to
 	// write one. A vault with no types is left unvalidated, as it was.
-	if _, ok := cfg.Types[OverviewType]; !ok && len(cfg.Types) > 0 {
-		cfg.Types[OverviewType] = TypeDef{Required: []string{"title"}, Optional: []string{"tags"}}
+	//
+	// A gap is the same kind of built-in. The index is a regenerable cache,
+	// so the durable home of an unanswered question is a note (Principle 7).
+	// Injected in memory only, and only when the vault already has types and
+	// has not defined gap itself. A vault with no types stays empty: note gap
+	// then names types.gap as the fix, rather than inventing a schema.
+	if len(cfg.Types) > 0 {
+		if _, ok := cfg.Types[OverviewType]; !ok {
+			cfg.Types[OverviewType] = TypeDef{Required: []string{"title"}, Optional: []string{"tags"}}
+		}
+		if _, ok := cfg.Types[GapType]; !ok {
+			cfg.Types[GapType] = GapTypeDef()
+		}
 	}
 
 	if err := validateConfigPaths(cfg); err != nil {

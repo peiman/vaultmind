@@ -53,6 +53,9 @@ FLAGS
   --finding <text>    The finding. Required.
   --source <url|path> A source URL or a file inside the vault or its repository. Repeatable.
   --close-band <band> The ask relevance band that means the top hit is close enough to patch.
+  --gap <id>          An open gap this finding answers. The draft stores closes_gap.
+                      When --question is omitted, the gap's question is used.
+                      Accepting the draft closes that gap.
   --vault <dir>       Path to the vault root.
   --json              Output a v1 envelope.`,
 	ConfigPrefix: "app.notepropose",
@@ -62,6 +65,7 @@ FLAGS
 		"app.notepropose.question":   "question",
 		"app.notepropose.finding":    "finding",
 		"app.notepropose.close_band": "close-band",
+		"app.notepropose.gap":        "gap",
 	},
 }
 
@@ -78,6 +82,7 @@ func NoteProposeOptions() []config.ConfigOption {
 			Description:  "Relevance band that means the top hit is close enough to patch. The band ask already reports for that hit. Default is the strong band.",
 			Type:         "string",
 		},
+		{Key: "app.notepropose.gap", DefaultValue: "", Description: "Open gap this finding answers. The draft stores closes_gap. When the question is omitted, the gap's question is used.", Type: "string"},
 	}
 }
 

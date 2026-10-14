@@ -591,16 +591,14 @@ func collectEdgeCandidates(db *index.DB, targetID string, drafts index.DraftSet,
 }
 
 // withoutDraftCandidates is the depth-1 collection filter. A draft linked to
-// the target never becomes a context item unless the caller opted in.
-// Removing this filter delivers that draft's body. The traversal applies the
-// same DraftSet for a deeper pack and for neighbors.
+// the target never becomes a context item unless the caller opted in. A gap
+// never does, even when drafts are included. Removing this filter delivers
+// that draft's body. The traversal applies the same DraftSet for a deeper
+// pack and for neighbors.
 func withoutDraftCandidates(candidates []contextCandidate, drafts index.DraftSet, includeDrafts bool) []contextCandidate {
-	if includeDrafts || len(drafts) == 0 {
-		return candidates
-	}
 	kept := make([]contextCandidate, 0, len(candidates))
 	for _, c := range candidates {
-		if drafts.Visible(c.noteID, false) {
+		if drafts.Visible(c.noteID, includeDrafts) {
 			kept = append(kept, c)
 		}
 	}

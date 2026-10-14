@@ -492,7 +492,7 @@ markers; `task check` fails if it drifts from the catalog. Everything outside th
 hand-written and stays.
 
 <!-- VAULTMIND:GENERATED:commands:START -->
-<!-- checksum:0bc4958dc017063ecaa1eb2457aa3eae7c13bccfef37dbaad72e6ab0ab92e8fb -->
+<!-- checksum:0e3c5ab2e83382d93d2e9603280915867ff34a9bf35634732dd64fb87e4948d3 -->
 # VaultMind Commands
 
 Every user-facing command, grouped by intent, with its when-to-use trigger.
@@ -510,9 +510,10 @@ Generated from the command tree — do not edit by hand (run `task generate:docs
 | `vaultmind memory pack` | Pack a note plus ranked context within a token budget | you want a token-budgeted context payload ready to ship to an agent. |
 | `vaultmind memory related` | List notes related to a target, filtered by edge type | you want a simple ranked list of directly connected notes, filtered by edge type. |
 | `vaultmind memory summarize` | Assemble material from specific note IDs for agent synthesis | you have a known list of note IDs and want their material assembled for synthesis. |
-| `vaultmind note` | Read, create, propose, accept, and batch-fetch notes by ID | you want to read, create, propose, accept, or batch-fetch a specific note by ID. |
+| `vaultmind note` | Read, create, propose, accept, record a gap, and batch-fetch notes by ID | you want to read, create, propose, accept, record a gap, or batch-fetch a specific note by ID. |
 | `vaultmind note accept` | Promote a draft into recall | a person has reviewed a draft and it should enter recall. |
 | `vaultmind note create` | Create a note from a template with field overrides | you want to create a new note from its type template with field overrides. |
+| `vaultmind note gap` | Record a question the vault did not answer | an answer did not settle the question and you want that question kept until a later draft closes it. |
 | `vaultmind note get` | Get one note's full content and metadata by ID | you know a note's ID or path and want its full content (with access tracking). |
 | `vaultmind note mget` | Fetch multiple notes by ID in one call | you have several note IDs and want them all in one batched fetch. |
 | `vaultmind note propose` | Turn a finding into a reviewable draft | you found the answer and want a reviewable draft, with the id, metadata, and formatting handled for you. |

@@ -127,12 +127,15 @@ func RunNoteGet(db *index.DB, cfg NoteGetConfig, w io.Writer) (NoteGetOutcome, e
 	return outcome, nil
 }
 
-// noteGetHeader is the text-mode first line. A draft says so; every other
-// status, including none, keeps the line the callers already parse.
+// noteGetHeader is the text-mode first line. A draft says so, and a gap says
+// so. Every other status, including none, keeps the line the callers already parse.
 func noteGetHeader(note *index.FullNote) string {
 	header := fmt.Sprintf("%s (%s) — %s", note.ID, note.Type, note.Title)
 	if status, _ := note.Frontmatter["status"].(string); status == index.StatusDraft {
 		header += " [draft]"
+	}
+	if note.Type == index.TypeGap {
+		header += " [gap]"
 	}
 	return header
 }

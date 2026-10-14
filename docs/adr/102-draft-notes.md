@@ -215,11 +215,14 @@ file and `VAULTMIND_APP_RETRIEVAL_INCLUDE_DRAFTS` reach all of them. Flag beats
 env, env beats the file, the file beats the default. A deprecated alias does
 not copy a hand-registered flag, so each alias registers it too.
 
-`index.DraftIDs` loads `SELECT id FROM notes WHERE status = ?` once per
-operation. `DraftSet.Visible` is the check. Zero `IncludeDrafts` excludes, so
-existing library callers stay safe. The start node of a traversal and the
-target of a pack are the id the caller named, and they are not passed through
-`Visible`.
+`index.DraftIDs` loads every note whose status is `draft` or whose type is
+`gap`, once per operation. `DraftSet` is that one set (the type is
+`NonKnowledge`; the old name stays so callers do not fork). `Visible` hides a
+gap even when the caller opted into drafts, and hides a draft unless they did.
+The same predicate is the SQL in `appendSearchFilters`: a gap is always out,
+and a draft is out only while `IncludeDrafts` is false. The start node of a
+traversal and the target of a pack are the id the caller named, and they are
+not passed through `Visible`.
 
 ## Enforcement
 
@@ -236,7 +239,7 @@ rank first and assert it is absent unless the caller opted in:
 - `TestDraftGraph_NamedDraftStaysReadable` (`cmd`) — `memory pack` of a named draft id still returns its body. `ask --read` of a draft that did not rank does not.
 - `TestDraftGraph_TreeForSkipsADraftLine` (`cmd`) — `tree --for` omits a draft's line unless `--include-drafts` is set. The full tree still lists the draft and marks `[draft]`.
 - `TestDraftGraph_MCPAskOmitsTheNeighbor` (`cmd`) — MCP ask does not deliver the neighbor's body.
-- `TestDraftIDs_IsTheStatusDraftSet` (`internal/index`) — the shared set is exactly `status: draft`.
+- `TestDraftIDs_IsTheStatusDraftSet` (`internal/index`) — the shared set holds `status: draft` and `type: gap`. `Visible(gap, true)` stays false. `Visible(draft, true)` stays true. An empty set hides nothing.
 
 `TestCheckUncommittedNotes_FlagsOnlyOldUntrackedMarkdown` fails if the age
 comparison stops being strictly greater than N days. `TestDoctor_ListsDraftsAndSkipsUncommittedOutsideGit`
@@ -280,8 +283,135 @@ list. That list is vault data. A closed list warns during the draft window and
 already rejects an unknown value at validation; accepting writes a value the
 list allows. A type with an empty list is allowed to store `draft`.
 
+## Amendment: knowledge gaps
+
+A gap is a question the vault did not answer. It is a note (`type: gap`,
+`status: open`, `question`, `opened_at`, optional `session`, `asked_hits`),
+written under `gaps/` by `note gap`. The index is a regenerable cache, so the
+committed note is the only durable home (Principle 7 — one source of truth).
+Commands stay under `note` (ADR-101). `doctor` is where the open list and the
+meter are read.
+
+**Schema.** `gap` is registered the way `overview` is. When a vault already
+defines types and does not define `gap`, `LoadConfig` adds it in memory and
+does not rewrite `config.yaml`. A vault's own `gap` definition wins. A vault
+with an empty types map stays empty: inventing a type there would make every
+other note an unknown type. `note gap` then fails and names the fix,
+`types.gap` in `.vaultmind/config.yaml` or `vaultmind init`. The built-in
+definition has no template path, so an existing vault needs no file on disk.
+Required fields are `title` and `question`. Statuses are `open` and `closed`,
+never `draft`. `authoritative` is false: a gap is not citable evidence. New
+vaults list the same definition in the scaffold. `index.TypeGap` and
+`vault.GapType` are the same string; a vault test locks them because the two
+packages cannot import each other.
+
+**Dedup.** An open gap with the same question, spacing and case aside, is
+reported (`mode: existing`). A closed gap does not count. The id is
+`gap-<slug>` from the question. A path collision with a different question
+gets a numeric suffix.
+
+**Recall.** A gap is never knowledge. The draft exclusion is the same set and
+the same SQL predicate, extended by one type clause (`gapExcludeSQL`).
+`--include-drafts` does not reveal a gap. Named reads stay direct: `note get`
+returns the gap, the full `tree` lists it and marks `[gap]`, and `tree --for`
+omits it. `asked_hits` is whatever `ask` ranks for the question at open time,
+with drafts and gaps already excluded.
+
+**Closing.** `note propose --gap <id>` requires an open gap. The draft stores
+`closes_gap`. An omitted `--question` uses the question on the gap. `note
+accept` closes that gap before it changes the draft, through `internal/mutation`
+(`status: closed`, `closed_at`, `closed_by`). `closed_by` is the new note, or
+the note a patch lands on. Already closed is a no-op, so a retry finishes.
+Frontmatter other than those keys stays byte-identical.
+
+A confirmed absence is not a failure. The id is not in the index, so the
+finding is still the knowledge, and leaving the draft unpublished would
+strand it. Accept publishes the note, prints a warning that names the id,
+and `--json` adds a `warnings` entry with code `gap_missing`, that same
+message, and the id in `field`. Status becomes `warning`. `schema_version`
+stays `v1`. That warning is not tagged `reindex_failed`.
+
+Anything short of confirmed absence fails inside the same error envelope as
+every other accept failure, and the draft stays a draft. A lookup error is
+`gap_missing` (the gap might still be there). A note that is not a gap, a
+path outside the vault, and a file that cannot be parsed are `gap_invalid`.
+A file that cannot be read is `gap_unreadable`.
+
+**Hints.** A weak or no-match `ask` from the CLI appends one JSON line to
+per-user state, not to the vault. The path is `xdg.StateDir()` plus
+`possible-gaps/<sha256 of vault.CanonicalKey>.jsonl`. That is the same state
+directory episode cursors and the signer socket use (Principle 7 — one
+resolver). The usage database stays in the data directory; this log is
+disposable. `CanonicalKey` is the absolute, symlink-resolved vault path,
+the same string calibration stores. There is no separate vault id. The
+directory is `0700` and the file is `0600`. The file name is not salted.
+
+The query hash is `sha256(salt || query)`, raw salt bytes then the query.
+One 32-byte salt per install lives beside that directory, at
+`possible-gap-salt`, mode `0600`, created on first use. One salt serves
+every vault. The log is already one file per vault, and the salt's job is
+to stop a dictionary of unsalted hashes on this machine. A salt per vault
+would make the same question hash differently in two vaults and add a file
+that has to stay with the log. A salt of the wrong length is an error. It
+is not replaced.
+
+`app.ask.gap_log_limit` (default 1000, the same number as
+`gap.DefaultLogLimit`) is how many records a compaction keeps. The file may
+grow to twice that. The next append rewrites it to the newest window, via a
+temp file in the same directory and `rename`. The scan keeps at most twice
+the window in memory. A non-positive value uses the default, so a missed
+config read cannot empty the log. The key is config and
+`VAULTMIND_APP_ASK_GAP_LOG_LIMIT`, not a flag.
+
+The line stores `query_sha256` and `query_len` (bytes). The raw query is
+stored only when `app.ask.gap_store_query` is true. The default is false.
+The switch is config and `VAULTMIND_APP_ASK_GAP_STORE_QUERY`, not a flag.
+Strong, moderate, and empty bands are not hints. A failed write does not
+fail `ask`.
+
+A hook caller is not a hint. `recordPossibleGap` returns before it writes
+when `index.HookCaller` is true. `HookCaller` and the access-log resolver
+share one classification: a caller whose name contains `hook`, and the
+exact value `auto-rag-guard`. That value is not renamed, so the script
+keeps writing it. New note-access rows from that caller are stored as
+`hook`, because the resolver and `HookCaller` are the same function. Rows
+already stored under the old caller string stay as they are.
+`experiment.DetectCaller` still returns the raw value.
+
+An old `.vaultmind/possible-gaps.jsonl` is not read and not migrated. It
+never shipped in a release.
+
+`doctor` prints the count and the earliest date, and `--json` adds `gaps`
+without bumping `schema_version`. The meter is gaps opened (open plus
+closed), gaps closed, and the median days to close. An unreadable log
+counts as zero.
+
+## Enforcement (gaps)
+
+Removing the gap half of the shared predicate fails these tests. They do not
+replace the draft list above. `--include-drafts` is set, and the gap is still
+absent:
+
+- `TestSearchFTS_ExcludesGapsEvenWhenDraftsAreIncluded` (`internal/index`) — FTS search and count. Deleting `gapExcludeSQL` lets the gap rank and this test goes red. The draft beside it still comes back only when drafts are included.
+- `TestGapGraph_StaysOutOfRecallEvenWhenDraftsAreIncluded` (`cmd`) — a gap that is a real wikilink neighbor stays out of `ask`, `search`, `memory pack`, `memory context-pack`, `memory related`, `memory neighbors`, `links neighbors`, and MCP `ask`/`search`, with and without `--include-drafts`. `arc recite --type gap` totals 0. `tree --for` omits the covering gap. The full tree marks `[gap]`. `note get` still returns the body.
+- `TestAccept_ClosesTheLinkedGap` (`internal/propose`) — accepting a new draft and accepting a patch each close the linked gap. `closed_by` is the new note, or the patched target. The gap file is byte-identical except `status`, `closed_at`, and `closed_by`. Skipping the `closes_gap` read leaves the gap open and this test goes red.
+- `TestContract_NoteAcceptClosesTheLinkedGap` and `TestContract_NoteAcceptWarnsWhenTheLinkedGapIsMissing` (`cmd`) — a linked gap that is in the vault closes and the envelope stays `ok`. A linked gap that is not in the vault still accepts: the text warns, and `--json` carries `gap_missing` with the id in `field`. Status is `warning`.
+- `TestContract_NoteAcceptRejectsALinkedNoteThatIsNotAGap` (`cmd`) and `TestAccept_LinkedNoteThatIsNotAGapStaysADraft` (`internal/propose`) — a `closes_gap` id that is not a gap returns `gap_invalid` and leaves the draft a draft. Dropping `failOp` on that path goes red.
+- `TestAccept_UnreadableGapStaysADraft` and `TestAccept_UnparseableGapStaysADraft` (`internal/propose`) — a gap file that cannot be read (`gap_unreadable`) or parsed (`gap_invalid`) leaves the draft a draft.
+- `TestOpen_WritesAGapAndDedups` (`internal/gap`) — the written note is `type: gap`, `status: open`, and a repeated question reports `existing` without ranking again.
+- `TestContract_NoteGapJSON` (`cmd`) — `note gap --json` is the v1 envelope, and `doctor` lists the open gap. The human line and the `gaps` object agree.
+- `TestRecordPossible_BandsAndPrivacy` (`internal/gap`) and `TestRecordPossibleGap_LogsWeakAsksOnly` (`cmd`) — weak and no-match are logged; strong, moderate, and empty are not. The raw query is absent unless `app.ask.gap_store_query` is set.
+- `TestRecordPossible_LogStaysOutsideTheVault` (`internal/gap`) — the log path is outside the vault, the file is `0600`, the directory is `0700`, and an old `.vaultmind/possible-gaps.jsonl` is left unread. Writing the log inside the vault again makes this test red.
+- `TestHashQuery_DependsOnTheInstallSalt` (`internal/gap`) — the same query hashes differently under two salts, a planted salt matches `sha256(salt || query)`, and the salt file is 32 bytes at mode `0600`. Dropping the salt makes the two hashes equal and this test red.
+- `TestRecordPossible_OneSaltForEveryVault` (`internal/gap`) — two vaults share one salt, so the same query has one hash and two files.
+- `TestRecordPossible_CompactsPastTwiceTheLimit` (`internal/gap`) — the file may hold `2N` records and the next one rewrites it to the newest `N`. A non-positive limit keeps the default window.
+- `TestRecordPossibleGap_SkipsHookCallers` (`cmd`) — `vaultmind-userprompt-hook` and `auto-rag-guard` append nothing; a CLI caller appends one line. Dropping the `HookCaller` check makes this test red.
+- `TestHookCaller_AutoRagGuardIsAHook` (`internal/index`) — `auto-rag-guard` is a hook without renaming `VAULTMIND_CALLER`.
+- `TestAsk_AppendsAPossibleGapForATie` (`cmd`) — an `ask` whose band is weak or no-match appends a line that does not contain the raw query, and the line is not inside the vault.
+
 ## References
 
+- Gap loop, item 1 (2026-10-14): `note gap` records the question; accepting the draft that answers it closes the gap.
 - Gap loop, item 4 (2026-10-14): `note propose` checks that the draft repairs retrieval.
 - Gap loop, item 3 (2026-10-14): drafts at the final path; accepting is a status flip.
 - Gap loop, item 2 (2026-10-14): `note propose` writes the draft; `note accept` promotes it.

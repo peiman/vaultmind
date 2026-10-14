@@ -46,6 +46,7 @@ func proposeRequest(cmd *cobra.Command) (propose.Vault, propose.Request, func(),
 		Question:  getConfigValueWithFlags[string](cmd, "question", config.KeyAppNoteproposeQuestion),
 		Finding:   getConfigValueWithFlags[string](cmd, "finding", config.KeyAppNoteproposeFinding),
 		CloseBand: getConfigValueWithFlags[string](cmd, "close-band", config.KeyAppNoteproposeCloseBand),
+		GapID:     getConfigValueWithFlags[string](cmd, "gap", config.KeyAppNoteproposeGap),
 		JSON:      getConfigValueWithFlags[bool](cmd, "json", config.KeyAppNoteproposeJson),
 		Stdout:    cmd.OutOrStdout(),
 		Stderr:    cmd.ErrOrStderr(),
@@ -74,9 +75,15 @@ func openProposeVault(cmd *cobra.Command, vaultPath, command string, req propose
 	noop := func() {}
 	req.Question = strings.TrimSpace(req.Question)
 	req.Finding = strings.TrimSpace(req.Finding)
-	// A missing question or finding is the caller's error. Opening a guessed
-	// vault first would create an index in the wrong directory.
-	if command == "note propose" && (req.Question == "" || req.Finding == "") {
+	req.GapID = strings.TrimSpace(req.GapID)
+	// A missing finding, or a missing question with no gap, is the caller's
+	// error. Opening a guessed vault first would create an index in the
+	// wrong directory. --gap with an empty question still opens the vault:
+	// the stored question is on the gap note.
+	if command == "note propose" && req.Finding == "" {
+		return propose.Vault{}, req, noop, nil
+	}
+	if command == "note propose" && req.Question == "" && req.GapID == "" {
 		return propose.Vault{}, req, noop, nil
 	}
 	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, command)
@@ -99,26 +106,7 @@ func newAskClosest(cmd *cobra.Command) propose.Retriever {
 }
 
 func (a askClosest) Closest(ctx context.Context, vaultPath string, db *index.DB, text string) (propose.Hit, bool, error) {
-	ret := query.BuildAutoRetrieverFull(ctx, db)
-	// Cleanup does not unload the process session. Embed-on-write borrows it.
-	defer ret.Cleanup()
-	limit, forward, salient := askRankingBounds(a.cmd)
-	noise, sigma, has, low := 0.0, 0.0, false, false
-	if ret.Embedder != nil {
-		noise, sigma, low = resolveNoiseFloor(ctx, vaultPath, ret.Embedder.Dims())
-		has = true
-	}
-	result, err := query.Rank(ctx, ret.Retriever, db, query.AskConfig{
-		Query:              text,
-		SearchLimit:        limit,
-		Embedder:           ret.Embedder,
-		NoiseFloor:         noise,
-		NoiseFloorSigma:    sigma,
-		HasNoiseFloor:      has,
-		VaultLowContrast:   low,
-		QueryForwardTokens: forward,
-		QuerySalientTerms:  salient,
-	})
+	result, err := askRank(a.cmd, ctx, vaultPath, db, text)
 	if err != nil || result == nil || len(result.TopHits) == 0 {
 		return propose.Hit{}, false, err
 	}

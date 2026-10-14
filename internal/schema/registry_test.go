@@ -76,9 +76,10 @@ func TestRegistry_IsFieldAllowed(t *testing.T) {
 //   - coreFields = [id, type] — gated at parser classification;
 //     the only fields RequiredFields reports beyond td.Required.
 //   - recognizedFields = [title, status, aliases, tags, parent_id,
-//     related_ids, source_ids, created, updated] — recognized on
-//     any type via IsFieldAllowed; never required by vaultmind,
-//     never auto-maintained.
+//     related_ids, source_ids, created, updated, paths, closes_gap]
+//     — recognized on any type via IsFieldAllowed; never required by
+//     vaultmind, never auto-maintained. closes_gap names the open gap
+//     a draft will close when it is accepted.
 //
 // Earlier shapes declared `vaultmindOwnedFields = [created, vm_updated]`
 // (auto-maintained, unset-protected). The dogfood pass retired

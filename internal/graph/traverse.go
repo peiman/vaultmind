@@ -76,15 +76,12 @@ func (r *Resolver) Traverse(cfg TraverseConfig) (*TraverseResult, error) {
 	visited := make(map[string]bool)
 	visited[cfg.StartID] = true
 
-	// Loaded once for the walk. A draft is dropped where neighbors are
-	// collected, before it is marked visited or enqueued, so the walk does
-	// not pass through it either.
-	var drafts index.DraftSet
-	if !cfg.IncludeDrafts {
-		var err error
-		if drafts, err = index.DraftIDs(r.db); err != nil {
-			return nil, fmt.Errorf("loading drafts: %w", err)
-		}
+	// Loaded once for the walk, even when drafts are opted in: a gap stays
+	// hidden. A draft is dropped where neighbors are collected, before it is
+	// marked visited or enqueued, so the walk does not pass through it either.
+	drafts, err := index.DraftIDs(r.db)
+	if err != nil {
+		return nil, fmt.Errorf("loading drafts: %w", err)
 	}
 
 	startNode := TraverseNode{ID: cfg.StartID, Distance: 0}
