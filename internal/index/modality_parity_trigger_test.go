@@ -131,6 +131,40 @@ func TestModalityParityTrigger_UpsertClearOnContentChangeStillWorks(t *testing.T
 	require.NoError(t, err, "content-change clearout path must remain valid")
 }
 
+// Migration 006 rejects a NULL sparse column beside a 4096-byte dense vector.
+// It does not reject a zero-length blob: the predicate is IS NULL, not
+// length. EncodeSparseEmbedding of an empty map is nil, which stores as
+// NULL and is refused. A zero-length blob is the storable empty map.
+func TestModalityParityTrigger_EmptyBlobPassesNullDoesNot(t *testing.T) {
+	db := openFreshDB(t)
+	insertBareNote(t, db, "n1")
+
+	dense := make([]byte, 4096)
+	colbert := []byte{0x01}
+	_, err := db.Exec(
+		`UPDATE notes SET embedding = ?, sparse_embedding = ?, colbert_embedding = ? WHERE id = ?`,
+		dense, []byte{}, colbert, "n1",
+	)
+	require.NoError(t, err, "a zero-length sparse blob is not NULL")
+
+	var isNull, length int
+	var kind string
+	require.NoError(t, db.QueryRow(
+		`SELECT sparse_embedding IS NULL, LENGTH(sparse_embedding), typeof(sparse_embedding) FROM notes WHERE id = 'n1'`,
+	).Scan(&isNull, &length, &kind))
+	assert.Equal(t, 0, isNull)
+	assert.Equal(t, 0, length)
+	assert.Equal(t, "blob", kind)
+
+	decoded, err := index.DecodeSparseEmbedding([]byte{})
+	require.NoError(t, err)
+	assert.Empty(t, decoded)
+
+	_, err = db.Exec(`UPDATE notes SET sparse_embedding = NULL WHERE id = 'n1'`)
+	require.Error(t, err, "NULL sparse beside BGE-M3 dense is the state the trigger exists to refuse")
+	assert.Contains(t, err.Error(), "modality")
+}
+
 // Direct INSERT of a violating row (BGE-M3 dense + NULL sparse) must also be
 // rejected — the trigger must cover BEFORE INSERT as well as BEFORE UPDATE.
 // A bug here would let seed scripts or tests sneak invalid state in.

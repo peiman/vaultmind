@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - The sparse lane no longer counts special tokens, matching the model's reference behavior.
+- A note whose body yields no sparse weights no longer aborts the one-time sparse re-embed. The pass stores an empty sparse map for that note and still stamps the vault. A model or IO error still stops the pass without stamping.
+- The stale-sparse notice is not repeated on every recall-hook turn. `ask` stays quiet when a hook invokes it. `doctor`, a plain `index`, and the SessionStart health hook still say it (once per session for the health hook).
+  Run `vaultmind hooks install --force` to update installed copies.
 - Subagent hand-backs whose report contains a `<` character were sent to recall and timed out; they're skipped again. The hook receives a hand-back as a bare `agent-message`, `teammate-message`, or `cross-session-message` envelope, and treats everything between its opening and closing tag as the report, unparsed. A question typed inside those tags is therefore skipped with it; text before the opening tag or after the closing tag is still recalled.
   A prompt that is only an `agent-message`, `teammate-message`, or `cross-session-message` envelope is skipped without reading the report. The skip is logged as `cross-session-envelope`. Words before the opening tag or after the closing tag are still recalled, including a sentence that only mentions the tag.
   Run `vaultmind hooks install --force` to update installed copies.
@@ -55,7 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- On upgrade, `vaultmind index --embed` re-embeds the sparse vector of every note once. Dense and ColBERT bytes stay. The pass is one forward pass per note, about as long as one full embed: a few minutes for ~130 notes on ORT, hours on pure-Go. A plain `vaultmind index` does not load the model and does not mix formats; it warns, and so do `doctor` and `ask`, with the remedy `vaultmind index --embed`. The first embed-on-write after the upgrade does the same sparse pass when the ORT backend is available, even if a backlog would otherwise defer embedding.
+- On upgrade, `vaultmind index --embed` re-embeds the sparse vector of every note once. Dense and ColBERT bytes stay. The pass is one forward pass per note, about as long as one full embed: a few minutes for ~130 notes on ORT, hours on pure-Go. A plain `vaultmind index` does not load the model and does not mix formats; it warns, and so do `doctor` and `ask`, with the remedy `vaultmind index --embed`. The first embed-on-write after the upgrade does the same sparse pass when the ORT backend is available, even if a backlog would otherwise defer embedding. An older binary on another machine can write old-format sparse vectors without resetting the stamp. Upgrade every machine that writes the vault, then run `vaultmind index --full --embed`.
 
 ## [0.10.12] - 2026-10-12
 

@@ -3,7 +3,9 @@ package index_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/embedding"
@@ -107,7 +109,7 @@ func TestReembedStaleSparse_RewritesSparseOnlyAndStamps(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 2, n)
 	require.Equal(t, 2, script.calls)
-	require.Equal(t, "re-embedding sparse vectors for 2 notes (format change)\n", buf.String())
+	require.Equal(t, "re-embedding sparse vectors for 2 notes (format change)\nre-embedded sparse vectors 2/2\n", buf.String())
 
 	gotDense, gotSparse, gotColbert := blobs(t, db, "a")
 	require.Equal(t, dense, gotDense)
@@ -147,7 +149,49 @@ func TestReembedStaleSparse_FreshStampKeepsIDZero(t *testing.T) {
 	require.Equal(t, before, after)
 }
 
-func TestReembedStaleSparse_InterruptDoesNotStamp(t *testing.T) {
+func TestReembedStaleSparse_EmptyMapDoesNotBlockTheStamp(t *testing.T) {
+	db := openSparseDB(t)
+	// 4096-byte dense is the migration-006 case: NULL sparse is refused, a
+	// zero-length blob is not. A short sibling must still be rewritten.
+	dense := make([]byte, 4096)
+	colbert := index.EncodeColBERTEmbedding([][]float32{{5, 6}})
+	_, err := db.Exec(`INSERT INTO notes (id, path, hash, mtime, is_domain, body_text, embedding, sparse_embedding, colbert_embedding)
+		VALUES ('empty', 'empty.md', 'h', 1, 0, 'stub', ?, ?, ?)`,
+		dense, index.EncodeSparseEmbedding(map[int32]float32{0: 1, 7: 0.3}), colbert)
+	require.NoError(t, err)
+	insertSparseNote(t, db, "full", "alpha body", map[int32]float32{0: 1})
+
+	script := &sparseScript{emptyOn: "stub"}
+	n, err := (&index.Indexer{}).ReembedStaleSparse(context.Background(), db, script, &bytes.Buffer{})
+	require.NoError(t, err)
+	require.Equal(t, 2, n)
+
+	format, rerr := index.ReadSparseFormat(db)
+	require.NoError(t, rerr)
+	require.Equal(t, index.SparseFormatCurrent, format)
+
+	var isNull int
+	var got []byte
+	require.NoError(t, db.QueryRow(`SELECT sparse_embedding, sparse_embedding IS NULL FROM notes WHERE id = 'empty'`).Scan(&got, &isNull))
+	require.Equal(t, 0, isNull, "the empty map is stored, not NULL")
+	decoded, err := index.DecodeSparseEmbedding(got)
+	require.NoError(t, err)
+	require.Empty(t, decoded)
+	require.NotContains(t, decoded, int32(0))
+
+	_, fullSparse, _ := blobs(t, db, "full")
+	decoded, err = index.DecodeSparseEmbedding(fullSparse)
+	require.NoError(t, err)
+	require.Equal(t, map[int32]float32{10: 0.4, 99: 0.2}, decoded)
+
+	calls := script.calls
+	n, err = (&index.Indexer{}).ReembedStaleSparse(context.Background(), db, script, &bytes.Buffer{})
+	require.NoError(t, err)
+	require.Equal(t, 0, n)
+	require.Equal(t, calls, script.calls, "the stamp stops the next pass")
+}
+
+func TestReembedStaleSparse_EmbedErrorDoesNotStamp(t *testing.T) {
 	db := openSparseDB(t)
 	insertSparseNote(t, db, "a", "alpha", map[int32]float32{0: 1})
 	insertSparseNote(t, db, "b", "beta", map[int32]float32{0: 1})
@@ -163,19 +207,19 @@ func TestReembedStaleSparse_InterruptDoesNotStamp(t *testing.T) {
 	require.Equal(t, before, after, "the note that failed is not rewritten")
 }
 
-func TestReembedStaleSparse_EmptyMapDoesNotStamp(t *testing.T) {
+func TestReembedStaleSparse_PrintsProgressEveryBatch(t *testing.T) {
 	db := openSparseDB(t)
-	insertSparseNote(t, db, "a", "alpha", map[int32]float32{0: 1, 7: 0.3})
-	_, before, _ := blobs(t, db, "a")
-
-	script := &sparseScript{emptyOn: "alpha"}
-	_, err := (&index.Indexer{}).ReembedStaleSparse(context.Background(), db, script, &bytes.Buffer{})
-	require.Error(t, err)
-	format, rerr := index.ReadSparseFormat(db)
-	require.NoError(t, rerr)
-	require.Equal(t, 0, format)
-	_, after, _ := blobs(t, db, "a")
-	require.Equal(t, before, after, "an empty map is not stored")
+	const notes = 33 // one past the regular batch cap
+	for i := range notes {
+		insertSparseNote(t, db, fmt.Sprintf("n%02d", i), "x", map[int32]float32{0: 1})
+	}
+	var buf bytes.Buffer
+	n, err := (&index.Indexer{}).ReembedStaleSparse(context.Background(), db, &sparseScript{}, &buf)
+	require.NoError(t, err)
+	require.Equal(t, notes, n)
+	require.Contains(t, buf.String(), "re-embedded sparse vectors 32/33\n")
+	require.Contains(t, buf.String(), "re-embedded sparse vectors 33/33\n")
+	require.Equal(t, 2, strings.Count(buf.String(), "re-embedded sparse vectors"))
 }
 
 func TestSparseFormatStale_NoSparseIsNotStale(t *testing.T) {

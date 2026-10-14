@@ -284,6 +284,45 @@ func TestStoreSparseBatch_LengthAndMissingNote(t *testing.T) {
 		[]*embedding.BGEM3Output{{Sparse: map[int32]float32{10: 0.4}}},
 	)
 	require.Error(t, err)
+
+	_, err = storeSparseBatch(db,
+		[]sparseNote{{id: "missing"}},
+		[]int{0},
+		[]*embedding.BGEM3Output{{Sparse: map[int32]float32{}}},
+	)
+	require.Error(t, err)
+
+	_, err = storeSparseBatch(db,
+		[]sparseNote{{id: "missing"}},
+		[]int{0},
+		[]*embedding.BGEM3Output{nil},
+	)
+	require.Error(t, err)
+}
+
+type nWrites struct{ left int }
+
+func (n *nWrites) Write(p []byte) (int, error) {
+	if n.left == 0 {
+		return 0, errors.New("write failed")
+	}
+	n.left--
+	return len(p), nil
+}
+
+func TestReembedStaleSparse_BatchProgressWriteErrorDoesNotStamp(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "index.db"))
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	_, err = db.Exec(`INSERT INTO notes (id, path, hash, mtime, body_text, sparse_embedding) VALUES ('a', 'a.md', 'h', 1, 'alpha', ?)`,
+		EncodeSparseEmbedding(map[int32]float32{0: 1}))
+	require.NoError(t, err)
+
+	_, err = (&Indexer{}).ReembedStaleSparse(context.Background(), db, &whiteboxSparse{}, &nWrites{left: 1})
+	require.Error(t, err)
+	format, rerr := ReadSparseFormat(db)
+	require.NoError(t, rerr)
+	require.Equal(t, 0, format)
 }
 
 func TestSkipIncrementalEmbed_PendingIsNotIdle(t *testing.T) {

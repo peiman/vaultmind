@@ -46,7 +46,13 @@ func ReadSparseFormat(db *DB) (int, error) {
 }
 
 // WriteSparseFormat stores the stamp. The caller writes it only after every
-// stale sparse vector has been replaced.
+// note in the migration has been processed. A model or IO error does not stamp.
+//
+// The stamp is one row, and an older binary does not know it. That binary can
+// write old-format sparse vectors on another machine and leave the stamp where
+// it is, so this binary will not rewrite them on a plain `index --embed`.
+// Upgrade every machine that writes the vault, then run
+// `vaultmind index --full --embed`.
 func WriteSparseFormat(db *DB, format int) error {
 	_, err := db.Exec(`INSERT INTO meta (key, value) VALUES (?, ?)
 		ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
@@ -92,9 +98,14 @@ type sparseNote struct {
 
 // ReembedStaleSparse rewrites sparse_embedding for every note that has one
 // when the stamp is older than SparseFormatCurrent. Dense and ColBERT bytes
-// are not touched. The stamp is written only after every note succeeds. An
-// empty new map is not stored and blocks the stamp. A fresh stamp returns
-// without calling the embedder.
+// are not touched. The stamp is written once every note has been processed.
+// A model or IO error aborts without stamping. A fresh stamp returns without
+// calling the embedder.
+//
+// An empty new map is stored as a zero-length blob. That is the new-format
+// value (no positive weights). Migration 006 rejects NULL, which is what
+// EncodeSparseEmbedding emits for an empty map, and accepts the zero-length
+// blob. The sparse retriever scores that blob as no overlap.
 func (idx *Indexer) ReembedStaleSparse(ctx context.Context, db *DB, embedder embedding.Embedder, progress io.Writer) (int, error) {
 	stale, err := SparseFormatStale(db)
 	if err != nil {
@@ -124,7 +135,7 @@ func (idx *Indexer) ReembedStaleSparse(ctx context.Context, db *DB, embedder emb
 	if _, err := fmt.Fprintf(w, "re-embedding sparse vectors for %d notes (format change)\n", len(notes)); err != nil {
 		return 0, fmt.Errorf("reporting sparse re-embed: %w", err)
 	}
-	rewritten, passErr := reembedSparseNotes(ctx, db, full, notes)
+	rewritten, passErr := reembedSparseNotes(ctx, db, full, notes, w)
 	if passErr != nil { // sparse format stamp waits until this returns
 		return rewritten, fmt.Errorf("re-embedding sparse vectors: %w", passErr)
 	}
@@ -154,13 +165,14 @@ func loadSparseNotes(db *DB) ([]sparseNote, error) {
 	return notes, nil
 }
 
-func reembedSparseNotes(ctx context.Context, db *DB, full embedding.FullEmbedder, notes []sparseNote) (int, error) {
+func reembedSparseNotes(ctx context.Context, db *DB, full embedding.FullEmbedder, notes []sparseNote, progress io.Writer) (int, error) {
 	lengths := make([]int, len(notes))
 	for i, n := range notes {
 		lengths[i] = len(n.body)
 	}
 	rewritten := 0
-	for _, idxs := range planEmbedBatches(lengths, 8, 8*embedPaddedBudgetPerSlot) {
+	seen := 0
+	for _, idxs := range planEmbedBatches(lengths, embedBatchSize, embedBatchSize*embedPaddedBudgetPerSlot) {
 		texts := make([]string, len(idxs))
 		for j, i := range idxs {
 			texts[j] = notes[i].body
@@ -175,6 +187,10 @@ func reembedSparseNotes(ctx context.Context, db *DB, full embedding.FullEmbedder
 		if err != nil {
 			return rewritten, err
 		}
+		seen += len(idxs)
+		if _, err := fmt.Fprintf(progress, "re-embedded sparse vectors %d/%d\n", seen, len(notes)); err != nil {
+			return rewritten, fmt.Errorf("reporting sparse re-embed: %w", err)
+		}
 	}
 	return rewritten, nil
 }
@@ -186,17 +202,41 @@ func storeSparseBatch(db *DB, notes []sparseNote, idxs []int, outs []*embedding.
 	stored := 0
 	for j, i := range idxs {
 		out := outs[j]
-		if out == nil || len(out.Sparse) == 0 {
-			log.Debug().Str("id", notes[i].id).Msg("sparse re-embed produced an empty map")
-			return stored, fmt.Errorf("empty sparse embedding for %q", notes[i].id)
+		if out == nil {
+			log.Debug().Str("id", notes[i].id).Msg("sparse re-embed produced no output")
+			return stored, fmt.Errorf("no sparse output for %q", notes[i].id)
 		}
-		if err := StoreSparseEmbedding(db, notes[i].id, out.Sparse); err != nil {
+		var err error
+		if len(out.Sparse) == 0 {
+			err = storeEmptySparseMap(db, notes[i].id)
+		} else {
+			err = StoreSparseEmbedding(db, notes[i].id, out.Sparse)
+		}
+		if err != nil {
 			log.Debug().Err(err).Str("id", notes[i].id).Msg("storing re-embedded sparse vector failed")
 			return stored, err
 		}
 		stored++
 	}
 	return stored, nil
+}
+
+// storeEmptySparseMap writes the new-format value of a note with no positive
+// weights. EncodeSparseEmbedding returns nil for an empty map, and a nil blob
+// is SQL NULL, which migration 006 rejects beside a BGE-M3 dense vector. A
+// zero-length blob is not NULL. DecodeSparseEmbedding reads it as an empty map.
+func storeEmptySparseMap(db *DB, noteID string) error {
+	// A nil slice would bind as NULL. The composite literal is a real blob.
+	empty := []byte{}
+	result, err := db.Exec(`UPDATE notes SET sparse_embedding = ? WHERE id = ?`, empty, noteID)
+	if err != nil {
+		return fmt.Errorf("storing empty sparse embedding for %q: %w", noteID, err)
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("no note found with id %q", noteID)
+	}
+	return nil
 }
 
 // sparseFormatBlocksLazy is true when an incremental embed must load the

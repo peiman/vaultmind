@@ -1010,12 +1010,12 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 	}
 
 	// Process in batches. BGE-M3 inference holds peak memory roughly equal to
-	// batch_size * max_seq_len * hidden_dim — at 32 * 8192 * 1024 * 4 bytes
-	// per intermediate tensor it pushes a memory-tight machine over the
-	// OOM-killer threshold. The smaller batch caps peak per-call memory and
+	// batch_size * max_seq_len * hidden_dim — at embedBatchSize * 8192 * 1024
+	// * 4 bytes per intermediate tensor it pushes a memory-tight machine over
+	// the OOM-killer threshold. The smaller batch caps peak per-call memory and
 	// also commits more often, so a SIGKILL mid-run loses fewer notes of
-	// progress. MiniLM is much smaller; 32 is fine there. See vaultmind#22.
-	batchSize := 32
+	// progress. MiniLM is much smaller; embedBatchSize is fine there. See vaultmind#22.
+	batchSize := embedBatchSize
 	if isFull {
 		batchSize = 8
 	}

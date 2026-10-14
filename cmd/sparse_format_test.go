@@ -124,6 +124,17 @@ func TestDoctorAndAsk_ReportStaleSparseFormat(t *testing.T) {
 	assert.True(t, ask.Result.SparseFormatStale)
 }
 
+func TestAsk_HookCallerOmitsSparseFormatNotice(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	setStaleSparse(t, vault)
+	t.Setenv("VAULTMIND_CALLER", "vaultmind-userprompt-hook")
+
+	out, _, err := runRootCmd(t, "ask", "alpha", "--vault", vault)
+	require.NoError(t, err)
+	assert.NotContains(t, out.String(), index.SparseFormatStaleNotice)
+	assert.Contains(t, out.String(), "Search:")
+}
+
 // markBGEM3Vectors stores a complete BGE-M3 row on every note and leaves the
 // sparse-format stamp unset, so the vault reads as bge-m3 and stale.
 func markBGEM3Vectors(t *testing.T, vaultPath string) {

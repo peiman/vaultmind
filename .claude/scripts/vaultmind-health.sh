@@ -120,6 +120,22 @@ if [ "$DOCTOR_RC" -eq 0 ] && [ -n "$STALE_LINE" ]; then
   echo "   Refresh: vaultmind index --vault \"$VAULT\" && vaultmind index --embed --vault \"$VAULT\""
 fi
 
+# Sparse-format relay. doctor prints the warning; this hook is what a session
+# reads once. The per-turn recall hook does not repeat it. The words stay
+# doctor's — this only forwards the notice and its run line.
+if [ "$DOCTOR_RC" -eq 0 ]; then
+  SPARSE_BLOCK="$(printf '%s\n' "$DOCTOR" | awk '
+    index($0, "sparse vectors are an older format") {
+      print
+      if (getline <= 0) exit
+      if (index($0, "run: vaultmind index --embed")) print
+    }
+  ')"
+  if [ -n "$SPARSE_BLOCK" ]; then
+    printf '%s\n' "$SPARSE_BLOCK"
+  fi
+fi
+
 # The map. An agent reads a file when it knows where the answer lives; with a
 # knowledge vault it can only know that if it can see what the vault holds.
 # Folders and counts (tree --depth 1), for every vault the project names, capped
