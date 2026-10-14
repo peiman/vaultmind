@@ -113,10 +113,10 @@ app:
     # Send a note as its title alone when this conversation (VAULTMIND_USER_SESSION_ID) received its text within this long, e.g. 10m. Empty = off. For hooks that fire in bursts.
     dedup_window: 
 
-    # Embed the first N words of the query in one forward pass. Dense and sparse rank on that text. 0 turns the bound off.
-    query_forward_words: 512
+    # Embed the first N tokens of the query in one forward pass. Dense and sparse rank on that text. The cut is on a token boundary, so the embedded text is a prefix of the query. 0 turns the bound off.
+    query_forward_tokens: 1152
 
-    # ColBERT and FTS use the K tokens and words with the highest sparse weight from that forward pass. 0 turns the bound off.
+    # ColBERT and FTS use the K tokens with the highest sparse weight from that forward pass. A spaced word stays one FTS term. A long word with no spaces contributes the text of its salient tokens, not the whole word. 0 turns the bound off.
     query_salient_terms: 64
 
   check:

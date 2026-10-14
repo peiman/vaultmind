@@ -704,8 +704,8 @@ func formatLongQuery(c *QueryCapped) string {
 		return ""
 	}
 	var parts []string
-	if c.EmbeddedWords < c.TotalWords {
-		parts = append(parts, fmt.Sprintf("ranked on its first %d of %d words", c.EmbeddedWords, c.TotalWords))
+	if c.EmbeddedTokens < c.TotalTokens {
+		parts = append(parts, fmt.Sprintf("ranked on its first %d of %d tokens", c.EmbeddedTokens, c.TotalTokens))
 	}
 	if c.SalientTerms > 0 {
 		parts = append(parts, fmt.Sprintf("ColBERT and FTS on its %d most salient terms", c.SalientTerms))

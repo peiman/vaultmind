@@ -110,8 +110,8 @@ func TestAskHits_SearchArgumentStaysTheOriginalQuery(t *testing.T) {
 	assert.Equal(t, original, res.Query)
 	assert.Equal(t, original, lane.seen(), "activation and any lane that ignores the plan still see the full query")
 	require.NotNil(t, res.QueryCapped)
-	assert.Equal(t, 64, res.QueryCapped.EmbeddedWords)
-	assert.Equal(t, 71, res.QueryCapped.TotalWords)
+	assert.Equal(t, 64, res.QueryCapped.EmbeddedTokens)
+	assert.Equal(t, 71, res.QueryCapped.TotalTokens)
 	assert.Equal(t, 0, res.QueryCapped.SalientTerms)
 }
 
@@ -161,17 +161,17 @@ func TestAsk_EmbedsTheForwardTextAndEchoesTheOriginal(t *testing.T) {
 	original := words(8) + " TAIL"
 
 	res, err := query.Ask(context.Background(), lane, graph.NewResolver(db), db, query.AskConfig{
-		Query:             original,
-		SearchLimit:       5,
-		Embedder:          emb,
-		QueryForwardWords: 4,
-		QuerySalientTerms: 2,
+		Query:              original,
+		SearchLimit:        5,
+		Embedder:           emb,
+		QueryForwardTokens: 4,
+		QuerySalientTerms:  2,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, original, res.Query)
 	require.NotNil(t, res.QueryCapped)
-	assert.Equal(t, 4, res.QueryCapped.EmbeddedWords)
-	assert.Equal(t, 9, res.QueryCapped.TotalWords)
+	assert.Equal(t, 4, res.QueryCapped.EmbeddedTokens)
+	assert.Equal(t, 9, res.QueryCapped.TotalTokens)
 	assert.Equal(t, 0, res.QueryCapped.SalientTerms, "this embedder has no sparse weights")
 	assert.Equal(t, original, lane.seen())
 	assert.Equal(t, words(4), emb.seen(), "the cosine embeds the forward text, not a salient subset")

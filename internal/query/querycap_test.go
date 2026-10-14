@@ -49,8 +49,8 @@ func TestShapeQuery_KeepsTheHighestWeightsInOrder(t *testing.T) {
 	assert.Equal(t, 1, analyzer.calls)
 	assert.Equal(t, original, analyzer.seen)
 	require.NotNil(t, shaped.Report)
-	assert.Equal(t, 4, shaped.Report.EmbeddedWords)
-	assert.Equal(t, 4, shaped.Report.TotalWords)
+	assert.Equal(t, 4, shaped.Report.EmbeddedTokens)
+	assert.Equal(t, 4, shaped.Report.TotalTokens)
 	assert.Equal(t, 2, shaped.Report.SalientTerms)
 
 	tied := query.SelectSalientTokenIndices([]float32{5, 5, 1}, 1)
@@ -63,9 +63,11 @@ func TestShapeQuery_KeepsTheHighestWeightsInOrder(t *testing.T) {
 		[]string{"alpha", "beta"}, []int{0, 1}, []float32{1, 9}, 2))
 }
 
-// TestForwardQuery_AppliesTheWordBound pins the forward cut.
-// Skipping it (fields[:maxWords] → fields) must fail this test.
-func TestForwardQuery_AppliesTheWordBound(t *testing.T) {
+// TestForwardQuery_AppliesTheTokenBound pins the forward cut.
+// With no tokenizer, one whitespace word is one token. The cut is a prefix,
+// so internal whitespace stays. Ignoring the span and joining the words
+// must fail the whitespace cases.
+func TestForwardQuery_AppliesTheTokenBound(t *testing.T) {
 	const messy = "alpha   beta\n\tgamma"
 
 	tests := []struct {
@@ -73,23 +75,23 @@ func TestForwardQuery_AppliesTheWordBound(t *testing.T) {
 		text    string
 		max     int
 		want    string
-		words   int
+		tokens  int
 		total   int
 		applied bool
 	}{
-		{name: "under the bound keeps the original text", text: messy, max: 10, want: messy, words: 3, total: 3},
-		{name: "exactly N words is not a bound", text: "one two three", max: 3, want: "one two three", words: 3, total: 3},
-		{name: "over the bound keeps the first N words", text: "one two three four", max: 2, want: "one two", words: 2, total: 4, applied: true},
-		{name: "whitespace collapses only when the bound applies", text: "one\n\ntwo   three\tfour", max: 3, want: "one two three", words: 3, total: 4, applied: true},
-		{name: "non-ASCII words are counted as words", text: "café 東京 alpha beta", max: 2, want: "café 東京", words: 2, total: 4, applied: true},
-		{name: "non-ASCII spaces split words", text: "one\u00a0two\u3000three four", max: 2, want: "one two", words: 2, total: 4, applied: true},
+		{name: "under the bound keeps the original text", text: messy, max: 10, want: messy, tokens: 3, total: 3},
+		{name: "exactly N tokens is not a bound", text: "one two three", max: 3, want: "one two three", tokens: 3, total: 3},
+		{name: "over the bound keeps the prefix", text: "one two three four", max: 2, want: "one two", tokens: 2, total: 4, applied: true},
+		{name: "the prefix keeps internal whitespace", text: "one\n\ntwo   three\tfour", max: 3, want: "one\n\ntwo   three", tokens: 3, total: 4, applied: true},
+		{name: "non-ASCII words are tokens", text: "café 東京 alpha beta", max: 2, want: "café 東京", tokens: 2, total: 4, applied: true},
+		{name: "non-ASCII spaces split tokens", text: "one\u00a0two\u3000three four", max: 2, want: "one\u00a0two", tokens: 2, total: 4, applied: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, words, total, applied := query.ForwardQuery(tt.text, tt.max)
+			got, tokens, total, applied := query.ForwardQuery(tt.text, tt.max, nil)
 			assert.Equal(t, tt.want, got)
-			assert.Equal(t, tt.words, words)
+			assert.Equal(t, tt.tokens, tokens)
 			assert.Equal(t, tt.total, total)
 			assert.Equal(t, tt.applied, applied)
 		})
@@ -105,7 +107,7 @@ func TestQueryBound_ZeroTurnsItOff(t *testing.T) {
 	wordOf := []int{0, 1, 2, 3}
 
 	for _, n := range []int{0, -3} {
-		got, _, _, applied := query.ForwardQuery(text, n)
+		got, _, _, applied := query.ForwardQuery(text, n, nil)
 		assert.Equal(t, text, got)
 		assert.False(t, applied, "forward %d", n)
 		assert.Nil(t, query.SelectSalientTokenIndices(weights, n), "tokens %d", n)
@@ -128,8 +130,8 @@ func TestQueryBound_ZeroTurnsItOff(t *testing.T) {
 	assert.Equal(t, "one two", forwardOnly.FTSText)
 	assert.Nil(t, forwardOnly.Keep)
 	require.NotNil(t, forwardOnly.Report)
-	assert.Equal(t, 2, forwardOnly.Report.EmbeddedWords)
-	assert.Equal(t, 4, forwardOnly.Report.TotalWords)
+	assert.Equal(t, 2, forwardOnly.Report.EmbeddedTokens)
+	assert.Equal(t, 4, forwardOnly.Report.TotalTokens)
 	assert.Equal(t, 0, forwardOnly.Report.SalientTerms)
 }
 
@@ -185,7 +187,7 @@ func TestShapeQuery_MissingWordMapDoesNotInventTerms(t *testing.T) {
 }
 
 func TestQueryCapped_ZeroSalientTermsStaysInJSON(t *testing.T) {
-	raw, err := json.Marshal(query.QueryCapped{EmbeddedWords: 512, TotalWords: 912, SalientTerms: 0})
+	raw, err := json.Marshal(query.QueryCapped{EmbeddedTokens: 1152, TotalTokens: 1400, SalientTerms: 0})
 	require.NoError(t, err)
-	assert.JSONEq(t, `{"embedded_words":512,"total_words":912,"salient_terms":0}`, string(raw))
+	assert.JSONEq(t, `{"embedded_tokens":1152,"total_tokens":1400,"salient_terms":0}`, string(raw))
 }

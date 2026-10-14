@@ -33,9 +33,9 @@ type askCapEnvelope struct {
 	Result        struct {
 		Query       string `json:"query"`
 		QueryCapped *struct {
-			EmbeddedWords int `json:"embedded_words"`
-			TotalWords    int `json:"total_words"`
-			SalientTerms  int `json:"salient_terms"`
+			EmbeddedTokens int `json:"embedded_tokens"`
+			TotalTokens    int `json:"total_tokens"`
+			SalientTerms   int `json:"salient_terms"`
 		} `json:"query_capped"`
 	} `json:"result"`
 }
@@ -60,14 +60,14 @@ func isolateAskCap(t *testing.T) {
 func TestAskQueryCap_JSONAndText(t *testing.T) {
 	isolateAskCap(t)
 	vault := indexedBaselineVault(t)
-	query := nWords(520, "LASTWORD")
+	query := nWords(1160, "LASTWORD")
 
 	env, raw := askCapQuery(t, vault, query)
 	assert.Equal(t, query, env.Result.Query)
 	assert.Equal(t, "v1", env.SchemaVersion)
 	require.NotNil(t, env.Result.QueryCapped)
-	assert.Equal(t, 512, env.Result.QueryCapped.EmbeddedWords)
-	assert.Equal(t, 520, env.Result.QueryCapped.TotalWords)
+	assert.Equal(t, 1152, env.Result.QueryCapped.EmbeddedTokens)
+	assert.Equal(t, 1160, env.Result.QueryCapped.TotalTokens)
 	assert.Equal(t, 0, env.Result.QueryCapped.SalientTerms, "a keyword vault has no sparse weights")
 	assert.Contains(t, string(raw), `"salient_terms":0`)
 	assert.NotContains(t, string(raw), "used_words")
@@ -77,13 +77,13 @@ func TestAskQueryCap_JSONAndText(t *testing.T) {
 	text := out.String()
 	searchAt := strings.Index(text, "Search:")
 	require.GreaterOrEqual(t, searchAt, 0)
-	capAt := strings.Index(text, "  [long query: ranked on its first 512 of 520 words]\n")
+	capAt := strings.Index(text, "  [long query: ranked on its first 1152 of 1160 tokens]\n")
 	require.Greater(t, capAt, searchAt)
 	assert.NotContains(t, text, "salient")
 	assert.Contains(t, text, "LASTWORD")
 }
 
-func TestAskQueryForwardWords_Precedence(t *testing.T) {
+func TestAskQueryForwardTokens_Precedence(t *testing.T) {
 	isolateAskCap(t)
 	// --config sticks in configFileUsed for the life of the process, and the
 	// next test would validate that deleted temp file. Clearing the two
@@ -95,45 +95,45 @@ func TestAskQueryForwardWords_Precedence(t *testing.T) {
 		cfgFile = ""
 	})
 	vault := indexedBaselineVault(t)
-	query := nWords(520, "LASTWORD")
+	query := nWords(1160, "LASTWORD")
 	configPath := filepath.Join(t.TempDir(), "config.yaml")
-	require.NoError(t, os.WriteFile(configPath, []byte("app:\n  ask:\n    query_forward_words: 10\n"), 0o644))
+	require.NoError(t, os.WriteFile(configPath, []byte("app:\n  ask:\n    query_forward_tokens: 10\n"), 0o644))
 
-	t.Run("default is 512", func(t *testing.T) {
+	t.Run("default is 1152", func(t *testing.T) {
 		viper.Reset()
 		env, _ := askCapQuery(t, vault, query)
 		require.NotNil(t, env.Result.QueryCapped)
-		assert.Equal(t, 512, env.Result.QueryCapped.EmbeddedWords)
-		assert.Equal(t, 520, env.Result.QueryCapped.TotalWords)
+		assert.Equal(t, 1152, env.Result.QueryCapped.EmbeddedTokens)
+		assert.Equal(t, 1160, env.Result.QueryCapped.TotalTokens)
 	})
 
 	t.Run("config file beats the default", func(t *testing.T) {
 		viper.Reset()
 		env, _ := askCapQuery(t, vault, query, "--config", configPath)
 		require.NotNil(t, env.Result.QueryCapped)
-		assert.Equal(t, 10, env.Result.QueryCapped.EmbeddedWords)
+		assert.Equal(t, 10, env.Result.QueryCapped.EmbeddedTokens)
 	})
 
 	t.Run("env beats the config file", func(t *testing.T) {
 		viper.Reset()
-		t.Setenv("VAULTMIND_APP_ASK_QUERY_FORWARD_WORDS", "5")
+		t.Setenv("VAULTMIND_APP_ASK_QUERY_FORWARD_TOKENS", "5")
 		env, _ := askCapQuery(t, vault, query, "--config", configPath)
 		require.NotNil(t, env.Result.QueryCapped)
-		assert.Equal(t, 5, env.Result.QueryCapped.EmbeddedWords)
+		assert.Equal(t, 5, env.Result.QueryCapped.EmbeddedTokens)
 	})
 
 	t.Run("flag beats env", func(t *testing.T) {
 		viper.Reset()
-		t.Setenv("VAULTMIND_APP_ASK_QUERY_FORWARD_WORDS", "5")
-		env, _ := askCapQuery(t, vault, query, "--config", configPath, "--query-forward-words", "3")
+		t.Setenv("VAULTMIND_APP_ASK_QUERY_FORWARD_TOKENS", "5")
+		env, _ := askCapQuery(t, vault, query, "--config", configPath, "--query-forward-tokens", "3")
 		require.NotNil(t, env.Result.QueryCapped)
-		assert.Equal(t, 3, env.Result.QueryCapped.EmbeddedWords)
+		assert.Equal(t, 3, env.Result.QueryCapped.EmbeddedTokens)
 	})
 
 	t.Run("flag zero turns the forward bound off", func(t *testing.T) {
 		viper.Reset()
-		t.Setenv("VAULTMIND_APP_ASK_QUERY_FORWARD_WORDS", "5")
-		env, _ := askCapQuery(t, vault, query, "--query-forward-words", "0")
+		t.Setenv("VAULTMIND_APP_ASK_QUERY_FORWARD_TOKENS", "5")
+		env, _ := askCapQuery(t, vault, query, "--query-forward-tokens", "0")
 		assert.Nil(t, env.Result.QueryCapped)
 		assert.Equal(t, query, env.Result.Query)
 	})
@@ -142,7 +142,7 @@ func TestAskQueryForwardWords_Precedence(t *testing.T) {
 		viper.Reset()
 		env, _ := askCapQuery(t, vault, query, "--query-salient-terms", "0")
 		require.NotNil(t, env.Result.QueryCapped)
-		assert.Equal(t, 512, env.Result.QueryCapped.EmbeddedWords)
+		assert.Equal(t, 1152, env.Result.QueryCapped.EmbeddedTokens)
 		assert.Equal(t, 0, env.Result.QueryCapped.SalientTerms)
 	})
 }
@@ -193,7 +193,8 @@ func TestAskHelp_MentionsQueryShapeBounds(t *testing.T) {
 	out, _, err := runRootCmd(t, "ask", "--help")
 	require.NoError(t, err)
 	help := out.String()
-	assert.Contains(t, help, "--query-forward-words")
+	assert.Contains(t, help, "--query-forward-tokens")
+	assert.NotContains(t, help, "--query-forward-words")
 	assert.Contains(t, help, "--query-salient-terms")
 	assert.Contains(t, help, "0")
 	assert.NotContains(t, help, "--query-max-words")
@@ -225,7 +226,7 @@ func TestAskQueryCap_ShortQueryIsByteIdenticalToOff(t *testing.T) {
 	on, _, err := runRootCmd(t, "ask", query, "--vault", onVault, "--json", "--pointers-only", "--max-items", "1", "--budget", "200")
 	require.NoError(t, err)
 	off, _, err := runRootCmd(t, "ask", query, "--vault", offVault, "--json", "--pointers-only", "--max-items", "1", "--budget", "200",
-		"--query-forward-words", "0", "--query-salient-terms", "0")
+		"--query-forward-tokens", "0", "--query-salient-terms", "0")
 	require.NoError(t, err)
 	assert.Equal(t, withoutRunFields(on.Bytes()), withoutRunFields(off.Bytes()))
 	assert.NotContains(t, on.String(), "query_capped")
@@ -235,7 +236,7 @@ func TestAskQueryCap_ShortQueryIsByteIdenticalToOff(t *testing.T) {
 	textOn, _, err := runRootCmd(t, "ask", query, "--vault", cloneIndexedVault(t, src), "--pointers-only", "--max-items", "1", "--budget", "200")
 	require.NoError(t, err)
 	textOff, _, err := runRootCmd(t, "ask", query, "--vault", cloneIndexedVault(t, src), "--pointers-only", "--max-items", "1", "--budget", "200",
-		"--query-forward-words", "0", "--query-salient-terms", "0")
+		"--query-forward-tokens", "0", "--query-salient-terms", "0")
 	require.NoError(t, err)
 	assert.Equal(t, textOn.Bytes(), textOff.Bytes())
 	assert.NotContains(t, textOn.String(), "long query")
@@ -252,7 +253,7 @@ func TestMCPAsk_ShortQueryMatchesTheCLI(t *testing.T) {
 	on, _, err := runRootCmd(t, "ask", "--json", "--vault="+onVault, "--", query)
 	require.NoError(t, err)
 	off, _, err := runRootCmd(t, "ask", "--json", "--vault="+offVault,
-		"--query-forward-words", "0", "--query-salient-terms", "0", "--", query)
+		"--query-forward-tokens", "0", "--query-salient-terms", "0", "--", query)
 	require.NoError(t, err)
 	assert.Equal(t, withoutRunFields(on.Bytes()), withoutRunFields(off.Bytes()),
 		"a short MCP query is the CLI query, and that query is unchanged with both bounds off")

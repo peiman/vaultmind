@@ -4,6 +4,7 @@ import (
 	"context"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/peiman/vaultmind/internal/embedding"
 	"github.com/rs/zerolog/log"
@@ -14,9 +15,9 @@ import (
 // The ints are always serialized: a zero would otherwise vanish, and zero
 // means "that bound did not apply."
 type QueryCapped struct {
-	EmbeddedWords int `json:"embedded_words"`
-	TotalWords    int `json:"total_words"`
-	SalientTerms  int `json:"salient_terms"`
+	EmbeddedTokens int `json:"embedded_tokens"`
+	TotalTokens    int `json:"total_tokens"`
+	SalientTerms   int `json:"salient_terms"`
 }
 
 // QueryAnalyzer reads per-token sparse weights from the one forward pass.
@@ -33,6 +34,13 @@ func AnalyzerFrom(emb embedding.Embedder) QueryAnalyzer {
 	}
 	a, _ := emb.(QueryAnalyzer)
 	return a
+}
+
+// QueryTokenizer reports content-token byte spans for text, specials excluded.
+// BGEM3Embedder implements it. An analyzer without it is bounded one whitespace
+// word per token.
+type QueryTokenizer interface {
+	TokenSpans(text string) ([][2]int, error)
 }
 
 // ShapedQuery is the one plan every ranking lane reads.
@@ -55,17 +63,49 @@ func boundOff(n int) bool { return n <= 0 }
 // definition (Principle 7).
 func higherSparseWeight(a, b float32) bool { return a > b }
 
-// ForwardQuery bounds the text of one forward pass to the first maxWords
-// words. Off, or already within the bound, returns text unchanged,
-// whitespace included. A longer query is the first maxWords words joined
-// by a single space.
-func ForwardQuery(text string, maxWords int) (embedded string, embeddedWords, totalWords int, applied bool) {
-	fields := strings.Fields(text)
-	totalWords = len(fields)
-	if boundOff(maxWords) || totalWords <= maxWords {
-		return text, totalWords, totalWords, false
+// longRunRunes is the whitespace-word length past which the word is not a
+// lexical FTS term. An English word, even one split into several BPE pieces,
+// stays one term. A CJK or Thai paragraph is one run with no spaces, and its
+// salient tokens contribute their own surface. Exactly this many runes is
+// still one word.
+const longRunRunes = 64
+
+// ForwardQuery bounds one forward pass to the first maxTokens content tokens.
+// spans are byte ranges into text; nil means one span per whitespace word
+// (embedding.WhitespaceTokenSpans — the same split the word map uses,
+// Principle 7). Off, or already within the bound, returns text unchanged.
+// A longer query is the prefix ending at the last kept token, so the embedded
+// text is a clean prefix and internal whitespace stays. A span that cannot be
+// cut as valid UTF-8 does not apply the bound.
+func ForwardQuery(text string, maxTokens int, spans [][2]int) (embedded string, embeddedTokens, totalTokens int, applied bool) {
+	if spans == nil {
+		spans = embedding.WhitespaceTokenSpans(text)
 	}
-	return strings.Join(fields[:maxWords], " "), maxWords, totalWords, true
+	totalTokens = len(spans)
+	if boundOff(maxTokens) || totalTokens <= maxTokens {
+		return text, totalTokens, totalTokens, false
+	}
+	start, end := spans[maxTokens-1][0], spans[maxTokens-1][1]
+	if start < 0 || end <= start || end > len(text) || !utf8.ValidString(text[:end]) {
+		return text, totalTokens, totalTokens, false
+	}
+	return text[:end], maxTokens, totalTokens, true
+}
+
+// tokenSpansOf reads content-token spans when the analyzer can tokenize.
+// A tokenizer error falls back to whitespace spans inside ForwardQuery. The
+// model clamp is what stops an oversized forward pass.
+func tokenSpansOf(analyzer QueryAnalyzer, text string) [][2]int {
+	tok, ok := analyzer.(QueryTokenizer)
+	if !ok || tok == nil {
+		return nil
+	}
+	spans, err := tok.TokenSpans(text)
+	if err != nil {
+		log.Debug().Err(err).Msg("ask query shape: token spans unavailable")
+		return nil
+	}
+	return spans
 }
 
 // SelectSalientTokenIndices returns the k highest-weight token positions,
@@ -152,8 +192,8 @@ func SelectSalientWords(words []string, tokenWord []int, weights []float32, k in
 // The forward bound limits the one embedding. Salient selection, when the
 // embedder has per-token weights, limits ColBERT and FTS. A failure to read
 // those weights skips salient selection and still applies the forward bound.
-func ShapeQuery(ctx context.Context, text string, forwardWords, salient int, analyzer QueryAnalyzer) ShapedQuery {
-	embed, embWords, total, forwardApplied := ForwardQuery(text, forwardWords)
+func ShapeQuery(ctx context.Context, text string, forwardTokens, salient int, analyzer QueryAnalyzer) ShapedQuery {
+	embed, embTokens, total, forwardApplied := ForwardQuery(text, forwardTokens, tokenSpansOf(analyzer, text))
 	out := ShapedQuery{EmbedText: embed}
 
 	var tokens embedding.QueryTokens
@@ -169,32 +209,120 @@ func ShapeQuery(ctx context.Context, text string, forwardWords, salient int, ana
 	}
 
 	var keep []int
-	var picked []string
+	var fts []string
 	if analyzed {
 		keep = SelectSalientTokenIndices(tokens.Weights, salient)
-		picked = SelectSalientWords(tokens.Words, tokens.Word, tokens.Weights, salient)
+		fts = ftsTerms(embed, tokens, keep, salient)
 	}
-	salientApplied := keep != nil || picked != nil
+	salientApplied := keep != nil || len(fts) > 0
 	out.Keep = keep
-	if picked != nil {
-		out.FTSText = strings.Join(picked, " ")
-	} else if forwardApplied && !analyzed {
+	if len(fts) > 0 {
+		out.FTSText = strings.Join(fts, " ")
+	} else if forwardApplied {
+		// Weights may have been read and still produced no FTS terms: too few
+		// distinct words, or no word map. An empty FTSText would send the lane
+		// the caller's original, unbounded query.
 		out.FTSText = embed
 	}
 
 	if !forwardApplied && !salientApplied {
 		return out
 	}
-	terms := 0
+	reported := 0
 	if salientApplied {
-		terms = salient
+		reported = salient
 	}
 	out.Report = &QueryCapped{
-		EmbeddedWords: embWords,
-		TotalWords:    total,
-		SalientTerms:  terms,
+		EmbeddedTokens: embTokens,
+		TotalTokens:    total,
+		SalientTerms:   reported,
 	}
 	return out
+}
+
+// ftsTerms is the one decision for what FTS searches (Principle 7). Spaced
+// words stay whole. A salient token whose word is a long no-space run
+// contributes that token's surface, not the run. Nil means the caller falls
+// back to the forward prefix rather than an empty search string.
+func ftsTerms(text string, tokens embedding.QueryTokens, keep []int, salient int) []string {
+	picked := SelectSalientWords(tokens.Words, tokens.Word, tokens.Weights, salient)
+	if !keepHasLongRun(tokens, keep) {
+		return picked
+	}
+	terms := tokenSurfaces(text, tokens, keep)
+	if len(terms) == 0 {
+		return nil
+	}
+	return terms
+}
+
+func keepHasLongRun(tokens embedding.QueryTokens, keep []int) bool {
+	if keep == nil {
+		return false
+	}
+	for _, i := range keep {
+		if longNoSpaceRun(wordAt(tokens, i)) {
+			return true
+		}
+	}
+	return false
+}
+
+func longNoSpaceRun(word string) bool {
+	return utf8.RuneCountInString(word) > longRunRunes
+}
+
+func wordAt(tokens embedding.QueryTokens, i int) string {
+	if i < 0 || i >= len(tokens.Word) {
+		return ""
+	}
+	w := tokens.Word[i]
+	if w < 0 || w >= len(tokens.Words) {
+		return ""
+	}
+	return tokens.Words[w]
+}
+
+func tokenSurfaces(text string, tokens embedding.QueryTokens, keep []int) []string {
+	seen := make(map[string]struct{}, len(keep))
+	var out []string
+	for _, i := range keep {
+		term := ftsTermAt(text, tokens, i)
+		if term == "" {
+			continue
+		}
+		if _, ok := seen[term]; ok {
+			continue
+		}
+		seen[term] = struct{}{}
+		out = append(out, term)
+	}
+	return out
+}
+
+func ftsTermAt(text string, tokens embedding.QueryTokens, i int) string {
+	word := wordAt(tokens, i)
+	if word == "" {
+		return ""
+	}
+	if !longNoSpaceRun(word) {
+		return word
+	}
+	if i < 0 || i >= len(tokens.Offsets) {
+		return ""
+	}
+	return tokenSurface(text, tokens.Offsets[i])
+}
+
+func tokenSurface(text string, off [2]int) string {
+	if off[0] < 0 || off[1] > len(text) || off[1] <= off[0] {
+		return ""
+	}
+	s := text[off[0]:off[1]]
+	if !utf8.ValidString(s) {
+		return ""
+	}
+	return s
 }
 
 // shapedPlan is carried on the context so each lane can keep its string

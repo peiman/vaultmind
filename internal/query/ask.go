@@ -67,9 +67,9 @@ type AskConfig struct {
 	// their text is not sent again and their access is not a delivered read.
 	ShownBefore map[string]bool
 
-	// QueryForwardWords bounds the text of one forward pass. 0 leaves it
+	// QueryForwardTokens bounds the text of one forward pass. 0 leaves it
 	// unchanged. The library zero is off; the CLI default lives in the registry.
-	QueryForwardWords int
+	QueryForwardTokens int
 	// QuerySalientTerms is how many highest-weight tokens and words ColBERT
 	// and FTS use from that pass. 0 leaves those lanes on the embedded text.
 	QuerySalientTerms int
@@ -253,12 +253,12 @@ func computeTopHitConfidenceRRFGap(hits []retrieval.ScoredResult) string {
 // mis-attribute access events to a note the agent didn't read. The
 // caller is responsible for firing access on whatever it chooses to
 // read.
-func AskHits(ctx context.Context, retriever retrieval.Retriever, query string, searchLimit, forwardWords, salientTerms int, analyzer QueryAnalyzer) (*AskResult, error) {
-	shaped := ShapeQuery(ctx, query, forwardWords, salientTerms, analyzer)
+func AskHits(ctx context.Context, retriever retrieval.Retriever, query string, searchLimit, forwardTokens, salientTerms int, analyzer QueryAnalyzer) (*AskResult, error) {
+	shaped := ShapeQuery(ctx, query, forwardTokens, salientTerms, analyzer)
 	if shaped.Report != nil {
 		log.Debug().
-			Int("embedded_words", shaped.Report.EmbeddedWords).
-			Int("total_words", shaped.Report.TotalWords).
+			Int("embedded_tokens", shaped.Report.EmbeddedTokens).
+			Int("total_tokens", shaped.Report.TotalTokens).
 			Int("salient_terms", shaped.Report.SalientTerms).
 			Msg("ask ranking query shaped")
 	}
@@ -315,7 +315,7 @@ func Ask(ctx context.Context, retriever retrieval.Retriever, resolver *graph.Res
 	// AskHits is the one search. Dense and sparse embed the forward-bounded
 	// text; ColBERT and FTS use the salient terms when weights exist.
 	// cfg.Query stays the original for the echo.
-	result, err := AskHits(ctx, retriever, cfg.Query, cfg.SearchLimit, cfg.QueryForwardWords, cfg.QuerySalientTerms, AnalyzerFrom(cfg.Embedder))
+	result, err := AskHits(ctx, retriever, cfg.Query, cfg.SearchLimit, cfg.QueryForwardTokens, cfg.QuerySalientTerms, AnalyzerFrom(cfg.Embedder))
 	if err != nil {
 		return nil, err
 	}

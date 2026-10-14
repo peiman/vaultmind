@@ -21,9 +21,9 @@ type AskEnvelope struct {
 	Result        struct {
 		Query       string `json:"query"`
 		QueryCapped *struct {
-			EmbeddedWords int `json:"embedded_words"`
-			TotalWords    int `json:"total_words"`
-			SalientTerms  int `json:"salient_terms"`
+			EmbeddedTokens int `json:"embedded_tokens"`
+			TotalTokens    int `json:"total_tokens"`
+			SalientTerms   int `json:"salient_terms"`
 		} `json:"query_capped,omitempty"`
 		RetrievalMode string `json:"retrieval_mode"`
 		TopHits       []struct {

@@ -17,10 +17,10 @@ func TestAskOptions_QueryShapeBounds(t *testing.T) {
 		def  int
 	}{
 		{
-			key:  "app.ask.query_forward_words",
-			flag: "query-forward-words",
-			env:  "VAULTMIND_APP_ASK_QUERY_FORWARD_WORDS",
-			def:  512,
+			key:  "app.ask.query_forward_tokens",
+			flag: "query-forward-tokens",
+			env:  "VAULTMIND_APP_ASK_QUERY_FORWARD_TOKENS",
+			def:  1152,
 		},
 		{
 			key:  "app.ask.query_salient_terms",

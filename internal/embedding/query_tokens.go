@@ -16,12 +16,15 @@ type QueryTokens struct {
 	Weights []float32
 	Word    []int
 	Words   []string
+	// Offsets are byte ranges into the text the tokenizer saw, aligned with
+	// Weights. A token with no span has end <= start.
+	Offsets [][2]int
 }
 
 // alignQueryTokens drops the CLS position so index 0 matches ColBERT[0],
 // then trims to the ColBERT length. Offsets are byte offsets into text,
 // which is the string the tokenizer actually saw.
-func alignQueryTokens(text string, offsets [][2]uint, positionWeights []float32, colbertLen int) ([]float32, []int, []string) {
+func alignQueryTokens(text string, offsets [][2]uint, positionWeights []float32, colbertLen int) ([]float32, []int, []string, [][2]int) {
 	weights := positionWeights
 	if len(weights) > 0 {
 		weights = weights[1:]
@@ -46,7 +49,39 @@ func alignQueryTokens(text string, offsets [][2]uint, positionWeights []float32,
 		copy(fixed, tokenWord)
 		tokenWord = fixed
 	}
-	return weights, tokenWord, words
+	aligned := make([][2]int, len(weights))
+	for i := range aligned {
+		aligned[i] = [2]int{-1, -1}
+	}
+	for i := 0; i < len(weights) && i < len(offs); i++ {
+		aligned[i] = [2]int{int(offs[i][0]), int(offs[i][1])}
+	}
+	return weights, tokenWord, words, aligned
+}
+
+// WhitespaceTokenSpans is the one whitespace split. A keyword-only ask has
+// no BGE-M3 tokenizer, so each whitespace word is one token. alignTokenWords
+// uses the same split, and the two cannot drift (Principle 7).
+func WhitespaceTokenSpans(text string) [][2]int {
+	_, spans := whitespaceSpans(text)
+	return spans
+}
+
+// contentTokenSpans keeps tokens the model will score: not special, and with
+// a real span. Hugot turns a special's negative span into [0,0], so an empty
+// span is not content even when the mask is missing.
+func contentTokenSpans(offsets [][2]uint, special []uint32) [][2]int {
+	var out [][2]int
+	for i, off := range offsets {
+		if i < len(special) && special[i] != 0 {
+			continue
+		}
+		if off[1] <= off[0] {
+			continue
+		}
+		out = append(out, [2]int{int(off[0]), int(off[1])})
+	}
+	return out
 }
 
 // alignTokenWords maps each token onto the whitespace word that contains

@@ -23,6 +23,7 @@ type BGEM3Output struct {
 	TokenWeights []float32
 	TokenWord    []int
 	Words        []string
+	TokenOffsets [][2]int
 }
 
 // BGEM3Embedder produces dense, sparse, and ColBERT embeddings using BGE-M3.
@@ -209,7 +210,7 @@ func (e *BGEM3Embedder) EmbedFullBatch(ctx context.Context, texts []string) ([]*
 			raw = batch.Input[i].Raw
 			offsets = batch.Input[i].Offsets
 		}
-		out.TokenWeights, out.TokenWord, out.Words = alignQueryTokens(raw, offsets, pos, colbertLen)
+		out.TokenWeights, out.TokenWord, out.Words, out.TokenOffsets = alignQueryTokens(raw, offsets, pos, colbertLen)
 		outputs[i] = out
 	}
 
@@ -350,7 +351,26 @@ func (e *BGEM3Embedder) AnalyzeQuery(ctx context.Context, text string) (QueryTok
 	if err != nil {
 		return QueryTokens{}, err
 	}
-	return QueryTokens{Weights: out.TokenWeights, Word: out.TokenWord, Words: out.Words}, nil
+	return QueryTokens{Weights: out.TokenWeights, Word: out.TokenWord, Words: out.Words, Offsets: out.TokenOffsets}, nil
+}
+
+// TokenSpans reports content-token byte spans for text without a forward
+// pass. The model clamp in preprocessWithinTokenLimit is what keeps an
+// oversized note from hanging; this read is only where the query is cut.
+func (e *BGEM3Embedder) TokenSpans(text string) ([][2]int, error) {
+	if e == nil || e.preprocess == nil {
+		return nil, fmt.Errorf("tokenizer unavailable")
+	}
+	batch := backends.NewBatch(1)
+	defer func() { _ = batch.Destroy() }()
+	if err := e.preprocess(batch, []string{text}); err != nil {
+		return nil, err
+	}
+	if len(batch.Input) == 0 {
+		return nil, fmt.Errorf("tokenizer returned no input")
+	}
+	in := batch.Input[0]
+	return contentTokenSpans(in.Offsets, in.SpecialTokensMask), nil
 }
 
 // EmbedColBERT produces only the ColBERT per-token embeddings (used by ColBERTRetriever).

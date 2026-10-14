@@ -118,7 +118,7 @@ func TestAskJSONContract_QueryCappedIsAdditive(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	vault := indexedBaselineVault(t)
-	parts := make([]string, 520)
+	parts := make([]string, 1160)
 	for i := range parts {
 		parts[i] = "word"
 	}
@@ -134,8 +134,8 @@ func TestAskJSONContract_QueryCappedIsAdditive(t *testing.T) {
 	assert.Equal(t, "v1", env.SchemaVersion)
 	assert.Equal(t, query, env.Result.Query)
 	require.NotNil(t, env.Result.QueryCapped)
-	assert.Equal(t, 512, env.Result.QueryCapped.EmbeddedWords)
-	assert.Equal(t, 520, env.Result.QueryCapped.TotalWords)
+	assert.Equal(t, 1152, env.Result.QueryCapped.EmbeddedTokens)
+	assert.Equal(t, 1160, env.Result.QueryCapped.TotalTokens)
 	assert.Equal(t, 0, env.Result.QueryCapped.SalientTerms)
 	assert.Contains(t, out.String(), `"salient_terms":0`)
 	assert.NotContains(t, out.String(), "used_words")
