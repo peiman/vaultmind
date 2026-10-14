@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The recall hook no longer spends 25 s and times out on subagent hand-backs.**
+  A prompt that is only the harness prefix `Another Claude session sent a message:`,
+  then one or more `agent-message`, `teammate-message`, or `cross-session-message`
+  envelopes, then whitespace or one of the two observed harness suffixes, is
+  skipped. The skip is logged as `cross-session-envelope`. A person's own words
+  before, after, or between those envelopes are still recalled, including a
+  sentence that only mentions `<agent-message>`.
+  Run `vaultmind hooks install --force` to update installed copies.
+
 ## [0.10.12] - 2026-10-12
 
 > An excerpt now keeps the heading that governs it (so a "do not use" warning isn't lost), and passage headings read top-down without repeating the note title.
