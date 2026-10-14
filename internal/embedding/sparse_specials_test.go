@@ -79,3 +79,18 @@ func TestSparseSpecialIDs_MissingRequiredIsAnError(t *testing.T) {
 	_, err = sparseSpecialIDs(nil)
 	require.Error(t, err)
 }
+
+func TestSparseSpecialIDs_NegativeRequiredIDIsAnError(t *testing.T) {
+	_, err := sparseSpecialIDs(stubSpecials{ids: map[api.SpecialToken]int{
+		api.TokClassification: -1,
+		api.TokPad:            1,
+		api.TokEndOfSentence:  2,
+		api.TokUnknown:        3,
+	}})
+	require.Error(t, err)
+}
+
+func TestSparseSpecialsFromPipeline_MissingTokenizerIsAnError(t *testing.T) {
+	_, err := sparseSpecialsFromPipeline(nil)
+	require.Error(t, err)
+}

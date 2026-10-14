@@ -2,11 +2,13 @@ package cmd
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/embedding"
 	"github.com/peiman/vaultmind/internal/index"
+	"github.com/peiman/vaultmind/internal/query"
 	"github.com/peiman/vaultmind/internal/vault"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -171,6 +173,84 @@ func TestEmbedOnWrite_StaleSparseUpgradesDespiteTheBacklogLimit(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, *calls)
 	assert.NotContains(t, errOut.String(), "notes have no embeddings")
+}
+
+func TestPlainIndex_CorruptStampIsAnError(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	setStaleSparse(t, vault)
+	db, err := index.Open(filepath.Join(vault, ".vaultmind", "index.db"))
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO meta (key, value) VALUES ('sparse_format', 'nope')`)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	_, _, err = runRootCmd(t, "index", "--vault", vault)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "sparse format")
+}
+
+func TestNoteStaleSparse_SkipsEmbedAndReportsAnUnreadableIndex(t *testing.T) {
+	require.NoError(t, noteStaleSparse(nil, "unused", false))
+	require.NoError(t, noteStaleSparse(&index.IndexResult{}, "unused", true))
+
+	parent := filepath.Join(t.TempDir(), "not-a-directory")
+	require.NoError(t, os.WriteFile(parent, []byte("x"), 0o644))
+	err := noteStaleSparse(&index.IndexResult{}, filepath.Join(parent, "index.db"), false)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "checking sparse format")
+}
+
+func TestFormatIndexResult_StaleWarningWriteError(t *testing.T) {
+	err := formatIndexResult(index.IndexAndEmbedResult{
+		Index: &index.IndexResult{SparseFormatStale: true},
+	}, "", &failAfterNWriter{ok: 1})
+	require.Error(t, err)
+}
+
+func TestWriteEmbeddingStatus_StaleWarningWriteError(t *testing.T) {
+	notReady := &query.DoctorEmbeddings{SemanticReady: false, SparseFormatStale: true, TotalNotes: 3}
+	require.Error(t, writeEmbeddingStatus(&failAfterNWriter{ok: 1}, notReady, nil))
+
+	ready := &query.DoctorEmbeddings{
+		SemanticReady:     true,
+		SparseFormatStale: true,
+		Model:             embedding.ModelBGEM3,
+		TotalNotes:        1,
+		DenseCount:        1,
+		SparseCount:       1,
+		ColBERTCount:      1,
+	}
+	require.Error(t, writeEmbeddingStatus(&failAfterNWriter{ok: 1}, ready, nil))
+}
+
+func TestAsk_UnreadableSparseStampLeavesTheFieldUnset(t *testing.T) {
+	vault := buildIndexedTestVault(t)
+	db, err := index.Open(filepath.Join(vault, ".vaultmind", "index.db"))
+	require.NoError(t, err)
+	_, err = db.Exec(`DROP TABLE meta`)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	askJSON, _, err := runRootCmd(t, "ask", "alpha", "--vault", vault, "--json")
+	require.NoError(t, err)
+	assert.NotContains(t, askJSON.String(), "sparse_format_stale")
+}
+
+func TestEmbedOnWrite_UnreadableStampDoesNotEmbed(t *testing.T) {
+	vaultPath := buildIndexedTestVault(t)
+	markBGEM3Vectors(t, vaultPath)
+	useORTBackend(t)
+	calls := countEmbedPasses(t)
+	db, err := index.Open(filepath.Join(vaultPath, ".vaultmind", "index.db"))
+	require.NoError(t, err)
+	_, err = db.Exec(`DROP TABLE meta`)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	_, errOut, err := runRootCmd(t, "frontmatter", "set", "projects/beta.md", "status", "paused", "--vault", vaultPath)
+	require.NoError(t, err)
+	assert.Zero(t, *calls)
+	assert.Contains(t, errOut.String(), "written, but not embedded")
 }
 
 func TestEmbedOnWrite_FreshStampKeepsTheBacklogLimit(t *testing.T) {

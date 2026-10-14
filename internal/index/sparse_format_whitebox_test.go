@@ -3,6 +3,8 @@ package index
 import (
 	"bytes"
 	"context"
+	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -166,4 +168,172 @@ func TestSkipIncrementalEmbed_StaleBGEM3IsNotIdle(t *testing.T) {
 	skip, _, err = skipIncrementalEmbed(miniPath, embedding.ModelMiniLM)
 	require.NoError(t, err)
 	require.True(t, skip, "minilm does not upgrade a sparse column")
+}
+
+// denseOnly is an Embedder that cannot produce sparse vectors.
+type denseOnly struct{}
+
+func (denseOnly) Embed(context.Context, string) ([]float32, error) {
+	return []float32{1, 0, 0, 0}, nil
+}
+func (denseOnly) EmbedBatch(context.Context, []string) ([][]float32, error) {
+	return [][]float32{{1, 0, 0, 0}}, nil
+}
+func (denseOnly) Dims() int    { return 4 }
+func (denseOnly) Close() error { return nil }
+
+type failWriter struct{}
+
+func (failWriter) Write([]byte) (int, error) { return 0, errors.New("write failed") }
+
+func blockedDBPath(t *testing.T) string {
+	t.Helper()
+	parent := filepath.Join(t.TempDir(), "not-a-directory")
+	require.NoError(t, os.WriteFile(parent, []byte("x"), 0o644))
+	return filepath.Join(parent, "index.db")
+}
+
+func TestReadSparseFormat_ClosedDBAndGarbageValue(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "index.db")
+	db, err := Open(dbPath)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+	_, err = ReadSparseFormat(db)
+	require.Error(t, err)
+
+	db, err = Open(dbPath)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	_, err = db.Exec(`INSERT INTO meta (key, value) VALUES (?, ?)`, metaKeySparseFormat, "nope")
+	require.NoError(t, err)
+	_, err = ReadSparseFormat(db)
+	require.Error(t, err)
+	_, err = SparseFormatStale(db)
+	require.Error(t, err)
+}
+
+func TestSparseFormatStale_CountFailure(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "index.db"))
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	_, err = db.Exec(`ALTER TABLE notes RENAME TO notes_kept`)
+	require.NoError(t, err)
+	_, err = SparseFormatStale(db)
+	require.Error(t, err)
+}
+
+func TestSparseFormatStaleFile_UnopenablePath(t *testing.T) {
+	_, err := SparseFormatStaleFile(blockedDBPath(t))
+	require.Error(t, err)
+}
+
+func TestReembedStaleSparse_NeedsAFullEmbedder(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "index.db"))
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	_, err = db.Exec(`INSERT INTO notes (id, path, hash, mtime, sparse_embedding) VALUES ('a', 'a.md', 'h', 1, ?)`,
+		EncodeSparseEmbedding(map[int32]float32{0: 1}))
+	require.NoError(t, err)
+	_, err = (&Indexer{}).ReembedStaleSparse(context.Background(), db, denseOnly{}, &bytes.Buffer{})
+	require.Error(t, err)
+}
+
+func TestReembedStaleSparse_ProgressWriteErrorDoesNotStamp(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "index.db"))
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	_, err = db.Exec(`INSERT INTO notes (id, path, hash, mtime, body_text, sparse_embedding) VALUES ('a', 'a.md', 'h', 1, 'alpha', ?)`,
+		EncodeSparseEmbedding(map[int32]float32{0: 1}))
+	require.NoError(t, err)
+	script := &whiteboxSparse{}
+	_, err = (&Indexer{}).ReembedStaleSparse(context.Background(), db, script, failWriter{})
+	require.Error(t, err)
+	require.Zero(t, script.calls)
+	format, rerr := ReadSparseFormat(db)
+	require.NoError(t, rerr)
+	require.Equal(t, 0, format)
+}
+
+func TestReembedStaleSparse_StampWriteErrorLeavesTheColumnNew(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "index.db"))
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	_, err = db.Exec(`INSERT INTO notes (id, path, hash, mtime, body_text, sparse_embedding) VALUES ('a', 'a.md', 'h', 1, 'alpha', ?)`,
+		EncodeSparseEmbedding(map[int32]float32{0: 1}))
+	require.NoError(t, err)
+	_, err = db.Exec(`CREATE TRIGGER meta_refuse BEFORE INSERT ON meta BEGIN SELECT RAISE(ABORT, 'refused'); END`)
+	require.NoError(t, err)
+
+	_, err = (&Indexer{}).ReembedStaleSparse(context.Background(), db, &whiteboxSparse{}, &bytes.Buffer{})
+	require.Error(t, err)
+	format, rerr := ReadSparseFormat(db)
+	require.NoError(t, rerr)
+	require.Equal(t, 0, format, "a failed stamp write does not claim the column is current")
+}
+
+func TestStoreSparseBatch_LengthAndMissingNote(t *testing.T) {
+	_, err := storeSparseBatch(nil, nil, []int{0}, nil)
+	require.Error(t, err)
+
+	db, err := Open(filepath.Join(t.TempDir(), "index.db"))
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	_, err = storeSparseBatch(db,
+		[]sparseNote{{id: "missing"}},
+		[]int{0},
+		[]*embedding.BGEM3Output{{Sparse: map[int32]float32{10: 0.4}}},
+	)
+	require.Error(t, err)
+}
+
+func TestSkipIncrementalEmbed_PendingIsNotIdle(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "index.db")
+	db, err := Open(dbPath)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO notes (id, path, hash, mtime) VALUES ('a', 'a.md', 'h', 1)`)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	skip, _, err := skipIncrementalEmbed(dbPath, embedding.ModelMiniLM)
+	require.NoError(t, err)
+	require.False(t, skip)
+}
+
+func TestMaybeUpgradeSparse_SkipsADenseOnlyEmbedder(t *testing.T) {
+	n, err := NewIndexer(t.TempDir(), "unused", nil).maybeUpgradeSparse(context.Background(), "unused", denseOnly{}, embedding.ModelBGEM3)
+	require.NoError(t, err)
+	require.Equal(t, 0, n)
+}
+
+func TestMaybeUpgradeSparse_OpenError(t *testing.T) {
+	_, err := NewIndexer(t.TempDir(), "unused", nil).maybeUpgradeSparse(context.Background(), blockedDBPath(t), &whiteboxSparse{}, embedding.ModelBGEM3)
+	require.Error(t, err)
+}
+
+func TestStampCurrentSparse_OpenError(t *testing.T) {
+	err := stampCurrentSparse(blockedDBPath(t), embedding.ModelBGEM3, 0, &EmbedResult{Embedded: 1})
+	require.Error(t, err)
+}
+
+func TestEmbedResolved_StampWriteErrorDoesNotClaimSuccess(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "index.db")
+	db, err := Open(dbPath)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO notes (id, path, hash, mtime, body_text) VALUES ('a', 'a.md', 'h', 1, 'alpha body')`)
+	require.NoError(t, err)
+	_, err = db.Exec(`CREATE TRIGGER meta_refuse BEFORE INSERT ON meta BEGIN SELECT RAISE(ABORT, 'refused'); END`)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	res, err := NewIndexer(t.TempDir(), dbPath, nil).embedResolved(context.Background(), dbPath, &whiteboxSparse{}, embedding.ModelBGEM3, false)
+	require.Error(t, err)
+	require.NotNil(t, res)
+	require.Equal(t, 1, res.Embedded)
+
+	db, err = Open(dbPath)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	format, rerr := ReadSparseFormat(db)
+	require.NoError(t, rerr)
+	require.Equal(t, 0, format)
 }

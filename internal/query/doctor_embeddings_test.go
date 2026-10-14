@@ -277,3 +277,18 @@ func TestDoctor_SparseFormatStaleIsAdditive(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, string(raw), "sparse_format_stale")
 }
+
+func TestDoctor_UnreadableSparseStampIsAnError(t *testing.T) {
+	dbPath := t.TempDir() + "/idx.db"
+	db, err := index.Open(dbPath)
+	require.NoError(t, err)
+	defer db.Close()
+	_, err = db.Exec(`INSERT INTO notes (id, path, hash, mtime) VALUES ('n1', 'n1.md', 'h', 0)`)
+	require.NoError(t, err)
+	_, err = db.Exec(`DROP TABLE meta`)
+	require.NoError(t, err)
+
+	_, err = query.Doctor(db, "/vault", nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "sparse format")
+}
