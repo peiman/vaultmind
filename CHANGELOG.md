@@ -10,7 +10,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `ask` caps a long query where the cost is. One BGE-M3 forward pass embeds the first N tokens (default 1152), cut on a token boundary so the embedded text is a prefix of the query. A separate query-only tokenize reads those byte spans, and only to find the cut and the salient spans. The tokenizer that indexes notes and embeds short queries is unchanged, so those embeddings stay byte-identical to the previous release. Dense and sparse rank on that prefix. ColBERT scores only the K query-token vectors with the highest per-position sparse weight from that same pass (default 64), in their original order. FTS searches the K most salient words, still joined with OR. A long word with no spaces contributes those tokens' own text, not the whole word. When salient words are not chosen, FTS searches the forward prefix rather than the raw query. `0` turns each bound off. A query at or under both bounds is unchanged. The echoed query stays the full text. Activation is unchanged. A keyword-only ask has no tokenizer, so one whitespace word counts as one token.
-
 - Long prompts no longer make the recall hook fail on Linux (argument too long).
   The query passed to `vaultmind ask` is the first 16384 characters. Linux
   rejects a longer single argument (`MAX_ARG_STRLEN`, 128 KiB) and the hook
