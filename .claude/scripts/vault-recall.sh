@@ -313,14 +313,74 @@ log_envelope_skip() (
   mv -f "$tmp" "$file" || return 1
 )
 
-# Cross-session hand-backs are harness text. One observed prefix
-# ("Another Claude session sent a message:" plus a newline) preceded every
-# such user turn: 1,146 agent-message, 850 teammate-message, 258
-# cross-session-message (2026-10-14). Two fixed suffixes follow the closing
-# tag (1,187 peer, 1,067 subagent). The prefix and suffix are judged on
-# bounded slices, the edges are counted once, and the envelope is parsed
-# once. Only those three tags may open at the top level. A person's prose
-# before, after, or between envelopes stays on the recall path.
+# The hook receives the bare envelope: an opening tag, the report, and the
+# matching closing tag. A transcript draws a prefix and a suffix around that
+# envelope; those are not in the prompt. The report is opaque and is not
+# parsed. A "<" in it is text, so the tag parser must not see the body.
+# Edges are read from a bounded head and a bounded tail. Prose before the
+# opening tag or after the closing tag stays on the recall path.
+is_bare_cross_session_envelope() {
+  local candidate="$1"
+  (
+    LC_ALL=C
+    c="$candidate"
+    edge=4096
+    n=${#c}
+    head="${c:0:edge}"
+    skip=$(leading_drop "$head")
+    if [ "$skip" -ge "${#head}" ]; then
+      exit 1
+    fi
+    at="${head:skip}"
+    tag=""
+    if [ "${at:0:22}" = "<cross-session-message" ]; then
+      nxt="${at:22:1}"
+      if [ "$nxt" = " " ] || [ "$nxt" = ">" ]; then
+        tag="cross-session-message"
+      fi
+    elif [ "${at:0:17}" = "<teammate-message" ]; then
+      nxt="${at:17:1}"
+      if [ "$nxt" = " " ] || [ "$nxt" = ">" ]; then
+        tag="teammate-message"
+      fi
+    elif [ "${at:0:14}" = "<agent-message" ]; then
+      nxt="${at:14:1}"
+      if [ "$nxt" = " " ] || [ "$nxt" = ">" ]; then
+        tag="agent-message"
+      fi
+    fi
+    if [ -z "$tag" ]; then
+      exit 1
+    fi
+    tail_at=0
+    if [ "$n" -gt "$edge" ]; then
+      tail_at=$(( n - edge ))
+    fi
+    tail="${c:tail_at:edge}"
+    trail=$(trailing_ws "$tail")
+    close="</${tag}>"
+    clen=${#close}
+    end=$(( ${#tail} - trail ))
+    if [ "$end" -lt "$clen" ]; then
+      exit 1
+    fi
+    if [ "${tail:end-clen:clen}" != "$close" ]; then
+      exit 1
+    fi
+    exit 0
+  )
+}
+
+# A transcript can also render a prefix and a suffix around the envelope.
+# The hook receives the bare form, so this prefixed check does not match
+# the prompt it reads. It is kept. One observed prefix ("Another Claude
+# session sent a message:" plus a newline) preceded every such rendered
+# turn: 1,146 agent-message, 850 teammate-message, 258 cross-session-message
+# (2026-10-14). Two fixed suffixes follow the closing tag (1,187 peer,
+# 1,067 subagent). The prefix and suffix are judged on bounded slices, the
+# edges are counted once, and the envelope is parsed once. Only those three
+# tags may open at the top level. A person's prose before, after, or between
+# envelopes stays on the recall path.
 is_cross_session_envelope() {
   local candidate="$1" body
   # Indexes are bytes, so this subshell runs in the C locale. The head covers
@@ -386,6 +446,11 @@ PROMPT_KIND=$(prompt_kind "$PROMPT")
 # Avoid even running the predicate for ordinary prose.
 case "$PROMPT" in
   *"<task-notification"*|*"<system-reminder"*|*"<cross-session-message"*|*"<local-command-stdout"*|*"<local-command-caveat"*|*"<command-name"*|*"<command-message"*|*"<command-args"*|*"<agent-message"*|*"<teammate-message"*)
+    # Bare envelope first, so the report is never parsed.
+    if is_bare_cross_session_envelope "$PROMPT"; then
+      log_envelope_skip "cross-session-envelope" 2>/dev/null || :
+      exit 0
+    fi
     if is_envelope_only "$PROMPT"; then
       log_envelope_skip "harness-envelope" 2>/dev/null || :
       exit 0

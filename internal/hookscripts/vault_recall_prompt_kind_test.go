@@ -170,8 +170,15 @@ func TestRecallHook_SidecarRecordsPromptKind(t *testing.T) {
 		},
 	}
 	for _, tag := range recallHarnessTags {
+		reason := "harness-envelope"
+		switch tag {
+		case "agent-message", "teammate-message", "cross-session-message":
+			// A bare envelope of these three tags is opaque. The report is
+			// not parsed, and the skip reason is cross-session-envelope.
+			reason = "cross-session-envelope"
+		}
 		rows = append(rows, promptKindRow{
-			name: tag, mode: "envelope", kind: tag, reason: "harness-envelope",
+			name: tag, mode: "envelope", kind: tag, reason: reason,
 			prompt:  "<" + tag + ">" + promptKindSentinel + " done</" + tag + ">",
 			secrets: []string{promptKindSentinel},
 		})
