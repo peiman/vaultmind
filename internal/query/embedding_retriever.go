@@ -22,7 +22,7 @@ const snippetMaxLen = 200
 // Search embeds the query, computes cosine similarity against all stored embeddings,
 // and returns the top results sorted by score descending.
 func (r *EmbeddingRetriever) Search(ctx context.Context, query string, limit, offset int, filters index.SearchFilters) ([]retrieval.ScoredResult, int, error) {
-	queryVec, err := r.Embedder.Embed(ctx, query)
+	queryVec, err := r.Embedder.Embed(ctx, embedTextFrom(ctx, query))
 	if err != nil {
 		return nil, 0, fmt.Errorf("embedding query: %w", err)
 	}

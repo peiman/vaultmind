@@ -67,9 +67,12 @@ type AskConfig struct {
 	// their text is not sent again and their access is not a delivered read.
 	ShownBefore map[string]bool
 
-	// QueryMaxWords caps the text sent to ranking. 0 leaves the query unchanged.
-	// The library zero is off; the CLI default lives in the config registry.
-	QueryMaxWords int
+	// QueryForwardWords bounds the text of one forward pass. 0 leaves it
+	// unchanged. The library zero is off; the CLI default lives in the registry.
+	QueryForwardWords int
+	// QuerySalientTerms is how many highest-weight tokens and words ColBERT
+	// and FTS use from that pass. 0 leaves those lanes on the embedded text.
+	QuerySalientTerms int
 }
 
 // AskResult is the combined output of a search + context-pack operation.
@@ -145,11 +148,11 @@ type AskResult struct {
 	// FederatedVaults reports every vault that was SEARCHED and what its own
 	// floor said, so a reader can tell an empty vault from an unsearched one.
 	FederatedVaults []FederatedVaultStatus `json:"federated_vaults,omitempty"`
-	// QueryCapped is set only when ranking used a shorter query than Query.
+	// QueryCapped is set only when a bound shortened ranking.
 	// Query itself stays the caller's original text.
 	QueryCapped *QueryCapped `json:"query_capped,omitempty"`
-	// rankingQuery is the text retrieval and query-embedding actually used.
-	// It equals Query when the cap is off or the query is already short enough.
+	// rankingQuery is the text the forward pass embedded. The cosine uses it,
+	// so it stays the same string the dense lane embedded and the memo hits.
 	rankingQuery string
 }
 
@@ -250,22 +253,26 @@ func computeTopHitConfidenceRRFGap(hits []retrieval.ScoredResult) string {
 // mis-attribute access events to a note the agent didn't read. The
 // caller is responsible for firing access on whatever it chooses to
 // read.
-func AskHits(ctx context.Context, retriever retrieval.Retriever, query string, searchLimit, queryMaxWords int) (*AskResult, error) {
-	ranking, report := CapRankingQuery(query, queryMaxWords)
-	if report != nil {
+func AskHits(ctx context.Context, retriever retrieval.Retriever, query string, searchLimit, forwardWords, salientTerms int, analyzer QueryAnalyzer) (*AskResult, error) {
+	shaped := ShapeQuery(ctx, query, forwardWords, salientTerms, analyzer)
+	if shaped.Report != nil {
 		log.Debug().
-			Int("used_words", report.UsedWords).
-			Int("total_words", report.TotalWords).
-			Msg("ask ranking query capped")
+			Int("embedded_words", shaped.Report.EmbeddedWords).
+			Int("total_words", shaped.Report.TotalWords).
+			Int("salient_terms", shaped.Report.SalientTerms).
+			Msg("ask ranking query shaped")
 	}
-	hits, _, err := retriever.Search(ctx, ranking, searchLimit, 0, index.SearchFilters{})
+	ctx = contextWithPlan(ctx, shapedPlan{embed: shaped.EmbedText, fts: shaped.FTSText, keep: shaped.Keep})
+	// The argument stays the original. Lanes that honor the plan read it from
+	// the context; activation ignores the string, and still receives it whole.
+	hits, _, err := retriever.Search(ctx, query, searchLimit, 0, index.SearchFilters{})
 	if err != nil {
 		return nil, err
 	}
 	return &AskResult{
 		Query:            query,
-		rankingQuery:     ranking,
-		QueryCapped:      report,
+		rankingQuery:     shaped.EmbedText,
+		QueryCapped:      shaped.Report,
 		TopHits:          hits,
 		TopHitConfidence: computeTopHitConfidenceRRFGap(hits),
 	}, nil
@@ -305,9 +312,10 @@ func relevantLaterHits(hits []retrieval.ScoredResult, r *AskResult) []memory.See
 // spreading activation (via ActivationFunc), then packs token-budgeted
 // context around the top hit. Context-pack failure is non-fatal.
 func Ask(ctx context.Context, retriever retrieval.Retriever, resolver *graph.Resolver, db *index.DB, cfg AskConfig) (*AskResult, error) {
-	// AskHits is the one search. Every ranking lane, and the cosine below,
-	// sees the same capped text. cfg.Query stays the original for the echo.
-	result, err := AskHits(ctx, retriever, cfg.Query, cfg.SearchLimit, cfg.QueryMaxWords)
+	// AskHits is the one search. Dense and sparse embed the forward-bounded
+	// text; ColBERT and FTS use the salient terms when weights exist.
+	// cfg.Query stays the original for the echo.
+	result, err := AskHits(ctx, retriever, cfg.Query, cfg.SearchLimit, cfg.QueryForwardWords, cfg.QuerySalientTerms, AnalyzerFrom(cfg.Embedder))
 	if err != nil {
 		return nil, err
 	}

@@ -30,11 +30,13 @@ import (
 // context around the top hit." Round-2 inter-agent review surfaced the
 // missing third workflow shape between probe (--pointers-only) and
 // full context-pack — this is it.
-func runAskRead(cmd *cobra.Command, queryStr, readArg string, ret query.AutoRetrieverResult, vdb *cmdutil.VaultDB, queryMaxWords int, fed federatedRead) error {
+func runAskRead(cmd *cobra.Command, queryStr, readArg string, ret query.AutoRetrieverResult, vdb *cmdutil.VaultDB, forwardWords, salientTerms int, fed federatedRead) error {
 	hits, err := query.AskHits(cmd.Context(), ret.Retriever,
 		queryStr,
 		getConfigValueWithFlags[int](cmd, "search-limit", config.KeyAppAskSearchLimit),
-		queryMaxWords,
+		forwardWords,
+		salientTerms,
+		query.AnalyzerFrom(ret.Embedder),
 	)
 	if err != nil {
 		return fmt.Errorf("ask --read: %w", err)

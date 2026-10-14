@@ -11,10 +11,18 @@ import (
 )
 
 // BGEM3Output contains all three embedding types from a BGE-M3 forward pass.
+//
+// TokenWeights, TokenWord and Words are the query-token view used to choose
+// salient terms. TokenWeights are per-position ReLU weights before vocab-id
+// max-pooling, with the CLS position dropped so they line up with ColBERT.
+// A sidecar pass does not fill them.
 type BGEM3Output struct {
-	Dense   []float32         // [1024] CLS-pooled, L2-normalized
-	Sparse  map[int32]float32 // vocab_id -> weight (non-zero only)
-	ColBERT [][]float32       // [seq_len-1][1024] per-token, L2-normalized
+	Dense        []float32         // [1024] CLS-pooled, unit length
+	Sparse       map[int32]float32 // vocab_id -> weight (non-zero only)
+	ColBERT      [][]float32       // [seq_len-1][1024] per-token, unit length
+	TokenWeights []float32
+	TokenWord    []int
+	Words        []string
 }
 
 // BGEM3Embedder produces dense, sparse, and ColBERT embeddings using BGE-M3.
@@ -183,11 +191,26 @@ func (e *BGEM3Embedder) EmbedFullBatch(ctx context.Context, texts []string) ([]*
 		tokenIDs := batch.Input[i].TokenIDs
 		specialMask := batch.Input[i].SpecialTokensMask
 
-		outputs[i] = &BGEM3Output{
+		pos := SparsePositionWeights(hidden, specialMask, e.sparseW, e.sparseB)
+		out := &BGEM3Output{
 			Dense:   DenseHead(hidden),
-			Sparse:  SparseHead(hidden, tokenIDs, specialMask, e.sparseW, e.sparseB),
+			Sparse:  poolSparseWeights(pos, tokenIDs),
 			ColBERT: ColBERTHead(hidden, e.colbertW, e.colbertB),
 		}
+		colbertLen := 0
+		if out.ColBERT != nil {
+			colbertLen = len(out.ColBERT)
+		}
+		// Offsets index the string the tokenizer saw (Input.Raw), which is
+		// the fitted text when the token limit shortened it.
+		raw := ""
+		var offsets [][2]uint
+		if i < len(batch.Input) {
+			raw = batch.Input[i].Raw
+			offsets = batch.Input[i].Offsets
+		}
+		out.TokenWeights, out.TokenWord, out.Words = alignQueryTokens(raw, offsets, pos, colbertLen)
+		outputs[i] = out
 	}
 
 	return outputs, nil
@@ -318,6 +341,16 @@ func (e *BGEM3Embedder) EmbedSparse(ctx context.Context, text string) (map[int32
 		return nil, err
 	}
 	return out.Sparse, nil
+}
+
+// AnalyzeQuery returns the per-token weights of the one forward pass for text.
+// The caller embeds that same string afterwards, and the memo makes it one pass.
+func (e *BGEM3Embedder) AnalyzeQuery(ctx context.Context, text string) (QueryTokens, error) {
+	out, err := e.EmbedFull(ctx, text)
+	if err != nil {
+		return QueryTokens{}, err
+	}
+	return QueryTokens{Weights: out.TokenWeights, Word: out.TokenWord, Words: out.Words}, nil
 }
 
 // EmbedColBERT produces only the ColBERT per-token embeddings (used by ColBERTRetriever).

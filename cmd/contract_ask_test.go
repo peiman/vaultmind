@@ -109,16 +109,16 @@ func TestAskJSONContract_EnvelopeDecodesIntoConsumerShape(t *testing.T) {
 	assert.NotEmpty(t, env.Result.TopHits[0].ID,
 		"hit ID is the primary field consumers use to dereference notes")
 	assert.Nil(t, env.Result.QueryCapped,
-		"a query under the cap must omit result.query_capped — the field is additive and present only when ranking was shortened")
+		"a query under both bounds must omit result.query_capped — the field is additive and present only when a bound applied")
 }
 
-// A query longer than the default cap still echoes the original text.
+// A query longer than the forward bound still echoes the original text.
 // result.query_capped is added beside it and schema_version stays v1.
 func TestAskJSONContract_QueryCappedIsAdditive(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	vault := indexedBaselineVault(t)
-	parts := make([]string, 70)
+	parts := make([]string, 520)
 	for i := range parts {
 		parts[i] = "word"
 	}
@@ -134,8 +134,11 @@ func TestAskJSONContract_QueryCappedIsAdditive(t *testing.T) {
 	assert.Equal(t, "v1", env.SchemaVersion)
 	assert.Equal(t, query, env.Result.Query)
 	require.NotNil(t, env.Result.QueryCapped)
-	assert.Equal(t, 64, env.Result.QueryCapped.UsedWords)
-	assert.Equal(t, 70, env.Result.QueryCapped.TotalWords)
+	assert.Equal(t, 512, env.Result.QueryCapped.EmbeddedWords)
+	assert.Equal(t, 520, env.Result.QueryCapped.TotalWords)
+	assert.Equal(t, 0, env.Result.QueryCapped.SalientTerms)
+	assert.Contains(t, out.String(), `"salient_terms":0`)
+	assert.NotContains(t, out.String(), "used_words")
 }
 
 // A missing-vault failure must still produce a decodable envelope with

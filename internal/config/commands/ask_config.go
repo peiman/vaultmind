@@ -69,10 +69,12 @@ ANTI-PATTERN — AVOID
 
 LONG QUERIES
 
-  Ranking uses the first N words (--query-max-words, default 64). 0 turns the
-  cap off. Dense, sparse, ColBERT, FTS and activation all see that shorter
-  text. The echoed query stays the full text, and the Search header reports
-  how many words were used.
+  One forward pass embeds the first N words (--query-forward-words, default
+  512). Dense and sparse rank on that text, so a prompt's later content stays
+  in the ranking. ColBERT and FTS use the K most salient terms of that pass
+  (--query-salient-terms, default 64). 0 turns each bound off. A query already
+  within both bounds is ranked unchanged. The echoed query stays the full
+  text, and the Search header reports when a bound applied.
 
 OUTPUT INCLUDES
 
@@ -81,23 +83,24 @@ OUTPUT INCLUDES
   Context:   target frontmatter + body, then ranked context items (default mode only)`,
 	ConfigPrefix: "app.ask",
 	FlagOverrides: map[string]string{
-		"app.ask.vault":            "vault",
-		"app.ask.vaults":           "vaults",
-		"app.ask.json":             "json",
-		"app.ask.budget":           "budget",
-		"app.ask.max_items":        "max-items",
-		"app.ask.search_limit":     "search-limit",
-		"app.ask.explain":          "explain",
-		"app.ask.pointers_only":    "pointers-only",
-		"app.ask.preview":          "preview",
-		"app.ask.read":             "read",
-		"app.ask.quiet_on_nomatch": "quiet-on-no-match",
-		"app.ask.excerpt":          "excerpt",
-		"app.ask.type":             "type",
-		"app.ask.tag":              "tag",
-		"app.ask.path":             "path",
-		"app.ask.dedup_window":     "dedup-window",
-		"app.ask.query_max_words":  "query-max-words",
+		"app.ask.vault":               "vault",
+		"app.ask.vaults":              "vaults",
+		"app.ask.json":                "json",
+		"app.ask.budget":              "budget",
+		"app.ask.max_items":           "max-items",
+		"app.ask.search_limit":        "search-limit",
+		"app.ask.explain":             "explain",
+		"app.ask.pointers_only":       "pointers-only",
+		"app.ask.preview":             "preview",
+		"app.ask.read":                "read",
+		"app.ask.quiet_on_nomatch":    "quiet-on-no-match",
+		"app.ask.excerpt":             "excerpt",
+		"app.ask.type":                "type",
+		"app.ask.tag":                 "tag",
+		"app.ask.path":                "path",
+		"app.ask.dedup_window":        "dedup-window",
+		"app.ask.query_forward_words": "query-forward-words",
+		"app.ask.query_salient_terms": "query-salient-terms",
 	},
 }
 
@@ -120,7 +123,8 @@ func AskOptions() []config.ConfigOption {
 		{Key: "app.ask.tag", DefaultValue: "", Description: "Rank only notes carrying this tag", Type: "string"},
 		{Key: "app.ask.path", DefaultValue: "", Description: "Rank only notes under this vault folder (path prefix, e.g. decisions/) — the same match as tree --path", Type: "string"},
 		{Key: "app.ask.dedup_window", DefaultValue: "", Description: "Send a note as its title alone when this conversation (VAULTMIND_USER_SESSION_ID) received its text within this long, e.g. 10m. Empty = off. For hooks that fire in bursts.", Type: "string"},
-		{Key: "app.ask.query_max_words", DefaultValue: 64, Description: "Rank on the first N words of the query across dense, sparse, ColBERT, FTS and activation. The echoed query stays the full text, and the Search header reports used vs total words. 0 turns the cap off.", Type: "int"},
+		{Key: "app.ask.query_forward_words", DefaultValue: 512, Description: "Embed the first N words of the query in one forward pass. Dense and sparse rank on that text. 0 turns the bound off.", Type: "int"},
+		{Key: "app.ask.query_salient_terms", DefaultValue: 64, Description: "ColBERT and FTS use the K tokens and words with the highest sparse weight from that forward pass. 0 turns the bound off.", Type: "int"},
 	}
 }
 

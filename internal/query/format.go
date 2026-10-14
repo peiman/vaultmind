@@ -696,15 +696,33 @@ func writeLaneBreakdown(w io.Writer, components map[string]float64) error {
 	return err
 }
 
+// formatLongQuery is the one sentence the Search header uses when a bound
+// applied. Each clause is present only for the bound that actually shortened
+// the query, so a forward-only run does not claim a salient-term cut.
+func formatLongQuery(c *QueryCapped) string {
+	if c == nil {
+		return ""
+	}
+	var parts []string
+	if c.EmbeddedWords < c.TotalWords {
+		parts = append(parts, fmt.Sprintf("ranked on its first %d of %d words", c.EmbeddedWords, c.TotalWords))
+	}
+	if c.SalientTerms > 0 {
+		parts = append(parts, fmt.Sprintf("ColBERT and FTS on its %d most salient terms", c.SalientTerms))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "  [long query: " + strings.Join(parts, "; ") + "]"
+}
+
 // emitAskHeader is the ONE place a header reaches the writer. writeAskHeader
 // has three early returns (small-vault, noise-floor, RRF-gap) and the
 // federation block was appended after only one of them — so on the live path
 // it silently vanished. A single emit point makes "some return forgot it"
 // structurally impossible rather than a thing to remember.
 func emitAskHeader(w io.Writer, header string, result *AskResult) error {
-	if result.QueryCapped != nil {
-		line := fmt.Sprintf("  [query capped: ranked on the first %d of %d words]",
-			result.QueryCapped.UsedWords, result.QueryCapped.TotalWords)
+	if line := formatLongQuery(result.QueryCapped); line != "" {
 		if i := strings.IndexByte(header, '\n'); i >= 0 {
 			header = header[:i] + "\n" + line + header[i:]
 		} else {

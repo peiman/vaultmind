@@ -189,9 +189,10 @@ func SearchAndJudge(
 	floors FloorResolver,
 	queryText string,
 	limit int,
-	queryMaxWords int,
+	forwardWords int,
+	salientTerms int,
 ) (hits []retrieval.ScoredResult, verdict string, relevanceZ float64, err error) {
-	res, err := AskHits(ctx, ret, queryText, limit, queryMaxWords)
+	res, err := AskHits(ctx, ret, queryText, limit, forwardWords, salientTerms, AnalyzerFrom(emb))
 	if err != nil {
 		return nil, "", 0, err
 	}

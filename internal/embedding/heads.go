@@ -31,12 +31,13 @@ func DenseHead(hiddenStates [][]float32) []float32 {
 	return L2Normalize(hiddenStates[0])
 }
 
-// SparseHead computes learned lexical weights per token.
-// For each non-special token: weight = ReLU(dot(hidden, w) + bias).
-// Weights scattered to vocabulary positions via tokenIDs.
-// Duplicate token IDs keep the maximum weight.
-func SparseHead(hiddenStates [][]float32, tokenIDs, specialMask []uint32, weights []float32, bias float32) map[int32]float32 {
-	sparse := make(map[int32]float32)
+// SparsePositionWeights is the per-position ReLU(dot(hidden, w)+bias), before
+// vocab-id max-pooling. Index i aligns with hiddenStates[i], CLS included.
+// Specials and non-positive values are 0. Salient-term selection uses these
+// weights, not the pooled map: pooling would give every occurrence of a token
+// id the same weight.
+func SparsePositionWeights(hiddenStates [][]float32, specialMask []uint32, weights []float32, bias float32) []float32 {
+	out := make([]float32, len(hiddenStates))
 	for i, hidden := range hiddenStates {
 		if i < len(specialMask) && specialMask[i] == 1 {
 			continue
@@ -48,7 +49,23 @@ func SparseHead(hiddenStates [][]float32, tokenIDs, specialMask []uint32, weight
 			}
 		}
 		val += bias
-		if val <= 0 {
+		if val > 0 {
+			out[i] = val
+		}
+	}
+	return out
+}
+
+// SparseHead pools SparsePositionWeights by vocabulary id.
+// Duplicate token IDs keep the maximum weight. Specials are absent.
+func SparseHead(hiddenStates [][]float32, tokenIDs, specialMask []uint32, weights []float32, bias float32) map[int32]float32 {
+	return poolSparseWeights(SparsePositionWeights(hiddenStates, specialMask, weights, bias), tokenIDs)
+}
+
+func poolSparseWeights(positionWeights []float32, tokenIDs []uint32) map[int32]float32 {
+	sparse := make(map[int32]float32)
+	for i, val := range positionWeights {
+		if val <= 0 || i >= len(tokenIDs) {
 			continue
 		}
 		tid := tokenIDs[i]

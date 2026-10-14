@@ -9,20 +9,43 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestAskOptions_QueryMaxWords(t *testing.T) {
-	const key = "app.ask.query_max_words"
-	var opt config.ConfigOption
-	for _, candidate := range commands.AskOptions() {
-		if candidate.Key == key {
-			opt = candidate
-			break
-		}
+func TestAskOptions_QueryShapeBounds(t *testing.T) {
+	tests := []struct {
+		key  string
+		flag string
+		env  string
+		def  int
+	}{
+		{
+			key:  "app.ask.query_forward_words",
+			flag: "query-forward-words",
+			env:  "VAULTMIND_APP_ASK_QUERY_FORWARD_WORDS",
+			def:  512,
+		},
+		{
+			key:  "app.ask.query_salient_terms",
+			flag: "query-salient-terms",
+			env:  "VAULTMIND_APP_ASK_QUERY_SALIENT_TERMS",
+			def:  64,
+		},
 	}
-	require.Equal(t, key, opt.Key)
-	assert.Equal(t, 64, opt.DefaultValue)
-	assert.Equal(t, "int", opt.Type)
-	assert.Equal(t, "query-max-words", commands.AskMetadata.FlagOverrides[key])
-	assert.Equal(t, "VAULTMIND_APP_ASK_QUERY_MAX_WORDS", opt.EnvVarName("VAULTMIND"))
-	assert.Contains(t, commands.AskMetadata.Long, "--query-max-words")
-	assert.Contains(t, opt.Description, "0")
+	for _, tt := range tests {
+		t.Run(tt.key, func(t *testing.T) {
+			var opt config.ConfigOption
+			for _, candidate := range commands.AskOptions() {
+				if candidate.Key == tt.key {
+					opt = candidate
+					break
+				}
+			}
+			require.Equal(t, tt.key, opt.Key)
+			assert.Equal(t, tt.def, opt.DefaultValue)
+			assert.Equal(t, "int", opt.Type)
+			assert.Equal(t, tt.flag, commands.AskMetadata.FlagOverrides[tt.key])
+			assert.Equal(t, tt.env, opt.EnvVarName("VAULTMIND"))
+			assert.Contains(t, commands.AskMetadata.Long, "--"+tt.flag)
+			assert.Contains(t, opt.Description, "0")
+		})
+	}
+	assert.NotContains(t, commands.AskMetadata.Long, "query-max-words")
 }

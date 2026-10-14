@@ -22,7 +22,7 @@ type SparseRetriever struct {
 // Search embeds the query as a sparse vector, computes dot-product similarity against
 // all stored sparse embeddings, and returns the top results sorted by score descending.
 func (r *SparseRetriever) Search(ctx context.Context, query string, limit, offset int, filters index.SearchFilters) ([]retrieval.ScoredResult, int, error) {
-	querySparse, err := r.EmbedSparse(ctx, query)
+	querySparse, err := r.EmbedSparse(ctx, embedTextFrom(ctx, query))
 	if err != nil {
 		return nil, 0, fmt.Errorf("embedding query (sparse): %w", err)
 	}
