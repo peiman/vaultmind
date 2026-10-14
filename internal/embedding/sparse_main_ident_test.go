@@ -60,8 +60,10 @@ func TestSparseHead_MatchesMainForTheSameInputs(t *testing.T) {
 		pos := SparsePositionWeights(hidden, mask, w, 0.1)
 		require.Equal(t, mainSparseHead(hidden, ids, mask, w, 0.1), poolSparseWeights(pos, ids))
 	}
-	// Empty mask is what the index tokenizer hands the forward pass.
-	// CLS and SEP keep a positive weight.
+	// SparseHead with an empty mask still counts CLS and SEP. The shared
+	// tokenizer still does not fill a mask (vaultmind#279). The forward pass
+	// builds its own and no longer calls SparseHead that way. This block pins
+	// SparseHead, not the forward pass.
 	pos := SparsePositionWeights(hidden, nil, w, 0)
 	require.Greater(t, pos[0], float32(0))
 	require.Greater(t, pos[3], float32(0))
@@ -69,10 +71,14 @@ func TestSparseHead_MatchesMainForTheSameInputs(t *testing.T) {
 	require.Contains(t, got, int32(101))
 	require.Contains(t, got, int32(102))
 
-	// The forward path drops a presented mask, so it still matches main's
-	// empty-mask result rather than main's masked result.
-	forward, fwdPos := sparseFromForward(hidden, ids, []uint32{1, 0, 0, 1, 0}, w, 0)
-	require.Equal(t, SparseHead(hidden, ids, nil, w, 0), forward)
-	require.Equal(t, pos, fwdPos)
-	require.NotEqual(t, SparseHead(hidden, ids, []uint32{1, 0, 0, 1, 0}, w, 0), forward)
+	// The forward path applies the mask it is given. A mask that marks CLS
+	// and SEP matches the masked pool, not the empty-mask result. The
+	// identity tests used to require the opposite.
+	mask := []uint32{1, 0, 0, 1, 0}
+	forward, fwdPos := sparseFromForward(hidden, ids, mask, w, 0)
+	require.Equal(t, SparseHead(hidden, ids, mask, w, 0), forward)
+	require.Equal(t, SparsePositionWeights(hidden, mask, w, 0), fwdPos)
+	require.NotEqual(t, SparseHead(hidden, ids, nil, w, 0), forward)
+	require.NotContains(t, forward, int32(101))
+	require.NotContains(t, forward, int32(102))
 }

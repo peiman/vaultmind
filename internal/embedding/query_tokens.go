@@ -22,8 +22,8 @@ type QueryTokens struct {
 }
 
 // alignSalientSpans maps query-only offsets onto weights that already
-// dropped the CLS position. It does not apply a special-token mask: the
-// forward pass leaves that mask empty, so a SEP position keeps its weight.
+// dropped the CLS position. It does not apply a mask itself. The forward
+// pass zeroes CLS, SEP, PAD, and UNK in those weights before this runs.
 func alignSalientSpans(text string, offsets [][2]uint, weights []float32) ([]string, []int, [][2]int) {
 	padded := make([]float32, 1+len(weights))
 	copy(padded[1:], weights)

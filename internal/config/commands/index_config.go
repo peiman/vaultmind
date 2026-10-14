@@ -11,6 +11,11 @@ commands see current note contents. By default only re-parses notes whose
 content has changed since the last run (incremental). Use --full to purge and
 rebuild the entire index from scratch.
 
+A plain index does not re-embed and does not load an embedding model. If stored
+sparse vectors are an older format, it warns and leaves every vector unchanged.
+vaultmind index --embed rewrites those sparse vectors once and keeps the dense
+and ColBERT bytes.
+
 FLAGS
 
   --vault path        Vault root directory to index (default: current dir).

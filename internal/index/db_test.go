@@ -235,7 +235,7 @@ func TestMigrations_FreshDB(t *testing.T) {
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, version, int64(1))
 
-	tables := []string{"notes", "aliases", "tags", "frontmatter_kv", "links", "blocks", "headings", "fts_notes", "generated_sections"}
+	tables := []string{"notes", "aliases", "tags", "frontmatter_kv", "links", "blocks", "headings", "fts_notes", "generated_sections", "meta"}
 	for _, tbl := range tables {
 		var name string
 		err := db.QueryRow("SELECT name FROM sqlite_master WHERE type IN ('table','view') AND name = ?", tbl).Scan(&name)

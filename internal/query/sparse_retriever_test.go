@@ -38,6 +38,27 @@ func TestSparseRetriever_Search(t *testing.T) {
 	assert.Greater(t, results[0].Score, results[1].Score)
 }
 
+func TestSparseRetriever_EmptyMapDoesNotError(t *testing.T) {
+	db := buildRetrieverTestDB(t)
+	row, _ := db.QueryNoteByPath("concepts/spreading-activation.md")
+	require.NotNil(t, row)
+	_, err := db.Exec(`UPDATE notes SET sparse_embedding = ? WHERE id = ?`, []byte{}, row.ID)
+	require.NoError(t, err)
+
+	retriever := &query.SparseRetriever{
+		DB: db,
+		EmbedSparse: func(context.Context, string) (map[int32]float32, error) {
+			return map[int32]float32{100: 1}, nil
+		},
+	}
+	results, total, err := retriever.Search(context.Background(), "test", 10, 0, index.SearchFilters{})
+	require.NoError(t, err)
+	require.Equal(t, 1, total)
+	require.Len(t, results, 1)
+	assert.Equal(t, row.ID, results[0].ID)
+	assert.Equal(t, 0.0, results[0].Score)
+}
+
 func TestSparseRetriever_NoEmbeddings(t *testing.T) {
 	db := buildRetrieverTestDB(t)
 	embedFunc := func(_ context.Context, _ string) (map[int32]float32, error) {

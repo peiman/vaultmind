@@ -240,6 +240,11 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	mode := retrievalModeLabel(ret)
 	if result != nil {
 		result.RetrievalMode = mode
+		if stale, serr := index.SparseFormatStale(vdb.DB); serr != nil {
+			log.Debug().Err(serr).Msg("sparse format check failed")
+		} else {
+			result.SparseFormatStale = stale
+		}
 		if len(federated) > 0 {
 			result.Federated = federated
 			result.FederatedVaults = federatedVaults
@@ -291,6 +296,9 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		}
 		// Before the results, so the reader knows what kind of results these are.
 		query.WriteEmbedderDownNotice(cmd.OutOrStdout(), ret.EmbedderErr)
+		if result != nil && result.SparseFormatStale {
+			query.WriteSparseFormatStaleNotice(cmd.OutOrStdout())
+		}
 		if err := formatter(result, cmd.OutOrStdout()); err != nil {
 			return err
 		}
