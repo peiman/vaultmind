@@ -1,9 +1,11 @@
 package query_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/envelope"
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/query"
 	"github.com/stretchr/testify/assert"
@@ -239,4 +241,39 @@ func TestDoctor_BGEM3_PartialCoverage_FlagsImbalance(t *testing.T) {
 	assert.Equal(t, 1, result.Embeddings.ColBERTCount)
 	assert.True(t, result.Embeddings.HasModalityImbalance,
 		"dense=2 but sparse=colbert=1 under BGE-M3 must flag imbalance")
+}
+
+func TestDoctor_SparseFormatStaleIsAdditive(t *testing.T) {
+	dbPath := t.TempDir() + "/idx.db"
+	db, err := index.Open(dbPath)
+	require.NoError(t, err)
+	defer db.Close()
+
+	vec := make([]float32, 1024)
+	_, err = db.Exec(
+		`INSERT INTO notes (id, path, hash, mtime, title, is_domain, embedding, sparse_embedding, colbert_embedding)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		"n1", "n1.md", "h", 0, "T", true,
+		index.EncodeEmbedding(vec),
+		index.EncodeSparseEmbedding(map[int32]float32{0: 1}),
+		index.EncodeColBERTEmbedding([][]float32{vec}),
+	)
+	require.NoError(t, err)
+
+	result, err := query.Doctor(db, "/vault", nil)
+	require.NoError(t, err)
+	require.True(t, result.Embeddings.SparseFormatStale)
+	env := envelope.OK("doctor", result)
+	raw, err := json.Marshal(env)
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), `"schema_version":"v1"`)
+	assert.Contains(t, string(raw), `"sparse_format_stale":true`)
+
+	require.NoError(t, index.WriteSparseFormat(db, index.SparseFormatCurrent))
+	fresh, err := query.Doctor(db, "/vault", nil)
+	require.NoError(t, err)
+	require.False(t, fresh.Embeddings.SparseFormatStale)
+	raw, err = json.Marshal(fresh.Embeddings)
+	require.NoError(t, err)
+	assert.NotContains(t, string(raw), "sparse_format_stale")
 }

@@ -22,6 +22,7 @@ import (
 	"github.com/peiman/vaultmind/internal/envelope"
 	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/hooks"
+	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/query"
 	"github.com/peiman/vaultmind/internal/xdg"
 	"github.com/spf13/cobra"
@@ -133,6 +134,9 @@ func writeEmbeddingStatus(w io.Writer, emb *query.DoctorEmbeddings, issues *quer
 			emb.TotalNotes); err != nil {
 			return err
 		}
+		if err := writeSparseFormatWarning(w, emb, issues); err != nil {
+			return err
+		}
 		return writeRunLine(w, indexCommand(issues, "vaultmind index --embed --vault <vault>"))
 	}
 	if _, err := fmt.Fprintf(w,
@@ -140,6 +144,9 @@ func writeEmbeddingStatus(w io.Writer, emb *query.DoctorEmbeddings, issues *quer
 		emb.DenseCount, emb.TotalNotes, emb.Model,
 		emb.SparseCount, emb.TotalNotes,
 		emb.ColBERTCount, emb.TotalNotes); err != nil {
+		return err
+	}
+	if err := writeSparseFormatWarning(w, emb, issues); err != nil {
 		return err
 	}
 	if emb.RuntimeError != "" {
@@ -181,6 +188,16 @@ func writeEmbeddingStatus(w io.Writer, emb *query.DoctorEmbeddings, issues *quer
 		return writeModalityImbalance(w, emb, issues)
 	}
 	return nil
+}
+
+func writeSparseFormatWarning(w io.Writer, emb *query.DoctorEmbeddings, issues *query.DoctorIssues) error {
+	if emb == nil || !emb.SparseFormatStale {
+		return nil
+	}
+	if _, err := fmt.Fprintf(w, "⚠ %s\n", index.SparseFormatStaleNotice); err != nil {
+		return err
+	}
+	return writeRunLine(w, indexCommand(issues, "vaultmind index --embed --vault <vault>"))
 }
 
 func writeMiniLMWarning(w io.Writer, issues *query.DoctorIssues) error {

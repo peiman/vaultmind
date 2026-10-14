@@ -158,6 +158,9 @@ type AskResult struct {
 	// QueryCapped is set only when a bound shortened ranking.
 	// Query itself stays the caller's original text.
 	QueryCapped *QueryCapped `json:"query_capped,omitempty"`
+	// SparseFormatStale is true when stored sparse vectors predate the format
+	// that drops CLS, SEP, PAD, and UNK. Absent when current. schema_version stays v1.
+	SparseFormatStale bool `json:"sparse_format_stale,omitempty"`
 	// rankingQuery is the text the forward pass embedded. The cosine uses it,
 	// so it stays the same string the dense lane embedded and the memo hits.
 	rankingQuery string

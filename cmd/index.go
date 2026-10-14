@@ -37,6 +37,20 @@ const bgem3SlowPathWarning = `⚠ BGE-M3 embedding on the pure-Go hugot backend 
 
 var indexCmd = MustNewCommand(commands.IndexMetadata, runIndex)
 
+// noteStaleSparse records that a plain index left an older sparse column
+// untouched. index --embed rewrites it, so that path does not warn.
+func noteStaleSparse(result *index.IndexResult, dbPath string, embed bool) error {
+	if embed || result == nil {
+		return nil
+	}
+	stale, err := index.SparseFormatStaleFile(dbPath)
+	if err != nil {
+		return fmt.Errorf("checking sparse format: %w", err)
+	}
+	result.SparseFormatStale = stale
+	return nil
+}
+
 func init() {
 	MustAddToRoot(indexCmd)
 }
@@ -125,6 +139,12 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
+	// A plain index writes no sparse bytes, so it cannot mix formats. It also
+	// does not load the model. The warning is the same sentence doctor and ask use.
+	if err := noteStaleSparse(result, dbPath, embed); err != nil {
+		return err
+	}
+
 	var embedResult *index.EmbedResult
 	if embed {
 		if err := guardBGEM3SlowBackend(cmd, model); err != nil {
@@ -205,6 +225,10 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 // search but are invisible to semantic search.
 const warnCodeEmbedErrors = "embed_errors"
 
+// warnCodeSparseFormat is a plain index that found older sparse vectors and
+// left them unchanged. The remedy is index --embed, which rewrites them once.
+const warnCodeSparseFormat = "sparse_format_stale"
+
 // embedErrorsMsgFmt is shared by the JSON warning and the human line, so the
 // two say the same thing.
 const embedErrorsMsgFmt = "%d note(s) have no embedding and are invisible to semantic search " +
@@ -218,6 +242,9 @@ func indexEnvelope(r index.IndexAndEmbedResult, vaultPath string) *envelope.Enve
 	env.Meta.VaultPath = vaultPath
 	if r.Embed != nil && r.Embed.Errors > 0 {
 		env.AddWarning(warnCodeEmbedErrors, fmt.Sprintf(embedErrorsMsgFmt, r.Embed.Errors), "embed.errors")
+	}
+	if r.Index != nil && r.Index.SparseFormatStale {
+		env.AddWarning(warnCodeSparseFormat, index.SparseFormatStaleNotice+" — run: "+index.SparseFormatStaleRemedy, "index.sparse_format_stale")
 	}
 	return env
 }
@@ -284,6 +311,11 @@ func formatIndexResult(r index.IndexAndEmbedResult, model string, w io.Writer) e
 			}
 		}
 		if _, err := fmt.Fprintln(w, "  copy the file into the vault, or link to it with a [[wikilink]]"); err != nil {
+			return err
+		}
+	}
+	if r.Index.SparseFormatStale {
+		if _, err := fmt.Fprintf(w, "⚠ %s\n  run: %s\n", index.SparseFormatStaleNotice, index.SparseFormatStaleRemedy); err != nil {
 			return err
 		}
 	}

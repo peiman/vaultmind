@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -35,6 +36,11 @@ type IndexResult struct {
 	DuplicateDetails  []DuplicateID      `json:"duplicate_details,omitempty"`
 	SkippedSymlinks   []string           `json:"skipped_symlinks,omitempty"`
 	PostIndexWarnings []PostIndexWarning `json:"post_index_warnings,omitempty"`
+	// SparseFormatStale is set by a plain index (no --embed) when stored sparse
+	// vectors predate the current format. The index does not rewrite them and
+	// does not load a model. Absent when the stamp is current or there is no
+	// sparse column.
+	SparseFormatStale bool `json:"sparse_format_stale,omitempty"`
 }
 
 // DuplicateID names one id claimed by two files on disk, and which file kept
@@ -81,6 +87,9 @@ type EmbedResult struct {
 	Errors      int    `json:"errors"`
 	EmptyOutput int    `json:"empty_output,omitempty"`
 	Model       string `json:"model,omitempty"`
+	// SparseReembedded is how many sparse vectors a format upgrade rewrote.
+	// Dense and ColBERT bytes are left as they were. Absent when nothing was rewritten.
+	SparseReembedded int `json:"sparse_reembedded,omitempty"`
 }
 
 // IndexAndEmbedResult combines index and optional embed results for command output.
@@ -125,18 +134,16 @@ func (idx *Indexer) RunEmbed(ctx context.Context, dbPath, model string, full boo
 			return &EmbedResult{Model: model}, nil
 		}
 	} else {
-		// Incremental: refuse a model switch that would mix dimensions, then apply
-		// the lazy-load short-circuit when nothing is pending.
-		if err := guardEmbeddingModel(dbPath, model); err != nil {
-			return nil, err
-		}
-		//nolint:contextcheck // countPendingForModel calls Open which does not accept a context; the heavy work in EmbedNotes uses ctx properly
-		pending, skipped, err := countPendingForModel(dbPath, model)
+		// Incremental: refuse a model switch that would mix dimensions, then
+		// skip the model load when nothing is pending and the sparse column
+		// is not an older format.
+		//nolint:contextcheck // skipIncrementalEmbed opens the index; Open does not take a context
+		skip, res, err := skipIncrementalEmbed(dbPath, model)
 		if err != nil {
 			return nil, err
 		}
-		if pending == 0 {
-			return &EmbedResult{Skipped: skipped, Model: model}, nil
+		if skip {
+			return &res, nil
 		}
 	}
 
@@ -215,12 +222,20 @@ func (idx *Indexer) embedResolved(ctx context.Context, dbPath string, embedder e
 			return nil, fmt.Errorf("purging embeddings for a full re-embed: %w", perr)
 		}
 	}
+	// Sparse upgrade before EmbedNotes. A --full purge has already cleared
+	// the column, so there is nothing old to rewrite and no progress line.
+	// A failure here must not embed new notes: that would mix formats.
+	upgraded, uerr := idx.maybeUpgradeSparse(ctx, dbPath, embedder, modelUsed)
+	if uerr != nil {
+		return &EmbedResult{SparseReembedded: upgraded, Model: modelUsed}, uerr
+	}
 	res, err := idx.EmbedNotes(ctx, dbPath, embedder)
 	if res != nil {
 		// Report the model ACTUALLY used (loadEmbedder may have fallen back from
 		// bge-m3 to minilm), so the caller stamps it, calibrates the noise floor
 		// for it, and the mixed-model guard sees the truth.
 		res.Model = modelUsed
+		res.SparseReembedded = upgraded
 	}
 	// EmbedNotes is failure-tolerant: a per-batch embed/store failure is logged,
 	// counted in res.Errors, and skipped — and it returns a nil error even if EVERY
@@ -237,7 +252,47 @@ func (idx *Indexer) embedResolved(ctx context.Context, dbPath string, embedder e
 				"re-run 'vaultmind index --full --embed --model %s'",
 			purged, res.Embedded, modelUsed, res.Errors, modelUsed)
 	}
+	if err == nil {
+		//nolint:contextcheck // stampCurrentSparse opens the index; Open does not take a context
+		if serr := stampCurrentSparse(dbPath, modelUsed, upgraded, res); serr != nil {
+			return res, serr
+		}
+	}
 	return res, err
+}
+
+// maybeUpgradeSparse rewrites a stale sparse column before EmbedNotes.
+// MiniLM and a non-full embedder are left alone. The stamp for a vault that
+// had no old sparse vectors is written by stampCurrentSparse after EmbedNotes.
+func (idx *Indexer) maybeUpgradeSparse(ctx context.Context, dbPath string, embedder embedding.Embedder, model string) (int, error) {
+	if model != embedding.ModelBGEM3 {
+		return 0, nil
+	}
+	if _, ok := embedder.(embedding.FullEmbedder); !ok {
+		return 0, nil
+	}
+	db, err := Open(dbPath) //nolint:contextcheck // Open does not accept a context; the embedder calls use ctx
+	if err != nil {
+		return 0, fmt.Errorf("opening index database for sparse re-embed: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+	return idx.ReembedStaleSparse(ctx, db, embedder, idx.Progress)
+}
+
+// stampCurrentSparse records SparseFormatCurrent after EmbedNotes stored new
+// vectors and the upgrade pass did not already write the stamp. A partial
+// embed (errors) does not stamp: the next run treats the column as stale and
+// rewrites it, which is idempotent.
+func stampCurrentSparse(dbPath, model string, upgraded int, res *EmbedResult) error {
+	if model != embedding.ModelBGEM3 || upgraded > 0 || res == nil || res.Errors > 0 || res.Embedded == 0 {
+		return nil
+	}
+	db, err := Open(dbPath) //nolint:contextcheck // Open does not accept a context; this is a stamp write
+	if err != nil {
+		return fmt.Errorf("opening index database to stamp sparse format: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+	return WriteSparseFormat(db, SparseFormatCurrent)
 }
 
 // hasBGEM3Embeddings reports whether the vault already holds any bge-m3
@@ -426,6 +481,8 @@ type Indexer struct {
 	vaultRoot string
 	dbPath    string
 	cfg       *vault.Config
+	// Progress receives the sparse-format re-embed line. Nil writes to stderr.
+	Progress io.Writer
 }
 
 // NewIndexer creates an Indexer for the given vault.
