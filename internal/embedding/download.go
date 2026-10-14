@@ -65,6 +65,61 @@ var bgem3Files = []modelFile{
 	{"colbert_linear.pt", "colbert_linear.pt", 2100674, "19bfbae397c2b7524158c919d0e9b19393c5639d098f0a66932c91ed8f5f9abb"},
 }
 
+// bgem3TokenizerFile is the pinned tokenizer.json. The hash lives in
+// bgem3Files, which is the only list of BGE-M3 bytes VaultMind trusts
+// (Principle 7 — SSOT).
+func bgem3TokenizerFile() (modelFile, bool) {
+	for _, f := range bgem3Files {
+		if f.local == "tokenizer.json" {
+			return f, true
+		}
+	}
+	return modelFile{}, false
+}
+
+// BGEM3TokenizerPin is the pinned tokenizer.json: revision, sha256, and the
+// URL that serves only that file. Model weights are a different file.
+func BGEM3TokenizerPin() (revision, sum, url string) {
+	m := pinnedModels[BGEM3ModelName]
+	f, ok := bgem3TokenizerFile()
+	if !ok {
+		return m.revision, "", ""
+	}
+	url = fmt.Sprintf("%s/%s/resolve/%s/%s", huggingFaceBase, m.repo, m.revision, f.remote)
+	return m.revision, f.sha256, url
+}
+
+// BGEM3TokenizerPath is the cache file ReadBGEM3Tokenizer reads. When the
+// XDG app name is unset, DefaultCacheDir is the legacy cache,
+// ~/.vaultmind/models. Tests and CI both read that path.
+func BGEM3TokenizerPath() string {
+	return filepath.Join(hugotModelDir(DefaultCacheDir(), BGEM3ModelName), "tokenizer.json")
+}
+
+// ReadBGEM3Tokenizer reads the pinned tokenizer.json from the model cache.
+// It does not load model weights.
+func ReadBGEM3Tokenizer() ([]byte, error) {
+	path := BGEM3TokenizerPath()
+	// nosemgrep: go-path-traversal -- path is the model cache plus the fixed tokenizer filename, not user input
+	raw, err := os.ReadFile(path) //nolint:gosec // same
+	if err != nil {
+		return nil, fmt.Errorf("reading bge-m3 tokenizer at %s: %w", path, err)
+	}
+	return raw, nil
+}
+
+// TokenizerMissIsFatal reports that a missing tokenizer must fail a test.
+// GitHub Actions sets CI=true. Any other value, including empty, skips.
+func TokenizerMissIsFatal(ci string) bool {
+	return ci == "true"
+}
+
+// TokenizerFetchHint names the cache path and how to fetch only tokenizer.json.
+func TokenizerFetchHint() string {
+	rev, sum, url := BGEM3TokenizerPin()
+	return fmt.Sprintf("bge-m3 tokenizer.json is not in the model cache (%s); fetch only that file, not the model weights, from %s and verify sha256 %s (revision %s)", BGEM3TokenizerPath(), url, sum, rev)
+}
+
 // DownloadBGEM3 makes sure the pinned BGE-M3 files are in the cache and
 // match their hashes, downloading what is missing or wrong. Returns the path
 // to the model directory.

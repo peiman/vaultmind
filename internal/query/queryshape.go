@@ -37,10 +37,11 @@ func AnalyzerFrom(emb embedding.Embedder) QueryAnalyzer {
 }
 
 // QueryTokenizer reports content-token byte spans for text, specials excluded.
+// forwardTokens is the forward bound in use. <= 0 reads the whole string.
 // BGEM3Embedder implements it. An analyzer without it is bounded one whitespace
 // word per token.
 type QueryTokenizer interface {
-	TokenSpans(text string) ([][2]int, error)
+	TokenSpans(text string, forwardTokens int) ([][2]int, error)
 }
 
 // ShapedQuery is the one plan every ranking lane reads.
@@ -93,14 +94,15 @@ func ForwardQuery(text string, maxTokens int, spans [][2]int) (embedded string, 
 }
 
 // tokenSpansOf reads content-token spans when the analyzer can tokenize.
-// A tokenizer error falls back to whitespace spans inside ForwardQuery. The
-// model clamp is what stops an oversized forward pass.
-func tokenSpansOf(analyzer QueryAnalyzer, text string) [][2]int {
+// forwardTokens sizes the tokenizer's window. A tokenizer error falls back
+// to whitespace spans inside ForwardQuery. The model clamp is what stops an
+// oversized forward pass.
+func tokenSpansOf(analyzer QueryAnalyzer, text string, forwardTokens int) [][2]int {
 	tok, ok := analyzer.(QueryTokenizer)
 	if !ok || tok == nil {
 		return nil
 	}
-	spans, err := tok.TokenSpans(text)
+	spans, err := tok.TokenSpans(text, forwardTokens)
 	if err != nil {
 		log.Debug().Err(err).Msg("ask query shape: token spans unavailable")
 		return nil
@@ -188,12 +190,34 @@ func SelectSalientWords(words []string, tokenWord []int, weights []float32, k in
 	return out
 }
 
+// applyUnderCountCut treats a span window that ended before the text, and
+// still held no more spans than the bound, as a long query. The tokens past
+// the window were not read. The embedded text is that window.
+func applyUnderCountCut(text string, forwardTokens int, spans [][2]int, embed string, embTokens, total int, applied bool) (string, int, int, bool) {
+	if applied || boundOff(forwardTokens) || spans == nil || len(spans) > forwardTokens {
+		return embed, embTokens, total, applied
+	}
+	window := embedding.QuerySpanWindow(text, forwardTokens)
+	if len(window) >= len(text) {
+		return embed, embTokens, total, applied
+	}
+	log.Debug().
+		Int("spans", len(spans)).
+		Int("forward_tokens", forwardTokens).
+		Int("window_bytes", len(window)).
+		Int("text_bytes", len(text)).
+		Msg("ask query shape: span window under-counted; cutting at the window")
+	return window, forwardTokens, forwardTokens + 1, true
+}
+
 // ShapeQuery is the only place the ranking-query shape is decided.
 // The forward bound limits the one embedding. Salient selection, when the
 // embedder has per-token weights, limits ColBERT and FTS. A failure to read
 // those weights skips salient selection and still applies the forward bound.
 func ShapeQuery(ctx context.Context, text string, forwardTokens, salient int, analyzer QueryAnalyzer) ShapedQuery {
-	embed, embTokens, total, forwardApplied := ForwardQuery(text, forwardTokens, tokenSpansOf(analyzer, text))
+	spans := tokenSpansOf(analyzer, text, forwardTokens)
+	embed, embTokens, total, forwardApplied := ForwardQuery(text, forwardTokens, spans)
+	embed, embTokens, total, forwardApplied = applyUnderCountCut(text, forwardTokens, spans, embed, embTokens, total, forwardApplied)
 	out := ShapedQuery{EmbedText: embed}
 
 	var tokens embedding.QueryTokens
