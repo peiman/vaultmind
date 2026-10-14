@@ -370,7 +370,7 @@ func (e *BGEM3Embedder) TokenSpans(text string) ([][2]int, error) {
 		return nil, fmt.Errorf("tokenizer returned no input")
 	}
 	in := batch.Input[0]
-	return contentTokenSpans(in.Offsets, in.SpecialTokensMask), nil
+	return clampSpans(text, contentTokenSpans(in.Offsets, in.SpecialTokensMask)), nil
 }
 
 // EmbedColBERT produces only the ColBERT per-token embeddings (used by ColBERTRetriever).

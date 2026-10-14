@@ -54,9 +54,30 @@ func alignQueryTokens(text string, offsets [][2]uint, positionWeights []float32,
 		aligned[i] = [2]int{-1, -1}
 	}
 	for i := 0; i < len(weights) && i < len(offs); i++ {
-		aligned[i] = [2]int{int(offs[i][0]), int(offs[i][1])}
+		aligned[i] = clampSpan(text, int(offs[i][0]), int(offs[i][1]))
 	}
 	return weights, tokenWord, words, aligned
+}
+
+// clampSpans pulls tokenizer spans back onto text. The last piece of a
+// no-space run can report an end a few bytes past the string; the embedded
+// prefix is still that string.
+func clampSpans(text string, spans [][2]int) [][2]int {
+	if len(spans) == 0 {
+		return spans
+	}
+	out := make([][2]int, len(spans))
+	for i, sp := range spans {
+		out[i] = clampSpan(text, sp[0], sp[1])
+	}
+	return out
+}
+
+func clampSpan(text string, start, end int) [2]int {
+	if end > len(text) {
+		end = len(text)
+	}
+	return [2]int{start, end}
 }
 
 // WhitespaceTokenSpans is the one whitespace split. A keyword-only ask has
