@@ -926,7 +926,7 @@ app:
     json: false
 
   retrieval:
-    # Rank notes whose status is draft. Off by default: a draft stays out of ask and search until its status is changed.
+    # Include notes whose status is draft in ranking and in graph and context delivery. Off by default: a draft stays out until its status is changed.
     include_drafts: false
 
   schema:

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/pathglob"
 )
 
@@ -29,7 +30,25 @@ type CodeFile struct {
 }
 
 // Covering returns the notes whose `paths:` cover f, each with its line.
+// A status:draft note is omitted: the line is a slice of the body, and the
+// code-map hook injects it as context. The full tree still lists the draft.
 func Covering(q Querier, f CodeFile) ([]Note, error) {
+	return covering(q, f, false)
+}
+
+// CoveringIncludingDrafts is Covering with the retrieval opt-in.
+func CoveringIncludingDrafts(q Querier, f CodeFile) ([]Note, error) {
+	return covering(q, f, true)
+}
+
+func covering(q Querier, f CodeFile, includeDrafts bool) ([]Note, error) {
+	var drafts index.DraftSet
+	if !includeDrafts {
+		var err error
+		if drafts, err = index.DraftIDs(q); err != nil {
+			return nil, fmt.Errorf("loading drafts: %w", err)
+		}
+	}
 	rows, err := q.Query(`SELECT n.id, n.path, COALESCE(n.title, ''), COALESCE(n.type, ''),
 		COALESCE(n.status, ''), COALESCE(n.body_raw, n.body_text, ''), kv.value_json
 		FROM frontmatter_kv kv JOIN notes n ON n.id = kv.note_id
@@ -47,6 +66,9 @@ func Covering(q Querier, f CodeFile) ([]Note, error) {
 			return nil, fmt.Errorf("reading note row: %w", err)
 		}
 		if !coversAny(decodePatterns(patterns), f) {
+			continue
+		}
+		if !drafts.Visible(n.ID, includeDrafts) {
 			continue
 		}
 		if n.Title == "" {

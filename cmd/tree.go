@@ -20,6 +20,7 @@ var treeCmd = MustNewCommand(commands.TreeMetadata, runTree)
 
 func init() {
 	MustAddToRoot(treeCmd)
+	registerIncludeDrafts(treeCmd)
 }
 
 // treeVault is one vault's map in the JSON result.
@@ -113,7 +114,11 @@ func loadTreeVault(cmd *cobra.Command, vaultPath string, q treeQuery) (treeVault
 	defer vdb.Close()
 	var notes []navigate.Note
 	if q.forFile != nil {
-		notes, err = navigate.Covering(vdb.DB, *q.forFile)
+		if retrievalIncludeDrafts(cmd) {
+			notes, err = navigate.CoveringIncludingDrafts(vdb.DB, *q.forFile)
+		} else {
+			notes, err = navigate.Covering(vdb.DB, *q.forFile)
+		}
 		navigate.MarkCodeChanged(notes, vaultPath, *q.forFile)
 	} else {
 		notes, err = navigate.Load(vdb.DB, q.filter)

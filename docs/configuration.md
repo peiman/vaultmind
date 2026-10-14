@@ -306,7 +306,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.ping.ui` | bool | `false` | `VAULTMIND_APP_PING_UI` | Enable interactive UI for the ping command |
 | `app.resolve.vault` | string | `.` | `VAULTMIND_APP_RESOLVE_VAULT` | Path to the vault root directory |
 | `app.resolve.json` | bool | `false` | `VAULTMIND_APP_RESOLVE_JSON` | Output in JSON format |
-| `app.retrieval.include_drafts` | bool | `false` | `VAULTMIND_APP_RETRIEVAL_INCLUDE_DRAFTS` | Rank notes whose status is draft. Off by default: a draft stays out of ask and search until its status is changed. |
+| `app.retrieval.include_drafts` | bool | `false` | `VAULTMIND_APP_RETRIEVAL_INCLUDE_DRAFTS` | Include notes whose status is draft in ranking and in graph and context delivery. Off by default: a draft stays out until its status is changed. |
 | `app.schema.vault` | string | `.` | `VAULTMIND_APP_SCHEMA_VAULT` | Path to vault root |
 | `app.schema.json` | bool | `false` | `VAULTMIND_APP_SCHEMA_JSON` | Output in JSON format |
 | `app.search.vault` | string | `.` | `VAULTMIND_APP_SEARCH_VAULT` | Path to vault root |
@@ -1265,7 +1265,7 @@ app:
     json: false
 
   retrieval:
-    # Rank notes whose status is draft. Off by default: a draft stays out of ask and search until its status is changed.
+    # Include notes whose status is draft in ranking and in graph and context delivery. Off by default: a draft stays out until its status is changed.
     include_drafts: false
 
   schema:
@@ -2232,7 +2232,7 @@ export VAULTMIND_APP_RESOLVE_VAULT=.
 # Output in JSON format
 export VAULTMIND_APP_RESOLVE_JSON=false
 
-# Rank notes whose status is draft. Off by default: a draft stays out of ask and search until its status is changed.
+# Include notes whose status is draft in ranking and in graph and context delivery. Off by default: a draft stays out until its status is changed.
 export VAULTMIND_APP_RETRIEVAL_INCLUDE_DRAFTS=false
 
 # Path to vault root

@@ -2,7 +2,9 @@ package query_test
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -92,6 +94,56 @@ func TestCheckUncommittedNotes_FlagsOnlyOldUntrackedMarkdown(t *testing.T) {
 	assert.Equal(t, len(byPath), got.Count)
 }
 
+func TestCheckUncommittedNotes_LimitsToAVaultInsideARepo(t *testing.T) {
+	repo := t.TempDir()
+	now := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+	initUncommittedRepo(t, repo, now)
+	vault := filepath.Join(repo, "vault")
+	require.NoError(t, os.MkdirAll(vault, 0o755))
+	writeAged(t, filepath.Join(vault, "old.md"), now.Add(-8*24*time.Hour))
+	writeAged(t, filepath.Join(vault, "fresh.md"), now.Add(-time.Hour))
+	writeAged(t, filepath.Join(repo, "outside.md"), now.Add(-30*24*time.Hour))
+
+	got, err := query.CheckUncommittedNotes(vault, 7, now)
+	require.NoError(t, err)
+	assert.False(t, got.Skipped)
+	byPath := map[string]string{}
+	for _, n := range got.Notes {
+		byPath[n.Path] = n.State
+	}
+	assert.Equal(t, "untracked", byPath["old.md"])
+	assert.NotContains(t, byPath, "fresh.md")
+	assert.NotContains(t, byPath, "outside.md")
+	assert.NotContains(t, byPath, "vault/old.md", "the path is relative to the vault, not the repo root")
+	assert.Equal(t, len(byPath), got.Count)
+}
+
+func TestCheckUncommittedNotes_FollowsAGitfile(t *testing.T) {
+	parent := t.TempDir()
+	vault := filepath.Join(parent, "vault")
+	gitDir := filepath.Join(parent, "gitdir")
+	require.NoError(t, os.MkdirAll(vault, 0o755))
+	cmd := exec.Command("git", "init", "--separate-git-dir", gitDir, vault)
+	// A commit hook exports GIT_DIR for this repository. Left set, git init
+	// treats that directory as the target and refuses --separate-git-dir.
+	cmd.Env = withoutGitLocation(os.Environ())
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(out))
+	info, err := os.Lstat(filepath.Join(vault, ".git"))
+	require.NoError(t, err)
+	assert.False(t, info.IsDir(), ".git is a gitlink file, not a directory")
+
+	now := time.Date(2026, 10, 14, 12, 0, 0, 0, time.UTC)
+	writeAged(t, filepath.Join(vault, "old.md"), now.Add(-8*24*time.Hour))
+
+	got, err := query.CheckUncommittedNotes(vault, 7, now)
+	require.NoError(t, err)
+	assert.False(t, got.Skipped, got.Reason)
+	require.Len(t, got.Notes, 1)
+	assert.Equal(t, "old.md", got.Notes[0].Path)
+	assert.Equal(t, "untracked", got.Notes[0].State)
+}
+
 func initUncommittedRepo(t *testing.T, dir string, now time.Time) *gogit.Repository {
 	t.Helper()
 	repo, err := gogit.PlainInit(dir, false)
@@ -107,6 +159,25 @@ func initUncommittedRepo(t *testing.T, dir string, now time.Time) *gogit.Reposit
 	_, err = wt.Commit("init", &gogit.CommitOptions{Author: gitAuthor(now)})
 	require.NoError(t, err)
 	return repo
+}
+
+// withoutGitLocation drops the variables a surrounding git process exports.
+// The check under test uses go-git. This only keeps the fixture's own git init
+// from binding to the repository that launched the test.
+func withoutGitLocation(env []string) []string {
+	drop := map[string]bool{
+		"GIT_DIR": true, "GIT_WORK_TREE": true, "GIT_INDEX_FILE": true,
+		"GIT_COMMON_DIR": true, "GIT_PREFIX": true, "GIT_OBJECT_DIRECTORY": true,
+		"GIT_ALTERNATE_OBJECT_DIRECTORIES": true,
+	}
+	kept := make([]string, 0, len(env))
+	for _, e := range env {
+		key, _, _ := strings.Cut(e, "=")
+		if !drop[key] {
+			kept = append(kept, e)
+		}
+	}
+	return kept
 }
 
 func gitAuthor(now time.Time) *object.Signature {

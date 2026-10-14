@@ -11,6 +11,9 @@ import (
 type RelatedConfig struct {
 	Input string
 	Mode  string // "mixed", "explicit", or "inferred"
+	// IncludeDrafts lets a status:draft note be listed. Off by default.
+	// The note the caller named is the target and is not filtered.
+	IncludeDrafts bool
 }
 
 // RelatedItem is a single related note returned by Related.
@@ -53,6 +56,11 @@ func Related(resolver *graph.Resolver, db *index.DB, cfg RelatedConfig) (*Relate
 	}
 	targetID := resolved.Matches[0].ID
 
+	drafts, err := index.DraftIDs(db)
+	if err != nil {
+		return nil, fmt.Errorf("loading drafts: %w", err)
+	}
+
 	// Step 2: Query outbound edges (src_note_id = target).
 	var edges []relatedEdge
 
@@ -71,6 +79,9 @@ func Related(resolver *graph.Resolver, db *index.DB, cfg RelatedConfig) (*Relate
 		var e relatedEdge
 		if scanErr := outRows.Scan(&e.noteID, &e.edgeType, &e.confidence, &e.origin, &e.weight); scanErr != nil {
 			return nil, fmt.Errorf("scanning outbound edge: %w", scanErr)
+		}
+		if !drafts.Visible(e.noteID, cfg.IncludeDrafts) {
+			continue
 		}
 		edges = append(edges, e)
 	}
@@ -94,6 +105,9 @@ func Related(resolver *graph.Resolver, db *index.DB, cfg RelatedConfig) (*Relate
 		var e relatedEdge
 		if scanErr := inRows.Scan(&e.noteID, &e.edgeType, &e.confidence, &e.origin, &e.weight); scanErr != nil {
 			return nil, fmt.Errorf("scanning inbound edge: %w", scanErr)
+		}
+		if !drafts.Visible(e.noteID, cfg.IncludeDrafts) {
+			continue
 		}
 		edges = append(edges, e)
 	}

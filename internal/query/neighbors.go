@@ -27,7 +27,7 @@ type NeighborEdge struct {
 // Neighbors performs a BFS traversal from the given input (resolved via
 // the Resolver's entity resolution) and returns the result in a format
 // suitable for JSON output.
-func Neighbors(resolver *graph.Resolver, input string, depth int, minConfidence string, maxNodes int) (*NeighborsResult, error) {
+func Neighbors(resolver *graph.Resolver, input string, depth int, minConfidence string, maxNodes int, includeDrafts bool) (*NeighborsResult, error) {
 	resolveResult, err := resolver.Resolve(input)
 	if err != nil {
 		return nil, err
@@ -42,6 +42,7 @@ func Neighbors(resolver *graph.Resolver, input string, depth int, minConfidence 
 		MaxDepth:      depth,
 		MinConfidence: minConfidence,
 		MaxNodes:      maxNodes,
+		IncludeDrafts: includeDrafts,
 	})
 	if err != nil {
 		return nil, err

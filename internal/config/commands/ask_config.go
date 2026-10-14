@@ -59,8 +59,10 @@ SCOPE THE SEARCH
 
 DRAFTS
 
-  A note with status: draft is excluded from ranking. --include-drafts puts
-  it back. Accepting a draft is editing that status (one file, no copy).
+  A note with status: draft is excluded from ranking and from the context
+  pack around a hit. --include-drafts puts it back. Naming the draft with
+  note get still reads it. Accepting a draft is editing that status (one
+  file, no copy).
 
 ANTI-PATTERN — AVOID
 

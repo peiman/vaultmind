@@ -27,15 +27,15 @@ func noteFilter(db *index.DB, filters index.SearchFilters) (func(id, noteType st
 			return nil, fmt.Errorf("loading path prefix: %w", err)
 		}
 	}
-	var drafts map[string]bool
+	var drafts index.DraftSet
 	if filters.ExcludesDrafts() {
 		var err error
-		if drafts, err = noteIDsWithStatus(db, index.StatusDraft); err != nil {
+		if drafts, err = index.DraftIDs(db); err != nil {
 			return nil, fmt.Errorf("loading drafts: %w", err)
 		}
 	}
 	return func(id, noteType string) bool {
-		if drafts[id] {
+		if drafts.Contains(id) {
 			return false
 		}
 		if filters.Type != "" && noteType != filters.Type {
@@ -46,25 +46,6 @@ func noteFilter(db *index.DB, filters index.SearchFilters) (func(id, noteType st
 		}
 		return filters.Tag == "" || tagged[id]
 	}, nil
-}
-
-// noteIDsWithStatus returns the set of note IDs whose stored status is exactly
-// status. A missing status is not a match.
-func noteIDsWithStatus(db *index.DB, status string) (map[string]bool, error) {
-	rows, err := db.Query("SELECT id FROM notes WHERE status = ?", status)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	ids := make(map[string]bool)
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		ids[id] = true
-	}
-	return ids, rows.Err()
 }
 
 // noteIDsUnderPrefix returns the set of note IDs whose vault path starts with

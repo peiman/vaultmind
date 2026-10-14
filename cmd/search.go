@@ -20,7 +20,7 @@ var searchCmd = MustNewCommand(commands.SearchMetadata, runSearch)
 func init() {
 	MustAddToRoot(searchCmd)
 	// Same key as ask. See ask.go.
-	searchCmd.Flags().Bool("include-drafts", false, commands.IncludeDraftsDescription)
+	registerIncludeDrafts(searchCmd)
 }
 
 func runSearch(cmd *cobra.Command, args []string) error {

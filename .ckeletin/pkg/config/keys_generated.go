@@ -296,7 +296,7 @@ const (
 	KeyAppPingUi                             = "app.ping.ui"                              // Enable interactive UI for the ping command
 	KeyAppResolveVault                       = "app.resolve.vault"                        // Path to the vault root directory
 	KeyAppResolveJson                        = "app.resolve.json"                         // Output in JSON format
-	KeyAppRetrievalIncludeDrafts             = "app.retrieval.include_drafts"             // Rank notes whose status is draft. Off by default: a draft stays out of ask an...
+	KeyAppRetrievalIncludeDrafts             = "app.retrieval.include_drafts"             // Include notes whose status is draft in ranking and in graph and context deliv...
 	KeyAppSchemaVault                        = "app.schema.vault"                         // Path to vault root
 	KeyAppSchemaJson                         = "app.schema.json"                          // Output in JSON format
 	KeyAppSearchVault                        = "app.search.vault"                         // Path to vault root

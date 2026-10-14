@@ -1857,7 +1857,7 @@
           "properties": {
             "include_drafts": {
               "default": false,
-              "description": "Rank notes whose status is draft. Off by default: a draft stays out of ask and search until its status is changed.",
+              "description": "Include notes whose status is draft in ranking and in graph and context delivery. Off by default: a draft stays out until its status is changed.",
               "type": "boolean"
             }
           },
