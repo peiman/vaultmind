@@ -31,6 +31,17 @@ func render(t *testing.T, root *navigate.Dir, o navigate.RenderOptions) string {
 	return b.String()
 }
 
+func TestRender_MarksADraftAndLeavesOtherStatusesAlone(t *testing.T) {
+	notes := sample()
+	notes[0].Status = "draft"
+	notes[1].Status = "active"
+	out := render(t, navigate.Build(notes), navigate.RenderOptions{})
+
+	assert.Contains(t, out, "Bee (concept-b) — About b. [draft]")
+	assert.Contains(t, out, "Ay (concept-a) — About a.")
+	assert.NotContains(t, out, "Ay (concept-a) — About a. [draft]")
+}
+
 func TestBuild_GroupsByFolderWithRecursiveCounts(t *testing.T) {
 	root := navigate.Build(sample())
 
@@ -50,6 +61,7 @@ func TestRender_ShowsEveryNoteWithItsIDAndLine(t *testing.T) {
 	assert.Contains(t, out, "concepts/ (2)")
 	assert.Contains(t, out, "decisions/2026/ (1)")
 	assert.Contains(t, out, "Ay (concept-a) — About a.", "title, the id to open it with, and what it is about")
+	assert.NotContains(t, out, "[draft]")
 	assert.Contains(t, out, "Top (readme-ish) — At the root.")
 }
 

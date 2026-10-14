@@ -18,10 +18,11 @@ import (
 // searched one, and the measured cost was 1-of-4 coverage with two of the
 // misses already written down in the desk. `--vaults` closes that.
 //
-// Delivery deliberately stays SINGLE-vault: the merge picks an owner, and the
-// owner's own pipeline packs the body, applies its own noise floor, and
-// records the access. There is no merged pseudo-vault whose floor belongs to
-// nobody, and plasticity lands in the vault the note actually lives in.
+// Delivery deliberately stays SINGLE-vault: the merge picks an owner, and that
+// owner's first-pass result packs the body, applies its own noise floor, and
+// records the access. The owner is not searched again. There is no merged
+// pseudo-vault whose floor belongs to nobody, and plasticity lands in the
+// vault the note actually lives in.
 
 // resolveAskVaultPaths returns the vaults a run will search: just the single
 // --vault when --vaults is empty, else the parsed list. Blank entries are
@@ -93,13 +94,14 @@ func vaultDisplayName(path string) string {
 // A vault that fails to open is reported, never skipped: a federation that
 // quietly drops a vault answers "nothing relevant" while not having looked,
 // which is the failure this whole feature exists to end.
-func federateAndPickOwner(cmd *cobra.Command, queryText string, paths []string, searchLimit, forwardTokens, salientTerms int) ([]query.FederatedHit, []query.FederatedVaultStatus, string, error) {
+func federateAndPickOwner(cmd *cobra.Command, queryText string, paths []string, searchLimit, forwardTokens, salientTerms int) ([]query.FederatedHit, []query.FederatedVaultStatus, string, *query.AskResult, error) {
 	if err := requireRealVaults(paths); err != nil {
-		return nil, nil, "", err
+		return nil, nil, "", nil, err
 	}
 	perVault := make(map[string][]retrieval.ScoredResult, len(paths))
 	verdicts := make(map[string]string, len(paths))
 	relevance := make(map[string]float64, len(paths))
+	rankedByName := make(map[string]*query.AskResult, len(paths))
 	byName := make(map[string]string, len(paths))
 	names := make([]string, 0, len(paths))
 
@@ -117,13 +119,14 @@ func federateAndPickOwner(cmd *cobra.Command, queryText string, paths []string, 
 		byName[name] = p
 		names = append(names, name)
 
-		hits, verdict, z, err := searchOneVault(cmd, p, queryText, searchLimit, forwardTokens, salientTerms)
+		searched, err := searchOneVault(cmd, p, queryText, searchLimit, forwardTokens, salientTerms)
 		if err != nil {
-			return nil, nil, "", fmt.Errorf("federated ask: vault %s: %w", p, err)
+			return nil, nil, "", nil, fmt.Errorf("federated ask: vault %s: %w", p, err)
 		}
-		perVault[name] = hits
-		verdicts[name] = verdict
-		relevance[name] = z
+		perVault[name] = searched.Hits
+		verdicts[name] = searched.Verdict
+		relevance[name] = searched.RelevanceZ
+		rankedByName[name] = searched.Ranked
 	}
 
 	merged := query.MergeFederated(perVault, verdicts, relevance)
@@ -142,34 +145,38 @@ func federateAndPickOwner(cmd *cobra.Command, queryText string, paths []string, 
 
 	if len(merged) == 0 {
 		// Nothing anywhere. Fall back to the primary vault so the caller still
-		// gets the normal no-match path, floor and diagnostics.
-		return nil, statuses, paths[0], nil
+		// gets the normal no-match path, floor and diagnostics. Reuse that
+		// vault's empty rank so it is not searched again on the way out.
+		fallback := vaultDisplayName(paths[0])
+		return nil, statuses, paths[0], rankedByName[fallback], nil
 	}
 	owner, ok := byName[merged[0].Vault]
 	if !ok {
-		return nil, nil, "", fmt.Errorf("federated ask: merged top hit names unknown vault %q", merged[0].Vault)
+		return nil, nil, "", nil, fmt.Errorf("federated ask: merged top hit names unknown vault %q", merged[0].Vault)
 	}
-	return merged, statuses, owner, nil
+	return merged, statuses, owner, rankedByName[merged[0].Vault], nil
 }
 
 // searchOneVault opens a vault, searches it, computes its OWN relevance
 // verdict, and closes the vault before returning. The embedder is not closed:
 // every vault shares the process's one loaded model (query.sharedEmbedderFor),
 // which is also what keeps the process to a single ONNX session.
-func searchOneVault(cmd *cobra.Command, vaultPath, queryText string, searchLimit, forwardTokens, salientTerms int) ([]retrieval.ScoredResult, string, float64, error) {
+func searchOneVault(cmd *cobra.Command, vaultPath, queryText string, searchLimit, forwardTokens, salientTerms int) (query.VaultSearch, error) {
 	vdb, err := cmdutil.OpenVaultDB(vaultPath)
 	if err != nil {
-		return nil, "", 0, err
+		return query.VaultSearch{}, err
 	}
 	defer vdb.Close()
 
-	ret := askRetriever(cmd, vdb.DB)
+	ret := openAskIndex(cmd, vaultPath, vdb.DB)
 	defer ret.Cleanup()
 
 	// ONE retrieval, then judge those same hits. Searching again for the
 	// verdict doubled every federated query — 6.7s across three vaults, enough
 	// to push the recall hook past its timeout and make it inject nothing.
-	return query.SearchAndJudge(
+	// The returned rank is what delivery packs, so the owner is not a fourth
+	// search on a three-vault ask.
+	return query.SearchVault(
 		cmd.Context(), ret.Retriever, ret.Embedder, vdb.DB,
 		vaultFloorResolver(cmd, vaultPath), queryText, searchLimit, forwardTokens, salientTerms)
 }

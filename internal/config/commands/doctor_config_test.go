@@ -33,4 +33,6 @@ func TestDoctorOptions_AllAndRootDefaults(t *testing.T) {
 	}
 	assert.Equal(t, false, byKey["app.doctor.all"], "--all defaults to false (explicit opt-in)")
 	assert.Equal(t, ".", byKey["app.doctor.root"], "--root defaults to the current directory")
+	assert.Equal(t, 7, byKey["app.doctor.uncommitted_days"], "uncommitted notes are flagged after 7 days")
+	assert.Equal(t, "uncommitted-days", commands.DoctorMetadata.FlagOverrides["app.doctor.uncommitted_days"])
 }

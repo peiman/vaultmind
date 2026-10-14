@@ -2,6 +2,8 @@ package graph
 
 import (
 	"fmt"
+
+	"github.com/peiman/vaultmind/internal/index"
 )
 
 // ConfidenceLevel maps confidence label to numeric rank (higher = more confident).
@@ -28,6 +30,10 @@ type TraverseConfig struct {
 	MaxDepth      int
 	MinConfidence string
 	MaxNodes      int
+	// IncludeDrafts lets a status:draft note be a neighbor. Off by default,
+	// the same switch as ranking (app.retrieval.include_drafts). The start
+	// note is the one the caller named, so it stays even when it is a draft.
+	IncludeDrafts bool
 }
 
 // TraverseEdge describes the edge by which a node was reached.
@@ -70,6 +76,17 @@ func (r *Resolver) Traverse(cfg TraverseConfig) (*TraverseResult, error) {
 	visited := make(map[string]bool)
 	visited[cfg.StartID] = true
 
+	// Loaded once for the walk. A draft is dropped where neighbors are
+	// collected, before it is marked visited or enqueued, so the walk does
+	// not pass through it either.
+	var drafts index.DraftSet
+	if !cfg.IncludeDrafts {
+		var err error
+		if drafts, err = index.DraftIDs(r.db); err != nil {
+			return nil, fmt.Errorf("loading drafts: %w", err)
+		}
+	}
+
 	startNode := TraverseNode{ID: cfg.StartID, Distance: 0}
 	result.Nodes = append(result.Nodes, startNode)
 
@@ -92,7 +109,7 @@ func (r *Resolver) Traverse(cfg TraverseConfig) (*TraverseResult, error) {
 			continue
 		}
 
-		neighbors, err := r.queryNeighbors(item.id, cfg.MinConfidence)
+		neighbors, err := r.queryNeighbors(item.id, cfg.MinConfidence, drafts, cfg.IncludeDrafts)
 		if err != nil {
 			return nil, fmt.Errorf("querying neighbors of %s: %w", item.id, err)
 		}
@@ -127,9 +144,10 @@ func (r *Resolver) Traverse(cfg TraverseConfig) (*TraverseResult, error) {
 	return result, nil
 }
 
-// queryNeighbors returns all neighbors (outbound + inbound) of nodeID
-// where edges are resolved and meet the minConfidence threshold.
-func (r *Resolver) queryNeighbors(nodeID, minConfidence string) ([]neighbor, error) {
+// queryNeighbors returns neighbors (outbound + inbound) of nodeID whose
+// edges are resolved, meet minConfidence, and are visible under the draft
+// policy. A hidden draft is not returned, so the caller never visits it.
+func (r *Resolver) queryNeighbors(nodeID, minConfidence string, drafts index.DraftSet, includeDrafts bool) ([]neighbor, error) {
 	var results []neighbor
 
 	// Outbound: edges where nodeID is the source
@@ -150,7 +168,7 @@ func (r *Resolver) queryNeighbors(nodeID, minConfidence string) ([]neighbor, err
 		if err := outRows.Scan(&nb.id, &nb.edgeType, &nb.confidence, &nb.weight); err != nil {
 			return nil, fmt.Errorf("scanning outbound row: %w", err)
 		}
-		if MeetsConfidence(nb.confidence, minConfidence) {
+		if MeetsConfidence(nb.confidence, minConfidence) && drafts.Visible(nb.id, includeDrafts) {
 			results = append(results, nb)
 		}
 	}
@@ -176,7 +194,7 @@ func (r *Resolver) queryNeighbors(nodeID, minConfidence string) ([]neighbor, err
 			return nil, fmt.Errorf("scanning inbound row: %w", err)
 		}
 		nb.sourceID = nb.id // actual src_note_id from DB, not BFS parent
-		if MeetsConfidence(nb.confidence, minConfidence) {
+		if MeetsConfidence(nb.confidence, minConfidence) && drafts.Visible(nb.id, includeDrafts) {
 			results = append(results, nb)
 		}
 	}

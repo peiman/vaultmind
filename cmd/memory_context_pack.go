@@ -14,4 +14,5 @@ var memoryContextPackCmd = newDeprecatedAlias(commands.MemoryContextPackMetadata
 func init() {
 	memoryCmd.AddCommand(memoryContextPackCmd)
 	setupCommandConfig(memoryContextPackCmd)
+	registerIncludeDrafts(memoryContextPackCmd)
 }

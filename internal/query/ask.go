@@ -2,6 +2,7 @@ package query
 
 import (
 	"context"
+	"errors"
 
 	"github.com/peiman/vaultmind/internal/embedding"
 	"github.com/peiman/vaultmind/internal/graph"
@@ -73,6 +74,12 @@ type AskConfig struct {
 	// QuerySalientTerms is how many highest-weight tokens and words ColBERT
 	// and FTS use from that pass. 0 leaves those lanes on the embedded text.
 	QuerySalientTerms int
+
+	// IncludeDrafts lets the context pack deliver a status:draft neighbor.
+	// Ranking reads the same choice from the retriever's SearchFilters.
+	// Zero excludes. The top hit is a ranked note, so a draft reaches it
+	// only when that ranking also opted in.
+	IncludeDrafts bool
 }
 
 // AskResult is the combined output of a search + context-pack operation.
@@ -319,6 +326,28 @@ func Ask(ctx context.Context, retriever retrieval.Retriever, resolver *graph.Res
 	if err != nil {
 		return nil, err
 	}
+	return finishAsk(ctx, resolver, db, cfg, result)
+}
+
+// errNoPreparedRank refuses to search as a fallback. A nil rank means the
+// caller lost the first pass; searching here would put the owner's second
+// hybrid search back.
+var errNoPreparedRank = errors.New("ask from rank: no prepared result")
+
+// AskFromRank packs context and records access from a search that already
+// ran. It does not search. ranked.rankingQuery is the text that search
+// embedded, so the delivery cosine hits the same memo entry.
+func AskFromRank(ctx context.Context, resolver *graph.Resolver, db *index.DB, cfg AskConfig, ranked *AskResult) (*AskResult, error) {
+	if ranked == nil {
+		return nil, errNoPreparedRank
+	}
+	ranked.Query = cfg.Query
+	return finishAsk(ctx, resolver, db, cfg, ranked)
+}
+
+// finishAsk is the delivery half of Ask: similarities, noise floor, context
+// pack, and access rows. The search that produced result has already run.
+func finishAsk(ctx context.Context, resolver *graph.Resolver, db *index.DB, cfg AskConfig, result *AskResult) (*AskResult, error) {
 	hits := result.TopHits
 
 	if len(hits) == 0 {
@@ -414,6 +443,7 @@ func Ask(ctx context.Context, retriever retrieval.Retriever, resolver *graph.Res
 		ActivationScores: activationScores,
 		ExcerptTokens:    cfg.ExcerptTokens,
 		Seeds:            relevantLaterHits(hits, result),
+		IncludeDrafts:    cfg.IncludeDrafts,
 	})
 	if packErr != nil {
 		log.Debug().Err(packErr).Str("note_id", hits[0].ID).Msg("context-pack failed; returning search results only")

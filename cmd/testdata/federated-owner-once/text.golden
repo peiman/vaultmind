@@ -1,0 +1,25 @@
+Search: "spreading activation" (3 hits)  [top-hit confidence: strong]
+  [federated: 2 vaults searched; delivering from desk]
+    research               nothing above its own floor (unmeasured — no embedder, so kept in the merge)
+  cross-vault ranking:
+    1. [desk] concept-spreading-activation             Spreading Activation
+       (also ranked in 2 vaults — amplified by cross-vault RRF)
+    2. [desk] concept-base-level-activation            Base-Level Activation
+       (also ranked in 2 vaults — amplified by cross-vault RRF)
+    3. [desk] concept-act-r                            ACT-R
+       (also ranked in 2 vaults — amplified by cross-vault RRF)
+   1.  concept-spreading-activation              Spreading Activation
+   2.  concept-base-level-activation             Base-Level Activation
+   3.  concept-act-r                             ACT-R
+
+Context from: concept-spreading-activation — 4 notes, 4 delivered as excerpts (299 tok)
+  [concept] Spreading Activation
+    ## Overview
+    
+    Spreading activation is the mechanism by which thinking about one concept makes related concepts more accessible. When you retrieve "doctor" from memory, "nurse" and "hospital" become slightly more available — that's spreading activation at work.
+  [concept] ACT-R
+    ACT-R is a cognitive architecture that models human cognition through declarative memory and procedural memory modules. Its memory model formalizes retrieval dynamics with base-level activation and [[Spreading Activation]] from the current context.
+  [decision] Use BGE-M3 for hybrid retrieval
+    We needed an embedding model that supports dense, sparse, and late-interaction retrieval from a single pass, to avoid running three models.
+  [project] VaultMind
+    VaultMind is the memory foundation for AI minds — a Git-backed associative memory layer over Obsidian vaults. Indexes notes, builds a knowledge graph, and serves context packs to agents through associative retrieval.

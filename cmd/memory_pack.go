@@ -16,6 +16,7 @@ var memoryPackCmd = MustNewCommand(commands.MemoryPackMetadata, runMemoryPack)
 func init() {
 	memoryCmd.AddCommand(memoryPackCmd)
 	setupCommandConfig(memoryPackCmd)
+	registerIncludeDrafts(memoryPackCmd)
 }
 
 func runMemoryPack(cmd *cobra.Command, args []string) error {
@@ -43,6 +44,7 @@ func runMemoryPack(cmd *cobra.Command, args []string) error {
 		// the original "N items, 0 with bodies" behaviour after every other
 		// caller had been fixed.
 		ExcerptTokens: getConfigValueWithFlags[int](cmd, "excerpt", config.KeyAppMemorypackExcerpt),
+		IncludeDrafts: retrievalIncludeDrafts(cmd),
 	})
 	if err != nil {
 		if jsonOut {

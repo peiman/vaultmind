@@ -699,7 +699,9 @@ func getConfigValueWithFlags[T any](cmd *cobra.Command, flagName string, viperKe
 }
 
 // coerceConfigValue converts a viper env string into T. ToIntE rejects a
-// non-numeric string, so a bad value is not silently read as 0.
+// non-numeric string, so a bad value is not silently read as 0. A bool env
+// value is the string "true" or "false"; the type assert would otherwise miss
+// it and the key would stay at its zero value.
 func coerceConfigValue[T any](v any) (T, bool) {
 	var zero T
 	switch any(zero).(type) {
@@ -709,6 +711,13 @@ func coerceConfigValue[T any](v any) (T, bool) {
 			return zero, false
 		}
 		out, ok := any(n).(T)
+		return out, ok
+	case bool:
+		b, err := cast.ToBoolE(v)
+		if err != nil {
+			return zero, false
+		}
+		out, ok := any(b).(T)
 		return out, ok
 	default:
 		return zero, false

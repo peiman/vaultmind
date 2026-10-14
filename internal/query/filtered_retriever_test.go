@@ -34,3 +34,12 @@ func TestFilteredRetriever_FillsEmptyFiltersAndKeepsTheCallers(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, index.SearchFilters{Type: "decision", Tag: "engineering", PathPrefix: "concepts/"}, base.got, "a path the caller passes wins")
 }
+
+func TestFilteredRetriever_OptsIntoDraftsWhenTheCallerLeftThemOut(t *testing.T) {
+	base := &recordingRetriever{}
+	r := query.FilteredRetriever{Base: base, Filters: index.SearchFilters{IncludeDrafts: true}}
+
+	_, _, err := r.Search(context.Background(), "q", 5, 0, index.SearchFilters{})
+	require.NoError(t, err)
+	assert.True(t, base.got.IncludeDrafts, "ask searches with empty filters; the opt-in has to survive that")
+}

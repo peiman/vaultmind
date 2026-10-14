@@ -13,6 +13,9 @@ type RecallConfig struct {
 	Depth         int
 	MinConfidence string
 	MaxNodes      int
+	// IncludeDrafts lets a status:draft note be a neighbor. Off by default.
+	// The note the caller named stays the start of the traversal.
+	IncludeDrafts bool
 }
 
 // RecallNode is an enriched graph node returned by Recall.
@@ -63,6 +66,7 @@ func Recall(resolver *graph.Resolver, db *index.DB, cfg RecallConfig) (*RecallRe
 		MaxDepth:      cfg.Depth,
 		MinConfidence: cfg.MinConfidence,
 		MaxNodes:      cfg.MaxNodes,
+		IncludeDrafts: cfg.IncludeDrafts,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("traversing graph from %q: %w", targetID, err)

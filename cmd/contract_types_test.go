@@ -64,6 +64,35 @@ type ContextPackEnvelope struct {
 	} `json:"result"`
 }
 
+// DoctorEnvelope is the contract shape for the draft fields on `vaultmind doctor --json`.
+// schema_version stays v1: the fields are additive.
+type DoctorEnvelope struct {
+	SchemaVersion string `json:"schema_version"`
+	Status        string `json:"status"`
+	Command       string `json:"command"`
+	Result        struct {
+		Drafts struct {
+			Count int `json:"count"`
+			Notes []struct {
+				ID      string `json:"id"`
+				Path    string `json:"path"`
+				AgeDays int    `json:"age_days"`
+			} `json:"notes"`
+		} `json:"drafts"`
+		UncommittedNotes struct {
+			ThresholdDays int    `json:"threshold_days"`
+			Count         int    `json:"count"`
+			Skipped       bool   `json:"skipped"`
+			Reason        string `json:"reason"`
+			Notes         []struct {
+				Path    string `json:"path"`
+				AgeDays int    `json:"age_days"`
+				State   string `json:"state"`
+			} `json:"notes"`
+		} `json:"uncommitted_notes"`
+	} `json:"result"`
+}
+
 // SearchEnvelope is the contract shape for `vaultmind search --json`.
 type SearchEnvelope struct {
 	SchemaVersion string `json:"schema_version"`

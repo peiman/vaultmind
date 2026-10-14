@@ -1,0 +1,22 @@
+[
+  {
+    "note_id": "concept-act-r",
+    "caller": "agent-neighbor",
+    "body_delivered": true
+  },
+  {
+    "note_id": "concept-spreading-activation",
+    "caller": "agent",
+    "body_delivered": true
+  },
+  {
+    "note_id": "decision-example",
+    "caller": "agent-neighbor",
+    "body_delivered": true
+  },
+  {
+    "note_id": "proj-vaultmind",
+    "caller": "agent-neighbor",
+    "body_delivered": true
+  }
+]

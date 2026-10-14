@@ -15,15 +15,24 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// openAskIndex opens one vault's retriever and embedder. Tests replace it to
+// count searches. The per-vault pass and the delivery pass both call it, and
+// a given vault path gets the same embedder back: the query embedding is
+// memoized on that instance, and a fresh one would forward again.
+var openAskIndex = func(cmd *cobra.Command, _ string, db *index.DB) query.AutoRetrieverResult {
+	return askRetriever(cmd, db)
+}
+
 // askRetriever builds the vault's retriever, scoped by --type, --tag and --path.
 // Every ask path — direct, --read and each federated vault — builds through
 // here, so none of them can search unscoped.
 func askRetriever(cmd *cobra.Command, db *index.DB) query.AutoRetrieverResult {
 	ret := query.BuildAutoRetrieverFull(cmd.Context(), db)
 	filters := index.SearchFilters{
-		Type:       getConfigValueWithFlags[string](cmd, "type", config.KeyAppAskType),
-		Tag:        getConfigValueWithFlags[string](cmd, "tag", config.KeyAppAskTag),
-		PathPrefix: getConfigValueWithFlags[string](cmd, "path", config.KeyAppAskPath),
+		Type:          getConfigValueWithFlags[string](cmd, "type", config.KeyAppAskType),
+		Tag:           getConfigValueWithFlags[string](cmd, "tag", config.KeyAppAskTag),
+		PathPrefix:    getConfigValueWithFlags[string](cmd, "path", config.KeyAppAskPath),
+		IncludeDrafts: retrievalIncludeDrafts(cmd),
 	}
 	if filters != (index.SearchFilters{}) {
 		ret.Retriever = query.FilteredRetriever{Base: ret.Retriever, Filters: filters}

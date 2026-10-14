@@ -18,7 +18,9 @@ var TreeMetadata = config.CommandMetadata{
 		"or --type.\n\n" +
 		"A note names the code it is about with `paths:` in its frontmatter — globs relative " +
 		"to the repository root (`internal/hooks/**`, `cmd/*.go`), with `repo:` in front for " +
-		"code in another repository. --for <file> lists the notes that cover that file.\n\n" +
+		"code in another repository. --for <file> lists the notes that cover that file. " +
+		"A draft is left out of that list unless --include-drafts is set; the full map " +
+		"still shows it and marks the line [draft].\n\n" +
 		"  vaultmind tree --vault ./vaultmind-vault --depth 1\n" +
 		"  vaultmind tree --vault ./vaultmind-vault --path decisions/\n" +
 		"  vaultmind tree --vault ./vaultmind-vault --type concept --brief\n" +

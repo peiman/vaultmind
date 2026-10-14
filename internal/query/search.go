@@ -22,13 +22,14 @@ type SearchResult struct {
 
 // SearchConfig holds search parameters.
 type SearchConfig struct {
-	Query      string
-	Limit      int
-	Offset     int
-	TypeFilter string
-	TagFilter  string
-	JSONOutput bool
-	VaultPath  string
+	Query         string
+	Limit         int
+	Offset        int
+	TypeFilter    string
+	TagFilter     string
+	IncludeDrafts bool
+	JSONOutput    bool
+	VaultPath     string
 }
 
 // RunSearch executes the search command logic and returns the result for
@@ -36,7 +37,7 @@ type SearchConfig struct {
 func RunSearch(retriever retrieval.Retriever, cfg SearchConfig, w io.Writer) (*SearchResult, error) {
 	results, total, err := retriever.Search(
 		context.Background(), cfg.Query, cfg.Limit, cfg.Offset,
-		index.SearchFilters{Type: cfg.TypeFilter, Tag: cfg.TagFilter},
+		index.SearchFilters{Type: cfg.TypeFilter, Tag: cfg.TagFilter, IncludeDrafts: cfg.IncludeDrafts},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("searching: %w", err)

@@ -32,6 +32,11 @@ type ContextPackConfig struct {
 	// ahead of every graph neighbour, in the order given, because a note that
 	// matched the question outranks one that is merely linked to the answer.
 	Seeds []Seed
+
+	// IncludeDrafts lets a status:draft note be a context item. Off by default,
+	// the same switch as ranking. The note the caller named is the target and
+	// is packed either way.
+	IncludeDrafts bool
 }
 
 // Seed is a note to pack as context regardless of its graph distance from the
@@ -194,11 +199,17 @@ func ContextPack(resolver *graph.Resolver, db *index.DB, cfg ContextPackConfig) 
 	}
 
 	// Step 4: Collect candidates — depth-1 (direct edges) or multi-hop BFS.
+	// One draft set for this pack. Depth 1 filters where the link rows are
+	// collected. A deeper pack asks the traversal to do the same.
+	drafts, err := index.DraftIDs(db)
+	if err != nil {
+		return nil, fmt.Errorf("loading drafts: %w", err)
+	}
 	var candidates []contextCandidate
 	if cfg.Depth > 1 {
-		candidates, err = collectTraverseCandidates(resolver, targetID, cfg.Depth)
+		candidates, err = collectTraverseCandidates(resolver, targetID, cfg.Depth, cfg.IncludeDrafts)
 	} else {
-		candidates, err = collectEdgeCandidates(db, targetID)
+		candidates, err = collectEdgeCandidates(db, targetID, drafts, cfg.IncludeDrafts)
 	}
 	if err != nil {
 		return nil, err
@@ -209,7 +220,7 @@ func ContextPack(resolver *graph.Resolver, db *index.DB, cfg ContextPackConfig) 
 		return nil, err
 	}
 
-	candidates = withSeeds(cfg.Seeds, targetID, candidates, loadNote)
+	candidates = withSeeds(cfg.Seeds, targetID, candidates, loadNote, drafts, cfg.IncludeDrafts)
 
 	// Step 6: Pack context items until budget exhausted.
 	if cfg.MaxItems > 0 {
@@ -227,14 +238,14 @@ func ContextPack(resolver *graph.Resolver, db *index.DB, cfg ContextPackConfig) 
 // given. A seed that is the target or names no note is skipped; a seed that is
 // also a neighbour appears once, as the seed, since matching the question is
 // the stronger reason to be in the pack.
-func withSeeds(seeds []Seed, targetID string, candidates []contextCandidate, loadNote func(string) (*index.FullNote, error)) []contextCandidate {
+func withSeeds(seeds []Seed, targetID string, candidates []contextCandidate, loadNote func(string) (*index.FullNote, error), drafts index.DraftSet, includeDrafts bool) []contextCandidate {
 	if len(seeds) == 0 {
 		return candidates
 	}
 	out := make([]contextCandidate, 0, len(seeds)+len(candidates))
 	seeded := map[string]bool{targetID: true}
 	for _, s := range seeds {
-		if seeded[s.ID] {
+		if seeded[s.ID] || !drafts.Visible(s.ID, includeDrafts) {
 			continue
 		}
 		if n, err := loadNote(s.ID); err != nil || n == nil {
@@ -521,7 +532,7 @@ func packTargetContent(full *index.FullNote, budget, excerptTokens int, result *
 
 // collectEdgeCandidates queries outbound and inbound resolved edges for targetID
 // and returns deduplicated candidates ranked by edgePriority.
-func collectEdgeCandidates(db *index.DB, targetID string) ([]contextCandidate, error) {
+func collectEdgeCandidates(db *index.DB, targetID string, drafts index.DraftSet, includeDrafts bool) ([]contextCandidate, error) {
 	// noteID -> index in candidates. -1 marks the target itself, which is
 	// excluded: a sentinel rather than a second map, so "already placed" and
 	// "never eligible" stay one lookup.
@@ -576,13 +587,30 @@ func collectEdgeCandidates(db *index.DB, targetID string) ([]contextCandidate, e
 		return nil, fmt.Errorf("iterating inbound edges: %w", err)
 	}
 
-	return candidates, nil
+	return withoutDraftCandidates(candidates, drafts, includeDrafts), nil
+}
+
+// withoutDraftCandidates is the depth-1 collection filter. A draft linked to
+// the target never becomes a context item unless the caller opted in.
+// Removing this filter delivers that draft's body. The traversal applies the
+// same DraftSet for a deeper pack and for neighbors.
+func withoutDraftCandidates(candidates []contextCandidate, drafts index.DraftSet, includeDrafts bool) []contextCandidate {
+	if includeDrafts || len(drafts) == 0 {
+		return candidates
+	}
+	kept := make([]contextCandidate, 0, len(candidates))
+	for _, c := range candidates {
+		if drafts.Visible(c.noteID, false) {
+			kept = append(kept, c)
+		}
+	}
+	return kept
 }
 
 // collectTraverseCandidates uses BFS traversal to collect candidates up to maxDepth hops.
 // Priority is distance*10 + edgePriority so that closer nodes always rank higher than
 // farther ones, with edge type as a tiebreaker within the same distance band.
-func collectTraverseCandidates(resolver *graph.Resolver, targetID string, maxDepth int) ([]contextCandidate, error) {
+func collectTraverseCandidates(resolver *graph.Resolver, targetID string, maxDepth int, includeDrafts bool) ([]contextCandidate, error) {
 	tResult, err := resolver.Traverse(graph.TraverseConfig{
 		StartID:       targetID,
 		MaxDepth:      maxDepth,
@@ -592,7 +620,8 @@ func collectTraverseCandidates(resolver *graph.Resolver, targetID string, maxDep
 		// otherwise the contract "depth-2 ⊇ depth-1" breaks once the
 		// breadth at distance 1 alone exceeds the cap. 5000 is well above
 		// realistic per-target neighborhood size while still bounded.
-		MaxNodes: 5000,
+		MaxNodes:      5000,
+		IncludeDrafts: includeDrafts,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("BFS traversal from %q: %w", targetID, err)
