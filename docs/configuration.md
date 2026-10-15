@@ -161,7 +161,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.hooksinstall.scope` | string | `project` | `VAULTMIND_APP_HOOKSINSTALL_SCOPE` | Hook scope: project or user (across projects) |
 | `app.hooksinstall.force` | bool | `false` | `VAULTMIND_APP_HOOKSINSTALL_FORCE` | Overwrite existing hook scripts (default: refuse) |
 | `app.hooksinstall.json` | bool | `false` | `VAULTMIND_APP_HOOKSINSTALL_JSON` | Output in JSON format |
-| `app.hooksinstall.profile` | string | `` | `VAULTMIND_APP_HOOKSINSTALL_PROFILE` | Capability profile to declare and install: knowledge, persona, or full. Unset, the project's declared profile is kept; else full if hooks are already installed (older installs were all full); else knowledge, like init. Recorded in .claude/vaultmind-profile so `hooks status` judges what you chose, not everything the binary ships. |
+| `app.hooksinstall.profile` | string | `` | `VAULTMIND_APP_HOOKSINSTALL_PROFILE` | Capability profile to declare and install: knowledge, persona, or full. Unset, the project's declared profile is kept; else full if hooks are already installed (older installs were all full); else knowledge, like init. Recorded in .claude/vaultmind-profile so 'hooks status' judges what you chose, not everything the binary ships. |
 | `app.hooksinstall.only` | string | `` | `VAULTMIND_APP_HOOKSINSTALL_ONLY` | Comma-separated subset of canonical scripts to install (default: all). Unknown names rejected at lint time. |
 | `app.hooksinstall.vault` | string | `` | `VAULTMIND_APP_HOOKSINSTALL_VAULT` | Vault path to bake into the printed settings.json stanza via VAULTMIND_VAULT (default: the built-in vaultmind-identity convention). |
 | `app.hooksinstall.merge` | bool | `false` | `VAULTMIND_APP_HOOKSINSTALL_MERGE` | Additively merge the hook stanza into the project's settings file (never clobbers existing hooks) instead of only printing it. |
@@ -186,8 +186,8 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.identityenroll.invite` | string | `` | `VAULTMIND_APP_IDENTITYENROLL_INVITE` | Network invite: a vmenroll1: token or enroll URL (required) |
 | `app.identityenroll.display_name` | string | `` | `VAULTMIND_APP_IDENTITYENROLL_DISPLAY_NAME` | Your display name in the network (required; Unicode NFC) |
 | `app.identityenroll.slug` | string | `` | `VAULTMIND_APP_IDENTITYENROLL_SLUG` | Your short ASCII handle/slug (required) |
-| `app.identityenroll.pubkey` | string | `` | `VAULTMIND_APP_IDENTITYENROLL_PUBKEY` | Your base64-std ed25519 identity pubkey from `identity init` (required) |
-| `app.identityenroll.transport_pubkey` | string | `` | `VAULTMIND_APP_IDENTITYENROLL_TRANSPORT_PUBKEY` | Your base64-std 32-byte WireGuard pubkey from `wg pubkey` (required) |
+| `app.identityenroll.pubkey` | string | `` | `VAULTMIND_APP_IDENTITYENROLL_PUBKEY` | Your base64-std ed25519 identity pubkey from 'identity init' (required) |
+| `app.identityenroll.transport_pubkey` | string | `` | `VAULTMIND_APP_IDENTITYENROLL_TRANSPORT_PUBKEY` | Your base64-std 32-byte WireGuard pubkey from 'wg pubkey' (required) |
 | `app.identityenroll.transport_endpoint` | string | `` | `VAULTMIND_APP_IDENTITYENROLL_TRANSPORT_ENDPOINT` | Optional reachable host:port (IPv6 bracketed); omitted when empty |
 | `app.identityenroll.signer_socket` | string | `` | `VAULTMIND_APP_IDENTITYENROLL_SIGNER_SOCKET` | Signer socket path (default: XDG state dir) |
 | `app.identityenroll.yes` | bool | `false` | `VAULTMIND_APP_IDENTITYENROLL_YES` | Skip the out-of-band fingerprint confirmation prompt |
@@ -342,7 +342,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.tree.for` | string | `` | `VAULTMIND_APP_TREE_FOR` | Only the notes whose paths: frontmatter covers this code file |
 | `app.vaultstatus.vault` | string | `.` | `VAULTMIND_APP_VAULTSTATUS_VAULT` | Path to vault root |
 | `app.vaultstatus.json` | bool | `false` | `VAULTMIND_APP_VAULTSTATUS_JSON` | Output in JSON format |
-| `app.embed_on_write` | bool | `true` | `VAULTMIND_APP_EMBED_ON_WRITE` | Embed a note as soon as a command writes it (note create, the frontmatter commands), with the model the vault already uses. A changed note loses its embeddings, and without this it drops out of semantic search until the next `vaultmind index --embed`. Turn off for bulk edits and embed once at the end. |
+| `app.embed_on_write` | bool | `true` | `VAULTMIND_APP_EMBED_ON_WRITE` | Embed a note as soon as a command writes it (note create, the frontmatter commands), with the model the vault already uses. A changed note loses its embeddings, and without this it drops out of semantic search until the next 'vaultmind index --embed'. Turn off for bulk edits and embed once at the end. |
 
 ## Example Configuration
 
@@ -359,7 +359,7 @@ app:
   # Output format: text (human-readable) or json (machine-readable)
   output_format: json
 
-  # Embed a note as soon as a command writes it (note create, the frontmatter commands), with the model the vault already uses. A changed note loses its embeddings, and without this it drops out of semantic search until the next `vaultmind index --embed`. Turn off for bulk edits and embed once at the end.
+  # Embed a note as soon as a command writes it (note create, the frontmatter commands), with the model the vault already uses. A changed note loses its embeddings, and without this it drops out of semantic search until the next 'vaultmind index --embed'. Turn off for bulk edits and embed once at the end.
   embed_on_write: true
 
   apply:
@@ -771,7 +771,7 @@ app:
     # Output in JSON format
     json: false
 
-    # Capability profile to declare and install: knowledge, persona, or full. Unset, the project's declared profile is kept; else full if hooks are already installed (older installs were all full); else knowledge, like init. Recorded in .claude/vaultmind-profile so `hooks status` judges what you chose, not everything the binary ships.
+    # Capability profile to declare and install: knowledge, persona, or full. Unset, the project's declared profile is kept; else full if hooks are already installed (older installs were all full); else knowledge, like init. Recorded in .claude/vaultmind-profile so 'hooks status' judges what you chose, not everything the binary ships.
     profile: 
 
     # Comma-separated subset of canonical scripts to install (default: all). Unknown names rejected at lint time.
@@ -832,10 +832,10 @@ app:
     # Your short ASCII handle/slug (required)
     slug: 
 
-    # Your base64-std ed25519 identity pubkey from `identity init` (required)
+    # Your base64-std ed25519 identity pubkey from 'identity init' (required)
     pubkey: 
 
-    # Your base64-std 32-byte WireGuard pubkey from `wg pubkey` (required)
+    # Your base64-std 32-byte WireGuard pubkey from 'wg pubkey' (required)
     transport_pubkey: 
 
     # Optional reachable host:port (IPv6 bracketed); omitted when empty
@@ -1848,7 +1848,7 @@ export VAULTMIND_APP_HOOKSINSTALL_FORCE=false
 # Output in JSON format
 export VAULTMIND_APP_HOOKSINSTALL_JSON=false
 
-# Capability profile to declare and install: knowledge, persona, or full. Unset, the project's declared profile is kept; else full if hooks are already installed (older installs were all full); else knowledge, like init. Recorded in .claude/vaultmind-profile so `hooks status` judges what you chose, not everything the binary ships.
+# Capability profile to declare and install: knowledge, persona, or full. Unset, the project's declared profile is kept; else full if hooks are already installed (older installs were all full); else knowledge, like init. Recorded in .claude/vaultmind-profile so 'hooks status' judges what you chose, not everything the binary ships.
 export VAULTMIND_APP_HOOKSINSTALL_PROFILE=
 
 # Comma-separated subset of canonical scripts to install (default: all). Unknown names rejected at lint time.
@@ -1923,10 +1923,10 @@ export VAULTMIND_APP_IDENTITYENROLL_DISPLAY_NAME=
 # Your short ASCII handle/slug (required)
 export VAULTMIND_APP_IDENTITYENROLL_SLUG=
 
-# Your base64-std ed25519 identity pubkey from `identity init` (required)
+# Your base64-std ed25519 identity pubkey from 'identity init' (required)
 export VAULTMIND_APP_IDENTITYENROLL_PUBKEY=
 
-# Your base64-std 32-byte WireGuard pubkey from `wg pubkey` (required)
+# Your base64-std 32-byte WireGuard pubkey from 'wg pubkey' (required)
 export VAULTMIND_APP_IDENTITYENROLL_TRANSPORT_PUBKEY=
 
 # Optional reachable host:port (IPv6 bracketed); omitted when empty
@@ -2391,7 +2391,7 @@ export VAULTMIND_APP_VAULTSTATUS_VAULT=.
 # Output in JSON format
 export VAULTMIND_APP_VAULTSTATUS_JSON=false
 
-# Embed a note as soon as a command writes it (note create, the frontmatter commands), with the model the vault already uses. A changed note loses its embeddings, and without this it drops out of semantic search until the next `vaultmind index --embed`. Turn off for bulk edits and embed once at the end.
+# Embed a note as soon as a command writes it (note create, the frontmatter commands), with the model the vault already uses. A changed note loses its embeddings, and without this it drops out of semantic search until the next 'vaultmind index --embed'. Turn off for bulk edits and embed once at the end.
 export VAULTMIND_APP_EMBED_ON_WRITE=true
 
 ```

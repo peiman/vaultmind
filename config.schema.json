@@ -450,7 +450,7 @@
         },
         "embed_on_write": {
           "default": true,
-          "description": "Embed a note as soon as a command writes it (note create, the frontmatter commands), with the model the vault already uses. A changed note loses its embeddings, and without this it drops out of semantic search until the next `vaultmind index --embed`. Turn off for bulk edits and embed once at the end.",
+          "description": "Embed a note as soon as a command writes it (note create, the frontmatter commands), with the model the vault already uses. A changed note loses its embeddings, and without this it drops out of semantic search until the next 'vaultmind index --embed'. Turn off for bulk edits and embed once at the end.",
           "type": "boolean"
         },
         "eval": {
@@ -832,7 +832,7 @@
             },
             "profile": {
               "default": "",
-              "description": "Capability profile to declare and install: knowledge, persona, or full. Unset, the project's declared profile is kept; else full if hooks are already installed (older installs were all full); else knowledge, like init. Recorded in .claude/vaultmind-profile so `hooks status` judges what you chose, not everything the binary ships.",
+              "description": "Capability profile to declare and install: knowledge, persona, or full. Unset, the project's declared profile is kept; else full if hooks are already installed (older installs were all full); else knowledge, like init. Recorded in .claude/vaultmind-profile so 'hooks status' judges what you chose, not everything the binary ships.",
               "type": "string"
             },
             "scope": {
@@ -922,7 +922,7 @@
             },
             "pubkey": {
               "default": "",
-              "description": "Your base64-std ed25519 identity pubkey from `identity init` (required)",
+              "description": "Your base64-std ed25519 identity pubkey from 'identity init' (required)",
               "type": "string"
             },
             "signer_socket": {
@@ -942,7 +942,7 @@
             },
             "transport_pubkey": {
               "default": "",
-              "description": "Your base64-std 32-byte WireGuard pubkey from `wg pubkey` (required)",
+              "description": "Your base64-std 32-byte WireGuard pubkey from 'wg pubkey' (required)",
               "type": "string"
             },
             "yes": {

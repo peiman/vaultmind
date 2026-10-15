@@ -8,7 +8,7 @@ app:
   # Output format: text (human-readable) or json (machine-readable)
   output_format: json
 
-  # Embed a note as soon as a command writes it (note create, the frontmatter commands), with the model the vault already uses. A changed note loses its embeddings, and without this it drops out of semantic search until the next `vaultmind index --embed`. Turn off for bulk edits and embed once at the end.
+  # Embed a note as soon as a command writes it (note create, the frontmatter commands), with the model the vault already uses. A changed note loses its embeddings, and without this it drops out of semantic search until the next 'vaultmind index --embed'. Turn off for bulk edits and embed once at the end.
   embed_on_write: true
 
   apply:
@@ -420,7 +420,7 @@ app:
     # Output in JSON format
     json: false
 
-    # Capability profile to declare and install: knowledge, persona, or full. Unset, the project's declared profile is kept; else full if hooks are already installed (older installs were all full); else knowledge, like init. Recorded in .claude/vaultmind-profile so `hooks status` judges what you chose, not everything the binary ships.
+    # Capability profile to declare and install: knowledge, persona, or full. Unset, the project's declared profile is kept; else full if hooks are already installed (older installs were all full); else knowledge, like init. Recorded in .claude/vaultmind-profile so 'hooks status' judges what you chose, not everything the binary ships.
     profile: 
 
     # Comma-separated subset of canonical scripts to install (default: all). Unknown names rejected at lint time.
@@ -481,10 +481,10 @@ app:
     # Your short ASCII handle/slug (required)
     slug: 
 
-    # Your base64-std ed25519 identity pubkey from `identity init` (required)
+    # Your base64-std ed25519 identity pubkey from 'identity init' (required)
     pubkey: 
 
-    # Your base64-std 32-byte WireGuard pubkey from `wg pubkey` (required)
+    # Your base64-std 32-byte WireGuard pubkey from 'wg pubkey' (required)
     transport_pubkey: 
 
     # Optional reachable host:port (IPv6 bracketed); omitted when empty
