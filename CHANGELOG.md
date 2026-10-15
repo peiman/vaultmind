@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.13] - 2026-10-15
+
+> Recall no longer times out on long prompts or subagent hand-backs, and agents can now close the loop on what they could not find: record a gap (`note gap`), propose a draft that repairs it (`note propose`, which checks the draft actually ranks), accept it after review (`note accept`), and see it credited when it later answers a question. Sparse vectors now drop special tokens; run `vaultmind index --embed` once after upgrading.
+
 ### Added
 
 - When `ask` delivers a note that closed a recorded gap, the text adds one line under that note: `↳ answers a question first investigated 2026-10-14: "<question>"`. The question is cut at 80 characters. The date is the local day `opened_at` falls on. `--json` keeps that timestamp in UTC. `--pointers-only` does not add the line, and a note already shown in the session is not credited again. `--json` adds `answers_gap` (`question`, `opened_at`, `closed_at`) on the delivered target and on a context item whose body was delivered, and on a hit with the same id. It is absent when that note was already shown. A draft or a gap never carries it, even with `--include-drafts`. `schema_version` stays `v1`. `doctor` prints `gap-closing notes (all vaults on this machine): N surfaced, M cited` beside the memory-use line. `--json` adds `gap_loop` with gaps opened, gaps closed, median days to close, and gap-closing notes cited, so that claim is one object. Median days is a fraction of a day (12 hours is 0.5). `gap_closing_cited` is null when there is no usage log or the cite query fails, and 0 when that count was measured as zero. The cite window is the same machine-wide window as memory use. The credit follows the note id (`closed_by`), not the gap id. A cite counts only when the note is one a closed gap names in `closed_by`. Writing notes is not a score.
