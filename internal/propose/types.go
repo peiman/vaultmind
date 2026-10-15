@@ -51,8 +51,10 @@ type Request struct {
 	Now            time.Time // zero means time.Now().UTC()
 	ID             string    // accept: the draft id
 	Stdout, Stderr io.Writer
-	Embed          func(vaultPath string)
-	WorkDir        string
+	// Embed runs after a note is re-indexed. rel is the note this command
+	// just wrote, so the caller can avoid warning about other notes.
+	Embed   func(vaultPath, rel string)
+	WorkDir string
 	// Ranker re-runs the original question after the draft is on disk.
 	// Nil skips the check. The command sets it; tests that only place a
 	// draft leave it nil so their output stays the placement report.

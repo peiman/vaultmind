@@ -120,7 +120,7 @@ func reindex(ctx context.Context, v Vault, req Request, rel string) []string {
 		return []string{fmt.Sprintf("re-index failed: %s", err)}
 	}
 	if req.Embed != nil {
-		req.Embed(v.Path)
+		req.Embed(v.Path, rel)
 	}
 	return nil
 }

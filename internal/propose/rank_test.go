@@ -193,7 +193,7 @@ func TestPropose_RankCheck_DraftRanksFirst(t *testing.T) {
 	}
 	req, out, _, embeds := reqOf(question, finding)
 	req.Ranker = ranker
-	req.Embed = func(string) {
+	req.Embed = func(string, string) {
 		*embeds++
 		embedIndexedBodies(t, v.DB, emb)
 	}
@@ -241,7 +241,7 @@ func TestPropose_RankCheck_UnrelatedDraftDoesNotRank(t *testing.T) {
 	ranker := &embeddingRanker{db: v.DB, emb: emb, window: 2}
 	req, out, _, embeds := reqOf(question, "bananas sit in a bowl")
 	req.Ranker = ranker
-	req.Embed = func(string) {
+	req.Embed = func(string, string) {
 		*embeds++
 		embedIndexedBodies(t, v.DB, emb)
 	}
@@ -287,7 +287,7 @@ func TestPropose_RankCheck_JSONContract(t *testing.T) {
 	req, out, _, _ := reqOf("Where does quartzkeeper live", "quartzkeeper lives under the hill")
 	req.JSON = true
 	req.Ranker = ranker
-	req.Embed = func(string) { embedIndexedBodies(t, v.DB, emb) }
+	req.Embed = func(string, string) { embedIndexedBodies(t, v.DB, emb) }
 	ret := &stubClosest{hit: Hit{ID: "target-note", Path: "concepts/target.md", Type: "concept", Band: "strong"}, ok: true}
 	require.NoError(t, Run(context.Background(), v, req, ret))
 
@@ -331,7 +331,7 @@ func TestPropose_RankCheck_ExistingDraftSkipsTheCheck(t *testing.T) {
 	req, _, _, _ := reqOf("Where does the day go?", "It goes to the work.")
 	req.Ranker = ranker
 	var closedAtEmbed []int
-	req.Embed = func(string) { closedAtEmbed = append(closedAtEmbed, ranker.closed) }
+	req.Embed = func(string, string) { closedAtEmbed = append(closedAtEmbed, ranker.closed) }
 	require.NoError(t, Run(context.Background(), v, req, &stubClosest{}))
 	assert.Equal(t, 2, ranker.calls)
 	assert.Equal(t, 2, ranker.closed)

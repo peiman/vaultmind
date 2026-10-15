@@ -118,7 +118,7 @@ func reqOf(question, finding string) (Request, *bytes.Buffer, *bytes.Buffer, *in
 		Now:      proposeNow,
 		Stdout:   out,
 		Stderr:   errOut,
-		Embed:    func(string) { embeds++ },
+		Embed:    func(string, string) { embeds++ },
 	}, out, errOut, &embeds
 }
 

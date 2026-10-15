@@ -77,7 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `note propose` loads the embedding model once. Ranking and embed-on-write share that session, so writing the draft does not cold-load the model again. The vectors and the index contents are unchanged. `vaultmind index --embed` still builds its own session and releases it at the end of the pass.
+- `note propose` loads the embedding model once. Ranking and embed-on-write share that session, so writing the draft does not cold-load the model again. The vectors and the index contents are unchanged. `note propose` and `note accept` each print the embed line once, and an empty-body warning only for a note that command wrote. The second embed still runs, because the rank keys change the note hash. `vaultmind index --embed` still builds its own session and releases it at the end of the pass.
 - On upgrade, `vaultmind index --embed` re-embeds the sparse vector of every note once. Dense and ColBERT bytes stay. The pass is one forward pass per note, about as long as one full embed: a few minutes for ~130 notes on ORT, hours on pure-Go. A plain `vaultmind index` does not load the model and does not mix formats; it warns, and so do `doctor` and `ask`, with the remedy `vaultmind index --embed`. The first embed-on-write after the upgrade does the same sparse pass when the ORT backend is available, even if a backlog would otherwise defer embedding. An older binary on another machine can write old-format sparse vectors without resetting the stamp. Upgrade every machine that writes the vault, then run `vaultmind index --full --embed`.
 
 ## [0.10.12] - 2026-10-12
