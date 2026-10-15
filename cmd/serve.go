@@ -13,5 +13,7 @@ func init() {
 }
 
 func runServe(cmd *cobra.Command, _ []string) error {
-	return serveUntilIdle(cmd.Context(), getConfigValueWithFlags[string](cmd, "idle", config.KeyAppServeIdle))
+	return serveUntilIdle(cmd.Context(),
+		getConfigValueWithFlags[string](cmd, "idle", config.KeyAppServeIdle),
+		getConfigValueWithFlags[int](cmd, "max-rss-mb", config.KeyAppServeMaxRssMb))
 }

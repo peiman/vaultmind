@@ -124,7 +124,7 @@ func TestServeShutdown_ReleasesTheProcessEmbedder(t *testing.T) {
 			sock, err := serveSocket()
 			require.NoError(t, err)
 			done := make(chan error, 1)
-			go func() { done <- serveUntilIdle(ctx, tt.idle) }()
+			go func() { done <- serveUntilIdle(ctx, tt.idle, 0) }()
 			tt.stop(t, cancel, sock)
 
 			select {

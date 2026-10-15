@@ -1014,6 +1014,9 @@ app:
     # Exit after this long without a request (a Go duration: 30m, 2h)
     idle: 30m
 
+    # Exit after a request once the server's peak memory passes this many MiB; the next ask starts a fresh server. 0 turns the check off
+    max_rss_mb: 4096
+
   tree:
     # Path to vault root
     vault: .

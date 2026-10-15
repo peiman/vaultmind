@@ -323,6 +323,7 @@ const (
 	KeyAppSelfVault                          = "app.self.vault"                           // Path to vault root
 	KeyAppSelfLimit                          = "app.self.limit"                           // Max rows per section (recent/hot/stale)
 	KeyAppServeIdle                          = "app.serve.idle"                           // Exit after this long without a request (a Go duration: 30m, 2h)
+	KeyAppServeMaxRssMb                      = "app.serve.max_rss_mb"                     // Exit after a request once the server's peak memory passes this many MiB; the ...
 	KeyAppTreeVault                          = "app.tree.vault"                           // Path to vault root
 	KeyAppTreeVaults                         = "app.tree.vaults"                          // Map several vaults, comma-separated (overrides --vault)
 	KeyAppTreeJson                           = "app.tree.json"                            // Output in JSON format

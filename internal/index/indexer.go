@@ -1074,26 +1074,18 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 		return result, nil
 	}
 
-	// Process in batches. BGE-M3 inference holds peak memory roughly equal to
-	// batch_size * max_seq_len * hidden_dim — at embedBatchSize * 8192 * 1024
-	// * 4 bytes per intermediate tensor it pushes a memory-tight machine over
-	// the OOM-killer threshold. The smaller batch caps peak per-call memory and
-	// also commits more often, so a SIGKILL mid-run loses fewer notes of
-	// progress. MiniLM is much smaller; embedBatchSize is fine there. See vaultmind#22.
-	batchSize := embedBatchSize
-	if isFull {
-		batchSize = 8
-	}
-	// Group by PADDED cost, not by position. The runtime pads every input in a
-	// batch out to the longest one, so a single long note used to drag its
-	// neighbours up to full length — 8x the work for the same output (#70).
-	// See planEmbedBatches: the count cap is still the memory bound, the cost
-	// budget is the throughput bound.
+	// Process in batches. BGE-M3 memory grows with the padded tokens in a
+	// batch, so its batches come from planBGEM3Batches (one cap-length note's
+	// worth per batch). MiniLM is much smaller and keeps the padded-cost plan (#70).
 	lengths := make([]int, len(pending))
 	for i, nt := range pending {
 		lengths[i] = len(nt.body)
 	}
-	for _, idxs := range planEmbedBatches(lengths, batchSize, batchSize*embedPaddedBudgetPerSlot) {
+	plan := planEmbedBatches(lengths, embedBatchSize, embedBatchSize*embedPaddedBudgetPerSlot)
+	if isFull {
+		plan = planBGEM3Batches(lengths)
+	}
+	for _, idxs := range plan {
 		batch := make([]noteText, len(idxs))
 		texts := make([]string, len(idxs))
 		for j, idx := range idxs {

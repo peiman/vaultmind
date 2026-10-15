@@ -48,6 +48,22 @@ type Option func(*serveOptions)
 
 type serveOptions struct {
 	onShutdown Shutdown
+	memCap     int64
+	rss        func() int64
+}
+
+// WithMemoryCap makes the server exit after a request once rss() reports more
+// than limit bytes. The request in hand is answered first; the next ask
+// starts a fresh process. It bounds a resident process whatever makes it grow.
+// A limit of zero or less, or a nil rss, turns the check off.
+func WithMemoryCap(limit int64, rss func() int64) Option {
+	return func(o *serveOptions) {
+		o.memCap, o.rss = limit, rss
+	}
+}
+
+func (o serveOptions) overMemoryCap() bool {
+	return o.memCap > 0 && o.rss != nil && o.rss() > o.memCap
 }
 
 // WithShutdown sets the function Serve calls when it stops after it has
@@ -160,6 +176,11 @@ func Serve(ctx context.Context, sock string, exec Exec, idle time.Duration, opts
 			mu.Unlock()
 			touch(activity)
 			_ = json.NewEncoder(conn).Encode(resp)
+			if opt.overMemoryCap() {
+				// Stop accepting; the loop finishes the requests in hand,
+				// releases the model, and the process exits.
+				cancel()
+			}
 		}()
 	}
 }

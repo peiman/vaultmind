@@ -23,7 +23,8 @@ var ServeMetadata = config.CommandMetadata{
 		"request, releasing the model's memory. VAULTMIND_NO_SERVE=1 turns it off.",
 	ConfigPrefix: "app.serve",
 	FlagOverrides: map[string]string{
-		"app.serve.idle": "idle",
+		"app.serve.idle":       "idle",
+		"app.serve.max_rss_mb": "max-rss-mb",
 	},
 	SeeAlso: []string{"ask"},
 }
@@ -32,6 +33,7 @@ var ServeMetadata = config.CommandMetadata{
 func ServeOptions() []config.ConfigOption {
 	return []config.ConfigOption{
 		{Key: "app.serve.idle", DefaultValue: "30m", Description: "Exit after this long without a request (a Go duration: 30m, 2h)", Type: "string"},
+		{Key: "app.serve.max_rss_mb", DefaultValue: 4096, Description: "Exit after a request once the server's peak memory passes this many MiB; the next ask starts a fresh server. 0 turns the check off", Type: "int"},
 	}
 }
 

@@ -168,8 +168,9 @@ func spawnServer(exe string) {
 
 // serveUntilIdle answers asks on this binary's socket until idle passes with
 // no request or the process is signalled. A server already answering there
-// is not an error: this one simply isn't needed.
-func serveUntilIdle(ctx context.Context, idle string) error {
+// is not an error: this one simply isn't needed. maxRSSMB > 0 makes the server
+// exit after a request once its peak memory passes that many MiB.
+func serveUntilIdle(ctx context.Context, idle string, maxRSSMB int) error {
 	wait, err := time.ParseDuration(idle)
 	if err != nil || wait <= 0 {
 		return fmt.Errorf("--idle %q: want a positive duration such as 30m", idle)
@@ -182,7 +183,11 @@ func serveUntilIdle(ctx context.Context, idle string) error {
 	closeExperimentSession()
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if err := serve.Serve(ctx, sock, serveExec, wait, serve.WithShutdown(query.CloseSharedEmbedder)); err != nil && !errors.Is(err, serve.ErrAlreadyServing) {
+	opts := []serve.Option{
+		serve.WithShutdown(query.CloseSharedEmbedder),
+		serve.WithMemoryCap(int64(maxRSSMB)<<20, serve.PeakRSS),
+	}
+	if err := serve.Serve(ctx, sock, serveExec, wait, opts...); err != nil && !errors.Is(err, serve.ErrAlreadyServing) {
 		return err
 	}
 	return nil
