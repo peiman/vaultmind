@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
@@ -46,6 +47,7 @@ func proposeRequest(cmd *cobra.Command) (propose.Vault, propose.Request, func(),
 		Question:  getConfigValueWithFlags[string](cmd, "question", config.KeyAppNoteproposeQuestion),
 		Finding:   getConfigValueWithFlags[string](cmd, "finding", config.KeyAppNoteproposeFinding),
 		CloseBand: getConfigValueWithFlags[string](cmd, "close-band", config.KeyAppNoteproposeCloseBand),
+		DraftsDir: getConfigValueWithFlags[string](cmd, "drafts-dir", config.KeyAppNoteproposeDraftsDir),
 		GapID:     getConfigValueWithFlags[string](cmd, "gap", config.KeyAppNoteproposeGap),
 		JSON:      getConfigValueWithFlags[bool](cmd, "json", config.KeyAppNoteproposeJson),
 		Stdout:    cmd.OutOrStdout(),
@@ -91,7 +93,14 @@ func openProposeVault(cmd *cobra.Command, vaultPath, command string, req propose
 		return propose.Vault{}, req, noop, err
 	}
 	cfg := vdb.Config
-	req.Embed = func(path string) { embedAfterWrite(cmd, path, cfg) }
+	// One tracker for every embed this command runs. Propose writes the draft
+	// and then the rank keys; accept closes a gap and then the target. The
+	// second pass still embeds (the hash changed) but does not repeat the line.
+	track := &embedPrint{written: map[string]struct{}{}}
+	req.Embed = func(path, rel string) {
+		track.written[filepath.ToSlash(rel)] = struct{}{}
+		embedAfterWriteUpTo(cmd, path, cfg, embedOnWriteLimit, track)
+	}
 	v := propose.Vault{Path: vaultPath, DB: vdb.DB, Config: cfg, Reg: vdb.Reg}
 	if req.JSON {
 		v.IndexHash = vdb.GetIndexHash

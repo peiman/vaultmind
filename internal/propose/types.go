@@ -42,14 +42,19 @@ type Request struct {
 	Question, Finding, CloseBand string
 	// GapID, when set, stores closes_gap on the draft. An empty question
 	// uses the gap's stored question.
-	GapID          string
+	GapID string
+	// DraftsDir is where a draft goes when it must not sit in an import
+	// folder. Empty means notes. "." is the vault root.
+	DraftsDir      string
 	Sources        []string
 	JSON           bool
 	Now            time.Time // zero means time.Now().UTC()
 	ID             string    // accept: the draft id
 	Stdout, Stderr io.Writer
-	Embed          func(vaultPath string)
-	WorkDir        string
+	// Embed runs after a note is re-indexed. rel is the note this command
+	// just wrote, so the caller can avoid warning about other notes.
+	Embed   func(vaultPath, rel string)
+	WorkDir string
 	// Ranker re-runs the original question after the draft is on disk.
 	// Nil skips the check. The command sets it; tests that only place a
 	// draft leave it nil so their output stays the placement report.
@@ -114,6 +119,15 @@ type RankCheck struct {
 	After       RankPlace `json:"after"`
 	MeasuredOn  string    `json:"measured_on,omitempty"`
 	OutrankedBy []string  `json:"outranked_by,omitempty"`
+	// Decision is the hit that chose patch or new: the closest note on the
+	// question and the finding. Rank is 1 when that note was found. The zero
+	// value means the retrieval named nothing. Before stays the question-only
+	// rank stored as rank_before.
+	Decision RankPlace `json:"decision,omitempty"`
+	// DecisionOn is the text that comparison used.
+	DecisionOn string `json:"decision_on,omitempty"`
+	// CloseBand is the weakest band the decision treated as close enough.
+	CloseBand string `json:"close_band,omitempty"`
 }
 
 // outcome is one successful propose or accept.

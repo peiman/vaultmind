@@ -232,7 +232,7 @@ func finishImport(cmd *cobra.Command, vaultPath, label string, cfg *vault.Config
 			return res, err
 		}
 		res.IndexWarnings = indexWarnings(ir, changed)
-		embedAfterWriteUpTo(cmd, vaultPath, cfg, embedOnWriteLimit+len(changed))
+		embedAfterWriteUpTo(cmd, vaultPath, cfg, embedOnWriteLimit+len(changed), nil)
 		sayIfNeverEmbedded(cmd, vaultPath, dbPath)
 	}
 	return res, nil

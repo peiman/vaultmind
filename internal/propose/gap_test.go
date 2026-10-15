@@ -83,7 +83,7 @@ func TestAccept_ClosesTheLinkedGap(t *testing.T) {
 		req.GapID = gapID
 		require.NoError(t, Run(context.Background(), v, req, ret))
 
-		rel := proposalPath("concepts/memory.md", targetID, proposeNow)
+		rel := proposalPath("concepts/memory.md", targetID, "Quartz keeps one timeline.", proposeNow)
 		fm, _ := parseNote(t, v, rel)
 		assert.Equal(t, gapID, fm["closes_gap"])
 		accept, _, _, _ := reqOf("", "")

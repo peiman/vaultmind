@@ -70,8 +70,11 @@ finding. The check writes `rank_before`, `rank_after`, and `rank_checked_at`
 into the draft's frontmatter through the mutation writer. `0` means the note
 was not in the window. It does not record an access and it does not record an
 activation read. Keyword mode, when the embedder is unavailable, still runs
-and is labeled. The text line and the additive `rank_check` object in the v1
-envelope report both measurements. This ADR does not add `draft` to any type's
+and is labeled. The text line's before is the band that chose patch or new,
+on the question and the finding. The question-only rank is labeled separately,
+and that is what `rank_before` and `rank_check.before` store. The additive
+`rank_check` object in the v1 envelope also carries `decision` for the hit the
+mode used. This ADR does not add `draft` to any type's
 allowed-status list.
 
 ## Amendment: a proposal draft, and `note accept`
@@ -86,26 +89,35 @@ remains (Principle 7).
 finding the way `ask` does, drafts excluded, and reads the relevance band `ask`
 already computed for the top hit. It does not invent a score. The band that
 means close is the registry key `app.notepropose.close_band` (flag
-`--close-band`). The default is the strong band. Only a strong match is close
-enough to attach a finding to an existing note. A moderate, weak, `no_match`,
-or empty band — including a judgement `ask` withholds when the vault is small
-and the noise floor was never measured — is a new note. A typo'd close band
-fails the same way: nothing matches it, so the finding becomes a new note
-rather than a patch on the wrong one.
+`--close-band`). The default is the strong band. Close means at least that
+band: strong is closer than moderate, then weak, then `no_match`. A strong
+hit is a patch when the close band is moderate or weak. A band weaker than
+the close band, or an empty band — including a judgement `ask` withholds when
+the vault is small and the noise floor was never measured — is a new note. A
+typo'd close band fails the same way: nothing matches it, so the finding
+becomes a new note rather than a patch on the wrong one.
 
 - **patch.** The top hit is close. The draft sits next to that note, at
-  `<target-dir>/<target-id>.proposal-<yyyymmdd-hhmm>.md`. Frontmatter is
-  `status: draft`, `patches: <target-id>`, `question:`, `sources:`, and the
-  target's `type`. The body is the finding plus a Sources section.
+  `<target-dir>/<target-id>.proposal-<yyyymmdd-hhmm>.md`. A target under the
+  import folder (`imported/`, the folder the import command writes) does not
+  hold the proposal: it is filed in the drafts folder with that same filename.
+  Frontmatter is `status: draft`, `patches: <target-id>`, `question:`,
+  `sources:`, and the target's `type`, including when that type is the import
+  type, so a vault that only registers that type can still write the proposal.
+  The body is the finding plus a Sources section.
 - **new.** Nothing is close. Frontmatter is `status: draft`, `question:`, and
   `sources:`. The type is the top hit's type when that type is registered,
-  otherwise the vault's default knowledge type: the registered type named
-  `concept` when the schema has it, otherwise the first type in alphabetical
-  order that can hold `draft`. The built-in `overview` type is skipped. The
-  file is in the top hit's folder, or the vault root when there is no hit. The
-  id is the id `note create` would mint for a filename slugged from the
-  question. The body is expanded through that type's template, the same path
-  `note create` uses, so required fields hold.
+  except the type the import command writes (`reference`). Otherwise the
+  vault's default knowledge type: the registered type named `concept` when the
+  schema has it, otherwise the first type in alphabetical order that can hold
+  `draft`. The built-in `overview` type is skipped. The file is in the top
+  hit's folder, or the vault root when there is no hit. A hit under the import
+  folder is filed in the drafts folder instead. That folder is the registry
+  key `app.notepropose.drafts_dir` (flag `--drafts-dir`, default `notes`).
+  `.` is the vault root. A drafts folder under the import folder falls back
+  to `notes`. The id is the id `note create` would mint for a filename slugged
+  from the question. The body is expanded through that type's template, the
+  same path `note create` uses, so required fields hold.
 - **existing.** A draft already stores the same `question:` once spacing is
   collapsed and case is folded. That draft is reported. Nothing new is written.
 
@@ -125,7 +137,13 @@ rather than a patch on the wrong one.
   the file delete fails, the row is already gone; the retry finds the file,
   re-indexes it, sees the marker, and only finishes cleanup. If the file is
   already gone and the indexed row is a proposal, accept removes the row and
-  says the proposal was already gone. Delivery omits only a `<!-- vaultmind:`
+  says the proposal was already gone. When the id is gone from the index and
+  from disk, and a note's raw body contains the marker, accept reports
+  `already accepted into <target>` and exits 0. It does not rewrite, re-index,
+  or embed that note. The raw body is searched first. Search text does not
+  hold the marker. A miss then reads at most 1 MiB from the end of each vault
+  file, and at most 5000 files. An id with no marker is still not in the vault.
+  Delivery omits only a `<!-- vaultmind:`
   comment and keeps every other HTML comment. `note get` still shows the
   marker. Search text and recall excerpts still drop every HTML comment. The
   target's other frontmatter is left as written (Principle 7:
@@ -135,6 +153,8 @@ rather than a patch on the wrong one.
   and the proposal stays. After a write that lands, accept deletes the index
   row, then the proposal file, and re-indexes the target.
 - A note that is not a draft is refused. A patch whose target is gone is refused.
+  A proposal already accepted, with the marker on its target and the proposal
+  itself gone, exits 0 and does not change the target.
   A patch whose target is itself a draft, or is itself a proposal, is refused.
   A `file:` source is checked the same way as a path: it must exist, and it
   must sit inside the vault or the repository.
@@ -254,12 +274,17 @@ file (a gitlink) is treated as not a repository.
 `note propose` and `note accept` are held by these tests:
 
 - `TestPropose_PatchWhenTheTopHitIsClose` (`internal/propose`) — a strong top hit writes a proposal draft next to that note.
-- `TestPropose_NewWhenNothingIsClose` (`internal/propose`) — a weaker band, and no hit, write a new draft. Inverting the band check (`band == closeBand`) turns the weaker hit into a patch and this test goes red.
+- `TestPropose_NewDraftDoesNotInheritAnImport` (`internal/propose`) — a new draft whose closest note is an import is filed as `concept` under `notes/`, not in the import folder and not as the import type.
+- `TestPropose_PatchOfAnImportGoesToTheDraftsFolder` (`internal/propose`) — a patch of an imported note is filed in the drafts folder and keeps the target's type.
+- `TestPropose_NewWhenNothingIsClose` (`internal/propose`) — a band weaker than the close band, and no hit, write a new draft. Treating a moderate hit as close when the close band is strong turns it into a patch and this test goes red.
+- `TestPropose_CloseBandModerateIncludesAStrongHit` (`internal/propose`) — `--close-band moderate` writes a patch when the hit is strong.
+- `TestPropose_ExplainsANewNoteWhenTheQuestionIsStrongerThanTheFinding` (`internal/propose`) — a strong question-only rank and a moderate question-and-finding hit stay `new`, and the line says why. The question-only rank stays labeled on its own.
 - `TestPropose_ExistingDraftOnRepeatedQuestion` (`internal/propose`) — the same question, spacing and case aside, reports the draft already written.
 - `TestPropose_WrittenNoteValidatesAndAskOmitsDrafts` (`cmd`) — the written note passes the vault schema, and a default `ask` on the real index does not return the draft.
 - `TestAccept_NewFlipsStatus` (`internal/propose`) — accepting a new draft flips status to the schema's published value.
 - `TestAccept_PatchMergesDeletesAndReindexes` (`internal/propose`) — the target body contains the addition, the proposal file is gone, and the target is re-indexed. Skipping the proposal delete leaves the file and this test goes red.
 - `TestAccept_RetryAfterCleanupFailureDoesNotDuplicate` (`internal/propose`) — when deleting the proposal fails after the target was written, a retry leaves one copy of the section. Removing the marker check appends it again and this test goes red.
+- `TestAccept_SecondAcceptOfAnAppliedPatchChangesNothing` (`internal/propose`) — a second accept of a patch that already landed exits 0, names the target, and leaves that file byte-identical.
 - `TestAccept_FrontmatterPreservesUnchangedKeys` (`internal/propose`) — accepting a new draft changes only the `status` line. Key order, a quoted title, a date scalar, and a comment stay byte-identical.
 - `TestAccept_PatchKeepsFrontmatterExceptSources` (`internal/propose`) — accepting a patch keeps that same frontmatter and appends `sources` when the type allows the field.
 - `TestAccept_RefusesWhenTheTargetChanged` (`internal/propose`) — a target that changed between the read and the write is left untouched. Dropping the hash check overwrites it and this test goes red.

@@ -155,7 +155,7 @@ func render(d doc, id string, prev note) []byte {
 	// write frontmatter of its own, so none gets through.
 	fmt.Fprintf(&b, "# Imported by `vaultmind import` from %s.\n", strings.Map(dropControl, d.Source))
 	head := owned{
-		ID: id, Type: "reference", Title: d.Title,
+		ID: id, Type: NoteType, Title: d.Title,
 		Source: d.Source, SourceHash: d.Hash,
 	}
 	if d.URL != "" {

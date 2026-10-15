@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/peiman/vaultmind/internal/envelope"
 	"github.com/peiman/vaultmind/internal/schema"
@@ -17,10 +18,38 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// A drafts dir is judged after it is cleaned, so a spelling that resolves into
+// the import folder, or out of the vault, cannot get a draft written there.
+func TestDraftsDir_NormalizesBeforeChecking(t *testing.T) {
+	tests := map[string]string{
+		"notes":                          "notes",
+		"notes/sub/":                     "notes/sub",
+		".":                              ".",
+		"":                               defaultDraftsDir,
+		"notes/../" + vault.ImportFolder: defaultDraftsDir,
+		"./" + vault.ImportFolder:        defaultDraftsDir,
+		vault.ImportFolder + "/x":        defaultDraftsDir,
+		"../outside":                     defaultDraftsDir,
+		"notes/../../outside":            defaultDraftsDir,
+		"/abs/path":                      defaultDraftsDir,
+	}
+	for in, want := range tests {
+		assert.Equal(t, want, draftsDir(in), "draftsDir(%q)", in)
+	}
+}
+
 func TestSlugAndPlacement(t *testing.T) {
 	assert.Equal(t, "note", slugQuestion("   !!!   "))
 	assert.Equal(t, strings.Repeat("a", 80), slugQuestion(strings.Repeat("a", 90)))
-	assert.Equal(t, "concept-memory.proposal-20261014-1530.md", proposalPath("memory.md", "concept-memory", proposeNow))
+	assert.Equal(t, "concept-memory.proposal-20261014-153000-"+findingHash("Quartz keeps one timeline.")+".md",
+		proposalPath("memory.md", "concept-memory", "Quartz keeps one timeline.", proposeNow))
+	// A different finding, or a different second, never names the same draft.
+	assert.NotEqual(t, proposalPath("memory.md", "concept-memory", "First.", proposeNow),
+		proposalPath("memory.md", "concept-memory", "Second.", proposeNow))
+	assert.NotEqual(t, proposalPath("memory.md", "concept-memory", "First.", proposeNow),
+		proposalPath("memory.md", "concept-memory", "First.", proposeNow.Add(time.Second)))
+	// Re-typed whitespace is the same finding.
+	assert.Equal(t, findingHash("a  b\n c"), findingHash("a b c"))
 	assert.Equal(t, ".", hitDir(""))
 	assert.Equal(t, ".", hitDir("memory.md"))
 	assert.Equal(t, "concepts/slug-20261014-1530-2.md", newRel("concepts", "slug", 2, proposeNow))
