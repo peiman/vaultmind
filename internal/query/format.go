@@ -183,6 +183,22 @@ func formatAskWithOptions(result *AskResult, w io.Writer, opts formatOpts) error
 	return writeContextFooter(w, result.Context, opts)
 }
 
+// askHeaderQueryRunes is how much of the query the Search line echoes.
+// The recall hook injects that stdout, so a pasted prompt must not come
+// back in full. JSON result.query keeps the whole text.
+const askHeaderQueryRunes = 160
+
+// echoedQuery is the query as the Search line shows it. A short query is
+// Go-quoted, the same bytes as before. A longer one keeps the first
+// askHeaderQueryRunes characters and names the full character count.
+func echoedQuery(query string) string {
+	chars := []rune(query)
+	if len(chars) <= askHeaderQueryRunes {
+		return fmt.Sprintf("%q", query)
+	}
+	return fmt.Sprintf("%q… (%d chars)", string(chars[:askHeaderQueryRunes]), len(chars))
+}
+
 // writeAskHeader emits "Search: ... [relevance: ...]". In noise-floor mode the
 // label is band-normalized — z = (top_cosine − N)/σ, glossed as "Nσ above/below
 // the off-topic noise floor" so the agent reads both the tier and its magnitude.
@@ -201,7 +217,7 @@ func writeAskHeader(w io.Writer, result *AskResult, explain, bodyDelivered bool)
 	if !bodyDelivered {
 		suppressedNote = " — body suppressed; use --read N to override"
 	}
-	header := fmt.Sprintf("Search: %q (%d hits)", result.Query, len(result.TopHits))
+	header := fmt.Sprintf("Search: %s (%d hits)", echoedQuery(result.Query), len(result.TopHits))
 	if result.NoiseFloorApplied {
 		// Below the calibration gate, report the absence of a judgement rather
 		// than a judgement. Quoting σ against a handful of notes dresses a

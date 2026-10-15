@@ -82,7 +82,8 @@ func TestAskQueryCap_JSONAndText(t *testing.T) {
 	capAt := strings.Index(text, "  [long query: ranked on its first 1152 of 1160 tokens]\n")
 	require.Greater(t, capAt, searchAt)
 	assert.NotContains(t, text, "salient")
-	assert.Contains(t, text, "LASTWORD")
+	assert.NotContains(t, text, "LASTWORD", "the Search line does not echo the tail of a long query")
+	assert.Contains(t, text, "chars)")
 }
 
 func TestAskQueryForwardTokens_Precedence(t *testing.T) {

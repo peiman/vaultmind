@@ -13,8 +13,8 @@ note influenced an answer. Each surfaced appearance has one state:
   applying an idea in other words is not measurable by this check.
 
 ```text
-Memory use (7d): 5 surfaced → 5 delivered → 1 opened, 2 cited (2 unknown — not measurable from text)
-gap-closing notes: 1 surfaced, 1 cited
+Memory use (7d, all vaults on this machine): 5 surfaced → 5 delivered → 1 opened, 2 cited (2 unknown — not measurable from text)
+gap-closing notes (all vaults on this machine): 1 surfaced, 1 cited
 ```
 
 `gap-closing notes` counts the same appearances, limited to notes a closed gap names in `closed_by`. A note that was opened is not also counted as cited. There is no count of notes written.

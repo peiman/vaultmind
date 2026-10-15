@@ -85,7 +85,8 @@ func TestDoctor_GapLoopReadsTheClaim(t *testing.T) {
 
 	human, errOut, err := runRootCmd(t, "doctor", "--vault", dir)
 	require.NoError(t, err, errOut.String())
-	assert.Contains(t, human.String(), "gap-closing notes: 1 surfaced, 1 cited")
+	assert.Contains(t, human.String(), "gap-closing notes (all vaults on this machine): 1 surfaced, 1 cited")
+	assert.Contains(t, human.String(), "Memory use (7d, all vaults on this machine):")
 
 	raw, errOut, err := runRootCmd(t, "doctor", "--vault", dir, "--json")
 	require.NoError(t, err, errOut.String())
@@ -93,14 +94,16 @@ func TestDoctor_GapLoopReadsTheClaim(t *testing.T) {
 		SchemaVersion string `json:"schema_version"`
 		Result        struct {
 			GapLoop struct {
+				Scope           string   `json:"scope"`
 				Opened          int      `json:"opened"`
 				Closed          int      `json:"closed"`
 				Median          *float64 `json:"median_days_to_close"`
 				GapClosingCited int      `json:"gap_closing_cited"`
 			} `json:"gap_loop"`
 			MemoryUse struct {
-				GapClosingSurfaced int `json:"gap_closing_surfaced"`
-				GapClosingCited    int `json:"gap_closing_cited"`
+				Scope              string `json:"scope"`
+				GapClosingSurfaced int    `json:"gap_closing_surfaced"`
+				GapClosingCited    int    `json:"gap_closing_cited"`
 			} `json:"memory_use"`
 		} `json:"result"`
 	}
@@ -112,6 +115,8 @@ func TestDoctor_GapLoopReadsTheClaim(t *testing.T) {
 	assert.Equal(t, 1, doc.Result.GapLoop.GapClosingCited)
 	assert.Equal(t, 1, doc.Result.MemoryUse.GapClosingSurfaced)
 	assert.Equal(t, 1, doc.Result.MemoryUse.GapClosingCited)
+	assert.Equal(t, "machine", doc.Result.MemoryUse.Scope)
+	assert.Equal(t, "machine", doc.Result.GapLoop.Scope)
 
 	var loop map[string]json.RawMessage
 	require.NoError(t, json.Unmarshal(mustGapLoop(t, raw.Bytes()), &loop))

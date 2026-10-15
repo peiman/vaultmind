@@ -19,16 +19,20 @@ import (
 
 // IndexResult holds the outcome of an index rebuild.
 type IndexResult struct {
-	DBPath            string             `json:"db_path"`
-	Indexed           int                `json:"indexed"`
-	DomainNotes       int                `json:"domain_notes"`
-	UnstructuredNotes int                `json:"unstructured_notes"`
-	Errors            int                `json:"errors"`
-	Skipped           int                `json:"skipped"`
-	DuplicateIDs      int                `json:"duplicate_ids"`
-	Added             int                `json:"added"`
-	Updated           int                `json:"updated"`
-	Deleted           int                `json:"deleted"`
+	DBPath            string `json:"db_path"`
+	Indexed           int    `json:"indexed"`
+	DomainNotes       int    `json:"domain_notes"`
+	UnstructuredNotes int    `json:"unstructured_notes"`
+	Errors            int    `json:"errors"`
+	Skipped           int    `json:"skipped"`
+	DuplicateIDs      int    `json:"duplicate_ids"`
+	Added             int    `json:"added"`
+	Updated           int    `json:"updated"`
+	Deleted           int    `json:"deleted"`
+	// BodiesBackfilled counts unchanged notes whose delivery body (body_raw)
+	// was filled by this run. They are also counted in Skipped, but the
+	// index did change, so the summary must not call it already current.
+	BodiesBackfilled  int                `json:"bodies_backfilled,omitempty"`
 	FullRebuild       bool               `json:"full_rebuild"`
 	DurationMs        int64              `json:"duration_ms"`
 	CompletedAt       string             `json:"completed_at"`
@@ -887,6 +891,7 @@ func (idx *Indexer) Incremental() (*IndexResult, error) {
 				return nil, fmt.Errorf("refreshing raw body for %q: %w", file.RelPath, err)
 			}
 			result.Skipped++
+			result.BodiesBackfilled++
 			continue
 		}
 

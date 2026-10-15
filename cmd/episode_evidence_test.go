@@ -93,6 +93,7 @@ func TestCollectMemoryUse_EvidenceFields(t *testing.T) {
 	defer func() { _ = idb.Close() }()
 	use := collectMemoryUse(&cmdutil.VaultDB{DB: idb})
 	require.NotNil(t, use)
+	assert.Equal(t, query.UsageScopeMachine, use.Scope)
 	assert.Equal(t, 1, use.Cited)
 	assert.Equal(t, 0, use.Opened)
 	assert.Equal(t, 0, use.Unknown)

@@ -16,6 +16,10 @@ const gapCreditQuestionRunes = 80
 // counting stub. Production is index.GapClosures.
 var loadGapClosures = index.GapClosures
 
+// gapCreditZone is the clock for the date on the credit line. JSON keeps
+// opened_at in UTC. Tests set a fixed zone; production is the local zone.
+var gapCreditZone = time.Local
+
 // attachGapCredits stamps a delivered note with the gap it closed, and only
 // where the text line would be: the target, or a context item whose body was
 // delivered, and not a note already shown. A hit gets the field only when
@@ -101,7 +105,7 @@ func writeGapCreditLine(w io.Writer, credit *index.GapCredit, shownBefore, deliv
 		question = string(chars[:gapCreditQuestionRunes])
 	}
 	_, err := fmt.Fprintf(w, "  ↳ answers a question first investigated %s: %q\n",
-		credit.OpenedAt.UTC().Format(time.DateOnly), question)
+		credit.OpenedAt.In(gapCreditZone).Format(time.DateOnly), question)
 	return err
 }
 

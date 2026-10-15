@@ -72,7 +72,7 @@ func TestWriteEmbeddingStatus_SaysSemanticSearchIsDown(t *testing.T) {
 	require.NoError(t, writeEmbeddingStatus(&buf, &query.DoctorEmbeddings{
 		SemanticReady: true, Model: embedding.ModelBGEM3, TotalNotes: 67, DenseCount: 67, SparseCount: 67, ColBERTCount: 67,
 		RuntimeError: "Error setting ORT API base: 2",
-	}, nil))
+	}, nil, ""))
 	out := buf.String()
 	assert.Contains(t, out, "semantic search is DOWN")
 	assert.Contains(t, out, "Error setting ORT API base: 2")

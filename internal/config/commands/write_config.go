@@ -10,7 +10,7 @@ func WriteOptions() []config.ConfigOption {
 			DefaultValue: true,
 			Description: "Embed a note as soon as a command writes it (note create, the frontmatter commands), " +
 				"with the model the vault already uses. A changed note loses its embeddings, and without this " +
-				"it drops out of semantic search until the next `vaultmind index --embed`. Turn off for bulk " +
+				"it drops out of semantic search until the next 'vaultmind index --embed'. Turn off for bulk " +
 				"edits and embed once at the end.",
 			Type: "bool",
 		},

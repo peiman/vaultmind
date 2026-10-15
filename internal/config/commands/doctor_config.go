@@ -39,7 +39,10 @@ Doctor also lists notes whose status is draft (awaiting review: id, path, age)
 and .md files git reports as untracked or modified for more than
 --uncommitted-days (default 7). Neither list is an error. Accepting a draft
 is editing its status off "draft" — the same file, no copy. The uncommitted
-check is skipped, with a reason, when the vault is not a git repository.`,
+check is skipped, with a reason, when the vault is not a git repository.
+
+It lists open gaps (id, question, and age), how many gaps were opened and
+closed, the median days to close, and weak asks that did not match a note.`,
 	ConfigPrefix: "app.doctor",
 	FlagOverrides: map[string]string{
 		"app.doctor.vault":            "vault",

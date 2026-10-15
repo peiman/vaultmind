@@ -249,22 +249,32 @@ func indexEnvelope(r index.IndexAndEmbedResult, vaultPath string) *envelope.Enve
 	return env
 }
 
+// indexProgressLine is the first line of an index run. An incremental pass
+// that changed nothing says the index was already current, so a later embed
+// does not read as "indexed 21 notes" when every note was skipped.
+func indexProgressLine(r *index.IndexResult) string {
+	if r.FullRebuild {
+		// Report deleted too: a full rebuild purges notes no longer in the
+		// include set. Hiding the count was the misleading "0 deleted" signal
+		// flagged in issue #40.
+		return fmt.Sprintf("Indexed %d notes (%d domain, %d unstructured, %d deleted, %d errors)\n",
+			r.Indexed, r.DomainNotes, r.UnstructuredNotes, r.Deleted, r.Errors)
+	}
+	total := r.Skipped + r.Updated + r.Added
+	if r.Updated == 0 && r.Added == 0 && r.Deleted == 0 && r.Errors == 0 &&
+		r.DuplicateIDs == 0 && len(r.SkippedSymlinks) == 0 {
+		if r.BodiesBackfilled > 0 {
+			return fmt.Sprintf("Index current (%d notes); backfilled %d note bodies\n", total, r.BodiesBackfilled)
+		}
+		return fmt.Sprintf("Index already current (%d notes)\n", total)
+	}
+	return fmt.Sprintf("Indexed %d notes (%d skipped, %d updated, %d added, %d deleted)\n",
+		total, r.Skipped, r.Updated, r.Added, r.Deleted)
+}
+
 func formatIndexResult(r index.IndexAndEmbedResult, model string, w io.Writer) error {
-	if r.Index.FullRebuild {
-		// Report deleted too: a full rebuild now purges notes no longer in the
-		// include set (files removed from disk or newly excluded). Hiding the
-		// count was the misleading "0 deleted" signal flagged in issue #40 —
-		// the operator needs to see the purge to trust the rebuilt index.
-		if _, err := fmt.Fprintf(w, "Indexed %d notes (%d domain, %d unstructured, %d deleted, %d errors)\n",
-			r.Index.Indexed, r.Index.DomainNotes, r.Index.UnstructuredNotes, r.Index.Deleted, r.Index.Errors); err != nil {
-			return err
-		}
-	} else {
-		total := r.Index.Skipped + r.Index.Updated + r.Index.Added
-		if _, err := fmt.Fprintf(w, "Indexed %d notes (%d skipped, %d updated, %d added, %d deleted)\n",
-			total, r.Index.Skipped, r.Index.Updated, r.Index.Added, r.Index.Deleted); err != nil {
-			return err
-		}
+	if _, err := io.WriteString(w, indexProgressLine(r.Index)); err != nil {
+		return err
 	}
 	// Surface files that were skipped (read/parse errors) with their cause — a
 	// note dropped from the index must never vanish silently (vaultmind#40: an

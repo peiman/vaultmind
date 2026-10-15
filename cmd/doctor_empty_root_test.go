@@ -181,7 +181,7 @@ func TestWriteEmbeddingStatus_ORTMiniLMStillPrescribesIndex(t *testing.T) {
 	var buf bytes.Buffer
 	require.NoError(t, writeEmbeddingStatus(&buf, &query.DoctorEmbeddings{
 		SemanticReady: true, TotalNotes: 2, Model: embedding.ModelMiniLM, DenseCount: 2,
-	}, &query.DoctorIssues{}))
+	}, &query.DoctorIssues{}, ""))
 	assert.Contains(t, buf.String(), "vaultmind index --embed --model bge-m3 --full")
 }
 

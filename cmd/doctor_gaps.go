@@ -23,7 +23,7 @@ func attachGapReview(result *query.DoctorResult, vdb *cmdutil.VaultDB, vaultPath
 	if err != nil {
 		log.Debug().Err(err).Msg("gap list failed")
 		result.Gaps = &query.DoctorGaps{Notes: []query.DoctorGapNote{}}
-		result.GapLoop = &query.DoctorGapLoop{GapClosingCited: cited}
+		result.GapLoop = &query.DoctorGapLoop{Scope: query.UsageScopeMachine, GapClosingCited: cited}
 		return
 	}
 	notes := make([]query.DoctorGapNote, 0, len(report.Notes))
@@ -39,6 +39,7 @@ func attachGapReview(result *query.DoctorResult, vdb *cmdutil.VaultDB, vaultPath
 		PossibleSince:     report.PossibleSince,
 	}
 	result.GapLoop = &query.DoctorGapLoop{
+		Scope:             query.UsageScopeMachine,
 		Opened:            report.Opened,
 		Closed:            report.Closed,
 		MedianDaysToClose: report.Median,
