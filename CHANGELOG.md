@@ -7,9 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.14] - 2026-10-16
+
+> Upgrade from 0.10.13 now: its one-time re-embed could take a single `vaultmind` process past 100 GB of memory. Embedding now peaks near 3 GB.
+
 ### Fixed
 
-- Embedding a vault no longer runs a machine out of memory. The one-time sparse re-embed that 0.10.13 asks for embedded every note in batches of 32, and on a vault with long notes one process reached 56 GB. BGE-M3 batches now hold at most one cap-length note's worth of padded tokens (at most 8 notes), and that plan is used for `index --embed`, embed-on-write, and the sparse re-embed. Each note's vectors now read its first 1024 tokens, down from 8190. Search text still holds the whole note. ORT's CPU memory arena and memory pattern are off. Peak memory of a full embed, model included, measured on an ORT build: 3.2 GB on a 438-note research vault (16.3 GB at 8190) and 3.0 GB on a 198-note long-document set (12.2 GB at 8190). On their labelled questions Hit@3 went from 30/32 to 29/32 and from 45/50 to 44/50. Run `vaultmind index --embed` once after upgrading if 0.10.13's re-embed did not finish.
+- Embedding a vault no longer runs a machine out of memory. The one-time sparse re-embed that 0.10.13 asks for embedded every note in batches of 32, and on vaults with long notes one process reached 56 GB, and another passed 100 GB. BGE-M3 batches now hold at most one cap-length note's worth of padded tokens (at most 8 notes), and that plan is used for `index --embed`, embed-on-write, and the sparse re-embed. Each note's vectors now read its first 1024 tokens, down from 8190. Search text still holds the whole note. ORT's CPU memory arena and memory pattern are off. Peak memory of a full embed, model included, measured on an ORT build: 3.2 GB on a 438-note research vault (16.3 GB at 8190) and 3.0 GB on a 198-note long-document set (12.2 GB at 8190). On their labelled questions Hit@3 went from 30/32 to 29/32 and from 45/50 to 44/50. Run `vaultmind index --embed` once after upgrading if 0.10.13's re-embed did not finish.
 - `vaultmind serve` exits after a request once its peak memory passes `app.serve.max_rss_mb` (`--max-rss-mb`, default 4096; 0 turns the check off). The next `ask` starts a fresh server. Over 100 mixed asks the server stayed near 2.2 GB.
 
 ## [0.10.13] - 2026-10-15
