@@ -208,8 +208,16 @@ func applyPatch(abs, rel string, raw []byte, target, proposal *parser.ParsedNote
 	return rewriteNote(abs, rel, raw, req.beforeWrite, edit, &body)
 }
 
-// acceptedWhere is a note whose raw body already holds this proposal's marker.
+// acceptedWhere is a note whose body holds this proposal's marker on a line of
+// its own. Also names any further notes that do, so accept reports them all
+// instead of picking one.
 type acceptedWhere struct {
+	ID   string
+	Path string
+	Also []string
+}
+
+type acceptedHit struct {
 	ID   string
 	Path string
 }
@@ -223,41 +231,78 @@ func findAcceptedProposal(ctx context.Context, v Vault, id string) (acceptedWher
 	if err := ctx.Err(); err != nil {
 		return acceptedWhere{}, err
 	}
-	where, err := acceptedInRawBody(v.DB, acceptedMarker(id))
-	if err != nil || where.ID != "" {
-		return where, err
-	}
-	return acceptedInFiles(v, acceptedMarker(id))
-}
-
-func acceptedInRawBody(db *index.DB, marker string) (acceptedWhere, error) {
-	var id, path string
-	err := db.QueryRow(`
-		SELECT id, path FROM notes
-		WHERE instr(COALESCE(body_raw, ''), ?) > 0
-		ORDER BY path
-		LIMIT 1`, marker).Scan(&id, &path)
-	if errors.Is(err, sql.ErrNoRows) {
-		return acceptedWhere{}, nil
-	}
+	marker := acceptedMarker(id)
+	hits, err := acceptedInRawBody(v.DB, marker)
 	if err != nil {
 		return acceptedWhere{}, err
 	}
-	if strings.TrimSpace(id) == "" {
-		id = path
+	if len(hits) == 0 {
+		if hits, err = acceptedInFiles(v, marker); err != nil {
+			return acceptedWhere{}, err
+		}
 	}
-	return acceptedWhere{ID: id, Path: path}, nil
+	return whereOf(hits), nil
 }
 
-func acceptedInFiles(v Vault, marker string) (acceptedWhere, error) {
+func whereOf(hits []acceptedHit) acceptedWhere {
+	if len(hits) == 0 {
+		return acceptedWhere{}
+	}
+	w := acceptedWhere{ID: hits[0].ID, Path: hits[0].Path}
+	for _, h := range hits[1:] {
+		w.Also = append(w.Also, h.ID)
+	}
+	return w
+}
+
+// hasMarkerLine reports whether text holds the marker as a whole line, the
+// way appendSection writes it. A sentence that only quotes the marker is not
+// where the proposal was applied.
+func hasMarkerLine(text, marker string) bool {
+	for _, line := range strings.Split(text, "\n") {
+		if strings.TrimRight(line, "\r") == marker {
+			return true
+		}
+	}
+	return false
+}
+
+func acceptedInRawBody(db *index.DB, marker string) ([]acceptedHit, error) {
+	rows, err := db.Query(`
+		SELECT id, path, COALESCE(body_raw, '') FROM notes
+		WHERE instr(COALESCE(body_raw, ''), ?) > 0
+		ORDER BY path`, marker)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var hits []acceptedHit
+	for rows.Next() {
+		var id, path, body string
+		if err := rows.Scan(&id, &path, &body); err != nil {
+			return nil, err
+		}
+		if !hasMarkerLine(body, marker) {
+			continue
+		}
+		if strings.TrimSpace(id) == "" {
+			id = path
+		}
+		hits = append(hits, acceptedHit{ID: id, Path: path})
+	}
+	return hits, rows.Err()
+}
+
+func acceptedInFiles(v Vault, marker string) ([]acceptedHit, error) {
 	if v.Config == nil {
-		return acceptedWhere{}, nil
+		return nil, nil
 	}
 	scanned, err := vault.Scan(v.Path, v.Config.Vault.Exclude)
 	if err != nil {
-		return acceptedWhere{}, err
+		return nil, err
 	}
 	needle := []byte(marker)
+	var hits []acceptedHit
 	n := 0
 	for _, file := range scanned.Files {
 		if n >= acceptedScanMaxFiles {
@@ -272,16 +317,16 @@ func acceptedInFiles(v Vault, marker string) (acceptedWhere, error) {
 		if err != nil {
 			continue
 		}
-		if !bytes.Contains(tail, needle) {
+		if !bytes.Contains(tail, needle) || !hasMarkerLine(string(tail), marker) {
 			continue
 		}
 		id := noteIDAt(abs)
 		if id == "" {
 			id = file.RelPath
 		}
-		return acceptedWhere{ID: id, Path: file.RelPath}, nil
+		hits = append(hits, acceptedHit{ID: id, Path: file.RelPath})
 	}
-	return acceptedWhere{}, nil
+	return hits, nil
 }
 
 func readFileTail(abs string, limit int64) ([]byte, error) {
@@ -323,11 +368,17 @@ func noteIDAt(abs string) string {
 
 func renderAlreadyAccepted(req Request, v Vault, where acceptedWhere) error {
 	if !req.JSON {
-		_, err := fmt.Fprintf(stdout(req), "already accepted into %s\n", where.ID)
+		var err error
+		if len(where.Also) > 0 {
+			all := append([]string{where.ID}, where.Also...)
+			_, err = fmt.Fprintf(stdout(req), "already accepted (marker found in: %s)\n", strings.Join(all, ", "))
+		} else {
+			_, err = fmt.Fprintf(stdout(req), "already accepted into %s\n", where.ID)
+		}
 		return err
 	}
 	return writeEnvelope(req, v, envelope.OK(cmdAccept, acceptResult{
-		Mode: "already", Path: where.Path, ID: where.ID,
+		Mode: "already", Path: where.Path, ID: where.ID, AlsoIn: where.Also,
 	}), nil)
 }
 
@@ -414,6 +465,23 @@ func patchesNonEmpty(raw string) bool {
 	return strings.TrimSpace(value) != ""
 }
 
+// readNoteFile reads a vault file the accept lookup has already confined to
+// the vault. A variable so a test can count reads.
+var readNoteFile = func(abs string) ([]byte, error) {
+	return os.ReadFile(abs) //nolint:gosec // nosemgrep: go-path-traversal -- callers confine abs with vault.ResolveInside
+}
+
+// nameCanBeProposal reports whether a file's name can produce the id. A
+// generated id is "<type>-" plus the file name lowercased
+// (template.GenerateID); an id set by hand may equal the name. Any other file
+// is skipped without reading it. The caller still parses the one candidate
+// and checks that it really is a proposal.
+func nameCanBeProposal(rel, id string) bool {
+	base := strings.TrimSuffix(filepath.Base(rel), ".md")
+	slug := strings.ReplaceAll(strings.ToLower(base), " ", "-")
+	return slug != "" && (id == slug || strings.HasSuffix(id, "-"+slug))
+}
+
 // reindexUnindexedProposal finds a proposal file the index no longer has.
 // Accept deletes the row before the file, so a failed file delete leaves the
 // file on disk and the id unknown. The retry reads that file, sees the marker
@@ -430,11 +498,14 @@ func reindexUnindexedProposal(ctx context.Context, v Vault, id string) (*index.N
 		return nil, fmt.Errorf("looking for proposal %s: %w", id, err)
 	}
 	for _, file := range scanned.Files {
+		if !nameCanBeProposal(file.RelPath, id) {
+			continue
+		}
 		abs, err := vault.ResolveInside(v.Path, file.RelPath)
 		if err != nil {
 			continue
 		}
-		raw, err := os.ReadFile(abs) //nolint:gosec // nosemgrep: go-path-traversal -- path is confined with vault.ResolveInside
+		raw, err := readNoteFile(abs)
 		if err != nil {
 			continue
 		}

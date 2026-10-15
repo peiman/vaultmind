@@ -187,7 +187,7 @@ func TestPropose_PatchWhenTheTopHitIsClose(t *testing.T) {
 
 	assert.Equal(t, question+"\n"+finding, ret.text)
 	assert.Equal(t, 1, *embeds)
-	rel := proposalPath(targetRel, targetID, proposeNow)
+	rel := proposalPath(targetRel, targetID, finding, proposeNow)
 	id := tmpl.GenerateID(rel, "concept")
 	assert.Equal(t, "mode: patch\npath: "+rel+"\nid: "+id+"\ntarget: "+targetID+"\n"+nextStep(id)+"\n", out.String())
 

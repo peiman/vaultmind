@@ -43,7 +43,7 @@ func TestPropose_PatchOfAnImportGoesToTheDraftsFolder(t *testing.T) {
 	req, out, _, _ := reqOf("How does quartz work?", "Quartz keeps one timeline.")
 	require.NoError(t, Run(context.Background(), v, req, ret))
 
-	want := "notes/" + targetID + ".proposal-20261014-1530.md"
+	want := "notes/" + targetID + ".proposal-20261014-153000-" + findingHash("Quartz keeps one timeline.") + ".md"
 	assert.Contains(t, out.String(), "mode: patch\n")
 	assert.Contains(t, out.String(), "path: "+want+"\n")
 	assert.NotContains(t, out.String(), "imported/")

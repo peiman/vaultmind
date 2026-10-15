@@ -73,7 +73,7 @@ func TestPropose_CloseBandModerateIncludesAStrongHit(t *testing.T) {
 	require.NoError(t, Run(context.Background(), v, req, ret))
 
 	assert.Contains(t, out.String(), "mode: patch\n")
-	assert.Contains(t, out.String(), proposalPath(targetRel, targetID, proposeNow))
+	assert.Contains(t, out.String(), proposalPath(targetRel, targetID, "Quartz keeps one timeline.", proposeNow))
 	assert.NotContains(t, out.String(), "not close enough")
 }
 

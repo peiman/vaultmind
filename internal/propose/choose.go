@@ -1,7 +1,10 @@
 package propose
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -94,8 +97,13 @@ func slugQuestion(q string) string {
 	return s
 }
 
-func proposalPath(targetPath, targetID string, now time.Time) string {
-	name := targetID + ".proposal-" + now.UTC().Format("20060102-1504") + ".md"
+// proposalPath names a patch draft. The id comes from this name, and the
+// accepted marker carries the id, so the name must never repeat for a
+// different finding: it has the second it was made and a short hash of the
+// finding. A minute-resolution name let a later proposal reuse an accepted
+// one's id, and accept then skipped it as already applied.
+func proposalPath(targetPath, targetID, finding string, now time.Time) string {
+	name := targetID + ".proposal-" + now.UTC().Format("20060102-150405") + "-" + findingHash(finding) + ".md"
 	dir := filepath.ToSlash(filepath.Dir(targetPath))
 	if dir == "." || dir == "" {
 		return name
@@ -106,8 +114,8 @@ func proposalPath(targetPath, targetID string, now time.Time) string {
 // proposalRel keeps a patch beside its target. A target under the import
 // folder cannot hold the proposal: the draft goes in the drafts folder, with
 // the same filename.
-func proposalRel(targetPath, targetID, drafts string, now time.Time) string {
-	beside := proposalPath(targetPath, targetID, now)
+func proposalRel(targetPath, targetID, drafts, finding string, now time.Time) string {
+	beside := proposalPath(targetPath, targetID, finding, now)
 	if !underImport(targetPath) {
 		return beside
 	}
@@ -116,6 +124,13 @@ func proposalRel(targetPath, targetID, drafts string, now time.Time) string {
 		name = beside[i+1:]
 	}
 	return joinRel(draftsDir(drafts), name)
+}
+
+// findingHash is the first six hex digits of the finding's SHA-256, after
+// collapsing whitespace, so the same finding re-typed names the same draft.
+func findingHash(finding string) string {
+	sum := sha256.Sum256([]byte(strings.Join(strings.Fields(finding), " ")))
+	return hex.EncodeToString(sum[:])[:6]
 }
 
 func joinRel(dir, name string) string {
@@ -134,15 +149,19 @@ func underImport(rel string) bool {
 	return rel == folder || strings.HasPrefix(rel, folder+"/")
 }
 
+// draftsDir cleans the setting before judging it, so "notes/../imported" or
+// "./imported" is seen as the import folder and "../x" or "/x" as outside the
+// vault. Any of those falls back to the default drafts folder.
 func draftsDir(s string) string {
-	s = strings.Trim(filepath.ToSlash(strings.TrimSpace(s)), "/")
-	if s == "" {
+	s = filepath.ToSlash(strings.TrimSpace(s))
+	if s == "" || strings.HasPrefix(s, "/") {
 		return defaultDraftsDir
 	}
+	s = path.Clean(s)
 	if s == "." {
 		return "."
 	}
-	if underImport(s) {
+	if s == ".." || strings.HasPrefix(s, "../") || underImport(s) {
 		return defaultDraftsDir
 	}
 	return s
@@ -155,11 +174,11 @@ func newDir(hitPath, drafts string) string {
 	return hitDir(hitPath)
 }
 
-func hitDir(path string) string {
-	if path == "" {
+func hitDir(rel string) string {
+	if rel == "" {
 		return "."
 	}
-	dir := filepath.ToSlash(filepath.Dir(path))
+	dir := filepath.ToSlash(filepath.Dir(rel))
 	if dir == "." || dir == "" {
 		return "."
 	}

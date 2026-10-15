@@ -109,7 +109,7 @@ func writePatch(ctx context.Context, v Vault, req Request, hit Hit, now time.Tim
 			return err
 		}
 	}
-	rel, err := freeRel(v, proposalRel(hit.Path, hit.ID, req.DraftsDir, now))
+	rel, err := freeRel(v, proposalRel(hit.Path, hit.ID, req.DraftsDir, req.Finding, now))
 	if err != nil {
 		return err
 	}

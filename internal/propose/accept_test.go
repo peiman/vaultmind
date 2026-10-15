@@ -107,6 +107,31 @@ func TestAccept_PatchMergesDeletesAndReindexes(t *testing.T) {
 	})
 }
 
+// Two patches to one target inside the same minute must both land. A
+// minute-resolution proposal id let the second draft reuse the first one's id
+// after it was accepted, so accept saw the old marker and dropped the finding.
+func TestAccept_TwoPatchesInOneMinuteBothApply(t *testing.T) {
+	v := testVault(t)
+	writeTarget(t, v, "concepts/memory.md", "concept-memory", "concept", "Memory", "accepted", "The original body.")
+	ret := &stubClosest{hit: Hit{ID: "concept-memory", Path: "concepts/memory.md", Type: "concept", Band: "strong"}, ok: true}
+	for _, finding := range []string{"First finding.", "Second finding."} {
+		req, _, _, _ := reqOf("How does quartz work?", finding)
+		require.NoError(t, Run(context.Background(), v, req, ret))
+		matches, err := filepath.Glob(filepath.Join(v.Path, "concepts", "*.proposal-*.md"))
+		require.NoError(t, err)
+		require.Len(t, matches, 1, "one open proposal at a time")
+		rel, err := filepath.Rel(v.Path, matches[0])
+		require.NoError(t, err)
+		fm, _ := parseNote(t, v, filepath.ToSlash(rel))
+		acc, _, _, _ := reqOf("", "")
+		acc.ID, _ = fm["id"].(string)
+		require.NoError(t, Accept(context.Background(), v, acc))
+	}
+	_, body := parseNote(t, reopen(t, v.Path), "concepts/memory.md")
+	assert.Contains(t, body, "First finding.")
+	assert.Contains(t, body, "Second finding.")
+}
+
 func proposePatch(t *testing.T, noteType, targetRel, targetID string, sources []string) (Vault, string, string) {
 	t.Helper()
 	v := testVault(t)
@@ -115,7 +140,7 @@ func proposePatch(t *testing.T, noteType, targetRel, targetID string, sources []
 	req, _, _, _ := reqOf("How does quartz work?", "Quartz keeps one timeline.")
 	req.Sources = sources
 	require.NoError(t, Run(context.Background(), v, req, ret))
-	rel := proposalPath(targetRel, targetID, proposeNow)
+	rel := proposalPath(targetRel, targetID, "Quartz keeps one timeline.", proposeNow)
 	return v, rel, targetID
 }
 
@@ -136,7 +161,7 @@ func TestAccept_MissingTargetErrors(t *testing.T) {
 	ret := &stubClosest{hit: Hit{ID: "concept-memory", Path: "concepts/memory.md", Type: "concept", Band: "strong"}, ok: true}
 	created, _, _, _ := reqOf("How does quartz work?", "Quartz keeps one timeline.")
 	require.NoError(t, Run(context.Background(), v, created, ret))
-	rel := proposalPath("concepts/memory.md", "concept-memory", proposeNow)
+	rel := proposalPath("concepts/memory.md", "concept-memory", "Quartz keeps one timeline.", proposeNow)
 	fm, _ := parseNote(t, v, rel)
 	require.NoError(t, os.Remove(filepath.Join(v.Path, "concepts", "memory.md")))
 	require.NoError(t, indexDelete(t, v, "concepts/memory.md"))

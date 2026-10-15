@@ -186,7 +186,7 @@ func TestPropose_RankCheck_DraftRanksFirst(t *testing.T) {
 	embedIndexedBodies(t, v.DB, emb)
 	beforeIDs := embeddingIDs(t, v.DB, emb, "othernote")
 
-	rel := proposalPath("concepts/target.md", targetID, proposeNow)
+	rel := proposalPath("concepts/target.md", targetID, finding, proposeNow)
 	ranker := &embeddingRanker{
 		db: v.DB, emb: emb, window: 5,
 		snapPath: filepath.Join(v.Path, filepath.FromSlash(rel)),
@@ -282,7 +282,7 @@ func TestPropose_RankCheck_JSONContract(t *testing.T) {
 	writeTarget(t, v, "concepts/other.md", "other-note", "concept", "Other", "accepted", "othernote is the nearer published note")
 	writeTarget(t, v, "concepts/target.md", "target-note", "concept", "Target", "accepted", "targetnote is the note a patch would land beside")
 	embedIndexedBodies(t, v.DB, emb)
-	rel := proposalPath("concepts/target.md", "target-note", proposeNow)
+	rel := proposalPath("concepts/target.md", "target-note", "quartzkeeper lives under the hill", proposeNow)
 	ranker := &embeddingRanker{db: v.DB, emb: emb, window: 5}
 	req, out, _, _ := reqOf("Where does quartzkeeper live", "quartzkeeper lives under the hill")
 	req.JSON = true
@@ -356,7 +356,7 @@ func TestPropose_RankCheck_ErrorNamesTheDraft(t *testing.T) {
 	req.Ranker = ranker
 	ret := &stubClosest{hit: Hit{ID: "target-note", Path: "concepts/target.md", Type: "concept", Band: "strong"}, ok: true}
 	err := Run(context.Background(), v, req, ret)
-	rel := proposalPath("concepts/target.md", "target-note", proposeNow)
+	rel := proposalPath("concepts/target.md", "target-note", "quartzkeeper lives under the hill", proposeNow)
 	id := tmpl.GenerateID(rel, "concept")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), id)
