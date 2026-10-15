@@ -38,6 +38,33 @@ var runEmbedPass = func(cmd *cobra.Command, vaultPath, dbPath string, cfg *vault
 	return idxr.RunEmbed(cmd.Context(), dbPath, model, false)
 }
 
+// embedPrint records the notes one command wrote so a second embed pass
+// does not repeat the line or warn about notes that command did not write.
+// A nil *embedPrint keeps the old behavior: warn about every empty note
+// and print every time.
+type embedPrint struct {
+	written map[string]struct{}
+	warned  map[string]struct{}
+	printed bool
+}
+
+func (p *embedPrint) allow(id, path string) bool {
+	if p == nil {
+		return true
+	}
+	if _, ok := p.written[filepath.ToSlash(path)]; !ok {
+		return false
+	}
+	if p.warned == nil {
+		p.warned = map[string]struct{}{}
+	}
+	if _, seen := p.warned[id]; seen {
+		return false
+	}
+	p.warned[id] = struct{}{}
+	return true
+}
+
 // embedAfterWrite embeds the notes a write left without embeddings, with the
 // model the vault already uses. A changed note loses its vectors (the index
 // clears them on a content change), so without this a note just written was
@@ -47,13 +74,15 @@ var runEmbedPass = func(cmd *cobra.Command, vaultPath, dbPath string, cfg *vault
 // slow pure-Go backend is skipped, and a failure is reported on stderr with the
 // command that finishes the job. app.embed_on_write=false turns it off.
 func embedAfterWrite(cmd *cobra.Command, vaultPath string, cfg *vault.Config) {
-	embedAfterWriteUpTo(cmd, vaultPath, cfg, embedOnWriteLimit)
+	embedAfterWriteUpTo(cmd, vaultPath, cfg, embedOnWriteLimit, nil)
 }
 
 // embedAfterWriteUpTo is embedAfterWrite for a write of many notes: import
 // raises the limit by the notes it wrote, so what it asked for is embedded
 // and only a backlog beyond that is left to `vaultmind index --embed`.
-func embedAfterWriteUpTo(cmd *cobra.Command, vaultPath string, cfg *vault.Config, limit int) {
+// track, when set, prints the embed line once and limits empty-body warnings
+// to notes this command wrote. Nil keeps a warning and a line on every pass.
+func embedAfterWriteUpTo(cmd *cobra.Command, vaultPath string, cfg *vault.Config, limit int, track *embedPrint) {
 	if !getConfigValueWithFlags[bool](cmd, embedOnWriteFlag, config.KeyAppEmbedOnWrite) {
 		return
 	}
@@ -86,12 +115,23 @@ func embedAfterWriteUpTo(cmd *cobra.Command, vaultPath string, cfg *vault.Config
 			return
 		}
 	}
+	if track != nil {
+		prev := cmd.Context()
+		cmd.SetContext(index.WithEmptyBodyWarn(prev, track.allow))
+		defer cmd.SetContext(prev)
+	}
 	res, err := runEmbedPass(cmd, vaultPath, dbPath, cfg, model)
 	if err != nil {
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "written, but not embedded (%v); run %s\n", err, finish)
 		return
 	}
 	if res != nil && res.Embedded > 0 {
+		if track != nil && track.printed {
+			return
+		}
+		if track != nil {
+			track.printed = true
+		}
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "embedded %d note(s) [model: %s]\n", res.Embedded, model)
 	}
 }

@@ -311,7 +311,8 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.notepropose.json` | bool | `false` | `VAULTMIND_APP_NOTEPROPOSE_JSON` | Output in JSON format |
 | `app.notepropose.question` | string | `` | `VAULTMIND_APP_NOTEPROPOSE_QUESTION` | Question the finding answers |
 | `app.notepropose.finding` | string | `` | `VAULTMIND_APP_NOTEPROPOSE_FINDING` | Finding to record as a draft |
-| `app.notepropose.close_band` | string | `strong` | `VAULTMIND_APP_NOTEPROPOSE_CLOSE_BAND` | Relevance band that means the top hit is close enough to patch. The band ask already reports for that hit. Default is the strong band. |
+| `app.notepropose.close_band` | string | `strong` | `VAULTMIND_APP_NOTEPROPOSE_CLOSE_BAND` | Weakest relevance band that is close enough to patch. A stronger band is also close. The band ask already reports for that hit. Default is the strong band. |
+| `app.notepropose.drafts_dir` | string | `notes` | `VAULTMIND_APP_NOTEPROPOSE_DRAFTS_DIR` | Folder for a draft that must not sit in the import folder. Default is notes. "." is the vault root. A folder under the import folder falls back to notes. |
 | `app.notepropose.gap` | string | `` | `VAULTMIND_APP_NOTEPROPOSE_GAP` | Open gap this finding answers. The draft stores closes_gap. When the question is omitted, the gap's question is used. |
 | `app.ping.output_message` | string | `Pong` | `VAULTMIND_APP_PING_OUTPUT_MESSAGE` | Default message to display for the ping command |
 | `app.ping.output_color` | string | `white` | `VAULTMIND_APP_PING_OUTPUT_COLOR` | Text color for ping command output (white, red, green, blue, cyan, yellow, magenta) |
@@ -1292,8 +1293,11 @@ app:
     # Finding to record as a draft
     finding: 
 
-    # Relevance band that means the top hit is close enough to patch. The band ask already reports for that hit. Default is the strong band.
+    # Weakest relevance band that is close enough to patch. A stronger band is also close. The band ask already reports for that hit. Default is the strong band.
     close_band: strong
+
+    # Folder for a draft that must not sit in the import folder. Default is notes. "." is the vault root. A folder under the import folder falls back to notes.
+    drafts_dir: notes
 
     # Open gap this finding answers. The draft stores closes_gap. When the question is omitted, the gap's question is used.
     gap: 
@@ -2298,8 +2302,11 @@ export VAULTMIND_APP_NOTEPROPOSE_QUESTION=
 # Finding to record as a draft
 export VAULTMIND_APP_NOTEPROPOSE_FINDING=
 
-# Relevance band that means the top hit is close enough to patch. The band ask already reports for that hit. Default is the strong band.
+# Weakest relevance band that is close enough to patch. A stronger band is also close. The band ask already reports for that hit. Default is the strong band.
 export VAULTMIND_APP_NOTEPROPOSE_CLOSE_BAND=strong
+
+# Folder for a draft that must not sit in the import folder. Default is notes. "." is the vault root. A folder under the import folder falls back to notes.
+export VAULTMIND_APP_NOTEPROPOSE_DRAFTS_DIR=notes
 
 # Open gap this finding answers. The draft stores closes_gap. When the question is omitted, the gap's question is used.
 export VAULTMIND_APP_NOTEPROPOSE_GAP=

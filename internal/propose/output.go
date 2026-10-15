@@ -24,6 +24,9 @@ type acceptResult struct {
 	ID       string `json:"id"`
 	TargetID string `json:"target_id,omitempty"`
 	Status   string `json:"status,omitempty"`
+	// AlsoIn names further notes that carry the same accepted marker, when
+	// a second accept finds more than one. Accept does not pick one.
+	AlsoIn []string `json:"also_in,omitempty"`
 }
 
 func fail(req Request, command, code, msg string) error {

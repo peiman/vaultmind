@@ -36,6 +36,9 @@ types:
   principle:
     required: [title]
     template: .vaultmind/templates/concept.md
+  reference:
+    required: [title]
+    template: .vaultmind/templates/concept.md
 `
 
 var proposeNow = time.Date(2026, 10, 14, 15, 30, 0, 0, time.UTC)
@@ -115,7 +118,7 @@ func reqOf(question, finding string) (Request, *bytes.Buffer, *bytes.Buffer, *in
 		Now:      proposeNow,
 		Stdout:   out,
 		Stderr:   errOut,
-		Embed:    func(string) { embeds++ },
+		Embed:    func(string, string) { embeds++ },
 	}, out, errOut, &embeds
 }
 
@@ -184,7 +187,7 @@ func TestPropose_PatchWhenTheTopHitIsClose(t *testing.T) {
 
 	assert.Equal(t, question+"\n"+finding, ret.text)
 	assert.Equal(t, 1, *embeds)
-	rel := proposalPath(targetRel, targetID, proposeNow)
+	rel := proposalPath(targetRel, targetID, finding, proposeNow)
 	id := tmpl.GenerateID(rel, "concept")
 	assert.Equal(t, "mode: patch\npath: "+rel+"\nid: "+id+"\ntarget: "+targetID+"\n"+nextStep(id)+"\n", out.String())
 

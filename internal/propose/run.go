@@ -109,7 +109,7 @@ func writePatch(ctx context.Context, v Vault, req Request, hit Hit, now time.Tim
 			return err
 		}
 	}
-	rel, err := freeRel(v, proposalPath(hit.Path, hit.ID, now))
+	rel, err := freeRel(v, proposalRel(hit.Path, hit.ID, req.DraftsDir, req.Finding, now))
 	if err != nil {
 		return err
 	}
@@ -119,7 +119,7 @@ func writePatch(ctx context.Context, v Vault, req Request, hit Hit, now time.Tim
 	}
 	out.Mode = modePatch
 	out.TargetID = hit.ID
-	if err := attachRankCheck(ctx, v, req, &out, now); err != nil {
+	if err := attachRankCheck(ctx, v, req, &out, now, hit, true); err != nil {
 		return err
 	}
 	return renderPropose(req, v, out)
@@ -130,7 +130,7 @@ func writeNew(ctx context.Context, v Vault, req Request, hit Hit, found bool, no
 	dir := "."
 	if found {
 		hitType = hit.Type
-		dir = hitDir(hit.Path)
+		dir = newDir(hit.Path, req.DraftsDir)
 	}
 	noteType, err := chooseType(v.Reg, hitType)
 	if err != nil {
@@ -143,7 +143,7 @@ func writeNew(ctx context.Context, v Vault, req Request, hit Hit, found bool, no
 		out, err := writeDraft(ctx, v, req, rel, noteType, "")
 		if err == nil {
 			out.Mode = modeNew
-			if err := attachRankCheck(ctx, v, req, &out, now); err != nil {
+			if err := attachRankCheck(ctx, v, req, &out, now, hit, found); err != nil {
 				return err
 			}
 			return renderPropose(req, v, out)

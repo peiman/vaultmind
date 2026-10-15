@@ -941,8 +941,11 @@ app:
     # Finding to record as a draft
     finding: 
 
-    # Relevance band that means the top hit is close enough to patch. The band ask already reports for that hit. Default is the strong band.
+    # Weakest relevance band that is close enough to patch. A stronger band is also close. The band ask already reports for that hit. Default is the strong band.
     close_band: strong
+
+    # Folder for a draft that must not sit in the import folder. Default is notes. "." is the vault root. A folder under the import folder falls back to notes.
+    drafts_dir: notes
 
     # Open gap this finding answers. The draft stores closes_gap. When the question is omitted, the gap's question is used.
     gap: 

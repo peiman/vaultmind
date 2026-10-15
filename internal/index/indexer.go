@@ -966,6 +966,42 @@ func (idx *Indexer) Incremental() (*IndexResult, error) {
 	return result, nil
 }
 
+type emptyBodyWarnKey struct{}
+
+// WithEmptyBodyWarn limits the empty-body warning to notes allow returns true
+// for. A nil allow, and a context without this value, warns about every empty
+// note.
+func WithEmptyBodyWarn(ctx context.Context, allow func(id, path string) bool) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, emptyBodyWarnKey{}, allow)
+}
+
+func emptyBodyAllow(ctx context.Context) func(id, path string) bool {
+	if ctx == nil {
+		return nil
+	}
+	allow, _ := ctx.Value(emptyBodyWarnKey{}).(func(id, path string) bool)
+	return allow
+}
+
+// skipEmptyEmbed reports an empty body. The caller counts the note as skipped.
+// An empty body used to hard-error the whole pass (vaultmind#41). One
+// placeholder file must not block the rest of the vault. NULL body_text is
+// coalesced to "" by the pending query. A command that names the notes it
+// wrote suppresses the warning for every other empty note, and for a note it
+// already warned about.
+func skipEmptyEmbed(ctx context.Context, id, path, body string) bool {
+	if strings.TrimSpace(body) != "" {
+		return false
+	}
+	if allow := emptyBodyAllow(ctx); allow == nil || allow(id, path) {
+		log.Warn().Str("id", id).Msg("skipping note with empty body — nothing to embed")
+	}
+	return true
+}
+
 // EmbedNotes computes and stores embeddings for all notes that don't have one yet.
 // It opens its own DB connection (like Rebuild/Incremental) so it can be called
 // after the indexer has closed its connection.
@@ -986,10 +1022,10 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 	var skipQuery, pendingQuery string
 	if isFull {
 		// BGE-M3: need notes where any of the 3 embeddings are missing
-		pendingQuery = "SELECT id, COALESCE(body_text, '') FROM notes WHERE embedding IS NULL OR sparse_embedding IS NULL OR colbert_embedding IS NULL"
+		pendingQuery = "SELECT id, path, COALESCE(body_text, '') FROM notes WHERE embedding IS NULL OR sparse_embedding IS NULL OR colbert_embedding IS NULL"
 		skipQuery = "SELECT COUNT(*) FROM notes WHERE embedding IS NOT NULL AND sparse_embedding IS NOT NULL AND colbert_embedding IS NOT NULL"
 	} else {
-		pendingQuery = "SELECT id, COALESCE(body_text, '') FROM notes WHERE embedding IS NULL"
+		pendingQuery = "SELECT id, path, COALESCE(body_text, '') FROM notes WHERE embedding IS NULL"
 		skipQuery = "SELECT COUNT(*) FROM notes WHERE embedding IS NOT NULL"
 	}
 
@@ -1007,23 +1043,19 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 
 	type noteText struct {
 		id   string
+		path string
 		body string
 	}
 	var pending []noteText
 	for rows.Next() {
 		var nt noteText
-		if err := rows.Scan(&nt.id, &nt.body); err != nil {
+		if err := rows.Scan(&nt.id, &nt.path, &nt.body); err != nil {
 			_ = rows.Close()
 			return nil, fmt.Errorf("scanning unembedded note: %w", err)
 		}
-		// An empty-body note has nothing to embed. Skip it with a warning rather
-		// than feed "" to the embedder — a NULL body_text used to hard-error the
-		// whole pass (vaultmind#41). One placeholder file must not block embedding
-		// the rest of the vault. (NULL is coalesced to "" by the query above.)
-		if strings.TrimSpace(nt.body) == "" {
-			// Count it (not just log) so the skip is auditable in the result —
-			// consistent with surfacing dropped notes (#40), never a silent omission.
-			log.Warn().Str("id", nt.id).Msg("skipping note with empty body — nothing to embed")
+		// Count a skip (not just log it) so the result stays auditable —
+		// consistent with surfacing dropped notes (#40), never a silent omission.
+		if skipEmptyEmbed(ctx, nt.id, nt.path, nt.body) {
 			result.Skipped++
 			continue
 		}

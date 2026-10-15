@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,6 +19,14 @@ import (
 	"github.com/peiman/vaultmind/internal/vault"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
+)
+
+// acceptedScanMaxBytes is how much of a note the file search reads, from the
+// end. The marker is appended, so the tail is the part that can hold it.
+// acceptedScanMaxFiles caps how many vault files that search opens.
+const (
+	acceptedScanMaxBytes int64 = 1 << 20
+	acceptedScanMaxFiles       = 5000
 )
 
 // publishWords is the order in which a type's allowed statuses are asked
@@ -59,6 +68,14 @@ func Accept(ctx context.Context, v Vault, req Request) error {
 		return failOp(req, cmdAccept, "note_missing", fmt.Errorf("reading note %q: %w", req.ID, err))
 	}
 	if row == nil {
+		where, lookErr := findAcceptedProposal(ctx, v, req.ID)
+		if lookErr != nil {
+			log.Debug().Err(lookErr).Str("id", req.ID).Msg("accept marker lookup failed")
+			return failOp(req, cmdAccept, "note_missing", fmt.Errorf("looking for an accepted proposal %s: %w", req.ID, lookErr))
+		}
+		if where.ID != "" {
+			return renderAlreadyAccepted(req, v, where)
+		}
 		return fail(req, cmdAccept, "note_missing", fmt.Sprintf("note %q is not in the vault", req.ID))
 	}
 	abs, err := vault.ResolveInside(v.Path, row.Path)
@@ -191,6 +208,180 @@ func applyPatch(abs, rel string, raw []byte, target, proposal *parser.ParsedNote
 	return rewriteNote(abs, rel, raw, req.beforeWrite, edit, &body)
 }
 
+// acceptedWhere is a note whose body holds this proposal's marker on a line of
+// its own. Also names any further notes that do, so accept reports them all
+// instead of picking one.
+type acceptedWhere struct {
+	ID   string
+	Path string
+	Also []string
+}
+
+type acceptedHit struct {
+	ID   string
+	Path string
+}
+
+// findAcceptedProposal looks for the marker accept writes when a patch lands.
+// The proposal row and file are gone after a successful accept, so a second
+// call cannot see the draft. body_raw keeps the marker; the indexed search
+// text does not. A miss falls through to the files, reading at most
+// acceptedScanMaxBytes from the end of each, and at most acceptedScanMaxFiles.
+func findAcceptedProposal(ctx context.Context, v Vault, id string) (acceptedWhere, error) {
+	if err := ctx.Err(); err != nil {
+		return acceptedWhere{}, err
+	}
+	marker := acceptedMarker(id)
+	hits, err := acceptedInRawBody(v.DB, marker)
+	if err != nil {
+		return acceptedWhere{}, err
+	}
+	if len(hits) == 0 {
+		if hits, err = acceptedInFiles(v, marker); err != nil {
+			return acceptedWhere{}, err
+		}
+	}
+	return whereOf(hits), nil
+}
+
+func whereOf(hits []acceptedHit) acceptedWhere {
+	if len(hits) == 0 {
+		return acceptedWhere{}
+	}
+	w := acceptedWhere{ID: hits[0].ID, Path: hits[0].Path}
+	for _, h := range hits[1:] {
+		w.Also = append(w.Also, h.ID)
+	}
+	return w
+}
+
+// hasMarkerLine reports whether text holds the marker as a whole line, the
+// way appendSection writes it. A sentence that only quotes the marker is not
+// where the proposal was applied.
+func hasMarkerLine(text, marker string) bool {
+	for _, line := range strings.Split(text, "\n") {
+		if strings.TrimRight(line, "\r") == marker {
+			return true
+		}
+	}
+	return false
+}
+
+func acceptedInRawBody(db *index.DB, marker string) ([]acceptedHit, error) {
+	rows, err := db.Query(`
+		SELECT id, path, COALESCE(body_raw, '') FROM notes
+		WHERE instr(COALESCE(body_raw, ''), ?) > 0
+		ORDER BY path`, marker)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var hits []acceptedHit
+	for rows.Next() {
+		var id, path, body string
+		if err := rows.Scan(&id, &path, &body); err != nil {
+			return nil, err
+		}
+		if !hasMarkerLine(body, marker) {
+			continue
+		}
+		if strings.TrimSpace(id) == "" {
+			id = path
+		}
+		hits = append(hits, acceptedHit{ID: id, Path: path})
+	}
+	return hits, rows.Err()
+}
+
+func acceptedInFiles(v Vault, marker string) ([]acceptedHit, error) {
+	if v.Config == nil {
+		return nil, nil
+	}
+	scanned, err := vault.Scan(v.Path, v.Config.Vault.Exclude)
+	if err != nil {
+		return nil, err
+	}
+	needle := []byte(marker)
+	var hits []acceptedHit
+	n := 0
+	for _, file := range scanned.Files {
+		if n >= acceptedScanMaxFiles {
+			break
+		}
+		n++
+		abs, err := vault.ResolveInside(v.Path, file.RelPath)
+		if err != nil {
+			continue
+		}
+		tail, err := readFileTail(abs, acceptedScanMaxBytes)
+		if err != nil {
+			continue
+		}
+		if !bytes.Contains(tail, needle) || !hasMarkerLine(string(tail), marker) {
+			continue
+		}
+		id := noteIDAt(abs)
+		if id == "" {
+			id = file.RelPath
+		}
+		hits = append(hits, acceptedHit{ID: id, Path: file.RelPath})
+	}
+	return hits, nil
+}
+
+func readFileTail(abs string, limit int64) ([]byte, error) {
+	f, err := os.Open(abs) //nolint:gosec // nosemgrep: go-path-traversal -- path is confined with vault.ResolveInside
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	start := int64(0)
+	if info.Size() > limit {
+		start = info.Size() - limit
+	}
+	if _, err := f.Seek(start, io.SeekStart); err != nil {
+		return nil, err
+	}
+	return io.ReadAll(io.LimitReader(f, limit))
+}
+
+func noteIDAt(abs string) string {
+	f, err := os.Open(abs) //nolint:gosec // nosemgrep: go-path-traversal -- path is confined with vault.ResolveInside
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = f.Close() }()
+	raw, err := io.ReadAll(io.LimitReader(f, 64<<10))
+	if err != nil {
+		return ""
+	}
+	parsed, err := parser.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(fmString(parsed.Frontmatter, "id"))
+}
+
+func renderAlreadyAccepted(req Request, v Vault, where acceptedWhere) error {
+	if !req.JSON {
+		var err error
+		if len(where.Also) > 0 {
+			all := append([]string{where.ID}, where.Also...)
+			_, err = fmt.Fprintf(stdout(req), "already accepted (marker found in: %s)\n", strings.Join(all, ", "))
+		} else {
+			_, err = fmt.Fprintf(stdout(req), "already accepted into %s\n", where.ID)
+		}
+		return err
+	}
+	return writeEnvelope(req, v, envelope.OK(cmdAccept, acceptResult{
+		Mode: "already", Path: where.Path, ID: where.ID, AlsoIn: where.Also,
+	}), nil)
+}
+
 // lookupAcceptNote returns the indexed draft. The row is deleted before the
 // file, so a retry after a failed file delete finds no row: the file is
 // re-indexed and cleanup finishes. A missing id stays a missing id.
@@ -274,6 +465,23 @@ func patchesNonEmpty(raw string) bool {
 	return strings.TrimSpace(value) != ""
 }
 
+// readNoteFile reads a vault file the accept lookup has already confined to
+// the vault. A variable so a test can count reads.
+var readNoteFile = func(abs string) ([]byte, error) {
+	return os.ReadFile(abs) //nolint:gosec // nosemgrep: go-path-traversal -- callers confine abs with vault.ResolveInside
+}
+
+// nameCanBeProposal reports whether a file's name can produce the id. A
+// generated id is "<type>-" plus the file name lowercased
+// (template.GenerateID); an id set by hand may equal the name. Any other file
+// is skipped without reading it. The caller still parses the one candidate
+// and checks that it really is a proposal.
+func nameCanBeProposal(rel, id string) bool {
+	base := strings.TrimSuffix(filepath.Base(rel), ".md")
+	slug := strings.ReplaceAll(strings.ToLower(base), " ", "-")
+	return slug != "" && (id == slug || strings.HasSuffix(id, "-"+slug))
+}
+
 // reindexUnindexedProposal finds a proposal file the index no longer has.
 // Accept deletes the row before the file, so a failed file delete leaves the
 // file on disk and the id unknown. The retry reads that file, sees the marker
@@ -290,11 +498,14 @@ func reindexUnindexedProposal(ctx context.Context, v Vault, id string) (*index.N
 		return nil, fmt.Errorf("looking for proposal %s: %w", id, err)
 	}
 	for _, file := range scanned.Files {
+		if !nameCanBeProposal(file.RelPath, id) {
+			continue
+		}
 		abs, err := vault.ResolveInside(v.Path, file.RelPath)
 		if err != nil {
 			continue
 		}
-		raw, err := os.ReadFile(abs) //nolint:gosec // nosemgrep: go-path-traversal -- path is confined with vault.ResolveInside
+		raw, err := readNoteFile(abs)
 		if err != nil {
 			continue
 		}
