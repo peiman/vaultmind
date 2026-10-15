@@ -263,6 +263,9 @@ func indexProgressLine(r *index.IndexResult) string {
 	total := r.Skipped + r.Updated + r.Added
 	if r.Updated == 0 && r.Added == 0 && r.Deleted == 0 && r.Errors == 0 &&
 		r.DuplicateIDs == 0 && len(r.SkippedSymlinks) == 0 {
+		if r.BodiesBackfilled > 0 {
+			return fmt.Sprintf("Index current (%d notes); backfilled %d note bodies\n", total, r.BodiesBackfilled)
+		}
 		return fmt.Sprintf("Index already current (%d notes)\n", total)
 	}
 	return fmt.Sprintf("Indexed %d notes (%d skipped, %d updated, %d added, %d deleted)\n",

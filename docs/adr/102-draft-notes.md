@@ -421,7 +421,8 @@ note's body, as the target or as a context item, one line follows it:
   ↳ answers a question first investigated 2026-10-14: "<question>"
 ```
 
-The date is `opened_at`, in UTC, cut to the calendar day. The question is
+The date is `opened_at` in the local time zone, cut to the calendar day;
+`answers_gap` in `--json` keeps the RFC3339 UTC timestamp. The question is
 cut at 80 characters. `--pointers-only` does not print the line. A note
 already shown in the session is not credited again, in the text or in
 `answers_gap`. `--json` adds `answers_gap` on the target and on a context

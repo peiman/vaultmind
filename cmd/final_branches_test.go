@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/index"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -37,6 +38,30 @@ func TestIndex_IncrementalHumanOutput(t *testing.T) {
 	out, _, err := runRootCmd(t, "index", "--vault", vault)
 	require.NoError(t, err)
 	assert.Contains(t, out.String(), "Index already current")
+}
+
+// A run that only backfilled delivery bodies changed the index, so it must not
+// claim the index was already current; it says what it did.
+func TestIndexProgressLine_BodyBackfillIsNotAlreadyCurrent(t *testing.T) {
+	tests := []struct {
+		name    string
+		res     index.IndexResult
+		want    string
+		notWant string
+	}{
+		{"nothing changed", index.IndexResult{Skipped: 21}, "Index already current (21 notes)", ""},
+		{"bodies backfilled", index.IndexResult{Skipped: 21, BodiesBackfilled: 21},
+			"backfilled 21 note bodies", "already current"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := indexProgressLine(&tc.res)
+			assert.Contains(t, got, tc.want)
+			if tc.notWant != "" {
+				assert.NotContains(t, got, tc.notWant)
+			}
+		})
+	}
 }
 
 // Full-rebuild human output differs from incremental — it reports
