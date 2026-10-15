@@ -114,6 +114,13 @@ const (
 	BGEM3Dims         = 1024
 	BGEM3MaxTokens    = 8190 // 8192 minus 2 for CLS/SEP
 	BGEM3OnnxFilePath = "onnx/model.onnx"
+	// BGEM3EmbedMaxTokens is the per-note token cap the embedder truncates to.
+	// The model accepts BGEM3MaxTokens, but forward memory grows faster than
+	// the token count. Peak memory of a full embed (ORT CPU, model included):
+	// 12–16 GB at 8190, about 6 GB at 2048, about 3 GB at 1024. On labelled
+	// sets, 1024 kept Hit@3 within one query of 8190. Search text (FTS) still
+	// holds the whole note; only the vectors read the first 1024 tokens.
+	BGEM3EmbedMaxTokens = 1024
 )
 
 // CLI model tokens — the values the --model flag and RunEmbed receive. Distinct
@@ -159,7 +166,7 @@ func BGEM3Config() HugotConfig {
 		ModelName:    BGEM3ModelName,
 		CacheDir:     DefaultCacheDir(),
 		Dims:         BGEM3Dims,
-		MaxTokens:    BGEM3MaxTokens,
+		MaxTokens:    BGEM3EmbedMaxTokens,
 		OnnxFilePath: BGEM3OnnxFilePath,
 	}
 }

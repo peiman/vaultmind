@@ -172,7 +172,10 @@ func reembedSparseNotes(ctx context.Context, db *DB, full embedding.FullEmbedder
 	}
 	rewritten := 0
 	seen := 0
-	for _, idxs := range planEmbedBatches(lengths, embedBatchSize, embedBatchSize*embedPaddedBudgetPerSlot) {
+	// BGE-M3 only: the same memory-bounded plan EmbedNotes uses. This pass
+	// visits every note, so a count-only plan (batch 32) drove a long-note
+	// vault far past the machine's memory.
+	for _, idxs := range planBGEM3Batches(lengths) {
 		texts := make([]string, len(idxs))
 		for j, i := range idxs {
 			// Same cap as EmbedNotes. The stored body stays as indexed.

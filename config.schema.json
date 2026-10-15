@@ -2024,6 +2024,11 @@
               "default": "30m",
               "description": "Exit after this long without a request (a Go duration: 30m, 2h)",
               "type": "string"
+            },
+            "max_rss_mb": {
+              "default": 4096,
+              "description": "Exit after a request once the server's peak memory passes this many MiB; the next ask starts a fresh server. 0 turns the check off",
+              "type": "integer"
             }
           },
           "type": "object"

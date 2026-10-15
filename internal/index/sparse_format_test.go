@@ -227,7 +227,7 @@ func TestReembedStaleSparse_EmbedErrorDoesNotStamp(t *testing.T) {
 
 func TestReembedStaleSparse_PrintsProgressEveryBatch(t *testing.T) {
 	db := openSparseDB(t)
-	const notes = 33 // one past the regular batch cap
+	const notes = 33 // four full BGE-M3 batches of 8, then one
 	for i := range notes {
 		insertSparseNote(t, db, fmt.Sprintf("n%02d", i), "x", map[int32]float32{0: 1})
 	}
@@ -235,9 +235,10 @@ func TestReembedStaleSparse_PrintsProgressEveryBatch(t *testing.T) {
 	n, err := (&index.Indexer{}).ReembedStaleSparse(context.Background(), db, &sparseScript{}, &buf)
 	require.NoError(t, err)
 	require.Equal(t, notes, n)
+	require.Contains(t, buf.String(), "re-embedded sparse vectors 8/33\n")
 	require.Contains(t, buf.String(), "re-embedded sparse vectors 32/33\n")
 	require.Contains(t, buf.String(), "re-embedded sparse vectors 33/33\n")
-	require.Equal(t, 2, strings.Count(buf.String(), "re-embedded sparse vectors"))
+	require.Equal(t, 5, strings.Count(buf.String(), "re-embedded sparse vectors"))
 }
 
 func TestSparseFormatStale_NoSparseIsNotStale(t *testing.T) {

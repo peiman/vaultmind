@@ -49,7 +49,7 @@ import (
 // matches, the gap is still open. If it's different or works, the
 // upstream fix landed and you can flip the default.
 func newBGEM3Session(ctx context.Context) (*hugot.Session, error) {
-	var opts []options.WithOption
+	opts := ortMemoryOptions()
 	if libDir := detectORTLibDir(); libDir != "" {
 		opts = append(opts, options.WithOnnxLibraryPath(libDir))
 	}
@@ -175,4 +175,16 @@ func CheckRuntime(ctx context.Context) error {
 		return err
 	}
 	return s.Destroy()
+}
+
+// ortMemoryOptions turns off ONNX Runtime's CPU memory arena and memory-pattern
+// planning. With them on, ORT keeps a buffer for every input shape it has seen
+// and never gives it back, so a long-lived process (vaultmind serve, a long
+// index pass) grows with each new query length: measured +300 MB over 20 asks,
+// and 56 GB in one resident server on a machine whose hooks ask on every prompt.
+func ortMemoryOptions() []options.WithOption {
+	return []options.WithOption{
+		options.WithCPUMemArena(false),
+		options.WithMemPattern(false),
+	}
 }

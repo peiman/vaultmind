@@ -333,6 +333,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.self.vault` | string | `.` | `VAULTMIND_APP_SELF_VAULT` | Path to vault root |
 | `app.self.limit` | int | `10` | `VAULTMIND_APP_SELF_LIMIT` | Max rows per section (recent/hot/stale) |
 | `app.serve.idle` | string | `30m` | `VAULTMIND_APP_SERVE_IDLE` | Exit after this long without a request (a Go duration: 30m, 2h) |
+| `app.serve.max_rss_mb` | int | `4096` | `VAULTMIND_APP_SERVE_MAX_RSS_MB` | Exit after a request once the server's peak memory passes this many MiB; the next ask starts a fresh server. 0 turns the check off |
 | `app.tree.vault` | string | `.` | `VAULTMIND_APP_TREE_VAULT` | Path to vault root |
 | `app.tree.vaults` | string | `` | `VAULTMIND_APP_TREE_VAULTS` | Map several vaults, comma-separated (overrides --vault) |
 | `app.tree.json` | bool | `false` | `VAULTMIND_APP_TREE_JSON` | Output in JSON format |
@@ -1366,6 +1367,9 @@ app:
     # Exit after this long without a request (a Go duration: 30m, 2h)
     idle: 30m
 
+    # Exit after a request once the server's peak memory passes this many MiB; the next ask starts a fresh server. 0 turns the check off
+    max_rss_mb: 4096
+
   tree:
     # Path to vault root
     vault: .
@@ -2367,6 +2371,9 @@ export VAULTMIND_APP_SELF_LIMIT=10
 
 # Exit after this long without a request (a Go duration: 30m, 2h)
 export VAULTMIND_APP_SERVE_IDLE=30m
+
+# Exit after a request once the server's peak memory passes this many MiB; the next ask starts a fresh server. 0 turns the check off
+export VAULTMIND_APP_SERVE_MAX_RSS_MB=4096
 
 # Path to vault root
 export VAULTMIND_APP_TREE_VAULT=.

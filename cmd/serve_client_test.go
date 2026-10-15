@@ -83,15 +83,15 @@ func TestTryServer_NoServerRunsHereAndStartsOne(t *testing.T) {
 func TestServeUntilIdle(t *testing.T) {
 	isolatedState(t)
 	serveFake(t, func(serve.Request) serve.Response { return serve.Response{} })
-	assert.NoError(t, serveUntilIdle(context.Background(), "1m"), "another server already answers")
+	assert.NoError(t, serveUntilIdle(context.Background(), "1m", 0), "another server already answers")
 
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	startAt := time.Now()
-	require.NoError(t, serveUntilIdle(context.Background(), "100ms"))
+	require.NoError(t, serveUntilIdle(context.Background(), "100ms", 0))
 	assert.Less(t, time.Since(startAt), 5*time.Second)
 
-	assert.Error(t, serveUntilIdle(context.Background(), "soon"))
-	assert.Error(t, serveUntilIdle(context.Background(), "0s"))
+	assert.Error(t, serveUntilIdle(context.Background(), "soon", 0))
+	assert.Error(t, serveUntilIdle(context.Background(), "0s", 0))
 }
 
 // A server slower than the client's budget is abandoned: the ask runs here,
