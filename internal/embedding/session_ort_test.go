@@ -2,7 +2,25 @@
 
 package embedding
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/knights-analytics/hugot/options"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// The session gets the pinned memory settings (TestORTMemorySettings_StayOff).
+func TestORTMemoryOptions_TurnOffArenaAndPattern(t *testing.T) {
+	o := &options.Options{Backend: options.BackendORT, ORTOptions: &options.OrtOptions{}}
+	for _, opt := range ortMemoryOptions() {
+		require.NoError(t, opt(o))
+	}
+	require.NotNil(t, o.ORTOptions.CPUMemArena, "the CPU arena setting must be set, not left to ORT's default (on)")
+	require.NotNil(t, o.ORTOptions.MemPattern, "the memory-pattern setting must be set, not left to ORT's default (on)")
+	assert.False(t, *o.ORTOptions.CPUMemArena)
+	assert.False(t, *o.ORTOptions.MemPattern)
+}
 
 // resolveORTLibDir is the discovery-order heart of detectORTLibDir. It is
 // ORT-tagged (runs under `CGO_ENABLED=1 CGO_LDFLAGS=-L./lib go test -tags ORT`).
