@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/peiman/vaultmind/internal/memguard"
 	"github.com/peiman/vaultmind/internal/query"
 	"github.com/peiman/vaultmind/internal/serve"
 	"github.com/peiman/vaultmind/internal/xdg"
@@ -185,7 +186,7 @@ func serveUntilIdle(ctx context.Context, idle string, maxRSSMB int) error {
 	defer stop()
 	opts := []serve.Option{
 		serve.WithShutdown(query.CloseSharedEmbedder),
-		serve.WithMemoryCap(int64(maxRSSMB)<<20, serve.PeakRSS),
+		serve.WithMemoryCap(int64(maxRSSMB)<<20, memguard.PeakRSS),
 	}
 	if err := serve.Serve(ctx, sock, serveExec, wait, opts...); err != nil && !errors.Is(err, serve.ErrAlreadyServing) {
 		return err

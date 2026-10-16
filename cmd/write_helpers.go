@@ -35,7 +35,7 @@ var runEmbedPass = func(cmd *cobra.Command, vaultPath, dbPath string, cfg *vault
 	// Ranking already holds the process session. Borrow it instead of
 	// opening a second one that cannot exist beside the first.
 	idxr.SetEmbedderSource(query.ProcessEmbedder{})
-	return idxr.RunEmbed(cmd.Context(), dbPath, model, false)
+	return runEmbedGuarded(cmd, idxr, dbPath, model, false)
 }
 
 // embedPrint records the notes one command wrote so a second embed pass

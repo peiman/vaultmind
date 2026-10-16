@@ -177,6 +177,8 @@ components:
       - internal/mcpserver/**
       # VaultMind warm server (vaultmind serve): the socket transport; cmd runs each request as a fresh process would:
       - internal/serve/**
+      # VaultMind memory guard: reads the process's peak memory and reports when it passes a limit (serve, embed passes):
+      - internal/memguard/**
       # VaultMind propose (vaultmind note propose / note accept): a finding becomes a reviewable draft, and a person promotes it.
       - internal/propose/**
       # VaultMind gaps (vaultmind note gap): an unanswered question recorded as a note, and the hint log of weak asks.

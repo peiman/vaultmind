@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- An embedding pass stops itself when vaultmind's memory passes `app.embed_max_rss_mb` (default 6144 MiB, about twice the measured peak; `VAULTMIND_APP_EMBED_MAX_RSS_MB`; 0 turns it off). This covers `index --embed` and the embed after a write. It exits with an error that names the limit. Notes embedded before the stop are kept, and running the same command again continues: on a 70-note vault a stop at 23 notes resumed with 47 more. A future runaway fails at a few GB instead of taking the machine, as 0.10.13's re-embed did past 100 GB.
+
 ### Changed
 
 - The BGE-M3 embedder refuses a batch outside the memory budget (more than 8 texts, or more than one cap-length note's worth of padded tokens) with an error instead of running it. The indexer already plans every batch inside that budget; the refusal keeps a future caller that skips the plan from taking a machine's memory, as 0.10.13's re-embed did. One definition of the budget serves both.
