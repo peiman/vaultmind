@@ -14,6 +14,15 @@ func WriteOptions() []config.ConfigOption {
 				"edits and embed once at the end.",
 			Type: "bool",
 		},
+		{
+			Key:          "app.embed_max_rss_mb",
+			DefaultValue: 6144,
+			Description: "Stop an embedding pass (index --embed, or the embed after a write) once vaultmind's peak " +
+				"memory passes this many MiB. Embedding peaks near 3 GB; 0.10.13's re-embed passed 100 GB with " +
+				"nothing to stop it. Notes embedded before the stop are kept, so running the command again continues. " +
+				"0 turns the check off.",
+			Type: "int",
+		},
 	}
 }
 
