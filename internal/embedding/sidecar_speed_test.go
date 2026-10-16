@@ -46,9 +46,9 @@ func TestSidecar_Speed_SingleVsBatched(t *testing.T) {
 	}
 	defer side.Close()
 
-	// One batch of 8
+	// Batches as large as the memory budget allows
 	start := time.Now()
-	_, err = side.EmbedFullBatch(context.Background(), texts)
+	_, err = embedInBudget(context.Background(), side, texts)
 	batchedElapsed := time.Since(start)
 	if err != nil {
 		t.Fatal(err)
@@ -64,7 +64,7 @@ func TestSidecar_Speed_SingleVsBatched(t *testing.T) {
 	}
 	singletonElapsed := time.Since(start)
 
-	t.Log(fmt.Sprintf("batched (8 in 1):    %v (%.3fs/note)", batchedElapsed, batchedElapsed.Seconds()/float64(N)))
+	t.Log(fmt.Sprintf("budgeted batches:    %v (%.3fs/note)", batchedElapsed, batchedElapsed.Seconds()/float64(N)))
 	t.Log(fmt.Sprintf("singletons (8 calls): %v (%.3fs/note)", singletonElapsed, singletonElapsed.Seconds()/float64(N)))
 	t.Log(fmt.Sprintf("ratio singleton/batched: %.2fx slower", float64(singletonElapsed)/float64(batchedElapsed)))
 }

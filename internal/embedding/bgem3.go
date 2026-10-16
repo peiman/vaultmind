@@ -201,6 +201,9 @@ func (e *BGEM3Embedder) EmbedFull(ctx context.Context, text string) (*BGEM3Outpu
 // EmbedFullBatch produces all three embedding types for multiple texts.
 // Bypasses hugot's Postprocess to access raw per-token hidden states.
 func (e *BGEM3Embedder) EmbedFullBatch(ctx context.Context, texts []string) ([]*BGEM3Output, error) {
+	if err := checkBGEM3Batch(texts); err != nil {
+		return nil, err
+	}
 	// Tokenize into a batch, GUARANTEEING no input exceeds the model's token limit
 	// before the (hang-prone) ONNX forward pass — see preprocessWithinTokenLimit
 	// (#39). Skip Postprocess (mean-pool) so the heads see raw per-token states.
