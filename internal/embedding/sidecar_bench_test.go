@@ -60,7 +60,7 @@ func TestSidecar_VsInProcess_Throughput(t *testing.T) {
 	inProc, err := embedding.NewBGEM3Embedder(context.Background(), embedding.BGEM3Config())
 	require.NoError(t, err)
 	cpuStart := time.Now()
-	cpuOut, err := inProc.EmbedFullBatch(context.Background(), texts)
+	cpuOut, err := embedInBudget(context.Background(), inProc, texts)
 	cpuElapsed := time.Since(cpuStart)
 	_ = inProc.Close()
 	require.NoError(t, err)
@@ -86,7 +86,7 @@ func TestSidecar_VsInProcess_Throughput(t *testing.T) {
 	t.Logf("  sidecar startup (incl. model load): %v device=%s", time.Since(sideStartupStart), side.Device())
 
 	sideStart := time.Now()
-	sideOut, err := side.EmbedFullBatch(context.Background(), texts)
+	sideOut, err := embedInBudget(context.Background(), side, texts)
 	sideElapsed := time.Since(sideStart)
 	require.NoError(t, err)
 	require.Len(t, sideOut, len(texts))
@@ -105,6 +105,27 @@ func TestSidecar_VsInProcess_Throughput(t *testing.T) {
 		require.NotEmpty(t, cpuOut[i].ColBERT, "in-process colbert should be non-empty")
 		require.NotEmpty(t, sideOut[i].ColBERT, "sidecar colbert should be non-empty")
 	}
+}
+
+// embedInBudget embeds texts in batches that fit the BGE-M3 memory budget,
+// in order. The embedders refuse a batch outside it, so a workload of real
+// note bodies cannot go in as one batch.
+func embedInBudget(ctx context.Context, e embedding.FullEmbedder, texts []string) ([]*embedding.BGEM3Output, error) {
+	var out []*embedding.BGEM3Output
+	for start := 0; start < len(texts); {
+		end, longest := start+1, len(texts[start])
+		for end < len(texts) && embedding.BGEM3BatchFits(end-start+1, max(longest, len(texts[end]))) {
+			longest = max(longest, len(texts[end]))
+			end++
+		}
+		outs, err := e.EmbedFullBatch(ctx, texts[start:end])
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, outs...)
+		start = end
+	}
+	return out, nil
 }
 
 func totalChars(texts []string) int {

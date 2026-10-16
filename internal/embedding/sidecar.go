@@ -217,6 +217,9 @@ func (e *SidecarBGEM3Embedder) EmbedFull(ctx context.Context, text string) (*BGE
 // response. Tokens are sparse-key strings in the JSON; we parse to int32
 // here so the sidecar protocol stays portable across languages.
 func (e *SidecarBGEM3Embedder) EmbedFullBatch(_ context.Context, texts []string) ([]*BGEM3Output, error) {
+	if err := checkBGEM3Batch(texts); err != nil {
+		return nil, err
+	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.closed {

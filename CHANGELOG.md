@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The BGE-M3 embedder refuses a batch outside the memory budget (more than 8 texts, or more than one cap-length note's worth of padded tokens) with an error instead of running it. The indexer already plans every batch inside that budget; the refusal keeps a future caller that skips the plan from taking a machine's memory, as 0.10.13's re-embed did. One definition of the budget serves both.
+
 ## [0.10.14] - 2026-10-16
 
 > Upgrade from 0.10.13 now: its one-time re-embed could take a single `vaultmind` process past 100 GB of memory. Embedding now peaks near 3 GB.
