@@ -345,6 +345,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.vaultstatus.vault` | string | `.` | `VAULTMIND_APP_VAULTSTATUS_VAULT` | Path to vault root |
 | `app.vaultstatus.json` | bool | `false` | `VAULTMIND_APP_VAULTSTATUS_JSON` | Output in JSON format |
 | `app.embed_on_write` | bool | `true` | `VAULTMIND_APP_EMBED_ON_WRITE` | Embed a note as soon as a command writes it (note create, the frontmatter commands), with the model the vault already uses. A changed note loses its embeddings, and without this it drops out of semantic search until the next 'vaultmind index --embed'. Turn off for bulk edits and embed once at the end. |
+| `app.embed_max_rss_mb` | int | `6144` | `VAULTMIND_APP_EMBED_MAX_RSS_MB` | Stop an embedding pass (index --embed, or the embed after a write) once vaultmind's peak memory passes this many MiB. Embedding peaks near 3 GB; 0.10.13's re-embed passed 100 GB with nothing to stop it. Notes embedded before the stop are kept, so running the command again continues. 0 turns the check off. |
 
 ## Example Configuration
 
@@ -363,6 +364,9 @@ app:
 
   # Embed a note as soon as a command writes it (note create, the frontmatter commands), with the model the vault already uses. A changed note loses its embeddings, and without this it drops out of semantic search until the next 'vaultmind index --embed'. Turn off for bulk edits and embed once at the end.
   embed_on_write: true
+
+  # Stop an embedding pass (index --embed, or the embed after a write) once vaultmind's peak memory passes this many MiB. Embedding peaks near 3 GB; 0.10.13's re-embed passed 100 GB with nothing to stop it. Notes embedded before the stop are kept, so running the command again continues. 0 turns the check off.
+  embed_max_rss_mb: 6144
 
   apply:
     # Path to vault root
@@ -2407,5 +2411,8 @@ export VAULTMIND_APP_VAULTSTATUS_JSON=false
 
 # Embed a note as soon as a command writes it (note create, the frontmatter commands), with the model the vault already uses. A changed note loses its embeddings, and without this it drops out of semantic search until the next 'vaultmind index --embed'. Turn off for bulk edits and embed once at the end.
 export VAULTMIND_APP_EMBED_ON_WRITE=true
+
+# Stop an embedding pass (index --embed, or the embed after a write) once vaultmind's peak memory passes this many MiB. Embedding peaks near 3 GB; 0.10.13's re-embed passed 100 GB with nothing to stop it. Notes embedded before the stop are kept, so running the command again continues. 0 turns the check off.
+export VAULTMIND_APP_EMBED_MAX_RSS_MB=6144
 
 ```

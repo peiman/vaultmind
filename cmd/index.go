@@ -150,7 +150,7 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 		if err := guardBGEM3SlowBackend(cmd, model); err != nil {
 			return err
 		}
-		embedResult, err = idxr.RunEmbed(cmd.Context(), dbPath, model, fullRebuild)
+		embedResult, err = runEmbedGuarded(cmd, idxr, dbPath, model, fullRebuild)
 		if err != nil {
 			return fmt.Errorf("embedding notes: %w", err)
 		}
