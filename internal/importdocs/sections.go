@@ -5,6 +5,7 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/peiman/vaultmind/internal/vault"
 )
@@ -307,7 +308,14 @@ func sectionSlug(s section, heading string) string {
 		name = "part"
 	}
 	if len(name) > 50 {
-		name = strings.TrimRight(name[:50], "-")
+		// Cut in bytes (the cap bounds a file name) but between characters:
+		// half a multi-byte letter is not valid UTF-8, and macOS refuses
+		// the file name, so the section was never written.
+		cut := 50
+		for cut > 0 && !utf8.RuneStart(name[cut]) {
+			cut--
+		}
+		name = strings.TrimRight(name[:cut], "-")
 	}
 	return name
 }
