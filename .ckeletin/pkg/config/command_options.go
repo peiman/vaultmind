@@ -42,11 +42,6 @@ type ConfigOption struct {
 	// EnvVar is the corresponding environment variable name (computed automatically)
 	EnvVar string
 
-	// NoFlag keeps the option in the registry (config file and environment)
-	// without a command-line flag. A per-invocation flag is the wrong place
-	// for a privacy opt-in: the vault decides, not one call.
-	NoFlag bool
-
 	// Validation is an optional function that validates the config value at load time.
 	// It receives the current value from Viper and returns an error if invalid.
 	// Leave nil to skip validation for this option.

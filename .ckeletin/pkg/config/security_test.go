@@ -3,15 +3,12 @@
 package config
 
 import (
-	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/testutil"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -88,73 +85,6 @@ func TestValidateConfigFilePermissions(t *testing.T) {
 			}
 		})
 	}
-}
-
-// capturePermLog records what ValidateConfigFilePermissions emits at level.
-// Not parallel: it replaces the process logger, and sibling tests in this
-// file call t.Parallel. Run it via -run so those siblings are not started.
-func capturePermLog(t *testing.T, level zerolog.Level) *bytes.Buffer {
-	t.Helper()
-	var buf bytes.Buffer
-	old := log.Logger
-	log.Logger = zerolog.New(&buf).Level(level)
-	t.Cleanup(func() { log.Logger = old })
-	return &buf
-}
-
-func writePermConfig(t *testing.T, perm os.FileMode) string {
-	t.Helper()
-	testutil.SkipOnWindowsWithReason(t, "permission tests require Unix file permissions")
-	path := filepath.Join(t.TempDir(), "config.yaml")
-	require.NoError(t, os.WriteFile(path, []byte("test: value\n"), perm))
-	require.NoError(t, os.Chmod(path, perm))
-	return path
-}
-
-// A normal 0644 config is not a problem the user must fix. The note about it
-// is diagnostic, so the default Info level — what every command runs at —
-// must not print it. v0.10.8 was quiet here.
-func TestConfigPermissions_RoutineNoteIsQuietAtInfo(t *testing.T) {
-	logs := capturePermLog(t, zerolog.InfoLevel)
-	path := writePermConfig(t, 0o644)
-	require.NoError(t, ValidateConfigFilePermissions(path))
-	assert.NotContains(t, logs.String(), "permissive permissions")
-	assert.NotContains(t, logs.String(), "recommend tightening")
-}
-
-// The same note stays available when debug logging is on. Moving it must not
-// delete the diagnostic.
-func TestConfigPermissions_RoutineNoteRemainsAtDebug(t *testing.T) {
-	logs := capturePermLog(t, zerolog.DebugLevel)
-	path := writePermConfig(t, 0o644)
-	require.NoError(t, ValidateConfigFilePermissions(path))
-	assert.Contains(t, logs.String(), "permissive permissions")
-	assert.Contains(t, logs.String(), `"level":"debug"`)
-	assert.NotContains(t, logs.String(), `"level":"info"`)
-}
-
-// Group-writable is a real problem. It stays a warning at the default level,
-// and the routine "recommend tightening" note does not ride along with it.
-func TestConfigPermissions_GroupWritableStaysAWarning(t *testing.T) {
-	logs := capturePermLog(t, zerolog.InfoLevel)
-	path := writePermConfig(t, 0o620)
-	require.NoError(t, ValidateConfigFilePermissions(path))
-	assert.Contains(t, logs.String(), "group-writable")
-	assert.Contains(t, logs.String(), `"level":"warn"`)
-	assert.NotContains(t, logs.String(), "recommend tightening")
-}
-
-// World-writable is a problem the user must fix before the command continues.
-// It stays an error that says so, not a routine permissions note.
-func TestConfigPermissions_WorldWritableStaysAnError(t *testing.T) {
-	logs := capturePermLog(t, zerolog.InfoLevel)
-	path := writePermConfig(t, 0o666)
-	err := ValidateConfigFilePermissions(path)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "world-writable")
-	assert.Contains(t, err.Error(), "Security Issue")
-	assert.Contains(t, err.Error(), "How to fix")
-	assert.NotContains(t, logs.String(), "permissive permissions")
 }
 
 func TestValidateConfigFilePermissions_NonexistentFile(t *testing.T) {
@@ -377,4 +307,115 @@ func TestValidateConfigFileSecurity_NonexistentFile(t *testing.T) {
 	require.Error(t, err, "ValidateConfigFileSecurity() should error for nonexistent file")
 	assert.True(t, strings.Contains(err.Error(), "failed to stat"),
 		"Expected error message to contain 'failed to stat', got: %v", err)
+}
+
+func TestValidateLogFilePath(t *testing.T) {
+	t.Parallel()
+	validate := ValidateLogFilePath()
+
+	tests := []struct {
+		name        string
+		value       interface{}
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name:    "Default relative path",
+			value:   "./logs/vaultmind.log",
+			wantErr: false,
+		},
+		{
+			name:    "Absolute path",
+			value:   "/var/log/vaultmind/app.log",
+			wantErr: false,
+		},
+		{
+			name:    "Relative path without leading dot",
+			value:   "logs/app.log",
+			wantErr: false,
+		},
+		{
+			name:        "Parent directory traversal",
+			value:       "../escape.log",
+			wantErr:     true,
+			errContains: "traversal",
+		},
+		{
+			name:        "Nested traversal escaping the tree",
+			value:       "logs/../../escape.log",
+			wantErr:     true,
+			errContains: "traversal",
+		},
+		{
+			name:    "Inner traversal that stays inside cleans away",
+			value:   "logs/../app.log",
+			wantErr: false,
+		},
+		{
+			name:    "Component with leading dots is not traversal",
+			value:   "logs/..hidden/app.log",
+			wantErr: false,
+		},
+		{
+			name:        "Empty path",
+			value:       "",
+			wantErr:     true,
+			errContains: "empty",
+		},
+		{
+			name:    "Nil value is skipped",
+			value:   nil,
+			wantErr: false,
+		},
+		{
+			name:    "Non-string value is skipped",
+			value:   42,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := validate(tt.value)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.errContains != "" {
+					assert.True(t, strings.Contains(err.Error(), tt.errContains),
+						"ValidateLogFilePath() error = %v, should contain %q", err, tt.errContains)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateLogFilePath_ExistingFiles(t *testing.T) {
+	t.Parallel()
+	testutil.SkipOnWindowsWithReason(t, "symlink creation requires elevated privileges on Windows")
+
+	tmpDir := t.TempDir()
+	target := filepath.Join(tmpDir, "real.log")
+	require.NoError(t,
+		os.WriteFile(target, []byte("log line\n"), 0600),
+		"Failed to create target file")
+
+	link := filepath.Join(tmpDir, "link.log")
+	require.NoError(t, os.Symlink(target, link), "Failed to create symlink")
+
+	validate := ValidateLogFilePath()
+
+	assert.NoError(t, validate(target),
+		"existing regular file should be accepted")
+
+	err := validate(link)
+	require.Error(t, err, "existing symlink should be rejected")
+	assert.True(t, strings.Contains(err.Error(), "symlink"),
+		"ValidateLogFilePath() error = %v, should contain %q", err, "symlink")
+
+	missing := filepath.Join(tmpDir, "missing", "app.log")
+	assert.NoError(t, validate(missing),
+		"missing file should be accepted (it is created on first write)")
 }

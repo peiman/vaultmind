@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Standard output functions for check scripts
 # Usage: source scripts/lib/check-output.sh
+#
+# Sourced library: deliberately no `set -eo pipefail` here — shell options
+# would leak into (or fight with) the sourcing script, which owns strict mode
 
 # Colors and formatting
 RED='\033[0;31m'
@@ -131,4 +134,67 @@ run_check() {
     CHECK_OUTPUT=$(eval "$cmd" 2>&1)
     local exit_code=$?
     return $exit_code
+}
+
+# classify_govulncheck: map a govulncheck status to clean, findings, or network.
+# Exit 3 means vulnerabilities were found. That output must not be scanned for
+# network words: a call stack can contain "timeout"
+# (http2bufferedWriterTimeoutWriter) and is not a connectivity failure.
+# Any other non-zero status is a network failure only when the text says so.
+# Usage: class=$(classify_govulncheck "$?" "$CHECK_OUTPUT")
+classify_govulncheck() {
+    local code="$1"
+    local output="$2"
+
+    if [[ "$code" -eq 0 ]]; then
+        echo clean
+        return 0
+    fi
+    if [[ "$code" -eq 3 ]]; then
+        echo findings
+        return 0
+    fi
+    if printf '%s\n' "$output" | grep -qiE 'no such host|connection refused|network is unreachable|dial tcp|temporary failure in name resolution|TLS handshake timeout|Client\.Timeout'; then
+        echo network
+        return 0
+    fi
+    echo findings
+    return 0
+}
+
+# ─────────────────────────────────────────────────────────────────────
+# Scanner exclusions (SSOT)
+#
+# Directories that file-walking checks must never descend into.
+# Claude Code's worktree feature creates full nested module checkouts
+# under .claude/worktrees/; stale copies there break tree-walking
+# scanners — and a scanner that errors on code it cannot build may
+# silently SKIP it, degrading coverage behind a green summary.
+#
+# Mirrored (static configs cannot read this list):
+#   - .go-arch-lint.yml excludeFiles has a /\.claude/.* entry
+#   - semgrep is covered via .gitignore (.claude/* is ignored); no
+#     .semgrepignore on purpose — creating one would REPLACE semgrep's
+#     built-in default ignores and lose more than it adds
+# The contract for all of them is pinned by
+# test/integration/scanner_exclusion_test.go.
+CKELETIN_SCAN_EXCLUDED_DIRS=(
+    ".claude/worktrees"
+)
+
+# ckeletin_go_files: print Go files under a root (default .), pruning
+# CKELETIN_SCAN_EXCLUDED_DIRS and any directory that carries its own
+# go.mod (a nested module — e.g. another worktree's checkout — is never
+# part of this module's scan surface).
+ckeletin_go_files() {
+    local root="${1:-.}"
+    local prunes=()
+    local d
+    for d in "${CKELETIN_SCAN_EXCLUDED_DIRS[@]}"; do
+        prunes+=(-path "${root}/${d}" -prune -o)
+    done
+    while IFS= read -r d; do
+        prunes+=(-path "$d" -prune -o)
+    done < <(find "$root" -mindepth 2 -name go.mod -exec dirname {} \; 2>/dev/null)
+    find "$root" "${prunes[@]}" -type f -name '*.go' -print 2>/dev/null
 }

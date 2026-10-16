@@ -19,9 +19,9 @@ This flexibility creates questions:
 - How do we communicate project intent through structure?
 - What prevents accidental API surface expansion?
 
-### Why This Matters for ckeletin-go
+### Why This Matters for vaultmind
 
-**ckeletin-go is a production-ready Go CLI scaffold powered by an updatable framework layer.** It is primarily a CLI tool, but it also hosts public reusable packages in `pkg/` (e.g., `checkmate` for beautiful terminal output). This dual nature should be:
+**vaultmind is a production-ready Go CLI scaffold powered by an updatable framework layer.** It is primarily a CLI tool, but it also hosts public reusable packages in `pkg/` (e.g., `checkmate` for beautiful terminal output). This dual nature should be:
 1. **Visible** - Structure shows "CLI-first, with optional public packages"
 2. **Enforced** - `pkg/` packages must be standalone (no `internal/` imports)
 3. **Documented** - Clear criteria for what belongs in `pkg/`
@@ -44,7 +44,7 @@ project/
 ```
 - **Pros**: Well-known pattern, supports both CLI and library
 - **Cons**: Maintenance burden for public API packages
-- **Why chosen**: ckeletin-go is CLI-first but also provides public packages (e.g., `pkg/checkmate/`). This layout matches our actual use case.
+- **Why chosen**: vaultmind is CLI-first but also provides public packages (e.g., `pkg/checkmate/`). This layout matches our actual use case.
 
 **2. Library-First Layout (pkg/, cmd/ optional)**
 ```
@@ -84,7 +84,7 @@ project/
 We adopt a **CLI-first package organization** with optional public packages:
 
 ```
-ckeletin-go/
+vaultmind/
 ├── main.go                    # Entry point (only root-level .go file)
 │
 ├── cmd/                       # CLI command implementations
@@ -263,7 +263,7 @@ This ADR **documents the organization strategy** and adds enforcement.
 ### Directory Purposes
 
 ```
-ckeletin-go/
+vaultmind/
 │
 ├── main.go                    # Bootstrap, execute root command
 ├── main_test.go               # Entry point tests

@@ -27,9 +27,9 @@ When building CLI applications, we depend on open-source libraries. Each depende
 - Legal liability for license violations
 - Inability to sell or distribute software
 
-### Why ckeletin-go Needs This
+### Why vaultmind Needs This
 
-**ckeletin-go is a scaffold** - users build their own projects from it. We must:
+**vaultmind is a scaffold** - users build their own projects from it. We must:
 1. **Lead by example** - Demonstrate professional license compliance
 2. **Protect scaffold users** - Prevent them from inheriting license issues
 3. **Enable commercial use** - Scaffold must support proprietary applications

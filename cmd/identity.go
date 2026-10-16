@@ -1,4 +1,4 @@
-// ckeletin:allow-custom-command
+// ckeletin:allow-custom-command - group parent that only shows help (see below)
 //
 // The `identity` parent is a custom group command, not a thin metadata-driven
 // leaf: it has no ConfigPrefix/options (its behavior is "show help") and carries

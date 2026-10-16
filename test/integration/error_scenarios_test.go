@@ -199,7 +199,7 @@ func TestInvalidFlagValues(t *testing.T) {
 			name:               "Invalid docs format",
 			args:               []string{"docs", "config", "--format", "invalid"},
 			wantExitCode:       1,
-			wantStderrContains: "unsupported format",
+			wantStderrContains: `invalid value "invalid" (valid options: markdown, yaml)`,
 		},
 	}
 
@@ -303,7 +303,7 @@ func TestDocumentationOutputErrors(t *testing.T) {
 			name: "Output to non-existent directory",
 			setupFunc: func(t *testing.T) (string, []string) {
 				nonExistentPath := filepath.Join(tmpDir, "nonexistent", "dir", "output.md")
-				return nonExistentPath, []string{"docs", "config", "--output", nonExistentPath}
+				return nonExistentPath, []string{"docs", "config", "--output-file", nonExistentPath}
 			},
 			wantExitCode:       1,
 			wantStderrContains: "failed",

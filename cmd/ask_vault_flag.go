@@ -1,4 +1,4 @@
-// ckeletin:allow-custom-command
+// ckeletin:allow-custom-command - not a command: a pflag.Value for ask --vault
 //
 // Not a command — a pflag Value wrapper for ask.go's --vault flag. Lives in
 // cmd/ because it wraps a flag registered there; the whitelist comment opts

@@ -7,8 +7,54 @@
 #   CKSPEC-ENF-005 — mapping completeness (fail on unmapped requirements)
 #   CKSPEC-ENF-006 — violation test verification
 #   CKSPEC-ENF-007 — automatic feedback signals
+#   CKSPEC-AGENT-007 / CKSPEC-ENF-009 — subject-gated: no-op in a derived project
 
 set -euo pipefail
+
+# ── Subject gate (CKSPEC-AGENT-007 / CKSPEC-ENF-009) ────────────────────────
+# This gate verifies ckeletin-go's OWN implementation-conformance. A project
+# scaffolded from ckeletin-go is NOT the reference implementation — `task init`
+# strips its conformance mapping/report (CKSPEC-AGENT-007), so running the gate
+# there would assert nothing about that project. Per CKSPEC-AGENT-007 an
+# inherited upstream-only gate MUST be subject-gated and MUST NOT hard-fail or
+# block the derived project's release: it declares its subject and exits 0.
+# Detection is by module identity (robust to the mapping being present/absent),
+# mirroring ckeletin-rust's repository-identity gate.
+#
+# A missing/unreadable/module-less go.mod is NOT a derived project — it means the
+# gate cannot determine its subject (e.g. conform run from the wrong directory),
+# which is an error to surface, not a no-op to skip. Only a readable go.mod whose
+# module differs from the reference is a genuine derived project (always a Go
+# project, so its go.mod always exists). So "can't read the subject" hard-fails;
+# "the subject is a different module" no-ops. This keeps the failure that matters
+# (a reference run that skips real verification) from hiding behind the no-op.
+REFERENCE_MODULE="github.com/peiman/ckeletin-go"
+if [ ! -r go.mod ]; then
+    echo "FAILED — conform.sh: go.mod not found or unreadable in '$(pwd)'." >&2
+    echo "  Run conform from the project root; the gate cannot determine its subject" >&2
+    echo "  without go.mod and must not silently skip conformance." >&2
+    exit 1
+fi
+CURRENT_MODULE="$(awk '$1 == "module" { print $2; exit }' go.mod)"
+if [ -z "$CURRENT_MODULE" ]; then
+    echo "FAILED — conform.sh: no 'module' directive parsed from go.mod." >&2
+    exit 1
+fi
+if [ "$CURRENT_MODULE" != "$REFERENCE_MODULE" ]; then
+    echo "ckeletin conformance gate — subject: derived project (${CURRENT_MODULE})."
+    echo "  This repository is not the ckeletin-go reference implementation, so there is"
+    echo "  no implementation-conformance to verify here (CKSPEC-AGENT-007, CKSPEC-ENF-009)."
+    echo "  Gate is a no-op by design — not a failure — so it never blocks the release."
+    exit 0
+fi
+
+# Sourced helper: ENF-008 violation-test anchor resolution. Extracted so the
+# resolution logic is unit-tested directly (test/conformance/violation_test.go
+# ::TestViolation_ENF008_AnchorResolution) without re-running conform (which
+# would recurse). Behaviour here is identical to the prior inline loop body.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/anchor.sh
+source "${SCRIPT_DIR}/lib/anchor.sh"
 
 MAPPING_FILE="conformance-mapping.yaml"
 FAIL_FILE=$(mktemp)
@@ -16,46 +62,64 @@ FEEDBACK_FILE=$(mktemp)
 WARNING_FILE=$(mktemp)
 trap 'rm -f "$FAIL_FILE" "$FEEDBACK_FILE" "$WARNING_FILE"' EXIT
 
-# ── Parse helpers (YAML subset — no external deps) ──────────────
+# ── Require yq, and fail fast if the mapping is not valid YAML ───
+# conform.sh parses the mapping with yq (one consistent YAML parser). An
+# unparseable mapping — e.g. a check string with an invalid backslash escape —
+# must fail the build, and therefore the release gate (CKSPEC-ENF-009), rather
+# than be silently tolerated by a lenient text scan. This gate runs first so a
+# broken mapping exits before any checks (including the conformance test suite),
+# which keeps it cheap and recursion-free.
+if ! command -v yq >/dev/null 2>&1; then
+    echo "FAILED — 'yq' is required to parse $MAPPING_FILE but was not found on PATH."
+    echo "  Install yq (https://github.com/mikefarah/yq) and re-run."
+    exit 1
+fi
+# Must be mikefarah/yq v4 (Go): the parser below uses strenv(), which the Python
+# yq (kislyuk) lacks. Probe the capability so a wrong variant fails here with a
+# clear message instead of a cryptic "unknown function strenv" mid-run.
+if ! printf 'a: 1\n' | probe=x yq '.a = strenv(probe)' >/dev/null 2>&1; then
+    echo "FAILED — the 'yq' on PATH is not mikefarah/yq v4 (strenv unsupported)."
+    echo "  conform.sh needs mikefarah/yq: https://github.com/mikefarah/yq"
+    exit 1
+fi
+if ! yq '.' "$MAPPING_FILE" >/dev/null 2>&1; then
+    echo "FAILED — $MAPPING_FILE is not valid YAML (yq could not parse it)."
+    echo "  Run 'yq . $MAPPING_FILE' to see the parse error."
+    echo "  Tip: a shell command containing regex backslashes must be written as a"
+    echo "       literal block scalar (- |-) so it is taken verbatim — see the file header."
+    exit 1
+fi
+
+# ── Parse helpers (all reads go through yq — one consistent parser) ──
+# Requirement IDs contain hyphens, so paths use strenv() to pass the id/field
+# in as data rather than interpolating untrusted text into the yq expression.
 
 get_spec_version() {
-    grep '^spec_version:' "$MAPPING_FILE" | head -1 | sed 's/spec_version: *"\(.*\)"/\1/'
+    yq '.spec_version // ""' "$MAPPING_FILE"
 }
 
 get_requirement_ids() {
-    grep '^  CKSPEC-' "$MAPPING_FILE" | sed 's/^ *\(CKSPEC-[A-Z]*-[0-9]*\):.*/\1/'
+    yq '.requirements | keys | .[]' "$MAPPING_FILE"
 }
 
-# Get a scalar field from a requirement block
+# Get a scalar field (title, status, enforcement_level) from a requirement.
 get_field() {
     local req_id="$1" field="$2"
-    awk -v req="$req_id" -v field="$field" '
-        /^  [A-Z]/ && $0 ~ req":" { found=1; next }
-        found && /^  [A-Z]/ { found=0 }
-        found && $0 ~ "^    " field ":" {
-            line=$0
-            sub(/^[^:]*: */, "", line)
-            gsub(/^ *"?/, "", line); gsub(/"? *$/, "", line)
-            if (line != "" && line != ">") print line
-            exit
-        }
-    ' "$MAPPING_FILE"
+    req="$req_id" field="$field" \
+        yq '.requirements[strenv(req)][strenv(field)] // ""' "$MAPPING_FILE"
 }
 
-# Get array items (checks or violation_tests)
+# Get array items (checks or violation_tests); empty/missing → no output.
 get_array_items() {
     local req_id="$1" field="$2"
-    awk -v req="$req_id" -v field="$field" '
-        /^  [A-Z]/ && $0 ~ req":" { found=1; next }
-        found && /^  [A-Z]/ { found=0 }
-        found && $0 ~ "^    " field ":" { in_array=1; next }
-        in_array && /^    [a-zA-Z_]/ { in_array=0; next }
-        in_array && /^      - / {
-            line=$0
-            sub(/^ *- *"?/, "", line); sub(/"? *$/, "", line)
-            if (line != "") print line
-        }
-    ' "$MAPPING_FILE"
+    req="$req_id" field="$field" \
+        yq '(.requirements[strenv(req)][strenv(field)] // [])[]' "$MAPPING_FILE"
+}
+
+# Print "true" if a requirement declares a violation_evidence block, else "false".
+has_violation_evidence() {
+    local req_id="$1"
+    req="$req_id" yq '.requirements[strenv(req)] | has("violation_evidence")' "$MAPPING_FILE"
 }
 
 # ── Main ────────────────────────────────────────────────────────
@@ -71,7 +135,7 @@ echo "Mapping file: $MAPPING_FILE"
 echo ""
 
 REQ_IDS=$(get_requirement_ids)
-TOTAL=$(echo "$REQ_IDS" | wc -l | tr -d ' ')
+TOTAL=$(yq '.requirements | keys | length' "$MAPPING_FILE")
 
 echo "Requirements mapped: $TOTAL"
 echo ""
@@ -157,6 +221,51 @@ fi
 echo "Completeness: $TOTAL/$TOTAL requirements mapped (ENF-005: PASS)"
 echo ""
 
+# ── Report sync guard: the committed conformance-report.json must match what
+# gen-conformance-report.sh produces from the mapping (mirrors the spec repo's
+# requirements.json sync pattern; P9). A stale report would publish wrong status,
+# so drift fails the build — and the release gate — here, before the checks run
+# (fast, recursion-free), prompting a regenerate. The spec repo aggregates this
+# published report instead of hand-authoring conformance/ckeletin-go.yaml.
+# Runs AFTER the completeness check so a mapping that drops a requirement fails
+# as "unmapped" (ENF-005) rather than as report drift.
+REPORT_FILE="conformance-report.json"
+GEN_SCRIPT=".ckeletin/scripts/gen-conformance-report.sh"
+if [[ ! -f "$REPORT_FILE" ]]; then
+    echo "FAILED — $REPORT_FILE is missing. Run 'task generate:conformance-report' and commit it."
+    exit 1
+fi
+# Generate into a temp file and check the generator's exit code SEPARATELY from
+# the diff, so a broken generator reports "generation failed" (not a misleading
+# "out of sync" whose suggested remediation would overwrite the committed report).
+GEN_TMP=$(mktemp)
+if ! bash "$GEN_SCRIPT" "$MAPPING_FILE" > "$GEN_TMP"; then
+    rm -f "$GEN_TMP"
+    echo "FAILED — could not generate the conformance report from $MAPPING_FILE."
+    echo "  Run 'bash $GEN_SCRIPT $MAPPING_FILE' to see the generator error."
+    exit 1
+fi
+if ! diff "$GEN_TMP" "$REPORT_FILE" >/dev/null 2>&1; then
+    rm -f "$GEN_TMP"
+    echo "FAILED — $REPORT_FILE is out of sync with $MAPPING_FILE."
+    echo "  Run 'task generate:conformance-report' and commit the result."
+    exit 1
+fi
+rm -f "$GEN_TMP"
+echo "Report sync: $REPORT_FILE matches the mapping (PASS)"
+echo ""
+
+# ── ENF-008 drift guard: machine-derivable facts in evidence must match reality.
+# (A hand-typed count in prose silently rots — e.g. "35" after a 36th requirement.)
+DRIFT=$(yq '.requirements[].evidence // ""' "$MAPPING_FILE" | grep -oE 'all [0-9]+ requirement' | grep -oE '[0-9]+' | head -1 || true)
+if [[ -n "$DRIFT" && "$DRIFT" != "$TOTAL" ]]; then
+    echo "evidence drift: prose claims '$DRIFT requirement IDs' but $TOTAL are mapped (ENF-008)" >> "$FAIL_FILE"
+fi
+
+# ENF-008 anchoring tallies: machine-enforced vs declared-analysis.
+ENF008_AUTOMATED=0
+ENF008_ANALYSIS=0
+
 # ── Run checks and validate ──────────────────────────────────────
 
 echo "Running checks..."
@@ -175,27 +284,38 @@ for req_id in $REQ_IDS; do
         echo "$req_id ($title): partial" >> "$WARNING_FILE"
     fi
 
+    # ── ENF-008: every met requirement must be machine-anchored (a check or a
+    # violation test) OR a declared honor-system with a written analysis
+    # (violation_evidence). No silent prose-only "met". ──
+    if [[ "$status" == "met" ]]; then
+        a_checks=$(get_array_items "$req_id" "checks")
+        a_vtests=$(get_array_items "$req_id" "violation_tests")
+        a_vevid=$(has_violation_evidence "$req_id")
+        if [[ -n "$a_checks" || -n "$a_vtests" ]]; then
+            ENF008_AUTOMATED=$((ENF008_AUTOMATED + 1))
+        elif [[ "$enforcement" == "honor-system" && "$a_vevid" == "true" ]]; then
+            ENF008_ANALYSIS=$((ENF008_ANALYSIS + 1))
+        else
+            echo "$req_id ($title): met but unanchored — add a check/violation_test, or declare honor-system + violation_evidence (ENF-008)" >> "$FAIL_FILE"
+        fi
+    fi
+
     # ── ENF-006: Check proof exists for claims above honor-system ──
     # Accepts either violation_tests OR violation_evidence (spec v0.4.0+)
     if [[ "$enforcement" != "honor-system" && "$enforcement" != "" ]]; then
         vtests=$(get_array_items "$req_id" "violation_tests")
-        # Check if violation_evidence exists in this requirement's block
-        # (multi-line field, so get_field may not capture it — use grep)
-        vevidence=$(awk -v req="$req_id" '
-            /^  [A-Z]/ && $0 ~ req":" { found=1; next }
-            found && /^  [A-Z]/ { found=0 }
-            found && /violation_evidence:/ { print "yes"; exit }
-        ' "$MAPPING_FILE")
+        # "true" if this requirement declares a violation_evidence block.
+        vevidence=$(has_violation_evidence "$req_id")
 
-        if [[ -z "$vtests" && -z "$vevidence" ]]; then
+        if [[ -z "$vtests" && "$vevidence" != "true" ]]; then
             echo "$req_id: claims $enforcement but has no violation test or evidence" >> "$FEEDBACK_FILE"
         elif [[ -n "$vtests" ]]; then
             echo "$vtests" | while IFS= read -r vt; do
-                # Strip test function reference (file.go::TestFunc -> file.go)
-                vt_file="${vt%%::*}"
-                if [[ -n "$vt_file" && ! -f "$vt_file" ]]; then
-                    echo "$req_id: violation test file not found: $vt_file" >> "$FEEDBACK_FILE"
-                fi
+                # ENF-008 (anchor validity): an anchor MUST resolve, not merely
+                # be present. anchor_resolve hard-fails (appends to FAIL_FILE) a
+                # dangling file::symbol — missing file, missing symbol, or empty
+                # symbol after '::' — so a stale anchor can never pass as proof.
+                anchor_resolve "$vt" "$FAIL_FILE" "$req_id"
             done
         fi
         # violation_evidence is accepted at face value if it exists —
@@ -230,9 +350,9 @@ done
 
 # ── Collect results ──────────────────────────────────────────────
 
-MET=$(grep -c 'status: met' "$MAPPING_FILE" || true)
-DEFERRED=$(grep -c 'status: deferred' "$MAPPING_FILE" || true)
-PARTIAL=$(grep -c 'status: partial' "$MAPPING_FILE" || true)
+MET=$(yq '[.requirements[] | select(.status == "met")] | length' "$MAPPING_FILE")
+DEFERRED=$(yq '[.requirements[] | select(.status == "deferred")] | length' "$MAPPING_FILE")
+PARTIAL=$(yq '[.requirements[] | select(.status == "partial")] | length' "$MAPPING_FILE")
 FAILED_CHECKS=0
 if [[ -s "$FAIL_FILE" ]]; then
     FAILED_CHECKS=$(wc -l < "$FAIL_FILE" | tr -d ' ')
@@ -254,6 +374,7 @@ echo "  Met:           $MET"
 echo "  Partial:       $PARTIAL"
 echo "  Deferred:      $DEFERRED"
 echo "  Failed checks: $FAILED_CHECKS"
+echo "  Enforcement:   $ENF008_AUTOMATED automated, $ENF008_ANALYSIS analysis-with-evidence (ENF-008)"
 echo ""
 
 if [[ $WARNING_COUNT -gt 0 ]]; then

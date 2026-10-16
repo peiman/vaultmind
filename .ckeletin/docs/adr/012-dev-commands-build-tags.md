@@ -28,9 +28,9 @@ When building CLI applications, developers need utilities during development tha
 - Larger binaries → slower downloads, more disk space
 - Support burden from users running dev commands
 
-### Why ckeletin-go Needs This
+### Why vaultmind Needs This
 
-**ckeletin-go is a scaffold** with unique requirements:
+**vaultmind is a scaffold** with unique requirements:
 
 1. **Teach best practices** - Show how to properly separate dev/prod code
 2. **Developer ergonomics** - Make local development easy with built-in tools
@@ -55,7 +55,7 @@ if os.Getenv("DEV_MODE") == "true" {
   - Flag bypass possible
 - **Why not**: Unacceptable security/size tradeoff
 
-**2. Separate Binary (e.g., ckeletin-go-dev)**
+**2. Separate Binary (e.g., vaultmind-dev)**
 - **Pros**: Complete separation, no confusion
 - **Cons**:
   - Two binaries to maintain
@@ -68,7 +68,7 @@ if os.Getenv("DEV_MODE") == "true" {
 **3. Submodule/Plugin System**
 ```go
 // Load dev commands from external module
-plugin.Load("github.com/peiman/ckeletin-go-devtools")
+plugin.Load("github.com/peiman/vaultmind-devtools")
 ```
 - **Pros**: Complete modularity, extensible
 - **Cons**:
@@ -246,11 +246,11 @@ internal/dev/
 ### CI Strategy
 
 **New job: `test-dev-prod`**
-1. Build dev: `go build -tags dev -o ckeletin-go-dev`
-2. Test dev commands exist: `./ckeletin-go-dev dev --help`
+1. Build dev: `go build -tags dev -o vaultmind-dev`
+2. Test dev commands exist: `./vaultmind-dev dev --help`
 3. Run tests with dev tag: `go test -tags dev ./...`
-4. Build prod: `go build -o ckeletin-go-prod`
-5. Test dev commands hidden: `./ckeletin-go-prod dev` (must fail)
+4. Build prod: `go build -o vaultmind-prod`
+5. Test dev commands hidden: `./vaultmind-prod dev` (must fail)
 6. Run tests without tags: `go test ./...`
 
 Must pass before `release` job runs.

@@ -1,5 +1,5 @@
 // cmd/zz_catalog.go
-// ckeletin:allow-custom-command
+// ckeletin:allow-custom-command - not a command: the command catalog (groups and triggers)
 //
 // This file is the SINGLE SOURCE OF TRUTH for the command catalog: the cobra
 // group every user-facing command belongs to, its when-to-use trigger phrase,

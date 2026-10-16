@@ -1,4 +1,4 @@
-// ckeletin:allow-custom-command
+// ckeletin:allow-custom-command - not a command: a helper for ask --read
 //
 // This file is not a command — it's a helper for ask.go's --read flag.
 // The ultra-thin-command validator (ADR-001) flags it because of its

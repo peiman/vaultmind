@@ -29,18 +29,20 @@ if ! command -v grype &> /dev/null; then
     exit 1
 fi
 
-# Ensure grype's vulnerability DB is current before scanning. grype enforces a
-# maximum DB age (5 days) and refuses to scan with a stale or missing database —
-# which surfaces as a scan *error* (the else-branch below), not a vulnerability
-# finding. A freshly `go install`ed grype (as in CI) has no primed DB, so refresh
-# it up front. Non-fatal: if the update fails (e.g. transient network), grype
-# falls back to whatever DB it has and the scan below remains the real gate.
-echo "  Updating grype vulnerability database..."
-if ! grype db update; then
-    echo "  ⚠ grype db update failed — scanning with grype's existing database"
-fi
-
 check_header "Scanning SBOM for vulnerabilities"
+
+# sbom_is_current is false when the file is missing or older than the module.
+sbom_is_current() {
+    local file="$1"
+    local src
+    [[ -n "$file" && -f "$file" ]] || return 1
+    for src in go.mod go.sum .go-version; do
+        if [[ -f "$src" && "$src" -nt "$file" ]]; then
+            return 1
+        fi
+    done
+    return 0
+}
 
 # Find the latest SBOM file
 SBOM_DIR="reports/sbom"
@@ -65,6 +67,21 @@ if [[ -z "$SBOM_FILE" ]]; then
             "Failed to generate SBOM" \
             "Could not generate CycloneDX SBOM" \
             "Run: task generate:sbom:cyclonedx"
+        exit 1
+    fi
+    SBOM_FILE=$(ls -t "$SBOM_DIR"/*.cdx.json 2>/dev/null | head -1)
+fi
+
+# reports/sbom is gitignored. A leftover file from an older toolchain keeps
+# failing the scan after go.mod, go.sum, or .go-version has moved on.
+# Regenerate when the newest CycloneDX file is older than any of those.
+if ! sbom_is_current "$SBOM_FILE"; then
+    echo "  SBOM is missing or older than the module. Regenerating..."
+    if ! "${SCRIPT_DIR}/generate-sbom.sh" cyclonedx; then
+        check_failure \
+            "Failed to regenerate SBOM" \
+            "The existing SBOM is older than go.mod, go.sum, or .go-version" \
+            "Run: task generate:sbom"
         exit 1
     fi
     SBOM_FILE=$(ls -t "$SBOM_DIR"/*.cdx.json 2>/dev/null | head -1)

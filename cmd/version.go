@@ -1,5 +1,5 @@
 // cmd/version.go
-// ckeletin:allow-custom-command
+// ckeletin:allow-custom-command - prints build info from ldflags; no settings
 
 package cmd
 

@@ -6,8 +6,8 @@ version: '3'
 
 vars:
   # Fallback defaults - parent Taskfile should override these via includes.vars
-  _BINARY_NAME_DEFAULT: ckeletin-go
-  _MODULE_PATH_DEFAULT: github.com/peiman/ckeletin-go
+  _BINARY_NAME_DEFAULT: vaultmind
+  _MODULE_PATH_DEFAULT: github.com/peiman/vaultmind
 
   # Computed vars
   VERSION:
@@ -32,30 +32,37 @@ vars:
   TEST_OUTPUT_JSON: "test-output.json"
   COVERAGE_TXT: "coverage.txt"
 
+  # Consumer test-env extension point (issue #95). Every test:* task sources this
+  # file — in the SAME shell as `go test` — before running, IF it exists. A
+  # consuming project defines its test-env isolation (XDG sandboxing, GO_TEST_FLAGS,
+  # fixtures, …) ONCE in this file, and every test:* task — current and future —
+  # inherits it. This removes the footgun of re-wrapping each test sibling by hand
+  # (Task does not cascade env: across `task:` delegation). Override the path with
+  # the CKELETIN_TEST_ENV_SETUP env var. Unset / missing file = no-op (back-compat).
+  # The `case` normalisation prefixes a bare filename with ./ so POSIX `.`
+  # (which searches $PATH, not cwd, for names without a slash — e.g. dash on
+  # Linux CI) reliably sources the cwd file instead of silently doing nothing.
+  _TEST_ENV_PRELUDE: '_ck_env="${CKELETIN_TEST_ENV_SETUP:-.ckeletin.test-env.sh}"; case "$_ck_env" in /*|./*|../*) ;; *) _ck_env="./$_ck_env";; esac; [ -f "$_ck_env" ] && . "$_ck_env";'
+
   # Scripts directory (relative to this Taskfile)
   SCRIPTS_DIR: '{{.TASKFILE_DIR}}/scripts'
 
   # Pinned tool versions for reproducibility
-  TOOL_GOIMPORTS_VERSION: v0.28.0
+  TOOL_GOIMPORTS_VERSION: v0.45.0
   TOOL_GOVULNCHECK_VERSION: latest
   TOOL_GOTESTSUM_VERSION: latest
-  # PROJECT DEVIATION from the ckeletin scaffold default (v2.12.2), which
-  # cannot analyse Go 1.27: its bundled typechecker rejects the newer export
-  # data ("export data version 4 is greater than maximum supported version
-  # 2") and fails on `import "math"`. Go 1.27.2 emits V5 export data,
-  # supported by v2.14.0 (v2.13.2 only supports V4).
-  # Set here rather than in the root Taskfile because
-  # include-level vars do NOT override an included taskfile's own vars —
-  # tested, and the override silently had no effect.
-  TOOL_GOLANGCI_LINT_VERSION: v2.14.0
-  TOOL_LEFTHOOK_VERSION: v1.7.18
+  TOOL_GOLANGCI_LINT_VERSION: v2.12.2
+  TOOL_LEFTHOOK_VERSION: v2.1.9
   TOOL_GO_MOD_OUTDATED_VERSION: latest
   TOOL_GO_LICENSES_VERSION: v2.0.1
   TOOL_LICHEN_VERSION: v0.1.7
-  TOOL_SYFT_VERSION: v1.18.1
+  TOOL_SYFT_VERSION: v1.45.1
   TOOL_GITLEAKS_VERSION: latest
   TOOL_GRYPE_VERSION: latest
   TOOL_GOCOVMERGE_VERSION: latest
+  # Keep in sync with YQ_VERSION in .github/workflows/reusable-conformance.yml
+  # (CI downloads the release binary; install_tools.sh go-installs this tag)
+  TOOL_YQ_VERSION: v4.53.3
 
 tasks:
   default:
@@ -102,7 +109,7 @@ tasks:
     - echo "   syft{{":"}} {{.TOOL_SYFT_VERSION}}"
     - go install golang.org/x/tools/cmd/goimports@{{.TOOL_GOIMPORTS_VERSION}}
     - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@{{.TOOL_GOLANGCI_LINT_VERSION}}
-    - go install github.com/evilmartians/lefthook@{{.TOOL_LEFTHOOK_VERSION}}
+    - go install github.com/evilmartians/lefthook/v2@{{.TOOL_LEFTHOOK_VERSION}}
     - go install github.com/google/go-licenses/v2@{{.TOOL_GO_LICENSES_VERSION}}
     - go install github.com/uw-labs/lichen@{{.TOOL_LICHEN_VERSION}}
     - go install github.com/anchore/syft/cmd/syft@{{.TOOL_SYFT_VERSION}}
@@ -183,37 +190,17 @@ tasks:
         echo "   Updating module paths (AST-based import rewriting)..."
         go run ./.ckeletin/scripts/rewrite-imports/ -old "$UPSTREAM_MODULE" -new "$CURRENT_MODULE" -dir .ckeletin
 
-        # Replace upstream binary name in .ckeletin/ Go string literals
-        # (e.g., "./logs/ckeletin-go.log" → "./logs/myapp.log")
-        # NOTE: String split prevents scaffold-init from replacing this name
+        # Re-apply the names task init wrote. Checkout brings the upstream
+        # module path and binary name back into markdown, YAML, and Go files
+        # (including tests). Leaving those names is a framework diff with no
+        # changelog edit, so task check fails after a same-version update.
+        # NOTE: String split prevents scaffold-init from replacing this name.
         UPSTREAM_NAME="ckeletin""-go"
         CURRENT_NAME=$(grep 'BINARY_NAME:' Taskfile.yml | head -1 | awk '{print $2}')
         if [ -n "$CURRENT_NAME" ] && [ "$CURRENT_NAME" != "$UPSTREAM_NAME" ]; then
-          echo "   Updating binary name references ($UPSTREAM_NAME → $CURRENT_NAME)..."
-          find .ckeletin -name "*.go" ! -name "*_test.go" | while IFS= read -r f; do
-            # Skip import lines, only replace in non-import content
-            awk -v old="$UPSTREAM_NAME" -v new="$CURRENT_NAME" '
-              /^import \(/ { in_import=1; print; next }
-              in_import && /^\)/ { in_import=0; print; next }
-              in_import { print; next }
-              /^import "/ { print; next }
-              { gsub(old, new); print }
-            ' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
-          done
-          # Also replace env var prefix form (CKELETIN_GO → MYAPP)
-          UPSTREAM_ENV=$(echo "$UPSTREAM_NAME" | tr '[:lower:]-' '[:upper:]_')
-          CURRENT_ENV=$(echo "$CURRENT_NAME" | tr '[:lower:]-' '[:upper:]_')
-          if [ "$UPSTREAM_ENV" != "$CURRENT_ENV" ]; then
-            find .ckeletin -name "*.go" ! -name "*_test.go" | while IFS= read -r f; do
-              awk -v old="$UPSTREAM_ENV" -v new="$CURRENT_ENV" '
-                /^import \(/ { in_import=1; print; next }
-                in_import && /^\)/ { in_import=0; print; next }
-                in_import { print; next }
-                /^import "/ { print; next }
-                { gsub(old, new); print }
-              ' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
-            done
-          fi
+          echo "   Updating derived names ($UPSTREAM_NAME → $CURRENT_NAME)..."
+          bash .ckeletin/scripts/rewrite-derived-names.sh \
+            "$UPSTREAM_MODULE" "$CURRENT_MODULE" "$UPSTREAM_NAME" "$CURRENT_NAME" .ckeletin
         fi
 
         echo "   Updating module dependencies..."
@@ -235,6 +222,7 @@ tasks:
           echo ""
           echo "✅ Framework is already up-to-date!"
           echo "   No changes needed."
+          printf 'CKELETIN_UPDATE_RESULT={"status":"up_to_date","from":"%s","to":"%s","committed":false}\n' "$OLD_VERSION" "$NEW_VERSION"
         else
           # --no-verify: framework update commits bypass pre-commit hooks because
           # the commit is machine-generated and verified by build+test below.
@@ -247,6 +235,7 @@ tasks:
             echo "The update may have introduced breaking changes."
             echo "Check .ckeletin/CHANGELOG.md and fix compilation errors."
             echo "To rollback: git revert HEAD"
+            printf 'CKELETIN_UPDATE_RESULT={"status":"build_failed","from":"%s","to":"%s","committed":true}\n' "$OLD_VERSION" "$NEW_VERSION"
             exit 1
           fi
           echo "✅ Build verified successfully"
@@ -288,6 +277,7 @@ tasks:
 
           echo ""
           echo "✅ Framework updated successfully!"
+          printf 'CKELETIN_UPDATE_RESULT={"status":"updated","from":"%s","to":"%s","committed":true}\n' "$OLD_VERSION" "$NEW_VERSION"
           echo "   Module paths updated: $UPSTREAM_MODULE → $CURRENT_MODULE"
           echo "   Review changes with: git diff HEAD~1"
         fi
@@ -465,7 +455,7 @@ tasks:
         task --version || echo "  ❌ Task not found"
         echo ""
         echo "Development Tools:"
-        for tool in goimports golangci-lint gotestsum govulncheck lefthook go-mod-outdated go-licenses lichen gocovmerge; do
+        for tool in goimports golangci-lint gotestsum govulncheck lefthook go-mod-outdated go-licenses lichen gocovmerge yq; do
           if command -v "$tool" > /dev/null 2>&1; then
             echo "  $tool: ✅ installed"
           else
@@ -479,6 +469,17 @@ tasks:
     desc: Show framework version
     cmds:
       - echo "ckeletin framework v$(cat .ckeletin/VERSION)"
+
+  check-update:
+    desc: Report whether a newer framework version is available (format=json for machines)
+    cmds:
+      - |
+        format="{{.format}}"
+        if [ "$format" = "json" ]; then
+          '{{.SCRIPTS_DIR}}/check-framework-updates.sh' --json
+        else
+          '{{.SCRIPTS_DIR}}/check-framework-updates.sh' --check
+        fi
 
   health:
     desc: Check framework health and update status
@@ -500,25 +501,9 @@ tasks:
           git diff --stat -- .ckeletin/
         fi
 
-        # Update check
-        CURRENT_MODULE=$(head -1 go.mod | awk '{print $2}')
-        UPSTREAM_MODULE="github.com/peiman/ckeleti""n-go"
-        if [ "$CURRENT_MODULE" = "$UPSTREAM_MODULE" ]; then
-          echo "ℹ️  This is the upstream repository"
-        else
-          if git remote get-url ckeletin-upstream >/dev/null 2>&1; then
-            git fetch ckeletin-upstream --quiet 2>/dev/null || true
-            BEHIND=$(git rev-list HEAD..ckeletin-upstream/main -- .ckeletin/ 2>/dev/null | wc -l | tr -d ' ')
-            if [ "$BEHIND" = "0" ]; then
-              echo "✅ Framework is up-to-date"
-            else
-              echo "⚠️  Framework is $BEHIND commit(s) behind upstream"
-              echo "   Run: task ckeletin:update:dry-run"
-            fi
-          else
-            echo "ℹ️  No upstream remote configured (run task ckeletin:update to set up)"
-          fi
-        fi
+        # Same comparison as `task check` and `task ckeletin:check-update`:
+        # upstream .ckeletin/VERSION is a newer semver. Not a commit count.
+        '{{.SCRIPTS_DIR}}/check-framework-updates.sh' --check
 
         # Import consistency
         echo ""
@@ -537,12 +522,25 @@ tasks:
           echo "✅ Upstream repository — imports are canonical"
         fi
 
+        # Release infrastructure drift — .goreleaser.yml and .github/workflows/*
+        # are NOT synced by ckeletin:update, so they drift silently and only fail
+        # at release time. Surface it here (non-fatal).
+        echo ""
+        echo "🚀 Release infrastructure:"
+        '{{.SCRIPTS_DIR}}/check-release-drift.sh' || true
+
   tidy:
     desc: Ensure go.mod and go.sum are up to date
     cmds:
       - go mod tidy
 
   # --- Go Version Check ---
+
+  check:framework-changelog:
+    desc: Fail when .ckeletin changes are missing from the framework changelog
+    silent: true
+    cmds:
+      - '{{.SCRIPTS_DIR}}/check-framework-changelog.sh'
 
   check:go-version:
     desc: Check if system Go version matches .go-version (SSOT)
@@ -737,6 +735,12 @@ tasks:
     cmds:
       - '{{.SCRIPTS_DIR}}/validate-command-patterns.sh'
 
+  validate:commands:baseline:
+    desc: Record the current long run* functions in .ckeletin-command-baseline (once, when adopting ADR-001's limit)
+    silent: true
+    cmds:
+      - '{{.SCRIPTS_DIR}}/validate-command-patterns.sh --write-baseline'
+
   validate:constants:
     desc: Validate config constants are in sync with registry (enforces ADR-005)
     silent: true
@@ -791,12 +795,19 @@ tasks:
     cmds:
       - '{{.SCRIPTS_DIR}}/validate-dev-build-tags.sh'
 
+  validate:hook-forwardings:
+    desc: Validate lefthook base hooks reference only namespaced or forwarded tasks (issue #100)
+    silent: true
+    cmds:
+      - '{{.SCRIPTS_DIR}}/validate-hook-forwardings.sh'
+
   # --- Testing ---
 
   test:
     desc: Run tests with coverage
     silent: true
     cmd: |
+      {{._TEST_ENV_PRELUDE}}
       gotestsum --format short --jsonfile {{.TEST_OUTPUT_JSON}} --hide-summary=skipped -- -v -tags dev -coverprofile=coverage.raw.txt -covermode=atomic -coverpkg=./...,{{._MODULE_PATH}}/.ckeletin/pkg/... ./... ./.ckeletin/pkg/...
       gocovmerge coverage.raw.txt > {{.COVERAGE_TXT}}
       rm -f coverage.raw.txt
@@ -805,6 +816,7 @@ tasks:
     desc: Run tests with dev commands (explicit - same as 'test')
     silent: true
     cmd: |
+      {{._TEST_ENV_PRELUDE}}
       gotestsum --format short --jsonfile {{.TEST_OUTPUT_JSON}} --hide-summary=skipped -- -v -tags dev -coverprofile=coverage.raw.txt -covermode=atomic -coverpkg=./...,{{._MODULE_PATH}}/.ckeletin/pkg/... ./... ./.ckeletin/pkg/...
       gocovmerge coverage.raw.txt > {{.COVERAGE_TXT}}
       rm -f coverage.raw.txt
@@ -813,6 +825,7 @@ tasks:
     desc: Run tests without dev commands (production mode)
     silent: true
     cmd: |
+      {{._TEST_ENV_PRELUDE}}
       gotestsum --format short --jsonfile {{.TEST_OUTPUT_JSON}} --hide-summary=skipped -- -v -coverprofile=coverage.raw.txt -covermode=atomic -coverpkg=./...,{{._MODULE_PATH}}/.ckeletin/pkg/... ./... ./.ckeletin/pkg/...
       gocovmerge coverage.raw.txt > {{.COVERAGE_TXT}}
       rm -f coverage.raw.txt
@@ -821,23 +834,27 @@ tasks:
     desc: Run unit tests only (skips integration tests)
     silent: true
     cmd: |
+      {{._TEST_ENV_PRELUDE}}
       gotestsum --format short --jsonfile {{.TEST_OUTPUT_JSON}} --hide-summary=skipped -- -v -short $(go list ./... | grep -v /test/integration)
 
   test:scaffold:
     desc: Run scaffold integration tests (slow — copies project, runs task check)
     silent: true
     cmd: |
+      {{._TEST_ENV_PRELUDE}}
       gotestsum --format short -- -v -tags "dev scaffold" -count=1 ./test/integration/...
 
   test:race:
     desc: Run tests with race detection
     cmd: |
+      {{._TEST_ENV_PRELUDE}}
       gotestsum --format standard-verbose --jsonfile {{.TEST_OUTPUT_JSON}} -- -v -race -tags dev ./...
 
   test:full:
     desc: Run all tests with both race detection and coverage
     silent: true
     cmd: |
+      {{._TEST_ENV_PRELUDE}}
       gotestsum --format short --jsonfile {{.TEST_OUTPUT_JSON}} --hide-summary=skipped -- -v -race -tags dev -coverprofile=coverage.raw.txt -covermode=atomic -coverpkg=./...,{{._MODULE_PATH}}/.ckeletin/pkg/... ./... ./.ckeletin/pkg/...
       gocovmerge coverage.raw.txt > {{.COVERAGE_TXT}}
       rm -f coverage.raw.txt
@@ -845,24 +862,27 @@ tasks:
   test:watch:
     desc: Run tests in watch mode
     cmd: |
+      {{._TEST_ENV_PRELUDE}}
       gotestsum --format short --watch --hide-summary=skipped
 
   test:integration:
     desc: Run integration tests (disables cache with -count=1)
     cmd: |
+      {{._TEST_ENV_PRELUDE}}
       gotestsum --format short -- -v -count=1 ./test/integration/...
 
   test:golden:
     desc: Test CLI output against golden files
     dir: .
     cmd: |
+      {{._TEST_ENV_PRELUDE}}
       go test ./test/integration -v -run Golden
 
   test:golden:update:
     desc: Update golden files (MUST manually review changes!)
     dir: .
     cmds:
-      - GOLDEN_UPDATE=1 go test ./test/integration -run Golden
+      - '{{._TEST_ENV_PRELUDE}} GOLDEN_UPDATE=1 go test ./test/integration -run Golden'
       - echo ""
       - echo "Review golden file changes before committing!"
       - echo "Run git diff test/integration/testdata/"
@@ -871,7 +891,7 @@ tasks:
   test:coverage:text:
     desc: Run tests with detailed coverage data
     cmds:
-      - gotestsum --format short --jsonfile {{.TEST_OUTPUT_JSON}} --hide-summary=skipped -- -cover -coverprofile=coverage.raw.txt -covermode=atomic -coverpkg=./...,{{._MODULE_PATH}}/.ckeletin/pkg/... ./... ./.ckeletin/pkg/...
+      - '{{._TEST_ENV_PRELUDE}} gotestsum --format short --jsonfile {{.TEST_OUTPUT_JSON}} --hide-summary=skipped -- -cover -coverprofile=coverage.raw.txt -covermode=atomic -coverpkg=./...,{{._MODULE_PATH}}/.ckeletin/pkg/... ./... ./.ckeletin/pkg/...'
       - gocovmerge coverage.raw.txt > {{.COVERAGE_TXT}}
       - rm -f coverage.raw.txt
       - echo "Detailed coverage report:"
@@ -911,6 +931,7 @@ tasks:
   bench:
     desc: Run all benchmarks
     cmd: |
+      {{._TEST_ENV_PRELUDE}}
       go test -bench=. -benchmem ./... -run=^$ | tee bench-results.txt
       echo "Benchmark results saved to bench-results.txt"
     silent: false
@@ -918,16 +939,19 @@ tasks:
   bench:cmd:
     desc: Run benchmarks for cmd package
     cmd: |
+      {{._TEST_ENV_PRELUDE}}
       go test -bench=. -benchmem ./cmd -run=^$
 
   bench:config:
     desc: Run benchmarks for config package
     cmd: |
+      {{._TEST_ENV_PRELUDE}}
       go test -bench=. -benchmem ./.ckeletin/pkg/config -run=^$
 
   bench:logger:
     desc: Run benchmarks for logger package
     cmd: |
+      {{._TEST_ENV_PRELUDE}}
       go test -bench=. -benchmem ./.ckeletin/pkg/logger -run=^$
 
   # --- Fuzz Testing ---
@@ -935,6 +959,7 @@ tasks:
   test:fuzz:
     desc: Run all fuzz tests (default 10s per function)
     cmd: |
+      {{._TEST_ENV_PRELUDE}}
       FUZZTIME=${FUZZTIME:-10s}
       echo "Running fuzz tests for $FUZZTIME each..."
       go test -fuzz=FuzzValidateConfigValue -fuzztime=$FUZZTIME ./.ckeletin/pkg/config
@@ -945,12 +970,14 @@ tasks:
   test:fuzz:config:
     desc: Run fuzz tests for config package
     cmd: |
+      {{._TEST_ENV_PRELUDE}}
       FUZZTIME=${FUZZTIME:-10s}
       go test -fuzz=FuzzValidateConfigValue -fuzztime=$FUZZTIME ./.ckeletin/pkg/config
 
   test:fuzz:validator:
     desc: Run fuzz tests for validator package
     cmd: |
+      {{._TEST_ENV_PRELUDE}}
       FUZZTIME=${FUZZTIME:-10s}
       go test -fuzz=. -fuzztime=$FUZZTIME ./.ckeletin/pkg/config/validator
 
@@ -1066,6 +1093,7 @@ tasks:
       - task: validate:output
       - task: validate:security
       - task: validate:dev-build-tags
+      - task: validate:hook-forwardings
       - cmd: |
           source {{.SCRIPTS_DIR}}/lib/check-output.sh
           category_header "Security Scanning"
@@ -1084,6 +1112,7 @@ tasks:
           category_header "Tests"
         silent: true
       - task: test:full
+      - task: check:framework-changelog
       - task: check:summary
 
   check:
@@ -1105,6 +1134,18 @@ tasks:
             echo ""
             task ckeletin:check:bash
           fi
+      # Enforce the project coverage threshold (85%) as part of the mandatory
+      # gate. The binary/bash check above measures coverage but does not gate on
+      # it; this is the authoritative threshold check (excludes TUI/demo code).
+      - task: test:coverage:project
+      # The binary check above does not know about the framework changelog.
+      # This script travels with .ckeletin/, so derived projects run it too.
+      - task: check:framework-changelog
+      # Non-fatal footer: nudge when upstream .ckeletin/VERSION is a newer semver.
+      # Throttled, time-boxed, CI-skipped and never fails the build (see the script).
+      - cmd: '{{.SCRIPTS_DIR}}/check-framework-updates.sh'
+        silent: true
+        ignore_error: true
     vars:
       CLI_ARGS: ""
 
@@ -1137,12 +1178,18 @@ tasks:
       - task: validate:package-organization
       - task: validate:config-consumption
       - task: validate:output
+      # validate:security is a sub-second grep script (ADR-004) — fast mode
+      # runs the same validate:* set as check:common, only skipping the
+      # heavyweight stages (race detection, integration tests, dep scans).
+      - task: validate:security
       - task: validate:dev-build-tags
+      - task: validate:hook-forwardings
       - cmd: |
           source {{.SCRIPTS_DIR}}/lib/check-output.sh
           category_header "Tests (Unit Only)"
         silent: true
       - task: test:unit
+      - task: check:framework-changelog
       - task: check:summary
         vars: { CHECK_MODE: "fast" }
 
@@ -1235,6 +1282,19 @@ tasks:
 
   # --- Code Generation ---
 
+  generate:command:
+    desc: Generate a new command with full pattern (cmd + internal + tests + config)
+    vars:
+      # name= is the documented form. CLI_ARGS covers `task generate:command -- greet`.
+      NAME: '{{.name | default .CLI_ARGS}}'
+    preconditions:
+      - sh: '[ -n "{{.NAME}}" ]'
+        msg: "Command name is required. Usage: task generate:command name=<name>"
+    cmds:
+      - go run {{.SCRIPTS_DIR}}/generate-command/ {{.NAME}}
+      - task: generate:config:key-constants
+      - task: format
+
   generate:config:key-constants:
     desc: Generate type-safe config key constants
     cmds:
@@ -1264,9 +1324,15 @@ tasks:
         echo "✅ GoReleaser is installed: $(goreleaser --version)"
     silent: false
 
+  check:release:drift:
+    desc: Detect release-infra drift (goreleaser deprecations, stale token/cosign, orphan tags) before a release
+    silent: true
+    cmds:
+      - '{{.SCRIPTS_DIR}}/check-release-drift.sh'
+
   test:release:
     desc: Test GoReleaser configuration (snapshot build, no release)
-    deps: [check:release]
+    deps: [check:release, check:release:drift]
     cmds:
       - echo "Building snapshot release (no tags required)..."
       - goreleaser release --snapshot --clean --skip=publish
@@ -1277,7 +1343,7 @@ tasks:
 
   build:release:
     desc: Build release artifacts locally (requires git tag)
-    deps: [check:release]
+    deps: [check:release, check:release:drift]
     cmds:
       - echo "Building release artifacts..."
       - goreleaser build --clean --snapshot

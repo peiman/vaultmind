@@ -1,4 +1,4 @@
-// ckeletin:allow-custom-command
+// ckeletin:allow-custom-command - not a command: ask helpers (activation scores, experiment logging)
 package cmd
 
 import (
