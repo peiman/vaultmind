@@ -18,11 +18,12 @@ func CoreOptions() []ConfigOption {
 		// If app.log.console_level is not set, this value is used for console output
 		{
 			Key: "app.log_level",
-			// Quiet by default (re-applied after ckeletin:update, which resets this
-			// to the upstream "info"): the console shows warnings and errors only, so
-			// a normal command prints just its result (stdout), not diagnostic chatter
-			// (stderr). Raise to info/debug via app.log_level or app.log.console_level
-			// when troubleshooting; file logging keeps its own (more verbose) level.
+			// vaultmind local patch: quiet by default. The console shows
+			// warnings and errors only, so a normal command prints just its
+			// result (stdout), not diagnostic chatter (stderr). Raise to
+			// info/debug via app.log_level or app.log.console_level when
+			// troubleshooting. ckeletin:update resets this to the upstream
+			// "info"; cmd/framework_patches_test.go fails when that happens.
 			DefaultValue: "warn",
 			Description:  "Logging level for the application (trace, debug, info, warn, error, fatal, panic). Used as console level if app.log.console_level is not set.",
 			Type:         "string",
@@ -56,6 +57,7 @@ func CoreOptions() []ConfigOption {
 			Type:         "string",
 			Required:     false,
 			Example:      "/var/log/vaultmind/app.log",
+			Validation:   ValidateLogFilePath(),
 		},
 		{
 			Key:          "app.log.file_level",
@@ -73,6 +75,8 @@ func CoreOptions() []ConfigOption {
 			Type:         "string",
 			Required:     false,
 			Example:      "true",
+			// Empty is allowed: the logger treats "" as auto-detection
+			Validation: ValidateOneOf([]string{"auto", "true", "false"}, true),
 		},
 		// Log rotation options (lumberjack)
 		{
@@ -82,6 +86,7 @@ func CoreOptions() []ConfigOption {
 			Type:         "int",
 			Required:     false,
 			Example:      "100",
+			Validation:   ValidatePositiveInt(),
 		},
 		{
 			Key:          "app.log.file_max_backups",
@@ -90,6 +95,8 @@ func CoreOptions() []ConfigOption {
 			Type:         "int",
 			Required:     false,
 			Example:      "3",
+			// Zero is meaningful: lumberjack retains all old log files
+			Validation: ValidateNonNegativeInt(),
 		},
 		{
 			Key:          "app.log.file_max_age",
@@ -98,6 +105,8 @@ func CoreOptions() []ConfigOption {
 			Type:         "int",
 			Required:     false,
 			Example:      "28",
+			// Zero is meaningful: lumberjack skips age-based deletion
+			Validation: ValidateNonNegativeInt(),
 		},
 		{
 			Key:          "app.log.file_compress",
@@ -123,6 +132,7 @@ func CoreOptions() []ConfigOption {
 			Type:         "int",
 			Required:     false,
 			Example:      "100",
+			Validation:   ValidatePositiveInt(),
 		},
 		{
 			Key:          "app.log.sampling_thereafter",
@@ -131,6 +141,7 @@ func CoreOptions() []ConfigOption {
 			Type:         "int",
 			Required:     false,
 			Example:      "100",
+			Validation:   ValidatePositiveInt(),
 		},
 		// Output format option (framework-level)
 		{

@@ -36,7 +36,7 @@ Layering provides:
 - All code in one package or loosely organized packages
 - **Pros**: Simple initially, no structure overhead
 - **Cons**: Scales poorly, becomes unmaintainable, no boundaries
-- **Why not**: ckeletin-go is a template/scaffold - architecture matters
+- **Why not**: vaultmind is a template/scaffold - architecture matters
 
 **2. Hexagonal Architecture (Ports & Adapters)**
 - Core domain surrounded by adapters, ports define interfaces
@@ -265,7 +265,7 @@ task check              # Includes layering validation
 ### File Organization
 
 ```
-ckeletin-go/
+vaultmind/
 ├── main.go                    # Layer 1: Entry
 │
 ├── cmd/                       # Layer 2: Commands

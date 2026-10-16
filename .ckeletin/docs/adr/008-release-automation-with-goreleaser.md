@@ -37,7 +37,7 @@ We adopt **GoReleaser** as our release automation tool with the following config
 
 ### Distribution Channels
 1. **GitHub Releases**: Automated release creation with changelog
-2. **Homebrew Tap**: `peiman/tap/ckeletin-go` for macOS/Linux users
+2. **Homebrew Tap**: `peiman/tap/vaultmind` for macOS/Linux users
 3. **Direct Downloads**: Platform-specific archives from releases
 
 ### Version Information

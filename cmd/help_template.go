@@ -1,4 +1,4 @@
-// ckeletin:allow-custom-command
+// ckeletin:allow-custom-command - not a command: installs the root help renderer
 //
 // This file is not a command — it's a helper that installs a custom
 // help-rendering function on the root command. The ultra-thin-command

@@ -1,6 +1,6 @@
 # Scripts Directory
 
-This directory contains automation scripts for the ckeletin-go project.
+This directory contains automation scripts for the vaultmind project.
 
 ## install_tools.sh
 
@@ -12,7 +12,7 @@ bash scripts/install_tools.sh
 ```
 
 **When it runs:**
-- Automatically via `.claude/hooks.json` SessionStart hook
+- Automatically via the `.claude/settings.json` SessionStart hook
 - When starting a new Claude Code session
 - Can be run manually if needed
 

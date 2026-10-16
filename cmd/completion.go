@@ -1,5 +1,5 @@
 // cmd/completion.go
-// ckeletin:allow-custom-command
+// ckeletin:allow-custom-command - cobra shell-completion generator; nothing to configure
 
 package cmd
 

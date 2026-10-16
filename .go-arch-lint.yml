@@ -39,6 +39,9 @@ allow:
 
 # Exclude test files, scripts, and generated files from validation
 excludeFiles:
+  # Claude Code worktrees are nested module checkouts, not part of the
+  # module architecture (scanner-exclusion SSOT: .ckeletin/scripts/lib/check-output.sh)
+  - /\.claude/.*
   - .*_test\.go$
   - /scripts/.*
   - /test/.*
@@ -87,6 +90,7 @@ components:
       - .ckeletin/pkg/logger/**
       - .ckeletin/pkg/output/**
       - .ckeletin/pkg/testutil/**
+      - .ckeletin/pkg/catalog/**
       - internal/config/commands/**
       - internal/ui/**
       - internal/xdg/**

@@ -7,17 +7,16 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/rs/zerolog/log"
 )
 
 // ValidateConfigFilePermissions checks if a config file has secure permissions.
-// On Unix-like systems, a world-writable file is an error the user must fix,
-// and a group-writable file is a warning. A merely permissive mode such as
-// 0644 is logged at debug: the default level is Info, and that note is not a
-// problem the user has to act on. On Windows, this check is skipped as
-// Windows has a different permission model.
+// On Unix-like systems, it ensures the file is not world-writable and warns if group-writable.
+// On Windows, this check is skipped as Windows has a different permission model.
 func ValidateConfigFilePermissions(path string) error {
 	// Skip on Windows - different permission model
 	if runtime.GOOS == "windows" {
@@ -54,10 +53,11 @@ This will set owner-only read/write permissions.`, path, perm, path)
 			Msg("Config file is group-writable, consider restricting to 0600 or 0400")
 	}
 
-	// 0644 is what a normal install has. It matches this mask, and so does
-	// group-writable, which already warned above. Debug, not Info: initConfig
-	// runs while the global level is Info, so an Info line here is printed on
-	// every command.
+	// vaultmind local patch: 0644 is what a normal install has. It matches
+	// this mask, and so does group-writable, which already warned above.
+	// Debug, not Info: initConfig runs while the global level is Info, so an
+	// Info line here is printed on every command. ckeletin:update resets
+	// this; cmd/framework_patches_test.go fails when that happens.
 	if perm&0077 != 0 {
 		log.Debug().
 			Str("path", path).
@@ -106,6 +106,55 @@ Maximum allowed: %d bytes (%.2f MB)`,
 		Msg("Config file size validated")
 
 	return nil
+}
+
+// ValidateLogFilePath returns a validation function for log file path config
+// values (ADR-004: configuration as attack surface). It validates the cleaned
+// path, rejecting:
+//   - paths whose cleaned form still escapes upward via ".." components
+//   - paths where an existing file is a symlink (writing through it would
+//     redirect log output to an attacker-chosen location)
+//   - empty paths
+//
+// Known limits of this check:
+//   - Nil and non-string values pass through unvalidated: nothing checks the
+//     declared option type at load time (viper casts at read time).
+//   - Only the final path component is Lstat'd, so a path whose parent
+//     directory is a symlink passes. Intentional: /var on macOS is itself a
+//     symlink.
+//   - Any Lstat error passes, not just a missing file (which is accepted
+//     because the logger creates it on first write).
+func ValidateLogFilePath() func(interface{}) error {
+	return func(value interface{}) error {
+		if value == nil {
+			return nil
+		}
+		path, ok := value.(string)
+		if !ok {
+			return nil
+		}
+		if path == "" {
+			return fmt.Errorf("log file path must not be empty")
+		}
+
+		cleaned := filepath.Clean(path)
+		for _, component := range strings.Split(filepath.ToSlash(cleaned), "/") {
+			if component == ".." {
+				return fmt.Errorf("log file path %q contains a path traversal component (..)", path)
+			}
+		}
+
+		info, err := os.Lstat(cleaned)
+		if err != nil {
+			// Missing file is fine: it is created on first write
+			return nil
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("log file path %q is a symlink, which is not allowed for log files", path)
+		}
+
+		return nil
+	}
 }
 
 // ValidateConfigFileSecurity performs comprehensive security validation on a config file.

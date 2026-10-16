@@ -151,14 +151,12 @@ func AskOptions() []config.ConfigOption {
 			DefaultValue: false,
 			Description:  "Store the raw query text in the possible-gap hint log. Off by default: the log keeps a salted hash and a length. The log is per-user state, outside the vault. Config file or environment only, not a flag.",
 			Type:         "bool",
-			NoFlag:       true,
 		},
 		{
 			Key:          "app.ask.gap_log_limit",
 			DefaultValue: 1000,
 			Description:  "Most records kept in the possible-gap hint log. The file may grow to twice this many, then it is rewritten to the newest this many. Config file or environment only, not a flag.",
 			Type:         "int",
-			NoFlag:       true,
 		},
 	}
 }

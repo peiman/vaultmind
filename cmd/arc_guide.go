@@ -1,5 +1,5 @@
 // cmd/arc_guide.go
-// ckeletin:allow-custom-command
+// ckeletin:allow-custom-command - prints the embedded arc-writing guide; no settings
 
 package cmd
 
