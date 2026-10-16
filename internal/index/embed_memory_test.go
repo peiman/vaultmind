@@ -4,6 +4,8 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/embedding"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -15,9 +17,7 @@ import (
 func estCost(lengths []int, idxs []int) int {
 	most := 0
 	for _, i := range idxs {
-		if t := bgem3TokenEstimate(lengths[i]); t > most {
-			most = t
-		}
+		most = max(most, embedding.BGEM3TokenEstimate(lengths[i]))
 	}
 	return len(idxs) * most
 }
@@ -27,8 +27,8 @@ func TestPlanBGEM3Batches_KeepsEveryBatchInsideTheAttentionBudget(t *testing.T) 
 	batches := planBGEM3Batches(lens)
 	require.NotEmpty(t, batches)
 	for _, b := range batches {
-		assert.LessOrEqual(t, estCost(lens, b), bgem3EmbedTokens, "batch %v exceeds one cap-length note of padded tokens", b)
-		assert.LessOrEqual(t, len(b), bgem3MaxBatch)
+		assert.LessOrEqual(t, estCost(lens, b), embedding.BGEM3EmbedMaxTokens, "batch %v exceeds one cap-length note of padded tokens", b)
+		assert.LessOrEqual(t, len(b), embedding.BGEM3MaxBatch)
 	}
 }
 
@@ -50,7 +50,7 @@ func TestPlanBGEM3Batches_ShortNotesStillShareABatch(t *testing.T) {
 	}
 	batches := planBGEM3Batches(lens)
 	assert.Len(t, batches, 3, "20 short notes batch up to the count cap")
-	assert.Len(t, batches[0], bgem3MaxBatch)
+	assert.Len(t, batches[0], embedding.BGEM3MaxBatch)
 }
 
 func TestPlanBGEM3Batches_CoversEveryNoteExactlyOnce(t *testing.T) {
@@ -66,10 +66,4 @@ func TestPlanBGEM3Batches_CoversEveryNoteExactlyOnce(t *testing.T) {
 		assert.Equal(t, 1, seen[i], "note %d", i)
 	}
 	assert.Nil(t, planBGEM3Batches(nil))
-}
-
-func TestBGEM3TokenEstimate_IsConservativeAndCapped(t *testing.T) {
-	assert.Equal(t, 0, bgem3TokenEstimate(0))
-	assert.Equal(t, 50, bgem3TokenEstimate(100), "two characters per token over-counts English")
-	assert.Equal(t, bgem3EmbedTokens, bgem3TokenEstimate(1_000_000), "text past the cap is truncated to the cap")
 }
