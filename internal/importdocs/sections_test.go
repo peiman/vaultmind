@@ -3,6 +3,7 @@ package importdocs
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -154,4 +155,20 @@ func TestExpandLong_LeavesTablesWhole(t *testing.T) {
 		d := doc{Rel: rel, Path: "docs/" + rel, Repo: "demo", Source: "demo:docs/" + rel, Title: rel, Body: body}
 		assert.Len(t, expandLong(d, "imported/demo/docs"), 1, rel)
 	}
+}
+
+// A section's file name is capped at 50 bytes. The cap must fall between
+// characters: a slug cut inside a multi-byte letter (ḵ is E1 B8 B5) is not
+// valid UTF-8, macOS refuses the file name ("illegal byte sequence"), and the
+// section was skipped on every import (reported by an agent importing a
+// Persian-epic project's retrospectives).
+func TestSectionSlug_CapFallsBetweenCharacters(t *testing.T) {
+	heading := "Retro 050 — Kay Kāvus ii on the edition: the Haft Ḵān label and the rest"
+	require.Greater(t, len(slug(heading)), 50, "the fixture must exceed the cap")
+
+	got := sectionSlug(section{path: []string{heading}}, heading)
+	assert.True(t, utf8.ValidString(got), "slug %q is not valid UTF-8", got)
+	assert.LessOrEqual(t, len(got), 50, "the cap is in bytes: it bounds the file name")
+	assert.Equal(t, "retro-050-kay-kāvus-ii-on-the-edition-the-haft", got,
+		"the cut drops the whole letter it would have split, then the trailing dash")
 }
