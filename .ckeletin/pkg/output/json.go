@@ -1,14 +1,22 @@
 // .ckeletin/pkg/output/json.go
 //
 // Framework-level JSON output types and mode state.
-// This file is managed by ckeletin-go and auto-updates via `task ckeletin:update`.
+// This file is managed by vaultmind and auto-updates via `task ckeletin:update`.
 
 package output
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 )
+
+// ErrRendered is a sentinel returned by a command that has already written its
+// single JSON envelope to stdout but still needs to signal a non-zero exit.
+// main.go recognizes it and exits non-zero WITHOUT rendering a second envelope.
+// This keeps the "exactly one envelope per command" contract while preserving a
+// meaningful process exit code for JSON consumers that gate on $?.
+var ErrRendered = errors.New("output: result already rendered")
 
 // JSONEnvelope is the standard response wrapper for --output json mode.
 // Every command emits exactly one envelope to stdout.
@@ -20,9 +28,13 @@ type JSONEnvelope struct {
 }
 
 // JSONError represents a structured error in the JSON envelope.
+// Per CKSPEC-OUT-003 the error object is a TOTAL schema {code, message}: both
+// keys are always present. Code is a *string so an absent classification
+// serializes as JSON null (present-and-null), never omitted — `omitempty` would
+// drop the key and break the fixed-key-set contract.
 type JSONError struct {
-	Message string `json:"message"`
-	Code    string `json:"code,omitempty"` // optional error classification
+	Message string  `json:"message"`
+	Code    *string `json:"code"` // error classification; nil → JSON null
 }
 
 // JSONResponder can be implemented by data types passed to RenderSuccess

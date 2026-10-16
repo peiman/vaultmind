@@ -1,6 +1,6 @@
 // cmd/config.go
 //
-// ckeletin:allow-custom-command
+// ckeletin:allow-custom-command - parent of config validate; inspects the registry itself
 
 package cmd
 

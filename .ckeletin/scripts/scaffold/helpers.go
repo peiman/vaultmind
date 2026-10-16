@@ -10,7 +10,7 @@ import (
 // replaceModulePreservingPkg replaces oldModule with newModule in content,
 // but preserves lines that reference oldModule/pkg/ (external library imports).
 // This allows derived projects to keep pkg/ packages as external dependencies
-// from the original ckeletin-go module.
+// from the original vaultmind module.
 func replaceModulePreservingPkg(content, oldModule, newModule string) string {
 	pkgPrefix := oldModule + "/pkg/"
 	lines := strings.Split(content, "\n")
@@ -25,7 +25,7 @@ func replaceModulePreservingPkg(content, oldModule, newModule string) string {
 
 // removePkgDirectory removes the pkg/ directory from the project root.
 // After scaffold init, pkg/ packages (like checkmate) are consumed as external
-// dependencies from the original ckeletin-go module, not local copies.
+// dependencies from the original vaultmind module, not local copies.
 func removePkgDirectory(projectRoot string) error {
 	pkgDir := filepath.Join(projectRoot, "pkg")
 	if _, err := os.Stat(pkgDir); os.IsNotExist(err) {
@@ -35,13 +35,14 @@ func removePkgDirectory(projectRoot string) error {
 }
 
 // removeFrameworkOnlyArtifacts removes files and directories that are specific
-// to the ckeletin-go framework development and should not be in downstream projects.
+// to the vaultmind framework development and should not be in downstream projects.
 // This includes conformance testing (spec compliance), scaffold integration tests,
-// and the conformance mapping.
+// and the conformance mapping plus its generated report.
 func removeFrameworkOnlyArtifacts(projectRoot string) error {
 	artifacts := []string{
 		"test/conformance",
 		"conformance-mapping.yaml",
+		"conformance-report.json",
 	}
 	for _, artifact := range artifacts {
 		path := filepath.Join(projectRoot, artifact)
@@ -74,7 +75,7 @@ func removeFrameworkOnlyArtifacts(projectRoot string) error {
 // For "mymodule", returns ("", "mymodule").
 // toEnvPrefix converts a binary name to its environment variable prefix form.
 // Uppercases the name and replaces non-alphanumeric characters with underscores.
-// For "ckeletin-go" returns "CKELETIN_GO", for "myapp" returns "MYAPP".
+// For "vaultmind" returns "VAULTMIND", for "myapp" returns "MYAPP".
 func toEnvPrefix(name string) string {
 	upper := strings.ToUpper(name)
 	var result strings.Builder

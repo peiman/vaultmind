@@ -2,6 +2,8 @@
 # Display summary after all checks pass
 # This script only runs if all checks succeeded (task stops on first failure)
 
+set -eo pipefail
+
 # Source standard output functions
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/check-output.sh
@@ -22,6 +24,7 @@ CHECKS+=("ADR-009: Layered architecture")
 CHECKS+=("ADR-010: Package organization")
 CHECKS+=("ADR-013: Output patterns")
 CHECKS+=("ADR-012: Dev build tags")
+CHECKS+=("Framework changelog records .ckeletin changes")
 
 if [ "$CHECK_MODE" != "fast" ]; then
   CHECKS+=("No hardcoded secrets (gitleaks)")

@@ -18,6 +18,21 @@ ALLOWED_LICENSES="${LICENSE_ALLOWED:-MIT,Apache-2.0,BSD-2-Clause,BSD-3-Clause,IS
 # Get module path to ignore self
 MODULE_PATH=$(go list -m 2>/dev/null || echo "github.com/peiman/ckeletin-go")
 
+# .license-ignore (repo root, optional): one module path per line, for a
+# module go-licenses cannot classify (it never gets a license name, so
+# LICENSE_ALLOWED cannot allow it). Blank lines and # comments are skipped.
+# Text after the path is a comment. Each path is another --ignore. A module
+# that is not listed still fails. See docs/licenses.md.
+IGNORE_FLAGS="--ignore='$MODULE_PATH'"
+if [ -f .license-ignore ]; then
+    while read -r mod _; do
+        case "$mod" in
+            ''|'#'*) continue ;;
+        esac
+        IGNORE_FLAGS="$IGNORE_FLAGS --ignore='$mod'"
+    done < .license-ignore
+fi
+
 check_header "Checking dependency licenses (source-based)"
 
 # Check if go-licenses is installed
@@ -25,25 +40,6 @@ if ! command -v go-licenses &> /dev/null; then
     check_failure "go-licenses not installed" "" \
         "Install with: go install github.com/google/go-licenses/v2@latest"$'\n'"Or run: task setup"
     exit 1
-fi
-
-# Modules go-licenses cannot classify but a person has checked, one per line
-# in .license-ignore at the repo root, each with its license and reason in a
-# comment (MIT-0, for one, is more permissive than MIT and still unknown to
-# go-licenses' classifier).
-IGNORE_FLAGS="--ignore='$MODULE_PATH'"
-if [ -f .license-ignore ]; then
-    while read -r mod _; do
-        case "$mod" in ''|'#'*) continue ;; esac
-        # The flags go through eval (run_check), so only a plain module path
-        # gets in; anything else would be read as shell.
-        if ! [[ "$mod" =~ ^[A-Za-z0-9._~/-]+$ ]]; then
-            check_failure ".license-ignore has an entry that is not a module path: $mod" "" \
-                "Each line is one module path, such as github.com/segmentio/asm"
-            exit 1
-        fi
-        IGNORE_FLAGS="$IGNORE_FLAGS --ignore='$mod'"
-    done < .license-ignore
 fi
 
 # Run license check

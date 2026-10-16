@@ -1,0 +1,20 @@
+# Long run* functions recorded when this project adopted the 35-line limit (ADR-001).
+# One "<command> <run func> <lines>" per line. Shrink a function, then lower or remove its entry.
+arc_candidates runArcCandidates 70
+arc_recite runArcRecite 39
+ask runAsk 205
+docs runDocsConfig 36
+doctor_heal runWikilinkFix 61
+experiment_compare runExperimentCompare 58
+experiment_report runExperimentReport 60
+export runExport 61
+frontmatter_fix_core runFrontmatterFixCore 63
+hooks_record runHooksRecord 38
+identity_fetch_registry runIdentityFetchRegistry 39
+identity_paths runIdentityPaths 43
+index runIndex 165
+init_scaffold runInitScaffold 42
+memory_links runLinksBoth 40
+memory_neighbors runNeighborsWithKeys 41
+memory_pack runMemoryPack 41
+note_mget runNoteMget 37

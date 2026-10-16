@@ -43,6 +43,10 @@ tasks:
     desc: Install @latest tools (security tools, always fresh)
     cmds: [task: ckeletin:setup:latest]
 
+  setup:all:
+    desc: Install all development tools (core + security/audit)
+    cmds: [task: ckeletin:setup:all]
+
   doctor:
     desc: Check development environment
     cmds: [task: ckeletin:doctor]
@@ -346,6 +350,10 @@ tasks:
   validate:commands:
     desc: Validate command files follow ultra-thin patterns
     cmds: [task: ckeletin:validate:commands]
+
+  validate:commands:baseline:
+    desc: Record the current long run* functions in .ckeletin-command-baseline (once, when adopting)
+    cmds: [task: ckeletin:validate:commands:baseline]
 
   validate:defaults:
     desc: Validate no unauthorized viper.SetDefault() calls
@@ -664,16 +672,17 @@ tasks:
   generate:command:
     desc: Generate a new command with full pattern (cmd + internal + tests + config)
     cmds:
-      - go run ./.ckeletin/scripts/generate-command/ {{.CLI_ARGS}}
-      - task: generate:config:key-constants
-      - task: format
+      - task: ckeletin:generate:command
+        vars:
+          name: '{{.name}}'
+          CLI_ARGS: '{{.CLI_ARGS}}'
 
   generate:docs:config:
     desc: Generate configuration documentation
     cmds:
       - echo "Generating configuration documentation..."
       - mkdir -p docs
-      - ./{{.BINARY_NAME}} docs config --output=docs/configuration.md
+      - ./{{.BINARY_NAME}} docs config --output-file=docs/configuration.md
       - echo "Configuration documentation saved to docs/configuration.md"
     deps: [build]
 
@@ -682,7 +691,7 @@ tasks:
     cmds:
       - echo "Generating YAML configuration template..."
       - mkdir -p docs
-      - ./{{.BINARY_NAME}} docs config --format=yaml --output=docs/config-template.yaml
+      - ./{{.BINARY_NAME}} docs config --format=yaml --output-file=docs/config-template.yaml
       - echo "YAML template saved to docs/config-template.yaml"
     deps: [build]
 
@@ -743,8 +752,8 @@ tasks:
       - cmd: |
           tmp=$(mktemp -d -t vm-docsdrift.XXXXXX)
           trap 'rm -rf "$tmp"' EXIT
-          ./{{.BINARY_NAME}} docs config --output="$tmp/configuration.md"
-          ./{{.BINARY_NAME}} docs config --format=yaml --output="$tmp/config-template.yaml"
+          ./{{.BINARY_NAME}} docs config --output-file="$tmp/configuration.md"
+          ./{{.BINARY_NAME}} docs config --format=yaml --output-file="$tmp/config-template.yaml"
           ./{{.BINARY_NAME}} docs commands --output="$tmp/COMMANDS.md"
           # AGENT_USAGE.md embeds the catalog in a marked region inside prose, so
           # it is checked by injecting into a COPY and diffing — never the tracked

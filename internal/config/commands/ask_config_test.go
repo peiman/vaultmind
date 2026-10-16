@@ -63,10 +63,10 @@ func TestAskOptions_GapHintLog(t *testing.T) {
 	}
 	require.Equal(t, "app.ask.gap_store_query", store.Key)
 	assert.Equal(t, false, store.DefaultValue)
-	assert.True(t, store.NoFlag)
+	assert.True(t, commands.ConfigOnly(store.Key))
 	require.Equal(t, "app.ask.gap_log_limit", limit.Key)
 	assert.Equal(t, gap.DefaultLogLimit, limit.DefaultValue)
 	assert.Equal(t, "int", limit.Type)
-	assert.True(t, limit.NoFlag)
+	assert.True(t, commands.ConfigOnly(limit.Key))
 	assert.Empty(t, commands.AskMetadata.FlagOverrides["app.ask.gap_log_limit"])
 }

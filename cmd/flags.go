@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
+	"github.com/peiman/vaultmind/internal/config/commands"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -23,7 +24,7 @@ func RegisterFlagsForPrefixWithOverrides(cmd *cobra.Command, prefix string, over
 		if !strings.HasPrefix(opt.Key, prefix) {
 			continue
 		}
-		if opt.NoFlag {
+		if commands.ConfigOnly(opt.Key) {
 			continue
 		}
 

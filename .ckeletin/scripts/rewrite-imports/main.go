@@ -1,4 +1,4 @@
-// AST-based Go import rewriter for ckeletin-go framework.
+// AST-based Go import rewriter for vaultmind framework.
 //
 // Replaces module paths in import statements using go/ast, ensuring that only
 // actual import paths are modified — never comments, string constants, or
@@ -12,7 +12,7 @@
 // Example:
 //
 //	go run ./.ckeletin/scripts/rewrite-imports/ \
-//	    -old github.com/peiman/ckeletin-go \
+//	    -old github.com/peiman/vaultmind \
 //	    -new github.com/user/myapp \
 //	    -dir .ckeletin
 package main

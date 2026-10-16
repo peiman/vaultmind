@@ -1,4 +1,4 @@
-// Scaffold initialization script for ckeletin-go
+// Scaffold initialization script for vaultmind
 //
 // This script automates the process of customizing the scaffold by:
 // - Updating module path in go.mod
@@ -13,7 +13,7 @@
 //
 // Example:
 //
-//	go run ./.ckeletin/scripts/scaffold/ github.com/peiman/ckeletin-go github.com/myuser/myapp ckeletin-go myapp
+//	go run ./.ckeletin/scripts/scaffold/ github.com/peiman/vaultmind github.com/myuser/myapp vaultmind myapp
 package main
 
 import (
@@ -29,7 +29,7 @@ func main() {
 	// Parse arguments
 	if len(os.Args) != 5 {
 		fmt.Fprintf(os.Stderr, "Usage: %s <old_module> <new_module> <old_name> <new_name>\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "Example: %s github.com/peiman/ckeletin-go github.com/myuser/myapp ckeletin-go myapp\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Example: %s github.com/peiman/vaultmind github.com/myuser/myapp vaultmind myapp\n", os.Args[0])
 		os.Exit(1)
 	}
 
@@ -177,7 +177,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error updating Go files: %v\n", err)
 		os.Exit(1)
 	}
-	// Also replace the env var prefix form (CKELETIN_GO → TESTAPP)
+	// Also replace the env var prefix form (VAULTMIND → TESTAPP)
 	oldEnvPrefix := toEnvPrefix(oldName)
 	newEnvPrefix := toEnvPrefix(newName)
 	if oldEnvPrefix != newEnvPrefix {

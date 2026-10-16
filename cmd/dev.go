@@ -1,6 +1,6 @@
 //go:build dev
 
-// ckeletin:allow-custom-command
+// ckeletin:allow-custom-command - dev-only parent for dev tools (build tag dev)
 // cmd/dev.go
 //
 // Development-only root command for dev tools.

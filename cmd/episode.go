@@ -1,4 +1,4 @@
-// ckeletin:allow-custom-command
+// ckeletin:allow-custom-command - utility command with no registry-backed settings (see below)
 //
 // `episode` is a utility command with no persistent user-facing config keys:
 // its single flag (--output-dir) defaults to a path inside the project's

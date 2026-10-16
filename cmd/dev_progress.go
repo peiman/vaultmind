@@ -1,6 +1,6 @@
 //go:build dev
 
-// ckeletin:allow-custom-command
+// ckeletin:allow-custom-command - dev-only progress-UI demo (build tag dev)
 // cmd/dev_progress.go
 //
 // Progress package demonstration command (dev-only).

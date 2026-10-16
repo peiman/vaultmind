@@ -1,6 +1,6 @@
 //go:build dev
 
-// ckeletin:allow-custom-command
+// ckeletin:allow-custom-command - dev-only config inspector (build tag dev)
 // cmd/dev_config.go
 //
 // Configuration inspector subcommand (dev-only).
