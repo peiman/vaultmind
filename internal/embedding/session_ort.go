@@ -177,14 +177,11 @@ func CheckRuntime(ctx context.Context) error {
 	return s.Destroy()
 }
 
-// ortMemoryOptions turns off ONNX Runtime's CPU memory arena and memory-pattern
-// planning. With them on, ORT keeps a buffer for every input shape it has seen
-// and never gives it back, so a long-lived process (vaultmind serve, a long
-// index pass) grows with each new query length: measured +300 MB over 20 asks,
-// and 56 GB in one resident server on a machine whose hooks ask on every prompt.
+// ortMemoryOptions applies the pinned ORT memory settings (ort_memory.go):
+// CPU memory arena and memory-pattern planning off.
 func ortMemoryOptions() []options.WithOption {
 	return []options.WithOption{
-		options.WithCPUMemArena(false),
-		options.WithMemPattern(false),
+		options.WithCPUMemArena(ortCPUMemArena),
+		options.WithMemPattern(ortMemPattern),
 	}
 }
