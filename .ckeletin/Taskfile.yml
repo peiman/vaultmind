@@ -51,7 +51,11 @@ vars:
   TOOL_GOIMPORTS_VERSION: v0.45.0
   TOOL_GOVULNCHECK_VERSION: latest
   TOOL_GOTESTSUM_VERSION: latest
-  TOOL_GOLANGCI_LINT_VERSION: v2.12.2
+  # vaultmind local patch: Go 1.27.2 (.go-version) writes V5 export data,
+  # which golangci-lint reads from v2.14.0 on (v2.12/v2.13 read V4 only and
+  # fail on `import "math"`). Upstream pins v2.12.2 for Go 1.26.
+  # cmd/framework_patches_test.go fails when an update reverts this.
+  TOOL_GOLANGCI_LINT_VERSION: v2.14.0
   TOOL_LEFTHOOK_VERSION: v2.1.9
   TOOL_GO_MOD_OUTDATED_VERSION: latest
   TOOL_GO_LICENSES_VERSION: v2.0.1

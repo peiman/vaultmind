@@ -13,6 +13,7 @@ Only framework changes are tracked here — project-level changes belong in the 
 
 - **`pkg/config/core_options.go`: `app.log_level` defaults to `warn`** (upstream: `info`). A normal command prints its result, not info-level lines on stderr.
 - **`pkg/config/security.go`: a permissive (0644) config file is noted at Debug** (upstream: Info). Config loads at Info level, so the Info note printed on every command.
+- **`Taskfile.yml`: `TOOL_GOLANGCI_LINT_VERSION` is v2.14.0** (upstream: v2.12.2). vaultmind builds with Go 1.27.2, whose export data older golangci-lint cannot read.
 
 ## [0.2.2] - 2026-10-16
 
