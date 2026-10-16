@@ -43,6 +43,7 @@ Use `task` commands for all standard workflows. The `task` runner wraps Go tooli
 | Quick compile check | `go build ./...` |
 | Run benchmarks | `task bench` |
 | Integration tests | `task test:integration` |
+| Before a release (embedding and server memory, ORT + model) | `task test:memory` |
 | Vulnerability check | `task check:vuln` |
 | Regenerate config constants | `task generate:config:key-constants` |
 

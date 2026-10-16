@@ -461,6 +461,25 @@ tasks:
           trap 'rm -rf "$XDG_DATA_HOME"' EXIT
           task ckeletin:test:integration
 
+  test:memory:
+    desc: Pre-release memory gate — a real ORT build embeds a long-note vault and serves 100 asks under 4 GB
+    deps: [setup:ort:check]
+    summary: |
+      Builds an ORT binary, then runs test/memory (build tag `memory`): a full
+      BGE-M3 embed of a generated long-note vault, and 100 asks through the
+      warm server, each failing above 4 GB peak memory. Also runs the
+      ORT-tagged unit tests (the session's memory settings). Needs the BGE-M3
+      model in the cache; the first run downloads it (about 2.2 GB). Run it
+      before tagging a release: 0.10.13 shipped a re-embed that passed 100 GB.
+    cmds:
+      - cmd: |
+          set -e
+          BIN=$(mktemp -d -t vm-memory.XXXXXX)/vaultmind
+          trap 'rm -rf "$(dirname "$BIN")"' EXIT
+          CGO_ENABLED=1 CGO_LDFLAGS="-L$(pwd)/lib" go build -tags ORT -o "$BIN" .
+          CGO_ENABLED=1 CGO_LDFLAGS="-L$(pwd)/lib" go test -tags ORT -count=1 ./internal/embedding/
+          VAULTMIND_MEMORY_BINARY="$BIN" go test -tags memory -count=1 -timeout 30m -v ./test/memory/
+
   test:golden:
     desc: Test CLI output against golden files
     cmds: [task: ckeletin:test:golden]
