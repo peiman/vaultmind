@@ -17,14 +17,8 @@ func CoreOptions() []ConfigOption {
 		// Legacy log level option (maintained for backward compatibility)
 		// If app.log.console_level is not set, this value is used for console output
 		{
-			Key: "app.log_level",
-			// vaultmind local patch: quiet by default. The console shows
-			// warnings and errors only, so a normal command prints just its
-			// result (stdout), not diagnostic chatter (stderr). Raise to
-			// info/debug via app.log_level or app.log.console_level when
-			// troubleshooting. ckeletin:update resets this to the upstream
-			// "info"; cmd/framework_patches_test.go fails when that happens.
-			DefaultValue: "warn",
+			Key:          "app.log_level",
+			DefaultValue: "info",
 			Description:  "Logging level for the application (trace, debug, info, warn, error, fatal, panic). Used as console level if app.log.console_level is not set.",
 			Type:         "string",
 			Required:     false,

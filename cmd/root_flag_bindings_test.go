@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
+	"github.com/peiman/vaultmind/internal/projectdefaults"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
@@ -70,9 +71,21 @@ func TestFlagBindings_RegistryDriven(t *testing.T) {
 	// SETUP PHASE
 	viper.Reset()
 
-	// Get all core options from registry
+	// Get all core options, with the project overlay applied: a flag's
+	// default is the default the process uses (internal/projectdefaults).
+	effective, err := config.EffectiveRegistry(projectdefaults.TOML)
+	require.NoError(t, err)
+	byKey := make(map[string]config.ConfigOption, len(effective))
+	for _, o := range effective {
+		byKey[o.Key] = o
+	}
 	options := config.CoreOptions()
 	require.NotEmpty(t, options, "Registry should have options to test")
+	for i, o := range options {
+		if e, ok := byKey[o.Key]; ok {
+			options[i] = e
+		}
+	}
 
 	// Initialize root command (calls init() which defines flags)
 	// Note: RootCmd is package-level variable defined in root.go

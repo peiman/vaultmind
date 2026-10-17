@@ -26,6 +26,7 @@ import (
 	"github.com/peiman/vaultmind/.ckeletin/pkg/logger"
 	"github.com/peiman/vaultmind/.ckeletin/pkg/output"
 	"github.com/peiman/vaultmind/internal/experiment"
+	"github.com/peiman/vaultmind/internal/projectdefaults"
 	"github.com/peiman/vaultmind/internal/xdg"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -492,6 +493,12 @@ func initConfig() error {
 	// Thread-safety: This is called during startup before any concurrent access.
 	// No synchronization needed as all config writes happen here in PersistentPreRunE.
 	config.SetDefaults()
+	// The project overlay replaces framework defaults (app.log_level is warn
+	// here). It lives in internal/projectdefaults, outside .ckeletin/, so a
+	// framework update cannot revert it. A config file, env var or flag wins.
+	if err := config.ApplyProjectDefaultsTOML(projectdefaults.TOML); err != nil {
+		return fmt.Errorf("apply project defaults: %w", err)
+	}
 
 	// Validate default values to ensure they don't exceed limits
 	// This catches programming errors in default value definitions

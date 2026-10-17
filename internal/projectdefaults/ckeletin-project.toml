@@ -1,0 +1,9 @@
+# Project defaults for framework options.
+# Keys are registry keys, for example "app.log_level".
+# This file is outside .ckeletin/ and survives task ckeletin:update.
+# A config file, an environment variable, or a flag still wins.
+[defaults]
+# Quiet by default: the console shows warnings and errors only, so a normal
+# command prints just its result (stdout), not info lines on stderr. Raise it
+# with app.log_level or app.log.console_level when troubleshooting.
+"app.log_level" = "warn"
