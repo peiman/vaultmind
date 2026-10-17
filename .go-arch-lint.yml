@@ -83,6 +83,7 @@ components:
   #
   # Framework packages: .ckeletin/pkg/*
   # Project config: internal/config/commands/** (rarely changes)
+  # Project defaults: internal/projectdefaults/** (outside the framework tree)
   # Project UI: internal/ui/** (rarely changes)
   infrastructure:
     in:
@@ -92,6 +93,7 @@ components:
       - .ckeletin/pkg/testutil/**
       - .ckeletin/pkg/catalog/**
       - internal/config/commands/**
+      - internal/projectdefaults/**
       - internal/ui/**
       - internal/xdg/**
       # meshpaths: the SSOT for mesh wake-watcher state paths. Pure path

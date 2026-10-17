@@ -3,8 +3,6 @@
 package cmd
 
 import (
-	"path/filepath"
-
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config/commands"
 	projcommands "github.com/peiman/vaultmind/internal/config/commands"
@@ -50,29 +48,16 @@ func runDocsConfig(cmd *cobra.Command, args []string) error {
 		Str("output_file", outputFile).
 		Msg("Documentation configuration loaded")
 
-	// Create application info for the documentation generator
-	appInfo := docs.AppInfo{
-		BinaryName: binaryName,
-		EnvPrefix:  EnvPrefix(),
+	registry, err := effectiveDocsRegistry()
+	if err != nil {
+		return err
 	}
-
-	// Set config paths
-	paths := ConfigPaths()
-	if defaultDir := defaultUserConfigDir(paths); defaultDir != "" {
-		appInfo.ConfigPaths.DefaultPath = filepath.Join(defaultDir, "config.yaml")
-	}
-	appInfo.ConfigPaths.DefaultFullName = "config.yaml" // local project config
-
-	// Create document generator configuration
-	cfg := docs.Config{
+	generator := docs.NewGenerator(docs.Config{
 		Writer:       cmd.OutOrStdout(),
 		OutputFormat: outputFormat,
 		OutputFile:   outputFile,
-		Registry:     config.Registry,
-	}
-
-	// Create generator and generate documentation
-	generator := docs.NewGenerator(cfg)
-	generator.SetAppInfo(appInfo)
+		Registry:     registry,
+	})
+	generator.SetAppInfo(docsAppInfo())
 	return generator.Generate()
 }

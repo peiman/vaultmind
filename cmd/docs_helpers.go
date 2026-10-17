@@ -5,6 +5,11 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+
+	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
+	"github.com/peiman/vaultmind/internal/docs"
+	"github.com/peiman/vaultmind/internal/projectdefaults"
 
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -97,4 +102,25 @@ func injectIntoMarkedRegion(path, md string) ([]byte, bool, error) {
 		return nil, false, fmt.Errorf("injecting command reference into %s: %w", path, err)
 	}
 	return replaced, true, nil
+}
+
+// docsAppInfo describes this binary to the config documentation generator.
+func docsAppInfo() docs.AppInfo {
+	appInfo := docs.AppInfo{BinaryName: binaryName, EnvPrefix: EnvPrefix()}
+	if defaultDir := defaultUserConfigDir(ConfigPaths()); defaultDir != "" {
+		appInfo.ConfigPaths.DefaultPath = filepath.Join(defaultDir, "config.yaml")
+	}
+	appInfo.ConfigPaths.DefaultFullName = "config.yaml" // local project config
+	return appInfo
+}
+
+// effectiveDocsRegistry is the registry generated docs publish: the framework
+// registry with the project overlay applied (internal/projectdefaults), so a
+// documented default is the default the process uses.
+func effectiveDocsRegistry() (docs.RegistryFunc, error) {
+	registry, err := config.EffectiveRegistry(projectdefaults.TOML)
+	if err != nil {
+		return nil, err
+	}
+	return func() []config.ConfigOption { return registry }, nil
 }

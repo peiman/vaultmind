@@ -33,7 +33,8 @@ func (g *Generator) GenerateMarkdownDocs(w io.Writer, appInfo AppInfo) error {
 	fmt.Fprintf(w, "1. Command-line flags\n")
 	fmt.Fprintf(w, "2. Environment variables (with prefix `%s_`)\n", appInfo.EnvPrefix)
 	fmt.Fprintf(w, "3. Configuration file (%s)\n", sanitizeConfigPath(appInfo.ConfigPaths.DefaultPath))
-	fmt.Fprintf(w, "4. Default values\n\n")
+	fmt.Fprintf(w, "4. Project defaults\n")
+	fmt.Fprintf(w, "5. Framework defaults\n\n")
 
 	// Configuration options
 	fmt.Fprintf(w, "## Configuration Options\n\n")
@@ -56,7 +57,7 @@ func (g *Generator) GenerateMarkdownDocs(w io.Writer, appInfo AppInfo) error {
 			opt.Type,
 			defaultVal,
 			opt.EnvVarName(appInfo.EnvPrefix),
-			opt.Description,
+			opt.DocsDescription(),
 			required,
 		)
 	}
@@ -77,7 +78,7 @@ func (g *Generator) GenerateMarkdownDocs(w io.Writer, appInfo AppInfo) error {
 	fmt.Fprintf(w, "### Environment Variables\n\n")
 	fmt.Fprintf(w, "```bash\n")
 	for _, opt := range registry {
-		fmt.Fprintf(w, "# %s\n", opt.Description)
+		fmt.Fprintf(w, "# %s\n", opt.DocsDescription())
 		fmt.Fprintf(w, "export %s=%s\n\n", opt.EnvVarName(appInfo.EnvPrefix), opt.ExampleValueString())
 	}
 	fmt.Fprintf(w, "```\n")

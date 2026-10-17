@@ -138,12 +138,12 @@
             },
             "gap_log_limit": {
               "default": 1000,
-              "description": "Most records kept in the possible-gap hint log. The file may grow to twice this many, then it is rewritten to the newest this many. Config file or environment only, not a flag.",
+              "description": "Most records kept in the possible-gap hint log. The file may grow to twice this many, then it is rewritten to the newest this many. (config file or environment only)",
               "type": "integer"
             },
             "gap_store_query": {
               "default": false,
-              "description": "Store the raw query text in the possible-gap hint log. Off by default: the log keeps a salted hash and a length. The log is per-user state, outside the vault. Config file or environment only, not a flag.",
+              "description": "Store the raw query text in the possible-gap hint log. Off by default: the log keeps a salted hash and a length. The log is per-user state, outside the vault. (config file or environment only)",
               "type": "boolean"
             },
             "json": {

@@ -53,11 +53,8 @@ This will set owner-only read/write permissions.`, path, perm, path)
 			Msg("Config file is group-writable, consider restricting to 0600 or 0400")
 	}
 
-	// vaultmind local patch: 0644 is what a normal install has. It matches
-	// this mask, and so does group-writable, which already warned above.
-	// Debug, not Info: initConfig runs while the global level is Info, so an
-	// Info line here is printed on every command. ckeletin:update resets
-	// this; cmd/framework_patches_test.go fails when that happens.
+	// Debug, not Info: 0644 matches perm&0077 and is a normal config mode.
+	// Group-writable already warned above. World-writable already returned.
 	if perm&0077 != 0 {
 		log.Debug().
 			Str("path", path).

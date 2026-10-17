@@ -9,7 +9,8 @@ Configuration can be provided in multiple ways, in order of precedence:
 1. Command-line flags
 2. Environment variables (with prefix `VAULTMIND_`)
 3. Configuration file (~/.config/vaultmind/config.yaml)
-4. Default values
+4. Project defaults
+5. Framework defaults
 
 ## Configuration Options
 
@@ -66,8 +67,8 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.ask.dedup_window` | string | `` | `VAULTMIND_APP_ASK_DEDUP_WINDOW` | Send a note as its title alone when this conversation (VAULTMIND_USER_SESSION_ID) received its text within this long, e.g. 10m. Empty = off. For hooks that fire in bursts. |
 | `app.ask.query_forward_tokens` | int | `1152` | `VAULTMIND_APP_ASK_QUERY_FORWARD_TOKENS` | Embed the first N tokens of the query in one forward pass. Dense and sparse rank on that text. The cut is on a token boundary, so the embedded text is a prefix of the query. 0 turns the bound off. |
 | `app.ask.query_salient_terms` | int | `64` | `VAULTMIND_APP_ASK_QUERY_SALIENT_TERMS` | ColBERT and FTS use the K tokens with the highest sparse weight from that forward pass. A spaced word stays one FTS term. A long word with no spaces contributes the text of its salient tokens, not the whole word. 0 turns the bound off. |
-| `app.ask.gap_store_query` | bool | `false` | `VAULTMIND_APP_ASK_GAP_STORE_QUERY` | Store the raw query text in the possible-gap hint log. Off by default: the log keeps a salted hash and a length. The log is per-user state, outside the vault. Config file or environment only, not a flag. |
-| `app.ask.gap_log_limit` | int | `1000` | `VAULTMIND_APP_ASK_GAP_LOG_LIMIT` | Most records kept in the possible-gap hint log. The file may grow to twice this many, then it is rewritten to the newest this many. Config file or environment only, not a flag. |
+| `app.ask.gap_store_query` | bool | `false` | `VAULTMIND_APP_ASK_GAP_STORE_QUERY` | Store the raw query text in the possible-gap hint log. Off by default: the log keeps a salted hash and a length. The log is per-user state, outside the vault. (config file or environment only) |
+| `app.ask.gap_log_limit` | int | `1000` | `VAULTMIND_APP_ASK_GAP_LOG_LIMIT` | Most records kept in the possible-gap hint log. The file may grow to twice this many, then it is rewritten to the newest this many. (config file or environment only) |
 | `app.check.fail_fast` | bool | `false` | `VAULTMIND_APP_CHECK_FAIL_FAST` | Stop on first failed check |
 | `app.check.verbose` | bool | `false` | `VAULTMIND_APP_CHECK_VERBOSE` | Show verbose output including command details |
 | `app.check.parallel` | bool | `true` | `VAULTMIND_APP_CHECK_PARALLEL` | Run checks within each category in parallel (disable with --parallel=false) |
@@ -476,10 +477,10 @@ app:
     # ColBERT and FTS use the K tokens with the highest sparse weight from that forward pass. A spaced word stays one FTS term. A long word with no spaces contributes the text of its salient tokens, not the whole word. 0 turns the bound off.
     query_salient_terms: 64
 
-    # Store the raw query text in the possible-gap hint log. Off by default: the log keeps a salted hash and a length. The log is per-user state, outside the vault. Config file or environment only, not a flag.
+    # Store the raw query text in the possible-gap hint log. Off by default: the log keeps a salted hash and a length. The log is per-user state, outside the vault. (config file or environment only)
     gap_store_query: false
 
-    # Most records kept in the possible-gap hint log. The file may grow to twice this many, then it is rewritten to the newest this many. Config file or environment only, not a flag.
+    # Most records kept in the possible-gap hint log. The file may grow to twice this many, then it is rewritten to the newest this many. (config file or environment only)
     gap_log_limit: 1000
 
   check:
@@ -1575,10 +1576,10 @@ export VAULTMIND_APP_ASK_QUERY_FORWARD_TOKENS=1152
 # ColBERT and FTS use the K tokens with the highest sparse weight from that forward pass. A spaced word stays one FTS term. A long word with no spaces contributes the text of its salient tokens, not the whole word. 0 turns the bound off.
 export VAULTMIND_APP_ASK_QUERY_SALIENT_TERMS=64
 
-# Store the raw query text in the possible-gap hint log. Off by default: the log keeps a salted hash and a length. The log is per-user state, outside the vault. Config file or environment only, not a flag.
+# Store the raw query text in the possible-gap hint log. Off by default: the log keeps a salted hash and a length. The log is per-user state, outside the vault. (config file or environment only)
 export VAULTMIND_APP_ASK_GAP_STORE_QUERY=false
 
-# Most records kept in the possible-gap hint log. The file may grow to twice this many, then it is rewritten to the newest this many. Config file or environment only, not a flag.
+# Most records kept in the possible-gap hint log. The file may grow to twice this many, then it is rewritten to the newest this many. (config file or environment only)
 export VAULTMIND_APP_ASK_GAP_LOG_LIMIT=1000
 
 # Stop on first failed check

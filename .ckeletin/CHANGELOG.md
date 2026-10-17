@@ -7,13 +7,26 @@ Only framework changes are tracked here — project-level changes belong in the 
 
 ## [Unreleased]
 
-### vaultmind local patches (re-apply after every `task ckeletin:update`)
+## [0.2.4] - 2026-10-17
 
-`task ckeletin:update` replaces `.ckeletin/` with upstream, which resets both patches below. `cmd/framework_patches_test.go` fails until each one is re-applied.
+### Fixed
 
-- **`pkg/config/core_options.go`: `app.log_level` defaults to `warn`** (upstream: `info`). A normal command prints its result, not info-level lines on stderr.
-- **`pkg/config/security.go`: a permissive (0644) config file is noted at Debug** (upstream: Info). Config loads at Info level, so the Info note printed on every command.
-- **`Taskfile.yml`: `TOOL_GOLANGCI_LINT_VERSION` is v2.14.0** (upstream: v2.12.2). vaultmind builds with Go 1.27.2, whose export data older golangci-lint cannot read.
+- **A normal config file no longer logs at Info.** Mode 0644 matches the permissive-permission check, and that note is now Debug. Group-writable still warns. World-writable is still an error.
+- **golangci-lint is pinned to v2.15.0.** v2.12.2 cannot read Go 1.27 export data. A project overrides any tool pin with `CKELETIN_TOOL_<NAME>` in its own Taskfile, or on the task command line. Unset, the framework default is used. An update still replaces `.ckeletin/Taskfile.yml`, so the override has to live outside it.
+- **A framework update no longer rewrites the rename tools' fixtures.** A Go file marked `ckeletin:keep-upstream-names` keeps the upstream module path. The ordinary test tasks list `.ckeletin/scripts` explicitly, because `./...` skips a directory whose name starts with `.`.
+- **Generated config docs use the project default.** `config.EffectiveRegistry` applies `internal/projectdefaults` to a copy of the registry. `docs config` and the config schema publish that value. The registry itself keeps the framework default. The generated precedence is flag, environment, config file, project default, then framework default.
+- **An option can omit its command-line flag.** `ConfigOption.NoFlag` keeps the option in the registry, the config file, the environment, and the generated docs. Flag registration skips it. Generated docs say it is config file or environment only. Flags written out by hand, including the reference root flags, are separate from this loop. An update brings the field. A project that already registers flags has to honor `NoFlag` in its own `cmd/flags.go`, because an update does not replace that file.
+
+## [0.2.3] - 2026-10-17
+
+### Added
+
+- **`task ckeletin:update` stops before it replaces a local framework edit.** Uncommitted changes under `.ckeletin/` always stop the command, including when `discard_local=1` is set. A committed difference from the upstream tree at the project's current `.ckeletin/VERSION` stops the command unless `discard_local=1`. Names the update itself rewrites are not a local difference. The dry run shows the difference and changes nothing. The compatibility check refuses to apply a candidate when a local difference exists, and still restores `.ckeletin/` when the tree is clean. A stop prints `CKELETIN_UPDATE_RESULT` with `status` `stopped`, `reason` (`uncommitted`, `local_difference`, or `unknown_version`), `to` null, and `discarded` false.
+- **Project defaults live outside the framework tree.** `config.ApplyProjectDefaultsTOML` replaces the framework default for a registry key. An unknown key fails when configuration is loaded. A config file, environment variable, or flag still wins.
+
+### Changed
+
+- **`CKELETIN_UPDATE_RESULT` includes `discarded`.** It is true only when the command discarded a committed local difference. `up_to_date`, `build_failed`, and `updated` keep their existing fields.
 
 ## [0.2.2] - 2026-10-16
 

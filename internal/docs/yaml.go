@@ -90,7 +90,7 @@ func generateYAMLContent(w io.Writer, registry []config.ConfigOption) error {
 				key = parts[1]
 			}
 
-			fmt.Fprintf(w, "  # %s\n", opt.Description)
+			fmt.Fprintf(w, "  # %s\n", opt.DocsDescription())
 			fmt.Fprintf(w, "  %s: %s\n\n", key, opt.ExampleValueString())
 		}
 
@@ -109,7 +109,7 @@ func generateYAMLContent(w io.Writer, registry []config.ConfigOption) error {
 					key = opt.Key
 				}
 
-				fmt.Fprintf(w, "    # %s\n", opt.Description)
+				fmt.Fprintf(w, "    # %s\n", opt.DocsDescription())
 				fmt.Fprintf(w, "    %s: %s\n\n", key, opt.ExampleValueString())
 			}
 		}
