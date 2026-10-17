@@ -30,20 +30,6 @@ extends:
 
 # Project-specific hooks (add below)
 
-# Override: the framework's base injects a `scaffold` pre-push hook that runs
-# `task test:scaffold`. That task wraps a FULL `task check` inside a copied
-# project (minutes per run) — a sensible gate for ckeletin-go itself, but the
-# wrong cost for an end-product consumer's pre-push, which must stay fast.
-# It also references the bare `task test:scaffold`, which only exists namespaced
-# here (`ckeletin:test:scaffold`), so the inherited hook fails outright. We skip
-# it on pre-push; the scaffold suite remains runnable on demand via
-# `task ckeletin:test:scaffold` and in CI. (Framework drift: lefthook.base.yml
-# references a task that is not a project forwarding — reported upstream.)
-pre-push:
-  commands:
-    scaffold:
-      skip: true
-
 # Override: pre-commit ran the whole unit suite and pre-push ran it again under
 # coverage — a commit plus a push took up to ten minutes on a loaded machine
 # (#185). Pre-commit now tests only the packages that own the staged files
@@ -52,8 +38,7 @@ pre-push:
 #
 # A new command rather than a replacement `run:` for the base's `test`: when
 # both files set the same key, lefthook 1.7 keeps the extended base's value, so
-# the base `test` is skipped (skip merges, as scaffold's does above) and this
-# runs instead.
+# the base `test` is skipped (skip merges) and this runs instead.
 #
 # No {staged_files}: lefthook leaves out deleted files and the old side of a
 # rename, so the script reads the staged set from git itself.
