@@ -312,11 +312,13 @@ jobs:
   # ═══════════════════════════════════════════════════════════════════
   # QUALITY CHECKS (All triggers - fast for PRs, full for main)
   # PRs: Fast checks (format, lint, validate, unit tests) - ~2-3 min
-  # Main/releases: Full checks (+ security, license, integration) - ~5-8 min
+  # Main/releases: Full checks (+ security, license, integration). Measured
+  # 14-20 min on main (2026-10-16..19); two runs were cancelled at a 20 min
+  # limit, and a tag build cancelled there skips the release.
   # ═══════════════════════════════════════════════════════════════════
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       contents: read # Only need read access for checkout and build
       pull-requests: write # Needed for codecov comment
