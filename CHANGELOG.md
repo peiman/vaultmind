@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.15] - 2026-10-19
+
+> After upgrading, run `vaultmind index --embed` once per vault: it re-embeds every note with its title (about 3.3 GB peak on a 438-note vault). Run `vaultmind hooks install --force` to update installed hooks.
+
 ### Added
 
 - An embedding pass stops itself when vaultmind's memory passes `app.embed_max_rss_mb` (default 6144 MiB, about twice the measured peak; `VAULTMIND_APP_EMBED_MAX_RSS_MB`; 0 turns it off). This covers `index --embed` and the embed after a write. It exits with an error that names the limit. Notes embedded before the stop are kept, and running the same command again continues: on a 70-note vault a stop at 23 notes resumed with 47 more. A future runaway fails at a few GB instead of taking the machine, as 0.10.13's re-embed did past 100 GB.
@@ -3031,7 +3035,10 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.12...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.15...HEAD
+[0.10.15]: https://github.com/peiman/vaultmind/compare/v0.10.14...v0.10.15
+[0.10.14]: https://github.com/peiman/vaultmind/compare/v0.10.13...v0.10.14
+[0.10.13]: https://github.com/peiman/vaultmind/compare/v0.10.12...v0.10.13
 [0.10.12]: https://github.com/peiman/vaultmind/compare/v0.10.11...v0.10.12
 [0.10.11]: https://github.com/peiman/vaultmind/compare/v0.10.10...v0.10.11
 [0.10.10]: https://github.com/peiman/vaultmind/compare/v0.10.9...v0.10.10
