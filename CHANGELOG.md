@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Note titles are now embedded with the body, so a note whose title names the question ranks for it. Measured on two labelled sets: Hit@3 29→31 of 32 and 44→48 of 50. Existing vaults re-embed once with `vaultmind index --embed` (doctor, ask and index say so until then). A note write never starts that re-embed.
 - The ckeletin-go framework is updated from 0.1.0 to 0.2.4. `docs config` writes to a file with `--output-file` (was `--output`). An invalid `docs config --format` now names the valid options. A log file that was requested and cannot be opened fails the command instead of continuing to the console only. Generated config docs mark options that are set in the config file or environment only. Long command functions recorded in `.ckeletin-command-baseline` may shrink but not grow, and new ones are refused.
 - The BGE-M3 embedder refuses a batch outside the memory budget (more than 8 texts, or more than one cap-length note's worth of padded tokens) with an error instead of running it. The indexer already plans every batch inside that budget; the refusal keeps a future caller that skips the plan from taking a machine's memory, as 0.10.13's re-embed did. One definition of the budget serves both.
 

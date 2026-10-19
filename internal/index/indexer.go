@@ -45,6 +45,10 @@ type IndexResult struct {
 	// does not load a model. Absent when the stamp is current or there is no
 	// sparse column.
 	SparseFormatStale bool `json:"sparse_format_stale,omitempty"`
+	// EmbedTextStale is set by a plain index when stored dense vectors predate
+	// title embedding. The index does not rewrite them and does not load a
+	// model. Absent when the stamp is current or the vault has no embeddings.
+	EmbedTextStale bool `json:"embed_text_stale,omitempty"`
 }
 
 // DuplicateID names one id claimed by two files on disk, and which file kept
@@ -139,10 +143,10 @@ func (idx *Indexer) RunEmbed(ctx context.Context, dbPath, model string, full boo
 		}
 	} else {
 		// Incremental: refuse a model switch that would mix dimensions, then
-		// skip the model load when nothing is pending and the sparse column
-		// is not an older format.
+		// skip the model load when nothing is pending, the title stamp is
+		// not being upgraded, and the sparse column is not an older format.
 		//nolint:contextcheck // skipIncrementalEmbed opens the index; Open does not take a context
-		skip, res, err := skipIncrementalEmbed(dbPath, model)
+		skip, res, err := skipIncrementalEmbed(dbPath, model, idx.UpgradeEmbedText)
 		if err != nil {
 			return nil, err
 		}
@@ -230,6 +234,15 @@ func (idx *Indexer) RunEmbed(ctx context.Context, dbPath, model string, full boo
 // out from RunEmbed so the purge→re-embed round-trip is testable with an injected
 // embedder (RunEmbed itself constructs a real, ~2.2GB one).
 func (idx *Indexer) embedResolved(ctx context.Context, dbPath string, embedder embedding.Embedder, modelUsed string, full bool) (*EmbedResult, error) {
+	// Read the title stamp before a --full purge. Purge clears dense rows,
+	// and a stale vault would then look fresh.
+	//nolint:contextcheck // prepareEmbedText opens the index; Open does not take a context
+	plan, perr := idx.prepareEmbedText(dbPath)
+	if perr != nil {
+		return nil, perr
+	}
+	defer func() { idx.reembedAll = false }()
+
 	var purged int64
 	if full {
 		var perr error
@@ -243,6 +256,13 @@ func (idx *Indexer) embedResolved(ctx context.Context, dbPath string, embedder e
 	upgraded, uerr := idx.maybeUpgradeSparse(ctx, dbPath, embedder, modelUsed)
 	if uerr != nil {
 		return &EmbedResult{SparseReembedded: upgraded, Model: modelUsed}, uerr
+	}
+	// The text stamp goes on before any note is embedded when the vault was
+	// not stale. A failed batch, or a memory-guard exit in the middle of the
+	// pass, then cannot make the vault look like body-only vectors.
+	//nolint:contextcheck // stampTextIfCurrent opens the index; Open does not take a context
+	if serr := stampTextIfCurrent(plan, dbPath); serr != nil {
+		return &EmbedResult{SparseReembedded: upgraded, Model: modelUsed}, serr
 	}
 	res, err := idx.EmbedNotes(ctx, dbPath, embedder)
 	if res != nil {
@@ -268,8 +288,8 @@ func (idx *Indexer) embedResolved(ctx context.Context, dbPath string, embedder e
 			purged, res.Embedded, modelUsed, res.Errors, modelUsed)
 	}
 	if err == nil {
-		//nolint:contextcheck // stampCurrentSparse opens the index; Open does not take a context
-		if serr := stampCurrentSparse(dbPath, modelUsed, upgraded, res); serr != nil {
+		//nolint:contextcheck // stampEmbedPass opens the index; Open does not take a context
+		if serr := stampEmbedPass(dbPath, modelUsed, upgraded, plan, res, ctx.Err() != nil); serr != nil {
 			return res, serr
 		}
 	}
@@ -279,7 +299,11 @@ func (idx *Indexer) embedResolved(ctx context.Context, dbPath string, embedder e
 // maybeUpgradeSparse rewrites a stale sparse column before EmbedNotes.
 // MiniLM and a non-full embedder are left alone. The stamp for a vault that
 // had no old sparse vectors is written by stampCurrentSparse after EmbedNotes.
+// A title upgrade skips this pass: EmbedNotes rewrites sparse itself.
 func (idx *Indexer) maybeUpgradeSparse(ctx context.Context, dbPath string, embedder embedding.Embedder, model string) (int, error) {
+	if idx.reembedAll {
+		return 0, nil
+	}
 	if model != embedding.ModelBGEM3 {
 		return 0, nil
 	}
@@ -503,8 +527,16 @@ type Indexer struct {
 	vaultRoot string
 	dbPath    string
 	cfg       *vault.Config
-	// Progress receives the sparse-format re-embed line. Nil writes to stderr.
+	// Progress receives the sparse-format and title re-embed lines. Nil writes
+	// to stderr.
 	Progress io.Writer
+	// UpgradeEmbedText re-embeds every note when stored vectors predate title
+	// embedding. index --embed sets it. A note write leaves it false, so a
+	// write never starts that re-embed.
+	UpgradeEmbedText bool
+	// reembedAll is set for one EmbedNotes pass when this run is the title
+	// upgrade. It selects every note.
+	reembedAll bool
 	// embedderSource, when set, lends the process embedder. Nil means this
 	// pass builds and closes its own session, which is what a long
 	// `vaultmind index --embed` does so the model is released at the end.
@@ -1019,20 +1051,11 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 
 	result := &EmbedResult{}
 
-	// Determine skip/pending query based on embedder type.
-	// For FullEmbedder (BGE-M3): a note needs embedding if ANY of the three columns is NULL.
-	// For dense-only (MiniLM): a note needs embedding if the dense column is NULL.
+	// FullEmbedder (BGE-M3): a note is pending when any of the three columns
+	// is NULL. Dense-only (MiniLM): pending when the dense column is NULL.
+	// A title upgrade selects every note and overwrites the vectors in place.
 	fullEmbedder, isFull := embedder.(embedding.FullEmbedder)
-
-	var skipQuery, pendingQuery string
-	if isFull {
-		// BGE-M3: need notes where any of the 3 embeddings are missing
-		pendingQuery = "SELECT id, path, COALESCE(body_text, '') FROM notes WHERE embedding IS NULL OR sparse_embedding IS NULL OR colbert_embedding IS NULL"
-		skipQuery = "SELECT COUNT(*) FROM notes WHERE embedding IS NOT NULL AND sparse_embedding IS NOT NULL AND colbert_embedding IS NOT NULL"
-	} else {
-		pendingQuery = "SELECT id, path, COALESCE(body_text, '') FROM notes WHERE embedding IS NULL"
-		skipQuery = "SELECT COUNT(*) FROM notes WHERE embedding IS NOT NULL"
-	}
+	pendingQuery, skipQuery := embedNoteQueries(isFull, idx.reembedAll)
 
 	var skippedCount int
 	err = db.QueryRow(skipQuery).Scan(&skippedCount)
@@ -1046,15 +1069,10 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 		return nil, fmt.Errorf("querying unembedded notes: %w", err)
 	}
 
-	type noteText struct {
-		id   string
-		path string
-		body string
-	}
 	var pending []noteText
 	for rows.Next() {
 		var nt noteText
-		if err := rows.Scan(&nt.id, &nt.path, &nt.body); err != nil {
+		if err := rows.Scan(&nt.id, &nt.path, &nt.title, &nt.body); err != nil {
 			_ = rows.Close()
 			return nil, fmt.Errorf("scanning unembedded note: %w", err)
 		}
@@ -1077,24 +1095,22 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 	// Process in batches. BGE-M3 memory grows with the padded tokens in a
 	// batch, so its batches come from planBGEM3Batches (one cap-length note's
 	// worth per batch). MiniLM is much smaller and keeps the padded-cost plan (#70).
-	lengths := make([]int, len(pending))
-	for i, nt := range pending {
-		lengths[i] = len(nt.body)
+	// Lengths are the text the embedder receives, title included.
+	batches, err := idx.planNoteBatches(pending, isFull)
+	if err != nil {
+		return nil, err
 	}
-	plan := planEmbedBatches(lengths, embedBatchSize, embedBatchSize*embedPaddedBudgetPerSlot)
-	if isFull {
-		plan = planBGEM3Batches(lengths)
-	}
-	for _, idxs := range plan {
+	var unrewritten []string
+	for _, idxs := range batches {
 		batch := make([]noteText, len(idxs))
 		texts := make([]string, len(idxs))
 		for j, idx := range idxs {
 			batch[j] = pending[idx]
-			// The stored body stays as indexed. A long symbol run is capped
-			// only on the text the embedder tokenizes. That run has no
-			// ranking signal and stalls the tokenizer. Same rule as the
-			// ranking query (Principle 7).
-			texts[j] = embedding.CapSymbolRuns(pending[idx].body)
+			// The stored body stays as indexed. The embedder sees the title
+			// with the body. A long symbol run is capped only on that text.
+			// That run has no ranking signal and stalls the tokenizer.
+			// Same rule as the ranking query (Principle 7).
+			texts[j] = embedding.CapSymbolRuns(noteEmbedText(pending[idx].title, pending[idx].body))
 		}
 		i := idxs[0] // for log context: where this batch started in the input
 		if isFull {
@@ -1107,6 +1123,7 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 				// is degraded on this batch's notes.
 				log.Warn().Err(embedErr).Int("batch_start", i).Int("batch_size", len(batch)).Msg("embedding batch failed — notes in batch will lack embeddings")
 				result.Errors += len(batch)
+				unrewritten = appendUnrewritten(idx.reembedAll, unrewritten, noteIDs(batch))
 				continue
 			}
 
@@ -1135,6 +1152,7 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 						Int("colbert_tokens", len(out.ColBERT)).
 						Msg("BGE-M3 produced empty Sparse or ColBERT — note remains pending for next embed pass")
 					emptyInBatch++
+					unrewritten = appendUnrewritten(idx.reembedAll, unrewritten, []string{noteID})
 					continue
 				}
 				// Atomic single-statement write across all three modalities.
@@ -1158,11 +1176,13 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 			if storeErr {
 				_ = tx.Rollback()
 				result.Errors += len(batch)
+				unrewritten = appendUnrewritten(idx.reembedAll, unrewritten, noteIDs(batch))
 				continue
 			}
 			if err := tx.Commit(); err != nil {
 				_ = tx.Rollback()
 				result.Errors += len(batch)
+				unrewritten = appendUnrewritten(idx.reembedAll, unrewritten, noteIDs(batch))
 				continue
 			}
 			result.Embedded += len(batch) - emptyInBatch
@@ -1174,6 +1194,7 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 				// See FullEmbedder branch above for the rationale.
 				log.Warn().Err(embedErr).Int("batch_start", i).Int("batch_size", len(batch)).Msg("embedding batch failed — notes in batch will lack embeddings")
 				result.Errors += len(batch)
+				unrewritten = appendUnrewritten(idx.reembedAll, unrewritten, noteIDs(batch))
 				continue
 			}
 
@@ -1195,18 +1216,23 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 			if storeErr {
 				_ = tx.Rollback()
 				result.Errors += len(batch)
+				unrewritten = appendUnrewritten(idx.reembedAll, unrewritten, noteIDs(batch))
 				continue
 			}
 			if err := tx.Commit(); err != nil {
 				_ = tx.Rollback()
 				log.Debug().Err(err).Int("batch_start", i).Msg("committing embedding batch failed")
 				result.Errors += len(batch)
+				unrewritten = appendUnrewritten(idx.reembedAll, unrewritten, noteIDs(batch))
 				continue
 			}
 			result.Embedded += len(batch)
 		}
 	}
 
+	if err := clearNoteVectors(db, unrewritten); err != nil {
+		return result, err
+	}
 	return result, nil
 }
 

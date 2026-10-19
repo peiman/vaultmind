@@ -42,7 +42,7 @@ func TestFaithfulDelivery_UpgradeBackfillsWithoutChangingRetrieval(t *testing.T)
 			emb := &recordingBodyEmbedder{fakeDenseEmbedder: fakeDenseEmbedder{dims: 8}}
 			_, err = idx.EmbedNotes(context.Background(), dbPath, emb)
 			require.NoError(t, err)
-			assert.Equal(t, []string{parser.StripForFTS(body)}, emb.texts)
+			assert.Equal(t, []string{"Faithful\n\n" + parser.StripForFTS(body)}, emb.texts)
 			db, err := index.Open(dbPath)
 			require.NoError(t, err)
 			// Retain all three modalities byte-for-byte during the delivery refresh.

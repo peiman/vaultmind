@@ -218,6 +218,9 @@ type DoctorEmbeddings struct {
 	// that drops CLS, SEP, PAD, and UNK. Absent when current or when the vault
 	// has no sparse vectors. schema_version stays v1.
 	SparseFormatStale bool `json:"sparse_format_stale,omitempty"`
+	// EmbedTextStale is true when stored dense vectors predate title embedding.
+	// Absent when current or when the vault has no dense vectors.
+	EmbedTextStale bool `json:"embed_text_stale,omitempty"`
 }
 
 // DoctorModelBreakdown is one entry in DoctorEmbeddings.MixedModel.
@@ -374,12 +377,24 @@ func ResultSurfacedIssueCounts(result *DoctorResult) (errs, warns int) {
 	if result.IndexStatus == IndexStatusUnknown {
 		warns++
 	}
-	// The stale-sparse line is printed from Embeddings, not from Issues, so
-	// it is counted here for the same reason as the unknown banner.
-	if result.Embeddings != nil && result.Embeddings.SparseFormatStale {
-		warns++
-	}
+	// The stale-format lines are printed from Embeddings, not from Issues, so
+	// they are counted here for the same reason as the unknown banner.
+	warns += formatStaleWarnings(result.Embeddings)
 	return errs + mErrs, warns + mWarns
+}
+
+func formatStaleWarnings(emb *DoctorEmbeddings) int {
+	if emb == nil {
+		return 0
+	}
+	n := 0
+	if emb.SparseFormatStale {
+		n++
+	}
+	if emb.EmbedTextStale {
+		n++
+	}
+	return n
 }
 
 // ContentDrift describes one note whose current file content hash
@@ -669,12 +684,24 @@ func collectEmbeddingStatus(db *index.DB, total int) (*DoctorEmbeddings, error) 
 		(emb.SparseCount < emb.DenseCount || emb.ColBERTCount < emb.DenseCount) {
 		emb.HasModalityImbalance = true
 	}
+	if err := setFormatStale(db, emb); err != nil {
+		return nil, err
+	}
+	return emb, nil
+}
+
+func setFormatStale(db *index.DB, emb *DoctorEmbeddings) error {
 	stale, err := index.SparseFormatStale(db)
 	if err != nil {
-		return nil, fmt.Errorf("checking sparse format: %w", err)
+		return fmt.Errorf("checking sparse format: %w", err)
 	}
 	emb.SparseFormatStale = stale
-	return emb, nil
+	text, err := index.EmbedTextStale(db)
+	if err != nil {
+		return fmt.Errorf("checking embed text format: %w", err)
+	}
+	emb.EmbedTextStale = text
+	return nil
 }
 
 // DetectContentDrift compares each domain note's current file
