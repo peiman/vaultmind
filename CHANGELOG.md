@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `import` no longer skips a section whose heading has a multi-byte letter where its file name is cut. The 50-byte cap could split a character (for example `ḵ`, three bytes), and macOS refused the name ("illegal byte sequence"). The section was reported as skipped on every import, and a dry run reported it as added. The cut now falls between characters.
+- The auto-rag hook no longer blocks same-project writes as cross-project. A write to the session scratchpad, which macOS reports under `/private/tmp` (the real path of `/tmp`), is allowed: paths are compared with symlinks resolved. So is a write to another checkout of the same repository, recognized by its origin remote, including a URL an `insteadOf` rule rewrote. When the vault has no relevant guidance for a real cross-project write, the hook warns instead of denying: a block that can't say what to do instead teaches nothing. A deny declared in a `DRIFT_CATALOG` is unchanged. Run `vaultmind hooks install --force` to update installed copies.
 
 ## [0.10.14] - 2026-10-16
 
