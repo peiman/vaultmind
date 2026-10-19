@@ -51,6 +51,55 @@ func TestWriteEmbeddingStatus_StaleSparseOmitsCommandWhenIndexWouldRefuse(t *tes
 	assert.NotContains(t, out, "run:")
 }
 
+func staleTitleEmbeddings() *query.DoctorEmbeddings {
+	return &query.DoctorEmbeddings{
+		SemanticReady:  true,
+		EmbedTextStale: true,
+		Model:          embedding.ModelBGEM3,
+		TotalNotes:     1,
+		DenseCount:     1,
+		SparseCount:    1,
+		ColBERTCount:   1,
+	}
+}
+
+func TestWriteEmbeddingStatus_StaleEmbedTextUsesSharedRemedyAndVaultPath(t *testing.T) {
+	vault := "/tmp/vault-a"
+	var buf bytes.Buffer
+	require.NoError(t, writeEmbeddingStatus(&buf, staleTitleEmbeddings(), &query.DoctorIssues{}, vault))
+	out := buf.String()
+	assert.Contains(t, out, "run: "+index.EmbedTextStaleRemedy+" --vault "+vault)
+	assert.NotContains(t, out, "<vault>")
+	assert.Contains(t, out, index.EmbedTextStaleNotice)
+}
+
+func TestWriteEmbeddingStatus_StaleEmbedTextQuotesAPathWithSpaces(t *testing.T) {
+	vault := "/tmp/my vault"
+	var buf bytes.Buffer
+	require.NoError(t, writeEmbeddingStatus(&buf, staleTitleEmbeddings(), &query.DoctorIssues{}, vault))
+	assert.Contains(t, buf.String(), "run: "+index.EmbedTextStaleRemedy+" --vault '"+vault+"'")
+}
+
+func TestWriteEmbeddingStatus_StaleEmbedTextOmitsCommandWhenIndexWouldRefuse(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, writeEmbeddingStatus(&buf, staleTitleEmbeddings(), &query.DoctorIssues{
+		IndexRootBlocked: true,
+		ResolvedRoot:     "/empty",
+	}, "/tmp/vault-a"))
+	out := buf.String()
+	assert.Contains(t, out, index.EmbedTextStaleNotice)
+	assert.NotContains(t, out, "run:")
+}
+
+func TestWriteEmbeddingStatus_StaleEmbedTextWithoutPathUsesSharedRemedy(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, writeEmbeddingStatus(&buf, staleTitleEmbeddings(), nil, ""))
+	out := buf.String()
+	assert.Contains(t, out, "run: "+index.EmbedTextStaleRemedy+"\n")
+	assert.NotContains(t, out, "<vault>")
+	assert.NotContains(t, out, "--vault")
+}
+
 func TestWriteEmbeddingStatus_StaleSparseWithoutPathUsesSharedRemedy(t *testing.T) {
 	var buf bytes.Buffer
 	require.NoError(t, writeEmbeddingStatus(&buf, staleReadyEmbeddings(), nil, ""))

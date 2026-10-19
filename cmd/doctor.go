@@ -134,7 +134,7 @@ func writeEmbeddingStatus(w io.Writer, emb *query.DoctorEmbeddings, issues *quer
 			emb.TotalNotes); err != nil {
 			return err
 		}
-		if err := writeSparseFormatWarning(w, emb, issues, vaultPath); err != nil {
+		if err := writeFormatWarnings(w, emb, issues, vaultPath); err != nil {
 			return err
 		}
 		return writeRunLine(w, indexCommand(issues, "vaultmind index --embed --vault <vault>"))
@@ -146,7 +146,7 @@ func writeEmbeddingStatus(w io.Writer, emb *query.DoctorEmbeddings, issues *quer
 		emb.ColBERTCount, emb.TotalNotes); err != nil {
 		return err
 	}
-	if err := writeSparseFormatWarning(w, emb, issues, vaultPath); err != nil {
+	if err := writeFormatWarnings(w, emb, issues, vaultPath); err != nil {
 		return err
 	}
 	if emb.RuntimeError != "" {
@@ -190,6 +190,13 @@ func writeEmbeddingStatus(w io.Writer, emb *query.DoctorEmbeddings, issues *quer
 	return nil
 }
 
+func writeFormatWarnings(w io.Writer, emb *query.DoctorEmbeddings, issues *query.DoctorIssues, vaultPath string) error {
+	if err := writeSparseFormatWarning(w, emb, issues, vaultPath); err != nil {
+		return err
+	}
+	return writeEmbedTextWarning(w, emb, issues, vaultPath)
+}
+
 func writeSparseFormatWarning(w io.Writer, emb *query.DoctorEmbeddings, issues *query.DoctorIssues, vaultPath string) error {
 	if emb == nil || !emb.SparseFormatStale {
 		return nil
@@ -208,6 +215,26 @@ func sparseFormatRunCommand(vaultPath string) string {
 		return index.SparseFormatStaleRemedy
 	}
 	return index.SparseFormatStaleRemedy + " --vault " + shellWord(vaultPath)
+}
+
+func writeEmbedTextWarning(w io.Writer, emb *query.DoctorEmbeddings, issues *query.DoctorIssues, vaultPath string) error {
+	if emb == nil || !emb.EmbedTextStale {
+		return nil
+	}
+	if _, err := fmt.Fprintf(w, "⚠ %s\n", index.EmbedTextStaleNotice); err != nil {
+		return err
+	}
+	return writeRunLine(w, indexCommand(issues, embedTextRunCommand(vaultPath)))
+}
+
+// embedTextRunCommand is the shared stale-title remedy with this vault's
+// path. An empty path keeps the remedy alone. The words come from
+// index.EmbedTextStaleRemedy so doctor, ask, and index name one command.
+func embedTextRunCommand(vaultPath string) string {
+	if vaultPath == "" {
+		return index.EmbedTextStaleRemedy
+	}
+	return index.EmbedTextStaleRemedy + " --vault " + shellWord(vaultPath)
 }
 
 func writeMiniLMWarning(w io.Writer, issues *query.DoctorIssues) error {

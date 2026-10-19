@@ -58,6 +58,29 @@ func TestWriteSparseFormatStaleNotice_PlainAskPrints(t *testing.T) {
 	}
 }
 
+func TestWriteEmbedTextStaleNotice_HookCallerIsSilent(t *testing.T) {
+	for _, caller := range []string{"vaultmind-userprompt-hook", "vaultmind-persona-hook", "vaultmind-reach-hook", "auto-rag-guard"} {
+		t.Run(caller, func(t *testing.T) {
+			t.Setenv("VAULTMIND_CALLER", caller)
+			var buf bytes.Buffer
+			query.WriteEmbedTextStaleNotice(&buf)
+			assert.Empty(t, buf.String())
+		})
+	}
+}
+
+func TestWriteEmbedTextStaleNotice_PlainAskPrints(t *testing.T) {
+	for _, caller := range []string{"", "cli"} {
+		t.Run(caller, func(t *testing.T) {
+			t.Setenv("VAULTMIND_CALLER", caller)
+			var buf bytes.Buffer
+			query.WriteEmbedTextStaleNotice(&buf)
+			assert.Contains(t, buf.String(), index.EmbedTextStaleNotice)
+			assert.Contains(t, buf.String(), index.EmbedTextStaleRemedy)
+		})
+	}
+}
+
 func TestWriteKeywordOnlyHint_EndsWithNewline(t *testing.T) {
 	var buf bytes.Buffer
 	_ = query.WriteKeywordOnlyHint(&buf, "keyword", 0)

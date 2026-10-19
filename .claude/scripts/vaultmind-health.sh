@@ -134,6 +134,18 @@ if [ "$DOCTOR_RC" -eq 0 ]; then
   if [ -n "$SPARSE_BLOCK" ]; then
     printf '%s\n' "$SPARSE_BLOCK"
   fi
+  # Title-embedding relay. Same shape as the sparse block: doctor's notice
+  # and its run line, and nothing else.
+  TITLE_BLOCK="$(printf '%s\n' "$DOCTOR" | awk '
+    index($0, "embeddings predate title embedding") {
+      print
+      if (getline <= 0) exit
+      if (index($0, "run: vaultmind index --embed")) print
+    }
+  ')"
+  if [ -n "$TITLE_BLOCK" ]; then
+    printf '%s\n' "$TITLE_BLOCK"
+  fi
 fi
 
 # The map. An agent reads a file when it knows where the answer lives; with a

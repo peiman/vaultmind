@@ -149,6 +149,16 @@ func TestHealthHook_RelaysSparseFormatNotice(t *testing.T) {
 	assert.Contains(t, out, "run: vaultmind index --embed --vault /v")
 }
 
+func TestHealthHook_RelaysEmbedTextNotice(t *testing.T) {
+	doctorOut := "Embeddings: dense 50/50 (bge-m3), sparse 50/50, colbert 50/50\n" +
+		"⚠ embeddings predate title embedding; note titles do not count in semantic ranking\n" +
+		"  run: vaultmind index --embed --vault /v"
+	out, _ := runHealthHook(t, projectWithVault(t), stubVaultmind(t, doctorOut))
+	assert.Contains(t, out, "full BGE-M3 hybrid")
+	assert.Equal(t, 1, strings.Count(out, "embeddings predate title embedding"))
+	assert.Contains(t, out, "run: vaultmind index --embed --vault /v")
+}
+
 // A mixed-model index has a MiniLM fraction running degraded 2-lane recall.
 // doctor renders it as "(mixed)" + "Partial BGE-M3 coverage" — neither matches
 // the (minilm)/(bge-m3) literals, so before the fix it fell through to the
