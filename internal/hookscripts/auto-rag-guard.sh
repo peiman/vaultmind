@@ -55,6 +55,38 @@
 set -uo pipefail
 
 HOOK_INPUT=$(cat)
+
+# real_paths prints each argument with symlinks resolved, one per line, in
+# one python3 call; a path may not exist yet (the file a Write is about to
+# create). Without python3 it prints the paths as given.
+real_paths() {
+  python3 -c 'import os,sys; print("\n".join(os.path.realpath(p.rstrip("/") or "/") for p in sys.argv[1:]))' "$@" 2>/dev/null ||
+    printf '%s\n' "$@"
+}
+
+# git_origin prints a normalized origin URL for the repository holding $1:
+# scheme, user (even an empty one: an insteadOf rule can rewrite
+# https://host/ to https://@host/) and .git dropped, scp-style host:path
+# made host/path, a numeric port dropped,
+# lowercased, so git@github.com:o/r.git and https://github.com/o/r agree.
+# GIT_* is cleared: under a git hook it would point at another repository.
+git_origin() {
+  env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_COMMON_DIR \
+    git -C "$1" remote get-url origin 2>/dev/null |
+    sed -E 's#^[a-z+]+://##; s#^[^@/]*@##; s#^([^/:]+):[0-9]+/#\1/#; s#^([^/:]+):#\1/#; s#\.git$##; s#/$##' |
+    tr '[:upper:]' '[:lower:]'
+}
+
+# same_repository reports whether path $1 is inside a checkout of the same
+# repository as $2 (both have the same origin remote).
+same_repository() {
+  local dir="$1" a b
+  while [ ! -d "$dir" ] && [ "$dir" != "/" ] && [ "$dir" != "." ]; do dir=$(dirname "$dir"); done
+  a=$(git_origin "$2")
+  b=$(git_origin "$dir")
+  [ -n "$a" ] && [ "$a" = "$b" ]
+}
+
 # The harness's conversation id, forwarded on every vaultmind call so this
 # hook's events share a session with the agent's own (see vault-recall.sh).
 HOOK_SESSION_ID=$(printf '%s' "$HOOK_INPUT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('session_id','') or '')" 2>/dev/null || echo "")
@@ -205,20 +237,39 @@ case "$TOOL_NAME" in
     # Signature: cross-project Write/Edit.
     # Allowed roots from AUTORAG_ALLOWED_ROOTS (colon-separated,
     # trailing slash optional). Default: project root + ~/.claude +
-    # /tmp. Anything outside is cross-project drift.
-    ALLOWED="${AUTORAG_ALLOWED_ROOTS:-${VAULTMIND_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-.}}:${HOME}/.claude:/tmp}"
+    # /tmp, where a session scratchpad lives. Paths are compared as written
+    # and with symlinks resolved, so macOS's /private/tmp (the real path of
+    # /tmp, which tools report) matches /tmp. Anything outside is cross-project drift, unless it
+    # is another checkout of the same repository (same origin remote).
+    PROJECT_ROOT="${VAULTMIND_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-.}}"
+    ALLOWED="${AUTORAG_ALLOWED_ROOTS:-${PROJECT_ROOT}:${HOME}/.claude:/tmp}"
     in_allowed=0
     IFS=':' read -ra ROOTS <<<"$ALLOWED"
+    # As written first: the common case costs no subprocess.
     for root in "${ROOTS[@]}"; do
       [ -z "$root" ] && continue
       # Strip trailing slash from root for prefix-match consistency.
       root="${root%/}"
       case "$FILE_PATH" in
-        "$root"/*) in_allowed=1; break ;;
-        "$root") in_allowed=1; break ;;
+        "$root"/* | "$root") in_allowed=1; break ;;
       esac
     done
+    # Then with symlinks resolved, file and roots in one python3 call.
+    if [ "$in_allowed" = "0" ]; then
+      REAL_LIST=$(real_paths "$FILE_PATH" "${ROOTS[@]}")
+      REAL_FILE=$(printf '%s\n' "$REAL_LIST" | head -1)
+      while IFS= read -r real_root; do
+        [ -z "$real_root" ] && continue
+        case "$REAL_FILE" in
+          "$real_root"/* | "$real_root") in_allowed=1; break ;;
+        esac
+      done < <(printf '%s\n' "$REAL_LIST" | tail -n +2)
+    fi
+    if [ "$in_allowed" = "0" ] && same_repository "$FILE_PATH" "$PROJECT_ROOT"; then
+      in_allowed=1
+    fi
     if [ -z "$DRIFT" ] && [ "$in_allowed" = "0" ]; then
+      HARDCODED_CROSS_PROJECT=1
       DRIFT="cross-project-write"
       QUERY="cross-project boundary"
       # Was "ask" in v0.1; Claude Code 2.1.129 silently dropped the
@@ -269,10 +320,25 @@ if [ -x "$VAULTMIND" ] && [ -d "$VAULT_ROOT/.vaultmind" ]; then
   GUIDANCE=$(echo "$RAW" | sed -n '/^Search:/,$p' | head -80)
 fi
 
+# A cross-project block that can't say what to do instead teaches nothing:
+# the agent retries another way and learns no reason. When the vault has no
+# relevant guidance (no strong or moderate hit, or no vault at all), the
+# built-in cross-project check warns instead of denying. A catalog deny is the consumer's policy and stays.
+NO_GUIDANCE=0
+if [ "${HARDCODED_CROSS_PROJECT:-0}" = "1" ] && [ "$DECISION" = "deny" ] &&
+  ! printf '%s' "$GUIDANCE" | grep -qE 'relevance: (strong|moderate)'; then
+  DECISION="inject"
+  NO_GUIDANCE=1
+fi
+
 # Compose the header. Lead with the drift signature so the agent
 # immediately sees what triggered. Follow with the canonical query so
 # muscle memory shifts toward direct vault access. Then the vault
 # excerpt itself.
+if [ "$NO_GUIDANCE" = "1" ]; then
+  HEADER="[auto-rag] Drift signature matched: $DRIFT
+$TARGET is outside this project and is not another checkout of it. There is no vault guidance for this, so the write is allowed with this warning: check that this is the project you mean to change."
+else
 HEADER="[auto-rag] Drift signature matched: $DRIFT
 Canonical guidance query: vaultmind ask \"$QUERY\" --vault $VAULT_ROOT
 Vault excerpt below — read it and decide whether the action is still right. If you were running on autopilot, stop. If you have a real reason, proceed.
@@ -281,6 +347,7 @@ Vault excerpt below — read it and decide whether the action is still right. If
 $GUIDANCE
 ---
 end auto-rag injection."
+fi
 
 # Log the firing for evaluation. Sidecar JSONL line per event.
 # Skip the log write when AUTORAG_TEST_HARNESS=1 is set so test-harness
