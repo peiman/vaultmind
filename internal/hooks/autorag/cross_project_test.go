@@ -58,11 +58,14 @@ func stubVaultmind(t *testing.T, searchLine string) (bin, vault string) {
 	return bin, vault
 }
 
+// projectEnv pins the allowlist to the project alone. An empty
+// AUTORAG_ALLOWED_ROOTS means "use the default", which includes /tmp, and on
+// Linux every t.TempDir() is under /tmp.
 func projectEnv(project string, extra ...string) []string {
 	return append([]string{
 		"CLAUDE_PROJECT_DIR=" + project,
 		"VAULTMIND_PROJECT_DIR=" + project,
-		"AUTORAG_ALLOWED_ROOTS=",
+		"AUTORAG_ALLOWED_ROOTS=" + project,
 	}, extra...)
 }
 
@@ -71,8 +74,10 @@ func TestGuard_ScratchpadUnderPrivateTmpIsNotCrossProject(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("/private/tmp is macOS's real path for /tmp")
 	}
+	project := t.TempDir()
+	// The default allowlist (AUTORAG_ALLOWED_ROOTS unset) is what lists /tmp.
 	out := runGuard(t, writeInput("/private/tmp/claude-501/-Users-x/session/scratchpad/patch.py"),
-		projectEnv(t.TempDir())...)
+		"CLAUDE_PROJECT_DIR="+project, "VAULTMIND_PROJECT_DIR="+project)
 	assert.Empty(t, out, "a write under /private/tmp (macOS's /tmp) is not cross-project")
 }
 
