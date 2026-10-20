@@ -16,10 +16,20 @@ type Section struct {
 	Marker string
 }
 
+// taskCheckOutputFileEnv names a file holding the output of a task check
+// that already ran. CI sets it so the full check runs once, not twice.
+const taskCheckOutputFileEnv = "TASK_CHECK_OUTPUT_FILE"
+
 // runTaskCheckForStructure executes "task check" and returns output for structure validation.
 // Unlike golden file tests, this runs the full integration to verify structure.
 func runTaskCheckForStructure(t *testing.T) string {
 	t.Helper()
+
+	if saved := os.Getenv(taskCheckOutputFileEnv); saved != "" {
+		output, err := os.ReadFile(saved)
+		require.NoError(t, err, "reading saved task check output")
+		return string(output)
+	}
 
 	// Get the project root directory
 	projectRoot, err := os.Getwd()

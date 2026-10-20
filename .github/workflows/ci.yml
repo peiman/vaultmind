@@ -313,14 +313,13 @@ jobs:
   # QUALITY CHECKS (All triggers - fast for PRs, full for main)
   # PRs: Fast checks (format, lint, validate, unit tests) - ~2-3 min
   # Main/releases: Full checks (+ security, license, integration). The full
-  # check runs twice here: as its own step, and again inside
-  # TestTaskCheckOutputStructure. Measured 14-24 min on main (2026-10-16..19);
-  # runs were cancelled at a 20 min job limit and at go test's default 10 min,
-  # and a tag build stopped there skips the release.
+  # check runs once; TestTaskCheckOutputStructure reads its saved output
+  # (#313). Running it twice took 14-24 min (2026-10-16..19) and timed out
+  # the 0.10.15 release merge. A tag build stopped here skips the release.
   # ═══════════════════════════════════════════════════════════════════
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 30
     permissions:
       contents: read # Only need read access for checkout and build
       pull-requests: write # Needed for codecov comment
@@ -409,15 +408,20 @@ jobs:
         if: github.event_name == 'pull_request'
         run: task check:sast
 
+      # The output is saved so the structure test below reads it instead of
+      # running the full check a second time (#313).
       - name: Run Quality Checks (Full - main/releases)
         if: github.event_name != 'pull_request'
-        run: task check
+        run: |
+          set -o pipefail
+          task check 2>&1 | tee "$RUNNER_TEMP/task-check-output.txt"
 
       - name: Validate Task Check Output Structure (Full - main/releases)
         if: github.event_name != 'pull_request'
         env:
           RUN_TASK_CHECK_TESTS: "1"
-        run: go test ./test/integration -v -count=1 -timeout 20m -run '^TestTaskCheckOutputStructure$'
+          TASK_CHECK_OUTPUT_FILE: ${{ runner.temp }}/task-check-output.txt
+        run: go test ./test/integration -v -count=1 -run '^TestTaskCheckOutputStructure$'
 
       - name: Upload Coverage to Codecov
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5  # v7.1.1
