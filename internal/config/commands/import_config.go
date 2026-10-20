@@ -4,7 +4,7 @@ import "github.com/peiman/vaultmind/.ckeletin/pkg/config"
 
 // ImportMetadata defines the `import` command — a folder of docs as notes.
 var ImportMetadata = config.CommandMetadata{
-	Use:   "import <dir|file|url>",
+	Use:   "import <src>...",
 	Short: "Import a folder or archive of docs (markdown, PDF, Office, HTML, CSV, EPUB, images), one file, one web page or PDF, or a whole site, as notes and keep them in step",
 	Long: "Copy every *.md under <dir> into the vault as a note under imported/<repo>/, so " +
 		"a project's existing docs are found by search, ask and the code hooks like any " +
@@ -45,7 +45,10 @@ var ImportMetadata = config.CommandMetadata{
 		"is left out (naming an ignored folder imports it). Pass one such file instead and " +
 		"only that " +
 		"file is imported, named as importing its folder would name it; the folder's other " +
-		"notes are left alone. Pass an http or https URL instead of a folder and that one page " +
+		"notes are left alone. Pass several sources and each is imported in that order. A source " +
+		"that fails is named; the others still import; the command exits non-zero if any failed. " +
+		"--watch keeps one source in step and takes a single source. Pass an http or https URL " +
+		"instead of a folder and that one page " +
 		"becomes a note under imported/web/<host>/. A URL that serves a PDF becomes a note " +
 		"holding the PDF's text, titled from its metadata or its first line.\n\n" +
 		"Each folder note records its doc in `paths:` — reading or editing the doc brings the " +
@@ -88,6 +91,7 @@ var ImportMetadata = config.CommandMetadata{
 		"share imported/<name>/. Names that differ only in case are one note.\n\n" +
 		"  vaultmind import docs --vault ./knowledge --dry-run\n" +
 		"  vaultmind import docs --vault ./knowledge\n" +
+		"  vaultmind import docs *.md --vault ./knowledge\n" +
 		"  vaultmind import docs --vault ./knowledge --prune --json\n" +
 		"  vaultmind import papers/attention.pdf --vault ./knowledge\n" +
 		"  vaultmind import https://sqlite.org/fts5.html --vault ./kb\n" +

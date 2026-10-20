@@ -8,6 +8,7 @@ import (
 
 	"github.com/peiman/vaultmind/internal/hooks"
 	"github.com/peiman/vaultmind/internal/initvault"
+	"github.com/peiman/vaultmind/internal/onboard"
 	"github.com/peiman/vaultmind/internal/telemetry"
 	"github.com/spf13/cobra"
 )
@@ -38,43 +39,45 @@ func runInitScaffold(cmd *cobra.Command, path string, p initWireParams) error {
 	}
 	w := cmd.OutOrStdout()
 	_, _ = fmt.Fprintf(w, "✅ Vault scaffolded at %s (%d files)\n\n", res.VaultPath, res.FilesAdded)
-
 	if p.wireHooks {
 		if err := wireInitHooks(w, res.VaultPath, profile, p); err != nil {
 			return err
 		}
 	}
-
-	writeInitNextSteps(w, res.VaultPath, knowledge)
-	_, _ = fmt.Fprintf(w, "If this vault lives in a git repo, add to .gitignore (the index is a\nregenerable cache; the type registry is source):\n")
-	_, _ = fmt.Fprintf(w, "  .vaultmind/index.db*\n")
-	_, _ = fmt.Fprintf(w, "  !.vaultmind/config.yaml\n\n")
-	if !p.wireHooks {
-		_, _ = fmt.Fprintf(w, "To wire Claude Code now: re-run with --wire-hooks.\n")
-		if abs, err := filepath.Abs(res.VaultPath); err == nil {
-			_, _ = fmt.Fprintf(w, "To wire Codex: vaultmind hooks install <project-dir> --vault %s --agent codex --merge\n", shellWord(abs))
-		}
-		_, _ = fmt.Fprintf(w, "Or ")
-		_, _ = fmt.Fprintf(w, "for agent-led setup (interview, project read, migration): vaultmind init --print-instructions\n")
-	}
+	writeInitNextSteps(w, res.VaultPath, profile, p.wireHooks)
 	return nil
 }
 
-// writeInitNextSteps says what to do with the vault just made — the first
-// question and the files to replace differ between a knowledge base and an
-// agent's identity.
-func writeInitNextSteps(w io.Writer, vaultPath string, knowledge bool) {
-	question, edit := "who am I", "Edit identity/who-am-i.md and references/current-context.md to make it yours."
+// writeInitNextSteps prints the profile's first steps and edit line.
+// The command lists live in onboard (Principle 7).
+func writeInitNextSteps(w io.Writer, vaultPath string, profile hooks.Profile, wired bool) {
+	knowledge := profile == hooks.ProfileKnowledge
+	_, _ = fmt.Fprintf(w, "Next steps:\n")
+	steps := onboard.IdentityFirstSteps(shellWord(vaultPath), string(profile))
 	if knowledge {
-		question = "<a question about this project>"
+		steps = onboard.FirstSteps(shellWord(vaultPath))
+	}
+	for _, step := range steps {
+		_, _ = fmt.Fprintf(w, "  %s\n", step)
+	}
+	if knowledge {
+		_, _ = fmt.Fprintf(w, "\n%s\n", onboard.ShellExpandSentence)
+	}
+	_, _ = fmt.Fprintln(w)
+	edit := "Edit identity/who-am-i.md and references/current-context.md to make it yours."
+	if knowledge {
 		edit = "Replace the examples in decisions/ and concepts/ with real notes, and tie each\nto the code it is about with paths: — README.md shows how."
 	}
-	_, _ = fmt.Fprintf(w, "Next steps:\n")
-	_, _ = fmt.Fprintf(w, "  cd %s\n", vaultPath)
-	_, _ = fmt.Fprintf(w, "  vaultmind index --vault .\n")
-	_, _ = fmt.Fprintf(w, "  vaultmind index --embed --vault .\n")
-	_, _ = fmt.Fprintf(w, "  vaultmind ask %q --vault .\n\n", question)
 	_, _ = fmt.Fprintf(w, "%s\n\n", edit)
+	_, _ = fmt.Fprintf(w, "If this vault lives in a git repo, add to .gitignore (the index is a\nregenerable cache; the type registry is source):\n")
+	_, _ = fmt.Fprintf(w, "  .vaultmind/index.db*\n")
+	_, _ = fmt.Fprintf(w, "  !.vaultmind/config.yaml\n\n")
+	if wired {
+		return
+	}
+	if abs, err := filepath.Abs(vaultPath); err == nil {
+		_, _ = fmt.Fprintf(w, "To wire Codex: vaultmind hooks install <project-dir> --vault %s --profile %s --agent codex --merge\n", shellWord(abs), profile)
+	}
 }
 
 // initScaffoldProfile is the vault init makes: the named profile, else the

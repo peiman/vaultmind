@@ -23,6 +23,9 @@ func writeClosingReview(w io.Writer, result *query.DoctorResult) error {
 // them. A nil Notes slice means "not measured" (a partial result in tests)
 // and prints nothing, so an empty measured list stays distinct.
 func writeDraftReview(w io.Writer, result *query.DoctorResult) error {
+	if err := writeExampleNotes(w, result.ExampleNotes); err != nil {
+		return err
+	}
 	if result.Drafts.Notes != nil {
 		if err := writeDrafts(w, result.Drafts); err != nil {
 			return err
@@ -34,6 +37,26 @@ func writeDraftReview(w io.Writer, result *query.DoctorResult) error {
 		}
 	}
 	return writeGapReview(w, result.Gaps)
+}
+
+// writeExampleNotes names init's starter notes. Nil or none prints nothing.
+func writeExampleNotes(w io.Writer, notes *query.DoctorExampleNotes) error {
+	if notes == nil || notes.Count == 0 {
+		return nil
+	}
+	label := "example notes"
+	if notes.Count == 1 {
+		label = "example note"
+	}
+	if _, err := fmt.Fprintf(w, "%d %s: delete or keep\n", notes.Count, label); err != nil {
+		return err
+	}
+	for _, n := range notes.Notes {
+		if _, err := fmt.Fprintf(w, "  %s  %s\n", n.ID, n.Path); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func writeDrafts(w io.Writer, d query.DoctorDrafts) error {

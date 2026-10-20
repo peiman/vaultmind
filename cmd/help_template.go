@@ -90,7 +90,7 @@ WHEN YOU WANT TO ...
 
   GET KNOWLEDGE IN
     %[1]s init <dir>                       start a vault
-    %[1]s import <dir|file|url>            docs, PDFs, Office, HTML, CSV, EPUB, archives, images
+    %[1]s import <src>...                  docs, PDFs, Office, HTML, CSV, EPUB, archives, images
     %[1]s import <url> --crawl             a whole docs site, one note per page
     %[1]s import <dir|url> --watch         keep the vault in step as the source changes
 

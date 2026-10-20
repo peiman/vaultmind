@@ -266,6 +266,12 @@ func sayIfNeverEmbedded(cmd *cobra.Command, vaultPath, dbPath string) {
 	if model, err := index.EmbeddedModel(dbPath); err != nil || model != "" {
 		return
 	}
+	if said, _ := importContext(cmd).Value(importHintKey{}).(*bool); said != nil {
+		if *said {
+			return
+		}
+		*said = true
+	}
 	_, _ = fmt.Fprintf(cmd.ErrOrStderr(),
 		"this vault has never been embedded, so search is keyword-only; embed it with vaultmind index --embed --vault %s\n", vaultPath)
 }
@@ -314,8 +320,12 @@ func importSource(dir string) (importdocs.Source, error) {
 	return importdocs.Source{Dir: dir, Repo: f.Repo, Prefix: prefix}, nil
 }
 
-// importErr reports err in the JSON envelope under --json.
+// importErr reports err in the JSON envelope under --json. A multi-source
+// import collects the error instead, so one document can name every source.
 func importErr(cmd *cobra.Command, err error) error {
+	if collectingImports(cmd) {
+		return err
+	}
 	if !getConfigValueWithFlags[bool](cmd, "json", config.KeyAppImportJson) {
 		return fmt.Errorf("import: %w", err)
 	}
@@ -325,6 +335,174 @@ func importErr(cmd *cobra.Command, err error) error {
 	}
 	_ = cmdutil.WriteJSONError(cmd.OutOrStdout(), importEnvelope, code, err.Error())
 	return cmdutil.ErrAlreadyWritten
+}
+
+// importCollectKey marks a multi-source import, so a failure is collected
+// instead of written as its own JSON document.
+type importCollectKey struct{}
+
+// importHintKey scopes the embedding notice to one command invocation.
+type importHintKey struct{}
+
+// importOutcome is one source of a multi-source import.
+type importOutcome struct {
+	Arg string
+	Res *importResult
+	Err error
+}
+
+// importSourceJSON is one source in the multi-source JSON result.
+type importSourceJSON struct {
+	Arg    string        `json:"arg"`
+	Error  string        `json:"error,omitempty"`
+	Result *importResult `json:"result,omitempty"`
+}
+
+// importManyJSON is the multi-source result. One source keeps the old shape.
+type importManyJSON struct {
+	Vault   string             `json:"vault"`
+	Sources []importSourceJSON `json:"sources"`
+}
+
+// importArgs imports one source the way a single import always has, or each
+// source in order when several are named.
+func importArgs(cmd *cobra.Command, args []string) error {
+	parent := cmd.Context()
+	said := false
+	cmd.SetContext(context.WithValue(importContext(cmd), importHintKey{}, &said))
+	defer cmd.SetContext(parent)
+	if len(args) == 1 {
+		return importOne(cmd, args[0])
+	}
+	return importMany(cmd, args)
+}
+
+// importOne is the single-source path. Its output matches a one-argument import.
+func importOne(cmd *cobra.Command, arg string) error {
+	if err := checkWatchFlags(cmd, arg); err != nil {
+		return err
+	}
+	res, err := importDocs(cmd, arg)
+	if err != nil {
+		return finishImportError(cmd, res, err)
+	}
+	if err := writeImport(cmd, res); err != nil {
+		return err
+	}
+	return watchIfAsked(cmd, arg)
+}
+
+// importMany imports every source. A failure is named; the others still import.
+// --watch follows one source, so more than one is refused before anything is written.
+func importMany(cmd *cobra.Command, args []string) error {
+	if getConfigValueWithFlags[bool](cmd, "watch", config.KeyAppImportWatch) {
+		return importErr(cmd, errors.New("--watch keeps one source in step; pass one source"))
+	}
+	parent := cmd.Context()
+	base := parent
+	if base == nil {
+		base = context.Background()
+	}
+	cmd.SetContext(context.WithValue(base, importCollectKey{}, true))
+	defer cmd.SetContext(parent)
+
+	outcomes := make([]importOutcome, 0, len(args))
+	for _, arg := range args {
+		res, err := importDocs(cmd, arg)
+		if errors.Is(err, cmdutil.ErrAlreadyWritten) {
+			return err
+		}
+		outcomes = append(outcomes, importOutcome{Arg: arg, Res: res, Err: err})
+	}
+	return finishImportMany(cmd, outcomes)
+}
+
+func collectingImports(cmd *cobra.Command) bool {
+	if cmd == nil || cmd.Context() == nil {
+		return false
+	}
+	on, _ := cmd.Context().Value(importCollectKey{}).(bool)
+	return on
+}
+
+func finishImportMany(cmd *cobra.Command, outcomes []importOutcome) error {
+	if getConfigValueWithFlags[bool](cmd, "json", config.KeyAppImportJson) {
+		return writeImportManyJSON(cmd, outcomes)
+	}
+	if err := writeImportManyText(cmd.OutOrStdout(), outcomes); err != nil {
+		return err
+	}
+	return importManyError(outcomes)
+}
+
+func writeImportManyText(w io.Writer, outcomes []importOutcome) error {
+	for _, o := range outcomes {
+		if o.Res != nil {
+			// The returned aggregate error reports a failed index once.
+			report := *o.Res
+			report.IndexError = ""
+			if err := writeImportText(w, &report); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func importManyError(outcomes []importOutcome) error {
+	var parts []string
+	for _, o := range outcomes {
+		if o.Err != nil {
+			parts = append(parts, fmt.Sprintf("%s: %v", o.Arg, o.Err))
+		}
+	}
+	if len(parts) == 0 {
+		return nil
+	}
+	return fmt.Errorf("import: %s", strings.Join(parts, "; "))
+}
+
+func writeImportManyJSON(cmd *cobra.Command, outcomes []importOutcome) error {
+	env := envelope.OK(importEnvelope, importManyJSON{
+		Vault:   getConfigValueWithFlags[string](cmd, "vault", config.KeyAppImportVault),
+		Sources: importSourceReports(outcomes),
+	})
+	if failed := importManyIssues(outcomes); len(failed) > 0 {
+		env.Status = "error"
+		env.Errors = failed
+		return envelope.WriteError(cmd.OutOrStdout(), env)
+	}
+	return json.NewEncoder(cmd.OutOrStdout()).Encode(env)
+}
+
+func importSourceReports(outcomes []importOutcome) []importSourceJSON {
+	out := make([]importSourceJSON, 0, len(outcomes))
+	for _, o := range outcomes {
+		src := importSourceJSON{Arg: o.Arg, Result: o.Res}
+		if o.Err != nil {
+			src.Error = o.Err.Error()
+		}
+		out = append(out, src)
+	}
+	return out
+}
+
+func importManyIssues(outcomes []importOutcome) []envelope.Issue {
+	var issues []envelope.Issue
+	for _, o := range outcomes {
+		if o.Err == nil {
+			continue
+		}
+		code := "import_failed"
+		if errors.Is(o.Err, importdocs.ErrNoMarkdown) {
+			code = "no_markdown"
+		}
+		issues = append(issues, envelope.Issue{
+			Code:    code,
+			Message: fmt.Sprintf("%s: %v", o.Arg, o.Err),
+		})
+	}
+	return issues
 }
 
 func countActions(r *importdocs.Result) map[importdocs.Action]int {

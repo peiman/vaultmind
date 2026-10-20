@@ -12,7 +12,6 @@ hooks_record runHooksRecord 38
 identity_fetch_registry runIdentityFetchRegistry 39
 identity_paths runIdentityPaths 43
 index runIndex 165
-init_scaffold runInitScaffold 42
 memory_links runLinksBoth 40
 memory_neighbors runNeighborsWithKeys 41
 memory_pack runMemoryPack 41

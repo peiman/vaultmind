@@ -84,6 +84,11 @@ type DoctorResult struct {
 	// issue. Omitted until the cmd layer measured them (a nil Notes slice).
 	Drafts DoctorDrafts `json:"drafts,omitempty"`
 
+	// ExampleNotes are the starter notes init wrote (tagged example). Advice:
+	// delete them or keep them. Not counted as an issue. Omitted when there
+	// are none, so a vault without them keeps its doctor JSON unchanged.
+	ExampleNotes *DoctorExampleNotes `json:"example_notes,omitempty"`
+
 	// UncommittedNotes are markdown files git reports as untracked or modified
 	// whose working-tree mtime is older than the threshold. Skipped is set when
 	// the vault is not a git repository, so an empty list is not "clean".

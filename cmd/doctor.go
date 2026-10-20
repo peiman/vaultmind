@@ -436,6 +436,11 @@ func attachDraftReview(result *query.DoctorResult, vdb *cmdutil.VaultDB, vaultPa
 	} else {
 		result.Drafts = drafts
 	}
+	if examples, err := query.ListExampleNotes(vdb.DB); err != nil {
+		log.Debug().Err(err).Msg("example-notes check failed")
+	} else if examples.Count > 0 {
+		result.ExampleNotes = &examples
+	}
 	pending, err := query.CheckUncommittedNotes(vaultPath, uncommittedDays, now)
 	if err != nil {
 		log.Debug().Err(err).Msg("uncommitted-notes check failed")
