@@ -7,6 +7,10 @@ Only framework changes are tracked here — project-level changes belong in the 
 
 ## [Unreleased]
 
+### Added
+
+- **Config key constants for `note pinned`.** Regenerated `keys_generated.go` now has `app.notepinned.vault`, `app.notepinned.vaults`, `app.notepinned.json`, `app.notepinned.budget`, and `app.notepinned.excerpt`.
+
 ## [0.2.4] - 2026-10-17
 
 ### Fixed

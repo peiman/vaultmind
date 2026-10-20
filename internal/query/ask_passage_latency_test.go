@@ -17,28 +17,31 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// passageLatencyCPUBound is process CPU, not wall time. The fixed path
-// tokenizes once: about 6–12 ms of CPU here, coverage included. The pre-fix
-// path re-normalized every window into a temporary FTS index. Put back, that
-// cost 53–68 ms of CPU on ordinary prose and 2.2–2.5 s on short sentences (the
-// historical wall-time range was 127 ms to 3.9 s). 40 ms sits between the
-// fixed path and that regression. Wall time is the wrong clock: under load
-// the fixed path has been measured at 50–400 ms of scheduler delay, and CPU
-// time does not include that wait. The minimum of several samples drops one
-// that happened to include a GC cycle.
-const (
-	passageLatencyCPUBound = 40 * time.Millisecond
-	passageLatencySamples  = 5
-)
+// The bounds are process CPU, not wall time. The fixed path tokenizes once:
+// about 6–12 ms of CPU here, coverage included. The pre-fix path
+// re-normalized every window into a temporary FTS index. Put back, that cost
+// 53–68 ms of CPU on ordinary prose and 2.2–2.5 s on short sentences (the
+// historical wall-time range was 127 ms to 3.9 s). Each case's bound sits
+// between the fixed path and its own regression: 40 ms for prose, 400 ms for
+// short sentences, where a shared CI runner measured the fixed path at 45 ms
+// (2026-10-19). Wall time is the wrong clock: under load the fixed path has
+// been measured at 50–400 ms of scheduler delay, and CPU time does not
+// include that wait. The minimum of several samples drops one that happened
+// to include a GC cycle.
+const passageLatencySamples = 5
 
 // These guards run without race instrumentation, whose SQLite and regexp
 // overhead measures instrumentation rather than selection cost.
 func TestPassageSelectionLatency(t *testing.T) {
 	intro := "An introductory overview. " + strings.Repeat("padding ", 72) + "ends."
-	for name, body := range map[string]string{
-		"ordinary_prose":  intro + "\n\n" + strings.Repeat(strings.Repeat("The ordinary explanation has useful background detail. ", 11)+"\n\n", 48) + "\n\nSet WAL_RECOVERY=immutable to recover the database.",
-		"short_sentences": intro + "\n\n" + strings.Repeat("A. B. C. D. E. ", 2000) + "\n\nSet WAL_RECOVERY=immutable to recover the database.",
+	for name, tc := range map[string]struct {
+		body  string
+		bound time.Duration
+	}{
+		"ordinary_prose":  {intro + "\n\n" + strings.Repeat(strings.Repeat("The ordinary explanation has useful background detail. ", 11)+"\n\n", 48) + "\n\nSet WAL_RECOVERY=immutable to recover the database.", 40 * time.Millisecond},
+		"short_sentences": {intro + "\n\n" + strings.Repeat("A. B. C. D. E. ", 2000) + "\n\nSet WAL_RECOVERY=immutable to recover the database.", 400 * time.Millisecond},
 	} {
+		body := tc.body
 		t.Run(name, func(t *testing.T) {
 			db, err := index.Open(filepath.Join(t.TempDir(), "passage.db"))
 			require.NoError(t, err)
@@ -64,7 +67,7 @@ func TestPassageSelectionLatency(t *testing.T) {
 			}
 			assert.Contains(t, result.Text, "WAL_RECOVERY=immutable")
 			t.Logf("%d bytes: min CPU %.3f ms over %d (slowest wall %.3f ms)", len(body), float64(best)/float64(time.Millisecond), passageLatencySamples, float64(slowestWall)/float64(time.Millisecond))
-			assert.Less(t, best, passageLatencyCPUBound)
+			assert.Less(t, best, tc.bound)
 		})
 	}
 }

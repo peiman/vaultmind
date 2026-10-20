@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -15,6 +16,35 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
+
+// noteAskFormatStale records the sparse and title stamps on an ask result.
+// A failed read leaves the field unset and is logged, the same as before.
+func noteAskFormatStale(result *query.AskResult, db *index.DB) {
+	if stale, serr := index.SparseFormatStale(db); serr != nil {
+		log.Debug().Err(serr).Msg("sparse format check failed")
+	} else {
+		result.SparseFormatStale = stale
+	}
+	if stale, serr := index.EmbedTextStale(db); serr != nil {
+		log.Debug().Err(serr).Msg("embed text format check failed")
+	} else {
+		result.EmbedTextStale = stale
+	}
+}
+
+// writeAskFormatNotices prints the sparse notice, then the title notice,
+// before ask's results. A hook caller stays silent inside each writer.
+func writeAskFormatNotices(w io.Writer, result *query.AskResult) {
+	if result == nil {
+		return
+	}
+	if result.SparseFormatStale {
+		query.WriteSparseFormatStaleNotice(w)
+	}
+	if result.EmbedTextStale {
+		query.WriteEmbedTextStaleNotice(w)
+	}
+}
 
 // askRankingBounds reads the ranking knobs ask already uses. They live here,
 // with the rest of app.ask, so note propose can rank the same way without

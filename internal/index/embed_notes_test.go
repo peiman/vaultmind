@@ -71,7 +71,8 @@ types:
 	_, err = idxr.EmbedNotes(context.Background(), dbPath, emb)
 	require.NoError(t, err)
 	require.Len(t, emb.texts, 1)
-	assert.Equal(t, "before "+strings.Repeat(".", embedding.RepeatedNonAlnumCap)+" mid "+strings.Repeat(".-", embedding.RepeatedNonAlnumCap/2)+" after", emb.texts[0])
+	capped := "before " + strings.Repeat(".", embedding.RepeatedNonAlnumCap) + " mid " + strings.Repeat(".-", embedding.RepeatedNonAlnumCap/2) + " after"
+	assert.Equal(t, "Dots\n\n"+capped, emb.texts[0])
 
 	db, err := index.Open(dbPath)
 	require.NoError(t, err)

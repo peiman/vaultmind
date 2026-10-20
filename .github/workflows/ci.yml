@@ -312,11 +312,14 @@ jobs:
   # ═══════════════════════════════════════════════════════════════════
   # QUALITY CHECKS (All triggers - fast for PRs, full for main)
   # PRs: Fast checks (format, lint, validate, unit tests) - ~2-3 min
-  # Main/releases: Full checks (+ security, license, integration) - ~5-8 min
+  # Main/releases: Full checks (+ security, license, integration). The full
+  # check runs once; TestTaskCheckOutputStructure reads its saved output
+  # (#313). Running it twice took 14-24 min (2026-10-16..19) and timed out
+  # the 0.10.15 release merge. A tag build stopped here skips the release.
   # ═══════════════════════════════════════════════════════════════════
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       contents: read # Only need read access for checkout and build
       pull-requests: write # Needed for codecov comment
@@ -405,14 +408,19 @@ jobs:
         if: github.event_name == 'pull_request'
         run: task check:sast
 
+      # The output is saved so the structure test below reads it instead of
+      # running the full check a second time (#313).
       - name: Run Quality Checks (Full - main/releases)
         if: github.event_name != 'pull_request'
-        run: task check
+        run: |
+          set -o pipefail
+          task check 2>&1 | tee "$RUNNER_TEMP/task-check-output.txt"
 
       - name: Validate Task Check Output Structure (Full - main/releases)
         if: github.event_name != 'pull_request'
         env:
           RUN_TASK_CHECK_TESTS: "1"
+          TASK_CHECK_OUTPUT_FILE: ${{ runner.temp }}/task-check-output.txt
         run: go test ./test/integration -v -count=1 -run '^TestTaskCheckOutputStructure$'
 
       - name: Upload Coverage to Codecov
@@ -487,7 +495,7 @@ jobs:
         uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c  # v0.24.3
 
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94  # v7.2.3
+        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de  # v7.3.0
         with:
           distribution: goreleaser
           version: '~> v2'

@@ -297,6 +297,11 @@ const (
 	KeyAppNotecreateCommit                   = "app.notecreate.commit"                    // Stage and commit
 	KeyAppNotegapVault                       = "app.notegap.vault"                        // Path to vault root
 	KeyAppNotegapJson                        = "app.notegap.json"                         // Output in JSON format
+	KeyAppNotepinnedVault                    = "app.notepinned.vault"                     // Path to vault root
+	KeyAppNotepinnedVaults                   = "app.notepinned.vaults"                    // Load pinned notes from several vaults, comma-separated (overrides --vault). O...
+	KeyAppNotepinnedJson                     = "app.notepinned.json"                      // Output in JSON format
+	KeyAppNotepinnedBudget                   = "app.notepinned.budget"                    // Total token ceiling for every vault in the run. 0 means unbounded. Notes that...
+	KeyAppNotepinnedExcerpt                  = "app.notepinned.excerpt"                   // Cap each note at N tokens, using the same excerpt rule as arc recite. 0 means...
 	KeyAppNoteproposeVault                   = "app.notepropose.vault"                    // Path to vault root
 	KeyAppNoteproposeJson                    = "app.notepropose.json"                     // Output in JSON format
 	KeyAppNoteproposeQuestion                = "app.notepropose.question"                 // Question the finding answers

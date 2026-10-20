@@ -33,6 +33,14 @@ var exitOverMemory = func(w io.Writer, used, limit int64) {
 	os.Exit(1)
 }
 
+// runIndexEmbed is the index --embed pass. It may re-embed the vault once
+// when stored vectors predate title embedding. A note write does not call
+// this, and must not: that re-embed is what drove a process past 100 GB.
+func runIndexEmbed(cmd *cobra.Command, idxr *index.Indexer, dbPath, model string, full bool) (*index.EmbedResult, error) {
+	idxr.UpgradeEmbedText = true
+	return runEmbedGuarded(cmd, idxr, dbPath, model, full)
+}
+
 // runEmbedGuarded runs an embed pass under the memory guard. Every embed pass
 // in cmd goes through here (TestRunEmbed_OnlyThroughTheMemoryGuard).
 func runEmbedGuarded(cmd *cobra.Command, idxr *index.Indexer, dbPath, model string, full bool) (*index.EmbedResult, error) {

@@ -9,10 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A note with `pinned: true` in its frontmatter is loaded at every session start, in vault order then id order, within one token budget for the session (default 1500, `VAULTMIND_PINNED_BUDGET`), however many vaults are named. A long note is excerpted to 400 tokens (`VAULTMIND_PINNED_EXCERPT`), so its opening arrives. `vaultmind note pinned` prints each one the way `arc recite` excerpts a note, and names any note that does not fit, with its vault. With nothing pinned it prints nothing. The mark lives in the vault, so it survives `hooks install --force`. Run `vaultmind hooks install --force` once to pick up the session-start hook that loads them. `doctor` reports how many notes are pinned, what they cost, and warns when they exceed that budget.
+
+## [0.10.15] - 2026-10-19
+
+> After upgrading, run `vaultmind index --embed` once per vault: it re-embeds every note with its title (about 3.3 GB peak on a 438-note vault). Run `vaultmind hooks install --force` to update installed hooks.
+
+### Added
+
 - An embedding pass stops itself when vaultmind's memory passes `app.embed_max_rss_mb` (default 6144 MiB, about twice the measured peak; `VAULTMIND_APP_EMBED_MAX_RSS_MB`; 0 turns it off). This covers `index --embed` and the embed after a write. It exits with an error that names the limit. Notes embedded before the stop are kept, and running the same command again continues: on a 70-note vault a stop at 23 notes resumed with 47 more. A future runaway fails at a few GB instead of taking the machine, as 0.10.13's re-embed did past 100 GB.
 
 ### Changed
 
+- Note titles are now embedded with the body, so a note whose title names the question ranks for it. Measured on two labelled sets: Hit@3 29→31 of 32 and 44→48 of 50. Existing vaults re-embed once with `vaultmind index --embed` (doctor, ask and index say so until then). A note write never starts that re-embed.
 - The ckeletin-go framework is updated from 0.1.0 to 0.2.4. `docs config` writes to a file with `--output-file` (was `--output`). An invalid `docs config --format` now names the valid options. A log file that was requested and cannot be opened fails the command instead of continuing to the console only. Generated config docs mark options that are set in the config file or environment only. Long command functions recorded in `.ckeletin-command-baseline` may shrink but not grow, and new ones are refused.
 - The BGE-M3 embedder refuses a batch outside the memory budget (more than 8 texts, or more than one cap-length note's worth of padded tokens) with an error instead of running it. The indexer already plans every batch inside that budget; the refusal keeps a future caller that skips the plan from taking a machine's memory, as 0.10.13's re-embed did. One definition of the budget serves both.
 
@@ -3030,7 +3039,10 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.12...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.15...HEAD
+[0.10.15]: https://github.com/peiman/vaultmind/compare/v0.10.14...v0.10.15
+[0.10.14]: https://github.com/peiman/vaultmind/compare/v0.10.13...v0.10.14
+[0.10.13]: https://github.com/peiman/vaultmind/compare/v0.10.12...v0.10.13
 [0.10.12]: https://github.com/peiman/vaultmind/compare/v0.10.11...v0.10.12
 [0.10.11]: https://github.com/peiman/vaultmind/compare/v0.10.10...v0.10.11
 [0.10.10]: https://github.com/peiman/vaultmind/compare/v0.10.9...v0.10.10

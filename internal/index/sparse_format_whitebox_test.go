@@ -154,7 +154,7 @@ func TestSkipIncrementalEmbed_StaleBGEM3IsNotIdle(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
-	skip, _, err := skipIncrementalEmbed(dbPath, embedding.ModelBGEM3)
+	skip, _, err := skipIncrementalEmbed(dbPath, embedding.ModelBGEM3, false)
 	require.NoError(t, err)
 	require.False(t, skip, "a fully embedded stale column is still work")
 
@@ -165,7 +165,7 @@ func TestSkipIncrementalEmbed_StaleBGEM3IsNotIdle(t *testing.T) {
 		EncodeEmbedding(make([]float32, 384)))
 	require.NoError(t, err)
 	require.NoError(t, mini.Close())
-	skip, _, err = skipIncrementalEmbed(miniPath, embedding.ModelMiniLM)
+	skip, _, err = skipIncrementalEmbed(miniPath, embedding.ModelMiniLM, false)
 	require.NoError(t, err)
 	require.True(t, skip, "minilm does not upgrade a sparse column")
 }
@@ -333,7 +333,7 @@ func TestSkipIncrementalEmbed_PendingIsNotIdle(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
-	skip, _, err := skipIncrementalEmbed(dbPath, embedding.ModelMiniLM)
+	skip, _, err := skipIncrementalEmbed(dbPath, embedding.ModelMiniLM, false)
 	require.NoError(t, err)
 	require.False(t, skip)
 }
@@ -367,7 +367,9 @@ func TestEmbedResolved_StampWriteErrorDoesNotClaimSuccess(t *testing.T) {
 	res, err := NewIndexer(t.TempDir(), dbPath, nil).embedResolved(context.Background(), dbPath, &whiteboxSparse{}, embedding.ModelBGEM3, false)
 	require.Error(t, err)
 	require.NotNil(t, res)
-	require.Equal(t, 1, res.Embedded)
+	// The text stamp is written before EmbedNotes. A refused meta write stops
+	// the pass before any vector is stored, so success cannot be reported.
+	require.Equal(t, 0, res.Embedded)
 
 	db, err = Open(dbPath)
 	require.NoError(t, err)

@@ -107,6 +107,28 @@ func miniLMVault(t *testing.T) string {
 	return vault
 }
 
+// A stale title stamp must not turn one write into a re-embed of the vault.
+// That bypass is what drove a process past 100 GB. Pending notes over the
+// limit stay named, and the embed pass is not called.
+func TestEmbedOnWrite_StaleTitleDoesNotEmbedABacklog(t *testing.T) {
+	vaultPath := miniLMVault(t)
+	var calls int
+	saved := runEmbedPass
+	runEmbedPass = func(_ *cobra.Command, _, _ string, _ *vault.Config, _ string) (*index.EmbedResult, error) {
+		calls++
+		return &index.EmbedResult{Embedded: 1}, nil
+	}
+	t.Cleanup(func() { runEmbedPass = saved })
+	savedLimit := embedOnWriteLimit
+	embedOnWriteLimit = 0
+	t.Cleanup(func() { embedOnWriteLimit = savedLimit })
+
+	_, errOut, err := runRootCmd(t, "frontmatter", "set", "projects/beta.md", "status", "paused", "--vault", vaultPath)
+	require.NoError(t, err, "the write itself succeeds")
+	assert.Equal(t, 0, calls, "a stale title stamp does not start an embed pass")
+	assert.Contains(t, errOut.String(), "notes have no embeddings")
+}
+
 func TestEmbedOnWrite_ReportsWhatItEmbedded(t *testing.T) {
 	vault := miniLMVault(t)
 	stubEmbedPass(t, &index.EmbedResult{Embedded: 1}, nil)
