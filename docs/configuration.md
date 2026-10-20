@@ -308,6 +308,11 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.notecreate.commit` | bool | `false` | `VAULTMIND_APP_NOTECREATE_COMMIT` | Stage and commit |
 | `app.notegap.vault` | string | `.` | `VAULTMIND_APP_NOTEGAP_VAULT` | Path to vault root |
 | `app.notegap.json` | bool | `false` | `VAULTMIND_APP_NOTEGAP_JSON` | Output in JSON format |
+| `app.notepinned.vault` | string | `.` | `VAULTMIND_APP_NOTEPINNED_VAULT` | Path to vault root |
+| `app.notepinned.vaults` | string | `` | `VAULTMIND_APP_NOTEPINNED_VAULTS` | Load pinned notes from several vaults, comma-separated (overrides --vault). One budget across all of them |
+| `app.notepinned.json` | bool | `false` | `VAULTMIND_APP_NOTEPINNED_JSON` | Output in JSON format |
+| `app.notepinned.budget` | int | `1500` | `VAULTMIND_APP_NOTEPINNED_BUDGET` | Total token ceiling for every vault in the run. 0 means unbounded. Notes that do not fit are named by id, title, and vault |
+| `app.notepinned.excerpt` | int | `0` | `VAULTMIND_APP_NOTEPINNED_EXCERPT` | Cap each note at N tokens, using the same excerpt rule as arc recite. 0 means the whole body |
 | `app.notepropose.vault` | string | `.` | `VAULTMIND_APP_NOTEPROPOSE_VAULT` | Path to vault root |
 | `app.notepropose.json` | bool | `false` | `VAULTMIND_APP_NOTEPROPOSE_JSON` | Output in JSON format |
 | `app.notepropose.question` | string | `` | `VAULTMIND_APP_NOTEPROPOSE_QUESTION` | Question the finding answers |
@@ -1285,6 +1290,22 @@ app:
 
     # Output in JSON format
     json: false
+
+  notepinned:
+    # Path to vault root
+    vault: .
+
+    # Load pinned notes from several vaults, comma-separated (overrides --vault). One budget across all of them
+    vaults: 
+
+    # Output in JSON format
+    json: false
+
+    # Total token ceiling for every vault in the run. 0 means unbounded. Notes that do not fit are named by id, title, and vault
+    budget: 1500
+
+    # Cap each note at N tokens, using the same excerpt rule as arc recite. 0 means the whole body
+    excerpt: 0
 
   notepropose:
     # Path to vault root
@@ -2298,6 +2319,21 @@ export VAULTMIND_APP_NOTEGAP_VAULT=.
 
 # Output in JSON format
 export VAULTMIND_APP_NOTEGAP_JSON=false
+
+# Path to vault root
+export VAULTMIND_APP_NOTEPINNED_VAULT=.
+
+# Load pinned notes from several vaults, comma-separated (overrides --vault). One budget across all of them
+export VAULTMIND_APP_NOTEPINNED_VAULTS=
+
+# Output in JSON format
+export VAULTMIND_APP_NOTEPINNED_JSON=false
+
+# Total token ceiling for every vault in the run. 0 means unbounded. Notes that do not fit are named by id, title, and vault
+export VAULTMIND_APP_NOTEPINNED_BUDGET=1500
+
+# Cap each note at N tokens, using the same excerpt rule as arc recite. 0 means the whole body
+export VAULTMIND_APP_NOTEPINNED_EXCERPT=0
 
 # Path to vault root
 export VAULTMIND_APP_NOTEPROPOSE_VAULT=.

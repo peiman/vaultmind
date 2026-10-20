@@ -1846,6 +1846,36 @@
           },
           "type": "object"
         },
+        "notepinned": {
+          "properties": {
+            "budget": {
+              "default": 1500,
+              "description": "Total token ceiling for every vault in the run. 0 means unbounded. Notes that do not fit are named by id, title, and vault",
+              "type": "integer"
+            },
+            "excerpt": {
+              "default": 0,
+              "description": "Cap each note at N tokens, using the same excerpt rule as arc recite. 0 means the whole body",
+              "type": "integer"
+            },
+            "json": {
+              "default": false,
+              "description": "Output in JSON format",
+              "type": "boolean"
+            },
+            "vault": {
+              "default": ".",
+              "description": "Path to vault root",
+              "type": "string"
+            },
+            "vaults": {
+              "default": "",
+              "description": "Load pinned notes from several vaults, comma-separated (overrides --vault). One budget across all of them",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
         "notepropose": {
           "properties": {
             "close_band": {

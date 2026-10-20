@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A note with `pinned: true` in its frontmatter is loaded at every session start, in vault order then id order, within one token budget for the session (default 1500, `VAULTMIND_PINNED_BUDGET`), however many vaults are named. A long note is excerpted to 400 tokens (`VAULTMIND_PINNED_EXCERPT`), so its opening arrives. `vaultmind note pinned` prints each one the way `arc recite` excerpts a note, and names any note that does not fit, with its vault. With nothing pinned it prints nothing. The mark lives in the vault, so it survives `hooks install --force`. Run `vaultmind hooks install --force` once to pick up the session-start hook that loads them. `doctor` reports how many notes are pinned, what they cost, and warns when they exceed that budget.
+
 ## [0.10.15] - 2026-10-19
 
 > After upgrading, run `vaultmind index --embed` once per vault: it re-embeds every note with its title (about 3.3 GB peak on a 438-note vault). Run `vaultmind hooks install --force` to update installed hooks.

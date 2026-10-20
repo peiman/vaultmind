@@ -128,6 +128,17 @@ func TestHealthHook_MiniLMNamesUpgrade(t *testing.T) {
 	assert.Contains(t, out, "embedding-backends.md")
 }
 
+// A pinned note's title is free text inside doctor. Matching it as a verdict
+// turned a healthy BGE-M3 vault into "degraded recall" (review of #315).
+func TestHealthHook_PinnedTitleDoesNotChangeTheRecallTier(t *testing.T) {
+	doctorOut := "Embeddings: dense 50/50 (bge-m3), sparse 50/50, colbert 50/50\n" +
+		"Pinned notes: 1 (40 tokens; session-start budget 1500)\n" +
+		"  work-ledger  Fixing degraded recall  40 tokens\n"
+	out, _ := runHealthHook(t, projectWithVault(t), stubVaultmind(t, doctorOut))
+	assert.Contains(t, out, "full BGE-M3 hybrid")
+	assert.NotContains(t, out, "degraded")
+}
+
 // Index on BGE-M3 -> active, one-line confirmation + the ask flow. Must NOT
 // trip the degraded-recall branch (guards a regex that accidentally matches).
 func TestHealthHook_BGEM3ShowsActive(t *testing.T) {

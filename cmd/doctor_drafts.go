@@ -13,7 +13,10 @@ func writeClosingReview(w io.Writer, result *query.DoctorResult) error {
 	if err := writeOverviews(w, result.Overviews, result.VaultPath); err != nil {
 		return err
 	}
-	return writeDraftReview(w, result)
+	if err := writeDraftReview(w, result); err != nil {
+		return err
+	}
+	return writePinnedSection(w, result.Pinned)
 }
 
 // writeDraftReview prints the two review lists when the cmd layer measured
