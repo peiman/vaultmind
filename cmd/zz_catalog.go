@@ -96,8 +96,8 @@ var commandCatalog = map[string]catalogEntry{
 	},
 	"vaultmind note": {
 		group: groupRetrieval,
-		when:  "you want to read, create, propose, accept, record a gap, or batch-fetch a specific note by ID.",
-		short: "Read, create, propose, accept, record a gap, and batch-fetch notes by ID",
+		when:  "you want to read, create, propose, accept, record a gap, load pinned notes, or batch-fetch a specific note by ID.",
+		short: "Read, create, propose, accept, record a gap, load pinned notes, and batch-fetch notes by ID",
 	},
 	"vaultmind note get": {
 		group: groupRetrieval,
@@ -123,6 +123,11 @@ var commandCatalog = map[string]catalogEntry{
 		group: groupRetrieval,
 		when:  "an answer did not settle the question and you want that question kept until a later draft closes it.",
 		short: "Record a question the vault did not answer",
+	},
+	"vaultmind note pinned": {
+		group: groupRetrieval,
+		when:  "you want every note marked pinned, in vault order then id order, within one budget, and the names of any that do not fit.",
+		short: "Load notes marked pinned: true",
 	},
 	"vaultmind note mget": {
 		group: groupRetrieval,

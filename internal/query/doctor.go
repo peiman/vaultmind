@@ -101,6 +101,12 @@ type DoctorResult struct {
 	// means nothing has closed. A null cite count means the usage log was
 	// absent or the cite query failed; a measured zero stays 0.
 	GapLoop *DoctorGapLoop `json:"gap_loop,omitempty"`
+
+	// Pinned is the set a session start loads. Nil means unmeasured, which is
+	// a hand-built result in a test. Doctor always sets it. Tokens is the cost
+	// of the whole bodies, and Budget is the session-start ceiling. OverBudget
+	// is Tokens above that ceiling; landing on it is not over.
+	Pinned *DoctorPinned `json:"pinned,omitempty"`
 }
 
 // UsageScopeMachine marks counts read from the shared usage log. That log
@@ -380,6 +386,11 @@ func ResultSurfacedIssueCounts(result *DoctorResult) (errs, warns int) {
 	// The stale-format lines are printed from Embeddings, not from Issues, so
 	// they are counted here for the same reason as the unknown banner.
 	warns += formatStaleWarnings(result.Embeddings)
+	// The pinned warning is printed from Pinned, not from Issues. A nil section
+	// was not measured and must not warn.
+	if result.Pinned != nil && result.Pinned.OverBudget {
+		warns++
+	}
 	return errs + mErrs, warns + mWarns
 }
 
@@ -597,20 +608,29 @@ func Doctor(db *index.DB, vaultPath string, reg *schema.Registry) (*DoctorResult
 	// operations that bump mtime without changing content do NOT trigger
 	// drift (the false-positive shape that retired the prior mtime-based
 	// detector).
-	// A reconciliation that cannot run does NOT fail the whole command. doctor
-	// is a health hub: embeddings, validation, links and mesh identity are all
-	// still worth reporting when the vault root has gone unreadable, and a
-	// single unavailable section wedging the rest is the same shape as a broken
-	// hook wedging a session. It reports "unknown" with the reason instead —
-	// never "current", which would be the bug this section removed.
+	return finishDoctor(db, result, vaultPath)
+}
+
+// finishDoctor attaches the pinned set, then the index reconciliation.
+//
+// Pinned is attached first so the early return — reconciliation could not
+// run — still reports it. A reconciliation that cannot run does NOT fail the
+// whole command. doctor is a health hub: embeddings, validation, links and
+// mesh identity are all still worth reporting when the vault root has gone
+// unreadable, and a single unavailable section wedging the rest is the same
+// shape as a broken hook wedging a session. It reports "unknown" with the
+// reason instead — never "current", which would be the bug this section removed.
+func finishDoctor(db *index.DB, result *DoctorResult, vaultPath string) (*DoctorResult, error) {
+	if err := attachPinned(db, result); err != nil {
+		return nil, err
+	}
 	truth, err := ReconcileIndex(db, vaultPath)
 	if err != nil {
 		result.IndexStatus = IndexStatusUnknown
 		result.IndexStatusReason = err.Error()
-		return result, nil
+		return result, nil //nolint:nilerr // degraded section, reported via IndexStatus
 	}
 	applyIndexTruth(result, truth)
-
 	return result, nil
 }
 
