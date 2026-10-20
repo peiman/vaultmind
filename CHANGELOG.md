@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `vaultmind import` takes several folders, files or URLs in one call, in order. A source that fails is named; the others still import; the command exits non-zero if any failed. `--json` reports each source under `result.sources`. Single-source output is unchanged; `--watch` still takes one source.
+- `doctor` names the starter notes tagged `example`: `2 example notes: delete or keep`, with each id and path. The reminder is advice, not an issue, and disappears when the examples are removed.
+
+### Changed
+
+- Knowledge-profile `vaultmind init` and the README Quickstart give the same next steps: `import docs *.md`, `index --embed`, ask, then `hooks install`. Persona vaults instead embed, ask "who am I", and install hooks with `--profile persona`. Each profile's commands live in `internal/onboard`, and a README test guards the knowledge steps' order. The README explains `init --wire-hooks` and `init --print-instructions`; init's output omits the too-late `--wire-hooks` hint.
+
+### Fixed
+
+- Multi-source imports print each failed source's error once, with one `import:` prefix, and the never-embedded notice once per call. The Quickstart explains omitting absent `docs/` or root Markdown (including zsh's unmatched-glob error), re-importing changes, and manually removing deleted or renamed root docs from the vault before re-indexing; prune semantics are unchanged.
+- The README install section names the published ORT archives, including the `v` in `vaultmind_v0.10.15_darwin_arm64_ort.tar.gz`, and both supported platforms. It covers the plain MiniLM archives, keeping `libonnxruntime*` beside the binary on `PATH`, the first BGE-M3 download (about 2.3 GB), and the measured first embed: 74 notes in 133 seconds, 2.7 GB peak, on an Apple Silicon Mac.
+
 ## [0.10.16] - 2026-10-21
 
 > Run `vaultmind hooks install --force` once after upgrading to load pinned notes at session start.

@@ -61,11 +61,13 @@ Every command has `--help`, and `--json` for scripts. `vaultmind --help` lists a
 go install github.com/peiman/vaultmind@latest   # requires Go >= 1.26.6
 ```
 
-A pure-Go binary: full-text + MiniLM dense retrieval (2 lanes). Ideal for trying VaultMind — it does **not** include BGE-M3's sparse + ColBERT lanes.
+A pure-Go binary: full-text + MiniLM dense retrieval (2 lanes). Ideal for trying VaultMind — it does **not** include BGE-M3's sparse + ColBERT lanes. The same MiniLM build is published as a plain archive, `vaultmind_<version>_<os>_<arch>.tar.gz` (no `v` in the version), for platforms without an ORT build. Windows is a `.zip` of that build.
 
 **Full 4-way hybrid — BGE-M3 (recommended for real use):**
 
-Download the self-contained ORT archive for your platform (`darwin-arm64`, `linux-amd64`) from the [releases page](https://github.com/peiman/vaultmind/releases) — `vaultmind_<version>_<os>_<arch>_ort.tar.gz` — extract, and run. The official `libonnxruntime` is bundled (found automatically next to the binary), so there's nothing else to install — **no compiler required.** Upgrading an existing install? Extract elsewhere and `mv` the new binary into place rather than copying over the old one — `mv` is atomic and gives a fresh inode. Overwriting in place has been seen once on macOS to trip a codesigning SIGKILL; the cause is unconfirmed, but replacing rather than overwriting avoids it and is the safer form anyway.
+The ORT archives carry a `v` in the version. The two published for v0.10.15 are `vaultmind_v0.10.15_darwin_arm64_ort.tar.gz` and `vaultmind_v0.10.15_linux_amd64_ort.tar.gz` (`darwin_arm64` and `linux_amd64`) on the [releases page](https://github.com/peiman/vaultmind/releases). Extract the archive, keep `libonnxruntime*` in the same directory as the binary, and put that directory on `PATH`. The official `libonnxruntime` is bundled, so there's nothing else to install — **no compiler required.** Upgrading an existing install? Extract elsewhere and `mv` the new binary and its `libonnxruntime*` libraries into place rather than copying over the old ones — `mv` is atomic and gives a fresh inode. Overwriting in place has been seen once on macOS to trip a codesigning SIGKILL; the cause is unconfirmed, but replacing rather than overwriting avoids it and is the safer form anyway.
+
+With the ORT build, the first `vaultmind index --embed` downloads the BGE-M3 model (about 2.3 GB). On an Apple Silicon Mac a first embed of 74 notes took 133 seconds and used 2.7 GB peak memory.
 
 > **Which one?** For a **small vault or a slow machine, MiniLM is genuinely fine** — its dense lane covers a small corpus well, and its lighter query encoder keeps per-prompt latency low (that cost lands on *every* recall). Reach for **BGE-M3 when your vault is large and varied** and recall quality matters most. Note: `go install` is the *only* path that can't produce BGE-M3 (cgo can't travel through it) — so if your setup uses `go install`, you're on MiniLM by design; the prebuilt archive above is the no-compile way to the full hybrid.
 
@@ -83,23 +85,19 @@ See **[docs/embedding-backends.md](docs/embedding-backends.md)** for every backe
 ## Quickstart
 
 ```bash
-# 1. start a vault and bring in the docs a project already has
 vaultmind init ./knowledge
-vaultmind import ./docs --vault ./knowledge --dry-run   # see what it would do
-vaultmind import ./docs --vault ./knowledge             # re-run after the docs change
-
-# 2. embed it (import indexes; this adds meaning-based search)
+vaultmind import docs *.md --vault ./knowledge
 vaultmind index --embed --vault ./knowledge
-
-# 3. ask it, and see what it holds
 vaultmind ask "what did we decide about retries?" --vault ./knowledge
-vaultmind tree --vault ./knowledge --depth 1
-
-# 4. hand it to your agent
 vaultmind hooks install . --vault ./knowledge --merge
 ```
 
-`init` writes a type registry, a README for the vault and starter notes. Add your own notes as Markdown with frontmatter; `vaultmind index` picks up hand edits.
+The shell expands `*.md` to the root Markdown (README, CONTRIBUTING, AGENTS, and the rest) and skips dotfiles, so tool chat logs such as `.aider.chat.history.md` stay out; drop `docs` if the project has no `docs/`, and if the project has no root Markdown, leave out `*.md` (zsh aborts the whole command with `no matches found` otherwise).
+Re-running the same command picks up changes; a root doc you delete or rename must be removed from the vault by hand: delete its file under `<vault>/imported/` and run `vaultmind index --vault <vault>` (single-file imports have no orphan pass, even with `--prune`).
+
+`vaultmind init --wire-hooks` installs the hooks while scaffolding. `vaultmind init --print-instructions` prints the agent setup guide.
+
+`init` writes a type registry, a README for the vault and starter notes. `doctor` names those starters (`2 example notes: delete or keep`). Add your own notes as Markdown with frontmatter; `vaultmind index` picks up hand edits.
 
 ## Agents: hooks and MCP
 

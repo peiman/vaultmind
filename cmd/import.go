@@ -8,7 +8,7 @@ import (
 
 var importCmd = func() *cobra.Command {
 	c := MustNewCommand(commands.ImportMetadata, runImport)
-	c.Args = cobra.ExactArgs(1)
+	c.Args = cobra.MinimumNArgs(1)
 	return c
 }()
 
@@ -20,15 +20,5 @@ func init() {
 }
 
 func runImport(cmd *cobra.Command, args []string) error {
-	if err := checkWatchFlags(cmd, args[0]); err != nil {
-		return err
-	}
-	res, err := importDocs(cmd, args[0])
-	if err != nil {
-		return finishImportError(cmd, res, err)
-	}
-	if err := writeImport(cmd, res); err != nil {
-		return err
-	}
-	return watchIfAsked(cmd, args[0])
+	return importArgs(cmd, args)
 }
