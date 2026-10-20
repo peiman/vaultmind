@@ -200,7 +200,10 @@ aliases: ["Alt name"]      # match on these as well as the title
 parent_id: <id>            # hierarchical relation
 source_ids: [ref1, ref2]   # citations when the note quotes something
 status: <value>            # for types with a status lifecycle (project, decision)
+pinned: true               # load this note at every session start
 ```
+
+`pinned: true` loads that note at every session start. Vaults are read in the order given and notes by id within a vault, under one budget for the session (default 1500 tokens, `VAULTMIND_PINNED_BUDGET`). A long note is excerpted to 400 tokens (`VAULTMIND_PINNED_EXCERPT`), the same excerpt rule as `arc recite`. A note that does not fit is named, with its vault, not dropped. With nothing pinned, the loader prints nothing. The mark lives in the note, so it survives `hooks install --force`; run that once to pick up the hook. `doctor` reports the count, the token cost, and a warning when the set exceeds the budget (unpin or shorten).
 
 `status: draft` is a note that is not ready for recall or for context. `ask`, `search`, the context pack around a hit, `memory pack`, `memory related`, `memory neighbors`, `arc recite`, and `tree --for` leave it out unless you pass `--include-drafts` (or set `app.retrieval.include_drafts`). Accepting a new draft flips that field — the same file, no copy:
 
@@ -494,7 +497,7 @@ markers; `task check` fails if it drifts from the catalog. Everything outside th
 hand-written and stays.
 
 <!-- VAULTMIND:GENERATED:commands:START -->
-<!-- checksum:0e3c5ab2e83382d93d2e9603280915867ff34a9bf35634732dd64fb87e4948d3 -->
+<!-- checksum:6c9a0dd6ac0795f422355a2c9273334e25b511b0da4f5bda15a92ec68f2fdd95 -->
 # VaultMind Commands
 
 Every user-facing command, grouped by intent, with its when-to-use trigger.
@@ -512,12 +515,13 @@ Generated from the command tree — do not edit by hand (run `task generate:docs
 | `vaultmind memory pack` | Pack a note plus ranked context within a token budget | you want a token-budgeted context payload ready to ship to an agent. |
 | `vaultmind memory related` | List notes related to a target, filtered by edge type | you want a simple ranked list of directly connected notes, filtered by edge type. |
 | `vaultmind memory summarize` | Assemble material from specific note IDs for agent synthesis | you have a known list of note IDs and want their material assembled for synthesis. |
-| `vaultmind note` | Read, create, propose, accept, record a gap, and batch-fetch notes by ID | you want to read, create, propose, accept, record a gap, or batch-fetch a specific note by ID. |
+| `vaultmind note` | Read, create, propose, accept, record a gap, load pinned notes, and batch-fetch notes by ID | you want to read, create, propose, accept, record a gap, load pinned notes, or batch-fetch a specific note by ID. |
 | `vaultmind note accept` | Promote a draft into recall | a person has reviewed a draft and it should enter recall. |
 | `vaultmind note create` | Create a note from a template with field overrides | you want to create a new note from its type template with field overrides. |
 | `vaultmind note gap` | Record a question the vault did not answer | an answer did not settle the question and you want that question kept until a later draft closes it. |
 | `vaultmind note get` | Get one note's full content and metadata by ID | you know a note's ID or path and want its full content (with access tracking). |
 | `vaultmind note mget` | Fetch multiple notes by ID in one call | you have several note IDs and want them all in one batched fetch. |
+| `vaultmind note pinned` | Load notes marked pinned: true | you want every note marked pinned, in vault order then id order, within one budget, and the names of any that do not fit. |
 | `vaultmind note propose` | Turn a finding into a reviewable draft | you found the answer and want a reviewable draft, with the id, metadata, and formatting handled for you. |
 | `vaultmind resolve` | Resolve a fragment, alias, title, or path to canonical note IDs | you have a fragment, alias, title, or path and need the canonical note ID. |
 | `vaultmind search` | Search vault notes by keyword, semantic similarity, or both | you want a ranked list of hits to browse and pick from, without packed context. |

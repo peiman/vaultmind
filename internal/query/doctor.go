@@ -101,6 +101,12 @@ type DoctorResult struct {
 	// means nothing has closed. A null cite count means the usage log was
 	// absent or the cite query failed; a measured zero stays 0.
 	GapLoop *DoctorGapLoop `json:"gap_loop,omitempty"`
+
+	// Pinned is the set a session start loads. Nil means unmeasured, which is
+	// a hand-built result in a test. Doctor always sets it. Tokens is the cost
+	// of the whole bodies, and Budget is the session-start ceiling. OverBudget
+	// is Tokens above that ceiling; landing on it is not over.
+	Pinned *DoctorPinned `json:"pinned,omitempty"`
 }
 
 // UsageScopeMachine marks counts read from the shared usage log. That log
@@ -218,6 +224,9 @@ type DoctorEmbeddings struct {
 	// that drops CLS, SEP, PAD, and UNK. Absent when current or when the vault
 	// has no sparse vectors. schema_version stays v1.
 	SparseFormatStale bool `json:"sparse_format_stale,omitempty"`
+	// EmbedTextStale is true when stored dense vectors predate title embedding.
+	// Absent when current or when the vault has no dense vectors.
+	EmbedTextStale bool `json:"embed_text_stale,omitempty"`
 }
 
 // DoctorModelBreakdown is one entry in DoctorEmbeddings.MixedModel.
@@ -374,12 +383,29 @@ func ResultSurfacedIssueCounts(result *DoctorResult) (errs, warns int) {
 	if result.IndexStatus == IndexStatusUnknown {
 		warns++
 	}
-	// The stale-sparse line is printed from Embeddings, not from Issues, so
-	// it is counted here for the same reason as the unknown banner.
-	if result.Embeddings != nil && result.Embeddings.SparseFormatStale {
+	// The stale-format lines are printed from Embeddings, not from Issues, so
+	// they are counted here for the same reason as the unknown banner.
+	warns += formatStaleWarnings(result.Embeddings)
+	// The pinned warning is printed from Pinned, not from Issues. A nil section
+	// was not measured and must not warn.
+	if result.Pinned != nil && result.Pinned.OverBudget {
 		warns++
 	}
 	return errs + mErrs, warns + mWarns
+}
+
+func formatStaleWarnings(emb *DoctorEmbeddings) int {
+	if emb == nil {
+		return 0
+	}
+	n := 0
+	if emb.SparseFormatStale {
+		n++
+	}
+	if emb.EmbedTextStale {
+		n++
+	}
+	return n
 }
 
 // ContentDrift describes one note whose current file content hash
@@ -582,20 +608,29 @@ func Doctor(db *index.DB, vaultPath string, reg *schema.Registry) (*DoctorResult
 	// operations that bump mtime without changing content do NOT trigger
 	// drift (the false-positive shape that retired the prior mtime-based
 	// detector).
-	// A reconciliation that cannot run does NOT fail the whole command. doctor
-	// is a health hub: embeddings, validation, links and mesh identity are all
-	// still worth reporting when the vault root has gone unreadable, and a
-	// single unavailable section wedging the rest is the same shape as a broken
-	// hook wedging a session. It reports "unknown" with the reason instead —
-	// never "current", which would be the bug this section removed.
+	return finishDoctor(db, result, vaultPath)
+}
+
+// finishDoctor attaches the pinned set, then the index reconciliation.
+//
+// Pinned is attached first so the early return — reconciliation could not
+// run — still reports it. A reconciliation that cannot run does NOT fail the
+// whole command. doctor is a health hub: embeddings, validation, links and
+// mesh identity are all still worth reporting when the vault root has gone
+// unreadable, and a single unavailable section wedging the rest is the same
+// shape as a broken hook wedging a session. It reports "unknown" with the
+// reason instead — never "current", which would be the bug this section removed.
+func finishDoctor(db *index.DB, result *DoctorResult, vaultPath string) (*DoctorResult, error) {
+	if err := attachPinned(db, result); err != nil {
+		return nil, err
+	}
 	truth, err := ReconcileIndex(db, vaultPath)
 	if err != nil {
 		result.IndexStatus = IndexStatusUnknown
 		result.IndexStatusReason = err.Error()
-		return result, nil
+		return result, nil //nolint:nilerr // degraded section, reported via IndexStatus
 	}
 	applyIndexTruth(result, truth)
-
 	return result, nil
 }
 
@@ -669,12 +704,24 @@ func collectEmbeddingStatus(db *index.DB, total int) (*DoctorEmbeddings, error) 
 		(emb.SparseCount < emb.DenseCount || emb.ColBERTCount < emb.DenseCount) {
 		emb.HasModalityImbalance = true
 	}
+	if err := setFormatStale(db, emb); err != nil {
+		return nil, err
+	}
+	return emb, nil
+}
+
+func setFormatStale(db *index.DB, emb *DoctorEmbeddings) error {
 	stale, err := index.SparseFormatStale(db)
 	if err != nil {
-		return nil, fmt.Errorf("checking sparse format: %w", err)
+		return fmt.Errorf("checking sparse format: %w", err)
 	}
 	emb.SparseFormatStale = stale
-	return emb, nil
+	text, err := index.EmbedTextStale(db)
+	if err != nil {
+		return fmt.Errorf("checking embed text format: %w", err)
+	}
+	emb.EmbedTextStale = text
+	return nil
 }
 
 // DetectContentDrift compares each domain note's current file

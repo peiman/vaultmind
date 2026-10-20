@@ -32,6 +32,7 @@ var embeddingBackendName = embedding.BackendName
 // what a write reports without loading a real model.
 var runEmbedPass = func(cmd *cobra.Command, vaultPath, dbPath string, cfg *vault.Config, model string) (*index.EmbedResult, error) {
 	idxr := index.NewIndexer(vaultPath, dbPath, cfg)
+	// UpgradeEmbedText stays false: a note write embeds pending notes only.
 	// Ranking already holds the process session. Borrow it instead of
 	// opening a second one that cannot exist beside the first.
 	idxr.SetEmbedderSource(query.ProcessEmbedder{})

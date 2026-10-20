@@ -88,6 +88,19 @@ allow:
 # Override license detection for specific packages
 # Use when automated detection fails or is incorrect
 override:
+  # modernc.org/sqlite v1.60.1 added LICENSE-3RD-PARTY.md, an inventory of every
+  # license in its module graph. Detection read names in that inventory as
+  # licenses of sqlite itself (BSD-3-Clause-Attribution, BSD-3-Clause-Clear). The
+  # "attribution reference" it lists is a logo image in modernc.org/memory, not
+  # code, and "BSD-3-Clause-Clear" does not appear in it. sqlite's own code is
+  # BSD-3-Clause (LICENSE), plus SQLite's C source (public domain, LICENSE-SQLITE)
+  # and sqlite-vec (MIT, LICENSE-SQLITE_VEC), the same as v1.59.0. The modules the
+  # inventory names are checked as modules in their own right. Pinned to this
+  # version so the next bump is examined again.
+  - path: "modernc.org/sqlite"
+    version: "v1.60.1"
+    licenses: ["BSD-3-Clause", "MIT"]
+
   # Example: Manually specify license for a package
   # - path: "github.com/example/package"
   #   version: "v1.2.3"  # Optional: apply to specific version only

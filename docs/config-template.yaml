@@ -931,6 +931,22 @@ app:
     # Output in JSON format
     json: false
 
+  notepinned:
+    # Path to vault root
+    vault: .
+
+    # Load pinned notes from several vaults, comma-separated (overrides --vault). One budget across all of them
+    vaults: 
+
+    # Output in JSON format
+    json: false
+
+    # Total token ceiling for every vault in the run. 0 means unbounded. Notes that do not fit are named by id, title, and vault
+    budget: 1500
+
+    # Cap each note at N tokens, using the same excerpt rule as arc recite. 0 means the whole body
+    excerpt: 0
+
   notepropose:
     # Path to vault root
     vault: .

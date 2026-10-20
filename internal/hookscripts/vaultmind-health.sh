@@ -23,8 +23,11 @@
 #     this hook only relays `vaultmind doctor`, so it can never disagree with
 #     the tool about whether the index is BGE-M3, MiniLM, or unbuilt.
 
-# Drain the hook's stdin JSON (Claude Code passes session info); unused here.
-cat >/dev/null 2>&1
+# The harness's conversation id. Forwarded on the pinned-note call so those
+# reads share a session with the agent's own (see vault-recall.sh). The rest
+# of this hook does not name a caller, so it does not need the id.
+HOOK_INPUT=$(cat)
+HOOK_SESSION_ID=$(printf '%s' "$HOOK_INPUT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('session_id','') or '')" 2>/dev/null || echo "")
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="${VAULTMIND_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}}"
@@ -78,27 +81,30 @@ if [ "$DOCTOR_RC" -ne 0 ]; then
   echo "⚠ VaultMind vault detected ($VAULT) but \`vaultmind doctor\` failed (exit $DOCTOR_RC)."
   [ -n "$DOCTOR_ERR" ] && echo "   ${DOCTOR_ERR}"
   echo "   Re-run to debug: vaultmind doctor --vault \"$VAULT\""
-elif printf '%s' "$DOCTOR" | grep -q "semantic search is DOWN"; then
+elif DOWN_LINE="$(printf '%s\n' "$DOCTOR" | grep -E '^⚠ semantic search is DOWN' | head -n 1)"; [ -n "$DOWN_LINE" ]; then
   # Embeddings exist but the runtime that loads their model will not start, so
   # every recall is keyword-only. Checked BEFORE the tier lines: the counts are
   # all present, and "full BGE-M3 hybrid recall" above a dead search is exactly
   # what this hook said on 2026-09-23.
-  echo "⚠ VaultMind vault detected ($VAULT) — but $(printf '%s' "$DOCTOR" | grep -o "semantic search is DOWN.*" | head -n 1)"
+  # Each tier matches doctor's own line, not free text elsewhere. A pinned note
+  # titled "Fixing degraded recall" must not change which line this is.
+  DOWN_LINE="${DOWN_LINE#⚠ }"
+  echo "⚠ VaultMind vault detected ($VAULT) — but ${DOWN_LINE}"
   echo "   Details: vaultmind doctor --vault \"$VAULT\""
-elif printf '%s' "$DOCTOR" | grep -q "Embeddings: none"; then
+elif printf '%s\n' "$DOCTOR" | grep -qE '^Embeddings: none'; then
   echo "📚 VaultMind vault detected ($VAULT) — search is keyword-only: no embeddings yet."
   echo "   Add meaning-based search: vaultmind index --embed --vault \"$VAULT\""
-elif printf '%s' "$DOCTOR" | grep -qE "\(minilm\)|degraded recall"; then
+elif printf '%s\n' "$DOCTOR" | grep -qE '^Embeddings: .*\(minilm\)|^⚠ degraded recall:'; then
   echo "✓ VaultMind active ($VAULT) — but recall is degraded (MiniLM, 2-lane)."
   echo "   Ask: vaultmind ask \"<question>\" --vault \"$VAULT\""
   echo "   Full 4-way BGE-M3 hybrid: on darwin-arm64/linux-amd64 download the prebuilt ORT archive from the release (no build); other platforms see $DOC"
-elif printf '%s' "$DOCTOR" | grep -qE "\(mixed\)|Partial BGE-M3 coverage"; then
+elif printf '%s\n' "$DOCTOR" | grep -qE '^Embeddings: .*\(mixed\)|^⚠ Partial BGE-M3 coverage:'; then
   # A mixed-model index has a MiniLM fraction running degraded 2-lane recall —
   # the same cliff as a pure-MiniLM index, just partial. Name the full-embed fix.
   echo "✓ VaultMind active ($VAULT) — but recall is partially degraded (mixed-model index)."
   echo "   Finish the upgrade: vaultmind index --embed --vault \"$VAULT\""
   echo "   See $DOC"
-elif printf '%s' "$DOCTOR" | grep -q "(bge-m3)"; then
+elif printf '%s\n' "$DOCTOR" | grep -qE '^Embeddings: .*\(bge-m3\)'; then
   echo "✓ VaultMind active ($VAULT) — full BGE-M3 hybrid recall."
   echo "   Ask: vaultmind ask \"<question>\" --vault \"$VAULT\"  ->  vaultmind note get <id> --vault \"$VAULT\""
 else
@@ -134,6 +140,18 @@ if [ "$DOCTOR_RC" -eq 0 ]; then
   if [ -n "$SPARSE_BLOCK" ]; then
     printf '%s\n' "$SPARSE_BLOCK"
   fi
+  # Title-embedding relay. Same shape as the sparse block: doctor's notice
+  # and its run line, and nothing else.
+  TITLE_BLOCK="$(printf '%s\n' "$DOCTOR" | awk '
+    index($0, "embeddings predate title embedding") {
+      print
+      if (getline <= 0) exit
+      if (index($0, "run: vaultmind index --embed")) print
+    }
+  ')"
+  if [ -n "$TITLE_BLOCK" ]; then
+    printf '%s\n' "$TITLE_BLOCK"
+  fi
 fi
 
 # The map. An agent reads a file when it knows where the answer lives; with a
@@ -162,6 +180,32 @@ if [ "$DOCTOR_RC" -eq 0 ]; then
     if [ "$MAP_LINES" -gt "$MAP_MAX_LINES" ] 2>/dev/null; then
       echo "  … $((MAP_LINES - MAP_MAX_LINES)) more lines: vaultmind tree ${MAP_TARGET} --depth 1"
     fi
+  fi
+fi
+
+# Pinned notes. A note with pinned: true is loaded at every session start.
+# The mark lives in the vault, so it survives hooks install --force.
+# One budget for the session, however many vaults. A long note is excerpted,
+# so it arrives as its opening rather than as a name only.
+# Best-effort: a failure here leaves the map above intact. A failing binary
+# prints its usage to stdout; that must not enter the session (same as the map).
+# A cap that is not a number falls back to the default. 0 is left alone:
+# the command treats 0 as an unbounded budget and as the whole body.
+if [ "$DOCTOR_RC" -eq 0 ]; then
+  PINNED_BUDGET="${VAULTMIND_PINNED_BUDGET:-1500}"
+  case "$PINNED_BUDGET" in ''|*[!0-9]*) PINNED_BUDGET=1500 ;; esac
+  PINNED_EXCERPT="${VAULTMIND_PINNED_EXCERPT:-400}"
+  case "$PINNED_EXCERPT" in ''|*[!0-9]*) PINNED_EXCERPT=400 ;; esac
+  if [ -n "${VAULTMIND_VAULTS:-}" ]; then
+    BLOCK=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-health-hook \
+      "$VM" note pinned --vaults "$VAULTMIND_VAULTS" --budget "$PINNED_BUDGET" --excerpt "$PINNED_EXCERPT" 2>/dev/null) || BLOCK=""
+  else
+    BLOCK=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-health-hook \
+      "$VM" note pinned --vault "$VAULT" --budget "$PINNED_BUDGET" --excerpt "$PINNED_EXCERPT" 2>/dev/null) || BLOCK=""
+  fi
+  if [ -n "$BLOCK" ]; then
+    echo ""
+    printf '%s\n' "$BLOCK"
   fi
 fi
 
