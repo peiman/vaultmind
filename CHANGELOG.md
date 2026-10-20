@@ -7,9 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.16] - 2026-10-21
+
+> Run `vaultmind hooks install --force` once after upgrading to load pinned notes at session start.
+
 ### Added
 
 - A note with `pinned: true` in its frontmatter is loaded at every session start, in vault order then id order, within one token budget for the session (default 1500, `VAULTMIND_PINNED_BUDGET`), however many vaults are named. A long note is excerpted to 400 tokens (`VAULTMIND_PINNED_EXCERPT`), so its opening arrives. `vaultmind note pinned` prints each one the way `arc recite` excerpts a note, and names any note that does not fit, with its vault. With nothing pinned it prints nothing. The mark lives in the vault, so it survives `hooks install --force`. Run `vaultmind hooks install --force` once to pick up the session-start hook that loads them. `doctor` reports how many notes are pinned, what they cost, and warns when they exceed that budget.
+
+### Changed
+
+- Dependencies: hugot 0.8.3, goose 3.29.0, modernc.org/sqlite 1.60.1. Embeddings are unchanged: on a 19-note vault the dense vectors are byte-identical to 0.10.15's and the sparse vectors hold the same entries. The bundled ONNX Runtime stays 1.29.1, which is the API version these bindings request.
 
 ## [0.10.15] - 2026-10-19
 
@@ -3039,7 +3047,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.15...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.16...HEAD
+[0.10.16]: https://github.com/peiman/vaultmind/compare/v0.10.15...v0.10.16
 [0.10.15]: https://github.com/peiman/vaultmind/compare/v0.10.14...v0.10.15
 [0.10.14]: https://github.com/peiman/vaultmind/compare/v0.10.13...v0.10.14
 [0.10.13]: https://github.com/peiman/vaultmind/compare/v0.10.12...v0.10.13
