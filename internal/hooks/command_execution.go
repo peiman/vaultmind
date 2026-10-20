@@ -15,9 +15,11 @@ func executedScript(command string) ([]commandWord, int, bool) {
 	if !ok {
 		return nil, 0, false
 	}
-	// Codex and Cursor generate this one export before their command; older
-	// versions exported CLAUDE_PROJECT_DIR instead.
-	if len(words) >= 3 && words[0].value == "export" &&
+	// Codex and Cursor export the project dir before their command. A vault
+	// inside the project also exports CLAUDE_PROJECT_DIR so that assignment
+	// expands. Older versions exported only CLAUDE_PROJECT_DIR. Each export is
+	// its own statement; strip the run of them.
+	for len(words) >= 3 && words[0].value == "export" &&
 		(strings.HasPrefix(command[words[1].start:words[1].end], envProjectDir+"=") ||
 			strings.HasPrefix(command[words[1].start:words[1].end], "CLAUDE_PROJECT_DIR=")) &&
 		command[words[2].start:words[2].end] == ";" {

@@ -64,10 +64,7 @@ func codexHooksForScope(projectDir, vaultPath string, vaults []string, p Profile
 		allowed[n] = true
 	}
 	noLimit := 0
-	prefix := "export " + envProjectDir + "=" + singleQuote(projectDir) + "; "
-	if scope == ScopeUser {
-		prefix = `export VAULTMIND_PROJECT_DIR="$PWD"; `
-	}
+	prefix := projectDirExports(projectDir, vaultPath, vaults, scope)
 	scriptRef := func(script string) string {
 		return singleQuote(filepath.Join(ScriptsDir(projectDir, AgentCodex), script))
 	}

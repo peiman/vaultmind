@@ -135,6 +135,7 @@ func TestScriptsInCommand_ExecutedScript(t *testing.T) {
 		{"bash\n/project/vault-recall.sh", AgentClaude, ""},
 		{`bash "$CLAUDE_PROJECT_DIR"/.claude/scripts/vault-recall.sh`, AgentClaude, hookUserPromptSubmitScript},
 		{`export VAULTMIND_PROJECT_DIR="$PWD"; bash '/project/vault-recall.sh'`, AgentCodex, hookUserPromptSubmitScript},
+		{`export VAULTMIND_PROJECT_DIR='/p'; export CLAUDE_PROJECT_DIR='/p'; VAULTMIND_VAULT="$CLAUDE_PROJECT_DIR/knowledge" bash '/p/.vaultmind/scripts/vaultmind-health.sh'`, AgentCodex, hookHealthScript},
 		{"bash /project/vault-recall.sh --custom; echo keep", AgentClaude, hookUserPromptSubmitScript},
 		{"bash /project/cursor-adapter.sh vaultmind-health.sh", AgentCursor, hookHealthScript},
 		{"printf /project/cursor-adapter.sh vaultmind-health.sh", AgentCursor, ""},

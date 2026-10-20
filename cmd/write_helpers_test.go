@@ -2,7 +2,10 @@ package cmd
 
 import (
 	"errors"
+	"io"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
@@ -145,4 +148,48 @@ func TestEmbedOnWrite_AFailedPassDoesNotFailTheWrite(t *testing.T) {
 	_, errOut, err := runRootCmd(t, "frontmatter", "set", "projects/beta.md", "status", "paused", "--vault", vault)
 	require.NoError(t, err, "the note is written even when embedding fails")
 	assert.Contains(t, errOut.String(), "written, but not embedded (model load failed)")
+}
+
+// Capture both the command's stderr and the process fallback: a writer left
+// unset must not hide a duplicate line from the command-level assertion.
+func TestEmbedProgress_CommandDestinations(t *testing.T) {
+	for _, command := range []string{"create", "import", "index"} {
+		t.Run(command, func(t *testing.T) {
+			emb, _ := useLoadCountEmbedder(t)
+			dir := buildIndexedTestVault(t)
+			seedMiniLMEmbeddings(t, dir, emb.vec)
+			var args []string
+			switch command {
+			case "create":
+				args = []string{"note", "create", "concepts/progress.md", "--type", "concept", "--field", "title=Progress", "--body", "A note to embed.", "--vault", dir}
+			case "import":
+				repo := docsRepo(t)
+				args = []string{"import", filepath.Join(repo, "docs"), "--vault", dir}
+			case "index":
+				clearEmbedding(t, dir, "concept-alpha")
+				args = []string{"index", "--embed", "--model", embedding.ModelMiniLM, "--vault", dir}
+			}
+			raw, err := os.CreateTemp(t.TempDir(), "stderr")
+			require.NoError(t, err)
+			defer func() { _ = raw.Close() }()
+			prev := os.Stderr
+			os.Stderr = raw
+			defer func() { os.Stderr = prev }()
+			out, errOut, err := runRootCmd(t, args...)
+			require.NoError(t, err, "%s\n%s", out.String(), errOut.String())
+			_, err = raw.Seek(0, io.SeekStart)
+			require.NoError(t, err)
+			fallback, err := io.ReadAll(raw)
+			require.NoError(t, err)
+			assert.NotContains(t, string(fallback), "embedded ", "all progress uses the command's stderr")
+			assert.NotContains(t, out.String(), "embedded ")
+			if command == "create" {
+				combined := errOut.String() + string(fallback)
+				assert.Equal(t, 1, strings.Count(combined, "embedded "), combined)
+				assert.Contains(t, combined, "embedded 1 note(s) [model: minilm]")
+			} else {
+				assert.Regexp(t, `embedded \d+/\d+ notes \(\d+s\)`, errOut.String())
+			}
+		})
+	}
 }

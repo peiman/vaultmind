@@ -11,7 +11,7 @@ import (
 
 // TestInitWireHooks_ScaffoldsAndWires proves the one-command greenfield setup:
 // init creates the vault AND wires the hooks into a separate project dir,
-// baking the new vault's absolute path into the merged settings.
+// baking a portable vault path into the merged settings.
 func TestInitWireHooks_ScaffoldsAndWires(t *testing.T) {
 	root := t.TempDir()
 	project := filepath.Join(root, "proj")
@@ -34,8 +34,8 @@ func TestInitWireHooks_ScaffoldsAndWires(t *testing.T) {
 	require.NoError(t, err)
 	text := string(settings)
 	assert.Contains(t, text, "vault-recall.sh", "hooks wired")
-	absVault, _ := filepath.Abs(vault)
-	assert.Contains(t, text, "VAULTMIND_VAULT='"+absVault+"'", "absolute vault path baked into wiring")
+	assert.Contains(t, text, `VAULTMIND_VAULT=\"$CLAUDE_PROJECT_DIR/vaultmind-identity\"`)
+	assert.NotContains(t, text, vault)
 }
 
 // TestInitWireHooks_PreservesExistingHooks proves the merge is additive: a
@@ -92,4 +92,15 @@ func TestInit_NoWireHooks_LeavesProjectUntouched(t *testing.T) {
 	require.NoError(t, err)
 	_, statErr := os.Stat(filepath.Join(project, ".claude"))
 	assert.True(t, os.IsNotExist(statErr), "init without --wire-hooks must not create .claude/")
+}
+
+func TestInitWireHooks_RelativeKnowledgeVaultIsPortable(t *testing.T) {
+	project := t.TempDir()
+	t.Chdir(project)
+	_, _, err := runRootCmd(t, "init", "./knowledge", "--wire-hooks", "--project-dir", project)
+	require.NoError(t, err)
+	commands := settingsCommands(t, filepath.Join(project, ".claude", "settings.json"))
+	health := commandWith(t, commands, "vaultmind-health.sh")
+	assert.Contains(t, health, `VAULTMIND_VAULT="$CLAUDE_PROJECT_DIR/knowledge"`)
+	assert.NotContains(t, health, filepath.Join(project, "knowledge"))
 }

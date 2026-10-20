@@ -184,7 +184,7 @@ func canonicalHooksWith(vaultPath string, vaults []string, scriptRef func(string
 	cmd := func(script string) hookCommand {
 		c := hookCommandWith(scriptRef(script), vaultPath)
 		if len(vaults) > 0 && federatedScripts[script] {
-			c = "VAULTMIND_VAULTS=" + singleQuote(strings.Join(vaults, ",")) + " " + c
+			c = shellAssign("VAULTMIND_VAULTS", vaults...) + " " + c
 		}
 		return hookCommand{Type: "command", Command: c}
 	}
@@ -306,14 +306,36 @@ func claudeScriptRef(script string) string {
 }
 
 // hookCommandWith builds the shell command for one hook: run the script at ref.
-// A non-empty vaultPath is single-quoted and set as VAULTMIND_VAULT so the
-// literal path survives JSON encoding and the shell does not expand it.
+// A literal vault path is single-quoted so the shell does not expand it. A
+// path that names $CLAUDE_PROJECT_DIR is double-quoted so that variable expands
+// and the rest of the path does not.
 func hookCommandWith(ref, vaultPath string) string {
 	base := "bash " + ref
 	if vaultPath == "" {
 		return base
 	}
-	return "VAULTMIND_VAULT=" + singleQuote(vaultPath) + " " + base
+	return shellAssign("VAULTMIND_VAULT", vaultPath) + " " + base
+}
+
+// shellAssign joins vault references with commas. Only a leading project
+// reference expands; shell characters in the actual path stay literal.
+func shellAssign(name string, values ...string) string {
+	if !usesClaudeProjectDir("", values) {
+		return name + "=" + singleQuote(strings.Join(values, ","))
+	}
+	quoted := make([]string, len(values))
+	for i, value := range values {
+		if isProjectVaultRef(value) {
+			quoted[i] = claudeProjectDirVar + escapeDoubleQuoted(strings.TrimPrefix(value, claudeProjectDirVar))
+		} else {
+			quoted[i] = escapeDoubleQuoted(value)
+		}
+	}
+	return name + `="` + strings.Join(quoted, ",") + `"`
+}
+
+func escapeDoubleQuoted(s string) string {
+	return strings.NewReplacer(`\`, `\\`, `"`, `\"`, "`", "\\`", `$`, `\$`).Replace(s)
 }
 
 // singleQuote wraps s in single quotes, escaping any embedded single quote

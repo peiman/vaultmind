@@ -22,7 +22,8 @@ func TestProvision_InstallAndMerge(t *testing.T) {
 	b, err := os.ReadFile(filepath.Join(dir, ".claude", "settings.json"))
 	require.NoError(t, err)
 	assert.Contains(t, string(b), "vault-recall.sh", "hooks wired")
-	assert.Contains(t, string(b), vault, "vault path baked")
+	assert.Contains(t, string(b), `VAULTMIND_VAULT=\"$CLAUDE_PROJECT_DIR/v\"`, "portable vault path baked")
+	assert.NotContains(t, string(b), vault)
 }
 
 func TestProvision_InstallOnlyWhenMergeFalse(t *testing.T) {

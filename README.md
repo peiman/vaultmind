@@ -99,6 +99,8 @@ Re-running the same command picks up changes; a root doc you delete or rename mu
 
 `init` writes a type registry, a README for the vault and starter notes. `doctor` names those starters (`2 example notes: delete or keep`). Add your own notes as Markdown with frontmatter; `vaultmind index` picks up hand edits.
 
+The first `index --embed` downloads the embedding model if it is not cached (about 2.3 GB for BGE-M3). Allow a few minutes for the first embed: one run of 74 notes took 133 seconds and peaked at 2.7 GB of memory; time and memory depend on note length and hardware. Each batch prints `embedded <done>/<total> notes (<elapsed>s)` to stderr, so progress stays visible with `--json` too. The count includes only notes whose vectors were stored; failed batches are reported on the same line. Imports keep this progress, while ordinary note writes print one embed summary. Later runs reuse the cached model and skip notes whose embeddings are current.
+
 ## Agents: hooks and MCP
 
 **Hooks deliver the vault without being asked.** `hooks install` writes scripts into the project and wires them into the agent's settings (`--merge` adds to existing hooks and never removes them; `--dry-run` previews). A knowledge vault gets: the vault map and health at session start (and again after `/clear` and compaction), the notes that match each prompt as short excerpts, the notes about a code file when the agent reads or edits it, and related notes before a commit, push or merge. A note marked `pinned: true` is loaded at session start too, under one budget for the session, with a long note excerpted to 400 tokens. That mark lives in the vault so it survives `hooks install --force`. Without `--vault`, the hooks look for `<project-dir>/vaultmind-identity`.

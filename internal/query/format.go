@@ -357,12 +357,17 @@ type deliveryCounts struct {
 	// Delivered is the blocks that carry note text. An excerpt counts: the
 	// agent received words it can act on.
 	Delivered int
-	// Excerpted is the subset of Delivered that was capped. This is the
-	// distinction the old header was reaching for and inverted — an excerpt is
+	// Excerpted is the subset of Delivered that was capped to a passage. This is
+	// the distinction the old header was reaching for and inverted — an excerpt is
 	// not the whole note, so saying "delivered in full" of one would be the
 	// same lie in the other direction. Both facts are reported; neither is
 	// allowed to stand in for the other.
 	Excerpted int
+	// Cut is the subset of Delivered whose body was byte-sliced to the budget.
+	// A slice is not an excerpt and not "in full".
+	Cut int
+	// Budget is the pack's token budget, named when a body was cut to fit it.
+	Budget int
 	// ShownBefore is the blocks sent as a title because this conversation
 	// already received their text. Not a budget loss, so not in TitlesOnly.
 	ShownBefore int
@@ -393,6 +398,7 @@ func titleSuffix(shownBefore bool) string {
 // keeps the mirror honest — it recounts the rendered output and compares.
 func countDelivery(ctx *memory.ContextPackResult, opts formatOpts) deliveryCounts {
 	var c deliveryCounts
+	c.Budget = ctx.BudgetTokens
 	if ctx.Target != nil {
 		c.Notes++
 		if ctx.Target.BodyOmittedBudget && !ctx.Target.ShownBefore && ctx.Target.Body == "" {
@@ -405,6 +411,9 @@ func countDelivery(ctx *memory.ContextPackResult, opts formatOpts) deliveryCount
 			c.Delivered++
 			if ctx.Target.BodyExcerpted {
 				c.Excerpted++
+			}
+			if ctx.Target.BodyCutToBudget {
+				c.Cut++
 			}
 		}
 		if ctx.Target.Body == "" && !ctx.Target.ShownBefore && !ctx.Target.BodyOmittedBudget {
@@ -444,8 +453,8 @@ func countDelivery(ctx *memory.ContextPackResult, opts formatOpts) deliveryCount
 // decide whether it has enough to act on, or has to go fetch something.
 //
 // "as excerpts" is load-bearing: it says the full note exists and is one
-// `note get` away. That is the only thing the reader can act on, so it is the
-// only qualifier the line carries.
+// `note get` away. A budget cut also means the caller received only part of
+// the note; name it even when another note arrived as an excerpt.
 func deliveryPhrase(c deliveryCounts) string {
 	s := fmt.Sprintf("%d delivered", c.Delivered)
 	switch {
@@ -454,8 +463,15 @@ func deliveryPhrase(c deliveryCounts) string {
 		s += " as excerpt" + pluralS(c.Excerpted)
 	case c.Excerpted > 0:
 		s += fmt.Sprintf(", %d as excerpt%s", c.Excerpted, pluralS(c.Excerpted))
-	default:
+	case c.Cut == 0:
 		s += " in full"
+	}
+	if c.Cut > 0 {
+		if c.Cut == c.Delivered {
+			s += fmt.Sprintf(", cut to the %d-token budget", c.Budget)
+		} else {
+			s += fmt.Sprintf(", %d cut to the %d-token budget", c.Cut, c.Budget)
+		}
 	}
 	if t := c.TitlesOnly(); t > 0 && c.Delivered > 0 {
 		s += fmt.Sprintf(", %d title%s only", t, pluralS(t))

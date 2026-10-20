@@ -22,6 +22,12 @@ func Provision(cfg InstallConfig, merge, local, dryRun bool) (*ProvisionResult, 
 	// A dry run previews the scripts as well as the wiring; writing the
 	// scripts during a preview overwrote local edits under --force.
 	cfg.DryRun = cfg.DryRun || dryRun
+	// Both init and hooks install must bake the same checkout-portable paths.
+	vault, vaults, err := PortableVaultRefs(cfg.ProjectDir, cfg.VaultPath, cfg.Vaults, cfg.Scope)
+	if err != nil {
+		return &ProvisionResult{}, err
+	}
+	cfg.VaultPath, cfg.Vaults = vault, vaults
 	res, err := Install(cfg)
 	out := &ProvisionResult{Install: res}
 	if !merge || err != nil {
