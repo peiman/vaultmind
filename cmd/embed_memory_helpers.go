@@ -38,6 +38,7 @@ var exitOverMemory = func(w io.Writer, used, limit int64) {
 // this, and must not: that re-embed is what drove a process past 100 GB.
 func runIndexEmbed(cmd *cobra.Command, idxr *index.Indexer, dbPath, model string, full bool) (*index.EmbedResult, error) {
 	idxr.UpgradeEmbedText = true
+	idxr.Progress = cmd.ErrOrStderr()
 	return runEmbedGuarded(cmd, idxr, dbPath, model, full)
 }
 

@@ -33,7 +33,7 @@ func TestHooksInstallMerge_WiresSettingsWithoutClobbering(t *testing.T) {
 	assert.Contains(t, text, "their-existing-hook.sh", "foreign hook must survive the merge")
 	assert.Contains(t, text, "vault-recall.sh", "our recall hook must be wired")
 	assert.Contains(t, text, "load-persona.sh", "our persona hook must be wired")
-	assert.Contains(t, text, "VAULTMIND_VAULT='"+filepath.Join(dir, "their-vault")+"'", "vault path baked in")
+	assert.Contains(t, text, `VAULTMIND_VAULT=\"$CLAUDE_PROJECT_DIR/their-vault\"`, "portable vault path baked in")
 	assert.Contains(t, text, "permissions", "unrelated settings preserved")
 }
 

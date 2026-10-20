@@ -1,8 +1,10 @@
 package embedding
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -65,7 +67,7 @@ func testContent() map[string]string {
 func TestEnsureModel_DownloadsAndVerifiesEachFile(t *testing.T) {
 	srv, dir := newModelServer(t, testContent()), t.TempDir()
 
-	require.NoError(t, ensureModel(srv.URL, dir, "rev1", testFiles))
+	require.NoError(t, ensureModel(srv.URL, dir, "rev1", testFiles, ""))
 	got, err := os.ReadFile(filepath.Join(dir, "model.onnx")) //nolint:gosec // test path
 	require.NoError(t, err)
 	assert.Equal(t, "the model", string(got))
@@ -79,7 +81,7 @@ func TestEnsureModel_RefusesContentThatDoesNotMatchTheHash(t *testing.T) {
 	content["onnx/model.onnx"] = "the modeX" // same length, different bytes
 	srv, dir := newModelServer(t, content), t.TempDir()
 
-	err := ensureModel(srv.URL, dir, "rev1", testFiles)
+	err := ensureModel(srv.URL, dir, "rev1", testFiles, "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "sha256")
 	assert.NoFileExists(t, filepath.Join(dir, "model.onnx"))
@@ -94,7 +96,7 @@ func TestEnsureModel_RefusesATruncatedFile(t *testing.T) {
 	content["onnx/model.onnx"] = "the mo"
 	srv, dir := newModelServer(t, content), t.TempDir()
 
-	err := ensureModel(srv.URL, dir, "rev1", testFiles)
+	err := ensureModel(srv.URL, dir, "rev1", testFiles, "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "bytes")
 	assert.NoFileExists(t, filepath.Join(dir, "model.onnx"))
@@ -108,7 +110,7 @@ func TestEnsureModel_VerifiesAnExistingCacheOnceWithoutDownloading(t *testing.T)
 		require.NoError(t, os.WriteFile(filepath.Join(dir, filepath.Base(remote)), []byte(body), 0o600))
 	}
 
-	require.NoError(t, ensureModel(srv.URL, dir, "rev1", testFiles))
+	require.NoError(t, ensureModel(srv.URL, dir, "rev1", testFiles, ""))
 	assert.Zero(t, srv.count("onnx/model.onnx"))
 	assert.Zero(t, srv.count("config.json"))
 	assert.FileExists(t, filepath.Join(dir, ".verified-rev1"))
@@ -120,7 +122,7 @@ func TestEnsureModel_ReplacesACachedFileThatFailsTheHash(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "model.onnx"), []byte("tampered!"), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "config.json"), []byte(`{"a":1}`), 0o600))
 
-	require.NoError(t, ensureModel(srv.URL, dir, "rev1", testFiles))
+	require.NoError(t, ensureModel(srv.URL, dir, "rev1", testFiles, ""))
 	assert.Equal(t, 1, srv.count("onnx/model.onnx"))
 	assert.Zero(t, srv.count("config.json"), "the good file is kept")
 	got, _ := os.ReadFile(filepath.Join(dir, "model.onnx")) //nolint:gosec // test path
@@ -130,10 +132,10 @@ func TestEnsureModel_ReplacesACachedFileThatFailsTheHash(t *testing.T) {
 // Once verified, a file whose size changes is checked again.
 func TestEnsureModel_RechecksAVerifiedFileWhoseSizeChanged(t *testing.T) {
 	srv, dir := newModelServer(t, testContent()), t.TempDir()
-	require.NoError(t, ensureModel(srv.URL, dir, "rev1", testFiles))
+	require.NoError(t, ensureModel(srv.URL, dir, "rev1", testFiles, ""))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "model.onnx"), []byte("cut"), 0o600))
 
-	require.NoError(t, ensureModel(srv.URL, dir, "rev1", testFiles))
+	require.NoError(t, ensureModel(srv.URL, dir, "rev1", testFiles, ""))
 	assert.Equal(t, 2, srv.count("onnx/model.onnx"))
 	got, _ := os.ReadFile(filepath.Join(dir, "model.onnx")) //nolint:gosec // test path
 	assert.Equal(t, "the model", string(got))
@@ -142,9 +144,9 @@ func TestEnsureModel_RechecksAVerifiedFileWhoseSizeChanged(t *testing.T) {
 // A new pinned revision verifies the cache again: the marker is per revision.
 func TestEnsureModel_ANewRevisionVerifiesAgain(t *testing.T) {
 	srv, dir := newModelServer(t, testContent()), t.TempDir()
-	require.NoError(t, ensureModel(srv.URL, dir, "rev1", testFiles))
+	require.NoError(t, ensureModel(srv.URL, dir, "rev1", testFiles, ""))
 
-	require.NoError(t, ensureModel(srv.URL, dir, "rev2", testFiles))
+	require.NoError(t, ensureModel(srv.URL, dir, "rev2", testFiles, ""))
 	assert.FileExists(t, filepath.Join(dir, ".verified-rev2"))
 }
 
@@ -188,4 +190,89 @@ func TestDownloadPinned_UsesTheModelDirectoryThePipelineReads(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, filepath.Join(cache, "owner_name"), dir)
 	assert.FileExists(t, filepath.Join(dir, "model.onnx"))
+}
+
+// captureStderrDuring runs fn with os.Stderr pointed at a pipe.
+// Not safe under t.Parallel.
+func captureStderrDuring(t *testing.T, fn func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	defer func() { _ = r.Close() }()
+	defer func() { _ = w.Close() }()
+	old := os.Stderr
+	os.Stderr = w
+	defer func() { os.Stderr = old }()
+	fn()
+	require.NoError(t, w.Close())
+	var buf bytes.Buffer
+	_, err = io.Copy(&buf, r)
+	require.NoError(t, err)
+	return buf.String()
+}
+
+// BGE-M3 announces downloads once, for both a fresh cache and a small repair.
+func TestDownloadBGEM3_AnnouncesFreshAndPartialDownloads(t *testing.T) {
+	const rev = "rev1"
+	prefix := BGEM3ModelName + "/resolve/" + rev + "/"
+	content := map[string]string{}
+	for remote, body := range testContent() {
+		content[prefix+remote] = body
+	}
+	srv, cache := newModelServer(t, content), t.TempDir()
+	saved := pinnedModels
+	pinnedModels = map[string]pinnedModel{
+		BGEM3ModelName: {repo: BGEM3ModelName, revision: rev, files: testFiles},
+	}
+	savedBase := huggingFaceBase
+	huggingFaceBase = srv.URL
+	t.Cleanup(func() { pinnedModels, huggingFaceBase = saved, savedBase })
+
+	stderr := captureStderrDuring(t, func() {
+		_, err := DownloadBGEM3(cache)
+		require.NoError(t, err)
+	})
+	assert.Contains(t, stderr, "fetching BGE-M3 model files\n")
+	assert.NotContains(t, stderr, "Model files missing", "the existing announce is replaced, not joined by a second line")
+	assert.Equal(t, 1, strings.Count(stderr, "fetching BGE-M3 model files"))
+
+	// A small missing file is a partial repair, not a first model download.
+	require.NoError(t, os.Remove(filepath.Join(hugotModelDir(cache, BGEM3ModelName), "config.json")))
+	repaired := captureStderrDuring(t, func() {
+		_, err := DownloadBGEM3(cache)
+		require.NoError(t, err)
+	})
+	assert.Contains(t, repaired, "fetching BGE-M3 model files\n")
+	assert.NotContains(t, repaired, "2.3 GB")
+	assert.NotContains(t, repaired, "first run only")
+	assert.Equal(t, 1, srv.count(prefix+"onnx/model.onnx"))
+	assert.Equal(t, 2, srv.count(prefix+"config.json"))
+
+	again := captureStderrDuring(t, func() {
+		_, err := DownloadBGEM3(cache)
+		require.NoError(t, err)
+	})
+	assert.NotContains(t, again, "fetching BGE-M3 model files", "a cache hit is not a first run")
+	assert.NotContains(t, again, "Model files missing")
+}
+
+// MiniLM and any other pinned model keep the generic announce.
+func TestDownloadPinned_OtherModelKeepsTheGenericAnnounce(t *testing.T) {
+	content := map[string]string{}
+	for remote, body := range testContent() {
+		content["owner/name/resolve/rev1/"+remote] = body
+	}
+	srv, cache := newModelServer(t, content), t.TempDir()
+	saved := pinnedModels
+	pinnedModels = map[string]pinnedModel{"owner/name": {repo: "owner/name", revision: "rev1", files: testFiles}}
+	savedBase := huggingFaceBase
+	huggingFaceBase = srv.URL
+	t.Cleanup(func() { pinnedModels, huggingFaceBase = saved, savedBase })
+
+	stderr := captureStderrDuring(t, func() {
+		_, err := downloadPinned(cache, "owner/name")
+		require.NoError(t, err)
+	})
+	assert.Contains(t, stderr, "Model files missing or not verified. Downloading to ")
+	assert.NotContains(t, stderr, "BGE-M3")
 }

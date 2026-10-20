@@ -527,8 +527,8 @@ type Indexer struct {
 	vaultRoot string
 	dbPath    string
 	cfg       *vault.Config
-	// Progress receives the sparse-format and title re-embed lines. Nil writes
-	// to stderr.
+	// Progress receives embedding batch progress and re-embed lines. Nil
+	// writes to stderr.
 	Progress io.Writer
 	// UpgradeEmbedText re-embeds every note when stored vectors predate title
 	// embedding. index --embed sets it. A note write leaves it false, so a
@@ -1039,6 +1039,20 @@ func skipEmptyEmbed(ctx context.Context, id, path, body string) bool {
 	return true
 }
 
+// reportEmbedProgress writes one line per embed batch. A nil writer is stderr,
+// the same place as the re-embed lines. done counts only stored vectors;
+// failed batches still produce a line so activity stays visible.
+func reportEmbedProgress(w io.Writer, done, total, failedBatches int, elapsed time.Duration) {
+	if w == nil {
+		w = os.Stderr
+	}
+	failures := ""
+	if failedBatches > 0 {
+		failures = fmt.Sprintf(", %d batches failed", failedBatches)
+	}
+	_, _ = fmt.Fprintf(w, "embedded %d/%d notes%s (%ds)\n", done, total, failures, int(elapsed.Seconds()))
+}
+
 // EmbedNotes computes and stores embeddings for all notes that don't have one yet.
 // It opens its own DB connection (like Rebuild/Incremental) so it can be called
 // after the indexer has closed its connection.
@@ -1100,8 +1114,15 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 	if err != nil {
 		return nil, err
 	}
+	start := time.Now()
+	failedBatches := 0
 	var unrewritten []string
-	for _, idxs := range batches {
+	for batchNo, idxs := range batches {
+		// Report the completed batch before starting the next. The error
+		// branches below can continue, so reporting here covers those too.
+		if batchNo > 0 {
+			reportEmbedProgress(idx.Progress, result.Embedded, len(pending), failedBatches, time.Since(start))
+		}
 		batch := make([]noteText, len(idxs))
 		texts := make([]string, len(idxs))
 		for j, idx := range idxs {
@@ -1123,6 +1144,7 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 				// is degraded on this batch's notes.
 				log.Warn().Err(embedErr).Int("batch_start", i).Int("batch_size", len(batch)).Msg("embedding batch failed — notes in batch will lack embeddings")
 				result.Errors += len(batch)
+				failedBatches++
 				unrewritten = appendUnrewritten(idx.reembedAll, unrewritten, noteIDs(batch))
 				continue
 			}
@@ -1176,12 +1198,14 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 			if storeErr {
 				_ = tx.Rollback()
 				result.Errors += len(batch)
+				failedBatches++
 				unrewritten = appendUnrewritten(idx.reembedAll, unrewritten, noteIDs(batch))
 				continue
 			}
 			if err := tx.Commit(); err != nil {
 				_ = tx.Rollback()
 				result.Errors += len(batch)
+				failedBatches++
 				unrewritten = appendUnrewritten(idx.reembedAll, unrewritten, noteIDs(batch))
 				continue
 			}
@@ -1194,6 +1218,7 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 				// See FullEmbedder branch above for the rationale.
 				log.Warn().Err(embedErr).Int("batch_start", i).Int("batch_size", len(batch)).Msg("embedding batch failed — notes in batch will lack embeddings")
 				result.Errors += len(batch)
+				failedBatches++
 				unrewritten = appendUnrewritten(idx.reembedAll, unrewritten, noteIDs(batch))
 				continue
 			}
@@ -1216,6 +1241,7 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 			if storeErr {
 				_ = tx.Rollback()
 				result.Errors += len(batch)
+				failedBatches++
 				unrewritten = appendUnrewritten(idx.reembedAll, unrewritten, noteIDs(batch))
 				continue
 			}
@@ -1223,12 +1249,16 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 				_ = tx.Rollback()
 				log.Debug().Err(err).Int("batch_start", i).Msg("committing embedding batch failed")
 				result.Errors += len(batch)
+				failedBatches++
 				unrewritten = appendUnrewritten(idx.reembedAll, unrewritten, noteIDs(batch))
 				continue
 			}
 			result.Embedded += len(batch)
 		}
 	}
+
+	// The last batch has no next iteration to report it.
+	reportEmbedProgress(idx.Progress, result.Embedded, len(pending), failedBatches, time.Since(start))
 
 	if err := clearNoteVectors(db, unrewritten); err != nil {
 		return result, err

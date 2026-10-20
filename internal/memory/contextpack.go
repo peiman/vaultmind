@@ -59,8 +59,13 @@ type ContextPackTarget struct {
 	// than its whole text — same meaning as on ContextItem, and needed here for
 	// the same reason: a renderer that cannot tell the difference will truncate
 	// an already-bounded excerpt a second time.
-	BodyExcerpted bool   `json:"body_excerpted,omitempty"`
-	Body          string `json:"body,omitempty"`
+	BodyExcerpted bool `json:"body_excerpted,omitempty"`
+	// BodyCutToBudget is set only when the packer byte-sliced Body to fit the
+	// budget. It is not BodyExcerpted (a chosen passage) and not the pack's
+	// Truncated flag (also set when the body is empty or there is no room).
+	// The ask header reads it so a cut body is not called "delivered in full".
+	BodyCutToBudget bool   `json:"body_cut_to_budget,omitempty"`
+	Body            string `json:"body,omitempty"`
 	// ShownBefore marks a note whose body this conversation already received
 	// recently; it is sent as its title alone. See ContextItem.ShownBefore.
 	ShownBefore bool `json:"shown_before,omitempty"`
@@ -526,6 +531,7 @@ func packTargetContent(full *index.FullNote, budget, excerptTokens int, result *
 		if len(body) > maxChars {
 			body = body[:maxChars]
 			result.Truncated = true
+			target.BodyCutToBudget = true
 		}
 		target.Body = body
 		used := EstimateTokens(body)

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"path/filepath"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
@@ -32,6 +33,12 @@ var embeddingBackendName = embedding.BackendName
 // what a write reports without loading a real model.
 var runEmbedPass = func(cmd *cobra.Command, vaultPath, dbPath string, cfg *vault.Config, model string) (*index.EmbedResult, error) {
 	idxr := index.NewIndexer(vaultPath, dbPath, cfg)
+	// Ordinary writes already print one tracked summary. Imports can embed a
+	// long crawl, so keep their batch progress on the command's stderr.
+	idxr.Progress = io.Discard
+	if cmd.Name() == "import" {
+		idxr.Progress = cmd.ErrOrStderr()
+	}
 	// UpgradeEmbedText stays false: a note write embeds pending notes only.
 	// Ranking already holds the process session. Borrow it instead of
 	// opening a second one that cannot exist beside the first.

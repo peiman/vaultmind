@@ -193,7 +193,7 @@ func runHooksInstallCore(cmd *cobra.Command, p hooksInstallParams) error {
 		Scope:      scope,
 		Force:      p.force,
 		Only:       onlyList,
-		VaultPath:  strings.TrimSpace(p.vault),
+		VaultPath:  p.vault,
 		Vaults:     vaults,
 		Profile:    profile,
 	}, p.merge, p.local, p.dryRun)
@@ -319,7 +319,13 @@ func runHooksInstallAgent(cmd *cobra.Command, p hooksInstallParams, only []strin
 	if err != nil {
 		return fmt.Errorf("resolving project dir: %w", err)
 	}
-	vault := strings.TrimSpace(p.vault)
+	// The warning and the suggested rerun still name the absolute paths. The
+	// command bakes the portable form.
+	namedVaults := vaults
+	vault, vaults, err := hooks.PortableVaultRefs(projectDir, p.vault, vaults, hooks.Scope(p.scope))
+	if err != nil {
+		return err
+	}
 	prov, retErr := hooks.Provision(hooks.InstallConfig{
 		ProjectDir: projectDir,
 		Scope:      hooks.Scope(p.scope),
@@ -381,8 +387,8 @@ func runHooksInstallAgent(cmd *cobra.Command, p hooksInstallParams, only []strin
 		return retErr
 	}
 	writeHooksInstallAgentHuman(w, res, mergeRes, installGuidance{
-		rerun:        hooksInstallRerun(p, aw.name, vaults),
-		missingVault: hooksInstallVaultWarning(p, vaults),
+		rerun:        hooksInstallRerun(p, aw.name, namedVaults),
+		missingVault: hooksInstallVaultWarning(p, namedVaults),
 	}, aw)
 	return retErr
 }

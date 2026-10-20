@@ -79,10 +79,10 @@ func cursorHooksForScope(projectDir, vaultPath string, vaults []string, p Profil
 		}
 		return ref
 	}
-	prefix := "export " + envProjectDir + "=" + singleQuote(projectDir) + "; "
 	// The adapter reads workspace_roots from stdin; never pin user hooks to HOME.
-	if scope == ScopeUser {
-		prefix = ""
+	prefix := ""
+	if scope != ScopeUser {
+		prefix = projectDirExports(projectDir, vaultPath, vaults, scope)
 	}
 	var out []cursorEntry
 	for _, ch := range canonicalHooksWith(vaultPath, vaults, ref) {

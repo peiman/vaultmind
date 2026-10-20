@@ -1,7 +1,10 @@
 package index_test
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -134,6 +137,122 @@ func TestEmbedNotes_EmbedsThenSkipsOnRerun(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 0, r2.Embedded, "second pass must not re-embed already-embedded notes")
 	assert.Equal(t, 3, r2.Skipped, "all three must be counted as skipped")
+}
+
+// buildManyNoteVault indexes n short concept notes and returns the vault.
+func buildManyNoteVault(t *testing.T, n int) (vaultRoot, dbPath string) {
+	t.Helper()
+	require.Positive(t, n, "the progress fixture must contain notes")
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".vaultmind"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".vaultmind", "config.yaml"), []byte(`
+types:
+  concept:
+    required: [title]
+`), 0o644))
+	for i := range n {
+		name := fmt.Sprintf("n%02d", i)
+		content := "---\nid: concept-" + name + "\ntype: concept\ntitle: " + name + "\n---\nbody " + name + "\n"
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name+".md"), []byte(content), 0o644))
+	}
+	cfg, err := vault.LoadConfig(dir)
+	require.NoError(t, err)
+	dbPath = filepath.Join(dir, cfg.Index.DBPath)
+	require.NoError(t, os.MkdirAll(filepath.Dir(dbPath), 0o755))
+	idxr := index.NewIndexer(dir, dbPath, cfg)
+	_, err = idxr.Rebuild()
+	require.NoError(t, err)
+	return dir, dbPath
+}
+
+// captureStdout runs fn with os.Stdout pointed at a pipe and returns what it wrote.
+// Not safe under t.Parallel.
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	return captureStream(t, &os.Stdout, fn)
+}
+
+func captureStream(t *testing.T, stream **os.File, fn func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	defer func() { _ = r.Close() }()
+	defer func() { _ = w.Close() }()
+	old := *stream
+	*stream = w
+	defer func() { *stream = old }()
+	fn()
+	require.NoError(t, w.Close())
+	var buf bytes.Buffer
+	_, err = io.Copy(&buf, r)
+	require.NoError(t, err)
+	return buf.String()
+}
+
+// EmbedNotes tells the operator where a long embed is, one line per batch, on
+// the progress writer. The lines end at N/N. Stdout stays empty so --json is
+// not mixed with progress.
+func TestEmbedNotes_PrintsProgressPerBatch(t *testing.T) {
+	const n = 33 // one past the dense count cap, so the pass is two batches
+	vaultRoot, dbPath := buildManyNoteVault(t, n)
+	cfg, err := vault.LoadConfig(vaultRoot)
+	require.NoError(t, err)
+	idxr := index.NewIndexer(vaultRoot, dbPath, cfg)
+	var progress bytes.Buffer
+	idxr.Progress = &progress
+
+	var result *index.EmbedResult
+	stdout := captureStdout(t, func() {
+		result, err = idxr.EmbedNotes(context.Background(), dbPath, fakeDenseEmbedder{dims: 8})
+	})
+	require.NoError(t, err)
+	require.Equal(t, n, result.Embedded)
+
+	lines := strings.Split(strings.TrimSuffix(progress.String(), "\n"), "\n")
+	require.Len(t, lines, 2, "one line per batch, not one per note and not one summary:\n%s", progress.String())
+	assert.Regexp(t, `^embedded 32/33 notes \(\d+s\)$`, lines[0])
+	assert.Regexp(t, `^embedded 33/33 notes \(\d+s\)$`, lines[1])
+	assert.NotContains(t, stdout, "embedded", "progress stays off stdout")
+	assert.Empty(t, stdout)
+}
+
+// The BGE-M3 path batches by eights. Progress is one line per batch there too.
+func TestEmbedNotes_PrintsProgressPerBatchForFullEmbedder(t *testing.T) {
+	const n = 9
+	vaultRoot, dbPath := buildManyNoteVault(t, n)
+	cfg, err := vault.LoadConfig(vaultRoot)
+	require.NoError(t, err)
+	idxr := index.NewIndexer(vaultRoot, dbPath, cfg)
+	var progress bytes.Buffer
+	idxr.Progress = &progress
+
+	stdout := captureStdout(t, func() {
+		_, err = idxr.EmbedNotes(context.Background(), dbPath, fakeFullEmbedder{fakeDenseEmbedder: fakeDenseEmbedder{dims: 4}})
+	})
+	require.NoError(t, err)
+	lines := strings.Split(strings.TrimSuffix(progress.String(), "\n"), "\n")
+	require.Len(t, lines, 2, "progress:\n%s", progress.String())
+	assert.Regexp(t, `^embedded 8/9 notes \(\d+s\)$`, lines[0])
+	assert.Regexp(t, `^embedded 9/9 notes \(\d+s\)$`, lines[len(lines)-1])
+	assert.Empty(t, stdout)
+}
+
+func TestEmbedNotes_DefaultProgressIsStderrAndRerunIsQuiet(t *testing.T) {
+	vaultRoot, dbPath := buildManyNoteVault(t, 1)
+	cfg, err := vault.LoadConfig(vaultRoot)
+	require.NoError(t, err)
+	idxr := index.NewIndexer(vaultRoot, dbPath, cfg)
+	embedder := fakeDenseEmbedder{dims: 8}
+	stderr := captureStream(t, &os.Stderr, func() {
+		_, err = idxr.EmbedNotes(context.Background(), dbPath, embedder)
+	})
+	require.NoError(t, err)
+	assert.Regexp(t, `^embedded 1/1 notes \(\d+s\)\n$`, stderr)
+	stderr = captureStream(t, &os.Stderr, func() {
+		_, err = idxr.EmbedNotes(context.Background(), dbPath, embedder)
+	})
+	require.NoError(t, err)
+	assert.Empty(t, stderr, "no pending notes means no batches and no progress")
 }
 
 // fakeFullEmbedder satisfies FullEmbedder: dense + sparse + ColBERT. The
@@ -350,4 +469,65 @@ func TestEmbedNotes_MarksHasEmbeddingsTrue(t *testing.T) {
 	has, err = index.HasEmbeddings(db)
 	require.NoError(t, err)
 	assert.True(t, has, "post-embed: HasEmbeddings must flip to true")
+}
+
+// Failed batches still report activity, but only committed vectors count.
+type progressFailEmbedder struct {
+	fakeDenseEmbedder
+	calls    int
+	failCall int // zero fails every call
+}
+
+func (f *progressFailEmbedder) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
+	f.calls++
+	if f.failCall == 0 || f.calls == f.failCall {
+		return nil, fmt.Errorf("batch unavailable")
+	}
+	return f.fakeDenseEmbedder.EmbedBatch(ctx, texts)
+}
+
+// Wrap the dense failure stub to exercise the full-modality error path too.
+type progressFailFullEmbedder struct{ *progressFailEmbedder }
+
+func (f progressFailFullEmbedder) EmbedFullBatch(ctx context.Context, texts []string) ([]*embedding.BGEM3Output, error) {
+	if _, err := f.EmbedBatch(ctx, texts); err != nil {
+		return nil, err
+	}
+	return (fakeFullEmbedder{fakeDenseEmbedder: f.fakeDenseEmbedder}).EmbedFullBatch(ctx, texts)
+}
+func TestEmbedNotes_ProgressCountsStoredNotesOnBatchFailures(t *testing.T) {
+	for _, full := range []bool{false, true} {
+		for _, failCall := range []int{0, 1, 2} {
+			t.Run(fmt.Sprintf("full=%t/fail=%d", full, failCall), func(t *testing.T) {
+				const n = 33
+				dir, dbPath := buildManyNoteVault(t, n)
+				cfg, err := vault.LoadConfig(dir)
+				require.NoError(t, err)
+				idxr := index.NewIndexer(dir, dbPath, cfg)
+				var progress bytes.Buffer
+				idxr.Progress = &progress
+				stub := &progressFailEmbedder{fakeDenseEmbedder: fakeDenseEmbedder{dims: 8}, failCall: failCall}
+				var emb embedding.Embedder = stub
+				if full {
+					emb = progressFailFullEmbedder{stub}
+				}
+				result, err := idxr.EmbedNotes(context.Background(), dbPath, emb)
+				require.NoError(t, err)
+				require.Positive(t, result.Errors)
+				if failCall == 0 {
+					assert.Zero(t, result.Embedded)
+				}
+				lines := strings.Split(strings.TrimSpace(progress.String()), "\n")
+				require.Len(t, lines, stub.calls, "a failed batch still reports progress")
+				assert.Regexp(t, fmt.Sprintf(`^embedded %d/33 notes, \d+ batches failed \(\d+s\)$`, result.Embedded), lines[len(lines)-1])
+				assert.NotContains(t, progress.String(), "embedded 33/33")
+				db, err := index.Open(dbPath)
+				require.NoError(t, err)
+				defer func() { _ = db.Close() }()
+				var stored int
+				require.NoError(t, db.QueryRow("SELECT count(*) FROM notes WHERE embedding IS NOT NULL").Scan(&stored))
+				assert.Equal(t, stored, result.Embedded)
+			})
+		}
+	}
 }

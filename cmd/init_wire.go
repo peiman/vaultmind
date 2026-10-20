@@ -24,8 +24,8 @@ type initWireParams struct {
 // wireInitHooks provisions VaultMind's Claude Code hooks for a freshly
 // scaffolded vault: it installs the hook scripts into the project (CWD unless
 // --project-dir overrides) and merges the wiring into the project's settings
-// file, baking the new vault's ABSOLUTE path via VAULTMIND_VAULT so the hooks
-// resolve it regardless of where Claude Code runs them. It reuses
+// file, using a project-relative vault reference when it is inside the project.
+// It reuses
 // hooks.Provision — the same engine as `hooks install --merge` — so the
 // install-then-wire sequence stays in one place (SSOT).
 func wireInitHooks(w io.Writer, vaultPath string, scaffold hooks.Profile, p initWireParams) error {

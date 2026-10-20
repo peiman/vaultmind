@@ -138,7 +138,12 @@ func downloadPinned(cacheDir, name string) (string, error) {
 	}
 	modelDir := hugotModelDir(cacheDir, name)
 	base := fmt.Sprintf("%s/%s/resolve/%s", huggingFaceBase, m.repo, m.revision)
-	if err := ensureModel(base, modelDir, m.revision, m.files); err != nil {
+	announce := ""
+	if name == BGEM3ModelName {
+		// A repair may fetch only a small file; do not promise a full-model size.
+		announce = "fetching BGE-M3 model files\n"
+	}
+	if err := ensureModel(base, modelDir, m.revision, m.files, announce); err != nil {
 		return "", err
 	}
 	return modelDir, nil
@@ -151,7 +156,7 @@ func downloadPinned(cacheDir, name string) (string, error) {
 // for the revision then records it, so a normal load only compares sizes —
 // hashing 2.2 GB on every `ask` would cost seconds each time. A file whose
 // size changes is hashed again.
-func ensureModel(baseURL, modelDir, revision string, files []modelFile) error {
+func ensureModel(baseURL, modelDir, revision string, files []modelFile, announce string) error {
 	if err := os.MkdirAll(modelDir, 0o750); err != nil {
 		return fmt.Errorf("creating model directory: %w", err)
 	}
@@ -167,7 +172,11 @@ func ensureModel(baseURL, modelDir, revision string, files []modelFile) error {
 			continue
 		}
 		if !announced {
-			fmt.Fprintf(os.Stderr, "Model files missing or not verified. Downloading to %s\n", modelDir)
+			if announce == "" {
+				fmt.Fprintf(os.Stderr, "Model files missing or not verified. Downloading to %s\n", modelDir)
+			} else {
+				fmt.Fprint(os.Stderr, announce)
+			}
 			announced = true
 		}
 		if err := downloadVerified(baseURL+"/"+f.remote, path, f); err != nil {
