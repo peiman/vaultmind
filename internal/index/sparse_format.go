@@ -92,8 +92,9 @@ func SparseFormatStaleFile(dbPath string) (bool, error) {
 }
 
 type sparseNote struct {
-	id   string
-	body string
+	id    string
+	title string
+	body  string
 }
 
 // ReembedStaleSparse rewrites sparse_embedding for every note that has one
@@ -146,7 +147,7 @@ func (idx *Indexer) ReembedStaleSparse(ctx context.Context, db *DB, embedder emb
 }
 
 func loadSparseNotes(db *DB) ([]sparseNote, error) {
-	rows, err := db.Query(`SELECT id, COALESCE(body_text, '') FROM notes WHERE sparse_embedding IS NOT NULL ORDER BY id`)
+	rows, err := db.Query(`SELECT id, COALESCE(title, ''), COALESCE(body_text, '') FROM notes WHERE sparse_embedding IS NOT NULL ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("listing sparse notes: %w", err)
 	}
@@ -154,7 +155,7 @@ func loadSparseNotes(db *DB) ([]sparseNote, error) {
 	var notes []sparseNote
 	for rows.Next() {
 		var n sparseNote
-		if err := rows.Scan(&n.id, &n.body); err != nil {
+		if err := rows.Scan(&n.id, &n.title, &n.body); err != nil {
 			return nil, fmt.Errorf("scanning sparse note: %w", err)
 		}
 		notes = append(notes, n)
@@ -168,7 +169,7 @@ func loadSparseNotes(db *DB) ([]sparseNote, error) {
 func reembedSparseNotes(ctx context.Context, db *DB, full embedding.FullEmbedder, notes []sparseNote, progress io.Writer) (int, error) {
 	lengths := make([]int, len(notes))
 	for i, n := range notes {
-		lengths[i] = len(n.body)
+		lengths[i] = len(noteEmbedText(n.title, n.body))
 	}
 	rewritten := 0
 	seen := 0
@@ -179,7 +180,7 @@ func reembedSparseNotes(ctx context.Context, db *DB, full embedding.FullEmbedder
 		texts := make([]string, len(idxs))
 		for j, i := range idxs {
 			// Same cap as EmbedNotes. The stored body stays as indexed.
-			texts[j] = embedding.CapSymbolRuns(notes[i].body)
+			texts[j] = embedding.CapSymbolRuns(noteEmbedText(notes[i].title, notes[i].body))
 		}
 		outs, err := full.EmbedFullBatch(ctx, texts)
 		if err != nil {
@@ -253,8 +254,11 @@ func sparseFormatBlocksLazy(dbPath, model string) (bool, error) {
 }
 
 // skipIncrementalEmbed reports whether RunEmbed should return before loading
-// the model. skip is false when notes are pending or the sparse column is stale.
-func skipIncrementalEmbed(dbPath, model string) (skip bool, res EmbedResult, err error) {
+// the model. skip is false when notes are pending, when upgradeText is set
+// and stored embeddings predate title embedding, or when the sparse column
+// is stale. upgradeText is false on a note write: that path must not load
+// the model just to re-embed a vault.
+func skipIncrementalEmbed(dbPath, model string, upgradeText bool) (skip bool, res EmbedResult, err error) {
 	if err := guardEmbeddingModel(dbPath, model); err != nil {
 		return false, EmbedResult{}, err
 	}
@@ -265,6 +269,15 @@ func skipIncrementalEmbed(dbPath, model string) (skip bool, res EmbedResult, err
 	}
 	if pending > 0 {
 		return false, EmbedResult{}, nil
+	}
+	if upgradeText {
+		stale, serr := EmbedTextStaleFile(dbPath)
+		if serr != nil {
+			return false, EmbedResult{}, serr
+		}
+		if stale {
+			return false, EmbedResult{}, nil
+		}
 	}
 	block, err := sparseFormatBlocksLazy(dbPath, model)
 	if err != nil {

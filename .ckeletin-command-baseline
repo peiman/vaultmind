@@ -2,7 +2,7 @@
 # One "<command> <run func> <lines>" per line. Shrink a function, then lower or remove its entry.
 arc_candidates runArcCandidates 70
 arc_recite runArcRecite 39
-ask runAsk 205
+ask runAsk 199
 doctor_heal runWikilinkFix 61
 experiment_compare runExperimentCompare 58
 experiment_report runExperimentReport 60

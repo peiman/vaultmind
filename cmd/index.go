@@ -48,6 +48,11 @@ func noteStaleSparse(result *index.IndexResult, dbPath string, embed bool) error
 		return fmt.Errorf("checking sparse format: %w", err)
 	}
 	result.SparseFormatStale = stale
+	textStale, err := index.EmbedTextStaleFile(dbPath)
+	if err != nil {
+		return fmt.Errorf("checking embed text format: %w", err)
+	}
+	result.EmbedTextStale = textStale
 	return nil
 }
 
@@ -150,7 +155,7 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 		if err := guardBGEM3SlowBackend(cmd, model); err != nil {
 			return err
 		}
-		embedResult, err = runEmbedGuarded(cmd, idxr, dbPath, model, fullRebuild)
+		embedResult, err = runIndexEmbed(cmd, idxr, dbPath, model, fullRebuild)
 		if err != nil {
 			return fmt.Errorf("embedding notes: %w", err)
 		}
@@ -229,6 +234,10 @@ const warnCodeEmbedErrors = "embed_errors"
 // left them unchanged. The remedy is index --embed, which rewrites them once.
 const warnCodeSparseFormat = "sparse_format_stale"
 
+// warnCodeEmbedText is a plain index that found dense vectors from before
+// titles were embedded, and left them unchanged.
+const warnCodeEmbedText = "embed_text_stale"
+
 // embedErrorsMsgFmt is shared by the JSON warning and the human line, so the
 // two say the same thing.
 const embedErrorsMsgFmt = "%d note(s) have no embedding and are invisible to semantic search " +
@@ -245,6 +254,9 @@ func indexEnvelope(r index.IndexAndEmbedResult, vaultPath string) *envelope.Enve
 	}
 	if r.Index != nil && r.Index.SparseFormatStale {
 		env.AddWarning(warnCodeSparseFormat, index.SparseFormatStaleNotice+" — run: "+index.SparseFormatStaleRemedy, "index.sparse_format_stale")
+	}
+	if r.Index != nil && r.Index.EmbedTextStale {
+		env.AddWarning(warnCodeEmbedText, index.EmbedTextStaleNotice+" — run: "+index.EmbedTextStaleRemedy, "index.embed_text_stale")
 	}
 	return env
 }
@@ -326,6 +338,11 @@ func formatIndexResult(r index.IndexAndEmbedResult, model string, w io.Writer) e
 	}
 	if r.Index.SparseFormatStale {
 		if _, err := fmt.Fprintf(w, "⚠ %s\n  run: %s\n", index.SparseFormatStaleNotice, index.SparseFormatStaleRemedy); err != nil {
+			return err
+		}
+	}
+	if r.Index.EmbedTextStale {
+		if _, err := fmt.Fprintf(w, "⚠ %s\n  run: %s\n", index.EmbedTextStaleNotice, index.EmbedTextStaleRemedy); err != nil {
 			return err
 		}
 	}
