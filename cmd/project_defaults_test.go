@@ -35,7 +35,7 @@ func TestProjectDefaults_LogLevelIsWarn(t *testing.T) {
 }
 
 // The golangci-lint the framework installs must read this module's Go
-// version: Go 1.27.2 (.go-version) writes V5 export data, read from v2.14.0
+// version: Go 1.27.x (.go-version) writes V5 export data, read from v2.14.0
 // on. A project override (CKELETIN_TOOL_GOLANGCI_LINT_VERSION) would win; none
 // is set, so the framework pin is the one CI installs.
 func TestToolPins_GolangciLintReadsThisGoVersion(t *testing.T) {
@@ -46,5 +46,5 @@ func TestToolPins_GolangciLintReadsThisGoVersion(t *testing.T) {
 	major, _ := strconv.Atoi(m[1])
 	minor, _ := strconv.Atoi(m[2])
 	assert.True(t, major > 2 || (major == 2 && minor >= 14),
-		"golangci-lint v%s.%s.%s cannot read Go 1.27.2's export data; set CKELETIN_TOOL_GOLANGCI_LINT_VERSION in Taskfile.yml", m[1], m[2], m[3])
+		"golangci-lint v%s.%s.%s cannot read Go 1.27's export data; set CKELETIN_TOOL_GOLANGCI_LINT_VERSION in Taskfile.yml", m[1], m[2], m[3])
 }
