@@ -72,18 +72,20 @@ func TestDoctor_LongPinnedNoteFitsAtSessionStart(t *testing.T) {
 	// The hook may override its limits; doctor measures the shared defaults.
 	t.Setenv("VAULTMIND_PINNED_BUDGET", "1")
 	t.Setenv("VAULTMIND_PINNED_EXCERPT", "1")
-	body := strings.Repeat("word ", 5600)
+	body := "Intro line.\n\n## Now\n- item A\n- item B\n\n## Later\n" + strings.Repeat("- Review the next task.\n", 1400)
+	body += strings.Repeat("x", 36000-len(body))
 	dir := buildPinnedVault(t, map[string]string{
 		"ledger.md": pinnedNote("work-ledger", "Work Ledger", true, body),
 	})
 	tokens := memory.EstimateTokens(body)
-	require.Equal(t, 7000, tokens)
+	require.Equal(t, 9000, tokens)
 
 	jout, _, err := runRootCmd(t, "doctor", "--vault", dir, "--json")
 	require.NoError(t, err)
 	pinned := decodeDoctorPinned(t, jout.Bytes())
 	assert.Equal(t, tokens, pinned.Tokens)
-	assert.InDelta(t, memory.SessionPinnedExcerpt, pinned.SessionTokens, 2)
+	assert.InDelta(t, memory.SessionPinnedExcerpt, pinned.SessionTokens, 6)
+	assert.LessOrEqual(t, pinned.SessionTokens, memory.SessionPinnedExcerpt)
 	assert.Equal(t, memory.SessionPinnedBudget, pinned.Budget)
 	assert.False(t, pinned.OverBudget)
 	assert.Equal(t, []string{}, pinned.Omitted)

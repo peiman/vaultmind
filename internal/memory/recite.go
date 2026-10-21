@@ -112,7 +112,7 @@ func Recite(db *index.DB, cfg ReciteConfig) (*ReciteResult, error) {
 		// as omitted — the loop does not break, because the caller is owed the
 		// full list of what it did not get, not just the count. The fit itself
 		// is excerptForBudget, shared with pinned notes.
-		text, cost, keep := excerptForBudget(note.Body, cfg.ExcerptTokens, result.Tokens, cfg.Budget)
+		text, cost, keep := excerptForBudget(note.Body, cfg.ExcerptTokens, result.Tokens, cfg.Budget, Excerpt)
 		if !keep {
 			result.Omitted++
 			result.OmittedIDs = append(result.OmittedIDs, id)

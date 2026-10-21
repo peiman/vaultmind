@@ -13,17 +13,18 @@ const SessionPinnedExcerpt = 400
 // excerptForBudget is the one decision for "what text, and does it fit".
 //
 // Recite and pinned notes both deliver bodies under a token ceiling. A second
-// copy of the excerpt and the fit check would let them disagree about an
-// exact fit (Principle 7 — one excerpt and budget rule). The caller still
+// copy of the fit check would let them disagree about an exact fit. Callers
+// explicitly choose their excerpt function: a prefix for pins, the decision
+// rule for recitation. The caller still
 // records what it omitted, in its own order: a nil note stays where the
 // caller saw it, and a note that does not fit is recorded there too.
 //
 // excerptTokens <= 0 means the whole body. budget <= 0 means unbounded.
 // A note that lands exactly on the remaining budget is kept.
-func excerptForBudget(body string, excerptTokens, spent, budget int) (text string, cost int, keep bool) {
+func excerptForBudget(body string, excerptTokens, spent, budget int, excerpt func(string, int) string) (text string, cost int, keep bool) {
 	text = body
 	if excerptTokens > 0 {
-		text = Excerpt(body, excerptTokens)
+		text = excerpt(body, excerptTokens)
 	}
 	cost = EstimateTokens(text)
 	keep = budget <= 0 || spent+cost <= budget

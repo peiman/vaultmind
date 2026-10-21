@@ -86,7 +86,7 @@ func addPinnedVault(result *PinnedResult, v PinnedVault, cfg PinnedConfig) error
 			omitPinned(result, id, "", v.Vault)
 			continue
 		}
-		text, cost, keep := excerptForBudget(note.Body, cfg.ExcerptTokens, result.Tokens, cfg.Budget)
+		text, cost, keep := excerptForBudget(note.Body, cfg.ExcerptTokens, result.Tokens, cfg.Budget, PrefixExcerpt)
 		if !keep {
 			omitPinned(result, id, note.Title, v.Vault)
 			continue
