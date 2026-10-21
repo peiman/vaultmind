@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.18] - 2026-10-21
+
+> Plugin users: `claude plugin update vaultmind@vaultmind`. Pinned notes now arrive as their opening 400 tokens, headings included.
+
 ### Fixed
 
 - Pinned notes at session start deliver their opening tokens, including headings, lists and code blocks, instead of only the lead paragraph or an arc's Principle section. Excerpts keep whole lines when possible and close cut code fences within the token cap; `doctor` reports the same delivered cost. Arc recitation is unchanged.
@@ -3077,7 +3081,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.17...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.18...HEAD
+[0.10.18]: https://github.com/peiman/vaultmind/compare/v0.10.17...v0.10.18
 [0.10.17]: https://github.com/peiman/vaultmind/compare/v0.10.16...v0.10.17
 [0.10.16]: https://github.com/peiman/vaultmind/compare/v0.10.15...v0.10.16
 [0.10.15]: https://github.com/peiman/vaultmind/compare/v0.10.14...v0.10.15
