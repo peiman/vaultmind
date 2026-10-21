@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Pinned notes at session start deliver their opening tokens, including headings, lists and code blocks, instead of only the lead paragraph or an arc's Principle section. Excerpts keep whole lines when possible and close cut code fences within the token cap; `doctor` reports the same delivered cost. Arc recitation is unchanged.
+
 ## [0.10.17] - 2026-10-21
 
 > Install into Claude Code with one command: `claude plugin install vaultmind --marketplace peiman/vaultmind`, then `/vaultmind:vaultmind-setup`. Existing installs: run `vaultmind hooks install --force` once to write project-relative vault paths.
