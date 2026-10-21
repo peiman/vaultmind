@@ -2,6 +2,8 @@ module github.com/peiman/vaultmind
 
 go 1.27.0
 
+toolchain go1.27.3
+
 require (
 	codeberg.org/readeck/go-readability/v2 v2.1.3
 	filippo.io/edwards25519 v1.2.0
