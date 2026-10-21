@@ -3,6 +3,32 @@
 # Plugin calls yield to the same installed hook, one script at a time.
 # bin/ is on the Bash tool PATH; hooks set their PATH explicitly in hooks.json.
 if [ "${VAULTMIND_HOOK_SOURCE:-}" = plugin ]; then
+  # Hooks prepend our bin/, while the agent's Bash tool keeps the user's PATH
+  # first. Compare that original PATH's first binary with our manifest, even
+  # before setup or when the rest of this hook yields to an installed copy.
+  python3 - <<'VM_PLUGIN_PATH' 2>/dev/null
+import json, os, pathlib, re, shutil, subprocess
+try:
+    root = pathlib.Path(os.environ["CLAUDE_PLUGIN_ROOT"])
+    plugin_bin = root / "bin"
+    original_path = os.pathsep.join(
+        entry for entry in os.environ.get("PATH", "").split(os.pathsep)
+        if os.path.abspath(entry or ".") != os.path.abspath(plugin_bin))
+    candidate = shutil.which("vaultmind", path=original_path)
+    wrapper = plugin_bin / "vaultmind"
+    if candidate and not os.path.samefile(candidate, wrapper):
+        candidate = os.path.abspath(candidate)
+        version = json.loads((root / ".claude-plugin/plugin.json").read_text())["version"]
+        result = subprocess.run([candidate, "--version"], capture_output=True,
+                                text=True, timeout=2, check=True)
+        reported = re.search(r"\bversion v?([^\s,]+)", result.stdout)
+        if reported and reported[1] != version:
+            print(f"VaultMind: your PATH has vaultmind {reported[1]} at {candidate}; "
+                  f"this plugin is {version}. The agent's commands run the first one on PATH "
+                  f'— upgrade or remove it (or run "{wrapper}" explicitly).')
+except (KeyError, OSError, ValueError, subprocess.SubprocessError):
+    pass
+VM_PLUGIN_PATH
   VM_PROJECT="${VAULTMIND_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-$PWD}}"
   if python3 - "$VM_PROJECT" "$(basename "$0")" <<'VM_PLUGIN_CHECK'
 import json, os, pathlib, sys
