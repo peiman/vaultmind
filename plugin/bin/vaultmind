@@ -1,0 +1,126 @@
+#!/bin/sh
+# Lazy, version-pinned release launcher. Keep stdout for the invoked CLI/MCP.
+set -eu
+ROOT=${CLAUDE_PLUGIN_ROOT:-$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)}
+# Bash-tool commands have no CLAUDE_PLUGIN_* environment. Infer the persistent
+# directory from Claude's versioned install layout, including custom config dirs.
+DATA=${CLAUDE_PLUGIN_DATA:-}
+if [ -z "$DATA" ]; then
+  plugin_dir=$(dirname "$ROOT")
+  market_dir=$(dirname "$plugin_dir")
+  cache_dir=$(dirname "$market_dir")
+  if [ "$(basename "$cache_dir")" = cache ] && [ "$(basename "$(dirname "$cache_dir")")" = plugins ]; then
+    plugin_id=$(printf '%s@%s' "$(basename "$plugin_dir")" "$(basename "$market_dir")" | sed 's/[^a-zA-Z0-9_-]/-/g')
+    DATA=$(dirname "$cache_dir")/data/$plugin_id
+  else
+    DATA=${HOME:?}/.cache/vaultmind-plugin
+  fi
+fi
+VERSION=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$ROOT/.claude-plugin/plugin.json")
+fail() { printf 'VaultMind plugin: %s\n' "$*" >&2; exit 1; }
+printf '%s\n' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || fail 'invalid plugin version'
+# Search PATH only on the outer invocation. Unknown wrapper copies inherit the
+# marker; recognized plugin wrappers are never candidates for binary reuse.
+if [ "${VAULTMIND_PLUGIN_PROBE:-}" != 1 ]; then
+  export VAULTMIND_PLUGIN_PROBE=1
+  OLD_IFS=$IFS
+  IFS=:
+  SEEN='
+'
+  for entry in $PATH; do
+    IFS=$OLD_IFS
+    candidate=${entry:-.}/vaultmind
+    case "$SEEN" in *"
+$candidate
+"*) IFS=:; continue ;; esac
+    SEEN="$SEEN$candidate
+"
+    if [ -x "$candidate" ] && [ ! "$candidate" -ef "$ROOT/bin/vaultmind" ] && [ ! -f "$(dirname "$candidate")/../.claude-plugin/plugin.json" ]; then
+      reported=$("$candidate" --version 2>/dev/null | sed -n '1s/.*version v\{0,1\}\([^ ,]*\).*/\1/p') || reported=
+      if [ "$reported" = "$VERSION" ]; then exec "$candidate" "$@"; fi
+    fi
+    IFS=:
+  done
+  IFS=$OLD_IFS
+fi
+CACHE=$DATA/$VERSION
+[ ! -x "$CACHE/vaultmind" ] || exec "$CACHE/vaultmind" "$@"
+
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m)
+case "$ARCH" in arm64|aarch64) ARCH=arm64 ;; x86_64|amd64) ARCH=amd64 ;; i386|i686) ARCH=386 ;; armv7l) ARCH=armv7 ;; *) fail "unsupported architecture: $ARCH" ;; esac
+case "$OS" in darwin|linux) ;; *) fail "unsupported platform: $OS (requires a POSIX macOS/Linux environment)" ;; esac
+CHECKSUMS=checksums.txt
+case "${OS}_${ARCH}" in
+  darwin_arm64|linux_amd64) ARCHIVE=vaultmind_v${VERSION}_${OS}_${ARCH}_ort.tar.gz; CHECKSUMS=checksums-ort.txt ;;
+  *) ARCHIVE=vaultmind_${VERSION}_${OS}_${ARCH}.tar.gz ;;
+esac
+BASE=${VAULTMIND_PLUGIN_RELEASE_URL:-https://github.com/peiman/vaultmind/releases/download}
+mkdir -p "$DATA"
+# Concurrent MCP + SessionStart first use must publish one complete directory.
+LOCK=$DATA/$VERSION.lock
+# Each of the two fetches has a 180s limit; allow a further 60s to publish.
+DOWNLOAD_LIMIT=180
+STALE_AFTER=$((2 * DOWNLOAD_LIMIT + 60))
+stale_lock() {
+  owner=$(cat "$LOCK/pid" 2>/dev/null) || owner=
+  case "$owner" in
+    ''|*[!0-9]*) ;; # A just-created lock may not have its PID yet: use age.
+    *) kill -0 "$owner" 2>/dev/null || return 0 ;;
+  esac
+  modified=$(stat -f %m "$LOCK" 2>/dev/null) || modified=$(stat -c %Y "$LOCK" 2>/dev/null) || return 1
+  case "$modified" in ''|*[!0-9]*) return 1 ;; esac
+  [ "$(( $(date +%s) - modified ))" -gt "$STALE_AFTER" ]
+}
+attempt=0
+until mkdir "$LOCK" 2>/dev/null; do
+  [ ! -x "$CACHE/vaultmind" ] || exec "$CACHE/vaultmind" "$@"
+  if stale_lock; then rm -rf "$LOCK"; continue; fi
+  attempt=$((attempt + 1))
+  [ "$attempt" -lt 180 ] || fail "timed out waiting for $LOCK; remove it if a previous download was interrupted"
+  sleep 1
+done
+TMP=
+cleanup() {
+  [ -z "$TMP" ] || rm -rf "$TMP"
+  # A stale-lock recovery may have replaced our directory while we ran.
+  if [ "$(cat "$LOCK/pid" 2>/dev/null)" = "$$" ]; then
+    rm -f "$LOCK/pid"
+    rmdir "$LOCK" 2>/dev/null || :
+  fi
+}
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
+printf '%s\n' "$$" > "$LOCK/pid"
+[ ! -x "$CACHE/vaultmind" ] || { cleanup; trap - EXIT HUP INT TERM; exec "$CACHE/vaultmind" "$@"; }
+TMP=$(mktemp -d "$DATA/.download.XXXXXX")
+fetch() {
+  if command -v curl >/dev/null 2>&1; then
+    curl --fail --location --silent --show-error --connect-timeout 15 --max-time "$DOWNLOAD_LIMIT" "$1" -o "$2"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -q -t 1 -T "$DOWNLOAD_LIMIT" -O "$2" "$1"
+  else fail 'install curl or wget to download the release'; fi
+}
+printf 'VaultMind plugin: downloading %s\n' "$ARCHIVE" >&2
+fetch "$BASE/v$VERSION/$ARCHIVE" "$TMP/archive.tar.gz" || fail "could not download $ARCHIVE"
+fetch "$BASE/v$VERSION/$CHECKSUMS" "$TMP/checksums" || fail "could not download $CHECKSUMS"
+EXPECTED=$(awk -v name="$ARCHIVE" '$2 == name || $2 == "*" name {print $1}' "$TMP/checksums")
+if command -v sha256sum >/dev/null 2>&1; then
+  ACTUAL=$(sha256sum "$TMP/archive.tar.gz" | awk '{print $1}')
+elif command -v shasum >/dev/null 2>&1; then
+  ACTUAL=$(shasum -a 256 "$TMP/archive.tar.gz" | awk '{print $1}')
+else fail 'install sha256sum or shasum to verify the release'; fi
+[ -n "$EXPECTED" ] && [ "$EXPECTED" = "$ACTUAL" ] || fail "checksum mismatch for $ARCHIVE; refusing to execute"
+mkdir "$TMP/extract"
+tar xzf "$TMP/archive.tar.gz" -C "$TMP/extract" || fail "could not extract $ARCHIVE"
+BINARY=$(find "$TMP/extract" -type f -name vaultmind)
+[ -n "$BINARY" ] && [ -f "$BINARY" ] || fail 'archive must contain exactly one vaultmind binary'
+chmod +x "$BINARY"
+# ORT archives have a containing directory; plain archives have files at root.
+PAYLOAD=$(dirname "$BINARY")
+[ ! -e "$CACHE" ] || fail "incomplete cache at $CACHE; remove it and retry"
+mv "$PAYLOAD" "$CACHE"
+cleanup
+TMP=
+trap - EXIT HUP INT TERM
+exec "$CACHE/vaultmind" "$@"

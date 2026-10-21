@@ -14,6 +14,9 @@ import (
 // server in, and refuses a path that is not a vault at start rather than on
 // the first tool call.
 func mcpServerConfig(single, list string) (mcpserver.Config, error) {
+	if project := os.Getenv("VAULTMIND_PLUGIN_PROJECT"); project != "" && single == "." && list == "" {
+		return pluginMCPConfig(project)
+	}
 	paths, err := resolveAskVaultPaths(single, list)
 	if err != nil {
 		return mcpserver.Config{}, err
@@ -38,4 +41,13 @@ func mcpServerConfig(single, list string) (mcpserver.Config, error) {
 		cfg.Vaults = paths
 	}
 	return cfg, nil
+}
+
+// pluginMCPConfig passes the plugin project and this executable to the server.
+func pluginMCPConfig(project string) (mcpserver.Config, error) {
+	bin, err := os.Executable()
+	if err != nil {
+		return mcpserver.Config{}, fmt.Errorf("finding plugin binary: %w", err)
+	}
+	return mcpserver.ProjectConfig(project, Version, bin)
 }

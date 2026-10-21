@@ -55,3 +55,24 @@ func mustGetwd(t *testing.T) string {
 	require.NoError(t, err)
 	return wd
 }
+
+func TestMCPPluginStartsWithoutVault(t *testing.T) {
+	project := t.TempDir()
+	t.Setenv("VAULTMIND_PLUGIN_PROJECT", project)
+	cfg, err := mcpServerConfig(".", "")
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(project, "knowledge"), cfg.Vault)
+	_, err = cfg.Run(t.Context(), []string{"tree", "--json"})
+	require.ErrorContains(t, err, "no vault in this project")
+	require.ErrorContains(t, err, "/vaultmind:vaultmind-setup")
+}
+
+func TestMCPPluginFindsProjectVault(t *testing.T) {
+	project := t.TempDir()
+	t.Setenv("VAULTMIND_PLUGIN_PROJECT", project)
+	vault := testvault.IndexedFixtureVault(t)
+	require.NoError(t, os.Symlink(vault, filepath.Join(project, "knowledge")))
+	cfg, err := mcpServerConfig(".", "")
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(project, "knowledge"), cfg.Vault)
+}

@@ -1,8 +1,43 @@
 #!/bin/bash
+
+# Plugin calls yield to the same installed hook, one script at a time.
+# bin/ is on the Bash tool PATH; hooks set their PATH explicitly in hooks.json.
+if [ "${VAULTMIND_HOOK_SOURCE:-}" = plugin ]; then
+  VM_PROJECT="${VAULTMIND_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-$PWD}}"
+  if python3 - "$VM_PROJECT" "$(basename "$0")" <<'VM_PLUGIN_CHECK'
+import json, os, pathlib, sys
+project, script = sys.argv[1:]
+settings = [pathlib.Path(project) / ".claude" / name
+            for name in ("settings.json", "settings.local.json")]
+settings.append(pathlib.Path(os.environ.get("CLAUDE_CONFIG_DIR") or pathlib.Path.home() / ".claude") / "settings.json")
+for filename in settings:
+    try:
+        hooks = json.loads(filename.read_text()).get("hooks", {})
+        for groups in hooks.values():
+            for group in groups:
+                for hook in group.get("hooks", []):
+                    cmd = hook.get("command", "").replace('"', '').replace("'", "")
+                    if ".claude/scripts/" + script in cmd or "/.vaultmind/scripts/" + script in cmd:
+                        sys.exit(0)
+    except (OSError, ValueError, TypeError, AttributeError):
+        pass
+sys.exit(1)
+VM_PLUGIN_CHECK
+  then exit 0; fi
+  if [ -z "${VAULTMIND_VAULT:-}" ]; then
+    for VM_CAND in knowledge vaultmind-vault vaultmind-identity .; do
+      if [ -f "$VM_PROJECT/$VM_CAND/.vaultmind/config.yaml" ]; then
+        export VAULTMIND_VAULT="$VM_PROJECT/$VM_CAND"
+        break
+      fi
+    done
+  fi
+fi
+
 # Vault-agnostic SessionStart health / onboarding nudge for VaultMind.
 #
 # Tells the agent (and human) the single next command for the current state:
-#   no vault          -> silent (this hook only speaks when there's a vault)
+#   no vault          -> plugin setup hint; otherwise silent
 #   vault, no binary  -> how to install
 #   binary, no index  -> how to build the index
 #   index on MiniLM   -> recall active but degraded; how to upgrade
@@ -36,7 +71,7 @@ DOC="https://github.com/peiman/vaultmind/blob/main/docs/embedding-backends.md"
 
 # Resolve the vault: explicit override wins, then conventional directory names.
 VAULT="${VAULTMIND_VAULT:-}"
-if [ -z "$VAULT" ]; then
+if [ -z "$VAULT" ] && [ "${VAULTMIND_HOOK_SOURCE:-}" != plugin ]; then
   for cand in vaultmind-vault vaultmind-identity; do
     if [ -d "$PROJECT_DIR/$cand" ]; then
       VAULT="$PROJECT_DIR/$cand"
@@ -44,8 +79,13 @@ if [ -z "$VAULT" ]; then
     fi
   done
 fi
-# No vault -> stay silent. Nothing to onboard.
-[ -n "$VAULT" ] && [ -d "$VAULT" ] || exit 0
+# Only plugin adopters need the setup skill before a vault exists.
+if [ -z "$VAULT" ] || [ ! -d "$VAULT" ]; then
+  if [ "${VAULTMIND_HOOK_SOURCE:-}" = plugin ]; then
+    echo "VaultMind: no vault in this project; run /vaultmind:vaultmind-setup."
+  fi
+  exit 0
+fi
 
 # Resolve the binary: PATH first (go install / task install). The dev-loop
 # build at /tmp/vaultmind is used ONLY inside a vaultmind source checkout, so an

@@ -210,3 +210,12 @@ func TestImport_RefusesALocalPath(t *testing.T) {
 	}
 	assert.Empty(t, r.args)
 }
+
+func TestPluginNoVaultInstructions(t *testing.T) {
+	cs := connect(t, mcpserver.Config{NoVault: true, Version: "test", Run: func(context.Context, []string) ([]byte, error) { return nil, errors.New("no vault in this project") }})
+	assert.Contains(t, cs.InitializeResult().Instructions, "no vault in this project")
+	assert.Contains(t, cs.InitializeResult().Instructions, "/vaultmind:vaultmind-setup")
+	result := call(t, cs, "tree", map[string]any{})
+	assert.True(t, result.IsError)
+	assert.Contains(t, text(result), "no vault in this project")
+}

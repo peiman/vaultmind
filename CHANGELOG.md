@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Plugin release: `0.10.17`.
+
 ### Added
 
 - `vaultmind import` takes several folders, files or URLs in one call, in order. A source that fails is named; the others still import; the command exits non-zero if any failed. `--json` reports each source under `result.sources`. Single-source output is unchanged; `--watch` still takes one source.
@@ -25,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ask` no longer calls a body that was cut to fit the token budget "delivered in full". The header names the cut and the budget, for example `1 delivered, cut to the 4000-token budget`; JSON marks the target with `body_cut_to_budget`. A body that fit still says `delivered in full`. An excerpt is still `as excerpt`.
 - `hooks install` and `init --wire-hooks` write a vault that lives inside the project as `VAULTMIND_VAULT="$CLAUDE_PROJECT_DIR/<path>"` (and the same for each `--vaults` entry inside the project) instead of that checkout's absolute path. A vault outside the project stays absolute. A user-scope install stays absolute. `hooks status` still reports an older absolute install as in sync.
 - `doctor` measures pinned notes with the same 400-token excerpts and default 1500-token budget as the session-start hook. A long note that fits as an excerpt no longer triggers a false budget warning. The report keeps the full-body cost, adds the tokens delivered at session start, and names only notes that would not load. `--json` adds `session_tokens` for the set and each note, and `omitted` ids; `tokens` stays the full-body cost.
+- Claude Code plugin: install with `claude plugin install vaultmind --marketplace peiman/vaultmind`, then run `/vaultmind:vaultmind-setup`. Includes automatic recall, MCP tools, version-pinned downloads with SHA-256 verification, and coexistence with project-installed hooks.
+- Build with Go 1.27.3 to include the `crypto/x509` security fix (GO-2026-6809); CI follows the `.go-version` pin.
 
 ## [0.10.16] - 2026-10-21
 

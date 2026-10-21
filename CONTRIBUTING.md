@@ -692,3 +692,43 @@ fix: correct color rendering in non-TTY environments
 - **Documentation:** Check `docs/adr/` for architectural guidance
 
 Thank you for contributing to ckeletin-go!
+
+## Releasing the Claude Code plugin
+
+The release PR must bump `plugin/.claude-plugin/plugin.json` to the release
+version (without `v`). While that release is pending, keep the line ``Plugin release: `<version>`.`` under `## [Unreleased]` in CHANGELOG.md, as in the
+current entry. When cutting the release, move the Unreleased notes to the dated
+`## [<version>]` heading and remove the intent line. The version drift test reads
+the intent if present, otherwise the newest dated release heading.
+
+The marketplace uses the documented [`git-subdir` source](https://code.claude.com/docs/en/plugins/marketplace-reference#git-subdir-plugin-source)
+with a release-tag `ref`; never serve HEAD scripts against a released binary.
+Keep `.claude-plugin/marketplace.json` on the previous release during the release
+PR. AFTER the new tag's archives, `checksums.txt`, and `checksums-ort.txt` exist,
+open a follow-up PR bumping its `ref` to `v<version>`. The drift test permits only
+the manifest version or the immediately previous dated release in CHANGELOG.md.
+For this first, unannounced marketplace the ref is `v0.10.17`; do not merge and
+advertise it before the v0.10.17 assets exist.
+
+Copy changed `internal/hookscripts/*.sh` used by the knowledge profile to
+`plugin/scripts/` byte for byte (and refresh the installed dogfood copies).
+`TestPluginAssetsStayInSync` checks scripts, hook events/matchers and setup
+commands against their canonical Go sources. Do not refresh copies blindly;
+review their diffs.
+
+Run `claude plugin validate plugin`, `claude plugin validate .`, `task check`,
+then `task test:coverage`. CI validates both manifests with the pinned public
+`@anthropic-ai/claude-code` npm package; validation needs no Claude credentials.
+The two ORT matrix builds upload their archives; a dependent checksum job
+collects both archives and uploads one `checksums-ort.txt`, avoiding matrix jobs
+overwriting each other's checksums. Plain archives use GoReleaser's
+`checksums.txt`. A failed ORT job means no `checksums-ort.txt`, so plugin installs
+fail on ORT platforms. Re-run the failed ORT job and its dependent checksum job;
+check both checksum assets before updating the marketplace ref or announcing the release.
+
+For isolated local installation, use a throwaway `CLAUDE_CONFIG_DIR` and validate a local
+marketplace fixture pointing at the checkout (`"source": "./plugin"`) before
+running `claude plugin install vaultmind --marketplace /absolute/path/to/fixture`
+there. The production marketplace pin must remain intact; before publication its
+tag and assets may not exist yet.
+Never test installs against a contributor's real Claude Code configuration.

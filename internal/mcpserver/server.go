@@ -31,6 +31,8 @@ type Config struct {
 	Vaults []string
 	// Version is reported to clients.
 	Version string
+	// NoVault keeps plugin startup informative before project setup.
+	NoVault bool
 	// Run runs a vaultmind command; ExecRunner in production.
 	Run Runner
 }
@@ -59,10 +61,14 @@ func Serve(ctx context.Context, cfg Config) error {
 
 // New builds the server and its tools.
 func New(cfg Config) *mcp.Server {
+	instructions := "VaultMind is this project's curated knowledge vault: decisions and why, how the system " +
+		"works, gotchas someone paid for once. Before answering from memory, ask it. `ask` answers " +
+		"'what do we know about X'; `note_get` reads a note by id; `tree` shows what the vault covers."
+	if cfg.NoVault {
+		instructions = "VaultMind: no vault in this project; run /vaultmind:vaultmind-setup."
+	}
 	s := mcp.NewServer(&mcp.Implementation{Name: "vaultmind", Version: cfg.Version}, &mcp.ServerOptions{
-		Instructions: "VaultMind is this project's curated knowledge vault: decisions and why, how the system " +
-			"works, gotchas someone paid for once. Before answering from memory, ask it. `ask` answers " +
-			"'what do we know about X'; `note_get` reads a note by id; `tree` shows what the vault covers.",
+		Instructions: instructions,
 	})
 	t := tools{cfg: cfg}
 	add(s, cfg.Run, "ask", "Ask the vault what it knows about a question: ranked notes plus their most relevant text. "+

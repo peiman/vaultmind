@@ -1,0 +1,64 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "PATH=\"${CLAUDE_PLUGIN_ROOT}/bin:$PATH\" VAULTMIND_HOOK_SOURCE=plugin bash \"${CLAUDE_PLUGIN_ROOT}/scripts/vaultmind-health.sh\""
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "PATH=\"${CLAUDE_PLUGIN_ROOT}/bin:$PATH\" VAULTMIND_HOOK_SOURCE=plugin bash \"${CLAUDE_PLUGIN_ROOT}/scripts/vault-recall.sh\""
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "PATH=\"${CLAUDE_PLUGIN_ROOT}/bin:$PATH\" VAULTMIND_HOOK_SOURCE=plugin bash \"${CLAUDE_PLUGIN_ROOT}/scripts/vault-track-read.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "PATH=\"${CLAUDE_PLUGIN_ROOT}/bin:$PATH\" VAULTMIND_HOOK_SOURCE=plugin bash \"${CLAUDE_PLUGIN_ROOT}/scripts/vault-reach.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "PATH=\"${CLAUDE_PLUGIN_ROOT}/bin:$PATH\" VAULTMIND_HOOK_SOURCE=plugin bash \"${CLAUDE_PLUGIN_ROOT}/scripts/vault-code-map.sh\""
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "PATH=\"${CLAUDE_PLUGIN_ROOT}/bin:$PATH\" VAULTMIND_HOOK_SOURCE=plugin bash \"${CLAUDE_PLUGIN_ROOT}/scripts/precompact-preserve.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}
