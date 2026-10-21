@@ -121,3 +121,10 @@ func TestEnsureFingerprint_ReadErrorSurfaced(t *testing.T) {
 	_, err := telemetry.EnsureFingerprint(v)
 	require.Error(t, err)
 }
+
+func TestEnsureFingerprint_CreatesGitignore(t *testing.T) {
+	dir := t.TempDir()
+	_, err := telemetry.EnsureFingerprint(dir)
+	require.NoError(t, err)
+	assert.FileExists(t, filepath.Join(dir, ".vaultmind", ".gitignore"))
+}

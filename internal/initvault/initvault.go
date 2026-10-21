@@ -36,8 +36,8 @@ type Result struct {
 }
 
 // WriteConfigOnly writes the type registry into an existing directory, creating
-// .vaultmind/ if needed, and reports whether it wrote anything. It is a no-op
-// when a config is already there.
+// .vaultmind/ and its .gitignore if needed, and reports whether it wrote the
+// config. An existing config is left untouched.
 //
 // This is the path for "index a directory of markdown I already have". Init
 // would also drop a README and four starter notes in, which then index AS notes
@@ -47,6 +47,9 @@ type Result struct {
 // no registry, which is the same implicit-create the guessed-path guard exists
 // to end.
 func WriteConfigOnly(vaultPath string) (bool, error) {
+	if err := vault.EnsureGitignore(vaultPath); err != nil {
+		return false, err
+	}
 	cfgPath := filepath.Join(vaultPath, filepath.FromSlash(vault.ConfigRelPath))
 	if _, err := os.Stat(cfgPath); err == nil {
 		return false, nil
@@ -125,7 +128,10 @@ func today() string { return time.Now().UTC().Format(schema.CreatedDateFormat) }
 // writeTree copies the embedded tree under root into dst, stamping each note's
 // frontmatter with today's date, and returns the number of files written.
 func writeTree(fsys embed.FS, root, dst, today string) (int, error) {
-	count := 0
+	if err := vault.EnsureGitignore(dst); err != nil {
+		return 0, err
+	}
+	count := 1 // The .gitignore created above; dst is a fresh vault.
 	err := fs.WalkDir(fsys, root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err

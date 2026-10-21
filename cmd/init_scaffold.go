@@ -69,9 +69,8 @@ func writeInitNextSteps(w io.Writer, vaultPath string, profile hooks.Profile, wi
 		edit = "Replace the examples in decisions/ and concepts/ with real notes, and tie each\nto the code it is about with paths: — README.md shows how."
 	}
 	_, _ = fmt.Fprintf(w, "%s\n\n", edit)
-	_, _ = fmt.Fprintf(w, "If this vault lives in a git repo, add to .gitignore (the index is a\nregenerable cache; the type registry is source):\n")
-	_, _ = fmt.Fprintf(w, "  .vaultmind/index.db*\n")
-	_, _ = fmt.Fprintf(w, "  !.vaultmind/config.yaml\n\n")
+	_, _ = fmt.Fprintln(w, ".vaultmind/ ignores its own derived files; config.yaml stays available to git.")
+	_, _ = fmt.Fprintln(w)
 	if wired {
 		return
 	}

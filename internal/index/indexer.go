@@ -576,6 +576,10 @@ func (idx *Indexer) Rebuild() (*IndexResult, error) {
 	if err := refuseWipeOnEmptyScan(db, scan, idx.dbPath); err != nil {
 		return nil, err
 	}
+	// Scan first: adding metadata must not make an empty vault look nonempty.
+	if err := vault.EnsureGitignore(idx.vaultRoot); err != nil {
+		return nil, err
+	}
 
 	result := &IndexResult{DBPath: idx.dbPath, SkippedSymlinks: scan.SkippedSymlinks}
 	seenIDs := make(map[string]string) // id → first path
@@ -858,6 +862,10 @@ func (idx *Indexer) Incremental() (*IndexResult, error) {
 	}
 	files := scan.Files
 	if err := refuseWipeOnEmptyScan(db, scan, idx.dbPath); err != nil {
+		return nil, err
+	}
+	// Scan first: adding metadata must not make an empty vault look nonempty.
+	if err := vault.EnsureGitignore(idx.vaultRoot); err != nil {
 		return nil, err
 	}
 
