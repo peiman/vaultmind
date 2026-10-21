@@ -9,11 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-<<<<<<< Updated upstream
 - Pinned notes at session start deliver their opening tokens, including headings, lists and code blocks, instead of only the lead paragraph or an arc's Principle section. Excerpts keep whole lines when possible and close cut code fences within the token cap; `doctor` reports the same delivered cost. Arc recitation is unchanged.
-=======
 - The Claude Code plugin warns at session start when another `vaultmind` on the agent's PATH has a different version. The setup skill checks against its own plugin version and stops before initializing a vault with a mismatched binary.
->>>>>>> Stashed changes
 
 ## [0.10.17] - 2026-10-21
 
