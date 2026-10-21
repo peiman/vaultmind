@@ -6,6 +6,8 @@
 *.dylib
 # Replace the following line with the Binary name from BINARY_NAME in Taskfile.yml
 vaultmind
+# The Claude Code launcher is a source script, shipped with the plugin.
+!/plugin/bin/vaultmind
 
 # Task artifacts
 .task

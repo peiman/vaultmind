@@ -1,4 +1,39 @@
 #!/usr/bin/env bash
+
+# Plugin calls yield to the same installed hook, one script at a time.
+# bin/ is on the Bash tool PATH; hooks set their PATH explicitly in hooks.json.
+if [ "${VAULTMIND_HOOK_SOURCE:-}" = plugin ]; then
+  VM_PROJECT="${VAULTMIND_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-$PWD}}"
+  if python3 - "$VM_PROJECT" "$(basename "$0")" <<'VM_PLUGIN_CHECK'
+import json, os, pathlib, sys
+project, script = sys.argv[1:]
+settings = [pathlib.Path(project) / ".claude" / name
+            for name in ("settings.json", "settings.local.json")]
+settings.append(pathlib.Path(os.environ.get("CLAUDE_CONFIG_DIR") or pathlib.Path.home() / ".claude") / "settings.json")
+for filename in settings:
+    try:
+        hooks = json.loads(filename.read_text()).get("hooks", {})
+        for groups in hooks.values():
+            for group in groups:
+                for hook in group.get("hooks", []):
+                    cmd = hook.get("command", "").replace('"', '').replace("'", "")
+                    if ".claude/scripts/" + script in cmd or "/.vaultmind/scripts/" + script in cmd:
+                        sys.exit(0)
+    except (OSError, ValueError, TypeError, AttributeError):
+        pass
+sys.exit(1)
+VM_PLUGIN_CHECK
+  then exit 0; fi
+  if [ -z "${VAULTMIND_VAULT:-}" ]; then
+    for VM_CAND in knowledge vaultmind-vault vaultmind-identity .; do
+      if [ -f "$VM_PROJECT/$VM_CAND/.vaultmind/config.yaml" ]; then
+        export VAULTMIND_VAULT="$VM_PROJECT/$VM_CAND"
+        break
+      fi
+    done
+  fi
+fi
+
 # PreToolUse hook — surface vault pointers AT THE MOMENT OF THE REACH.
 #
 # Companion to vault-recall.sh, which fires on the user's prompt. That is the

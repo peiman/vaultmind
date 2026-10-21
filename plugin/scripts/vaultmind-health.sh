@@ -1,0 +1,288 @@
+#!/bin/bash
+
+# Plugin calls yield to the same installed hook, one script at a time.
+# bin/ is on the Bash tool PATH; hooks set their PATH explicitly in hooks.json.
+if [ "${VAULTMIND_HOOK_SOURCE:-}" = plugin ]; then
+  VM_PROJECT="${VAULTMIND_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-$PWD}}"
+  if python3 - "$VM_PROJECT" "$(basename "$0")" <<'VM_PLUGIN_CHECK'
+import json, os, pathlib, sys
+project, script = sys.argv[1:]
+settings = [pathlib.Path(project) / ".claude" / name
+            for name in ("settings.json", "settings.local.json")]
+settings.append(pathlib.Path(os.environ.get("CLAUDE_CONFIG_DIR") or pathlib.Path.home() / ".claude") / "settings.json")
+for filename in settings:
+    try:
+        hooks = json.loads(filename.read_text()).get("hooks", {})
+        for groups in hooks.values():
+            for group in groups:
+                for hook in group.get("hooks", []):
+                    cmd = hook.get("command", "").replace('"', '').replace("'", "")
+                    if ".claude/scripts/" + script in cmd or "/.vaultmind/scripts/" + script in cmd:
+                        sys.exit(0)
+    except (OSError, ValueError, TypeError, AttributeError):
+        pass
+sys.exit(1)
+VM_PLUGIN_CHECK
+  then exit 0; fi
+  if [ -z "${VAULTMIND_VAULT:-}" ]; then
+    for VM_CAND in knowledge vaultmind-vault vaultmind-identity .; do
+      if [ -f "$VM_PROJECT/$VM_CAND/.vaultmind/config.yaml" ]; then
+        export VAULTMIND_VAULT="$VM_PROJECT/$VM_CAND"
+        break
+      fi
+    done
+  fi
+fi
+
+# Vault-agnostic SessionStart health / onboarding nudge for VaultMind.
+#
+# Tells the agent (and human) the single next command for the current state:
+#   no vault          -> plugin setup hint; otherwise silent
+#   vault, no binary  -> how to install
+#   binary, no index  -> how to build the index
+#   index on MiniLM   -> recall active but degraded; how to upgrade
+#   index on BGE-M3   -> active; how to ask
+#
+# Why this exists: a project that ships a committed vaultmind vault but whose
+# adopter hasn't installed the binary previously got SILENCE at session start —
+# the recall/read hooks exit quietly when the binary is absent, and the only
+# loud surface (load-persona.sh) is persona-shaped and writes to stderr (which
+# SessionStart does NOT surface to the agent). This hook closes that gap for
+# every adopter — persona and knowledge-vault alike. (focalc field report, P0.)
+#
+# Contract:
+#   - Writes to STDOUT — SessionStart surfaces stdout to the agent, not stderr.
+#   - Always exits 0, so a broken/empty/half-built vault can never wedge a
+#     session start.
+#   - The vaultmind binary is the single source of truth for the index tier;
+#     this hook only relays `vaultmind doctor`, so it can never disagree with
+#     the tool about whether the index is BGE-M3, MiniLM, or unbuilt.
+
+# The harness's conversation id. Forwarded on the pinned-note call so those
+# reads share a session with the agent's own (see vault-recall.sh). The rest
+# of this hook does not name a caller, so it does not need the id.
+HOOK_INPUT=$(cat)
+HOOK_SESSION_ID=$(printf '%s' "$HOOK_INPUT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('session_id','') or '')" 2>/dev/null || echo "")
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="${VAULTMIND_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}}"
+
+DOC="https://github.com/peiman/vaultmind/blob/main/docs/embedding-backends.md"
+
+# Resolve the vault: explicit override wins, then conventional directory names.
+VAULT="${VAULTMIND_VAULT:-}"
+if [ -z "$VAULT" ] && [ "${VAULTMIND_HOOK_SOURCE:-}" != plugin ]; then
+  for cand in vaultmind-vault vaultmind-identity; do
+    if [ -d "$PROJECT_DIR/$cand" ]; then
+      VAULT="$PROJECT_DIR/$cand"
+      break
+    fi
+  done
+fi
+# Only plugin adopters need the setup skill before a vault exists.
+if [ -z "$VAULT" ] || [ ! -d "$VAULT" ]; then
+  if [ "${VAULTMIND_HOOK_SOURCE:-}" = plugin ]; then
+    echo "VaultMind: no vault in this project; run /vaultmind:vaultmind-setup."
+  fi
+  exit 0
+fi
+
+# Resolve the binary: PATH first (go install / task install). The dev-loop
+# build at /tmp/vaultmind is used ONLY inside a vaultmind source checkout, so an
+# adopter's machine never picks up a stray /tmp binary. A missing binary is a
+# first-class state, not an error.
+if command -v vaultmind >/dev/null 2>&1; then
+  VM="$(command -v vaultmind)"
+elif [ -d "$PROJECT_DIR/internal" ] && [ -d "$PROJECT_DIR/cmd" ] && [ -x /tmp/vaultmind ]; then
+  VM="/tmp/vaultmind"
+else
+  VM=""
+fi
+
+if [ -z "$VM" ]; then
+  echo "📚 VaultMind vault detected ($VAULT) but the vaultmind binary is not installed."
+  echo "   Install (MiniLM, any platform): go install github.com/peiman/vaultmind@latest   # Go >= 1.26.6"
+  echo "   Full BGE-M3 hybrid (darwin-arm64/linux-amd64): download the prebuilt ORT archive from the release — no build. Other platforms: build from source — see $DOC"
+  exit 0
+fi
+
+# Tier comes from the tool, never re-derived here (single source of truth).
+# Capture doctor's exit code AND stderr: a doctor *failure* (bad vault path,
+# corrupt/locked index, panicking or mismatched binary) must surface its reason,
+# NOT be laundered into a success-shaped nudge. Suppressing the failure reason
+# would reintroduce the exact silence this hook exists to end. Always exit 0.
+ERRFILE="$(mktemp 2>/dev/null || echo "${TMPDIR:-/tmp}/vm-health-$$.err")"
+DOCTOR="$("$VM" doctor --vault "$VAULT" 2>"$ERRFILE")"
+DOCTOR_RC=$?
+DOCTOR_ERR="$(cat "$ERRFILE" 2>/dev/null)"
+rm -f "$ERRFILE"
+
+if [ "$DOCTOR_RC" -ne 0 ]; then
+  echo "⚠ VaultMind vault detected ($VAULT) but \`vaultmind doctor\` failed (exit $DOCTOR_RC)."
+  [ -n "$DOCTOR_ERR" ] && echo "   ${DOCTOR_ERR}"
+  echo "   Re-run to debug: vaultmind doctor --vault \"$VAULT\""
+elif DOWN_LINE="$(printf '%s\n' "$DOCTOR" | grep -E '^⚠ semantic search is DOWN' | head -n 1)"; [ -n "$DOWN_LINE" ]; then
+  # Embeddings exist but the runtime that loads their model will not start, so
+  # every recall is keyword-only. Checked BEFORE the tier lines: the counts are
+  # all present, and "full BGE-M3 hybrid recall" above a dead search is exactly
+  # what this hook said on 2026-09-23.
+  # Each tier matches doctor's own line, not free text elsewhere. A pinned note
+  # titled "Fixing degraded recall" must not change which line this is.
+  DOWN_LINE="${DOWN_LINE#⚠ }"
+  echo "⚠ VaultMind vault detected ($VAULT) — but ${DOWN_LINE}"
+  echo "   Details: vaultmind doctor --vault \"$VAULT\""
+elif printf '%s\n' "$DOCTOR" | grep -qE '^Embeddings: none'; then
+  echo "📚 VaultMind vault detected ($VAULT) — search is keyword-only: no embeddings yet."
+  echo "   Add meaning-based search: vaultmind index --embed --vault \"$VAULT\""
+elif printf '%s\n' "$DOCTOR" | grep -qE '^Embeddings: .*\(minilm\)|^⚠ degraded recall:'; then
+  echo "✓ VaultMind active ($VAULT) — but recall is degraded (MiniLM, 2-lane)."
+  echo "   Ask: vaultmind ask \"<question>\" --vault \"$VAULT\""
+  echo "   Full 4-way BGE-M3 hybrid: on darwin-arm64/linux-amd64 download the prebuilt ORT archive from the release (no build); other platforms see $DOC"
+elif printf '%s\n' "$DOCTOR" | grep -qE '^Embeddings: .*\(mixed\)|^⚠ Partial BGE-M3 coverage:'; then
+  # A mixed-model index has a MiniLM fraction running degraded 2-lane recall —
+  # the same cliff as a pure-MiniLM index, just partial. Name the full-embed fix.
+  echo "✓ VaultMind active ($VAULT) — but recall is partially degraded (mixed-model index)."
+  echo "   Finish the upgrade: vaultmind index --embed --vault \"$VAULT\""
+  echo "   See $DOC"
+elif printf '%s\n' "$DOCTOR" | grep -qE '^Embeddings: .*\(bge-m3\)'; then
+  echo "✓ VaultMind active ($VAULT) — full BGE-M3 hybrid recall."
+  echo "   Ask: vaultmind ask \"<question>\" --vault \"$VAULT\"  ->  vaultmind note get <id> --vault \"$VAULT\""
+else
+  # doctor SUCCEEDED (exit 0) but printed an unrecognized shape — e.g. an older
+  # binary whose output predates the (minilm)/(bge-m3) tags. Keep the nudge
+  # minimal and honest rather than guessing the tier.
+  echo "📚 VaultMind vault detected ($VAULT). Try: vaultmind ask \"<question>\" --vault \"$VAULT\""
+fi
+
+# Stale-index relay (dabir's layer-2 incident, 2026-09-03): a note corrected on
+# disk while the index kept serving the OLD text for hours. Doctor detects that
+# state ("Stale index: N …") but this hook — the surface an agent actually
+# reads at session start — never relayed it. A tier line saying "active, full
+# recall" while recall is serving superseded content is the health hook
+# laundering the one defect that makes recall lie. Relay it on every tier.
+STALE_LINE="$(printf '%s' "$DOCTOR" | grep -o "Stale index: [0-9][0-9]* note(s) changed since last index pass")"
+if [ "$DOCTOR_RC" -eq 0 ] && [ -n "$STALE_LINE" ]; then
+  echo "⚠ ${STALE_LINE} — recall is serving the OLD text for those notes."
+  echo "   Refresh: vaultmind index --vault \"$VAULT\" && vaultmind index --embed --vault \"$VAULT\""
+fi
+
+# Sparse-format relay. doctor prints the warning; this hook is what a session
+# reads once. The per-turn recall hook does not repeat it. The words stay
+# doctor's — this only forwards the notice and its run line.
+if [ "$DOCTOR_RC" -eq 0 ]; then
+  SPARSE_BLOCK="$(printf '%s\n' "$DOCTOR" | awk '
+    index($0, "sparse vectors are an older format") {
+      print
+      if (getline <= 0) exit
+      if (index($0, "run: vaultmind index --embed")) print
+    }
+  ')"
+  if [ -n "$SPARSE_BLOCK" ]; then
+    printf '%s\n' "$SPARSE_BLOCK"
+  fi
+  # Title-embedding relay. Same shape as the sparse block: doctor's notice
+  # and its run line, and nothing else.
+  TITLE_BLOCK="$(printf '%s\n' "$DOCTOR" | awk '
+    index($0, "embeddings predate title embedding") {
+      print
+      if (getline <= 0) exit
+      if (index($0, "run: vaultmind index --embed")) print
+    }
+  ')"
+  if [ -n "$TITLE_BLOCK" ]; then
+    printf '%s\n' "$TITLE_BLOCK"
+  fi
+fi
+
+# The map. An agent reads a file when it knows where the answer lives; with a
+# knowledge vault it can only know that if it can see what the vault holds.
+# Folders and counts (tree --depth 1), for every vault the project names, capped
+# so a flat vault cannot flood the session start. The output is captured whole
+# and then cut — piping tree into head would kill it mid-write. A binary older
+# than `tree` fails the call and the map is simply skipped.
+MAP_MAX_LINES="${VAULTMIND_MAP_MAX_LINES:-30}"
+# A cap that is not a positive number falls back to the default: awk compares a
+# non-numeric cap as a string ("1" <= "lots"), which silently lifts the cap.
+case "$MAP_MAX_LINES" in ''|*[!0-9]*|0) MAP_MAX_LINES=30 ;; esac
+if [ "$DOCTOR_RC" -eq 0 ]; then
+  if [ -n "${VAULTMIND_VAULTS:-}" ]; then
+    MAP_TARGET="--vaults $VAULTMIND_VAULTS"
+    MAP="$("$VM" tree --vaults "$VAULTMIND_VAULTS" --depth 1 2>/dev/null)" || MAP=""
+  else
+    MAP_TARGET="--vault $VAULT"
+    MAP="$("$VM" tree --vault "$VAULT" --depth 1 2>/dev/null)" || MAP=""
+  fi
+  if [ -n "$MAP" ]; then
+    MAP_LINES="$(printf '%s\n' "$MAP" | wc -l | tr -d ' ')"
+    echo ""
+    echo "MAP — what the knowledge vault holds. Open a note: vaultmind note get <id>; list a folder: vaultmind tree ${MAP_TARGET} --path <folder>/"
+    printf '%s\n' "$MAP" | awk -v max="$MAP_MAX_LINES" 'NR <= max'
+    if [ "$MAP_LINES" -gt "$MAP_MAX_LINES" ] 2>/dev/null; then
+      echo "  … $((MAP_LINES - MAP_MAX_LINES)) more lines: vaultmind tree ${MAP_TARGET} --depth 1"
+    fi
+  fi
+fi
+
+# Pinned notes. A note with pinned: true is loaded at every session start.
+# The mark lives in the vault, so it survives hooks install --force.
+# One budget for the session, however many vaults. A long note is excerpted,
+# so it arrives as its opening rather than as a name only.
+# Best-effort: a failure here leaves the map above intact. A failing binary
+# prints its usage to stdout; that must not enter the session (same as the map).
+# A cap that is not a number falls back to the default. 0 is left alone:
+# the command treats 0 as an unbounded budget and as the whole body.
+if [ "$DOCTOR_RC" -eq 0 ]; then
+  PINNED_BUDGET="${VAULTMIND_PINNED_BUDGET:-1500}"
+  case "$PINNED_BUDGET" in ''|*[!0-9]*) PINNED_BUDGET=1500 ;; esac
+  PINNED_EXCERPT="${VAULTMIND_PINNED_EXCERPT:-400}"
+  case "$PINNED_EXCERPT" in ''|*[!0-9]*) PINNED_EXCERPT=400 ;; esac
+  if [ -n "${VAULTMIND_VAULTS:-}" ]; then
+    BLOCK=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-health-hook \
+      "$VM" note pinned --vaults "$VAULTMIND_VAULTS" --budget "$PINNED_BUDGET" --excerpt "$PINNED_EXCERPT" 2>/dev/null) || BLOCK=""
+  else
+    BLOCK=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-health-hook \
+      "$VM" note pinned --vault "$VAULT" --budget "$PINNED_BUDGET" --excerpt "$PINNED_EXCERPT" 2>/dev/null) || BLOCK=""
+  fi
+  if [ -n "$BLOCK" ]; then
+    echo ""
+    printf '%s\n' "$BLOCK"
+  fi
+fi
+
+# Stale hook scripts relay. Scripts are copied into the project, so they only
+# change when someone reruns `hooks install`; nothing said when they fell
+# behind. Two projects kept a recall script from before its noise guard for five
+# weeks (found 2026-09-24), searching on background-task notifications the whole
+# time. `hooks status` checks both layouts (.claude/scripts for Claude Code,
+# .vaultmind/scripts for Codex) — doctor's drift line only knows the first — so
+# ask it, and name the refresh for the agent that is behind. It exits non-zero
+# when anything is off; only its JSON matters here.
+STATUS_JSON="$("$VM" hooks status "$PROJECT_DIR" --json 2>/dev/null || true)"
+if [ -n "$STATUS_JSON" ]; then
+  STALE="$(printf '%s' "$STATUS_JSON" | python3 -c '
+import json, sys
+try:
+    r = (json.load(sys.stdin) or {}).get("result") or {}
+except Exception:
+    sys.exit(0)
+off = lambda ss: sum(1 for s in (ss or []) if s.get("state") in ("drifted", "missing"))
+print(off(r.get("scripts")), off((r.get("codex") or {}).get("scripts")), off((r.get("cursor") or {}).get("scripts")))
+' 2>/dev/null)"
+  CLAUDE_STALE="${STALE%% *}"
+  CURSOR_STALE="${STALE##* }"
+  CODEX_STALE="${STALE#* }"
+  CODEX_STALE="${CODEX_STALE%% *}"
+  if [ "${CLAUDE_STALE:-0}" -gt 0 ] 2>/dev/null; then
+    echo "⚠ ${CLAUDE_STALE} hook script(s) here are out of date for this vaultmind. If you didn't change them yourself, refresh:"
+    echo "   vaultmind hooks install \"$PROJECT_DIR\" --force"
+  fi
+  if [ "${CODEX_STALE:-0}" -gt 0 ] 2>/dev/null; then
+    echo "⚠ ${CODEX_STALE} Codex hook script(s) here are out of date for this vaultmind. If you didn't change them yourself, refresh:"
+    echo "   vaultmind hooks install \"$PROJECT_DIR\" --agent codex --merge --force"
+  fi
+  if [ "${CURSOR_STALE:-0}" -gt 0 ] 2>/dev/null; then
+    echo "⚠ ${CURSOR_STALE} Cursor hook script(s) here are out of date for this vaultmind. If you didn't change them yourself, refresh:"
+    echo "   vaultmind hooks install \"$PROJECT_DIR\" --agent cursor --merge --force"
+  fi
+fi
+exit 0

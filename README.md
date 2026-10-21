@@ -55,6 +55,18 @@ Every command has `--help`, and `--json` for scripts. `vaultmind --help` lists a
 
 ## Install
 
+**Claude Code plugin — one command:**
+
+```bash
+claude plugin install vaultmind --marketplace peiman/vaultmind
+```
+
+Requires Claude Code 2.1.292+. Then run `/vaultmind:vaultmind-setup` inside Claude Code;
+the agent initializes a vault, imports project Markdown, embeds it and verifies
+retrieval. The plugin downloads a version-pinned binary on first use and supplies
+hooks plus MCP tools. See [plugin/README.md](plugin/README.md) for requirements,
+existing-hook coexistence, data storage and uninstall options.
+
 **Quick — MiniLM, every platform:**
 
 ```bash

@@ -68,6 +68,19 @@ env:
 permissions: {}
 
 jobs:
+  plugin-validate:
+    name: Validate Claude Code plugin and marketplace
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install public Claude Code CLI (no credentials required)
+        run: npm install --global @anthropic-ai/claude-code@2.1.305
+      - run: claude plugin validate --strict plugin
+      - run: claude plugin validate --strict .
+
   # ═══════════════════════════════════════════════════════════════════
   # DEPENDENCY REVIEW (PRs only)
   # Catches new vulnerabilities and license violations before merge
@@ -569,7 +582,7 @@ jobs:
   # cross-compilation: each platform builds on its own runner. Separate from the
   # pure-Go GoReleaser release above; these upload as ADDITIONAL assets to the
   # release it creates. Windows stays pure-Go MiniLM (ORT on Windows is impractical).
-  ort-release:
+  ort-build:
     name: ORT prebuilt (${{ matrix.goos }}/${{ matrix.goarch }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
@@ -762,3 +775,31 @@ jobs:
           done
           echo "::error::ORT archive attested but NOT verifiable — see issue #142"
           exit 1
+
+  ort-release:
+    name: Publish combined ORT checksums
+    needs: [ort-build]
+    if: ${{ !cancelled() && needs.ort-build.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      ORT_TAG_INPUT: ${{ inputs.ort_tag }}
+    steps:
+      - name: Download published ORT archives and upload checksums
+        run: |
+          set -euo pipefail
+          TAG="${ORT_TAG_INPUT:-${GITHUB_REF##*/}}"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::invalid release tag"
+            exit 1
+          fi
+          mkdir ort-checksums
+          cd ort-checksums
+          gh release download "$TAG" --pattern "vaultmind_${TAG}_darwin_arm64_ort.tar.gz"
+          gh release download "$TAG" --pattern "vaultmind_${TAG}_linux_amd64_ort.tar.gz"
+          sha256sum ./*.tar.gz | sed 's|  ./|  |' > checksums-ort.txt
+          gh release upload "$TAG" checksums-ort.txt --clobber

@@ -1,0 +1,11 @@
+{
+  "name": "vaultmind",
+  "description": "Curated project memory, automatic recall, and MCP tools. Run /vaultmind:vaultmind-setup to get started.",
+  "version": "0.10.17",
+  "author": {
+    "name": "peiman"
+  },
+  "homepage": "https://github.com/peiman/vaultmind#readme",
+  "repository": "https://github.com/peiman/vaultmind",
+  "license": "MIT"
+}

@@ -1,0 +1,215 @@
+#!/bin/bash
+
+# Plugin calls yield to the same installed hook, one script at a time.
+# bin/ is on the Bash tool PATH; hooks set their PATH explicitly in hooks.json.
+if [ "${VAULTMIND_HOOK_SOURCE:-}" = plugin ]; then
+  VM_PROJECT="${VAULTMIND_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-$PWD}}"
+  if python3 - "$VM_PROJECT" "$(basename "$0")" <<'VM_PLUGIN_CHECK'
+import json, os, pathlib, sys
+project, script = sys.argv[1:]
+settings = [pathlib.Path(project) / ".claude" / name
+            for name in ("settings.json", "settings.local.json")]
+settings.append(pathlib.Path(os.environ.get("CLAUDE_CONFIG_DIR") or pathlib.Path.home() / ".claude") / "settings.json")
+for filename in settings:
+    try:
+        hooks = json.loads(filename.read_text()).get("hooks", {})
+        for groups in hooks.values():
+            for group in groups:
+                for hook in group.get("hooks", []):
+                    cmd = hook.get("command", "").replace('"', '').replace("'", "")
+                    if ".claude/scripts/" + script in cmd or "/.vaultmind/scripts/" + script in cmd:
+                        sys.exit(0)
+    except (OSError, ValueError, TypeError, AttributeError):
+        pass
+sys.exit(1)
+VM_PLUGIN_CHECK
+  then exit 0; fi
+  if [ -z "${VAULTMIND_VAULT:-}" ]; then
+    for VM_CAND in knowledge vaultmind-vault vaultmind-identity .; do
+      if [ -f "$VM_PROJECT/$VM_CAND/.vaultmind/config.yaml" ]; then
+        export VAULTMIND_VAULT="$VM_PROJECT/$VM_CAND"
+        break
+      fi
+    done
+  fi
+fi
+
+# PreToolUse hook on Read — when the agent reads a vault note, fire
+# RecordNoteAccess via `vaultmind note get` AND inject a visible header
+# naming the canonical retrieval command. Allow Read to proceed.
+#
+# This is flavor B of the read-bypass design discussion (2026-05-02):
+# substitute-and-allow. The hook surfaces the right command name on
+# every vault Read so the muscle memory shifts. Read still works,
+# Edit on vault notes still works (since Read isn't blocked).
+#
+# Lifecycle history:
+#   - Originally PostToolUse(Read) (commit f219f0e). Closed the
+#     bookkeeping bypass (access tracking) but stayed silent — agent
+#     never learned the canonical command.
+#   - Now PreToolUse(Read) with additionalContext injection. Same
+#     tracking, plus visibility. Probe-before-commit on flavor C.
+#
+# Flavor C (block-and-redirect) is preserved on disk in
+# vault-block-read.sh + test-vault-block-read.sh, unwired, ready to
+# enable if B's data shows visibility-only isn't sufficient to shift
+# retrieval pattern.
+#
+# Mechanism: detect vault paths, run `vaultmind note get` synchronously
+# (an unresolved id exits non-zero AND prints "No note found"; the status
+# is the primary signal and the string check remains as a guard for
+# binaries older than the exit-code fix). On resolution, emit JSON
+# `hookSpecificOutput.additionalContext` to inject a header the agent
+# sees. On non-resolution (episode files, frontmatter quirks, transient
+# errors), silently allow Read — no misleading header.
+#
+# Output strategy: low-noise. The header is a single short line
+# pointing at the canonical command. Exit 0 always — this hook is
+# non-blocking by design.
+
+set -uo pipefail
+
+HOOK_INPUT=$(cat)
+# The harness's conversation id, forwarded on every vaultmind call so this
+# hook's events share a session with the agent's own (see vault-recall.sh).
+HOOK_SESSION_ID=$(printf '%s' "$HOOK_INPUT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('session_id','') or '')" 2>/dev/null || echo "")
+
+TOOL_NAME=$(echo "$HOOK_INPUT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('tool_name',''))" 2>/dev/null || echo "")
+FILE_PATH=$(echo "$HOOK_INPUT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('tool_input',{}).get('file_path',''))" 2>/dev/null || echo "")
+
+if [ "$TOOL_NAME" != "Read" ] || [ -z "$FILE_PATH" ]; then
+  exit 0
+fi
+
+# Path pattern gate — fast-skip Reads on files that obviously aren't
+# vault notes (the walk-up `.vaultmind/` check below is the real test
+# but is filesystem-stat-per-ancestor; this glob filters early).
+# Default `*/vaultmind-*/*.md` matches vaultmind-self conventions
+# (vaultmind-identity, vaultmind-vault). Consumers with non-default
+# vault dir names override per project — one project might use
+# `*/their-vault/*.md`; another might use
+# `*/vaultmind-knowledge/*.md`. Set inline in settings.json command,
+# e.g. `VAULT_PATH_PATTERN="*/companion-vault/*.md" bash <script>`.
+#
+# Multi-vault: enable shopt extglob below so consumers needing more
+# than one vault dir can use the `+(a|b)` extglob syntax — e.g.
+# `VAULT_PATH_PATTERN="*/+(vault-a|another-vault)/*.md"`.
+# Brace expansion (`*/{a,b}/*.md`) does NOT work from env vars (bash
+# expands braces before parameter expansion); pipe alternation
+# without extglob also doesn't work. Extglob does.
+#
+# Companion project 2026-05-07 HIGH-1 — silent-inert hook for non-default
+# vault names was the dogfood-found regression.
+shopt -s extglob
+# Pattern precedence (issue #41.6): an explicit VAULT_PATH_PATTERN wins (the
+# companion project extglob-alternation case). Otherwise derive the pattern from the
+# recall vault's basename so read-tracking fires for a consumer vault — bash `case`
+# globs span `/`, so `*/<name>/*.md` matches notes in subdirectories too.
+# Read-tracking is a recall concern, so this prefers the per-concern
+# VAULTMIND_RECALL_VAULT, falling back to the overloaded VAULTMIND_VAULT (both
+# ${VAR:-}-guarded so set -u doesn't abort when unset). Falls back to the
+# vaultmind-* convention when neither is set.
+RECALL_VAULT="${VAULTMIND_RECALL_VAULT:-${VAULTMIND_VAULT:-}}"
+if [ -n "${VAULT_PATH_PATTERN:-}" ]; then
+  PATTERN="${VAULT_PATH_PATTERN:-}"
+elif [ -n "$RECALL_VAULT" ]; then
+  PATTERN="*/${RECALL_VAULT##*/}/*.md"
+else
+  PATTERN="*/vaultmind-*/*.md"
+fi
+case "$FILE_PATH" in
+  $PATTERN) ;;
+  *) exit 0 ;;
+esac
+
+VAULT_ROOT=$(dirname "$FILE_PATH")
+# A vault holds its config or its index under .vaultmind/. A Codex or Cursor
+# project keeps only hook scripts there, and is not a vault: the same rule
+# vaultmind's own discovery uses.
+holds_vault() {
+  [ -f "$1/.vaultmind/config.yaml" ] || [ -f "$1/.vaultmind/index.db" ]
+}
+while [ "$VAULT_ROOT" != "/" ] && [ "$VAULT_ROOT" != "." ]; do
+  if holds_vault "$VAULT_ROOT"; then
+    break
+  fi
+  VAULT_ROOT=$(dirname "$VAULT_ROOT")
+done
+if ! holds_vault "$VAULT_ROOT"; then
+  exit 0
+fi
+
+# Use PATH-installed vaultmind. /tmp/vaultmind is dev-loop only
+# (load-persona.sh auto-rebuild target) — not a valid fallback for
+# general use; users install via `task install`. Silently skip if
+# not on PATH (PreToolUse hook must never block a Read).
+if ! command -v vaultmind >/dev/null 2>&1; then
+  exit 0
+fi
+VAULTMIND=$(command -v vaultmind)
+
+REL_PATH="${FILE_PATH#"$VAULT_ROOT"/}"
+
+# Sidecar log directory — captures invocations for verification.
+LOG_DIR="${HOME}/.vaultmind/preread-track"
+mkdir -p "$LOG_DIR" 2>/dev/null
+TIMESTAMP=$(date +%Y%m%dT%H%M%S)
+
+# Run note get synchronously with a 3s timeout. PreToolUse hooks
+# block the agent until they exit; a hung binary (corrupt index.db,
+# deadlocked SQLite, disk I/O stall) would wedge the session with no
+# visible error. Three seconds is generous for a SQLite point-lookup
+# but tight enough to fail fast on real hangs. macOS doesn't ship
+# `timeout` by default — fall back to `gtimeout` (coreutils via brew),
+# then to a no-timeout call as a last resort. Output discarded (the
+# agent gets the body from Read itself); only exit status + first
+# line matter for resolution detection.
+# One definition, used by both branches. Deliberately NOT the query bound the
+# other two hooks use: this bounds a SQLite point-lookup, not a vault query, so
+# folding them together would tie a 3s lookup to a 25s search. Issue #105 asked
+# to consolidate all three; two of them share a concern and this one does not.
+NOTE_GET_TIMEOUT="${VAULTMIND_NOTE_GET_TIMEOUT:-3}"
+TIMEOUT_CMD=""
+if command -v timeout >/dev/null 2>&1; then
+  TIMEOUT_CMD="timeout $NOTE_GET_TIMEOUT"
+elif command -v gtimeout >/dev/null 2>&1; then
+  TIMEOUT_CMD="gtimeout $NOTE_GET_TIMEOUT"
+fi
+NOTE_OUTPUT=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-preread-track $TIMEOUT_CMD "$VAULTMIND" note get "$REL_PATH" --vault "$VAULT_ROOT" 2>/dev/null)
+NOTE_STATUS=$?
+
+NOTE_RESOLVED=1
+if [ "$NOTE_STATUS" != "0" ] || [ -z "$NOTE_OUTPUT" ]; then
+  NOTE_RESOLVED=0
+elif echo "$NOTE_OUTPUT" | head -1 | grep -q "^No note found"; then
+  NOTE_RESOLVED=0
+fi
+
+if [ "$NOTE_RESOLVED" = "0" ]; then
+  printf '{"timestamp":"%s","file_path":"%s","note_status":%d,"injected":false,"reason":"note_get_failed"}\n' \
+    "$TIMESTAMP" "$FILE_PATH" "$NOTE_STATUS" \
+    > "$LOG_DIR/${TIMESTAMP}-skip.json" 2>/dev/null
+  exit 0
+fi
+
+# Inject a visible header via Claude Code's PreToolUse JSON contract.
+# The agent sees additionalContext as model-visible context attached to
+# this tool call — same channel as UserPromptSubmit injections, just
+# scoped to the tool boundary.
+HEADER="[vault-track-read] Read on vault note \"$REL_PATH\" — access recorded via \`vaultmind note get\`. Canonical retrieval for next time: vaultmind note get $REL_PATH --vault $VAULT_ROOT (or by id: vaultmind note get <id> --vault $VAULT_ROOT)."
+
+python3 -c "
+import json, sys
+print(json.dumps({
+    'hookSpecificOutput': {
+        'hookEventName': 'PreToolUse',
+        'additionalContext': sys.argv[1],
+    }
+}))
+" "$HEADER"
+
+printf '{"timestamp":"%s","file_path":"%s","injected":true,"header_chars":%d}\n' \
+  "$TIMESTAMP" "$FILE_PATH" "${#HEADER}" \
+  > "$LOG_DIR/${TIMESTAMP}-inject.json" 2>/dev/null
+
+exit 0

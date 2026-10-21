@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "vaultmind": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/bin/vaultmind",
+      "args": [
+        "mcp"
+      ],
+      "env": {
+        "VAULTMIND_PLUGIN_PROJECT": "${CLAUDE_PROJECT_DIR}"
+      }
+    }
+  }
+}
