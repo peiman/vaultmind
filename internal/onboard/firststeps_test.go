@@ -2,6 +2,7 @@ package onboard_test
 
 import (
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -41,10 +42,12 @@ func TestREADMEInstall_NamesThePublishedArchives(t *testing.T) {
 	body, err := os.ReadFile("../../README.md")
 	require.NoError(t, err)
 	install := installBlock(t, string(body))
+	// The README names the newest release's archives, so it can't silently go stale.
+	latest := latestReleasedVersion(t)
 
 	for _, want := range []string{
-		"vaultmind_v0.10.15_darwin_arm64_ort.tar.gz",
-		"vaultmind_v0.10.15_linux_amd64_ort.tar.gz",
+		"vaultmind_v" + latest + "_darwin_arm64_ort.tar.gz",
+		"vaultmind_v" + latest + "_linux_amd64_ort.tar.gz",
 		"darwin_arm64",
 		"linux_amd64",
 		"libonnxruntime",
@@ -82,4 +85,14 @@ func section(t *testing.T, readme, heading string) string {
 		rest = rest[:j]
 	}
 	return rest
+}
+
+// latestReleasedVersion is the first dated "## [X.Y.Z] - date" heading in CHANGELOG.md.
+func latestReleasedVersion(t *testing.T) string {
+	t.Helper()
+	changelog, err := os.ReadFile("../../CHANGELOG.md")
+	require.NoError(t, err)
+	m := regexp.MustCompile(`(?m)^## \[(\d+\.\d+\.\d+)\] - `).FindSubmatch(changelog)
+	require.NotNil(t, m, "no dated release heading in CHANGELOG.md")
+	return string(m[1])
 }
