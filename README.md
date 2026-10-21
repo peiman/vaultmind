@@ -99,6 +99,8 @@ Re-running the same command picks up changes; a root doc you delete or rename mu
 
 `init` writes a type registry, a README for the vault and starter notes. `doctor` names those starters (`2 example notes: delete or keep`). Add your own notes as Markdown with frontmatter; `vaultmind index` picks up hand edits.
 
+The vault's `.vaultmind/.gitignore` keeps its index, caches and locks out of git while leaving `config.yaml`, section templates, project hook setup and the telemetry fingerprint available to commit; `init` and the first index create it when absent and preserve an existing file.
+
 The first `index --embed` downloads the embedding model if it is not cached (about 2.3 GB for BGE-M3). Allow a few minutes for the first embed: one run of 74 notes took 133 seconds and peaked at 2.7 GB of memory; time and memory depend on note length and hardware. Each batch prints `embedded <done>/<total> notes (<elapsed>s)` to stderr, so progress stays visible with `--json` too. The count includes only notes whose vectors were stored; failed batches are reported on the same line. Imports keep this progress, while ordinary note writes print one embed summary. Later runs reuse the cached model and skip notes whose embeddings are current.
 
 ## Agents: hooks and MCP

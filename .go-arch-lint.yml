@@ -121,6 +121,7 @@ components:
       - internal/baseline/**
       # VaultMind shared test vault fixture (per-process vault rebuild, test-only):
       - internal/testvault/**
+      - internal/testgit/**
       # VaultMind episodic substrate (session transcript → episode markdown, v0):
       - internal/episode/**
       # VaultMind arc distillation (rendered episode markdown → candidate moments and the review queue; never writes arcs, only an episode's `reviewed` mark):

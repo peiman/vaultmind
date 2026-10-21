@@ -6,6 +6,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,13 +38,14 @@ func signerTestKey(t *testing.T) (keyPath string, pub ed25519.PublicKey) {
 	return keyPath, pub
 }
 
-// waitForSocket polls until path exists or the deadline passes; it lets a test
-// wait for runIdentitySigner's goroutine to bind before dialing.
+// waitForSocket waits for a listening socket, not just its directory entry:
+// the path can exist briefly before the listener accepts connections.
 func waitForSocket(t *testing.T, path string) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if _, err := os.Stat(path); err == nil {
+		if conn, err := net.DialTimeout("unix", path, 50*time.Millisecond); err == nil {
+			_ = conn.Close()
 			return
 		}
 		time.Sleep(5 * time.Millisecond)

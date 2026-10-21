@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/peiman/vaultmind/internal/vault"
 )
 
 // FingerprintFile is the relative path within a vault where the
@@ -22,14 +24,18 @@ const FingerprintFile = ".vaultmind/fingerprint.txt"
 //
 // The fingerprint is per-vault, not per-machine. If a vault is shared
 // across machines (committed to git), all machines contribute under
-// the same fingerprint. If the user wants per-machine fingerprints,
-// they should gitignore .vaultmind/fingerprint.txt — the default
-// behavior is "vault carries its own identity."
+// the same fingerprint. The vault's default .gitignore leaves this file
+// committable. If the user wants per-machine fingerprints, they should
+// ignore .vaultmind/fingerprint.txt — the default behavior is "vault
+// carries its own identity."
 //
 // The file is created with mode 0o600 to keep curious file-system
 // scanners from picking it up casually; it's not a secret, but it's
 // also not meant to be world-readable.
 func EnsureFingerprint(vaultPath string) (string, error) {
+	if err := vault.EnsureGitignore(vaultPath); err != nil {
+		return "", err
+	}
 	cleanPath := filepath.Clean(vaultPath)
 	// nosemgrep: go-path-traversal -- fpPath is derived from a vault path
 	// supplied by the operator, not from external user input. Cleaning

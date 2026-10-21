@@ -27,7 +27,7 @@ func TestInitKnowledge_ScaffoldsAProjectKnowledgeBase(t *testing.T) {
 	for _, persona := range []string{"identity", "arcs", "principles"} {
 		assert.NoDirExists(t, filepath.Join(dst, persona))
 	}
-	assert.Equal(t, 4, res.FilesAdded)
+	assert.Equal(t, 5, res.FilesAdded)
 
 	readme, err := os.ReadFile(filepath.Join(dst, "README.md")) //nolint:gosec // test path
 	require.NoError(t, err)

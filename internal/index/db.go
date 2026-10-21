@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/peiman/vaultmind/internal/vault"
 	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite" // pure-Go SQLite driver
 )
@@ -28,6 +29,11 @@ type DB struct {
 // pragmas (WAL mode, foreign key enforcement).
 func Open(dbPath string) (*DB, error) {
 	cleanPath := filepath.Clean(dbPath)
+	if dir := filepath.Dir(cleanPath); filepath.Base(dir) == ".vaultmind" {
+		if err := vault.EnsureGitignore(filepath.Dir(dir)); err != nil {
+			return nil, err
+		}
+	}
 	if err := os.MkdirAll(filepath.Dir(cleanPath), 0o750); err != nil {
 		return nil, fmt.Errorf("creating db directory: %w", err)
 	}

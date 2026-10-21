@@ -28,10 +28,8 @@ func TestRunInit_ScaffoldsAndPrintsNextSteps(t *testing.T) {
 	assert.Contains(t, out, "Vault scaffolded at")
 	assert.Contains(t, out, "vaultmind index")
 	assert.Contains(t, out, "vaultmind ask")
-	// .gitignore guidance: index is a regenerable cache, config is source
-	// (issue #41 init ask — surface it so the SQLite index isn't committed).
-	assert.Contains(t, out, ".vaultmind/index.db*")
-	assert.Contains(t, out, "!.vaultmind/config.yaml")
+	assert.Contains(t, out, ".vaultmind/ ignores its own derived files")
+	assert.NotContains(t, out, "add to .gitignore")
 
 	// Sanity: scaffold actually happened on disk.
 	_, err := os.Stat(filepath.Join(dst, ".vaultmind", "config.yaml"))

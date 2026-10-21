@@ -1,0 +1,9 @@
+*
+!.gitignore
+!config.yaml
+!fingerprint.txt
+!sections/
+!sections/**
+!scripts/
+!scripts/**
+!vaultmind-profile
