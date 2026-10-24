@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Project `hooks install --local` keeps `.claude/scripts/` and `.claude/vaultmind-profile` out of git using a marked block in the checkout's git exclude, including worktrees, submodules and projects below the repository root. Text and JSON output report the exclusions or why they were skipped; `--merge --dry-run` previews them without writing. `hooks uninstall --local` removes only that project's marked block, preserving user exclusions.
+
 ## [0.10.18] - 2026-10-21
 
 > Plugin users: `claude plugin update vaultmind@vaultmind`. Pinned notes now arrive as their opening 400 tokens, headings included.

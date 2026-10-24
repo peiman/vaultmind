@@ -38,11 +38,13 @@ WHAT GETS REMOVED
   hooks are never deleted.
 
   --local: clean .claude/settings.local.json instead of the default
-  .claude/settings.json. Run once per file if you wired into both.
+  .claude/settings.json. Also remove the marked block for the scripts and
+  profile file added to the checkout's git exclude by install --local.
+  Run once per settings file if you wired into both.
 
   --remove-scripts: also delete the installed scripts under
   .claude/scripts/ (Codex: .vaultmind/scripts/). Off by default — uninstall
-  touches only the hook config unless you ask for the scripts too.
+  leaves scripts in place unless you ask for them too.
 
   --agent codex: clean .codex/hooks.json instead, and with --remove-scripts
   .vaultmind/scripts/. The .vaultmind folder itself is never removed (it can
@@ -77,7 +79,7 @@ func HooksUninstallOptions() []config.ConfigOption {
 		{
 			Key:          "app.hooksuninstall.local",
 			DefaultValue: false,
-			Description:  "Target .claude/settings.local.json instead of .claude/settings.json.",
+			Description:  "Target .claude/settings.local.json and remove the marked block for scripts and profile added to the checkout's git exclude by install --local.",
 			Type:         "bool",
 		},
 		{

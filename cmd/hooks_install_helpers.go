@@ -244,6 +244,7 @@ func writeHooksInstallHuman(w io.Writer, res *hooks.InstallResult, mergeRes *hoo
 	}
 	_, _ = fmt.Fprintf(w, "Project: %s\n", res.ProjectDir)
 	_, _ = fmt.Fprintf(w, "Scripts dir: %s\n", res.ScriptsDir)
+	writeHooksGitExclude(w, res.GitExclude)
 	if len(res.Written) > 0 {
 		writtenVerb := "Written"
 		if res.DryRun {

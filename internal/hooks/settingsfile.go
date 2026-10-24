@@ -137,6 +137,8 @@ type RemoveFileResult struct {
 	// ScriptsKept names the scripts --remove-scripts left in place because the
 	// other agent sharing .vaultmind/scripts still runs them.
 	ScriptsKept []string `json:"scripts_kept,omitempty"`
+
+	GitExclude *GitExcludeResult `json:"git_exclude,omitempty"`
 }
 
 // RemoveFromSettings strips VaultMind's hook entries from the target hook-config
@@ -172,6 +174,9 @@ func RemoveFromSettings(projectDir string, local, removeScripts bool) (*RemoveFi
 			return res, err
 		}
 		res.ScriptsDeleted = deleted
+	}
+	if local {
+		res.GitExclude = localGitExclude(projectDir, true, false)
 	}
 	return res, nil
 }

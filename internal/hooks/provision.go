@@ -30,6 +30,9 @@ func Provision(cfg InstallConfig, merge, local, dryRun bool) (*ProvisionResult, 
 	cfg.VaultPath, cfg.Vaults = vault, vaults
 	res, err := Install(cfg)
 	out := &ProvisionResult{Install: res}
+	if local && cfg.Scope != ScopeUser && (cfg.Agent == "" || cfg.Agent == AgentClaude) && res != nil {
+		res.GitExclude = localGitExclude(cfg.ProjectDir, false, cfg.DryRun)
+	}
 	if !merge || err != nil {
 		return out, err
 	}

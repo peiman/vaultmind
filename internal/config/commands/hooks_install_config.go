@@ -138,7 +138,9 @@ WIRING (--merge)
   --local: merge into .claude/settings.local.json (gitignored, personal)
   instead of .claude/settings.json (committed, team-shared). Choose local
   for a personal persona vault; the default for a capability the whole
-  team should get.
+  team should get. The scripts and .claude/vaultmind-profile are added to
+  the checkout's git exclude in a marked block; uninstall --local removes it.
+  Outside a git work tree, installation reports why exclusion was skipped.
 
   --dry-run: with --merge, print the merged result without writing it —
   use it to preview/diff before applying.
@@ -241,7 +243,7 @@ func HooksInstallOptions() []config.ConfigOption {
 		{
 			Key:          "app.hooksinstall.local",
 			DefaultValue: false,
-			Description:  "With --merge, target .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared).",
+			Description:  "With --merge, target .claude/settings.local.json (personal). Add .claude/scripts/ and .claude/vaultmind-profile to the checkout's git exclude.",
 			Type:         "bool",
 		},
 		{

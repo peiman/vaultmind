@@ -822,7 +822,7 @@
             },
             "local": {
               "default": false,
-              "description": "With --merge, target .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared).",
+              "description": "With --merge, target .claude/settings.local.json (personal). Add .claude/scripts/ and .claude/vaultmind-profile to the checkout's git exclude.",
               "type": "boolean"
             },
             "merge": {
@@ -902,7 +902,7 @@
             },
             "local": {
               "default": false,
-              "description": "Target .claude/settings.local.json instead of .claude/settings.json.",
+              "description": "Target .claude/settings.local.json and remove the marked block for scripts and profile added to the checkout's git exclude by install --local.",
               "type": "boolean"
             },
             "removescripts": {

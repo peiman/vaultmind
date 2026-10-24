@@ -7,6 +7,10 @@ Only framework changes are tracked here — project-level changes belong in the 
 
 ## [Unreleased]
 
+### Fixed
+
+- Regenerated config key comments describe checkout-local git exclusion for hook scripts and the profile file, and its removal during local uninstall.
+
 ### Added
 
 - **Config key constants for `note pinned`.** Regenerated `keys_generated.go` now has `app.notepinned.vault`, `app.notepinned.vaults`, `app.notepinned.json`, `app.notepinned.budget`, and `app.notepinned.excerpt`.
