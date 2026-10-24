@@ -1,6 +1,7 @@
 package hooks
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -14,7 +15,8 @@ import (
 
 func gitExcludeRepo(t *testing.T) (string, string) {
 	t.Helper()
-	dir := t.TempDir()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
 	testgit.Run(t, dir, "init")
 	return dir, filepath.Join(dir, ".git", "info", "exclude")
 }
@@ -133,4 +135,83 @@ func TestEditGitExclude_RepairsExistingBlockAndPreservesOtherProjects(t *testing
 	removed, names = editGitExclude(incomplete, entries, true)
 	assert.Empty(t, names)
 	assert.Equal(t, incomplete, removed)
+}
+
+func TestLocalGitExclude_SymlinkedSubproject(t *testing.T) {
+	dir, path := gitExcludeRepo(t)
+	project := filepath.Join(dir, "a", "b")
+	require.NoError(t, os.MkdirAll(project, 0o750))
+	outside := t.TempDir()
+	link := filepath.Join(outside, "x", "y", "l2")
+	require.NoError(t, os.MkdirAll(filepath.Dir(link), 0o750))
+	require.NoError(t, os.Symlink(project, link))
+	res, err := Provision(InstallConfig{ProjectDir: link}, false, true, false)
+	require.NoError(t, err)
+	require.Empty(t, res.Install.GitExclude.SkippedReason)
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "/a/b/.claude/scripts/")
+	assert.NoDirExists(t, filepath.Join(outside, "x", ".git"))
+}
+
+func TestLocalGitExclude_RefusesInfoOutsideCommonDir(t *testing.T) {
+	dir, path := gitExcludeRepo(t)
+	require.NoError(t, os.RemoveAll(filepath.Dir(path)))
+	outside := t.TempDir()
+	require.NoError(t, os.Symlink(outside, filepath.Dir(path)))
+	res := localGitExclude(dir, false, false)
+	assert.Contains(t, res.SkippedReason, "outside git common directory")
+	assert.Empty(t, res.Added)
+	assert.NoFileExists(t, filepath.Join(outside, "exclude"))
+}
+
+func TestLocalGitExclude_HonorsDiscoveryCeiling(t *testing.T) {
+	dir, path := gitExcludeRepo(t)
+	before, err := os.ReadFile(path)
+	require.NoError(t, err)
+	ceiling := filepath.Join(dir, "fenced")
+	project := filepath.Join(ceiling, "project")
+	require.NoError(t, os.MkdirAll(project, 0o750))
+	t.Setenv("GIT_CEILING_DIRECTORIES", ceiling)
+	res := localGitExclude(project, false, false)
+	assert.Contains(t, res.SkippedReason, "not a git work tree")
+	assert.Empty(t, res.Added)
+	after, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, before, after)
+}
+
+func TestLocalGitExclude_PreservesExcludeSymlink(t *testing.T) {
+	for _, outside := range []bool{false, true} {
+		t.Run(fmt.Sprint(outside), func(t *testing.T) {
+			dir, path := gitExcludeRepo(t)
+			target := filepath.Join(filepath.Dir(path), "shared-exclude")
+			if outside {
+				target = filepath.Join(t.TempDir(), "shared-exclude")
+			}
+			require.NoError(t, os.Rename(path, target))
+			require.NoError(t, os.Symlink(target, path))
+			before, err := os.ReadFile(target)
+			require.NoError(t, err)
+			res := localGitExclude(dir, false, false)
+			if outside {
+				assert.Contains(t, res.SkippedReason, "outside git common directory")
+				assert.Empty(t, res.Added)
+			} else {
+				require.Empty(t, res.SkippedReason)
+				data, err := os.ReadFile(target)
+				require.NoError(t, err)
+				assert.Contains(t, string(data), gitExcludeStart)
+				res = localGitExclude(dir, true, false)
+				require.Empty(t, res.SkippedReason)
+				assert.NotEmpty(t, res.Removed)
+			}
+			link, err := os.Readlink(path)
+			require.NoError(t, err)
+			assert.Equal(t, target, link)
+			after, err := os.ReadFile(target)
+			require.NoError(t, err)
+			assert.Equal(t, before, after)
+		})
+	}
 }

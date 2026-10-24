@@ -17,7 +17,8 @@ const localExcludeEnd = "# end vaultmind\n"
 
 func localExcludeRepo(t *testing.T) (string, string) {
 	t.Helper()
-	dir := t.TempDir()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
 	testgit.Run(t, dir, "init")
 	path := strings.TrimSpace(string(testgit.Run(t, dir, "rev-parse", "--git-path", "info/exclude")))
 	if !filepath.IsAbs(path) {

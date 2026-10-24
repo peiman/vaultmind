@@ -10,6 +10,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/peiman/vaultmind/internal/git"
 )
 
 const (
@@ -53,7 +55,7 @@ func localGitExclude(projectDir string, remove, dryRun bool) *GitExcludeResult {
 		if info, statErr := os.Stat(path); statErr == nil {
 			perm = info.Mode().Perm()
 		}
-		if err = os.MkdirAll(filepath.Dir(path), 0o750); err == nil {
+		if err = os.Mkdir(filepath.Dir(path), 0o750); err == nil || errors.Is(err, os.ErrExist) {
 			err = atomicWriteFile(path, []byte(updated), perm)
 		}
 		if err != nil {
@@ -74,6 +76,10 @@ func localGitExcludePaths(projectDir string) (string, []string, error) {
 	if err != nil {
 		return "", nil, err
 	}
+	project, err = filepath.EvalSymlinks(project)
+	if err != nil {
+		return "", nil, err
+	}
 	root, err := localGitRevParse(project, "--show-toplevel")
 	if err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
@@ -88,9 +94,7 @@ func localGitExcludePaths(projectDir string) (string, []string, error) {
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(project, path)
 	}
-	// Git reports a physical work-tree root (e.g. /private/var on macOS).
-	// Resolve both sides before Rel so a symlink spelling cannot escape it.
-	project, err = filepath.EvalSymlinks(project)
+	path, err = checkedGitExcludePath(project, path)
 	if err != nil {
 		return path, nil, err
 	}
@@ -114,18 +118,62 @@ func localGitExcludePaths(projectDir string) (string, []string, error) {
 	return path, []string{prefix + "/.claude/scripts/", prefix + "/.claude/vaultmind-profile"}, nil
 }
 
-// Ignore inherited GIT_* variables: hooks may export another checkout's index
-// or git directory. Discovery must always describe the requested project.
+// checkedGitExcludePath permits only info/exclude inside an existing common
+// git directory. Resolve the parent before checking containment so an info
+// symlink cannot redirect a write outside the repository. A missing info
+// directory is allowed; its existing parent must be the common directory.
+func checkedGitExcludePath(project, path string) (string, error) {
+	common, err := localGitRevParse(project, "--git-common-dir")
+	if err != nil {
+		return path, fmt.Errorf("resolving git common directory: %w", err)
+	}
+	if !filepath.IsAbs(common) {
+		common = filepath.Join(project, common)
+	}
+	common, err = filepath.EvalSymlinks(common)
+	if err != nil {
+		return path, err
+	}
+	info, err := os.Stat(common)
+	if err != nil || !info.IsDir() {
+		return path, fmt.Errorf("git common directory does not exist: %s", common)
+	}
+	parent, err := filepath.EvalSymlinks(filepath.Dir(path))
+	if errors.Is(err, os.ErrNotExist) {
+		parent = filepath.Join(common, "info")
+		if filepath.Clean(filepath.Dir(path)) != parent {
+			return path, fmt.Errorf("exclude path outside git common directory: %s", path)
+		}
+	} else if err != nil {
+		return path, err
+	}
+	path = filepath.Join(parent, filepath.Base(path))
+	// Resolve an existing file too: atomic rename must update a symlink's
+	// target, never replace the link. A dangling symlink cannot be resolved
+	// safely and is skipped; only an absent regular path may be created.
+	if _, statErr := os.Lstat(path); statErr == nil {
+		path, err = filepath.EvalSymlinks(path)
+		if err != nil {
+			return path, err
+		}
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		return path, statErr
+	}
+	rel, err := filepath.Rel(common, path)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return path, fmt.Errorf("exclude path outside git common directory: %s", path)
+	}
+	return path, nil
+}
+
+// Discover the requested project without inheriting another repository's
+// location. Keep discovery controls such as GIT_CEILING_DIRECTORIES.
 func localGitRevParse(project string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", append([]string{"rev-parse"}, args...)...) //nolint:gosec // G204: private caller supplies only fixed rev-parse flags; project sets cwd, never an argument.
 	cmd.Dir = project
-	for _, kv := range os.Environ() {
-		if !strings.HasPrefix(kv, "GIT_") {
-			cmd.Env = append(cmd.Env, kv)
-		}
-	}
+	cmd.Env = git.WithoutLocation(os.Environ())
 	out, err := cmd.Output()
 	return strings.TrimSuffix(string(out), "\n"), err
 }

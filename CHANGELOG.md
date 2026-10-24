@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Local hook exclusions preserve `info/exclude` symlinks within the common git directory and honor `GIT_CEILING_DIRECTORIES`. Hook provisioning and code-history queries share the same repository-location environment filter. Exclusions resolve symlinked project directories physically and refuse paths outside the existing common git directory, preventing stray `.git/` directories.
 - Project `hooks install --local` keeps `.claude/scripts/` and `.claude/vaultmind-profile` out of git using a marked block in the checkout's git exclude, including worktrees, submodules and projects below the repository root. Text and JSON output report the exclusions or why they were skipped; `--merge --dry-run` previews them without writing. `hooks uninstall --local` removes only that project's marked block, preserving user exclusions.
 
 ## [0.10.18] - 2026-10-21
