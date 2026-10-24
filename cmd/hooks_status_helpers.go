@@ -66,7 +66,7 @@ func runHooksStatusCore(cmd *cobra.Command, projectDir, rawScope string, jsonOut
 		_, cursorDrifted, cursorMissing := report.Cursor.ScriptCounts()
 		unapproved += cursorDrifted + cursorMissing
 	}
-	if drifted+missing+unwired+unapproved+len(report.Overlaps)+len(report.BrokenCommands) > 0 {
+	if drifted+missing+unwired+unapproved+len(report.Overlaps)+len(report.BrokenCommands)+report.EventOverlapCount() > 0 {
 		return cmdutil.ErrAlreadyWritten
 	}
 	return nil
@@ -123,45 +123,8 @@ func renderHooksStatusScripts(w io.Writer, report hooks.StatusReport) error {
 		return err
 	}
 
-	if wired, unwired := report.EventCounts(); len(report.Events) > 0 {
-		if _, err := fmt.Fprintf(w, "Hook events: %d wired, %d unwired\n", wired, unwired); err != nil {
-			return err
-		}
-		for _, e := range report.Events {
-			if e.State == hooks.EventWired {
-				continue
-			}
-			// Name the event AND the script: "SessionEnd is off" and "the
-			// script is missing" have different fixes, and a project can have
-			// the script sitting right there unrun.
-			if e.State == hooks.EventStaleMatcher {
-				// Wired, but on a matcher an earlier release installed: it runs
-				// and misses tools it now needs. Not "unwired" — that would send
-				// the reader looking for a hook that is there.
-				if _, err := fmt.Fprintf(w,
-					"  old matcher %s -> %s (update it: vaultmind hooks install %s --merge)\n",
-					e.Event, e.Script, hooksStatusInstallTarget(report)); err != nil {
-					return err
-				}
-				continue
-			}
-			if e.State == hooks.EventOutsideProfile {
-				// Wired, but the declared profile excludes it: a persona loader
-				// in a knowledge project runs a script it chose not to have.
-				// The merge removes a group that is ours alone; one shared with
-				// the project's own hook it leaves, so say both.
-				if _, err := fmt.Fprintf(w,
-					"  outside profile %s -> %s (remove it: vaultmind hooks install %s --profile %s --merge; "+
-						"if that group also runs a hook of your own, remove ours from it by hand)\n",
-					e.Event, e.Script, hooksStatusInstallTarget(report), report.Profile); err != nil {
-					return err
-				}
-				continue
-			}
-			if _, err := fmt.Fprintf(w, "  unwired   %s -> %s\n", e.Event, e.Script); err != nil {
-				return err
-			}
-		}
+	if err := renderHooksStatusEvents(w, report); err != nil {
+		return err
 	}
 
 	// Name every script that is not in sync. A count alone cannot be acted on,
@@ -197,6 +160,60 @@ func renderHooksStatusScripts(w io.Writer, report hooks.StatusReport) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func renderHooksStatusEvents(w io.Writer, report hooks.StatusReport) error {
+	if wired, unwired := report.EventCounts(); len(report.Events) > 0 {
+		if _, err := fmt.Fprintf(w, "Hook events: %d wired, %d unwired\n", wired, unwired); err != nil {
+			return err
+		}
+		for _, e := range report.Events {
+			if len(e.Files) > 0 {
+				if _, err := fmt.Fprintf(w, "  %s %s -> %s (%s)\n", e.State, e.Event, e.Script, strings.Join(e.Files, ", ")); err != nil {
+					return err
+				}
+			}
+			if e.State == hooks.EventWired {
+				continue
+			}
+			localFlag := ""
+			if e.LocalOnly() {
+				localFlag = " --local"
+			}
+			// Name the event AND the script: "SessionEnd is off" and "the
+			// script is missing" have different fixes, and a project can have
+			// the script sitting right there unrun.
+			if e.State == hooks.EventStaleMatcher {
+				// Wired, but on a matcher an earlier release installed: it runs
+				// and misses tools it now needs. Not "unwired" — that would send
+				// the reader looking for a hook that is there.
+				if _, err := fmt.Fprintf(w,
+					"  old matcher %s -> %s (update it: vaultmind hooks install %s --merge%s)\n",
+					e.Event, e.Script, hooksStatusInstallTarget(report), localFlag); err != nil {
+					return err
+				}
+				continue
+			}
+			if e.State == hooks.EventOutsideProfile {
+				// Wired, but the declared profile excludes it: a persona loader
+				// in a knowledge project runs a script it chose not to have.
+				// The merge removes a group that is ours alone; one shared with
+				// the project's own hook it leaves, so say both.
+				if _, err := fmt.Fprintf(w,
+					"  outside profile %s -> %s (remove it: vaultmind hooks install %s --profile %s --merge%s; "+
+						"if that group also runs a hook of your own, remove ours from it by hand)\n",
+					e.Event, e.Script, hooksStatusInstallTarget(report), report.Profile, localFlag); err != nil {
+					return err
+				}
+				continue
+			}
+			if _, err := fmt.Fprintf(w, "  unwired   %s -> %s\n", e.Event, e.Script); err != nil {
+				return err
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -307,6 +324,13 @@ func renderScopeOverlaps(w io.Writer, overlaps []hooks.ScopeOverlap) error {
 func renderWiringHealth(w io.Writer, report hooks.StatusReport) error {
 	if err := renderScopeOverlaps(w, report.Overlaps); err != nil {
 		return err
+	}
+	for _, e := range report.Events {
+		for _, warning := range e.Warnings {
+			if _, err := fmt.Fprintf(w, "  %s %s -> %s (%s)\n", warning, e.Event, e.Script, strings.Join(e.Files, ", ")); err != nil {
+				return err
+			}
+		}
 	}
 	for _, b := range report.BrokenCommands {
 		if _, err := fmt.Fprintf(w, "  broken %s %s (%s)\n    command: %s\n    %s\n    fix: %s\n", b.Agent, b.Event, b.SettingsPath, b.Command, b.Reason, b.Fix); err != nil {

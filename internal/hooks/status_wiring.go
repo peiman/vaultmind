@@ -6,11 +6,11 @@ import (
 )
 
 // EventState says whether a canonical event is actually wired in the project's
-// settings.json.
+// settings files.
 type EventState string
 
 const (
-	// EventWired — settings.json runs this canonical script on this event.
+	// EventWired — a settings file runs this canonical script on this event.
 	EventWired EventState = "wired"
 	// EventUnwired — the binary wires this event and the project does not.
 	// Reported separately because an absence that renders as nothing looks
@@ -33,6 +33,15 @@ type EventStatus struct {
 	Event  string     `json:"event"`
 	Script string     `json:"script"`
 	State  EventState `json:"state"`
+	// Files names the settings files wiring this pair, in shared/local order.
+	Files []string `json:"files,omitempty"`
+	// Warnings names duplicate dispatch across project settings files.
+	Warnings []string `json:"warnings,omitempty"`
+}
+
+// LocalOnly reports whether repairs must target the personal project file.
+func (e EventStatus) LocalOnly() bool {
+	return len(e.Files) == 1 && e.Files[0] == settingsLocalName
 }
 
 // eventWiring compares the canonical event map against a project's settings.
@@ -43,51 +52,66 @@ type EventStatus struct {
 // capture-episode.sh sat on disk having already produced 13 episodes. Every
 // content check passed; the write half was off.
 func eventWiringForProfile(projectDir string, p Profile) []EventStatus {
-	raw, err := readSettingsFile(filepath.Join(projectDir, ".claude", "settings.json"))
-	if err != nil || len(raw) == 0 {
-		raw = nil
-	}
+	return eventWiringForScope(projectDir, p, ScopeProject)
+}
 
+func eventWiringForScope(projectDir string, p Profile, scope Scope) []EventStatus {
 	// Match on the script filename appearing in the command for that event.
 	// Deliberately not an exact-string match on the whole command: projects
 	// legitimately template the path ($CLAUDE_PROJECT_DIR, absolute, relative),
 	// and treating a path spelling difference as "unwired" would produce false
 	// alarms — which is how a check gets ignored, then deleted.
-	var parsed struct {
-		Hooks map[string][]struct {
-			Matcher string `json:"matcher"`
-			Hooks   []struct {
-				Command string `json:"command"`
-			} `json:"hooks"`
-		} `json:"hooks"`
+	type wiringFile struct {
+		name  string
+		hooks map[string][]hookGroup
 	}
-	if len(raw) > 0 {
+	var files []wiringFile
+	for _, path := range wiringPaths(projectDir, scope, AgentClaude) {
+		raw, err := readSettingsFile(path)
+		if err != nil || len(raw) == 0 {
+			continue
+		}
+		var parsed struct {
+			Hooks map[string][]hookGroup `json:"hooks"`
+		}
+		// Preserve the internal status check's treatment of malformed settings.
+		// The command's scope-overlap check separately surfaces parse/read errors.
 		_ = json.Unmarshal(raw, &parsed)
+		files = append(files, wiringFile{filepath.Base(path), parsed.Hooks})
 	}
 
 	// A script wired under a matcher an earlier release installed is not
 	// healthy: it runs, but misses tools it now needs to see. A script in
 	// several groups is hand-wired, a matcher per group: the project's choice,
 	// and the merge leaves it alone too.
-	stateOf := func(event, script string) EventState {
+	statusOf := func(event, script string) EventStatus {
+		status := EventStatus{Event: event, Script: script, State: EventUnwired}
 		groups, stale := 0, false
-		for _, group := range parsed.Hooks[event] {
-			for _, h := range group.Hooks {
-				if commandReferencesScript(h.Command, script) {
-					groups++
-					stale = isLegacyMatcher(script, group.Matcher)
-					break
+		for _, file := range files {
+			before := groups
+			for _, group := range file.hooks[event] {
+				for _, h := range group.Hooks {
+					if commandReferencesScript(h.Command, script) {
+						groups++
+						stale = isLegacyMatcher(script, group.Matcher)
+						break
+					}
 				}
+			}
+			if groups > before {
+				status.Files = append(status.Files, file.name)
 			}
 		}
 		switch {
-		case groups == 0:
-			return EventUnwired
 		case groups == 1 && stale:
-			return EventStaleMatcher
-		default:
-			return EventWired
+			status.State = EventStaleMatcher
+		case groups > 0:
+			status.State = EventWired
 		}
+		if len(status.Files) > 1 {
+			status.Warnings = []string{"Warning: hooks can fire twice; remove one file's wiring. Neither file is removed automatically."}
+		}
+		return status
 	}
 
 	// vaultPath is only used to build command strings for install; wiring
@@ -100,17 +124,30 @@ func eventWiringForProfile(projectDir string, p Profile) []EventStatus {
 	inProfile := map[EventScript]bool{}
 	for _, c := range expected {
 		inProfile[c] = true
-		out = append(out, EventStatus{Event: c.Event, Script: c.Script, State: stateOf(c.Event, c.Script)})
+		out = append(out, statusOf(c.Event, c.Script))
 	}
 	// And the other direction: one of our hooks wired that the profile
 	// excludes. Without this a knowledge project running a persona loader
 	// reported healthy — the profile was only ever read as "what to expect".
 	for _, c := range CanonicalEventScripts() {
-		if !inProfile[c] && stateOf(c.Event, c.Script) != EventUnwired {
-			out = append(out, EventStatus{Event: c.Event, Script: c.Script, State: EventOutsideProfile})
+		if status := statusOf(c.Event, c.Script); !inProfile[c] && status.State != EventUnwired {
+			status.State = EventOutsideProfile
+			out = append(out, status)
 		}
 	}
 	return out
+}
+
+// EventOverlapCount counts event/script pairs dispatched by both project files.
+// These gate status just as user/project scope overlaps do.
+func (r StatusReport) EventOverlapCount() int {
+	count := 0
+	for _, e := range r.Events {
+		if len(e.Files) > 1 {
+			count++
+		}
+	}
+	return count
 }
 
 // EventCounts returns how many canonical events are wired and unwired.

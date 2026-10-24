@@ -48,7 +48,7 @@ type StatusReport struct {
 	BrokenCommands     []BrokenCommand `json:"broken_commands,omitempty"`
 	Installed          bool            `json:"installed"`
 	Scripts            []ScriptStatus  `json:"scripts"`
-	// Events reports whether each canonical event is wired in settings.json.
+	// Events reports whether each canonical event is wired in the settings files.
 	// Script contents and event wiring are independent failures: a project can
 	// hold every script byte-identical and still run none of them.
 	Events []EventStatus `json:"events"`
@@ -102,7 +102,11 @@ func StatusForScope(projectDir string, scope Scope) (StatusReport, error) {
 		return StatusReport{}, err
 	}
 	report.Profile = profile
-	report.Events = eventWiringForProfile(projectDir, profile)
+	if scope == ScopeUser {
+		report.Events = eventWiringForScope(projectDir, profile, scope)
+	} else {
+		report.Events = eventWiringForProfile(projectDir, profile)
+	}
 	var codex CodexApproval
 	if scope == ScopeUser {
 		codex, err = codexApprovalsAt(UserCodexHooksPath(), codexHomeDir())
