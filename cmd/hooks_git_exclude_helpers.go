@@ -25,3 +25,12 @@ func writeHooksGitExclude(w io.Writer, res *hooks.GitExcludeResult) {
 		_, _ = fmt.Fprintf(w, "\nGit exclude unchanged: %s\n", res.Path)
 	}
 }
+
+// Cleanup has its own advisory wording: uninstall may have removed the files.
+func writeHooksGitExcludeCleanup(w io.Writer, res *hooks.GitExcludeResult) {
+	if res != nil && res.SkippedReason != "" {
+		_, _ = fmt.Fprintf(w, "\nGit exclude cleanup skipped: %s\n", res.SkippedReason)
+		return
+	}
+	writeHooksGitExclude(w, res)
+}

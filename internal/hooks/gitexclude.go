@@ -20,8 +20,8 @@ const (
 )
 
 // GitExcludeResult reports checkout-local exclusions. Added lists the literal
-// patterns written (or proposed under DryRun). Failure is advisory: the hook
-// install still succeeds, and SkippedReason explains the unprotected files.
+// patterns written (or proposed under DryRun). Exclusion failures are advisory;
+// SkippedReason explains skipped changes or blocks retained for other worktrees.
 type GitExcludeResult struct {
 	Path          string   `json:"path,omitempty"`
 	Added         []string `json:"added"`
@@ -49,6 +49,12 @@ func localGitExclude(projectDir string, remove, dryRun bool) *GitExcludeResult {
 	updated, changed := editGitExclude(string(existing), entries, remove)
 	if len(changed) == 0 {
 		return res
+	}
+	if remove {
+		res.SkippedReason = otherWorktreeNeedsExclude(projectDir)
+		if res.SkippedReason != "" {
+			return res
+		}
 	}
 	if !dryRun {
 		perm := os.FileMode(0o600)
@@ -169,9 +175,13 @@ func checkedGitExcludePath(project, path string) (string, error) {
 // Discover the requested project without inheriting another repository's
 // location. Keep discovery controls such as GIT_CEILING_DIRECTORIES.
 func localGitRevParse(project string, args ...string) (string, error) {
+	return localGitOutput(project, append([]string{"rev-parse"}, args...)...)
+}
+
+func localGitOutput(project string, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", append([]string{"rev-parse"}, args...)...) //nolint:gosec // G204: private caller supplies only fixed rev-parse flags; project sets cwd, never an argument.
+	cmd := exec.CommandContext(ctx, "git", args...) //nolint:gosec // G204: private caller supplies only fixed git commands and flags; project sets cwd, never an argument.
 	cmd.Dir = project
 	cmd.Env = git.WithoutLocation(os.Environ())
 	out, err := cmd.Output()

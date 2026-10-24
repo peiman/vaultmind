@@ -230,3 +230,50 @@ func TestHooksLocalExclude_SubprojectsUninstallIndependently(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, before, readLocalExclude(t, path))
 }
+
+func TestHooksLocalExclude_UninstallKeepsOtherWorktreeClean(t *testing.T) {
+	for _, fixture := range []struct{ rel, keep string }{
+		{".", "scripts"}, {"nested project", "vaultmind-profile"},
+	} {
+		t.Run(fixture.keep, func(t *testing.T) {
+			rel := fixture.rel
+			dir, path := localExcludeRepo(t)
+			require.NoError(t, os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("settings.local.json\n"), 0o600))
+			testgit.Run(t, dir, "add", ".gitignore")
+			testgit.Run(t, dir, "-c", "user.name=Test", "-c", "user.email=test@example.test", "-c", "core.hooksPath=/dev/null", "commit", "-m", "test fixture")
+			wt := filepath.Join(t.TempDir(), "linked checkout")
+			testgit.Run(t, dir, "worktree", "add", "-b", "local-test", wt)
+			for _, root := range []string{dir, wt} {
+				project := filepath.Join(root, rel)
+				require.NoError(t, os.MkdirAll(project, 0o750))
+				_, _, err := runRootCmd(t, "hooks", "install", project, "--merge", "--local")
+				require.NoError(t, err)
+			}
+			other := "scripts"
+			if fixture.keep == "scripts" {
+				other = "vaultmind-profile"
+			}
+			require.NoError(t, os.RemoveAll(filepath.Join(dir, rel, ".claude", other)))
+			before := readLocalExclude(t, path)
+			out, _, err := runRootCmd(t, "hooks", "uninstall", filepath.Join(wt, rel), "--local", "--remove-scripts")
+			require.NoError(t, err)
+			assert.Equal(t, before, readLocalExclude(t, path))
+			assert.Contains(t, out.String(), "another worktree")
+			assert.Empty(t, string(testgit.Run(t, dir, "status", "--porcelain")))
+			// The final checkout can remove the block after the other install
+			// is gone (remove-scripts leaves its profile marker behind).
+			require.NoError(t, os.RemoveAll(filepath.Join(wt, rel, ".claude")))
+			_, _, err = runRootCmd(t, "hooks", "uninstall", filepath.Join(dir, rel), "--local")
+			require.NoError(t, err)
+			assert.NotContains(t, readLocalExclude(t, path), localExcludeStart)
+		})
+	}
+}
+
+func TestHooksLocalExclude_UninstallNonGitWording(t *testing.T) {
+	out, _, err := runRootCmd(t, "hooks", "uninstall", t.TempDir(), "--local")
+	require.NoError(t, err)
+	assert.Contains(t, out.String(), "Git exclude cleanup skipped:")
+	assert.NotContains(t, out.String(), "are in the tree")
+	assert.NotContains(t, out.String(), "git exclusion skipped:")
+}
