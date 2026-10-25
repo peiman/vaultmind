@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `hooks install --local` and `init --wire-hooks --local` no longer leave `.claude/scripts/` and `.claude/vaultmind-profile` showing up in `git status` (#344). They add both paths to the checkout's own git exclude file, in a marked block, and say so; `--dry-run` previews it. This works in worktrees, submodules and projects below the repository root, including projects reached through a symlink. `hooks uninstall --local` removes the block, unless another worktree of the same repository still uses it. Your own exclude lines are never touched, and nothing is written if the install fails or the exclude file would be outside the repository.
+
 ## [0.10.18] - 2026-10-21
 
 > Plugin users: `claude plugin update vaultmind@vaultmind`. Pinned notes now arrive as their opening 400 tokens, headings included.

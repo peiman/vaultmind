@@ -35,6 +35,7 @@ func runHooksUninstallCore(cmd *cobra.Command, projectDir, agent string, jsonOut
 
 	if res != nil {
 		_, _ = fmt.Fprintf(w, "Settings: %s\n", res.SettingsPath)
+		writeHooksGitExcludeCleanup(w, res.GitExclude)
 		if len(res.Removed) > 0 {
 			_, _ = fmt.Fprintf(w, "\nRemoved %d VaultMind hook entries:\n", len(res.Removed))
 			for _, name := range res.Removed {

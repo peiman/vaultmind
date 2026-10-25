@@ -58,3 +58,27 @@ func TestProvision_DryRunDoesNotWriteSettings(t *testing.T) {
 	_, statErr := os.Stat(filepath.Join(dir, ".claude", "settings.json"))
 	assert.True(t, os.IsNotExist(statErr), "dry-run must not write settings")
 }
+
+func TestProvision_FailureDoesNotWriteGitExclude(t *testing.T) {
+	for _, failure := range []string{"script conflict", "settings merge"} {
+		t.Run(failure, func(t *testing.T) {
+			dir, path := gitExcludeRepo(t)
+			before, err := os.ReadFile(path)
+			require.NoError(t, err)
+			claude := filepath.Join(dir, ".claude")
+			require.NoError(t, os.MkdirAll(filepath.Join(claude, "scripts"), 0o750))
+			if failure == "script conflict" {
+				require.NoError(t, os.WriteFile(filepath.Join(claude, "scripts", "vault-recall.sh"), []byte("# local edit\n"), 0o700))
+			} else {
+				require.NoError(t, os.WriteFile(filepath.Join(claude, "settings.local.json"), []byte("invalid json"), 0o600))
+			}
+			prov, err := Provision(InstallConfig{ProjectDir: dir}, true, true, false)
+			require.Error(t, err)
+			require.NotNil(t, prov.Install)
+			assert.Nil(t, prov.Install.GitExclude)
+			after, err := os.ReadFile(path)
+			require.NoError(t, err)
+			assert.Equal(t, before, after)
+		})
+	}
+}

@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+
+	"github.com/peiman/vaultmind/internal/git"
 )
 
 // CodeChange says the code a note covers was committed to after the note was.
@@ -112,41 +114,11 @@ func summarize(c *CodeChange) string {
 }
 
 // runGitLog runs `git log` in dir, without the inherited repository location
-// (see gitLocationVars): under a git hook it points at the calling repository,
+// (see git.WithoutLocation): under a git hook it points at the calling repository,
 // and every answer would be about the wrong one.
 func runGitLog(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", append([]string{"-C", dir, "log"}, args...)...) //nolint:gosec // G204: dir and paths come from the vault index and the file being read, passed as separate args after --
-	cmd.Env = withoutGitLocation(os.Environ())
+	cmd.Env = git.WithoutLocation(os.Environ())
 	out, err := cmd.Output()
 	return strings.TrimSpace(string(out)), err
-}
-
-// gitLocationVars are what git exports to a hook to say which repository it is
-// in. Inherited, they point every git command at that repository instead of
-// the one named with -C — a hook's GIT_INDEX_FILE once made a test's
-// `git add` write into the calling worktree's index.
-var gitLocationVars = []string{
-	"GIT_DIR=", "GIT_WORK_TREE=", "GIT_INDEX_FILE=", "GIT_COMMON_DIR=", "GIT_PREFIX=",
-	"GIT_OBJECT_DIRECTORY=", "GIT_ALTERNATE_OBJECT_DIRECTORIES=",
-}
-
-// withoutGitLocation drops gitLocationVars. Set to empty they are still set,
-// and git refuses an empty path, so they are removed.
-func withoutGitLocation(env []string) []string {
-	out := env[:0:0]
-	for _, kv := range env {
-		if !hasAnyPrefix(kv, gitLocationVars) {
-			out = append(out, kv)
-		}
-	}
-	return out
-}
-
-func hasAnyPrefix(s string, prefixes []string) bool {
-	for _, p := range prefixes {
-		if strings.HasPrefix(s, p) {
-			return true
-		}
-	}
-	return false
 }

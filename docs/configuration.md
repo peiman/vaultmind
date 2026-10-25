@@ -166,7 +166,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.hooksinstall.only` | string | `` | `VAULTMIND_APP_HOOKSINSTALL_ONLY` | Comma-separated subset of canonical scripts to install (default: all). Unknown names rejected at lint time. |
 | `app.hooksinstall.vault` | string | `` | `VAULTMIND_APP_HOOKSINSTALL_VAULT` | Vault path to bake into the printed settings.json stanza via VAULTMIND_VAULT (default: the built-in vaultmind-identity convention). |
 | `app.hooksinstall.merge` | bool | `false` | `VAULTMIND_APP_HOOKSINSTALL_MERGE` | Additively merge the hook stanza into the project's settings file (never clobbers existing hooks) instead of only printing it. |
-| `app.hooksinstall.local` | bool | `false` | `VAULTMIND_APP_HOOKSINSTALL_LOCAL` | With --merge, target .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared). |
+| `app.hooksinstall.local` | bool | `false` | `VAULTMIND_APP_HOOKSINSTALL_LOCAL` | With --merge, target .claude/settings.local.json (personal). Add .claude/scripts/ and .claude/vaultmind-profile to the checkout's git exclude. |
 | `app.hooksinstall.vaults` | string | `` | `VAULTMIND_APP_HOOKSINSTALL_VAULTS` | Comma-separated vaults to search TOGETHER (federated recall): wired into the recall and decision-time hooks. The persona still loads one vault — --vault, else the first listed. |
 | `app.hooksinstall.agent` | string | `claude` | `VAULTMIND_APP_HOOKSINSTALL_AGENT` | Agent to wire: claude (default; .claude/settings.json), codex (.codex/hooks.json) or cursor (.cursor/hooks.json). Codex gets identity, recall, decision-time and episode-capture hooks; approve them in Codex with /hooks. Cursor gets the session-start map, the code map and post-commit notes. |
 | `app.hooksinstall.dryrun` | bool | `false` | `VAULTMIND_APP_HOOKSINSTALL_DRYRUN` | With --merge, print the merged result without writing it (preview/diff). |
@@ -175,7 +175,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.hooksstatus.scope` | string | `project` | `VAULTMIND_APP_HOOKSSTATUS_SCOPE` | Hook scope: project or user (across projects) |
 | `app.hooksstatus.json` | bool | `false` | `VAULTMIND_APP_HOOKSSTATUS_JSON` | Output in JSON format |
 | `app.hooksuninstall.json` | bool | `false` | `VAULTMIND_APP_HOOKSUNINSTALL_JSON` | Output in JSON format |
-| `app.hooksuninstall.local` | bool | `false` | `VAULTMIND_APP_HOOKSUNINSTALL_LOCAL` | Target .claude/settings.local.json instead of .claude/settings.json. |
+| `app.hooksuninstall.local` | bool | `false` | `VAULTMIND_APP_HOOKSUNINSTALL_LOCAL` | Target .claude/settings.local.json and remove the marked block for scripts and profile added to the checkout's git exclude by install --local. |
 | `app.hooksuninstall.removescripts` | bool | `false` | `VAULTMIND_APP_HOOKSUNINSTALL_REMOVESCRIPTS` | Also delete the installed hook scripts under .claude/scripts/ (Codex: .vaultmind/scripts/; default: leave them). |
 | `app.hooksuninstall.agent` | string | `claude` | `VAULTMIND_APP_HOOKSUNINSTALL_AGENT` | Agent to unwire: claude (default; .claude/settings.json), codex (.codex/hooks.json) or cursor (.cursor/hooks.json). |
 | `app.identityenrolladd.request` | string | `` | `VAULTMIND_APP_IDENTITYENROLLADD_REQUEST` | Signed enrollment-request JSON file (stdin when empty or "-") |
@@ -242,7 +242,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.init.full` | bool | `false` | `VAULTMIND_APP_INIT_FULL` | With --print-instructions, print the full agent-onboarding guide instead of the concise quick-start |
 | `app.init.wire_hooks` | bool | `false` | `VAULTMIND_APP_INIT_WIRE_HOOKS` | After scaffolding, install the Claude Code hook scripts into the current project and merge the wiring into .claude/settings.json (baked to the new vault). Never clobbers existing hooks. |
 | `app.init.profile` | string | `` | `VAULTMIND_APP_INIT_PROFILE` | What the vault is for: knowledge (the default) scaffolds a project knowledge base (decisions/, concepts/, notes tied to code with paths:); persona or full scaffold an agent's identity vault. With --wire-hooks it is also the hook profile installed; unset, the project's declared profile is kept, else the scaffold's. |
-| `app.init.local` | bool | `false` | `VAULTMIND_APP_INIT_LOCAL` | With --wire-hooks, merge into .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared). |
+| `app.init.local` | bool | `false` | `VAULTMIND_APP_INIT_LOCAL` | With --wire-hooks, merge into .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared). Keep .claude/scripts/ and .claude/vaultmind-profile out of git via git info/exclude and report changes or skips. |
 | `app.init.dry_run` | bool | `false` | `VAULTMIND_APP_INIT_DRY_RUN` | With --wire-hooks, print the would-be settings merge without writing it (preview). |
 | `app.init.project_dir` | string | `` | `VAULTMIND_APP_INIT_PROJECT_DIR` | With --wire-hooks, the project to wire hooks into (where .claude/ lives). Defaults to the current directory; set it when the vault and the project root differ. |
 | `app.links.vault` | string | `.` | `VAULTMIND_APP_LINKS_VAULT` | Path to vault root |
@@ -795,7 +795,7 @@ app:
     # Additively merge the hook stanza into the project's settings file (never clobbers existing hooks) instead of only printing it.
     merge: false
 
-    # With --merge, target .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared).
+    # With --merge, target .claude/settings.local.json (personal). Add .claude/scripts/ and .claude/vaultmind-profile to the checkout's git exclude.
     local: false
 
     # Comma-separated vaults to search TOGETHER (federated recall): wired into the recall and decision-time hooks. The persona still loads one vault — --vault, else the first listed.
@@ -825,7 +825,7 @@ app:
     # Output in JSON format
     json: false
 
-    # Target .claude/settings.local.json instead of .claude/settings.json.
+    # Target .claude/settings.local.json and remove the marked block for scripts and profile added to the checkout's git exclude by install --local.
     local: false
 
     # Also delete the installed hook scripts under .claude/scripts/ (Codex: .vaultmind/scripts/; default: leave them).
@@ -1041,7 +1041,7 @@ app:
     # What the vault is for: knowledge (the default) scaffolds a project knowledge base (decisions/, concepts/, notes tied to code with paths:); persona or full scaffold an agent's identity vault. With --wire-hooks it is also the hook profile installed; unset, the project's declared profile is kept, else the scaffold's.
     profile: 
 
-    # With --wire-hooks, merge into .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared).
+    # With --wire-hooks, merge into .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared). Keep .claude/scripts/ and .claude/vaultmind-profile out of git via git info/exclude and report changes or skips.
     local: false
 
     # With --wire-hooks, print the would-be settings merge without writing it (preview).
@@ -1894,7 +1894,7 @@ export VAULTMIND_APP_HOOKSINSTALL_VAULT=
 # Additively merge the hook stanza into the project's settings file (never clobbers existing hooks) instead of only printing it.
 export VAULTMIND_APP_HOOKSINSTALL_MERGE=false
 
-# With --merge, target .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared).
+# With --merge, target .claude/settings.local.json (personal). Add .claude/scripts/ and .claude/vaultmind-profile to the checkout's git exclude.
 export VAULTMIND_APP_HOOKSINSTALL_LOCAL=false
 
 # Comma-separated vaults to search TOGETHER (federated recall): wired into the recall and decision-time hooks. The persona still loads one vault — --vault, else the first listed.
@@ -1921,7 +1921,7 @@ export VAULTMIND_APP_HOOKSSTATUS_JSON=false
 # Output in JSON format
 export VAULTMIND_APP_HOOKSUNINSTALL_JSON=false
 
-# Target .claude/settings.local.json instead of .claude/settings.json.
+# Target .claude/settings.local.json and remove the marked block for scripts and profile added to the checkout's git exclude by install --local.
 export VAULTMIND_APP_HOOKSUNINSTALL_LOCAL=false
 
 # Also delete the installed hook scripts under .claude/scripts/ (Codex: .vaultmind/scripts/; default: leave them).
@@ -2122,7 +2122,7 @@ export VAULTMIND_APP_INIT_WIRE_HOOKS=false
 # What the vault is for: knowledge (the default) scaffolds a project knowledge base (decisions/, concepts/, notes tied to code with paths:); persona or full scaffold an agent's identity vault. With --wire-hooks it is also the hook profile installed; unset, the project's declared profile is kept, else the scaffold's.
 export VAULTMIND_APP_INIT_PROFILE=
 
-# With --wire-hooks, merge into .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared).
+# With --wire-hooks, merge into .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared). Keep .claude/scripts/ and .claude/vaultmind-profile out of git via git info/exclude and report changes or skips.
 export VAULTMIND_APP_INIT_LOCAL=false
 
 # With --wire-hooks, print the would-be settings merge without writing it (preview).

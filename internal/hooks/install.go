@@ -82,6 +82,8 @@ type InstallResult struct {
 	// on every successful install so the operator never has to transcribe
 	// it from the docs (issue #41).
 	SettingsStanza string `json:"settings_stanza,omitempty"`
+
+	GitExclude *GitExcludeResult `json:"git_exclude,omitempty"`
 }
 
 // Install writes the embedded canonical hook scripts into the

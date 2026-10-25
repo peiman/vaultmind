@@ -435,7 +435,7 @@ app:
     # Additively merge the hook stanza into the project's settings file (never clobbers existing hooks) instead of only printing it.
     merge: false
 
-    # With --merge, target .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared).
+    # With --merge, target .claude/settings.local.json (personal). Add .claude/scripts/ and .claude/vaultmind-profile to the checkout's git exclude.
     local: false
 
     # Comma-separated vaults to search TOGETHER (federated recall): wired into the recall and decision-time hooks. The persona still loads one vault — --vault, else the first listed.
@@ -465,7 +465,7 @@ app:
     # Output in JSON format
     json: false
 
-    # Target .claude/settings.local.json instead of .claude/settings.json.
+    # Target .claude/settings.local.json and remove the marked block for scripts and profile added to the checkout's git exclude by install --local.
     local: false
 
     # Also delete the installed hook scripts under .claude/scripts/ (Codex: .vaultmind/scripts/; default: leave them).
@@ -681,7 +681,7 @@ app:
     # What the vault is for: knowledge (the default) scaffolds a project knowledge base (decisions/, concepts/, notes tied to code with paths:); persona or full scaffold an agent's identity vault. With --wire-hooks it is also the hook profile installed; unset, the project's declared profile is kept, else the scaffold's.
     profile: 
 
-    # With --wire-hooks, merge into .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared).
+    # With --wire-hooks, merge into .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared). Keep .claude/scripts/ and .claude/vaultmind-profile out of git via git info/exclude and report changes or skips.
     local: false
 
     # With --wire-hooks, print the would-be settings merge without writing it (preview).

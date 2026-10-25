@@ -82,7 +82,8 @@ ONE-COMMAND SETUP (--wire-hooks)
   that declared its hooks keeps them.
 
     --local     wire .claude/settings.local.json (gitignored, personal)
-                instead of the committed settings.json
+                instead of the committed settings.json; keep scripts and the profile
+                out of git via git info/exclude, reporting changes or skips
     --dry-run   preview the settings merge without writing it
 
   The vault is created at <path>; the hooks are wired into the CURRENT
@@ -155,7 +156,7 @@ func InitOptions() []config.ConfigOption {
 		{
 			Key:          "app.init.local",
 			DefaultValue: false,
-			Description:  "With --wire-hooks, merge into .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared).",
+			Description:  "With --wire-hooks, merge into .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared). Keep .claude/scripts/ and .claude/vaultmind-profile out of git via git info/exclude and report changes or skips.",
 			Type:         "bool",
 		},
 		{

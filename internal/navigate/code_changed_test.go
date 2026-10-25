@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/git"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -31,7 +32,7 @@ func commitFile(t *testing.T, repo, rel, content, date, subject string) {
 func runGit(t *testing.T, dir, date string, args ...string) {
 	t.Helper()
 	cmd := exec.Command("git", append([]string{"-C", dir, "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"}, args...)...)
-	cmd.Env = withoutGitLocation(os.Environ())
+	cmd.Env = git.WithoutLocation(os.Environ())
 	if date != "" {
 		cmd.Env = append(cmd.Env, "GIT_AUTHOR_DATE="+date, "GIT_COMMITTER_DATE="+date)
 	}
@@ -92,7 +93,7 @@ func TestMarkCodeChanged_ShowsTheCommitterDateOfARebasedCommit(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(code, "cmd/run.go"), []byte("v2"), 0o644))
 	runGit(t, code, "", "add", "cmd/run.go")
 	cmd := exec.Command("git", "-C", code, "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "fix: rebased")
-	cmd.Env = append(withoutGitLocation(os.Environ()), "GIT_AUTHOR_DATE=2026-09-05T10:00:00Z", "GIT_COMMITTER_DATE=2026-09-15T10:00:00Z")
+	cmd.Env = append(git.WithoutLocation(os.Environ()), "GIT_AUTHOR_DATE=2026-09-05T10:00:00Z", "GIT_COMMITTER_DATE=2026-09-15T10:00:00Z")
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(out))
 

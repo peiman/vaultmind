@@ -59,6 +59,9 @@ func wireInitHooks(w io.Writer, vaultPath string, scaffold hooks.Profile, p init
 		_, _ = fmt.Fprintf(w, "✅ Installed %d hook script(s) into %s\n",
 			len(prov.Install.Written), filepath.Join(projectDir, ".claude", "scripts"))
 	}
+	if prov.Install != nil {
+		writeHooksGitExclude(w, prov.Install.GitExclude)
+	}
 	if prov.Merge != nil {
 		writeMergeOutcome(w, prov.Merge)
 		// The hooks query the vault on every prompt/session, but a freshly

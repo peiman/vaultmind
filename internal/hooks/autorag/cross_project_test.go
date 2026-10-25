@@ -52,7 +52,12 @@ func stubVaultmind(t *testing.T, searchLine string) (bin, vault string) {
 	dir := t.TempDir()
 	bin = filepath.Join(dir, "vaultmind")
 	script := "#!/bin/bash\nprintf '%s\\n' '" + searchLine + "' '   1.  principle-stay-in-your-lane  Stay in your lane'\n"
-	require.NoError(t, os.WriteFile(bin, []byte(script), 0o700))
+	// Reuse the committed executable stub: newly written executables can be
+	// refused transiently by the macOS scanner under a full test run (#191).
+	stub, err := filepath.Abs(filepath.Join("..", "..", "hookscripts", "testdata", "stub", "stub"))
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(bin+".body", []byte(script), 0o600))
+	require.NoError(t, os.Symlink(stub, bin))
 	vault = filepath.Join(dir, "vault")
 	require.NoError(t, os.MkdirAll(filepath.Join(vault, ".vaultmind"), 0o755))
 	return bin, vault
