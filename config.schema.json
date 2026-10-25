@@ -1321,7 +1321,7 @@
             },
             "local": {
               "default": false,
-              "description": "With --wire-hooks, merge into .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared).",
+              "description": "With --wire-hooks, merge into .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared). Keep .claude/scripts/ and .claude/vaultmind-profile out of git via git info/exclude and report changes or skips.",
               "type": "boolean"
             },
             "print_instructions": {

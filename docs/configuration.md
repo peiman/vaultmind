@@ -242,7 +242,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.init.full` | bool | `false` | `VAULTMIND_APP_INIT_FULL` | With --print-instructions, print the full agent-onboarding guide instead of the concise quick-start |
 | `app.init.wire_hooks` | bool | `false` | `VAULTMIND_APP_INIT_WIRE_HOOKS` | After scaffolding, install the Claude Code hook scripts into the current project and merge the wiring into .claude/settings.json (baked to the new vault). Never clobbers existing hooks. |
 | `app.init.profile` | string | `` | `VAULTMIND_APP_INIT_PROFILE` | What the vault is for: knowledge (the default) scaffolds a project knowledge base (decisions/, concepts/, notes tied to code with paths:); persona or full scaffold an agent's identity vault. With --wire-hooks it is also the hook profile installed; unset, the project's declared profile is kept, else the scaffold's. |
-| `app.init.local` | bool | `false` | `VAULTMIND_APP_INIT_LOCAL` | With --wire-hooks, merge into .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared). |
+| `app.init.local` | bool | `false` | `VAULTMIND_APP_INIT_LOCAL` | With --wire-hooks, merge into .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared). Keep .claude/scripts/ and .claude/vaultmind-profile out of git via git info/exclude and report changes or skips. |
 | `app.init.dry_run` | bool | `false` | `VAULTMIND_APP_INIT_DRY_RUN` | With --wire-hooks, print the would-be settings merge without writing it (preview). |
 | `app.init.project_dir` | string | `` | `VAULTMIND_APP_INIT_PROJECT_DIR` | With --wire-hooks, the project to wire hooks into (where .claude/ lives). Defaults to the current directory; set it when the vault and the project root differ. |
 | `app.links.vault` | string | `.` | `VAULTMIND_APP_LINKS_VAULT` | Path to vault root |
@@ -1041,7 +1041,7 @@ app:
     # What the vault is for: knowledge (the default) scaffolds a project knowledge base (decisions/, concepts/, notes tied to code with paths:); persona or full scaffold an agent's identity vault. With --wire-hooks it is also the hook profile installed; unset, the project's declared profile is kept, else the scaffold's.
     profile: 
 
-    # With --wire-hooks, merge into .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared).
+    # With --wire-hooks, merge into .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared). Keep .claude/scripts/ and .claude/vaultmind-profile out of git via git info/exclude and report changes or skips.
     local: false
 
     # With --wire-hooks, print the would-be settings merge without writing it (preview).
@@ -2122,7 +2122,7 @@ export VAULTMIND_APP_INIT_WIRE_HOOKS=false
 # What the vault is for: knowledge (the default) scaffolds a project knowledge base (decisions/, concepts/, notes tied to code with paths:); persona or full scaffold an agent's identity vault. With --wire-hooks it is also the hook profile installed; unset, the project's declared profile is kept, else the scaffold's.
 export VAULTMIND_APP_INIT_PROFILE=
 
-# With --wire-hooks, merge into .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared).
+# With --wire-hooks, merge into .claude/settings.local.json (gitignored, personal) instead of .claude/settings.json (committed, team-shared). Keep .claude/scripts/ and .claude/vaultmind-profile out of git via git info/exclude and report changes or skips.
 export VAULTMIND_APP_INIT_LOCAL=false
 
 # With --wire-hooks, print the would-be settings merge without writing it (preview).

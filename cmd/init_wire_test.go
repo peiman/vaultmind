@@ -104,3 +104,34 @@ func TestInitWireHooks_RelativeKnowledgeVaultIsPortable(t *testing.T) {
 	assert.Contains(t, health, `VAULTMIND_VAULT="$CLAUDE_PROJECT_DIR/knowledge"`)
 	assert.NotContains(t, health, filepath.Join(project, "knowledge"))
 }
+
+func TestInitWireHooks_LocalReportsGitExclude(t *testing.T) {
+	for _, mode := range []string{"install", "dry run", "non-git"} {
+		t.Run(mode, func(t *testing.T) {
+			project, path := localExcludeRepo(t)
+			if mode == "non-git" {
+				project = t.TempDir()
+			}
+			args := []string{"init", filepath.Join(t.TempDir(), "knowledge"), "--wire-hooks", "--local", "--project-dir", project}
+			if mode == "dry run" {
+				args = append(args, "--dry-run")
+			}
+			out, _, err := runRootCmd(t, args...)
+			require.NoError(t, err)
+			switch mode {
+			case "install":
+				assert.Contains(t, out.String(), "kept out of git:")
+				assert.Contains(t, out.String(), path)
+				assert.Contains(t, readLocalExclude(t, path), localExcludeStart)
+			case "dry run":
+				assert.Contains(t, out.String(), "Would add to "+path)
+				assert.NotContains(t, readLocalExclude(t, path), localExcludeStart)
+			case "non-git":
+				assert.Contains(t, out.String(), "git exclusion skipped:")
+			}
+		})
+	}
+	out, _, err := runRootCmd(t, "init", "--help")
+	require.NoError(t, err)
+	assert.Contains(t, out.String(), "git info/exclude")
+}
