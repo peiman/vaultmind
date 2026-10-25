@@ -37,6 +37,8 @@ type EventStatus struct {
 	Files []string `json:"files,omitempty"`
 	// Warnings names duplicate dispatch across project settings files.
 	Warnings []string `json:"warnings,omitempty"`
+	// Notes names identical handlers that are deduplicated across settings files.
+	Notes []string `json:"notes,omitempty"`
 }
 
 // LocalOnly reports whether repairs must target the personal project file.
@@ -82,34 +84,26 @@ func eventWiringForScope(projectDir string, p Profile, scope Scope) []EventStatu
 
 	// A script wired under a matcher an earlier release installed is not
 	// healthy: it runs, but misses tools it now needs to see. A script in
-	// several groups is hand-wired, a matcher per group: the project's choice,
-	// and the merge leaves it alone too.
+	// several groups in one file is hand-wired, a matcher per group: the
+	// project's choice, and the merge leaves it alone too.
 	statusOf := func(event, script string) EventStatus {
 		status := EventStatus{Event: event, Script: script, State: EventUnwired}
-		groups, stale := 0, false
+		stale := false
+		var previous []hookGroup
 		for _, file := range files {
-			before := groups
-			for _, group := range file.hooks[event] {
-				for _, h := range group.Hooks {
-					if commandReferencesScript(h.Command, script) {
-						groups++
-						stale = isLegacyMatcher(script, group.Matcher)
-						break
-					}
-				}
-			}
-			if groups > before {
+			groups := groupsForScript(file.hooks[event], script)
+			if len(groups) > 0 {
 				status.Files = append(status.Files, file.name)
+				status.State = EventWired
 			}
+			if len(groups) == 1 && isLegacyMatcher(script, groups[0].Matcher) {
+				stale = true
+			}
+			addDuplicateNotices(&status, previous, groups)
+			previous = append(previous, groups...)
 		}
-		switch {
-		case groups == 1 && stale:
+		if stale {
 			status.State = EventStaleMatcher
-		case groups > 0:
-			status.State = EventWired
-		}
-		if len(status.Files) > 1 {
-			status.Warnings = []string{"Warning: hooks can fire twice; remove one file's wiring. Neither file is removed automatically."}
 		}
 		return status
 	}
@@ -136,18 +130,6 @@ func eventWiringForScope(projectDir string, p Profile, scope Scope) []EventStatu
 		}
 	}
 	return out
-}
-
-// EventOverlapCount counts event/script pairs dispatched by both project files.
-// These gate status just as user/project scope overlaps do.
-func (r StatusReport) EventOverlapCount() int {
-	count := 0
-	for _, e := range r.Events {
-		if len(e.Files) > 1 {
-			count++
-		}
-	}
-	return count
 }
 
 // EventCounts returns how many canonical events are wired and unwired.

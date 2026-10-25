@@ -47,17 +47,36 @@ func TestHooksStatus_LocalInstall(t *testing.T) {
 func TestHooksStatus_BothSettingsWarn(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("CODEX_HOME", t.TempDir())
-	project := t.TempDir()
-	_, _, err := runRootCmd(t, "hooks", "install", project, "--merge", "--local")
-	require.NoError(t, err)
-	body, err := os.ReadFile(filepath.Join(project, ".claude", "settings.local.json"))
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(project, ".claude", "settings.json"), body, 0o600))
-	out, _, err := runRootCmd(t, "hooks", "status", project)
-	require.ErrorIs(t, err, cmdutil.ErrAlreadyWritten, "overlapping hooks fail status like scope overlaps")
-	assert.Contains(t, out.String(), "hooks can fire twice")
-	assert.Contains(t, out.String(), "settings.json, settings.local.json")
-	assert.Contains(t, out.String(), "0 unwired")
+	for _, different := range []bool{false, true} {
+		t.Run(map[bool]string{false: "identical", true: "different"}[different], func(t *testing.T) {
+			project := t.TempDir()
+			_, _, err := runRootCmd(t, "hooks", "install", project, "--merge")
+			require.NoError(t, err)
+			_, _, err = runRootCmd(t, "hooks", "install", project, "--merge", "--local")
+			require.NoError(t, err)
+			if different {
+				path := filepath.Join(project, ".claude", "settings.local.json")
+				body, err := os.ReadFile(path)
+				require.NoError(t, err)
+				body = []byte(strings.ReplaceAll(string(body), `"command": "`, `"command": " `))
+				require.NoError(t, os.WriteFile(path, body, 0o600))
+			}
+			out, _, err := runRootCmd(t, "hooks", "status", project)
+			require.NoError(t, err, "duplicates never fail status")
+			if different {
+				assert.Contains(t, out.String(), "hooks can fire twice")
+			} else {
+				assert.Contains(t, out.String(), "wired in both settings files; Claude Code runs it once — keep one")
+				assert.NotContains(t, out.String(), "Warning:")
+				assert.NotContains(t, out.String(), "can fire twice")
+			}
+			assert.Contains(t, out.String(), "settings.json, settings.local.json")
+			assert.Contains(t, out.String(), "0 unwired")
+			out, _, err = runRootCmd(t, "hooks", "status", project, "--json")
+			require.NoError(t, err)
+			assert.Contains(t, out.String(), `"status":"ok"`)
+		})
+	}
 }
 
 func TestHooksStatus_MalformedSettingsErrorSymmetrically(t *testing.T) {
