@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `hooks install --local` and `init --wire-hooks --local` no longer leave `.claude/scripts/` and `.claude/vaultmind-profile` showing up in `git status` (#344). They add both paths to the checkout's own git exclude file, in a marked block, and say so; `--dry-run` previews it. This works in worktrees, submodules and projects below the repository root, including projects reached through a symlink. `hooks uninstall --local` removes the block, unless another worktree of the same repository still uses it. Your own exclude lines are never touched, and nothing is written if the install fails or the exclude file would be outside the repository.
+- `hooks status` reads both `.claude/settings.json` and `.claude/settings.local.json`, so an install with `--merge --local` no longer shows as unwired (#345). Each event names the file that wires it. The same command in both files gets a note, because Claude Code runs it once; the same script under different commands with overlapping matchers gets a warning that it can fire twice; neither fails status. Outdated matchers are judged file by file, and repair hints give both commands when both files need fixing. User-scope status is unchanged.
 
 ## [0.10.18] - 2026-10-21
 

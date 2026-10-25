@@ -1,12 +1,151 @@
 package hooks
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestStatus_ProjectSettingsUnion(t *testing.T) {
+	group := func(matcher string) string {
+		return `{"matcher":"` + matcher + `","hooks":[{"command":"bash .claude/scripts/vault-reach.sh"}]}`
+	}
+	different := func(matcher string) string {
+		return strings.Replace(group(matcher), "bash ", "sh ", 1)
+	}
+	for _, tc := range []struct {
+		name, shared, local string
+		state               EventState
+		files               []string
+		warning, note       bool
+	}{
+		{"local only", "", group(reachMatcher), EventWired, []string{settingsLocalName}, false, false},
+		{"shared only", group(reachMatcher), "", EventWired, []string{settingsFileName}, false, false},
+		{"neither", "", "", EventUnwired, nil, false, false},
+		{"both", group(reachMatcher), group(reachMatcher), EventWired, []string{settingsFileName, settingsLocalName}, false, true},
+		{"local stale", "", group("Bash"), EventStaleMatcher, []string{settingsLocalName}, false, false},
+		{"stale in both", group("Bash"), group("Bash"), EventStaleMatcher, []string{settingsFileName, settingsLocalName}, false, true},
+		{"stale shared canonical local", group("Bash"), group(reachMatcher), EventStaleMatcher, []string{settingsFileName, settingsLocalName}, false, true},
+		{"canonical shared stale local", group(reachMatcher), group("Bash"), EventStaleMatcher, []string{settingsFileName, settingsLocalName}, false, true},
+		{"local hand wired", "", group("Bash") + "," + group("Edit"), EventWired, []string{settingsLocalName}, false, false},
+		{"hand wired across files", group("Bash"), group("Edit"), EventStaleMatcher, []string{settingsFileName, settingsLocalName}, false, false},
+		{"different overlapping commands", group(reachMatcher), different("Edit|Read"), EventWired, []string{settingsFileName, settingsLocalName}, true, false},
+		{"different disjoint commands", group("Read"), different("Edit"), EventWired, []string{settingsFileName, settingsLocalName}, false, false},
+		{"wildcard", group("*"), different("Edit"), EventWired, []string{settingsFileName, settingsLocalName}, true, false},
+		{"omitted matcher", `{"hooks":[{"command":"bash .claude/scripts/vault-reach.sh"}]}`, different("Edit"), EventWired, []string{settingsFileName, settingsLocalName}, true, false},
+		{"comma list", group("Read, Edit"), different("Edit"), EventWired, []string{settingsFileName, settingsLocalName}, true, false},
+		{"regex overlaps exact", group("^Ed.*"), different("Edit"), EventWired, []string{settingsFileName, settingsLocalName}, true, false},
+		{"regex disjoint from exact", group("^Read$"), different("Edit"), EventWired, []string{settingsFileName, settingsLocalName}, false, false},
+		{"all commands in a group checked", strings.Replace(group("Edit"), `"}]}`, `"},{"command":"sh .claude/scripts/vault-reach.sh"}]}`, 1), group("Edit"), EventWired, []string{settingsFileName, settingsLocalName}, true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			project := t.TempDir()
+			require.NoError(t, os.MkdirAll(filepath.Join(project, ".claude", "scripts"), 0o750))
+			require.NoError(t, os.WriteFile(filepath.Join(project, ".claude", "scripts", "capture-episode.sh"), []byte("#!/bin/bash\n"), 0o700))
+			for local, groups := range map[bool]string{false: tc.shared, true: tc.local} {
+				if groups != "" {
+					require.NoError(t, os.WriteFile(settingsFilePath(project, local), []byte(`{"hooks":{"PreToolUse":[`+groups+`]}}`), 0o600))
+				}
+			}
+			report, err := Status(project)
+			require.NoError(t, err)
+			require.Len(t, report.Events, len(CanonicalEventScripts()))
+			byScript := map[string]EventStatus{}
+			for _, e := range report.Events {
+				byScript[e.Script] = e
+			}
+			require.Contains(t, byScript, "capture-episode.sh")
+			assert.Equal(t, EventUnwired, byScript["capture-episode.sh"].State, "a script on disk still needs event wiring")
+			require.Contains(t, byScript, "vault-reach.sh")
+			e := byScript["vault-reach.sh"]
+			assert.Equal(t, tc.state, e.State)
+			body, err := json.Marshal(e)
+			require.NoError(t, err)
+			var details struct {
+				Files    []string `json:"files"`
+				Warnings []string `json:"warnings"`
+				Notes    []string `json:"notes"`
+			}
+			require.NoError(t, json.Unmarshal(body, &details))
+			assert.Equal(t, tc.files, details.Files)
+			if tc.warning {
+				require.Len(t, details.Warnings, 1)
+				assert.Contains(t, details.Warnings[0], "hooks can fire twice")
+			} else {
+				assert.Empty(t, details.Warnings)
+			}
+			if tc.note {
+				require.Len(t, details.Notes, 1)
+				assert.Contains(t, details.Notes[0], "wired in both settings files; Claude Code runs it once — keep one")
+			} else {
+				assert.Empty(t, details.Notes)
+			}
+		})
+	}
+}
+
+func TestStatus_MalformedSettingsRemainSymmetric(t *testing.T) {
+	for _, local := range []bool{false, true} {
+		project := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(project, ".claude"), 0o750))
+		require.NoError(t, os.WriteFile(settingsFilePath(project, local), []byte(`{"hooks":`), 0o600))
+		report, err := Status(project)
+		require.NoError(t, err, "the internal status check historically ignores malformed settings")
+		wired, unwired := report.EventCounts()
+		assert.Zero(t, wired)
+		assert.Equal(t, len(CanonicalEventScripts()), unwired)
+	}
+}
+
+func TestStatus_NonToolDuplicateCommands(t *testing.T) {
+	for _, different := range []bool{false, true} {
+		t.Run(map[bool]string{false: "identical", true: "different"}[different], func(t *testing.T) {
+			project := t.TempDir()
+			require.NoError(t, os.MkdirAll(filepath.Join(project, ".claude"), 0o750))
+			for _, local := range []bool{false, true} {
+				command := "bash .claude/scripts/vault-recall.sh"
+				if local && different {
+					command = "sh .claude/scripts/vault-recall.sh"
+				}
+				matcher := ""
+				if local {
+					matcher = `"matcher":"",`
+				}
+				require.NoError(t, os.WriteFile(settingsFilePath(project, local), []byte(`{"hooks":{"UserPromptSubmit":[{`+matcher+`"hooks":[{"command":"`+command+`"}]}]}}`), 0o600))
+			}
+			byScript := map[string]EventStatus{}
+			for _, e := range eventWiringForProfile(project, ProfileFull) {
+				byScript[e.Script] = e
+			}
+			require.Contains(t, byScript, hookUserPromptSubmitScript)
+			e := byScript[hookUserPromptSubmitScript]
+			assert.Equal(t, EventWired, e.State)
+			if different {
+				require.Len(t, e.Warnings, 1)
+				assert.Contains(t, e.Warnings[0], "hooks can fire twice")
+			} else {
+				assert.Empty(t, e.Warnings)
+			}
+		})
+	}
+}
+
+func TestStatus_UserScopeIgnoresLocalSettings(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CODEX_HOME", filepath.Join(home, ".codex"))
+	_, err := MergeIntoSettings(home, "", true, false)
+	require.NoError(t, err)
+	report, err := StatusForScope(home, ScopeUser)
+	require.NoError(t, err)
+	wired, _ := report.EventCounts()
+	assert.Zero(t, wired)
+	assert.False(t, UserScopeInstalled(home))
+}
 
 // TestStatus_ReportsCanonicalEventsThatAreNotWired closes the same gap this
 // command was built to close, one layer up.

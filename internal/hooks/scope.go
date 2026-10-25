@@ -58,7 +58,7 @@ func UserScopeInstalled(home string) bool {
 			return true
 		}
 	}
-	for _, e := range eventWiringForProfile(home, ProfileFull) {
+	for _, e := range eventWiringForScope(home, ProfileFull, ScopeUser) {
 		if e.State != EventUnwired {
 			return true
 		}
