@@ -9,9 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Local hook uninstall preserves shared exclusions while another worktree still has scripts or a profile marker at the same project-relative location, and explains skipped cleanup. Failed installs or settings merges leave git exclusions unchanged.
-- Local hook exclusions preserve `info/exclude` symlinks within the common git directory and honor `GIT_CEILING_DIRECTORIES`. Hook provisioning and code-history queries share the same repository-location environment filter. Exclusions resolve symlinked project directories physically and refuse paths outside the existing common git directory, preventing stray `.git/` directories.
-- Project `hooks install --local` and `init --wire-hooks --local` keep `.claude/scripts/` and `.claude/vaultmind-profile` out of git using a marked block in the checkout's git exclude, including worktrees, submodules and projects below the repository root. Text output reports the exclusions or why they were skipped; `hooks install` also reports them in JSON. Dry runs preview the exclusions without writing them. `hooks uninstall --local` removes only that project's marked block once other worktrees no longer need it, preserving user exclusions.
+- `hooks install --local` and `init --wire-hooks --local` no longer leave `.claude/scripts/` and `.claude/vaultmind-profile` showing up in `git status` (#344). They add both paths to the checkout's own git exclude file, in a marked block, and say so; `--dry-run` previews it. This works in worktrees, submodules and projects below the repository root, including projects reached through a symlink. `hooks uninstall --local` removes the block, unless another worktree of the same repository still uses it. Your own exclude lines are never touched, and nothing is written if the install fails or the exclude file would be outside the repository.
 
 ## [0.10.18] - 2026-10-21
 
