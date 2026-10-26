@@ -297,7 +297,11 @@ func TestMeshWatch_SameSecondCursor(t *testing.T) {
 					require.NoError(t, statErr)
 					lag := info.ModTime().Sub(added)
 					t.Logf("straggler recorded after %s", lag)
-					require.LessOrEqual(t, lag, 16*time.Second, "one 15s sweep interval plus scheduling/parse overhead")
+					// The sweep fires when bash's whole-second SECONDS has advanced 15, checked
+					// once per loop tick, so the design's worst case is ~17s before the read
+					// itself; 16s flaked under `task check` load (16.37s). 20s still fails a
+					// watcher that misses the 15s sweep and waits for the next one (30s).
+					require.LessOrEqual(t, lag, 20*time.Second, "one 15s sweep interval plus whole-second rounding, a loop tick and the read")
 				}
 			})
 		}

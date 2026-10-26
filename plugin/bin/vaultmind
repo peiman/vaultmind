@@ -18,6 +18,8 @@ if [ -z "$DATA" ]; then
 fi
 VERSION=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$ROOT/.claude-plugin/plugin.json")
 fail() { printf 'VaultMind plugin: %s\n' "$*" >&2; exit 1; }
+# Opt-in log of each cache and lock decision (#353); stdout stays the CLI's.
+trace() { [ -z "${VAULTMIND_PLUGIN_TRACE:-}" ] || printf '%s %s %s\n' "$$" "$(date +%s)" "$*" >> "$VAULTMIND_PLUGIN_TRACE" 2>/dev/null || :; }
 printf '%s\n' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || fail 'invalid plugin version'
 # Search PATH only on the outer invocation. Unknown wrapper copies inherit the
 # marker; recognized plugin wrappers are never candidates for binary reuse.
@@ -37,14 +39,14 @@ $candidate
 "
     if [ -x "$candidate" ] && [ ! "$candidate" -ef "$ROOT/bin/vaultmind" ] && [ ! -f "$(dirname "$candidate")/../.claude-plugin/plugin.json" ]; then
       reported=$("$candidate" --version 2>/dev/null | sed -n '1s/.*version v\{0,1\}\([^ ,]*\).*/\1/p') || reported=
-      if [ "$reported" = "$VERSION" ]; then exec "$candidate" "$@"; fi
+      if [ "$reported" = "$VERSION" ]; then trace "probe-exec $candidate"; exec "$candidate" "$@"; fi
     fi
     IFS=:
   done
   IFS=$OLD_IFS
 fi
 CACHE=$DATA/$VERSION
-[ ! -x "$CACHE/vaultmind" ] || exec "$CACHE/vaultmind" "$@"
+[ ! -x "$CACHE/vaultmind" ] || { trace cache-hit; exec "$CACHE/vaultmind" "$@"; }
 
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
@@ -63,6 +65,7 @@ LOCK=$DATA/$VERSION.lock
 DOWNLOAD_LIMIT=180
 STALE_AFTER=$((2 * DOWNLOAD_LIMIT + 60))
 stale_lock() {
+  modified=
   owner=$(cat "$LOCK/pid" 2>/dev/null) || owner=
   case "$owner" in
     ''|*[!0-9]*) ;; # A just-created lock may not have its PID yet: use age.
@@ -74,8 +77,9 @@ stale_lock() {
 }
 attempt=0
 until mkdir "$LOCK" 2>/dev/null; do
-  [ ! -x "$CACHE/vaultmind" ] || exec "$CACHE/vaultmind" "$@"
-  if stale_lock; then rm -rf "$LOCK"; continue; fi
+  [ ! -x "$CACHE/vaultmind" ] || { trace cache-hit-waiting; exec "$CACHE/vaultmind" "$@"; }
+  if stale_lock; then trace "stale-evict owner=$owner modified=$modified"; rm -rf "$LOCK"; continue; fi
+  trace "lock-busy owner=$owner modified=$modified"
   attempt=$((attempt + 1))
   [ "$attempt" -lt 180 ] || fail "timed out waiting for $LOCK; remove it if a previous download was interrupted"
   sleep 1
@@ -92,7 +96,11 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
 printf '%s\n' "$$" > "$LOCK/pid"
-[ ! -x "$CACHE/vaultmind" ] || { cleanup; trap - EXIT HUP INT TERM; exec "$CACHE/vaultmind" "$@"; }
+trace lock-acquired
+[ ! -x "$CACHE/vaultmind" ] || { trace cache-hit-locked; cleanup; trap - EXIT HUP INT TERM; exec "$CACHE/vaultmind" "$@"; }
+# Only the lock holder publishes, so a cache without its binary is a publish that
+# was killed mid-way: start it over.
+[ ! -e "$CACHE" ] || { trace cache-incomplete-removed; rm -rf "$CACHE"; }
 TMP=$(mktemp -d "$DATA/.download.XXXXXX")
 fetch() {
   if command -v curl >/dev/null 2>&1; then
@@ -118,8 +126,20 @@ BINARY=$(find "$TMP/extract" -type f -name vaultmind)
 chmod +x "$BINARY"
 # ORT archives have a containing directory; plain archives have files at root.
 PAYLOAD=$(dirname "$BINARY")
-[ ! -e "$CACHE" ] || fail "incomplete cache at $CACHE; remove it and retry"
-mv "$PAYLOAD" "$CACHE"
+# mkdir claims the cache atomically: `mv dir existing-dir` would nest our payload
+# inside another holder's install (#353). The binary moves last, because an
+# executable $CACHE/vaultmind is what every reader takes as "complete".
+if mkdir "$CACHE" 2>/dev/null; then
+  for entry in "$PAYLOAD"/*; do
+    [ "$entry" = "$PAYLOAD/vaultmind" ] || mv "$entry" "$CACHE/"
+  done
+  mv "$PAYLOAD/vaultmind" "$CACHE/vaultmind"
+  trace publish
+elif [ -x "$CACHE/vaultmind" ]; then
+  trace publish-lost-race
+else
+  fail "incomplete cache at $CACHE; remove it and retry"
+fi
 cleanup
 TMP=
 trap - EXIT HUP INT TERM
