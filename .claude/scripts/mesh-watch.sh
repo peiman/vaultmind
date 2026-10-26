@@ -178,7 +178,7 @@ echo $$ > "$VM_MESH_PID" 2>/dev/null || true
 #    a quoted heredoc cannot interpolate, and trying is how an ancestor spelled
 #    its own slug four times. Exit: 0 = clean parse, anything else = escalate.
 read -r -d '' DETECT <<'PY' || true
-import sys, json, os
+import sys, json, os, hashlib, tempfile
 
 SELF = os.environ["VM_WAKE_SELF"]
 OPERATOR = os.environ.get("VM_WAKE_OPERATOR", "")
@@ -239,23 +239,47 @@ except Exception:
     sys.exit(3)
 s = _listen_state()
 hits = []
+# Filter the entire batch against one snapshot: receive order is not ts order.
+snapshot = {kind: {"ts": c["ts"], "ids": set(c["ids"])}
+            for kind, c in cursors.items()}
+observed = {kind: set() for kind in cursors}
+def message_id(m):
+    return m.get("id") or "sha256:" + hashlib.sha256(json.dumps(
+        [m.get("from_agent"), m.get("ts"), m.get("body")],
+        separators=(",", ":")).encode()).hexdigest()
+
 for m in d.get("messages", []):
-    cursor = cursors.get(stream(m))
+    kind = stream(m)
+    cursor = snapshot.get(kind)
     if cursor is None:
         continue
-    ts, mid = m.get("ts", 0) or 0, m.get("id")
+    ts, mid = m.get("ts", 0) or 0, message_id(m)
     if ts < cursor["ts"] or (ts == cursor["ts"] and mid in cursor["ids"]):
         continue
+    if (ts, mid) in observed[kind]:
+        continue
+    observed[kind].add((ts, mid))
     if hear(m.get("from_agent", ""), s) and relevant(m):
         hits.append(m)
-    # Observe even self, muted and scope-filtered messages: listening can
-    # change between polls, but an already-seen ID must never wake again.
-    if ts > cursor["ts"]:
-        cursor.update(ts=ts, ids=[])
-    cursor["ids"].append(mid)
+# Retain only identities at the high-water second, including filtered messages.
+for kind, seen in observed.items():
+    old = snapshot[kind]
+    newest = max([old["ts"]] + [ts for ts, _ in seen])
+    ids = old["ids"] if newest == old["ts"] else set()
+    cursors[kind] = {"ts": newest,
+                     "ids": sorted(ids | {mid for ts, mid in seen if ts == newest})}
 if CURSOR_FILE:
-    with open(CURSOR_FILE, "w") as f:
-        json.dump(cursors, f)
+    # Readers see either complete generation, even if the process is stopped.
+    name = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", dir=os.path.dirname(CURSOR_FILE),
+                                         delete=False) as f:
+            name = f.name
+            json.dump(cursors, f)
+        os.replace(name, CURSOR_FILE)
+    finally:
+        if name and os.path.exists(name):
+            os.unlink(name)
 if hits:
     m = hits[-1]
     print(str(m.get("from_agent", "?")) + "|" + str(m.get("ts", "")))
@@ -312,10 +336,14 @@ PY
 newest_cursor() {
   local out
   out="$(curl -fsS -m 10 "$1" 2>/dev/null)" || return 1
-  printf '%s' "$out" | python3 -c 'import sys,json
+  printf '%s' "$out" | python3 -c 'import sys,json,hashlib
+def message_id(m):
+    return m.get("id") or "sha256:" + hashlib.sha256(json.dumps(
+        [m.get("from_agent"), m.get("ts"), m.get("body")],
+        separators=(",", ":")).encode()).hexdigest()
 d=json.load(sys.stdin); messages=d.get("messages",[])
 ts=max((m.get("ts",0) or 0 for m in messages), default=0)
-print(json.dumps({"ts":ts,"ids":[m.get("id") for m in messages if (m.get("ts",0) or 0)==ts]}))' 2>/dev/null
+print(json.dumps({"ts":ts,"ids":sorted({message_id(m) for m in messages if (m.get("ts",0) or 0)==ts})}))' 2>/dev/null
 }
 
 if ! dm_baseline="$(newest_cursor "${VM_MESH_DAEMON}/chat_read?to_agent=${VM_MESH_SELF}")"; then
@@ -343,25 +371,116 @@ wait_loop() {
   local query="/chat_wait?room=${room}"
   if [[ "$first" == "1" ]]; then
     query="${query}&to_agent=${VM_MESH_SELF}"
-    printf '{"room":%s,"dm":%s}' "$room_baseline" "$dm_baseline" > "$cursor"
+    printf '{"room":%s,"dm":%s}' "$room_baseline" "$dm_baseline" > "${cursor}.tmp"
   else
-    printf '{"room":%s}' "$room_baseline" > "$cursor"
+    printf '{"room":%s}' "$room_baseline" > "${cursor}.tmp"
   fi
+
+  # An empty mailbox has no historical second to overlap. Seed it from the
+  # newest arm cursor (or arm time if both stores are empty), never epoch - 1.
+  python3 - "${cursor}.tmp" "$start_ts" <<'PYINIT'
+import json, sys
+with open(sys.argv[1]) as f:
+    cursors = json.load(f)
+newest = max(c["ts"] for c in cursors.values()) or int(sys.argv[2])
+for c in cursors.values():
+    if not c["ts"] and not c["ids"]:
+        c["ts"] = newest
+with open(sys.argv[1], "w") as f:
+    json.dump(cursors, f)
+PYINIT
+  mv "${cursor}.tmp" "$cursor" || return 0
+
+  local wait_pid="" wait_out="${RUN_DIR}/s${idx}.wait"
+  local last_sweep=-15 sweep_failures=0 sweep_failed kind sweep_query sweep_since
+  # Own the pending curl as well as the stream: no orphaned long polls on wake.
+  trap '[[ -z "$wait_pid" ]] || { kill "$wait_pid" 2>/dev/null; wait "$wait_pid" 2>/dev/null; }' EXIT
+  trap 'exit 0' TERM INT
+
+  detect_response() {
+    hit="$(printf '%s' "$out" | \
+      VM_WAKE_SELF="$VM_MESH_SELF" VM_WAKE_OPERATOR="${VM_MESH_OPERATOR:-}" \
+      VM_WAKE_SCOPE="$scope" VM_WAKE_CURSOR_FILE="$cursor" \
+      VM_WAKE_LISTEN_FILE="$VM_MESH_LISTEN" VM_WAKE_FROM="$wfrom" VM_WAKE_KEYWORDS="$kws" \
+      python3 -c "$DETECT")"; rc=$?
+    if (( rc != 0 )); then
+      # ANY nonzero rc escalates, with the rc in the text. An ancestor tested
+      # rc==3 only, so a missing interpreter (127), OOM (137) or a traceback
+      # (1) all read as "no message" — a one-integer-wide guard.
+      echo "WATCHER ERROR: ${room} detector exited rc=${rc} (waking to fix — NOT silently treating as no-message)." > "$sig"
+      return 1
+    fi
+    if [[ -n "$hit" ]]; then
+      local ts="${hit##*|}" recover="${hit##*|}"
+      [[ "$ts" =~ ^[0-9]+$ ]] && recover="$(( ts - 1 ))"
+      printf '%s' "$hit" > "$VM_MESH_LASTWAKE" 2>/dev/null || true
+      # The empty-drain disambiguation must travel IN the wake line: only this
+      # watcher has PROVEN a message exists, so an empty chat_drain after this
+      # wake means the subscription is dead, not that nothing arrived.
+      # (Observed live 2026-08-12: real wake, drain [], subscriber_count 0.)
+      echo "WAKE: new ${room} message from ${hit%%|*} (ts ${ts}). Drain the chat (rooms + DMs), respond, then RE-ARM mesh-watch. IF THE DRAIN COMES BACK EMPTY do NOT conclude there is nothing — this message provably exists; re-subscribe and read ${room} with since=${recover} to recover it.$(registry_countdown)" > "$sig"
+      return 1
+    fi
+
+    return 0
+  }
 
   while true; do
     date +%s > "$alive" 2>/dev/null || true
     [[ -f "$VM_MESH_DISARM" ]] && return 0
     (( $(date +%s) - start_ts > MAX_WALL_SECS )) && return 0
 
-    # chat_wait has no after_id and since is exclusive. Overlap one second
-    # using the oldest logical stream; DETECT removes replays by each cursor.
+    # Exclusive max keeps the combined room/mailbox wait BLOCKING. Overlap
+    # belongs to bounded reads, never to the long poll's catch-up query.
     since="$(python3 -c 'import json,sys
 with open(sys.argv[1]) as f: cursors=json.load(f)
-print(min(c["ts"] for c in cursors.values())-1)' "$cursor")" || {
+print(max(c["ts"] for c in cursors.values()))' "$cursor")" || {
       echo "WATCHER ERROR: ${room} cursor unreadable — re-arm." > "$sig"
       return 0
     }
-    out="$(curl -fsS -m $((WAIT_SECS + 10)) "${VM_MESH_DAEMON}${query}&since=${since}&timeout_secs=${WAIT_SECS}" 2>/dev/null)"
+    # curl stays pending while this worker performs the periodic overlap reads.
+    # Only this worker ever updates the cursor.
+    curl -fsS -m $((WAIT_SECS + 10)) "${VM_MESH_DAEMON}${query}&since=${since}&timeout_secs=${WAIT_SECS}" > "$wait_out" 2>/dev/null &
+    wait_pid=$!
+    last_sweep=-15
+    while true; do
+      [[ -f "$VM_MESH_DISARM" ]] && return 0
+      (( $(date +%s) - start_ts > MAX_WALL_SECS )) && return 0
+      if (( SECONDS - last_sweep >= 15 )); then
+        sweep_failed=0
+        for kind in room dm; do
+          [[ "$kind" == dm && "$first" != 1 ]] && continue
+          sweep_since="$(python3 -c 'import json,sys
+with open(sys.argv[1]) as f: cursors=json.load(f)
+print(cursors[sys.argv[2]]["ts"]-1)' "$cursor" "$kind")" || {
+            echo "WATCHER ERROR: ${room} cursor unreadable — re-arm." > "$sig"
+            return 0
+          }
+          if [[ "$kind" == room ]]; then sweep_query="room=${room}"; else sweep_query="to_agent=${VM_MESH_SELF}"; fi
+          out="$(curl -fsS -m 10 "${VM_MESH_DAEMON}/chat_read?${sweep_query}&since=${sweep_since}" 2>/dev/null)"
+          if [[ -z "$out" ]]; then
+            sweep_failed=1
+          else
+            detect_response || return 0
+          fi
+        done
+        if (( sweep_failed )); then
+          sweep_failures=$((sweep_failures + 1))
+          if (( sweep_failures >= BACKOFF_GIVEUP )); then
+            echo "WATCHER ERROR: ${room} overlap reads failed ${sweep_failures} times — daemon ${VM_MESH_DAEMON} unreachable. Fix the connection, then re-arm." > "$sig"
+            return 0
+          fi
+        else
+          sweep_failures=0
+        fi
+        last_sweep=$SECONDS
+      fi
+      kill -0 "$wait_pid" 2>/dev/null || break
+      sleep 1
+    done
+    wait "$wait_pid" 2>/dev/null; wait_pid=""
+    out="$(cat "$wait_out")"
+    date +%s > "$alive" 2>/dev/null || true
     if [[ -z "$out" ]]; then
       failures=$((failures + 1))
       if (( failures >= BACKOFF_GIVEUP )); then
@@ -376,33 +495,8 @@ print(min(c["ts"] for c in cursors.values())-1)' "$cursor")" || {
     fi
     failures=0; backoff=2
 
-    hit="$(printf '%s' "$out" | \
-      VM_WAKE_SELF="$VM_MESH_SELF" VM_WAKE_OPERATOR="${VM_MESH_OPERATOR:-}" \
-      VM_WAKE_SCOPE="$scope" VM_WAKE_CURSOR_FILE="$cursor" \
-      VM_WAKE_LISTEN_FILE="$VM_MESH_LISTEN" VM_WAKE_FROM="$wfrom" VM_WAKE_KEYWORDS="$kws" \
-      python3 -c "$DETECT")"; rc=$?
-    if (( rc != 0 )); then
-      # ANY nonzero rc escalates, with the rc in the text. An ancestor tested
-      # rc==3 only, so a missing interpreter (127), OOM (137) or a traceback
-      # (1) all read as "no message" — a one-integer-wide guard.
-      echo "WATCHER ERROR: ${room} detector exited rc=${rc} (waking to fix — NOT silently treating as no-message)." > "$sig"
-      return 0
-    fi
-    if [[ -n "$hit" ]]; then
-      local ts="${hit##*|}" recover="${hit##*|}"
-      [[ "$ts" =~ ^[0-9]+$ ]] && recover="$(( ts - 1 ))"
-      printf '%s' "$hit" > "$VM_MESH_LASTWAKE" 2>/dev/null || true
-      # The empty-drain disambiguation must travel IN the wake line: only this
-      # watcher has PROVEN a message exists, so an empty chat_drain after this
-      # wake means the subscription is dead, not that nothing arrived.
-      # (Observed live 2026-08-12: real wake, drain [], subscriber_count 0.)
-      echo "WAKE: new ${room} message from ${hit%%|*} (ts ${ts}). Drain the chat (rooms + DMs), respond, then RE-ARM mesh-watch. IF THE DRAIN COMES BACK EMPTY do NOT conclude there is nothing — this message provably exists; re-subscribe and read ${room} with since=${recover} to recover it.$(registry_countdown)" > "$sig"
-      return 0
-    fi
-
-    # Overlapping catch-up can return only seen IDs immediately. Bound that
-    # retry rate rather than spinning on the daemon's stored messages.
-    sleep 1
+    detect_response || return 0
+    # The next arm sweeps immediately after this return, even on timeout.
   done
 }
 
