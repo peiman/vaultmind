@@ -184,8 +184,14 @@ SELF = os.environ["VM_WAKE_SELF"]
 OPERATOR = os.environ.get("VM_WAKE_OPERATOR", "")
 LISTEN = os.environ.get("VM_WAKE_LISTEN_FILE", "")
 SCOPE = os.environ.get("VM_WAKE_SCOPE", "all")
-ROOM_SINCE = int(os.environ.get("VM_WAKE_ROOM_SINCE", "0") or "0")
-DM_SINCE = int(os.environ.get("VM_WAKE_DM_SINCE", "0") or "0")
+CURSOR_FILE = os.environ.get("VM_WAKE_CURSOR_FILE", "")
+if CURSOR_FILE:
+    with open(CURSOR_FILE) as f:
+        cursors = json.load(f)
+else:
+    cursors = {kind: json.loads(os.environ.get("VM_WAKE_" + kind.upper() + "_CURSOR",
+                                             '{"ts":0,"ids":[]}'))
+               for kind in ("room", "dm")}
 WAKE_FROM = [x for x in os.environ.get("VM_WAKE_FROM", "").split(",") if x]
 KEYWORDS = [x for x in os.environ.get("VM_WAKE_KEYWORDS", "").split(",") if x]
 
@@ -210,20 +216,15 @@ def hear(frm, s):
         return frm not in s.get("mute", [])
     return True
 
-def relevant(m):
-    # Per-type local floors: the combined room+DM call shares ONE wire `since`
-    # (the MIN of both baselines, so neither stream misses), which means the
-    # wire can replay an already-seen message from the OTHER stream. Each
-    # message type is re-filtered against its own true baseline here.
-    ts = m.get("ts", 0) or 0
+def stream(m):
     # A DM is anything not stamped with a room, or stamped as addressed to me —
     # two daemon conventions, either sufficient (belt and braces: an ancestor
     # keyed on only one and would misfire if the daemon ever stamped the other).
-    is_dm = (not m.get("room")) or (m.get("to_agent") == SELF)
-    if is_dm:
-        return ts > DM_SINCE
-    if ts <= ROOM_SINCE:
-        return False
+    return "dm" if (not m.get("room")) or (m.get("to_agent") == SELF) else "room"
+
+def relevant(m):
+    if stream(m) == "dm":
+        return True
     if SCOPE != "filtered":
         return True
     frm = m.get("from_agent", "")
@@ -237,7 +238,24 @@ try:
 except Exception:
     sys.exit(3)
 s = _listen_state()
-hits = [m for m in d.get("messages", []) if hear(m.get("from_agent", ""), s) and relevant(m)]
+hits = []
+for m in d.get("messages", []):
+    cursor = cursors.get(stream(m))
+    if cursor is None:
+        continue
+    ts, mid = m.get("ts", 0) or 0, m.get("id")
+    if ts < cursor["ts"] or (ts == cursor["ts"] and mid in cursor["ids"]):
+        continue
+    if hear(m.get("from_agent", ""), s) and relevant(m):
+        hits.append(m)
+    # Observe even self, muted and scope-filtered messages: listening can
+    # change between polls, but an already-seen ID must never wake again.
+    if ts > cursor["ts"]:
+        cursor.update(ts=ts, ids=[])
+    cursor["ids"].append(mid)
+if CURSOR_FILE:
+    with open(CURSOR_FILE, "w") as f:
+        json.dump(cursors, f)
 if hits:
     m = hits[-1]
     print(str(m.get("from_agent", "?")) + "|" + str(m.get("ts", "")))
@@ -249,7 +267,7 @@ PY
 # fixture whose answer is known; anything but that answer refuses to arm.
 selftest="$(printf '{"messages":[{"from_agent":"agent:selftest","ts":42,"room":"mesh"}]}' \
   | VM_WAKE_SELF="$VM_MESH_SELF" VM_WAKE_OPERATOR="" VM_WAKE_SCOPE="all" \
-    VM_WAKE_ROOM_SINCE=0 VM_WAKE_DM_SINCE=0 VM_WAKE_LISTEN_FILE="$VM_MESH_LISTEN" \
+    VM_WAKE_LISTEN_FILE="$VM_MESH_LISTEN" \
     VM_WAKE_FROM="" VM_WAKE_KEYWORDS="" python3 -c "$DETECT" 2>&1)" || {
   printf 'mesh-watch: detector self-test FAILED (%s) — refusing to arm with a broken detector.\n' "$selftest" >&2
   exit 2
@@ -287,19 +305,20 @@ PY
 )" || { printf 'mesh-watch: room resolution failed — refusing to arm.\n' >&2; exit 2; }
 [[ -z "$ROOMS" ]] && { printf 'mesh-watch: no rooms resolved — refusing to arm.\n' >&2; exit 2; }
 
-# ── Baselines: newest ts per stream at arm time. Unreachable ≠ empty ─────────
+# ── Baselines: newest ts AND IDs at that second. Unreachable ≠ empty ─────────
 # An ancestor returned 0 on transport failure, so a daemon blip at arm time
 # fabricated an epoch baseline, replayed all history, and wake-stormed. A
 # watcher that cannot see the store has not armed.
-newest_ts() {
+newest_cursor() {
   local out
-  out="$(curl -fsS -m 10 "$1" 2>/dev/null)" || { echo -1; return; }
+  out="$(curl -fsS -m 10 "$1" 2>/dev/null)" || return 1
   printf '%s' "$out" | python3 -c 'import sys,json
-d=json.load(sys.stdin); m=d.get("messages",[]); print(m[-1].get("ts",0) if m else 0)' 2>/dev/null || echo -1
+d=json.load(sys.stdin); messages=d.get("messages",[])
+ts=max((m.get("ts",0) or 0 for m in messages), default=0)
+print(json.dumps({"ts":ts,"ids":[m.get("id") for m in messages if (m.get("ts",0) or 0)==ts]}))' 2>/dev/null
 }
 
-dm_baseline="$(newest_ts "${VM_MESH_DAEMON}/chat_read?to_agent=${VM_MESH_SELF}")"
-if [[ "$dm_baseline" -lt 0 ]]; then
+if ! dm_baseline="$(newest_cursor "${VM_MESH_DAEMON}/chat_read?to_agent=${VM_MESH_SELF}")"; then
   printf 'mesh-watch: cannot establish a baseline — daemon unreachable at %s. Refusing to arm against a fabricated zero.\n' "$VM_MESH_DAEMON" >&2
   exit 2
 fi
@@ -312,22 +331,21 @@ start_ts=$(date +%s)
 wait_loop() {
   local idx="$1" room="$2" scope="$3" wfrom="$4" kws="$5" first="$6"
   local sig="${RUN_DIR}/s${idx}.sig" alive="${RUN_DIR}/s${idx}.alive"
-  local backoff=2 failures=0 out hit rc newest
+  local backoff=2 failures=0 out hit rc since
+  local cursor="${RUN_DIR}/s${idx}.cursor"
 
   local room_baseline
-  room_baseline="$(newest_ts "${VM_MESH_DAEMON}/chat_read?room=${room}")"
-  if [[ "$room_baseline" -lt 0 ]]; then
+  if ! room_baseline="$(newest_cursor "${VM_MESH_DAEMON}/chat_read?room=${room}")"; then
     echo "WATCHER ERROR: could not baseline room ${room} (daemon unreachable at arm) — not armed for it." > "$sig"
     return 0
   fi
 
-  local query="/chat_wait?room=${room}" since="$room_baseline" dm_floor=0
+  local query="/chat_wait?room=${room}"
   if [[ "$first" == "1" ]]; then
     query="${query}&to_agent=${VM_MESH_SELF}"
-    dm_floor="$dm_baseline"
-    # Shared wire `since` must be the MIN of both baselines so neither stream
-    # misses; the per-type floors in DETECT filter the resulting replays.
-    if [[ "$dm_baseline" -lt "$since" ]]; then since="$dm_baseline"; fi
+    printf '{"room":%s,"dm":%s}' "$room_baseline" "$dm_baseline" > "$cursor"
+  else
+    printf '{"room":%s}' "$room_baseline" > "$cursor"
   fi
 
   while true; do
@@ -335,6 +353,14 @@ wait_loop() {
     [[ -f "$VM_MESH_DISARM" ]] && return 0
     (( $(date +%s) - start_ts > MAX_WALL_SECS )) && return 0
 
+    # chat_wait has no after_id and since is exclusive. Overlap one second
+    # using the oldest logical stream; DETECT removes replays by each cursor.
+    since="$(python3 -c 'import json,sys
+with open(sys.argv[1]) as f: cursors=json.load(f)
+print(min(c["ts"] for c in cursors.values())-1)' "$cursor")" || {
+      echo "WATCHER ERROR: ${room} cursor unreadable — re-arm." > "$sig"
+      return 0
+    }
     out="$(curl -fsS -m $((WAIT_SECS + 10)) "${VM_MESH_DAEMON}${query}&since=${since}&timeout_secs=${WAIT_SECS}" 2>/dev/null)"
     if [[ -z "$out" ]]; then
       failures=$((failures + 1))
@@ -352,7 +378,7 @@ wait_loop() {
 
     hit="$(printf '%s' "$out" | \
       VM_WAKE_SELF="$VM_MESH_SELF" VM_WAKE_OPERATOR="${VM_MESH_OPERATOR:-}" \
-      VM_WAKE_SCOPE="$scope" VM_WAKE_ROOM_SINCE="$room_baseline" VM_WAKE_DM_SINCE="$dm_floor" \
+      VM_WAKE_SCOPE="$scope" VM_WAKE_CURSOR_FILE="$cursor" \
       VM_WAKE_LISTEN_FILE="$VM_MESH_LISTEN" VM_WAKE_FROM="$wfrom" VM_WAKE_KEYWORDS="$kws" \
       python3 -c "$DETECT")"; rc=$?
     if (( rc != 0 )); then
@@ -374,9 +400,9 @@ wait_loop() {
       return 0
     fi
 
-    newest="$(printf '%s' "$out" | python3 -c 'import sys,json
-d=json.load(sys.stdin); m=d.get("messages",[]); print(m[-1].get("ts",0) if m else 0)' 2>/dev/null || echo 0)"
-    [[ -n "$newest" && "$newest" -gt "$since" ]] && since="$newest"
+    # Overlapping catch-up can return only seen IDs immediately. Bound that
+    # retry rate rather than spinning on the daemon's stored messages.
+    sleep 1
   done
 }
 
