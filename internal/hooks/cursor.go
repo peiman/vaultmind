@@ -40,6 +40,7 @@ const (
 // can deliver under Cursor. A script absent here is not wired.
 var cursorWiring = map[string]struct{ event, tools string }{
 	hookSessionStartScript: {"sessionStart", ""},
+	hookArcsScript:         {"sessionStart", ""},
 	hookHealthScript:       {"sessionStart", ""},
 	hookPreToolUseScript:   {"postToolUse", "Read"},
 	hookReachScript:        {"postToolUse", "Shell|Write"},

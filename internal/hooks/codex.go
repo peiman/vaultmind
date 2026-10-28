@@ -45,6 +45,7 @@ const (
 //   - precompact-preserve.sh: Codex's PreCompact cannot emit context.
 var codexScripts = map[string]bool{
 	hookSessionStartScript:     true,
+	hookArcsScript:             true,
 	hookHealthScript:           true,
 	hookUserPromptSubmitScript: true,
 	hookReachScript:            true,

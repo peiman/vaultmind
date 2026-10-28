@@ -3,9 +3,12 @@ package hookscripts_test
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/peiman/vaultmind/internal/hookscripts"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -94,4 +97,122 @@ func TestPersonaHook_FailedLoadSaysSoOnStdout(t *testing.T) {
 	rec := lastSidecar(t, env)
 	assert.Equal(t, false, rec["injection_success"])
 	assert.True(t, strings.Contains(rec["error"].(string), "database is locked"), "the log keeps the error: %v", rec["error"])
+}
+
+// #357: the cap is per hook, so the arc layer gets a hook of its own. This stub
+// models the measured 30-arc vault: ~350 bytes an arc at --excerpt 120 (10.5k,
+// over the cap) and ~287 at 70 (8.6k, all thirty fit).
+const arcLayerStub = "#!/bin/bash\n" +
+	"budget=3000; excerpt=120; prev=\n" +
+	"for a in \"$@\"; do [ \"$prev\" = --budget ] && budget=$a; [ \"$prev\" = --excerpt ] && excerpt=$a; prev=$a; done\n" +
+	"fill() { head -c \"$1\" /dev/zero | tr '\\0' \"$2\" | fold -w 100; echo; }\n" +
+	"case \"$1\" in\n" +
+	"  arc) total=$(( (200 + excerpt * 5 / 4) * 30 ))\n" +
+	"       if [ $((budget * 5)) -lt \"$total\" ]; then fill $((budget * 5)) a; echo 'SOME arc(s) DID NOT FIT'; else fill \"$total\" a; echo 'ALL-30-ARCS'; fi ;;\n" +
+	"  ask) if [ \"$2\" = 'who am I' ]; then fill 3200 i; else fill 1100 c; fi ;;\n" +
+	"  self) fill 1400 s ;;\n" +
+	"esac\n" +
+	"exit 0\n"
+
+// installArcsHook adds the embedded load-arcs.sh beside load-persona.sh and
+// wires it in the project's settings, the way `hooks install` does both.
+func installArcsHook(t *testing.T, project string) {
+	t.Helper()
+	copyArcsScript(t, project)
+	require.NoError(t, os.WriteFile(filepath.Join(project, ".claude", "settings.json"),
+		[]byte(`{"hooks":{"SessionStart":[{"matcher":"startup|clear|compact","hooks":[{"type":"command","command":"bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/load-arcs.sh"}]}]}}`), 0o600))
+}
+
+func copyArcsScript(t *testing.T, project string) {
+	t.Helper()
+	body, ok := hookscripts.All()["load-arcs.sh"]
+	require.True(t, ok, "load-arcs.sh must be embedded")
+	require.NoError(t, os.WriteFile(filepath.Join(project, ".claude", "scripts", "load-arcs.sh"), body, 0o600))
+}
+
+// A load-arcs.sh nobody wired must not make the arcs vanish: the persona hook
+// then delivers them itself (the worst case is twice, never not at all).
+func TestPersonaHook_KeepsTheArcsWhenTheArcsHookIsNotWired(t *testing.T) {
+	project, env := installPersonaHook(t, arcLayerStub)
+	copyArcsScript(t, project)
+	env = append(env, "VAULTMIND_PERSONA_MODE=served")
+
+	out := runSessionStartScript(t, project, env, "load-persona.sh", "s-unwired")
+
+	assert.Contains(t, out, "aaaa", "an unwired arcs hook delivers nothing, so the persona hook must")
+	assert.LessOrEqual(t, len(out), deliveryCap)
+}
+
+func runSessionStartScript(t *testing.T, project string, env []string, script, sessionID string) string {
+	t.Helper()
+	payload, err := json.Marshal(map[string]string{"session_id": sessionID, "hook_event_name": "SessionStart", "source": "compact"})
+	require.NoError(t, err)
+	cmd := exec.Command("/bin/bash", filepath.Join(project, ".claude", "scripts", script))
+	cmd.Env = env
+	cmd.Stdin = strings.NewReader(string(payload))
+	var out, errb strings.Builder
+	cmd.Stdout, cmd.Stderr = &out, &errb
+	require.NoError(t, cmd.Run(), "%s must exit 0 (stderr: %s)", script, errb.String())
+	return out.String()
+}
+
+func TestArcsHook_DeliversTheWholeArcLayerUnderTheCap(t *testing.T) {
+	project, env := installPersonaHook(t, arcLayerStub)
+	installArcsHook(t, project)
+	env = append(env, "VAULTMIND_PERSONA_MODE=served")
+
+	out := runSessionStartScript(t, project, env, "load-arcs.sh", "s-arcs")
+
+	assert.LessOrEqual(t, len(out), deliveryCap, "the arcs hook has the same cap (bytes)")
+	assert.Contains(t, out, "ALL-30-ARCS", "a shorter excerpt that fits every arc beats fewer arcs at full length")
+	assert.NotContains(t, out, "IDENTITY CONTEXT:", "the arcs hook delivers only the arc layer")
+}
+
+func TestPersonaHook_LeavesTheArcsToTheArcsHookWhenItIsInstalled(t *testing.T) {
+	project, env := installPersonaHook(t, arcLayerStub)
+	installArcsHook(t, project)
+	env = append(env, "VAULTMIND_PERSONA_MODE=served")
+
+	out := runSessionStartScript(t, project, env, "load-persona.sh", "s-split")
+
+	assert.LessOrEqual(t, len(out), deliveryCap)
+	assert.Contains(t, out, "IDENTITY CONTEXT:")
+	assert.NotContains(t, out, "aaaa", "with load-arcs.sh beside it, the persona hook leaves the arcs to that hook")
+	assert.Contains(t, out, "MEMORY STATE — IDENTITY VAULT:", "the room the arcs freed goes to the memory state")
+}
+
+func TestArcsHook_ExploreArmDeliversNothing(t *testing.T) {
+	project, env := installPersonaHook(t, arcLayerStub)
+	installArcsHook(t, project)
+	env = append(env, "VAULTMIND_PERSONA_MODE=explore")
+
+	out := runSessionStartScript(t, project, env, "load-arcs.sh", "s-explore-arcs")
+
+	assert.Empty(t, out, "the explore arm hands over no identity, arcs included")
+}
+
+func TestArcsHook_KeepsItsOwnSidecarRecord(t *testing.T) {
+	project, env := installPersonaHook(t, arcLayerStub)
+	installArcsHook(t, project)
+	env = append(env, "VAULTMIND_PERSONA_MODE=served")
+
+	runSessionStartScript(t, project, env, "load-persona.sh", "s-both")
+	runSessionStartScript(t, project, env, "load-arcs.sh", "s-both")
+
+	files, err := filepath.Glob(filepath.Join(envValue(env, "HOME"), ".vaultmind", "persona-eval", "*-injection.json"))
+	require.NoError(t, err)
+	assert.Len(t, files, 2, "both hooks fire in the same second; neither record may overwrite the other")
+	var parts []string
+	for _, f := range files {
+		raw, err := os.ReadFile(f) //nolint:gosec // test fixture path
+		require.NoError(t, err)
+		var rec map[string]any
+		require.NoError(t, json.Unmarshal(raw, &rec), "sidecar must stay valid JSON: %s", raw)
+		part, _ := rec["persona_part"].(string)
+		parts = append(parts, part)
+		if part == "arcs" {
+			assert.EqualValues(t, 70, rec["arc_excerpt"], "the record says which excerpt fitted")
+		}
+	}
+	assert.ElementsMatch(t, []string{"identity", "arcs"}, parts)
 }

@@ -176,7 +176,7 @@ func TestRemoveFromCodexHooks_StripsOnlyOurEntries(t *testing.T) {
 
 	res, err := RemoveFromCodexHooks(dir, false)
 	require.NoError(t, err)
-	assert.Len(t, res.Removed, 5)
+	assert.Len(t, res.Removed, 6)
 	raw, err := os.ReadFile(filepath.Join(dir, ".codex", "hooks.json"))
 	require.NoError(t, err)
 	assert.Contains(t, string(raw), "echo mine", "the project's own hook survives")

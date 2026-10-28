@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `load-arcs.sh`: a new SessionStart hook that delivers the whole arc layer, wired in the persona and full profiles for Claude Code, Codex and Cursor (#357).
+  - **Why:** Claude Code cuts each hook's output to a preview past ~10,000 characters. With the identity, the context and the memory state in one hook, a 30-arc vault had room for 9 arcs.
+  - **Now:** the arc layer has a hook of its own. It steps the excerpt down until every arc fits under the 9,000-byte cap. On a real 30-arc vault, all 30 arrive at excerpt 70 in 8.6 KB, and the identity hook is 7.2 KB.
+  - **No silent loss:** the persona hook leaves the arcs out only when `load-arcs.sh` sits beside it and a hook config wires it. Otherwise it delivers them itself, so the worst case is the arcs twice, never not at all.
+  - The explore arm delivers no arcs. Each part writes its own sidecar record (`persona_part`, `arc_excerpt`). `HOOK_VERSION` becomes `v8-arcs-hook`.
+  - Run `vaultmind hooks install --force` to get it.
+
 ### Fixed
 
 - `golang.org/x/net` updated to v0.62.0. That release fixes two vulnerabilities in its HTML package, GO-2026-6866 (raw-text namespace rendering) and GO-2026-6860 (quadratic text-node coalescing). Both are reachable through EPUB import, which renders HTML.
