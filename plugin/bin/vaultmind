@@ -76,7 +76,7 @@ stale_lock() {
   [ "$(( $(date +%s) - modified ))" -gt "$STALE_AFTER" ]
 }
 attempt=0
-until mkdir "$LOCK" 2>/dev/null; do
+until { mkdir "$LOCK" 2>/dev/null; lock_rc=$?; trace "lock-try rc=$lock_rc at=$(date +%s.%N 2>/dev/null)"; [ "$lock_rc" -eq 0 ]; }; do
   [ ! -x "$CACHE/vaultmind" ] || { trace cache-hit-waiting; exec "$CACHE/vaultmind" "$@"; }
   if stale_lock; then trace "stale-evict owner=$owner modified=$modified"; rm -rf "$LOCK"; continue; fi
   trace "lock-busy owner=$owner modified=$modified"
