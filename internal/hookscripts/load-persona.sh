@@ -35,7 +35,7 @@ TIMESTAMP=$(date +%Y%m%dT%H%M%S)
 # overwrote each other. The session id (made filename-safe, and capped so the
 # name stays under the 255-byte limit) separates them.
 SIDECAR_FILE="$LOG_DIR/${TIMESTAMP}-$(printf '%s' "$SESSION_ID" | tr -c 'A-Za-z0-9-' '_' | cut -c1-64)-injection.json"
-HOOK_VERSION="v6-persona-mode"
+HOOK_VERSION="v7-delivery-cap"
 
 # Persona mode — how the identity reaches the agent:
 #   served    (default) the identity, the arc layer and the current context are
@@ -203,7 +203,8 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
   # simply unbounded. Anything that does not fit is named, not dropped.
   #
   # Best-effort: a failure here leaves the identity block above intact.
-  ARCS=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" arc recite --vault "$VAULT_PATH" --budget "${VAULTMIND_ARC_BUDGET:-3000}" --excerpt "${VAULTMIND_ARC_EXCERPT:-120}" 2>>"$ASK_ERR")
+  # It runs below, once the other sections' size is known: the arc layer gets
+  # the room they leave under the delivery cap (#355).
   CONTEXT=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" ask "what matters most right now" --vault "$VAULT_PATH" --max-items 5 --budget 2000 --pointers-only 2>>"$ASK_ERR")
 
   # Self-state injection — surface the agent's own activation state
@@ -232,19 +233,51 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
     SELF_RESEARCH=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" self --vault "$RESEARCH_VAULT" --limit 5 2>>"$ASK_ERR" || true)
   fi
 
+  # THE DELIVERY CAP (#355). Claude Code replaces a SessionStart hook's output
+  # with a ~2 KB preview once it passes about 10,000 characters, and the agent
+  # then starts from a preview of itself while this hook logs success. Measured
+  # on a 30-arc vault: 15-19k characters served, cut at 16 of 45 compactions in
+  # one long session. So the output stays under OUTPUT_CAP. The arc layer (the
+  # decision rules, #47) gets the room the identity and current context leave
+  # (~6 characters per budget token); the memory-state lists are worth less, so
+  # they are the first whole sections to go when the total overshoots, each
+  # named with the command that reads it.
+  OUTPUT_CAP="${VAULTMIND_HOOK_OUTPUT_CAP:-9000}"
+  ARCS=""
+  OMITTED=""
+  ARC_BUDGET=0
+  if [ -n "$IDENTITY" ]; then
+    ARC_BUDGET=$(( (OUTPUT_CAP - ${#IDENTITY} - ${#CONTEXT} - 700) / 6 ))
+    [ "$ARC_BUDGET" -le "${VAULTMIND_ARC_BUDGET:-3000}" ] || ARC_BUDGET="${VAULTMIND_ARC_BUDGET:-3000}"
+    if [ "$ARC_BUDGET" -ge 100 ]; then
+      ARCS=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" arc recite --vault "$VAULT_PATH" --budget "$ARC_BUDGET" --excerpt "${VAULTMIND_ARC_EXCERPT:-120}" 2>>"$ASK_ERR")
+    else
+      OMITTED="the arcs"
+    fi
+  fi
+
+  # The first error line, made safe for the one-line JSON log.
+  LOAD_ERROR=$(grep -m1 -i 'error' "$ASK_ERR" 2>/dev/null || head -n1 "$ASK_ERR" 2>/dev/null)
+  LOAD_ERROR=$(printf '%s' "$LOAD_ERROR" | tr -d '\\\000-\037' | tr '"' "'" | cut -c1-300)
   if [ "$IDENTITY_STATUS" != "0" ]; then
     echo "VaultMind ask failed (exit $IDENTITY_STATUS) — persona not loaded" >&2
     cat "$ASK_ERR" >&2
   fi
   rm -f "$ASK_ERR"
 
-  if [ -n "$IDENTITY" ]; then
+  render_persona() {
     echo "IDENTITY CONTEXT:"
     echo ""
     echo "$IDENTITY"
     echo ""
     if [ -n "$ARCS" ]; then
       echo "$ARCS"
+      echo ""
+    fi
+    if [ -n "$OMITTED" ]; then
+      echo "Left out to stay under the hook delivery limit: $OMITTED. Read them with:"
+      echo "  vaultmind arc recite --vault \"$VAULT_PATH\""
+      echo "  vaultmind self --vault <vault>"
       echo ""
     fi
     echo "CURRENT CONTEXT:"
@@ -262,15 +295,48 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
       echo ""
       echo "$SELF_RESEARCH"
     fi
+  }
+
+  # Bytes, whatever the locale: the cut was measured in bytes, and a byte count
+  # never undercounts characters. -ge, because the final newline printed after
+  # $OUT is one more byte.
+  bytes_of() { printf '%s' "$1" | wc -c | tr -d ' '; }
+  if [ -n "$IDENTITY" ]; then
+    OUT=$(render_persona)
+    if [ "$(bytes_of "$OUT")" -ge "$OUTPUT_CAP" ] && [ -n "$SELF_RESEARCH" ]; then
+      SELF_RESEARCH=""; OMITTED="${OMITTED:+$OMITTED, }the research vault's memory state"; OUT=$(render_persona)
+    fi
+    if [ "$(bytes_of "$OUT")" -ge "$OUTPUT_CAP" ] && [ -n "$SELF_IDENTITY" ]; then
+      SELF_IDENTITY=""; OMITTED="${OMITTED:+$OMITTED, }the identity vault's memory state"; OUT=$(render_persona)
+    fi
+    if [ "$(bytes_of "$OUT")" -ge "$OUTPUT_CAP" ] && [ -n "$ARCS" ]; then
+      ARCS=""; OMITTED="${OMITTED:+$OMITTED, }the arcs"; OUT=$(render_persona)
+    fi
+    if [ "$(bytes_of "$OUT")" -ge "$OUTPUT_CAP" ]; then
+      # The identity block alone is over the cap: a preview of it would be
+      # worse than an honest pointer.
+      OMITTED="everything"
+      OUT=$(printf '%s\n' "IDENTITY TOO LARGE TO DELIVER in one hook (over $OUTPUT_CAP characters)." \
+        "Reconstruct it before your first answer:" \
+        "  vaultmind arc recite --vault \"$VAULT_PATH\"" \
+        "  vaultmind ask \"who am I\" --vault \"$VAULT_PATH\"")
+    fi
+    printf '%s\n' "$OUT"
 
     # Sidecar log — write injection manifest (agent never sees this)
-    printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","persona_mode":"%s","vault_path":"%s","identity_length":%d,"context_length":%d,"self_identity_length":%d,"self_research_length":%d,"injection_success":true}\n' \
-      "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$PERSONA_MODE" "$VAULT_PATH" "${#IDENTITY}" "${#CONTEXT}" "${#SELF_IDENTITY}" "${#SELF_RESEARCH}" \
+    printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","persona_mode":"%s","vault_path":"%s","identity_length":%d,"context_length":%d,"self_identity_length":%d,"self_research_length":%d,"output_bytes":%d,"arc_budget":%d,"capped":"%s","injection_success":true}\n' \
+      "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$PERSONA_MODE" "$VAULT_PATH" "${#IDENTITY}" "${#CONTEXT}" "${#SELF_IDENTITY}" "${#SELF_RESEARCH}" "$(( $(bytes_of "$OUT") + 1 ))" "$ARC_BUDGET" "$OMITTED" \
       > "$SIDECAR_FILE" 2>/dev/null
   else
-    # Hook fired but injection was empty — log the failure
-    printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","persona_mode":"%s","vault_path":"%s","identity_length":0,"context_length":0,"injection_success":false}\n' \
-      "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$PERSONA_MODE" "$VAULT_PATH" \
+    # The load failed (#356). Say so where the agent reads, not only on stderr:
+    # an absent identity must never look like a quiet start.
+    echo "IDENTITY NOT LOADED this session — vaultmind could not read the identity vault:"
+    echo "  ${LOAD_ERROR:-no output (exit $IDENTITY_STATUS)}"
+    echo "Reconstruct it before your first answer:"
+    echo "  vaultmind arc recite --vault \"$VAULT_PATH\""
+    echo "  vaultmind ask \"who am I\" --vault \"$VAULT_PATH\""
+    printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","persona_mode":"%s","vault_path":"%s","identity_length":0,"context_length":0,"injection_success":false,"error":"%s"}\n' \
+      "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$PERSONA_MODE" "$VAULT_PATH" "$LOAD_ERROR" \
       > "$SIDECAR_FILE" 2>/dev/null
   fi
 else

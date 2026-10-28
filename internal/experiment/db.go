@@ -291,9 +291,14 @@ func (d *DB) migrate() error {
 	return nil
 }
 
-// applyPragmas sets WAL mode and enables foreign key enforcement.
+// applyPragmas waits out brief locks, sets WAL mode and enables foreign key
+// enforcement.
 func (d *DB) applyPragmas() error {
 	pragmas := []string{
+		// First, so the pragmas below and every later statement wait out another
+		// process's brief lock instead of failing at once (#356). The pool holds a
+		// single connection, so this connection-level setting stays in force.
+		"PRAGMA busy_timeout=5000",
 		"PRAGMA journal_mode=WAL",
 		"PRAGMA foreign_keys=ON",
 	}
