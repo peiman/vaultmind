@@ -288,6 +288,14 @@ func TestPluginWrapperConcurrentFirstUse(t *testing.T) {
 	root := pluginRoot(t)
 	trace := filepath.Join(t.TempDir(), "trace")
 	env := append(os.Environ(), "PATH=/usr/bin:/bin", "CLAUDE_PLUGIN_ROOT="+root, "CLAUDE_PLUGIN_DATA="+data, "VAULTMIND_PLUGIN_RELEASE_URL="+url, "VAULTMIND_PLUGIN_TRACE="+trace)
+	// #353: this failed only in main's CI. On ANY failure, show which lock path
+	// each process took — a require that stops early must not hide the trace.
+	t.Cleanup(func() {
+		if t.Failed() {
+			traced, _ := os.ReadFile(trace)
+			t.Logf("requests=%d\ntrace:\n%s", requests.Load(), traced)
+		}
+	})
 	type result struct {
 		output string
 		err    error
@@ -439,6 +447,43 @@ func TestPluginWrapperPublishLostRace(t *testing.T) {
 		assert.False(t, e.IsDir(), "our payload must not be nested inside the published cache: %s", e.Name())
 	}
 	assert.NoFileExists(t, filepath.Join(cache, "libonnxruntime.so"), "our payload must not be mixed into the published cache")
+	traced, _ := os.ReadFile(trace)
+	assert.Contains(t, string(traced), "publish-lost-race")
+	assert.NoDirExists(t, filepath.Join(data, pluginVersion(t)+".lock"))
+}
+
+// #353 in main's CI: the other holder had claimed the cache but was still moving
+// its payload in, so the binary was not there yet. The loser must wait for it
+// (the binary is what every reader takes as complete), not fail.
+func TestPluginWrapperLostRaceWaitsForTheWinnersBinary(t *testing.T) {
+	data := t.TempDir()
+	cache := filepath.Join(data, pluginVersion(t))
+	staged := filepath.Join(t.TempDir(), "other")
+	require.NoError(t, os.Mkdir(staged, 0755))
+	hookscripts.InstallStub(t, staged, "vaultmind", "#!/bin/sh\nprintf 'other:%s\\n' \"$*\"\n")
+	landed := make(chan error, 1)
+	url, _ := fakeReleaseWith(t, runtime.GOOS, runtime.GOARCH, false, func(r *http.Request) {
+		if !strings.Contains(r.URL.Path, "checksums") {
+			return
+		}
+		if err := os.Mkdir(cache, 0755); err != nil { // claimed, still empty
+			landed <- err
+			return
+		}
+		go func() {
+			time.Sleep(500 * time.Millisecond)
+			err := os.Rename(filepath.Join(staged, "vaultmind.body"), filepath.Join(cache, "vaultmind.body"))
+			if err == nil {
+				err = os.Rename(filepath.Join(staged, "vaultmind"), filepath.Join(cache, "vaultmind"))
+			}
+			landed <- err
+		}()
+	})
+	trace := filepath.Join(t.TempDir(), "trace")
+	out, stderr, err := wrapperRun(t, []string{"PATH=/usr/bin:/bin", "CLAUDE_PLUGIN_DATA=" + data, "VAULTMIND_PLUGIN_RELEASE_URL=" + url, "VAULTMIND_PLUGIN_TRACE=" + trace}, "ask")
+	require.NoError(t, <-landed, "the simulated winner must finish its publish")
+	require.NoError(t, err, stderr)
+	assert.Contains(t, out, "other:ask")
 	traced, _ := os.ReadFile(trace)
 	assert.Contains(t, string(traced), "publish-lost-race")
 	assert.NoDirExists(t, filepath.Join(data, pluginVersion(t)+".lock"))

@@ -135,10 +135,16 @@ if mkdir "$CACHE" 2>/dev/null; then
   done
   mv "$PAYLOAD/vaultmind" "$CACHE/vaultmind"
   trace publish
-elif [ -x "$CACHE/vaultmind" ]; then
-  trace publish-lost-race
 else
-  fail "incomplete cache at $CACHE; remove it and retry"
+  # Another holder claimed the cache first and may still be moving its payload
+  # in (seen in CI, #353): wait for its binary rather than fail.
+  waited=0
+  until [ -x "$CACHE/vaultmind" ]; do
+    [ "$waited" -lt 60 ] || fail "incomplete cache at $CACHE; remove it and retry"
+    sleep 1
+    waited=$((waited + 1))
+  done
+  trace "publish-lost-race waited=${waited}s"
 fi
 cleanup
 TMP=
