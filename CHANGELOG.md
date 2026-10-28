@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `golang.org/x/net` updated to v0.62.0. That release fixes two vulnerabilities in its HTML package, GO-2026-6866 (raw-text namespace rendering) and GO-2026-6860 (quadratic text-node coalescing). Both are reachable through EPUB import, which renders HTML.
+- The persona hook's identity now reaches the agent whole (#355).
+  - **Before:** Claude Code replaces a SessionStart hook's output with a ~2 KB preview once it passes about 10,000 characters. A 30-arc identity printed 15–19k, so after many compactions the agent started from a preview of itself while the hook logged success.
+  - **Now:** the hook keeps its output under 9,000 bytes (`VAULTMIND_HOOK_OUTPUT_CAP`). The arc layer gets the room the other sections leave; if that is not enough, whole sections are dropped, lowest value first, and named with the command that reads them.
+  - **Log:** the sidecar now records `output_bytes`, `arc_budget` and what was `capped`.
+  - Run `vaultmind hooks install --force` to update installed hooks.
+- When the persona hook can't load the identity, it now says so to the agent: `IDENTITY NOT LOADED`, with the reason and the commands to rebuild it. Before, it printed nothing and exited 0 (#356). Its sidecar log keeps the error.
+- Opening the index and the usage log now waits out another process's brief lock (`busy_timeout`, 5 s) instead of failing at once with `database is locked`. A hook that opened the index during a re-index used to fail outright (#356).
 
 - The Claude Code plugin's launcher can no longer report success when two first runs both download the release (#353).
   - **Before:** the second move nested its payload inside the cache the first had just published.
