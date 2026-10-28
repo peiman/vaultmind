@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `golang.org/x/net` updated to v0.62.0. That release fixes two vulnerabilities in its HTML package, GO-2026-6866 (raw-text namespace rendering) and GO-2026-6860 (quadratic text-node coalescing). Both are reachable through EPUB import, which renders HTML.
+
 - The Claude Code plugin's launcher can no longer report success when two first runs both download the release (#353).
   - **Before:** the second move nested its payload inside the cache the first had just published.
   - **Now:** publishing claims the cache directory atomically and moves the binary last. A run that loses the race uses the published install.
