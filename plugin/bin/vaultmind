@@ -96,7 +96,7 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
 printf '%s\n' "$$" > "$LOCK/pid"
-trace lock-acquired
+trace "lock-acquired lock=$LOCK inode=$(ls -id "$LOCK" 2>/dev/null | awk '{print $1}') version=$VERSION root=$ROOT"
 [ ! -x "$CACHE/vaultmind" ] || { trace cache-hit-locked; cleanup; trap - EXIT HUP INT TERM; exec "$CACHE/vaultmind" "$@"; }
 # Only the lock holder publishes, so a cache without its binary is a publish that
 # was killed mid-way: start it over.
