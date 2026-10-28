@@ -60,15 +60,22 @@ esac
 BASE=${VAULTMIND_PLUGIN_RELEASE_URL:-https://github.com/peiman/vaultmind/releases/download}
 mkdir -p "$DATA"
 # Concurrent MCP + SessionStart first use must publish one complete directory.
+# The lock is a file the shell itself creates with O_EXCL (set -C), holding
+# the owner's PID. Not mkdir: Ubuntu 26.04's mkdir (uutils) lets two concurrent
+# calls on one path both succeed (measured 100 of 300), which let two first runs
+# download at once (#353). A redirect under noclobber is the shell's own open().
 LOCK=$DATA/$VERSION.lock
+take_lock() { ( set -C; printf '%s\n' "$$" > "$LOCK" ) 2>/dev/null; }
 # Each of the two fetches has a 180s limit; allow a further 60s to publish.
 DOWNLOAD_LIMIT=180
 STALE_AFTER=$((2 * DOWNLOAD_LIMIT + 60))
 stale_lock() {
   modified=
-  owner=$(cat "$LOCK/pid" 2>/dev/null) || owner=
+  # A directory here is an older release's lock: it has no readable owner, so
+  # only its age can free it.
+  owner=$(cat "$LOCK" 2>/dev/null) || owner=
   case "$owner" in
-    ''|*[!0-9]*) ;; # A just-created lock may not have its PID yet: use age.
+    ''|*[!0-9]*) ;; # A lock the shell is still writing has no PID yet: use age.
     *) kill -0 "$owner" 2>/dev/null || return 0 ;;
   esac
   modified=$(stat -f %m "$LOCK" 2>/dev/null) || modified=$(stat -c %Y "$LOCK" 2>/dev/null) || return 1
@@ -76,7 +83,7 @@ stale_lock() {
   [ "$(( $(date +%s) - modified ))" -gt "$STALE_AFTER" ]
 }
 attempt=0
-until mkdir "$LOCK" 2>/dev/null; do
+until take_lock; do
   [ ! -x "$CACHE/vaultmind" ] || { trace cache-hit-waiting; exec "$CACHE/vaultmind" "$@"; }
   if stale_lock; then trace "stale-evict owner=$owner modified=$modified"; rm -rf "$LOCK"; continue; fi
   trace "lock-busy owner=$owner modified=$modified"
@@ -87,15 +94,13 @@ done
 TMP=
 cleanup() {
   [ -z "$TMP" ] || rm -rf "$TMP"
-  # A stale-lock recovery may have replaced our directory while we ran.
-  if [ "$(cat "$LOCK/pid" 2>/dev/null)" = "$$" ]; then
-    rm -f "$LOCK/pid"
-    rmdir "$LOCK" 2>/dev/null || :
+  # A stale-lock recovery may have replaced our lock while we ran.
+  if [ "$(cat "$LOCK" 2>/dev/null)" = "$$" ]; then
+    rm -f "$LOCK"
   fi
 }
 trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
-printf '%s\n' "$$" > "$LOCK/pid"
 trace lock-acquired
 [ ! -x "$CACHE/vaultmind" ] || { trace cache-hit-locked; cleanup; trap - EXIT HUP INT TERM; exec "$CACHE/vaultmind" "$@"; }
 # Only the lock holder publishes, so a cache without its binary is a publish that
@@ -135,10 +140,16 @@ if mkdir "$CACHE" 2>/dev/null; then
   done
   mv "$PAYLOAD/vaultmind" "$CACHE/vaultmind"
   trace publish
-elif [ -x "$CACHE/vaultmind" ]; then
-  trace publish-lost-race
 else
-  fail "incomplete cache at $CACHE; remove it and retry"
+  # Another holder claimed the cache first and may still be moving its payload
+  # in (seen in CI, #353): wait for its binary rather than fail.
+  waited=0
+  until [ -x "$CACHE/vaultmind" ]; do
+    [ "$waited" -lt 60 ] || fail "incomplete cache at $CACHE; remove it and retry"
+    sleep 1
+    waited=$((waited + 1))
+  done
+  trace "publish-lost-race waited=${waited}s"
 fi
 cleanup
 TMP=
