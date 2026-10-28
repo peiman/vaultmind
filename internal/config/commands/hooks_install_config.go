@@ -96,6 +96,9 @@ WHAT GETS INSTALLED
 
     vaultmind-health.sh    SessionStart — vault health, the vault map, stale-hook warnings
     load-persona.sh        SessionStart — identity context (persona and full only)
+    load-arcs.sh           SessionStart — the arc layer, every arc, in a hook of its own:
+                           each hook's output is cut to a preview past ~10,000
+                           characters (persona and full only)
     vault-recall.sh        UserPromptSubmit — the notes that match the prompt, as excerpts
     vault-track-read.sh    PreToolUse(Read) — records which notes are read
     vault-reach.sh         PreToolUse(Bash|Edit|Write|MultiEdit) — related notes before a commit,
