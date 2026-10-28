@@ -321,7 +321,7 @@ func TestPluginWrapperConcurrentFirstUse(t *testing.T) {
 	require.NoError(t, err, "VAULTMIND_PLUGIN_TRACE must record the lock decisions")
 	assert.Contains(t, string(traced), "lock-acquired")
 	assert.EqualValues(t, 2, requests.Load(), "only archive + checksum should be fetched\noutputs:\n%s\ntrace:\n%s", strings.Join(outputs, "\n---\n"), traced)
-	assert.NoDirExists(t, filepath.Join(data, pluginVersion(t)+".lock"))
+	assert.NoFileExists(t, filepath.Join(data, pluginVersion(t)+".lock"), "the lock is released")
 }
 
 // A release PR may leave the marketplace on the immediately previous release
@@ -396,17 +396,24 @@ func TestPluginWrapperSkipsOtherWrappers(t *testing.T) {
 }
 
 func TestPluginWrapperBreaksStaleLock(t *testing.T) {
-	for _, stale := range []string{"dead PID", "old live PID", "old empty lock"} {
+	// The lock is a file holding the owner's PID (#353). An older release's lock
+	// is a directory with no readable owner, so only its age frees it.
+	for _, stale := range []string{"dead PID", "old live PID", "old empty lock", "old directory lock"} {
 		t.Run(stale, func(t *testing.T) {
 			data := t.TempDir()
 			lock := filepath.Join(data, pluginVersion(t)+".lock")
-			require.NoError(t, os.Mkdir(lock, 0755))
 			pid := "999999999\n"
 			if stale == "old live PID" {
 				pid = fmt.Sprintln(os.Getpid())
 			}
-			if stale != "old empty lock" {
+			switch stale {
+			case "old empty lock":
+				require.NoError(t, os.WriteFile(lock, nil, 0644))
+			case "old directory lock":
+				require.NoError(t, os.Mkdir(lock, 0755))
 				require.NoError(t, os.WriteFile(filepath.Join(lock, "pid"), []byte(pid), 0644))
+			default:
+				require.NoError(t, os.WriteFile(lock, []byte(pid), 0644))
 			}
 			if stale != "dead PID" {
 				old := time.Now().Add(-10 * time.Minute)
@@ -416,6 +423,7 @@ func TestPluginWrapperBreaksStaleLock(t *testing.T) {
 			out, stderr, err := wrapperRun(t, []string{"PATH=/usr/bin:/bin", "CLAUDE_PLUGIN_DATA=" + data, "VAULTMIND_PLUGIN_RELEASE_URL=" + url}, "ask")
 			require.NoError(t, err, stderr)
 			assert.Contains(t, out, "fake:ask")
+			assert.NoFileExists(t, lock)
 			assert.NoDirExists(t, lock)
 		})
 	}
@@ -449,7 +457,45 @@ func TestPluginWrapperPublishLostRace(t *testing.T) {
 	assert.NoFileExists(t, filepath.Join(cache, "libonnxruntime.so"), "our payload must not be mixed into the published cache")
 	traced, _ := os.ReadFile(trace)
 	assert.Contains(t, string(traced), "publish-lost-race")
-	assert.NoDirExists(t, filepath.Join(data, pluginVersion(t)+".lock"))
+	assert.NoFileExists(t, filepath.Join(data, pluginVersion(t)+".lock"), "the lock is released")
+}
+
+// #353's root cause: Ubuntu 26.04's mkdir (uutils) lets two concurrent calls on
+// one path both succeed (measured 100 of 300 races), so a mkdir lock admitted
+// both first runs. This mkdir always reports success, the worst case made
+// deterministic: the lock must not depend on it.
+func TestPluginWrapperLockDoesNotTrustMkdir(t *testing.T) {
+	url, requests := fakeRelease(t, runtime.GOOS, runtime.GOARCH, false)
+	data := t.TempDir()
+	root := pluginRoot(t)
+	tools := t.TempDir()
+	hookscripts.InstallStub(t, tools, "mkdir", "#!/bin/sh\n/bin/mkdir -p \"$@\" 2>/dev/null\nexit 0\n")
+	trace := filepath.Join(t.TempDir(), "trace")
+	env := append(os.Environ(), "PATH="+tools+":/usr/bin:/bin", "CLAUDE_PLUGIN_ROOT="+root, "CLAUDE_PLUGIN_DATA="+data, "VAULTMIND_PLUGIN_RELEASE_URL="+url, "VAULTMIND_PLUGIN_TRACE="+trace)
+	t.Cleanup(func() {
+		if t.Failed() {
+			traced, _ := os.ReadFile(trace)
+			t.Logf("requests=%d\ntrace:\n%s", requests.Load(), traced)
+		}
+	})
+	done := make(chan error, 2)
+	for range 2 {
+		go func() {
+			c := exec.Command("sh", filepath.Join(root, "bin/vaultmind"), "mcp")
+			c.Env = env
+			out, err := c.CombinedOutput()
+			if err == nil && !strings.Contains(string(out), "fake:mcp") {
+				err = fmt.Errorf("no fake:mcp in %q", out)
+			}
+			done <- err
+		}()
+	}
+	for range 2 {
+		require.NoError(t, <-done)
+	}
+	assert.EqualValues(t, 2, requests.Load(), "one download, even when mkdir cannot be trusted as a lock")
+	assert.NoFileExists(t, filepath.Join(data, pluginVersion(t)+".lock"))
+	assert.NoFileExists(t, filepath.Join(data, pluginVersion(t)+".lock"), "the lock is released")
 }
 
 // #353 in main's CI: the other holder had claimed the cache but was still moving
@@ -486,7 +532,7 @@ func TestPluginWrapperLostRaceWaitsForTheWinnersBinary(t *testing.T) {
 	assert.Contains(t, out, "other:ask")
 	traced, _ := os.ReadFile(trace)
 	assert.Contains(t, string(traced), "publish-lost-race")
-	assert.NoDirExists(t, filepath.Join(data, pluginVersion(t)+".lock"))
+	assert.NoFileExists(t, filepath.Join(data, pluginVersion(t)+".lock"), "the lock is released")
 }
 
 // A publish killed after claiming the cache leaves it without its binary. Only the
