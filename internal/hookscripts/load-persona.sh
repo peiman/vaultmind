@@ -45,7 +45,7 @@ arcs_hook_wired() {
   grep -qs 'load-arcs\.sh' \
     "$PROJECT_DIR/.claude/settings.json" "$PROJECT_DIR/.claude/settings.local.json" \
     "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json" \
-    "$PROJECT_DIR/.codex/hooks.json" "$HOME/.codex/hooks.json" \
+    "$PROJECT_DIR/.codex/hooks.json" "${CODEX_HOME:-$HOME/.codex}/hooks.json" \
     "$PROJECT_DIR/.cursor/hooks.json" "$HOME/.cursor/hooks.json"
 }
 PERSONA_PART="${VAULTMIND_PERSONA_PART:-}"
@@ -135,8 +135,8 @@ $v"
   echo "  vaultmind search \"<words>\" --vault <vault>"
   echo "  vaultmind note get <id> --vault <vault>"
 
-  printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","persona_mode":"%s","vault_path":"%s","injection_success":true}\n' \
-    "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$PERSONA_MODE" "$VAULT_PATH" \
+  printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","persona_mode":"%s","persona_part":"%s","vault_path":"%s","injection_success":true}\n' \
+    "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$PERSONA_MODE" "$PERSONA_PART" "$VAULT_PATH" \
     > "$SIDECAR_FILE" 2>/dev/null
   exit 0
 fi
@@ -421,7 +421,7 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
   fi
 else
   # Hook fired but vaultmind binary or vault missing — log infrastructure failure
-  printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","persona_mode":"%s","vault_path":"%s","identity_length":0,"context_length":0,"injection_success":false,"error":"binary_or_vault_missing"}\n' \
-    "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$PERSONA_MODE" "$VAULT_PATH" \
+  printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","persona_mode":"%s","persona_part":"%s","vault_path":"%s","identity_length":0,"context_length":0,"injection_success":false,"error":"binary_or_vault_missing"}\n' \
+    "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$PERSONA_MODE" "$PERSONA_PART" "$VAULT_PATH" \
     > "$SIDECAR_FILE" 2>/dev/null
 fi
