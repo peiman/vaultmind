@@ -160,18 +160,37 @@ cleanup() {
 # TERM/INT included: without them a `kill` leaves the stream children orphaned,
 # still long-polling forever with no parent. (Earned 2026-08-11: four stacked
 # watchers left 15 orphans and woke the session three times per message.)
-trap cleanup EXIT INT TERM
+#
+# A stop must END the watcher, and say why (#362, #363). The handler used to be
+# cleanup alone: it killed the streams and the script RESUMED, so the main loop
+# saw every stream dead and printed "WATCHER ERROR … re-arm", exit 3. The
+# session re-armed, which took over the newer watcher, which said the same:
+# two watchers taking the pidfile from each other. A watcher replaced by a
+# newer one now says so and does not ask for a re-arm.
+on_stop() {
+  local now
+  now="$(cat "$VM_MESH_PID" 2>/dev/null || true)"
+  if [[ -n "${now//[^0-9]/}" && "$now" != "$$" ]] && kill -0 "$now" 2>/dev/null; then
+    echo "REPLACED: a newer mesh-watch (pid ${now}) took over and is watching. Nothing to do; do not re-arm."
+  else
+    echo "STOPPED: mesh-watch was stopped and no other watcher holds the pidfile. Re-arm if you still want to be woken."
+  fi
+  exit 0
+}
+trap cleanup EXIT
+trap on_stop INT TERM
 
 # ── Idempotent arming: take over any live predecessor, never stack ───────────
-if [[ -f "$VM_MESH_PID" ]]; then
-  prior="$(cat "$VM_MESH_PID" 2>/dev/null || true)"
-  if [[ -n "${prior//[^0-9]/}" && "$prior" != "$$" ]] && kill -0 "$prior" 2>/dev/null; then
-    kill "$prior" 2>/dev/null
-    for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$prior" 2>/dev/null || break; sleep 0.2; done
-    kill -9 "$prior" 2>/dev/null || true
-  fi
-fi
+# The claim comes first, so the predecessor's stop handler can name its
+# successor. The predecessor gets 5 s to clean up its streams before SIGKILL,
+# which would orphan them.
+prior="$(cat "$VM_MESH_PID" 2>/dev/null || true)"
 echo $$ > "$VM_MESH_PID" 2>/dev/null || true
+if [[ -n "${prior//[^0-9]/}" && "$prior" != "$$" ]] && kill -0 "$prior" 2>/dev/null; then
+  kill "$prior" 2>/dev/null
+  for _ in $(seq 1 25); do kill -0 "$prior" 2>/dev/null || break; sleep 0.2; done
+  kill -9 "$prior" 2>/dev/null || true
+fi
 
 # ── Detector: stdin = /chat_wait JSON; prints "from|ts" of the newest message
 #    this agent should hear (nothing if none). ALL identity arrives via env —
@@ -544,7 +563,9 @@ while true; do
       fi
     fi
   fi
-  sleep 2
+  # Interruptible: bash defers a trap until a foreground sleep returns, but a
+  # `wait` returns at once, so a takeover's TERM is handled before its SIGKILL.
+  sleep 2 & wait $! 2>/dev/null
 done
 
 for p in "${PIDS[@]}"; do kill "$p" 2>/dev/null; done
