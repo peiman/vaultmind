@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A `mesh-watch.sh` replaced by a newer one now says `REPLACED: a newer mesh-watch (pid N) took over and is watching … do not re-arm` and exits 0 (#362, #363).
+  - **Before:** its stop handler killed its streams and then let the script carry on. It reported `WATCHER ERROR: all streams exited … re-arm` with exit 3, and the session re-armed, which replaced the newer watcher. Two watchers then kept taking the pidfile from each other.
+  - **Now:** arming claims the pidfile before stopping its predecessor, and gives it 5 s, not 2, before `SIGKILL`. The main loop's sleep can be interrupted, so the stop is handled at once and no stream is left orphaned.
+  - Run `vaultmind hooks install --force` to update installed watchers.
 - `golang.org/x/net` updated to v0.62.0. That release fixes two vulnerabilities in its HTML package, GO-2026-6866 (raw-text namespace rendering) and GO-2026-6860 (quadratic text-node coalescing). Both are reachable through EPUB import, which renders HTML.
 - The persona hook's identity now reaches the agent whole (#355).
   - **Before:** Claude Code replaces a SessionStart hook's output with a ~2 KB preview once it passes about 10,000 characters. A 30-arc identity printed 15–19k, so after many compactions the agent started from a preview of itself while the hook logged success.
