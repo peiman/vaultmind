@@ -66,6 +66,10 @@ esac
 	defer func() {
 		_ = os.WriteFile(filepath.Join(dir, "DISARM"), nil, 0o600) // stop the successor
 		_ = b.Wait()
+		// Only now: exec writes the buffer until the process exits (-race).
+		if t.Failed() {
+			t.Logf("successor output:\n%s", bOut.String())
+		}
 	}()
 
 	aErr := a.Wait()
@@ -78,6 +82,6 @@ esac
 	assert.Contains(t, aText, "do not re-arm", "a re-arm would replace the successor")
 
 	time.Sleep(time.Second)
-	assert.Nil(t, b.ProcessState, "the successor keeps watching: %s", bOut.String())
+	assert.Nil(t, b.ProcessState, "the successor keeps watching")
 	assert.True(t, pidIs(b.Process.Pid), "and owns the pidfile")
 }
