@@ -74,7 +74,8 @@ esac
 	assert.Contains(t, aText, "REPLACED", "it says it was replaced")
 	assert.Contains(t, aText, strconv.Itoa(b.Process.Pid), "and by which watcher")
 	assert.NotContains(t, aText, "WATCHER ERROR", "a takeover is not an error")
-	assert.NotContains(t, strings.ToLower(aText), "re-arm\n", "and must not ask for the re-arm that would replace the successor")
+	assert.NotContains(t, aText, "all streams exited", "the old misreport that asked for a re-arm")
+	assert.Contains(t, aText, "do not re-arm", "a re-arm would replace the successor")
 
 	time.Sleep(time.Second)
 	assert.Nil(t, b.ProcessState, "the successor keeps watching: %s", bOut.String())
