@@ -1,7 +1,7 @@
 {
   "name": "vaultmind",
   "description": "Curated project memory, automatic recall, and MCP tools. Run /vaultmind:vaultmind-setup to get started.",
-  "version": "0.10.18",
+  "version": "0.10.19",
   "author": {
     "name": "peiman"
   },
