@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.19] - 2026-10-29
+
+> Run `vaultmind hooks install --force` after upgrading. Plugin users: `claude plugin update vaultmind@vaultmind`.
+> - **The persona identity now reaches the agent whole**, with the whole arc layer in a hook of its own. Before, a large identity could arrive as a 2 KB preview.
+> - **Mesh watchers no longer drop same-second messages or replace each other.**
+> - **On Ubuntu 26.04 the plugin's first run downloads once.**
+
 ### Added
 
 - `load-arcs.sh`: a new SessionStart hook that delivers the whole arc layer, wired in the persona and full profiles for Claude Code, Codex and Cursor (#357).
@@ -3114,7 +3121,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.18...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.19...HEAD
+[0.10.19]: https://github.com/peiman/vaultmind/compare/v0.10.18...v0.10.19
 [0.10.18]: https://github.com/peiman/vaultmind/compare/v0.10.17...v0.10.18
 [0.10.17]: https://github.com/peiman/vaultmind/compare/v0.10.16...v0.10.17
 [0.10.16]: https://github.com/peiman/vaultmind/compare/v0.10.15...v0.10.16
