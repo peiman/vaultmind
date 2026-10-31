@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -55,6 +56,7 @@ type watchDaemon struct {
 	changed  chan struct{}
 	waits    chan watchRequest
 	armAdds  map[string][]watchMessage
+	down     atomic.Bool // a hub outage: every request gets 503 (#371)
 }
 
 func newWatchDaemon(messages ...watchMessage) *watchDaemon {
@@ -70,6 +72,17 @@ func (d *watchDaemon) add(messages ...watchMessage) {
 }
 
 func (d *watchDaemon) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if d.down.Load() {
+		// A real outage leaves the long poll hanging until its timeout while
+		// the short reads fail; that is how ten failed reads piled up (#371).
+		if r.URL.Path == "/chat_wait" {
+			for i := 0; i < 30 && d.down.Load(); i++ {
+				time.Sleep(100 * time.Millisecond)
+			}
+		}
+		http.Error(w, "hub down", http.StatusServiceUnavailable)
+		return
+	}
 	q := r.URL.Query()
 	since, _ := strconv.Atoi(q.Get("since"))
 	stream := q.Get("room")
@@ -122,7 +135,7 @@ func (d *watchDaemon) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func runWatchDaemon(t *testing.T, d *watchDaemon, ceiling, wait int, inject func(string)) (string, string) {
+func runWatchDaemon(t *testing.T, d *watchDaemon, ceiling, wait int, inject func(string), extraEnv ...string) (string, string) {
 	t.Helper()
 	server := httptest.NewServer(d)
 	defer server.Close()
@@ -146,6 +159,7 @@ esac
 	cmd := exec.CommandContext(ctx, "bash", script)
 	cmd.WaitDelay = 3 * time.Second
 	cmd.Env = []string{"PATH=" + bin + ":" + os.Getenv("PATH"), "HOME=" + t.TempDir(), "TMPDIR=" + t.TempDir(), "AGENT_CHAT_PROJECT_PATH=" + dir, "VM_TEST_ROOT=" + dir, "VM_TEST_DAEMON=" + server.URL, "MESH_WAIT_SECS=" + strconv.Itoa(wait), "MESH_WATCH_MAX_WALL_SECS=" + strconv.Itoa(ceiling)}
+	cmd.Env = append(cmd.Env, extraEnv...)
 	done := make(chan struct{})
 	if inject != nil {
 		go func() { defer close(done); inject(dir) }()
