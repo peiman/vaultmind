@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - The overlap cadence can be set with `MESH_SWEEP_SECS` (default 15).
   - **No retry outlives its watcher.** A watcher stopped while taking its first reading, or killed outright, could leave a retry loop running with no parent. The loop held the session's output open, and the outage window kept it alive for 600 s; on main it hung a test for the whole package timeout. Every retry loop and every stream now ends within about a second of its watcher.
   - Run `vaultmind hooks install --force` to update installed watchers.
+- After a compact, clear or resume, a session started before `load-arcs.sh` was wired now gets its arcs from the persona hook.
+  - **Before:** the persona hook checked only the hook config files. Claude Code reads its hooks when its process starts, so in a session started before the wiring, the files named `load-arcs.sh` but the harness never ran it. At every compact the agent got no arcs at all, only "Your arcs arrive in their own message". Two long-running keepers hit this on 2026-10-31.
+  - **Now:** at startup the config files are still trusted, because they are what the harness just read. At any later SessionStart, the persona hook leaves the arcs out only if `load-arcs.sh` has run in the same harness process. `load-arcs.sh` records that run under `~/.vaultmind/hook-state/arcs-live/`, keyed to the harness process ID and its start time. The worst case is still the arcs twice, never not at all.
+  - `HOOK_VERSION` becomes `v9-arcs-live`. Run `vaultmind hooks install --force` to get it.
 
 ## [0.10.19] - 2026-10-29
 
