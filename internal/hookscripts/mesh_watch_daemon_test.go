@@ -57,6 +57,7 @@ type watchDaemon struct {
 	waits    chan watchRequest
 	armAdds  map[string][]watchMessage
 	down     atomic.Bool // a hub outage: every request gets 503 (#371)
+	downHits atomic.Int32
 }
 
 func newWatchDaemon(messages ...watchMessage) *watchDaemon {
@@ -73,6 +74,7 @@ func (d *watchDaemon) add(messages ...watchMessage) {
 
 func (d *watchDaemon) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if d.down.Load() {
+		d.downHits.Add(1)
 		// A real outage leaves the long poll hanging until its timeout while
 		// the short reads fail; that is how ten failed reads piled up (#371).
 		if r.URL.Path == "/chat_wait" {
@@ -286,7 +288,11 @@ func TestMeshWatch_SameSecondCursor(t *testing.T) {
 						d.add(next)
 					}
 				}
-				ceiling, wait := 21, 28
+				// The ceiling must outlast setup plus one whole sweep interval: the
+				// straggler lands only after the first poll returns, and 21s flaked
+				// under load (2026-10-31, twice). The lag assertion below, not the
+				// ceiling, is what fails a watcher that misses the 15s sweep.
+				ceiling, wait := 32, 40
 				if arrival == "baseline-replay" || arrival == "poll-replay" {
 					ceiling, wait = 8, 1
 				}

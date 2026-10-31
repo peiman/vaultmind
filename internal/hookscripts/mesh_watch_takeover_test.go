@@ -45,6 +45,8 @@ esac
 		var out bytes.Buffer
 		c := exec.Command("bash", script)
 		c.Env, c.Stdout, c.Stderr = env, &out, &out
+		// A child left holding the output fails Wait instead of hanging the package.
+		c.WaitDelay = 10 * time.Second
 		require.NoError(t, c.Start())
 		return c, &out
 	}

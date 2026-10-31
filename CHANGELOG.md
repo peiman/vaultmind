@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Arming during an outage now waits for the hub,** within the same window, instead of failing at once.
   - A baseline that was reached but reported as a failure is also fixed: an `until` loop's status is its body's last command.
   - The overlap cadence can be set with `MESH_SWEEP_SECS` (default 15).
+  - **No retry outlives its watcher.** A watcher stopped while taking its first reading, or killed outright, could leave a retry loop running with no parent. The loop held the session's output open, and the outage window kept it alive for 600 s; on main it hung a test for the whole package timeout. Every retry loop and every stream now ends within about a second of its watcher.
   - Run `vaultmind hooks install --force` to update installed watchers.
 
 ## [0.10.19] - 2026-10-29
