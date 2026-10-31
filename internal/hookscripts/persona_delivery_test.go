@@ -145,7 +145,12 @@ func TestPersonaHook_KeepsTheArcsWhenTheArcsHookIsNotWired(t *testing.T) {
 
 func runSessionStartScript(t *testing.T, project string, env []string, script, sessionID string) string {
 	t.Helper()
-	payload, err := json.Marshal(map[string]string{"session_id": sessionID, "hook_event_name": "SessionStart", "source": "compact"})
+	return runSessionStartScriptFrom(t, project, env, script, sessionID, "startup")
+}
+
+func runSessionStartScriptFrom(t *testing.T, project string, env []string, script, sessionID, source string) string {
+	t.Helper()
+	payload, err := json.Marshal(map[string]string{"session_id": sessionID, "hook_event_name": "SessionStart", "source": source})
 	require.NoError(t, err)
 	cmd := exec.Command("/bin/bash", filepath.Join(project, ".claude", "scripts", script))
 	cmd.Env = env
@@ -179,6 +184,52 @@ func TestPersonaHook_LeavesTheArcsToTheArcsHookWhenItIsInstalled(t *testing.T) {
 	assert.Contains(t, out, "IDENTITY CONTEXT:")
 	assert.NotContains(t, out, "aaaa", "with load-arcs.sh beside it, the persona hook leaves the arcs to that hook")
 	assert.Contains(t, out, "MEMORY STATE — IDENTITY VAULT:", "the room the arcs freed goes to the memory state")
+}
+
+// Claude Code reads its hooks once, when the process starts. A session started
+// before load-arcs.sh was wired never runs it, yet the settings file now names
+// it. Trusting the file there lost the arcs at every compact (seen 2026-10-31
+// in two keepers). After startup the persona hook leaves the arcs to that hook
+// only once it has seen the hook run in this same harness process.
+func TestPersonaHook_CompactInAHarnessThatNeverRanTheArcsHookKeepsTheArcs(t *testing.T) {
+	project, env := installPersonaHook(t, arcLayerStub)
+	installArcsHook(t, project)
+	env = append(env, "VAULTMIND_PERSONA_MODE=served")
+
+	for _, source := range []string{"compact", "clear", "resume"} {
+		out := runSessionStartScriptFrom(t, project, env, "load-persona.sh", "s-old-harness", source)
+		assert.Contains(t, out, "aaaa", "%s: the arcs hook never ran in this harness, so the persona hook must deliver the arcs", source)
+		assert.LessOrEqual(t, len(out), deliveryCap)
+	}
+}
+
+func TestPersonaHook_CompactAfterTheArcsHookRanLeavesTheArcsToIt(t *testing.T) {
+	project, env := installPersonaHook(t, arcLayerStub)
+	installArcsHook(t, project)
+	env = append(env, "VAULTMIND_PERSONA_MODE=served")
+
+	runSessionStartScriptFrom(t, project, env, "load-arcs.sh", "s-live", "startup")
+	out := runSessionStartScriptFrom(t, project, env, "load-persona.sh", "s-live", "compact")
+
+	assert.NotContains(t, out, "aaaa", "the arcs hook ran in this harness, so it delivers the arcs at compact too")
+	assert.Contains(t, out, "IDENTITY CONTEXT:")
+}
+
+// An agent that lost its arcs may run load-arcs.sh by hand to get them back.
+// That run must not count as the harness running the hook, or every later
+// compact in the session drops the arcs again.
+func TestPersonaHook_AHandRunOfTheArcsHookDoesNotCountAsTheHarness(t *testing.T) {
+	project, env := installPersonaHook(t, arcLayerStub)
+	installArcsHook(t, project)
+	env = append(env, "VAULTMIND_PERSONA_MODE=served")
+
+	cmd := exec.Command("/bin/bash", filepath.Join(project, ".claude", "scripts", "load-arcs.sh"))
+	cmd.Env = env
+	cmd.Stdin = strings.NewReader("")
+	require.NoError(t, cmd.Run(), "a hand run with no payload must exit 0")
+	out := runSessionStartScriptFrom(t, project, env, "load-persona.sh", "s-hand", "compact")
+
+	assert.Contains(t, out, "aaaa", "a hand run is not the harness running the arcs hook")
 }
 
 func TestArcsHook_ExploreArmDeliversNothing(t *testing.T) {

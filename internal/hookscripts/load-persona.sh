@@ -8,6 +8,7 @@ HOOK_INPUT=$(cat)
 # hook's events share a session with the agent's own (see vault-recall.sh).
 HOOK_SESSION_ID=$(printf '%s' "$HOOK_INPUT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('session_id','') or '')" 2>/dev/null || echo "")
 SESSION_ID=$(echo "$HOOK_INPUT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('session_id','unknown'))" 2>/dev/null || echo "unknown")
+HOOK_SOURCE=$(printf '%s' "$HOOK_INPUT" | python3 -c "import json,sys; print(json.load(sys.stdin).get('source','') or '')" 2>/dev/null || echo "")
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="${VAULTMIND_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}}"
@@ -48,15 +49,48 @@ arcs_hook_wired() {
     "$PROJECT_DIR/.codex/hooks.json" "${CODEX_HOME:-$HOME/.codex}/hooks.json" \
     "$PROJECT_DIR/.cursor/hooks.json" "$HOME/.cursor/hooks.json"
 }
+# The harness reads its hooks once, when its process starts, so a wiring added
+# later is in the file but not in the running harness: trusting the file there
+# lost the arcs at every compact. At startup the file is what the harness read.
+# After that, the arcs are left out only if load-arcs.sh has run in this same
+# harness process, which it records under a key for that process (the first
+# ancestor that is not a shell, with its start time against PID reuse).
+harness_key() {
+  local pid=$PPID name i
+  for i in 1 2 3 4 5 6; do
+    name=$(ps -o comm= -p "$pid" 2>/dev/null) || return 1
+    name=${name##*/}
+    case "${name#-}" in
+      sh|bash|zsh|dash|ksh) pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ') || return 1 ;;
+      *) printf '%s-%s' "$pid" "$(ps -o lstart= -p "$pid" 2>/dev/null | tr -c 'A-Za-z0-9' '_')"; return 0 ;;
+    esac
+  done
+  return 1
+}
+ARCS_LIVE_DIR="${HOME}/.vaultmind/hook-state/arcs-live"
+HARNESS_KEY=$(harness_key)
+# A harness that sends no source (or no python3 to read it) is treated as at
+# startup: the files are all there is to go on.
+arcs_hook_live() {
+  arcs_hook_wired || return 1
+  case "$HOOK_SOURCE" in startup|"") return 0 ;; esac
+  [ -n "$HARNESS_KEY" ] && [ -f "$ARCS_LIVE_DIR/$HARNESS_KEY" ]
+}
 PERSONA_PART="${VAULTMIND_PERSONA_PART:-}"
 if [ -z "$PERSONA_PART" ]; then
-  if arcs_hook_wired; then PERSONA_PART=identity; else PERSONA_PART=all; fi
+  if arcs_hook_live; then PERSONA_PART=identity; else PERSONA_PART=all; fi
+# Only a run the harness started records the marker: an agent running
+# load-arcs.sh by hand to recover lost arcs sends no payload, and counting it
+# would drop the arcs again at every later compact.
+elif [ "$PERSONA_PART" = arcs ] && [ -n "$HARNESS_KEY" ] && [ -n "$HOOK_SOURCE" ]; then
+  mkdir -p "$ARCS_LIVE_DIR" 2>/dev/null && : > "$ARCS_LIVE_DIR/$HARNESS_KEY" 2>/dev/null
+  find "$ARCS_LIVE_DIR" -type f -mtime +30 -delete 2>/dev/null
 fi
 # Both hooks fire in the same second: the part keeps their records apart.
 PART_TAG=""
 [ "$PERSONA_PART" != arcs ] || PART_TAG="-arcs"
 SIDECAR_FILE="$LOG_DIR/${TIMESTAMP}-$(printf '%s' "$SESSION_ID" | tr -c 'A-Za-z0-9-' '_' | cut -c1-64)${PART_TAG}-injection.json"
-HOOK_VERSION="v8-arcs-hook"
+HOOK_VERSION="v9-arcs-live"
 
 # THE DELIVERY CAP (#355), per hook. Claude Code replaces a SessionStart hook's
 # output with a ~2 KB preview once it passes about 10,000 characters, and the
