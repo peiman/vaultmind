@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `mesh-watch.sh` rides out a hub outage instead of ending after about 150 s (#371).
+  - **Before:** the watcher ended after 10 failed overlap reads, roughly 150 s at the 15 s cadence. Any longer hub blip left the agent deaf until a manual re-arm: four times on 2026-10-29, once for 32 hours.
+  - **Now:** it retries with backoff, recovers when the hub answers, and ends LOUDLY only after `MESH_OUTAGE_GIVEUP_SECS` (default 600) of continuous failure. The message names the duration and curl's last error, for example HTTP 503 against connection refused, so a hub outage can be told apart from a watcher fault.
+  - **Arming during an outage now waits for the hub,** within the same window, instead of failing at once.
+  - A baseline that was reached but reported as a failure is also fixed: an `until` loop's status is its body's last command.
+  - The overlap cadence can be set with `MESH_SWEEP_SECS` (default 15).
+  - Run `vaultmind hooks install --force` to update installed watchers.
+
 ## [0.10.19] - 2026-10-29
 
 > Run `vaultmind hooks install --force` after upgrading. Plugin users: `claude plugin update vaultmind@vaultmind`.
