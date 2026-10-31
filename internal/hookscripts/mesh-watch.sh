@@ -369,6 +369,15 @@ ts=max((m.get("ts",0) or 0 for m in messages), default=0)
 print(json.dumps({"ts":ts,"ids":sorted({message_id(m) for m in messages if (m.get("ts",0) or 0)==ts})}))' 2>/dev/null
 }
 
+# Every retry loop ends once the watcher is gone. A watcher killed outright
+# (the takeover's SIGKILL fallback) runs no cleanup, and a command substitution
+# is never one of its jobs either way, so a loop that only watched the hub ran
+# on without a parent, holding the session's output: the outage window kept one
+# alive for 600 s. In every subshell $$ is still the watcher's own PID.
+watcher_alive() { kill -0 "$$" 2>/dev/null; }
+# nap <secs>: sleep in 1 s steps; returns 1 as soon as the watcher is gone.
+nap() { local i; for (( i = 0; i < $1; i++ )); do watcher_alive || return 1; sleep 1; done; }
+
 # A baseline that cannot be read is retried through an outage, never faked.
 # Prints the cursor, or returns 1 after OUTAGE_GIVEUP_SECS with the last
 # curl error in $2 (each caller its own file: streams baseline in parallel).
@@ -377,7 +386,7 @@ baseline_retry() {
   t0=$(date +%s)
   until newest_cursor "$1" "${2:-}"; do
     (( $(date +%s) - t0 >= OUTAGE_GIVEUP_SECS )) && return 1
-    sleep "$b"
+    nap "$b" || return 1
     b=$(( b * 2 )); (( b > BACKOFF_CAP )) && b=$BACKOFF_CAP
   done
   # Explicit: an until loop's status is its body's last command, and the cap
@@ -481,6 +490,7 @@ PYINIT
   read_answered() { outage_since=0; }
 
   while true; do
+    watcher_alive || return 0
     date +%s > "$alive" 2>/dev/null || true
     [[ -f "$VM_MESH_DISARM" ]] && return 0
     (( $(date +%s) - start_ts > MAX_WALL_SECS )) && return 0
@@ -522,6 +532,7 @@ print(cursors[sys.argv[2]]["ts"]-1)' "$cursor" "$kind")" || {
         last_sweep=$SECONDS
       fi
       kill -0 "$wait_pid" 2>/dev/null || break
+      watcher_alive || return 0
       sleep 1
     done
     wait "$wait_pid" 2>/dev/null; wait_pid=""
@@ -531,7 +542,7 @@ print(cursors[sys.argv[2]]["ts"]-1)' "$cursor" "$kind")" || {
       # An outage should wake the session ONCE, loudly, after the give-up
       # window: not sit dark for five hours, and not end on a short blip.
       read_failed "$wait_err" || return 0
-      sleep "$backoff"
+      nap "$backoff" || return 0
       backoff=$(( backoff * 2 )); (( backoff > BACKOFF_CAP )) && backoff=$BACKOFF_CAP
       continue
     fi
