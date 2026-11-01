@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/testvault"
@@ -276,4 +277,46 @@ func TestDeleteNoteByPath(t *testing.T) {
 	assert.Equal(t, initialCount-1, len(hashes2))
 	_, exists := hashes2[pathToDelete]
 	assert.False(t, exists)
+}
+
+// #356: a hook opened the index while another process held a lock and failed at
+// once ("database is locked"); the agent then got no identity at all. A brief
+// lock must be waited out, both when opening and when writing.
+func holdLock(t *testing.T, dbPath, begin string, hold time.Duration) {
+	t.Helper()
+	raw, err := sql.Open("sqlite", dbPath)
+	require.NoError(t, err)
+	raw.SetMaxOpenConns(1)
+	_, err = raw.Exec(begin)
+	require.NoError(t, err)
+	go func() {
+		time.Sleep(hold)
+		_, _ = raw.Exec("COMMIT")
+		_ = raw.Close()
+	}()
+}
+
+func TestOpen_WaitsOutABriefLock(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "index.db")
+	raw, err := sql.Open("sqlite", dbPath)
+	require.NoError(t, err)
+	_, err = raw.Exec("CREATE TABLE seed(x)")
+	require.NoError(t, err)
+	require.NoError(t, raw.Close())
+	holdLock(t, dbPath, "BEGIN EXCLUSIVE", 300*time.Millisecond)
+
+	db, err := index.Open(dbPath)
+	require.NoError(t, err, "opening must wait for a lock held a few hundred ms")
+	require.NoError(t, db.Close())
+}
+
+func TestDB_WriteWaitsOutABriefLock(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "index.db")
+	db, err := index.Open(dbPath)
+	require.NoError(t, err)
+	defer db.Close()
+	holdLock(t, dbPath, "BEGIN IMMEDIATE", 300*time.Millisecond)
+
+	_, err = db.Exec("CREATE TABLE IF NOT EXISTS lock_probe(x)")
+	require.NoError(t, err, "a write must wait for another writer's brief lock")
 }

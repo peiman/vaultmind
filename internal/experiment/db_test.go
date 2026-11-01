@@ -1,9 +1,11 @@
 package experiment_test
 
 import (
+	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/stretchr/testify/assert"
@@ -146,4 +148,26 @@ func TestOpen_EventsIndexes(t *testing.T) {
 		require.NoError(t, err, "index %q must exist", idx)
 		assert.Equal(t, idx, name)
 	}
+}
+
+// #356: hooks write the usage log while other processes do too; a brief lock
+// must be waited out, not turned into a failed hook.
+func TestOpen_WaitsOutABriefLock(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "experiment.db")
+	raw, err := sql.Open("sqlite", dbPath)
+	require.NoError(t, err)
+	raw.SetMaxOpenConns(1)
+	_, err = raw.Exec("CREATE TABLE seed(x)")
+	require.NoError(t, err)
+	_, err = raw.Exec("BEGIN EXCLUSIVE")
+	require.NoError(t, err)
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		_, _ = raw.Exec("COMMIT")
+		_ = raw.Close()
+	}()
+
+	db, err := experiment.Open(dbPath)
+	require.NoError(t, err, "opening must wait for a lock held a few hundred ms")
+	require.NoError(t, db.Close())
 }

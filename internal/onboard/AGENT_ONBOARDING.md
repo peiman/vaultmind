@@ -462,6 +462,8 @@ For each file, show a diff before writing.
 +    "SessionStart": [{"matcher":"startup|clear|compact","hooks":[
 +      {"type":"command","command":"bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/load-persona.sh"}
 +    ]},{"matcher":"startup|clear|compact","hooks":[
++      {"type":"command","command":"bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/load-arcs.sh"}
++    ]},{"matcher":"startup|clear|compact","hooks":[
 +      {"type":"command","command":"bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/vaultmind-health.sh"}
 +    ]}],
 +    "UserPromptSubmit": [{"hooks":[
@@ -497,7 +499,15 @@ vaultmind hooks install <project-dir> --vault <vault-path> --merge
 
 `--vault` bakes `VAULTMIND_VAULT=<path>` into every wired command, so the hooks target the user's vault with **no script editing** — the path-template table below is only needed for hybrid (research-vault) setups or `capture-episode.sh`'s output dir.
 
-The command writes **9 scripts** to `<project-dir>/.claude/scripts/`; **5 are wired as the core hooks**: `load-persona.sh` (SessionStart), `vaultmind-health.sh` (SessionStart — the vault-agnostic onboarding nudge that names the next command for the current install/index state), `vault-recall.sh` (UserPromptSubmit), `vault-track-read.sh` (PreToolUse·Read), `capture-episode.sh` (SessionEnd). The other 4 — `vault-block-read.sh`, `auto-rag-evaluate.sh`, `auto-rag-guard.sh`, `shell-strip.sh` — are helpers the core scripts source or that you opt into; written but not wired. Script writes refuse to overwrite drifted user-edited copies unless `--force` (see §6a Coexisting / Conflict modes). Omit `--merge` to only write scripts and print the stanza for manual merging (the pre-`--merge` behavior).
+The command writes the profile's scripts to `<project-dir>/.claude/scripts/` (`vaultmind hooks install --help` lists them by event). The core hooks are:
+- `load-persona.sh` (SessionStart): the identity.
+- `load-arcs.sh` (SessionStart): the arc layer, in a hook of its own. Claude Code cuts each SessionStart hook's output to a preview past ~10,000 characters, and one hook cannot carry both.
+- `vaultmind-health.sh` (SessionStart): the vault-agnostic onboarding nudge that names the next command for the current install or index state.
+- `vault-recall.sh` (UserPromptSubmit).
+- `vault-track-read.sh` (PreToolUse·Read).
+- `capture-episode.sh` (SessionEnd).
+
+Helpers such as `vault-block-read.sh`, `auto-rag-evaluate.sh`, `auto-rag-guard.sh` and `shell-strip.sh` are sourced by the core scripts or opted into: written, but not wired. Script writes refuse to overwrite drifted user-edited copies unless `--force` (see §6a Coexisting / Conflict modes). Omit `--merge` to only write scripts and print the stanza for manual merging (the pre-`--merge` behavior).
 
 **Path-template work** (hybrid / custom output dir only) — the embedded scripts are project-portable: they use `$CLAUDE_PROJECT_DIR`, honor `VAULTMIND_VAULT` (set by `--vault`), and default to `vaultmind-identity/` / `vaultmind-vault/`. Edit a generated copy only for the cases below:
 
@@ -570,6 +580,7 @@ The non-auto-RAG hooks installed by `vaultmind hooks install` also accept env-va
 | all hooks | `VAULTMIND_VAULT` | `$CLAUDE_PROJECT_DIR/vaultmind-identity` | The simple default: one var drives persona-load, per-turn recall, and episode-write at once (baked by `hooks install --vault`). The per-concern vars below each fall back to it, so single-var setups are unchanged. |
 | `vault-recall.sh` (UserPromptSubmit) + `vault-track-read.sh` (PreToolUse[Read]) | `VAULTMIND_RECALL_VAULT` | `VAULTMIND_VAULT` | Route *per-turn recall* (and the read-tracking pattern) to a vault distinct from persona/episodes. A dual-vault adopter who recalls from a research vault but loads persona from an identity vault sets this. |
 | `capture-episode.sh` (SessionEnd) | `VAULTMIND_EPISODE_VAULT` | `VAULTMIND_VAULT` | Route *episode writes* to a vault distinct from recall/persona. |
+| `load-persona.sh` (SessionStart) | `VAULTMIND_PERSONA_PART` | (unset) | Which part one run delivers: `arcs` (what `load-arcs.sh` sets), `identity` (all but the arcs) or `all`. Unset means `identity` when `load-arcs.sh` is beside the script and wired in a hook config, else `all`. So an unwired arcs hook can only cause the arcs to arrive twice, never not at all. |
 | `load-persona.sh` (SessionStart) | `LOAD_PERSONA_VAULT` | `VAULTMIND_VAULT` → `$CLAUDE_PROJECT_DIR/vaultmind-identity` | Identity vault has different name. Highest-precedence persona override; falls back to `VAULTMIND_VAULT`. |
 | `load-persona.sh` (SessionStart) | `LOAD_PERSONA_RESEARCH_VAULT` | `$CLAUDE_PROJECT_DIR/vaultmind-vault` | Optional second vault. **This block runs only `vaultmind self`** — a memory/activation-state surface (hot/recent note titles), NOT a content `ask`. It surfaces what's been reinforced in the research vault, not note bodies. Unset / non-existent skips silently. |
 | `load-persona.sh` (SessionStart) | `VAULTMIND_PERSONA_MODE` | `served` | How the identity arrives. `served` hands it over as text; `explore` names the vaults and asks the agent to look before answering, serving nothing; `alternate` splits sessions between the two by session id (stable across compactions) so they can be compared. The arm is logged as `persona_mode` in `~/.vaultmind/persona-eval/`. |

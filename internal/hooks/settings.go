@@ -24,6 +24,7 @@ import (
 // block reads top-to-bottom the way the hooks fire.
 const (
 	hookSessionStartScript     = "load-persona.sh"
+	hookArcsScript             = "load-arcs.sh"
 	hookHealthScript           = "vaultmind-health.sh"
 	hookUserPromptSubmitScript = "vault-recall.sh"
 	hookPreToolUseScript       = "vault-track-read.sh"
@@ -190,6 +191,11 @@ func canonicalHooksWith(vaultPath string, vaults []string, scriptRef func(string
 	}
 	return []canonicalHook{
 		{Event: "SessionStart", Script: hookSessionStartScript, Group: hookGroup{Matcher: sessionStartMatcher, Hooks: []hookCommand{cmd(hookSessionStartScript)}}},
+		// The arc layer in a hook of its own (#357). Claude Code cuts each
+		// SessionStart hook's output to a preview past ~10,000 characters, and
+		// one hook had room for 9 of 30 arcs; this one carries all of them. Its
+		// presence beside load-persona.sh tells the persona loader to leave them out.
+		{Event: "SessionStart", Script: hookArcsScript, Group: hookGroup{Matcher: sessionStartMatcher, Hooks: []hookCommand{cmd(hookArcsScript)}}},
 		// vault-agnostic health/onboarding nudge — every adopter (persona AND
 		// knowledge-vault) gets the "what do I do next?" answer at session
 		// start. Additive: coexists with load-persona.sh on SessionStart.

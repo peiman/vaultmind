@@ -319,8 +319,10 @@ is_envelope_only() {
 }
 
 # Same metadata-only sidecar convention as the other hooks, but one rolling
-# JSONL holds at most 128 records. A nonblocking mkdir lock serializes writers;
+# JSONL holds at most 128 records. A nonblocking lock serializes writers;
 # contention or any filesystem failure simply forgoes this diagnostic record.
+# The lock is a file the shell creates with O_EXCL (set -C), not a mkdir:
+# Ubuntu 26.04's mkdir (uutils) lets two concurrent calls both succeed (#353).
 # The subshell keeps umask/traps local; every failure is explicit for set -e.
 log_envelope_skip() (
   umask 077
@@ -328,8 +330,8 @@ log_envelope_skip() (
   local dir="${HOME}/.vaultmind/userprompt-hook" file tmp="" timestamp
   mkdir -p "$dir" || return 1
   chmod 700 "$dir" || return 1
-  mkdir "$dir/.envelope-skips.lock" || return 1
-  trap 'rm -f "$tmp"; rmdir "$dir/.envelope-skips.lock"' EXIT
+  ( set -C; : > "$dir/.envelope-skips.lock" ) 2>/dev/null || return 1
+  trap 'rm -f "$tmp" "$dir/.envelope-skips.lock"' EXIT
   file="$dir/envelope-skips.jsonl"
   [ ! -L "$file" ] || return 1
   if [ -e "$file" ]; then

@@ -42,6 +42,13 @@ if ! command -v go-licenses &> /dev/null; then
     exit 1
 fi
 
+# go-licenses tells the standard library apart by GOROOT, and without one it
+# uses the GOROOT of the Go that built it. When go.mod's toolchain line is newer
+# than that Go, `go` runs a downloaded toolchain and every standard package reads
+# as "does not have module info" (ckeletin-go#176). Hand it the GOROOT `go` uses.
+GOROOT="$(go env GOROOT)"
+export GOROOT
+
 # Run license check
 if run_check "go-licenses check --allowed_licenses='$ALLOWED_LICENSES' $IGNORE_FLAGS ./... 2>&1"; then
     check_success "All dependency licenses compliant"

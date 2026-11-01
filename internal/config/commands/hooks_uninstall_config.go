@@ -30,7 +30,7 @@ PROJECT-DIR
 WHAT GETS REMOVED
 
   Any hook entry whose command invokes one of VaultMind's scripts
-  (load-persona.sh, vault-recall.sh, vault-track-read.sh,
+  (load-persona.sh, load-arcs.sh, vault-recall.sh, vault-track-read.sh,
   capture-episode.sh, and the auto-RAG helpers). An event array left
   empty is dropped, and the "hooks" object is dropped if it becomes
   empty. Entries that merely have a similar name are NOT matched —

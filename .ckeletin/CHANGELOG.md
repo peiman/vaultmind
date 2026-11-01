@@ -10,6 +10,7 @@ Only framework changes are tracked here — project-level changes belong in the 
 ### Fixed
 
 - Regenerated config key comments describe checkout-local git exclusion for hook scripts and the profile file, and its removal during local uninstall.
+- **The license scripts give go-licenses the GOROOT that `go` uses.** When `go.mod`'s toolchain is newer than the Go that built go-licenses, `go` runs a downloaded toolchain and every standard package used to read as "does not have module info". `check-licenses-source.sh` and `generate-license-report.sh` now export `GOROOT="$(go env GOROOT)"` before calling go-licenses (ckeletin-go#176).
 
 ### Added
 
