@@ -194,7 +194,7 @@ func TestPersonaHook_LeavesTheArcsToTheArcsHookWhenItIsInstalled(t *testing.T) {
 func TestPersonaHook_CompactInAHarnessThatNeverRanTheArcsHookKeepsTheArcs(t *testing.T) {
 	project, env := installPersonaHook(t, arcLayerStub)
 	installArcsHook(t, project)
-	env = append(env, "VAULTMIND_PERSONA_MODE=served")
+	env = append(env, "VAULTMIND_PERSONA_MODE=served", oldHarness)
 
 	for _, source := range []string{"compact", "clear", "resume"} {
 		out := runSessionStartScriptFrom(t, project, env, "load-persona.sh", "s-old-harness", source)
@@ -206,7 +206,7 @@ func TestPersonaHook_CompactInAHarnessThatNeverRanTheArcsHookKeepsTheArcs(t *tes
 func TestPersonaHook_CompactAfterTheArcsHookRanLeavesTheArcsToIt(t *testing.T) {
 	project, env := installPersonaHook(t, arcLayerStub)
 	installArcsHook(t, project)
-	env = append(env, "VAULTMIND_PERSONA_MODE=served")
+	env = append(env, "VAULTMIND_PERSONA_MODE=served", oldHarness)
 
 	runSessionStartScriptFrom(t, project, env, "load-arcs.sh", "s-live", "startup")
 	out := runSessionStartScriptFrom(t, project, env, "load-persona.sh", "s-live", "compact")
@@ -221,7 +221,7 @@ func TestPersonaHook_CompactAfterTheArcsHookRanLeavesTheArcsToIt(t *testing.T) {
 func TestPersonaHook_AHandRunOfTheArcsHookDoesNotCountAsTheHarness(t *testing.T) {
 	project, env := installPersonaHook(t, arcLayerStub)
 	installArcsHook(t, project)
-	env = append(env, "VAULTMIND_PERSONA_MODE=served")
+	env = append(env, "VAULTMIND_PERSONA_MODE=served", oldHarness)
 
 	cmd := exec.Command("/bin/bash", filepath.Join(project, ".claude", "scripts", "load-arcs.sh"))
 	cmd.Env = env
@@ -230,6 +230,27 @@ func TestPersonaHook_AHandRunOfTheArcsHookDoesNotCountAsTheHarness(t *testing.T)
 	out := runSessionStartScriptFrom(t, project, env, "load-persona.sh", "s-hand", "compact")
 
 	assert.Contains(t, out, "aaaa", "a hand run is not the harness running the arcs hook")
+}
+
+// oldHarness makes the test process count as a harness that has been running
+// a while, so only the arcs-live marker can say the arcs hook is live in it.
+const oldHarness = "VAULTMIND_HARNESS_FRESH_SECS=0"
+
+// `claude --resume` starts a new process, which reads the hook config as it is
+// now; it runs both hooks at once, so the marker load-arcs.sh writes is not
+// there yet when the persona hook looks. Seen 2026-11-01: a resume delivered
+// the arcs twice (15 of 30 inline, then 30 of 30), and the memory state was
+// left out for room. A harness that only just started read the files, so the
+// files are trusted, as at startup.
+func TestPersonaHook_ResumeInAFreshHarnessLeavesTheArcsToTheArcsHook(t *testing.T) {
+	project, env := installPersonaHook(t, arcLayerStub)
+	installArcsHook(t, project)
+	env = append(env, "VAULTMIND_PERSONA_MODE=served", "VAULTMIND_HARNESS_FRESH_SECS=3600")
+
+	out := runSessionStartScriptFrom(t, project, env, "load-persona.sh", "s-fresh-resume", "resume")
+
+	assert.NotContains(t, out, "aaaa", "a harness that just started runs the arcs hook itself")
+	assert.Contains(t, out, "MEMORY STATE — IDENTITY VAULT:", "the room goes to the memory state")
 }
 
 func TestArcsHook_ExploreArmDeliversNothing(t *testing.T) {

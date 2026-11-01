@@ -20,7 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - After a compact, clear or resume, a session started before `load-arcs.sh` was wired now gets its arcs from the persona hook.
   - **Before:** the persona hook checked only the hook config files. Claude Code reads its hooks when its process starts, so in a session started before the wiring, the files named `load-arcs.sh` but the harness never ran it. At every compact the agent got no arcs at all, only "Your arcs arrive in their own message". Two long-running keepers hit this on 2026-10-31.
   - **Now:** at startup the config files are still trusted, because they are what the harness just read. At any later SessionStart, the persona hook leaves the arcs out only if `load-arcs.sh` has run in the same harness process. `load-arcs.sh` records that run under `~/.vaultmind/hook-state/arcs-live/`, keyed to the harness process ID and its start time. The worst case is still the arcs twice, never not at all.
-  - `HOOK_VERSION` becomes `v9-arcs-live`. Run `vaultmind hooks install --force` to get it.
+  - **A harness that only just started is trusted like a startup.** `claude --resume` starts a new process, which reads the config as it is now and runs both hooks at once, so the marker could not exist yet. A resume delivered the arcs twice and left the memory state out for room. The persona hook now treats a harness younger than 60 s as fresh (`VAULTMIND_HARNESS_FRESH_SECS`).
+  - `HOOK_VERSION` becomes `v10-fresh-harness`. Run `vaultmind hooks install --force` to get it.
 - Development: `task check:license:source` no longer fails with "Package fmt does not have module info" when `go.mod`'s toolchain is newer than the Go that built `go-licenses`. The license scripts now pass go-licenses the GOROOT that `go` actually uses (ckeletin-go#176).
 
 ## [0.10.19] - 2026-10-29

@@ -55,25 +55,41 @@ arcs_hook_wired() {
 # After that, the arcs are left out only if load-arcs.sh has run in this same
 # harness process, which it records under a key for that process (the first
 # ancestor that is not a shell, with its start time against PID reuse).
-harness_key() {
+harness_pid() {
   local pid=$PPID name i
   for i in 1 2 3 4 5 6; do
     name=$(ps -o comm= -p "$pid" 2>/dev/null) || return 1
     name=${name##*/}
     case "${name#-}" in
       sh|bash|zsh|dash|ksh) pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ') || return 1 ;;
-      *) printf '%s-%s' "$pid" "$(ps -o lstart= -p "$pid" 2>/dev/null | tr -c 'A-Za-z0-9' '_')"; return 0 ;;
+      *) printf '%s' "$pid"; return 0 ;;
     esac
   done
   return 1
 }
+# Seconds since the harness started, from ps's [[dd-]hh:]mm:ss elapsed time.
+harness_age() {
+  local t d=0 h=0 m=0 s=0 a b c
+  t=$(ps -o etime= -p "$1" 2>/dev/null | tr -d ' ')
+  [ -n "$t" ] || return 1
+  case "$t" in *-*) d=${t%%-*}; t=${t#*-} ;; esac
+  IFS=: read -r a b c <<<"$t"
+  if [ -n "$c" ]; then h=$a m=$b s=$c; else m=$a s=$b; fi
+  echo $(( 10#$d * 86400 + 10#$h * 3600 + 10#$m * 60 + 10#$s ))
+}
 ARCS_LIVE_DIR="${HOME}/.vaultmind/hook-state/arcs-live"
-HARNESS_KEY=$(harness_key)
+HARNESS_PID=$(harness_pid)
+HARNESS_KEY=""
+[ -z "$HARNESS_PID" ] || HARNESS_KEY="$HARNESS_PID-$(ps -o lstart= -p "$HARNESS_PID" 2>/dev/null | tr -c 'A-Za-z0-9' '_')"
 # A harness that sends no source (or no python3 to read it) is treated as at
-# startup: the files are all there is to go on.
+# startup: the files are all there is to go on. So is one that only just
+# started (`claude --resume` is a new process): it read the files as they are,
+# and it runs load-arcs.sh alongside this hook, before any marker can exist.
 arcs_hook_live() {
+  local age
   arcs_hook_wired || return 1
   case "$HOOK_SOURCE" in startup|"") return 0 ;; esac
+  age=$(harness_age "$HARNESS_PID") && [ "$age" -lt "${VAULTMIND_HARNESS_FRESH_SECS:-60}" ] && return 0
   [ -n "$HARNESS_KEY" ] && [ -f "$ARCS_LIVE_DIR/$HARNESS_KEY" ]
 }
 PERSONA_PART="${VAULTMIND_PERSONA_PART:-}"
@@ -90,7 +106,7 @@ fi
 PART_TAG=""
 [ "$PERSONA_PART" != arcs ] || PART_TAG="-arcs"
 SIDECAR_FILE="$LOG_DIR/${TIMESTAMP}-$(printf '%s' "$SESSION_ID" | tr -c 'A-Za-z0-9-' '_' | cut -c1-64)${PART_TAG}-injection.json"
-HOOK_VERSION="v9-arcs-live"
+HOOK_VERSION="v10-fresh-harness"
 
 # THE DELIVERY CAP (#355), per hook. Claude Code replaces a SessionStart hook's
 # output with a ~2 KB preview once it passes about 10,000 characters, and the
