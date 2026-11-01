@@ -250,8 +250,8 @@ func TestHooksStatus_CodexOnlyProjectPassesWhenApprovedAndInSync(t *testing.T) {
 	s := out.String()
 	assert.NotContains(t, s, "No hook scripts installed")
 	assert.NotContains(t, s, "unwired")
-	assert.Contains(t, s, "Codex: 5 of 5 VaultMind hooks approved")
-	assert.Contains(t, s, ".vaultmind/scripts: 5 in sync")
+	assert.Contains(t, s, "Codex: 6 of 6 VaultMind hooks approved")
+	assert.Contains(t, s, ".vaultmind/scripts: 6 in sync")
 	_, statErr := os.Stat(filepath.Join(dir, ".claude"))
 	assert.True(t, os.IsNotExist(statErr), "a Codex install creates no .claude folder")
 }
@@ -300,7 +300,7 @@ func TestHooksUninstall_Codex(t *testing.T) {
 	require.NoError(t, err)
 	s := out.String()
 	assert.Contains(t, s, filepath.Join(dir, ".codex", "hooks.json"))
-	assert.Contains(t, s, "Removed 5 VaultMind hook entries")
+	assert.Contains(t, s, "Removed 6 VaultMind hook entries")
 	assert.Contains(t, s, "from .vaultmind/scripts/")
 	raw, err := os.ReadFile(filepath.Join(dir, ".codex", "hooks.json")) // #nosec G304 -- test path
 	require.NoError(t, err)

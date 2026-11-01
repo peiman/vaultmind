@@ -77,8 +77,8 @@ func detectorEnv(t *testing.T, overrides map[string]string) map[string]string {
 		"VM_WAKE_SELF":        "agent:me",
 		"VM_WAKE_OPERATOR":    "human:op",
 		"VM_WAKE_SCOPE":       "all",
-		"VM_WAKE_ROOM_SINCE":  "0",
-		"VM_WAKE_DM_SINCE":    "0",
+		"VM_WAKE_ROOM_CURSOR": `{"ts":0,"ids":[]}`,
+		"VM_WAKE_DM_CURSOR":   `{"ts":0,"ids":[]}`,
 		"VM_WAKE_LISTEN_FILE": filepath.Join(t.TempDir(), "absent.json"),
 		"VM_WAKE_FROM":        "",
 		"VM_WAKE_KEYWORDS":    "",
@@ -110,7 +110,7 @@ func TestMeshWatchDetector_Behaviour(t *testing.T) {
 		// Wire since had to undershoot for the DM stream: a room message at
 		// ts=50 is a replay (room floor 90) but a DM at ts=60 is genuinely new
 		// (DM floor 40). The DM must wake; the room replay must not.
-		env := detectorEnv(t, map[string]string{"VM_WAKE_ROOM_SINCE": "90", "VM_WAKE_DM_SINCE": "40"})
+		env := detectorEnv(t, map[string]string{"VM_WAKE_ROOM_CURSOR": `{"ts":90,"ids":[]}`, "VM_WAKE_DM_CURSOR": `{"ts":40,"ids":[]}`})
 		out, rc := runDetector(t, env,
 			`{"messages":[{"from_agent":"agent:other","ts":50,"room":"mesh"},{"from_agent":"agent:other","ts":60,"to_agent":"agent:me"}]}`)
 		require.Zero(t, rc)

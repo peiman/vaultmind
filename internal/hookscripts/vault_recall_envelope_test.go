@@ -327,6 +327,25 @@ func TestRecallHook_HarnessEnvelopeLoggingFailureIsQuiet(t *testing.T) {
 	}
 }
 
+// #353: Ubuntu 26.04's mkdir (uutils) lets two concurrent calls on one path both
+// succeed, so a mkdir lock admits two writers and one record is lost. With
+// another writer holding the lock and a mkdir that always reports success (the
+// worst case, deterministic), the skip must still respect the held lock.
+func TestRecallHook_EnvelopeLogLockDoesNotTrustMkdir(t *testing.T) {
+	h := newHookEnv(t, fastStub)
+	logDir := filepath.Join(h.home, ".vaultmind", "userprompt-hook")
+	require.NoError(t, os.MkdirAll(logDir, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(logDir, ".envelope-skips.lock"), []byte("held\n"), 0o600))
+	hookscripts.InstallStub(t, h.binDir, "mkdir", "#!/bin/sh\n/bin/mkdir -p \"$@\" 2>/dev/null\nexit 0\n")
+
+	runEnvelopeSkip(t, h, "<task-notification>finished</task-notification>")
+
+	_, err := os.Stat(filepath.Join(logDir, "envelope-skips.jsonl"))
+	assert.True(t, os.IsNotExist(err), "a writer must not write while another holds the lock")
+	_, err = os.Stat(filepath.Join(logDir, ".envelope-skips.lock"))
+	assert.NoError(t, err, "and must not remove a lock it does not hold")
+}
+
 func runEnvelopeSkip(t *testing.T, h hookEnv, prompt string) {
 	t.Helper()
 	payload, err := json.Marshal(map[string]string{"prompt": prompt})

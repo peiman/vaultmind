@@ -7,8 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.20] - 2026-11-01
+
+> Run `vaultmind hooks install --force` after upgrading. Plugin users: `claude plugin update vaultmind@vaultmind`.
+> - **The arcs are no longer lost after a compact** in a session started before `load-arcs.sh` was wired, and a fresh `--resume` no longer delivers them twice.
+> - **Mesh watchers ride out a hub outage** for up to 10 minutes, then end loudly with the cause. No retry outlives its watcher.
+
 ### Fixed
 
+- `mesh-watch.sh` rides out a hub outage instead of ending after about 150 s (#371).
+  - **Before:** the watcher ended after 10 failed overlap reads, roughly 150 s at the 15 s cadence. Any longer hub blip left the agent deaf until a manual re-arm: four times on 2026-10-29, once for 32 hours.
+  - **Now:** it retries with backoff, recovers when the hub answers, and ends LOUDLY only after `MESH_OUTAGE_GIVEUP_SECS` (default 600) of continuous failure. The message names the duration and curl's last error, for example HTTP 503 against connection refused, so a hub outage can be told apart from a watcher fault.
+  - **Arming during an outage now waits for the hub,** within the same window, instead of failing at once.
+  - A baseline that was reached but reported as a failure is also fixed: an `until` loop's status is its body's last command.
+  - The overlap cadence can be set with `MESH_SWEEP_SECS` (default 15).
+  - **No retry outlives its watcher.** A watcher stopped while taking its first reading, or killed outright, could leave a retry loop running with no parent. The loop held the session's output open, and the outage window kept it alive for 600 s; on main it hung a test for the whole package timeout. Every retry loop and every stream now ends within about a second of its watcher.
+  - Run `vaultmind hooks install --force` to update installed watchers.
+- After a compact, clear or resume, a session started before `load-arcs.sh` was wired now gets its arcs from the persona hook.
+  - **Before:** the persona hook checked only the hook config files. Claude Code reads its hooks when its process starts, so in a session started before the wiring, the files named `load-arcs.sh` but the harness never ran it. At every compact the agent got no arcs at all, only "Your arcs arrive in their own message". Two long-running keepers hit this on 2026-10-31.
+  - **Now:** at startup the config files are still trusted, because they are what the harness just read. At any later SessionStart, the persona hook leaves the arcs out only if `load-arcs.sh` has run in the same harness process. `load-arcs.sh` records that run under `~/.vaultmind/hook-state/arcs-live/`, keyed to the harness process ID and its start time. The worst case is still the arcs twice, never not at all.
+  - **A harness that only just started is trusted like a startup.** `claude --resume` starts a new process, which reads the config as it is now and runs both hooks at once, so the marker could not exist yet. A resume delivered the arcs twice and left the memory state out for room. The persona hook now treats a harness younger than 60 s as fresh (`VAULTMIND_HARNESS_FRESH_SECS`).
+  - `HOOK_VERSION` becomes `v10-fresh-harness`. Run `vaultmind hooks install --force` to get it.
+- Development: `task check:license:source` no longer fails with "Package fmt does not have module info" when `go.mod`'s toolchain is newer than the Go that built `go-licenses`. The license scripts now pass go-licenses the GOROOT that `go` actually uses (ckeletin-go#176).
+
+## [0.10.19] - 2026-10-29
+
+> Run `vaultmind hooks install --force` after upgrading. Plugin users: `claude plugin update vaultmind@vaultmind`.
+> - **The persona identity now reaches the agent whole**, with the whole arc layer in a hook of its own. Before, a large identity could arrive as a 2 KB preview.
+> - **Mesh watchers no longer drop same-second messages or replace each other.**
+> - **On Ubuntu 26.04 the plugin's first run downloads once.**
+
+### Added
+
+- `load-arcs.sh`: a new SessionStart hook that delivers the whole arc layer, wired in the persona and full profiles for Claude Code, Codex and Cursor (#357).
+  - **Why:** Claude Code cuts each hook's output to a preview past ~10,000 characters. With the identity, the context and the memory state in one hook, a 30-arc vault had room for 9 arcs.
+  - **Now:** the arc layer has a hook of its own. It steps the excerpt down until every arc fits under the 9,000-byte cap. On a real 30-arc vault, all 30 arrive at excerpt 70 in 8.6 KB, and the identity hook is 7.2 KB.
+  - **No silent loss:** the persona hook leaves the arcs out only when `load-arcs.sh` sits beside it and a hook config wires it. Otherwise it delivers them itself, so the worst case is the arcs twice, never not at all.
+  - The explore arm delivers no arcs. Each part writes its own sidecar record (`persona_part`, `arc_excerpt`). `HOOK_VERSION` becomes `v8-arcs-hook`.
+  - Run `vaultmind hooks install --force` to get it.
+
+### Fixed
+
+- A `mesh-watch.sh` replaced by a newer one now says `REPLACED: a newer mesh-watch (pid N) took over and is watching … do not re-arm` and exits 0 (#362, #363).
+  - **Before:** its stop handler killed its streams and then let the script carry on. It reported `WATCHER ERROR: all streams exited … re-arm` with exit 3, and the session re-armed, which replaced the newer watcher. Two watchers then kept taking the pidfile from each other.
+  - **Now:** arming claims the pidfile before stopping its predecessor, and gives it 5 s, not 2, before `SIGKILL`. The main loop's sleep can be interrupted, so the stop is handled at once and no stream is left orphaned.
+  - Run `vaultmind hooks install --force` to update installed watchers.
+- `golang.org/x/net` updated to v0.62.0. That release fixes two vulnerabilities in its HTML package, GO-2026-6866 (raw-text namespace rendering) and GO-2026-6860 (quadratic text-node coalescing). Both are reachable through EPUB import, which renders HTML.
+- The persona hook's identity now reaches the agent whole (#355).
+  - **Before:** Claude Code replaces a SessionStart hook's output with a ~2 KB preview once it passes about 10,000 characters. A 30-arc identity printed 15–19k, so after many compactions the agent started from a preview of itself while the hook logged success.
+  - **Now:** the hook keeps its output under 9,000 bytes (`VAULTMIND_HOOK_OUTPUT_CAP`). The arc layer gets the room the other sections leave; if that is not enough, whole sections are dropped, lowest value first, and named with the command that reads them.
+  - **Log:** the sidecar now records `output_bytes`, `arc_budget` and what was `capped`.
+  - Run `vaultmind hooks install --force` to update installed hooks.
+- When the persona hook can't load the identity, it now says so to the agent: `IDENTITY NOT LOADED`, with the reason and the commands to rebuild it. Before, it printed nothing and exited 0 (#356). Its sidecar log keeps the error.
+- Opening the index and the usage log now waits out another process's brief lock (`busy_timeout`, 5 s) instead of failing at once with `database is locked`. A hook that opened the index during a re-index used to fail outright (#356).
+
+- The Claude Code plugin's launcher can no longer report success when two first runs both download the release (#353).
+  - **Before:** the second move nested its payload inside the cache the first had just published.
+  - **Now:** publishing claims the cache directory atomically and moves the binary last. A run that loses the race uses the published install, waiting up to 60 s if the winner is still moving it in. Before this, CI showed the loser failing with "incomplete cache".
+  - **Diagnostics:** `VAULTMIND_PLUGIN_TRACE=<file>` records each cache and lock decision. It is opt-in, and stdout is unchanged.
+  - **Root cause:** on Ubuntu 26.04, `mkdir` is the uutils (Rust) implementation, and two concurrent `mkdir` calls on one path can both succeed (100 of 300 races measured). So the launcher's `mkdir` lock let two first runs in at once. The lock is now a file the shell creates with `O_EXCL` (`set -C`), and on real Ubuntu 26.04 the double publish went from 8 in 100 rounds to 0. A leftover directory lock from an older release is freed by its age. The `vault-recall.sh` diagnostic log's lock got the same fix.
+- `mesh-watch.sh` keeps message IDs at each stream's latest second, so room messages and DMs arriving in the same second as an arm baseline or a previous poll are no longer skipped (#350). Blocking waits use the newest cursor, with separate overlap reads at arm, after wait returns and every 15 seconds, avoiding idle busy polling and empty-mailbox history replay. Batch filtering is independent of response order, missing IDs use stable content hashes, and cursor files are replaced atomically. Wake, re-arm and heartbeat behavior is preserved. Run `vaultmind hooks install --force` to update installed watchers.
 - `hooks install --local` and `init --wire-hooks --local` no longer leave `.claude/scripts/` and `.claude/vaultmind-profile` showing up in `git status` (#344). They add both paths to the checkout's own git exclude file, in a marked block, and say so; `--dry-run` previews it. This works in worktrees, submodules and projects below the repository root, including projects reached through a symlink. `hooks uninstall --local` removes the block, unless another worktree of the same repository still uses it. Your own exclude lines are never touched, and nothing is written if the install fails or the exclude file would be outside the repository.
 - `hooks status` reads both `.claude/settings.json` and `.claude/settings.local.json`, so an install with `--merge --local` no longer shows as unwired (#345). Each event names the file that wires it. The same command in both files gets a note, because Claude Code runs it once; the same script under different commands with overlapping matchers gets a warning that it can fire twice; neither fails status. Outdated matchers are judged file by file, and repair hints give both commands when both files need fixing. User-scope status is unchanged.
 
@@ -3086,7 +3144,9 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.18...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.20...HEAD
+[0.10.20]: https://github.com/peiman/vaultmind/compare/v0.10.19...v0.10.20
+[0.10.19]: https://github.com/peiman/vaultmind/compare/v0.10.18...v0.10.19
 [0.10.18]: https://github.com/peiman/vaultmind/compare/v0.10.17...v0.10.18
 [0.10.17]: https://github.com/peiman/vaultmind/compare/v0.10.16...v0.10.17
 [0.10.16]: https://github.com/peiman/vaultmind/compare/v0.10.15...v0.10.16

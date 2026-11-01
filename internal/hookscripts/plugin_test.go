@@ -107,6 +107,12 @@ func TestPluginVersionTracksReleaseIntent(t *testing.T) {
 
 func fakeRelease(t *testing.T, osname, arch string, corrupt bool) (string, *atomic.Int32) {
 	t.Helper()
+	return fakeReleaseWith(t, osname, arch, corrupt, nil)
+}
+
+// fakeReleaseWith runs before (when set) ahead of serving each request.
+func fakeReleaseWith(t *testing.T, osname, arch string, corrupt bool, before func(*http.Request)) (string, *atomic.Int32) {
+	t.Helper()
 	var archive bytes.Buffer
 	gz := gzip.NewWriter(&archive)
 	tw := tar.NewWriter(gz)
@@ -139,6 +145,9 @@ func fakeRelease(t *testing.T, osname, arch string, corrupt bool) (string, *atom
 	files := http.FileServer(http.Dir(releaseDir))
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests.Add(1)
+		if before != nil {
+			before(r)
+		}
 		files.ServeHTTP(w, r)
 	}))
 	t.Cleanup(server.Close)
@@ -277,7 +286,16 @@ func TestPluginWrapperConcurrentFirstUse(t *testing.T) {
 	url, requests := fakeRelease(t, runtime.GOOS, runtime.GOARCH, false)
 	data := t.TempDir()
 	root := pluginRoot(t)
-	env := append(os.Environ(), "PATH=/usr/bin:/bin", "CLAUDE_PLUGIN_ROOT="+root, "CLAUDE_PLUGIN_DATA="+data, "VAULTMIND_PLUGIN_RELEASE_URL="+url)
+	trace := filepath.Join(t.TempDir(), "trace")
+	env := append(os.Environ(), "PATH=/usr/bin:/bin", "CLAUDE_PLUGIN_ROOT="+root, "CLAUDE_PLUGIN_DATA="+data, "VAULTMIND_PLUGIN_RELEASE_URL="+url, "VAULTMIND_PLUGIN_TRACE="+trace)
+	// #353: this failed only in main's CI. On ANY failure, show which lock path
+	// each process took — a require that stops early must not hide the trace.
+	t.Cleanup(func() {
+		if t.Failed() {
+			traced, _ := os.ReadFile(trace)
+			t.Logf("requests=%d\ntrace:\n%s", requests.Load(), traced)
+		}
+	})
 	type result struct {
 		output string
 		err    error
@@ -291,13 +309,19 @@ func TestPluginWrapperConcurrentFirstUse(t *testing.T) {
 			done <- result{string(out), err}
 		}()
 	}
+	var outputs []string
 	for range 2 {
 		r := <-done
 		require.NoError(t, r.err, r.output)
 		assert.Contains(t, r.output, "fake:mcp")
+		outputs = append(outputs, r.output)
 	}
-	assert.EqualValues(t, 2, requests.Load(), "only archive + checksum should be fetched")
-	assert.NoDirExists(t, filepath.Join(data, pluginVersion(t)+".lock"))
+	// #353: this failed only in main's CI; the trace says which lock path each process took.
+	traced, err := os.ReadFile(trace)
+	require.NoError(t, err, "VAULTMIND_PLUGIN_TRACE must record the lock decisions")
+	assert.Contains(t, string(traced), "lock-acquired")
+	assert.EqualValues(t, 2, requests.Load(), "only archive + checksum should be fetched\noutputs:\n%s\ntrace:\n%s", strings.Join(outputs, "\n---\n"), traced)
+	assert.NoFileExists(t, filepath.Join(data, pluginVersion(t)+".lock"), "the lock is released")
 }
 
 // A release PR may leave the marketplace on the immediately previous release
@@ -372,17 +396,24 @@ func TestPluginWrapperSkipsOtherWrappers(t *testing.T) {
 }
 
 func TestPluginWrapperBreaksStaleLock(t *testing.T) {
-	for _, stale := range []string{"dead PID", "old live PID", "old empty lock"} {
+	// The lock is a file holding the owner's PID (#353). An older release's lock
+	// is a directory with no readable owner, so only its age frees it.
+	for _, stale := range []string{"dead PID", "old live PID", "old empty lock", "old directory lock"} {
 		t.Run(stale, func(t *testing.T) {
 			data := t.TempDir()
 			lock := filepath.Join(data, pluginVersion(t)+".lock")
-			require.NoError(t, os.Mkdir(lock, 0755))
 			pid := "999999999\n"
 			if stale == "old live PID" {
 				pid = fmt.Sprintln(os.Getpid())
 			}
-			if stale != "old empty lock" {
+			switch stale {
+			case "old empty lock":
+				require.NoError(t, os.WriteFile(lock, nil, 0644))
+			case "old directory lock":
+				require.NoError(t, os.Mkdir(lock, 0755))
 				require.NoError(t, os.WriteFile(filepath.Join(lock, "pid"), []byte(pid), 0644))
+			default:
+				require.NoError(t, os.WriteFile(lock, []byte(pid), 0644))
 			}
 			if stale != "dead PID" {
 				old := time.Now().Add(-10 * time.Minute)
@@ -392,9 +423,148 @@ func TestPluginWrapperBreaksStaleLock(t *testing.T) {
 			out, stderr, err := wrapperRun(t, []string{"PATH=/usr/bin:/bin", "CLAUDE_PLUGIN_DATA=" + data, "VAULTMIND_PLUGIN_RELEASE_URL=" + url}, "ask")
 			require.NoError(t, err, stderr)
 			assert.Contains(t, out, "fake:ask")
+			assert.NoFileExists(t, lock)
 			assert.NoDirExists(t, lock)
 		})
 	}
+}
+
+// #353: if another holder publishes the cache while we download, we must use its
+// install, never move our payload inside it.
+func TestPluginWrapperPublishLostRace(t *testing.T) {
+	data := t.TempDir()
+	cache := filepath.Join(data, pluginVersion(t))
+	// The other holder's install, published by one rename mid-download.
+	staged := filepath.Join(t.TempDir(), "other")
+	require.NoError(t, os.Mkdir(staged, 0755))
+	hookscripts.InstallStub(t, staged, "vaultmind", "#!/bin/sh\nprintf 'other:%s\\n' \"$*\"\n")
+	var published error
+	url, _ := fakeReleaseWith(t, runtime.GOOS, runtime.GOARCH, false, func(r *http.Request) {
+		if strings.Contains(r.URL.Path, "checksums") {
+			published = os.Rename(staged, cache)
+		}
+	})
+	trace := filepath.Join(t.TempDir(), "trace")
+	out, stderr, err := wrapperRun(t, []string{"PATH=/usr/bin:/bin", "CLAUDE_PLUGIN_DATA=" + data, "VAULTMIND_PLUGIN_RELEASE_URL=" + url, "VAULTMIND_PLUGIN_TRACE=" + trace}, "ask")
+	require.NoError(t, published, "the simulated holder must publish before our download ends")
+	require.NoError(t, err, stderr)
+	assert.Contains(t, out, "other:ask")
+	entries, err := os.ReadDir(cache)
+	require.NoError(t, err)
+	for _, e := range entries {
+		assert.False(t, e.IsDir(), "our payload must not be nested inside the published cache: %s", e.Name())
+	}
+	assert.NoFileExists(t, filepath.Join(cache, "libonnxruntime.so"), "our payload must not be mixed into the published cache")
+	traced, _ := os.ReadFile(trace)
+	assert.Contains(t, string(traced), "publish-lost-race")
+	assert.NoFileExists(t, filepath.Join(data, pluginVersion(t)+".lock"), "the lock is released")
+}
+
+// #353's root cause: Ubuntu 26.04's mkdir (uutils) lets two concurrent calls on
+// one path both succeed (measured 100 of 300 races), so a mkdir lock admitted
+// both first runs. This mkdir always reports success, the worst case made
+// deterministic: the lock must not depend on it.
+func TestPluginWrapperLockDoesNotTrustMkdir(t *testing.T) {
+	url, requests := fakeRelease(t, runtime.GOOS, runtime.GOARCH, false)
+	data := t.TempDir()
+	root := pluginRoot(t)
+	tools := t.TempDir()
+	hookscripts.InstallStub(t, tools, "mkdir", "#!/bin/sh\n/bin/mkdir -p \"$@\" 2>/dev/null\nexit 0\n")
+	trace := filepath.Join(t.TempDir(), "trace")
+	env := append(os.Environ(), "PATH="+tools+":/usr/bin:/bin", "CLAUDE_PLUGIN_ROOT="+root, "CLAUDE_PLUGIN_DATA="+data, "VAULTMIND_PLUGIN_RELEASE_URL="+url, "VAULTMIND_PLUGIN_TRACE="+trace)
+	t.Cleanup(func() {
+		if t.Failed() {
+			traced, _ := os.ReadFile(trace)
+			t.Logf("requests=%d\ntrace:\n%s", requests.Load(), traced)
+		}
+	})
+	done := make(chan error, 2)
+	for range 2 {
+		go func() {
+			c := exec.Command("sh", filepath.Join(root, "bin/vaultmind"), "mcp")
+			c.Env = env
+			out, err := c.CombinedOutput()
+			if err == nil && !strings.Contains(string(out), "fake:mcp") {
+				err = fmt.Errorf("no fake:mcp in %q", out)
+			}
+			done <- err
+		}()
+	}
+	for range 2 {
+		require.NoError(t, <-done)
+	}
+	assert.EqualValues(t, 2, requests.Load(), "one download, even when mkdir cannot be trusted as a lock")
+	assert.NoFileExists(t, filepath.Join(data, pluginVersion(t)+".lock"))
+	assert.NoFileExists(t, filepath.Join(data, pluginVersion(t)+".lock"), "the lock is released")
+}
+
+// #353 in main's CI: the other holder had claimed the cache but was still moving
+// its payload in, so the binary was not there yet. The loser must wait for it
+// (the binary is what every reader takes as complete), not fail.
+func TestPluginWrapperLostRaceWaitsForTheWinnersBinary(t *testing.T) {
+	data := t.TempDir()
+	cache := filepath.Join(data, pluginVersion(t))
+	staged := filepath.Join(t.TempDir(), "other")
+	require.NoError(t, os.Mkdir(staged, 0755))
+	hookscripts.InstallStub(t, staged, "vaultmind", "#!/bin/sh\nprintf 'other:%s\\n' \"$*\"\n")
+	landed := make(chan error, 1)
+	url, _ := fakeReleaseWith(t, runtime.GOOS, runtime.GOARCH, false, func(r *http.Request) {
+		if !strings.Contains(r.URL.Path, "checksums") {
+			return
+		}
+		if err := os.Mkdir(cache, 0755); err != nil { // claimed, still empty
+			landed <- err
+			return
+		}
+		go func() {
+			time.Sleep(500 * time.Millisecond)
+			err := os.Rename(filepath.Join(staged, "vaultmind.body"), filepath.Join(cache, "vaultmind.body"))
+			if err == nil {
+				err = os.Rename(filepath.Join(staged, "vaultmind"), filepath.Join(cache, "vaultmind"))
+			}
+			landed <- err
+		}()
+	})
+	trace := filepath.Join(t.TempDir(), "trace")
+	out, stderr, err := wrapperRun(t, []string{"PATH=/usr/bin:/bin", "CLAUDE_PLUGIN_DATA=" + data, "VAULTMIND_PLUGIN_RELEASE_URL=" + url, "VAULTMIND_PLUGIN_TRACE=" + trace}, "ask")
+	require.NoError(t, <-landed, "the simulated winner must finish its publish")
+	require.NoError(t, err, stderr)
+	assert.Contains(t, out, "other:ask")
+	traced, _ := os.ReadFile(trace)
+	assert.Contains(t, string(traced), "publish-lost-race")
+	assert.NoFileExists(t, filepath.Join(data, pluginVersion(t)+".lock"), "the lock is released")
+}
+
+// A publish killed after claiming the cache leaves it without its binary. Only the
+// lock holder publishes, so the next holder starts that publish over instead of
+// failing until someone deletes the folder by hand.
+func TestPluginWrapperRecoversIncompleteCache(t *testing.T) {
+	data := t.TempDir()
+	cache := filepath.Join(data, pluginVersion(t))
+	require.NoError(t, os.Mkdir(cache, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(cache, "libonnxruntime.so"), []byte("partial"), 0644))
+	url, _ := fakeRelease(t, runtime.GOOS, runtime.GOARCH, false)
+	out, stderr, err := wrapperRun(t, []string{"PATH=/usr/bin:/bin", "CLAUDE_PLUGIN_DATA=" + data, "VAULTMIND_PLUGIN_RELEASE_URL=" + url}, "ask")
+	require.NoError(t, err, stderr)
+	assert.Contains(t, out, "fake:ask")
+	assert.FileExists(t, filepath.Join(cache, "vaultmind"))
+}
+
+// The trace is opt-in: without VAULTMIND_PLUGIN_TRACE nothing is written and stdout is the CLI's alone.
+func TestPluginWrapperTraceIsOptIn(t *testing.T) {
+	url, _ := fakeRelease(t, runtime.GOOS, runtime.GOARCH, false)
+	data := t.TempDir()
+	trace := filepath.Join(t.TempDir(), "trace")
+	out, stderr, err := wrapperRun(t, []string{"PATH=/usr/bin:/bin", "CLAUDE_PLUGIN_DATA=" + data, "VAULTMIND_PLUGIN_RELEASE_URL=" + url, "VAULTMIND_PLUGIN_TRACE="}, "ask")
+	require.NoError(t, err, stderr)
+	assert.Equal(t, "fake:ask\n", out)
+	assert.NoFileExists(t, trace)
+	out, stderr, err = wrapperRun(t, []string{"PATH=/usr/bin:/bin", "CLAUDE_PLUGIN_DATA=" + data, "VAULTMIND_PLUGIN_RELEASE_URL=" + url, "VAULTMIND_PLUGIN_TRACE=" + trace}, "ask")
+	require.NoError(t, err, stderr)
+	assert.Equal(t, "fake:ask\n", out)
+	traced, err := os.ReadFile(trace)
+	require.NoError(t, err)
+	assert.Contains(t, string(traced), "cache-hit")
 }
 
 func TestPluginWrapperInfersInstalledRootAndData(t *testing.T) {

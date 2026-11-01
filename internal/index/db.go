@@ -134,6 +134,10 @@ func (d *DB) UpdateMTime(path string, mtime int64) error {
 
 func (d *DB) applyPragmas() error {
 	pragmas := []string{
+		// First, so the pragmas below and every later statement wait out another
+		// process's brief lock instead of failing at once (#356). The pool holds a
+		// single connection, so this connection-level setting stays in force.
+		"PRAGMA busy_timeout=5000",
 		"PRAGMA journal_mode=WAL",
 		"PRAGMA foreign_keys=ON",
 	}
