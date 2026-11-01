@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.20] - 2026-11-01
+
+> Run `vaultmind hooks install --force` after upgrading. Plugin users: `claude plugin update vaultmind@vaultmind`.
+> - **The arcs are no longer lost after a compact** in a session started before `load-arcs.sh` was wired, and a fresh `--resume` no longer delivers them twice.
+> - **Mesh watchers ride out a hub outage** for up to 10 minutes, then end loudly with the cause. No retry outlives its watcher.
+
 ### Fixed
 
 - `mesh-watch.sh` rides out a hub outage instead of ending after about 150 s (#371).
@@ -3138,7 +3144,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.19...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.20...HEAD
+[0.10.20]: https://github.com/peiman/vaultmind/compare/v0.10.19...v0.10.20
 [0.10.19]: https://github.com/peiman/vaultmind/compare/v0.10.18...v0.10.19
 [0.10.18]: https://github.com/peiman/vaultmind/compare/v0.10.17...v0.10.18
 [0.10.17]: https://github.com/peiman/vaultmind/compare/v0.10.16...v0.10.17
