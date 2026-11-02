@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `TestMeshWatch_EncodesRoomAndWakes` no longer fails intermittently on a loaded machine. It stamped its message before the watcher started; when the watcher took more than about three seconds to arm, the stamp fell before the arm time and the watcher treated the message as history. The message is now stamped once the watcher is waiting, as a hub stamps it on receipt.
+
 ## [0.10.21] - 2026-11-02
 
 ### Added
