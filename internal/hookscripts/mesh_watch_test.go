@@ -130,6 +130,82 @@ func TestMeshWatchDetector_Behaviour(t *testing.T) {
 		require.Equal(t, "agent:other|11", out, "keyword match is case-insensitive")
 	})
 
+	t.Run("filtered scope: addressed messages wake with strict boundaries", func(t *testing.T) {
+		env := detectorEnv(t, map[string]string{
+			"VM_WAKE_SELF":     "agent:cm",
+			"VM_WAKE_SCOPE":    "filtered",
+			"VM_WAKE_KEYWORDS": "@cm",
+		})
+		cases := []struct {
+			name string
+			body string
+			wake bool
+		}{
+			{"leading uppercase colon", "CM: hi", true},
+			{"leading lowercase colon", "cm: hi", true},
+			{"leading comma", "cm, hi", true},
+			{"mention lowercase", "@cm hi", true},
+			{"mention uppercase", "@CM hi", true},
+			{"mention in sentence", "hey @cm", true},
+			{"leading whitespace", "  Cm : hi", true},
+			{"plain text", "I told the cm team", false},
+			{"command prefix", "cmd: run it", false},
+			{"email", "email foo@cm.io", false},
+			{"longer mention", "@cmx hello", false},
+			{"hyphenated other agent", "@cm-bot hello", false},
+			{"later line opens with the name", "Status: done.\nCM: please review", true},
+			{"bold label", "**CM:** hi", true},
+			{"quoted line is someone else's", "> CM: hi", false},
+			{"underscore continues the name", "@cm_x hi", false},
+		}
+		for i, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				out, rc := runDetector(t, env, `{"messages":[{"from_agent":"agent:other","ts":`+strconv.Itoa(20+i)+`,"room":"mesh","body":`+strconv.Quote(tc.body)+`}]}`)
+				require.Zero(t, rc)
+				if tc.wake {
+					require.Equal(t, "agent:other|"+strconv.Itoa(20+i), out)
+				} else {
+					require.Empty(t, out)
+				}
+			})
+		}
+	})
+
+	t.Run("filtered scope: a keyword name is literal, not a pattern", func(t *testing.T) {
+		env := detectorEnv(t, map[string]string{
+			"VM_WAKE_SELF":     "agent:zz",
+			"VM_WAKE_SCOPE":    "filtered",
+			"VM_WAKE_KEYWORDS": "@c.m",
+		})
+		out, rc := runDetector(t, env, `{"messages":[{"from_agent":"agent:other","ts":40,"room":"mesh","body":"@cxm hi"}]}`)
+		require.Zero(t, rc)
+		require.Empty(t, out, "the dot in @c.m must not match any character")
+		out, rc = runDetector(t, env, `{"messages":[{"from_agent":"agent:other","ts":41,"room":"mesh","body":"@c.m hi"}]}`)
+		require.Zero(t, rc)
+		require.Equal(t, "agent:other|41", out)
+	})
+
+	t.Run("filtered scope: slug addresses without keywords", func(t *testing.T) {
+		env := detectorEnv(t, map[string]string{
+			"VM_WAKE_SELF":     "agent:cm",
+			"VM_WAKE_SCOPE":    "filtered",
+			"VM_WAKE_KEYWORDS": "",
+		})
+		for i, body := range []string{"CM: hi", "@cm"} {
+			out, rc := runDetector(t, env, `{"messages":[{"from_agent":"agent:other","ts":`+strconv.Itoa(40+i)+`,"room":"mesh","body":`+strconv.Quote(body)+`}]}`)
+			require.Zero(t, rc)
+			require.Equal(t, "agent:other|"+strconv.Itoa(40+i), out)
+		}
+	})
+
+	t.Run("filtered scope: plain keyword remains a substring match", func(t *testing.T) {
+		env := detectorEnv(t, map[string]string{"VM_WAKE_SCOPE": "filtered", "VM_WAKE_KEYWORDS": "deploy"})
+		out, rc := runDetector(t, env,
+			`{"messages":[{"from_agent":"agent:other","ts":50,"room":"mesh","body":"deployer started"}]}`)
+		require.Zero(t, rc)
+		require.Equal(t, "agent:other|50", out)
+	})
+
 	t.Run("filtered scope: wake_from principal always wakes", func(t *testing.T) {
 		env := detectorEnv(t, map[string]string{"VM_WAKE_SCOPE": "filtered", "VM_WAKE_FROM": "human:op,human:other"})
 		out, rc := runDetector(t, env,
