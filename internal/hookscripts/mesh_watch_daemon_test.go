@@ -146,7 +146,18 @@ func runWatchDaemon(t *testing.T, d *watchDaemon, ceiling, wait int, inject func
 	dir, bin := t.TempDir(), t.TempDir()
 	script := filepath.Join(dir, "mesh-watch.sh")
 	require.NoError(t, os.WriteFile(script, body, 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "LISTEN"), []byte(`{"mode":"all","agents":{"mesh-watch-test":{"rooms":{"mesh":{"scope":"all"},"other":{"scope":"all"}}}}}`), 0o600))
+	// Rooms of the messages seeded at construction are watched too, so a test can
+	// use its own room. A test that needs an UNwatched room must not seed it here.
+	rooms := map[string]any{"mesh": map[string]string{"scope": "all"}, "other": map[string]string{"scope": "all"}}
+	for _, message := range d.messages {
+		if message.Room != "" {
+			rooms[message.Room] = map[string]string{"scope": "all"}
+		}
+	}
+	listen := map[string]any{"mode": "all", "agents": map[string]any{"mesh-watch-test": map[string]any{"rooms": rooms}}}
+	listenBody, err := json.Marshal(listen)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "LISTEN"), listenBody, 0o600))
 	InstallStub(t, bin, "vaultmind", `
 case "$*" in
  'identity paths')
@@ -179,6 +190,65 @@ esac
 	require.NoError(t, err, "%s", out)
 	<-done
 	return string(out), dir
+}
+
+func TestMeshWatch_TSZeroCursorSweepIsBounded(t *testing.T) {
+	t.Parallel()
+	d := newWatchDaemon(watchMsg("zero", "agent:first", 0, "mesh"))
+	// The hub filters reads on receive time, so a sweep from 0 (or -1) re-reads
+	// the whole history. Every read must start near the arm instead.
+	armFloor := int(time.Now().Unix()) - 5
+	runWatchDaemon(t, d, 4, 1, nil, "MESH_SWEEP_SECS=1")
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	var bounded int
+	for _, request := range d.requests {
+		if request.HasSince {
+			bounded++
+			require.GreaterOrEqual(t, request.Since, armFloor, "a ts=0 stream must not sweep its whole history: %+v", request)
+		}
+	}
+	require.Greater(t, bounded, 0, "exercise cursor-bearing requests")
+}
+
+// The sweep floor moves; the cursor does not. A later message also stamped
+// ts=0 is still new and must wake (seeding the cursor past 0 would drop it).
+func TestMeshWatch_LaterTSZeroMessageStillWakes(t *testing.T) {
+	t.Parallel()
+	d := newWatchDaemon(watchMsg("zero", "agent:first", 0, "mesh"))
+	out, _ := runWatchDaemon(t, d, 8, 1, func(dir string) {
+		waitForArm(dir)
+		waitForLongPoll(d)
+		late := watchMsg("late-zero", "agent:other", 0, "mesh")
+		late.ReceiveTS = int(time.Now().Unix()) + 1
+		d.add(late)
+	}, "MESH_SWEEP_SECS=1")
+	require.Contains(t, out, "message from agent:other")
+}
+
+func TestMeshWatch_EncodesRoomAndWakes(t *testing.T) {
+	t.Parallel()
+	room := "a b&c#"
+	ts := int(time.Now().Unix()) + 2
+	d := newWatchDaemon(watchMsg("baseline", "agent:first", 0, room))
+	message := watchMsg("room-message", "agent:second", ts, room)
+	out, dir := runWatchDaemon(t, d, 8, 1, func(_ string) {
+		<-d.waits
+		d.add(message)
+	})
+	require.Contains(t, out, "message from agent:second (ts "+strconv.Itoa(ts)+")")
+	wake, err := os.ReadFile(filepath.Join(dir, "LASTWAKE"))
+	require.NoError(t, err)
+	require.Equal(t, "agent:second|"+strconv.Itoa(ts), string(wake))
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	seenRoom := false
+	for _, request := range d.requests {
+		if request.Stream == room {
+			seenRoom = true
+		}
+	}
+	require.True(t, seenRoom, "daemon must receive the decoded room name")
 }
 
 func TestMeshWatch_QuietCallBound(t *testing.T) {

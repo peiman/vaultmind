@@ -66,6 +66,11 @@ if [[ -z "${VM_MESH_SLUG:-}" ]]; then
   exit 2
 fi
 
+# Query values are URL-encoded (#352): an agent id carries ":" and room names
+# may carry anything.
+VM_MESH_SELF_Q="$(python3 -c 'from urllib.parse import quote; import sys; print(quote(sys.argv[1], safe=""))' "$VM_MESH_SELF")"
+[[ -n "$VM_MESH_SELF_Q" ]] || { printf 'mesh-watch: could not URL-encode the agent id — refusing to arm.\n' >&2; exit 2; }
+
 # ── Registry countdown — carried into every wake, because a freshness warning
 # only in `doctor` is a warning nobody reads. On 2026-09-06 the trust registry
 # aged past the hub's max_staleness and EVERY signed send was refused for ~21
@@ -467,7 +472,11 @@ baseline_retry() {
   return 0
 }
 
-if ! dm_baseline="$(baseline_retry "${VM_MESH_DAEMON}/chat_read?to_agent=${VM_MESH_SELF}")"; then
+# Everything the hub received before this moment is in the baseline. A stream
+# whose newest message is stamped ts=0 has no usable cursor floor, so its sweep
+# starts here instead of re-reading the whole history every sweep (#352).
+ARM_TS=$(date +%s)
+if ! dm_baseline="$(baseline_retry "${VM_MESH_DAEMON}/chat_read?to_agent=${VM_MESH_SELF_Q}")"; then
   printf 'mesh-watch: cannot establish a baseline — daemon unreachable at %s for %ss (last error: %s). Refusing to arm against a fabricated zero.\n' \
     "$VM_MESH_DAEMON" "$OUTAGE_GIVEUP_SECS" "$(tail -n1 "${RUN_DIR}/baseline.err" 2>/dev/null)" >&2
   exit 2
@@ -480,19 +489,22 @@ start_ts=$(date +%s)
 # from one call), so N rooms cost N connections, not N+1.
 wait_loop() {
   local idx="$1" room="$2" scope="$3" wfrom="$4" kws="$5" first="$6"
+  local room_q
+  room_q="$(python3 -c 'from urllib.parse import quote; import sys; print(quote(sys.argv[1], safe=""))' "$room")"
   local sig="${RUN_DIR}/s${idx}.sig" alive="${RUN_DIR}/s${idx}.alive"
   local backoff=2 out hit rc since
   local cursor="${RUN_DIR}/s${idx}.cursor"
+  [[ -n "$room_q" ]] || { echo "WATCHER ERROR: could not URL-encode room ${room} — not armed for it." > "$sig"; return 0; }
 
   local room_baseline
-  if ! room_baseline="$(baseline_retry "${VM_MESH_DAEMON}/chat_read?room=${room}" "${RUN_DIR}/s${idx}.baseline.err")"; then
+  if ! room_baseline="$(baseline_retry "${VM_MESH_DAEMON}/chat_read?room=${room_q}" "${RUN_DIR}/s${idx}.baseline.err")"; then
     echo "WATCHER ERROR: could not baseline room ${room} — daemon unreachable for ${OUTAGE_GIVEUP_SECS}s at arm (last error: $(tail -n1 "${RUN_DIR}/s${idx}.baseline.err" 2>/dev/null)). Not armed for it." > "$sig"
     return 0
   fi
 
-  local query="/chat_wait?room=${room}"
+  local query="/chat_wait?room=${room_q}"
   if [[ "$first" == "1" ]]; then
-    query="${query}&to_agent=${VM_MESH_SELF}"
+    query="${query}&to_agent=${VM_MESH_SELF_Q}"
     printf '{"room":%s,"dm":%s}' "$room_baseline" "$dm_baseline" > "${cursor}.tmp"
   else
     printf '{"room":%s}' "$room_baseline" > "${cursor}.tmp"
@@ -597,11 +609,12 @@ print(max(c["ts"] for c in cursors.values()))' "$cursor")" || {
           [[ "$kind" == dm && "$first" != 1 ]] && continue
           sweep_since="$(python3 -c 'import json,sys
 with open(sys.argv[1]) as f: cursors=json.load(f)
-print(cursors[sys.argv[2]]["ts"]-1)' "$cursor" "$kind")" || {
+ts = cursors[sys.argv[2]]["ts"]
+print(ts - 1 if ts else int(sys.argv[3]) - 1)' "$cursor" "$kind" "$ARM_TS")" || {
             echo "WATCHER ERROR: ${room} cursor unreadable — re-arm." > "$sig"
             return 0
           }
-          if [[ "$kind" == room ]]; then sweep_query="room=${room}"; else sweep_query="to_agent=${VM_MESH_SELF}"; fi
+          if [[ "$kind" == room ]]; then sweep_query="room=${room_q}"; else sweep_query="to_agent=${VM_MESH_SELF_Q}"; fi
           out="$(curl -fsS -m 10 "${VM_MESH_DAEMON}/chat_read?${sweep_query}&since=${sweep_since}" 2>"$read_err")"
           if [[ -z "$out" ]]; then
             read_failed "$read_err" || return 0
