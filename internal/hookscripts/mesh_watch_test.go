@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/peiman/vaultmind/internal/testgit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -284,7 +285,7 @@ func TestMeshWatch_EvalsOnlyVMLines(t *testing.T) {
 	require.Positive(t, end)
 	bootstrap := s[start : start+end]
 
-	out, err := exec.Command("bash", "-c",
+	out, err := testgit.ShellCommand(t, "",
 		"PATH="+dir+":$PATH\n"+bootstrap+"\nprintf '%s' \"$VM_MESH_SLUG\"").CombinedOutput()
 	require.NoError(t, err, "bootstrap must succeed on poisoned-but-parseable output: %s", out)
 	require.Equal(t, "mira", string(out), "the VM_ line must still be applied")
@@ -342,8 +343,8 @@ func runCountdownFn(t *testing.T, fn, armValue, fakeBody string) string {
 	InstallStub(t, dir, "vaultmind", "#!/bin/sh\n"+fakeBody+"\n")
 
 	script := "set -u\n" + fn + "\nregistry_countdown\n"
-	cmd := exec.Command("bash", "-c", script)
-	cmd.Env = append(os.Environ(), "VM_MESH_REGISTRY_DAYS_LEFT="+armValue, "PATH="+dir+":"+os.Getenv("PATH"))
+	cmd := testgit.ShellCommand(t, "", script)
+	cmd.Env = append(cmd.Env, "VM_MESH_REGISTRY_DAYS_LEFT="+armValue, "PATH="+dir+":"+os.Getenv("PATH"))
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, "countdown must never fail the wake line: %s", out)
 	return string(out)

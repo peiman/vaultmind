@@ -23,6 +23,7 @@ import (
 	"github.com/peiman/vaultmind/internal/hooks"
 	"github.com/peiman/vaultmind/internal/hookscripts"
 	"github.com/peiman/vaultmind/internal/onboard"
+	"github.com/peiman/vaultmind/internal/testgit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -242,7 +243,7 @@ func TestPluginSessionStartAndCoexistence(t *testing.T) {
 	hookscripts.InstallStub(t, tools, "vaultmind", "#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'vaultmind version v"+pluginVersion(t)+"'; elif [ \"$1\" = doctor ]; then echo '{\"result\":{\"embedding_tier\":\"bge-m3\"}}'; fi\n")
 	run := func(command, marker string) string {
 		c := exec.Command("sh", "-c", command)
-		c.Env = append(os.Environ(), "HOME="+home, "CLAUDE_CONFIG_DIR=", "CLAUDE_PLUGIN_ROOT="+pluginRoot(t), "CLAUDE_PROJECT_DIR="+project, "VAULTMIND_HOOK_SOURCE="+marker, "VAULTMIND_VAULT=", "VAULTMIND_VAULTS=", "VAULTMIND_PROJECT_DIR="+project, "PATH="+tools+":/usr/bin:/bin")
+		c.Env = append(testgit.Env(), "HOME="+home, "CLAUDE_CONFIG_DIR=", "CLAUDE_PLUGIN_ROOT="+pluginRoot(t), "CLAUDE_PROJECT_DIR="+project, "VAULTMIND_HOOK_SOURCE="+marker, "VAULTMIND_VAULT=", "VAULTMIND_VAULTS=", "VAULTMIND_PROJECT_DIR="+project, "PATH="+tools+":/usr/bin:/bin")
 		c.Stdin = strings.NewReader("{}")
 		out, err := c.Output()
 		require.NoError(t, err)

@@ -19,12 +19,32 @@ func Command(tb testing.TB, dir string, args ...string) *exec.Cmd {
 	tb.Helper()
 	cmd := exec.Command("git", args...) //nolint:gosec // G204: test-only; arguments come from test code, never user input.
 	cmd.Dir = dir
+	cmd.Env = Env()
+	return cmd
+}
+
+// Env returns the process environment with every GIT_* variable removed and
+// GIT_CONFIG_NOSYSTEM=1 set.
+func Env() []string {
+	env := make([]string, 0, len(os.Environ())+1)
 	for _, kv := range os.Environ() {
 		if !strings.HasPrefix(kv, "GIT_") {
-			cmd.Env = append(cmd.Env, kv)
+			env = append(env, kv)
 		}
 	}
-	cmd.Env = append(cmd.Env, "GIT_CONFIG_NOSYSTEM=1")
+	return append(env, "GIT_CONFIG_NOSYSTEM=1")
+}
+
+// ShellCommand builds a bash -c command without the caller's GIT_* variables.
+// Hooks export GIT_DIR, GIT_INDEX_FILE and friends; cmd.Dir alone does not
+// isolate a test repository. An empty dir leaves cmd.Dir unset.
+func ShellCommand(tb testing.TB, dir, script string) *exec.Cmd {
+	tb.Helper()
+	cmd := exec.Command("bash", "-c", script) //nolint:gosec // G204: test-only; script comes from test code, never user input.
+	if dir != "" {
+		cmd.Dir = dir
+	}
+	cmd.Env = Env()
 	return cmd
 }
 

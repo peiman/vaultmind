@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The test guard that keeps git in tests away from the real repository now also catches git run through a shell (#381). Under a git hook, `GIT_DIR` and related variables are exported; a test that ran `bash -c "git …"` with the inherited environment acted on the developer's repository (#380 slipped through this way).
+  - **The guard:** a `bash` or `sh` call with `-c` among its leading options (`-c`, `-e -c`, `-ec`, `-lc`) is checked like a direct `git` call. It passes when the same function sets the command's `Env` to a value that doesn't copy `os.Environ()`.
+  - **No file is exempt any more:** importing `internal/testgit` used to exempt the whole file, so its other raw `exec.Command` calls went unchecked. Every raw call is now checked.
+  - **New helpers:** `testgit.ShellCommand(tb, dir, script)` runs a shell with the `GIT_*` variables removed, and `testgit.Env()` returns that environment for a hand-built command.
 - A filtered watcher now wakes on a message addressed to its agent, not only on a configured keyword (#364). A message is addressed when it mentions `@name` anywhere, or has a line that opens with `name:` or `name,` (bold `**name:**` counts; a quoted `> name:` line does not), case-insensitively. The name is the agent's slug or any `@` keyword. `CM: …` used to be skipped by a watcher keyed on `@cm`.
   - A keyword starting with `@` now needs the whole name, where letters, digits, `_` and `-` continue a name: `@cmx`, `@cm_x`, `@cm-bot` and `foo@cm.io` no longer wake `@cm`. Other keywords still match anywhere in the text.
 - A watcher stream whose newest message is stamped ts=0 no longer re-reads the room's whole history on every sweep (#352). It swept with `since=-1`. Its sweep now starts at the moment the watcher armed, because everything before that is in the baseline. The cursor stays at 0, so a later message stamped ts=0 still wakes.

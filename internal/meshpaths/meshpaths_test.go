@@ -1,11 +1,11 @@
 package meshpaths
 
 import (
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/testgit"
 	"github.com/peiman/vaultmind/internal/xdg"
 	"github.com/stretchr/testify/require"
 )
@@ -64,7 +64,7 @@ func TestDir_MatchesTheShellDerivation(t *testing.T) {
 	t.Setenv("VAULTMIND_MESH_DIR", "")
 	xdg.SetAppName("vaultmind")
 
-	out, err := exec.Command("bash", "-c",
+	out, err := testgit.ShellCommand(t, "",
 		`printf '%s' "${XDG_CONFIG_HOME:-$HOME/.config}/vaultmind"`).Output()
 	require.NoError(t, err)
 

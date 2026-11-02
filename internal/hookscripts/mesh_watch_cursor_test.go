@@ -3,11 +3,11 @@ package hookscripts
 import (
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/testgit"
 	"github.com/stretchr/testify/require"
 )
 
@@ -66,8 +66,8 @@ func TestMeshWatchDetector_MissingIDsAndDescendingBaseline(t *testing.T) {
 	require.Positive(t, end)
 	bin := t.TempDir()
 	InstallStub(t, bin, "curl", `printf '%s' '{"messages":[{"from_agent":"agent:first","ts":101,"room":"mesh","body":"first"},{"id":"older","ts":100}]}'`)
-	cmd := exec.Command("bash", "-c", s[start:start+end+3]+"\nnewest_cursor unused")
-	cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"))
+	cmd := testgit.ShellCommand(t, "", s[start:start+end+3]+"\nnewest_cursor unused")
+	cmd.Env = append(cmd.Env, "PATH="+bin+":"+os.Getenv("PATH"))
 	out, err := cmd.Output()
 	require.NoError(t, err)
 	var baseline watchCursor
