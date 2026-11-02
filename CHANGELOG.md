@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.21] - 2026-11-02
+
 ### Added
 
 - **Watchdog mode in the mesh watcher:** before it wakes the session, the watcher checks that the agent's model API answers. While it does not (DNS failure, no network, connection refused), the wake is held and the API is probed again with backoff, without a limit; the heartbeat stays fresh and disarm or stop still work. Once the API answers, the wake is printed with a `NOTE: held this wake …` line.
@@ -3166,7 +3168,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.20...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.21...HEAD
+[0.10.21]: https://github.com/peiman/vaultmind/compare/v0.10.20...v0.10.21
 [0.10.20]: https://github.com/peiman/vaultmind/compare/v0.10.19...v0.10.20
 [0.10.19]: https://github.com/peiman/vaultmind/compare/v0.10.18...v0.10.19
 [0.10.18]: https://github.com/peiman/vaultmind/compare/v0.10.17...v0.10.18
