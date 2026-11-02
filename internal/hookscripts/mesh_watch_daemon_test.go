@@ -161,7 +161,9 @@ esac
 	cmd := exec.CommandContext(ctx, "bash", script)
 	setWatchProcessGroup(cmd)
 	cmd.WaitDelay = 3 * time.Second
-	cmd.Env = []string{"PATH=" + bin + ":" + os.Getenv("PATH"), "HOME=" + t.TempDir(), "TMPDIR=" + t.TempDir(), "AGENT_CHAT_PROJECT_PATH=" + dir, "VM_TEST_ROOT=" + dir, "VM_TEST_DAEMON=" + server.URL, "MESH_WAIT_SECS=" + strconv.Itoa(wait), "MESH_WATCH_MAX_WALL_SECS=" + strconv.Itoa(ceiling)}
+	cmd.Env = []string{"PATH=" + bin + ":" + os.Getenv("PATH"), "HOME=" + t.TempDir(), "TMPDIR=" + t.TempDir(), "AGENT_CHAT_PROJECT_PATH=" + dir, "VM_TEST_ROOT=" + dir, "VM_TEST_DAEMON=" + server.URL, "MESH_VENDOR_PROBE_URL=" + server.URL, "MESH_WAIT_SECS=" + strconv.Itoa(wait), "MESH_WATCH_MAX_WALL_SECS=" + strconv.Itoa(ceiling)}
+	// extraEnv comes last: exec keeps the last value of a duplicate key, so a
+	// test can override MESH_VENDOR_PROBE_URL.
 	cmd.Env = append(cmd.Env, extraEnv...)
 	done := make(chan struct{})
 	if inject != nil {
