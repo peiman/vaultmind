@@ -58,8 +58,13 @@ CODEX (--agent codex)
   no .claude/ folder):
   identity at session start, the health check, recall on every prompt, vault
   context before consequential commands, and episode capture when the session
-  ends. Each command exports VAULTMIND_PROJECT_DIR and runs its script by
-  absolute path; Codex sets no project variable of its own.
+  ends. Each command exports VAULTMIND_PROJECT_DIR and runs its script from it;
+  Codex sets no project variable of its own. When the project is the root of a
+  git work tree, the command asks git for it at run time
+  ($(git rev-parse --show-toplevel)), so the committed .codex/hooks.json holds
+  no absolute path and works from any subdirectory and any checkout. Otherwise
+  the project path is written in (a vault outside the project stays absolute
+  either way). Re-running install upgrades an older absolute command in place.
 
   Two steps Codex requires, and skips SILENTLY without:
     1. trust the project (Codex asks when you first open it), and

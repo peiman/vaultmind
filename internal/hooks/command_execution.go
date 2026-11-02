@@ -19,12 +19,7 @@ func executedScript(command string) ([]commandWord, int, bool) {
 	// inside the project also exports CLAUDE_PROJECT_DIR so that assignment
 	// expands. Older versions exported only CLAUDE_PROJECT_DIR. Each export is
 	// its own statement; strip the run of them.
-	for len(words) >= 3 && words[0].value == "export" &&
-		(strings.HasPrefix(command[words[1].start:words[1].end], envProjectDir+"=") ||
-			strings.HasPrefix(command[words[1].start:words[1].end], "CLAUDE_PROJECT_DIR=")) &&
-		command[words[2].start:words[2].end] == ";" {
-		words = words[3:]
-	}
+	words, exports := stripProjectExports(command, words)
 	// Understand simple commands separated by semicolons, but select only the
 	// first. Reject other shell operators and incomplete command lists rather
 	// than claiming a script executes from a possibly invalid shell program.
@@ -82,7 +77,43 @@ func executedScript(command string) ([]commandWord, int, bool) {
 			return words, 0, false
 		}
 	}
+	if !portableShapeHolds(command, words, i, exports) {
+		return words, 0, false
+	}
 	return words, i, i < len(words)
+}
+
+// portableShapeHolds reports whether a command that uses the portable script
+// word anywhere is exactly the shape we write: our exports, then only vault
+// assignments, then `bash <portable script>`, and nothing after it — no
+// argument, option, prefix assignment, trailing statement or comment. A command
+// without the portable word is not this function's business.
+func portableShapeHolds(command string, words []commandWord, i int, exports string) bool {
+	uses := false
+	for _, w := range words {
+		uses = uses || isPortableScriptWord(command, w)
+	}
+	if !uses {
+		return true
+	}
+	if !isPortableExports(exports) || i != len(words)-1 || i < 1 ||
+		!isPortableScriptWord(command, words[i]) || command[words[i-1].start:words[i-1].end] != "bash" ||
+		strings.TrimSpace(command[words[i].end:]) != "" {
+		return false
+	}
+	for _, w := range words[:i-1] {
+		key, _, _ := strings.Cut(command[w.start:w.end], "=")
+		if key != "VAULTMIND_VAULT" && key != "VAULTMIND_VAULTS" {
+			return false
+		}
+	}
+	return true
+}
+
+// isPortableCommand reports whether command is exactly a portable Codex command.
+func isPortableCommand(command string) bool {
+	words, i, ok := executedScript(command)
+	return ok && isPortableScriptWord(command, words[i])
 }
 
 func shellReservedWord(raw string) bool {
@@ -146,6 +177,29 @@ func canonicalScriptWord(command string, w commandWord) bool {
 		return false
 	}
 	// Keep diagnosing the legacy generated path as stale at user scope.
-	return !w.dynamic || command[w.start:w.end] == claudeScriptRef(filepath.Base(w.value)) ||
+	return !w.dynamic || isPortableScriptWord(command, w) || command[w.start:w.end] == claudeScriptRef(filepath.Base(w.value)) ||
 		command[w.start:w.end] == "$CLAUDE_PROJECT_DIR/.claude/scripts/"+filepath.Base(w.value)
+}
+
+// isPortableScriptWord reports whether w is exactly the script word of a
+// portable Codex command. It is only ours behind our own exports
+// (executedScript checks that), because it expands whatever they set.
+func isPortableScriptWord(command string, w commandWord) bool {
+	return command[w.start:w.end] == codexPortableScriptRef(filepath.Base(w.value))
+}
+
+// stripProjectExports removes the leading run of project-dir exports from words
+// and returns the exact text it removed.
+func stripProjectExports(command string, words []commandWord) ([]commandWord, string) {
+	rest := words
+	for len(rest) >= 3 && rest[0].value == "export" &&
+		(strings.HasPrefix(command[rest[1].start:rest[1].end], envProjectDir+"=") ||
+			strings.HasPrefix(command[rest[1].start:rest[1].end], "CLAUDE_PROJECT_DIR=")) &&
+		command[rest[2].start:rest[2].end] == ";" {
+		rest = rest[3:]
+	}
+	if n := len(words) - len(rest); n > 0 {
+		return rest, command[words[0].start:words[n-1].end]
+	}
+	return rest, ""
 }

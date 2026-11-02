@@ -97,7 +97,7 @@ func generatedUserCommand(command, home string, agent Agent) (string, bool) {
 		}
 		v, has := strings.CutPrefix(words[1].value, envProjectDir+"=")
 		raw := command[words[1].start:words[1].end]
-		if !has || (raw != envProjectDir+"="+singleQuote(v) && raw != `VAULTMIND_PROJECT_DIR="$PWD"`) {
+		if !has || (raw != envProjectDir+"="+singleQuote(v) && raw != `VAULTMIND_PROJECT_DIR="$PWD"` && !isPortableExportWord(raw)) {
 			return "", false
 		}
 		i = 3
@@ -148,6 +148,9 @@ func generatedScriptRef(command string, path commandWord, home string, agent Age
 		return "", false
 	}
 	rawPath := command[path.start:path.end]
+	if rawPath == codexPortableScriptRef(script) && agent == AgentCodex && isPortableCommand(command) {
+		return singleQuote(filepath.Join(scriptsDirFor(home, agent, ScopeUser), script)), true
+	}
 	// Current absolute and legacy project-variable forms are emitted by us.
 	if rawPath != singleQuote(path.value) && rawPath != claudeScriptRef(script) {
 		return "", false

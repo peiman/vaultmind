@@ -13,10 +13,14 @@ import (
 // {"hooks": {Event: [groups]}} form. Three differences decide this file:
 //
 //   - No CLAUDE_PROJECT_DIR. Every script path resolved to /.claude/scripts/…
-//     and every hook "Failed". The script path is now absolute, and the project
-//     dir is EXPORTED first as VAULTMIND_PROJECT_DIR for the scripts to read
-//     (as a prefix assignment it would expand too late — the bug hit while
-//     proving this). Scripts live under .vaultmind/scripts, not .claude/.
+//     and every hook "Failed". The project dir is now EXPORTED first as
+//     VAULTMIND_PROJECT_DIR for the scripts to read (as a prefix assignment it
+//     would expand too late — the bug hit while proving this). Scripts live
+//     under .vaultmind/scripts, not .claude/.
+//     At the root of a git work tree both come from `git rev-parse
+//     --show-toplevel` at run time, so the committed file holds no absolute
+//     path (#372; codex_portable.go). Anywhere else the project dir is baked in
+//     as an absolute path.
 //   - Context over ~2500 tokens is moved to a file by default. The identity
 //     load is ~18KB, so the limit is set to 0 (never).
 //   - Hooks run only once trusted (`/hooks`), and an untrusted hook is skipped
@@ -65,10 +69,7 @@ func codexHooksForScope(projectDir, vaultPath string, vaults []string, p Profile
 		allowed[n] = true
 	}
 	noLimit := 0
-	prefix := projectDirExports(projectDir, vaultPath, vaults, scope)
-	scriptRef := func(script string) string {
-		return singleQuote(filepath.Join(ScriptsDir(projectDir, AgentCodex), script))
-	}
+	prefix, scriptRef := codexProjectWiring(projectDir, vaultPath, vaults, scope)
 	var out []canonicalHook
 	for _, ch := range canonicalHooksWith(vaultPath, vaults, scriptRef) {
 		if !codexScripts[ch.Script] || !allowed[ch.Script] {
@@ -94,6 +95,18 @@ func codexHooksForScope(projectDir, vaultPath string, vaults []string, p Profile
 		out = append(out, ch)
 	}
 	return out
+}
+
+// codexProjectWiring returns the export prefix and the script reference for a
+// command. At the root of a git work tree they are portable (no absolute path);
+// otherwise the project dir is baked in, as before.
+func codexProjectWiring(projectDir, vaultPath string, vaults []string, scope Scope) (string, func(string) string) {
+	if scope == ScopeProject && isGitRoot(projectDir) {
+		return codexPortableExports(vaultPath, vaults), codexPortableScriptRef
+	}
+	return projectDirExports(projectDir, vaultPath, vaults, scope), func(script string) string {
+		return singleQuote(filepath.Join(ScriptsDir(projectDir, AgentCodex), script))
+	}
 }
 
 // CodexHooksStanza renders .codex/hooks.json for projectDir.
