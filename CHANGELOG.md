@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The mesh watcher no longer gives up after the machine sleeps; sleep is not counted as hub outage.
+  - **Before:** a read held across a sleep returned at wake with the whole sleep as elapsed time, so a 16-minute sleep ended the watcher with a false `WATCHER ERROR`.
+  - **Now:** a gap between read outcomes longer than any awake retry cycle restarts the outage clock. `MESH_SUSPEND_GAP_SECS` overrides that gap (default: poll window + backoff cap + slack, 128 s).
 - `hooks install --agent codex` no longer writes the operator's absolute project path into `.codex/hooks.json` (#372).
   - **Before:** every command began `export VAULTMIND_PROJECT_DIR='/Users/you/proj'` and ran its script by absolute path. The file is normally committed, so it published the operator's home directory and was wrong in every other checkout.
   - **Now:** when the project is the root of a git work tree, the command is `export VAULTMIND_PROJECT_DIR="$(git rev-parse --show-toplevel)"; bash "$VAULTMIND_PROJECT_DIR"/.vaultmind/scripts/<script>`. Git is asked at run time, which also works when Codex starts in a subdirectory. A vault inside the project is stored as `$CLAUDE_PROJECT_DIR/<path>`; a vault outside it stays absolute.

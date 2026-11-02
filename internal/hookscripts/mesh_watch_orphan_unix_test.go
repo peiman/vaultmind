@@ -93,3 +93,11 @@ func killAndRequireNoSurvivors(t *testing.T, c *exec.Cmd, what string) {
 		t.Fatalf("%s outlived the watcher: 20 s after SIGKILL its output was still held open", what)
 	}
 }
+
+func stopWatchProcessGroup(pid int) error {
+	return syscall.Kill(-pid, syscall.SIGSTOP)
+}
+
+func continueWatchProcessGroup(pid int) error {
+	return syscall.Kill(-pid, syscall.SIGCONT)
+}
