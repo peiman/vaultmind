@@ -147,6 +147,11 @@ WAIT_SECS="${MESH_WAIT_SECS:-28}"              # per-call long-poll window (<=30
 MAX_WALL_SECS="${MESH_WATCH_MAX_WALL_SECS:-18000}"   # ~5h quiet-heartbeat ceiling
 STREAM_STALE_SECS=$(( 2 * (WAIT_SECS + 10) ))  # a stream silent past two full poll cycles is wedged
 BACKOFF_CAP=60                                 # transport retry ceiling (exponential from 2s)
+# A gap between read outcomes longer than any awake retry cycle (one long poll,
+# the capped backoff, slack) means the machine slept or the watcher was stopped.
+# The override is for tests: below the longest awake gap (~BACKOFF_CAP + 15 s)
+# every failed read restarts the clock and a real outage never gives up.
+SUSPEND_GAP_SECS="${MESH_SUSPEND_GAP_SECS:-$(( WAIT_SECS + 10 + BACKOFF_CAP + 30 ))}"
 SWEEP_SECS="${MESH_SWEEP_SECS:-15}"            # overlap-read cadence (same-second stragglers, #350)
 # A hub outage is ridden out, then reported once, LOUDLY (#371). A fixed count
 # of failed reads gave up after ~150 s, so every short hub blip left the agent
@@ -382,10 +387,16 @@ nap() { local i; for (( i = 0; i < $1; i++ )); do watcher_alive || return 1; sle
 # Prints the cursor, or returns 1 after OUTAGE_GIVEUP_SECS with the last
 # curl error in $2 (each caller its own file: streams baseline in parallel).
 baseline_retry() {
-  local t0 b=2
+  local t0 last_attempt b=2 now
   t0=$(date +%s)
+  last_attempt=$t0
   until newest_cursor "$1" "${2:-}"; do
-    (( $(date +%s) - t0 >= OUTAGE_GIVEUP_SECS )) && return 1
+    now=$(date +%s)
+    if (( now - last_attempt > SUSPEND_GAP_SECS )); then
+      t0=$now
+    fi
+    last_attempt=$now
+    (( now - t0 >= OUTAGE_GIVEUP_SECS )) && return 1
     nap "$b" || return 1
     b=$(( b * 2 )); (( b > BACKOFF_CAP )) && b=$BACKOFF_CAP
   done
@@ -441,7 +452,8 @@ PYINIT
   mv "${cursor}.tmp" "$cursor" || return 0
 
   local wait_pid="" wait_out="${RUN_DIR}/s${idx}.wait" wait_err="${RUN_DIR}/s${idx}.wait.err"
-  local read_err="${RUN_DIR}/s${idx}.read.err" outage_since=0 last_err=""
+  local read_err="${RUN_DIR}/s${idx}.read.err" outage_since=0 last_err="" last_seen
+  last_seen=$(date +%s)
   local last_sweep=-$SWEEP_SECS kind sweep_query sweep_since
   # Own the pending curl as well as the stream: no orphaned long polls on wake.
   trap '[[ -z "$wait_pid" ]] || { kill "$wait_pid" 2>/dev/null; wait "$wait_pid" 2>/dev/null; }' EXIT
@@ -480,14 +492,21 @@ PYINIT
   # watcher, and the message carries curl's last error, so a hub outage can be
   # told apart from a watcher fault.
   read_failed() {
-    (( outage_since > 0 )) || outage_since=$(date +%s)
+    local now
+    now=$(date +%s)
+    # Time asleep is not outage: on 2026-11-01/02 the Mac slept 09:30-09:46,
+    # then curl resumed after ~942s and falsely used the sleep as hub downtime.
+    if (( outage_since == 0 || now - last_seen > SUSPEND_GAP_SECS )); then
+      outage_since=$now
+    fi
+    last_seen=$now
     last_err="$(tail -n1 "$1" 2>/dev/null)"
-    if (( $(date +%s) - outage_since >= OUTAGE_GIVEUP_SECS )); then
-      echo "WATCHER ERROR: ${room} daemon ${VM_MESH_DAEMON} unreachable for $(( $(date +%s) - outage_since ))s (last error: ${last_err:-no response}). Fix the connection, then re-arm." > "$sig"
+    if (( now - outage_since >= OUTAGE_GIVEUP_SECS )); then
+      echo "WATCHER ERROR: ${room} daemon ${VM_MESH_DAEMON} unreachable for $(( now - outage_since ))s (last error: ${last_err:-no response}). Fix the connection, then re-arm." > "$sig"
       return 1
     fi
   }
-  read_answered() { outage_since=0; }
+  read_answered() { outage_since=0; last_seen=$(date +%s); }
 
   while true; do
     watcher_alive || return 0
