@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/testgit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -46,7 +47,7 @@ func TestInstallStub_BehavesAsTheBodySays(t *testing.T) {
 		// Found on PATH by a shell, as the hooks run it. exec.Command("vaultmind")
 		// would resolve against THIS process's PATH instead — a real binary on a
 		// developer machine, nothing on CI.
-		"on PATH": exec.Command("/bin/bash", "-c", `vaultmind "$@"`, "bash", "ask", "q"),
+		"on PATH": testgit.ShellCommand(t, "", `vaultmind ask q`),
 		"by path": exec.Command(filepath.Join(dir, "vaultmind"), "ask", "q"),
 	} {
 		cmd.Env = []string{"PATH=" + dir + ":/usr/bin:/bin"}

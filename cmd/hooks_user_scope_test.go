@@ -3,13 +3,13 @@ package cmd
 import (
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/hooks"
+	"github.com/peiman/vaultmind/internal/testgit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -70,9 +70,8 @@ func TestHooksUserScope_InstallAbsoluteAndAdditive(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(probe, []byte("#!/bin/bash\nprintf '%s' \"$VAULTMIND_VAULT\"\n"), 0o700))
 	for _, project := range []string{t.TempDir(), t.TempDir()} {
-		shell := exec.Command("/bin/bash", "-c", command)
-		shell.Dir = project
-		shell.Env = append(os.Environ(), "CLAUDE_PROJECT_DIR="+project)
+		shell := testgit.ShellCommand(t, project, command)
+		shell.Env = append(shell.Env, "CLAUDE_PROJECT_DIR="+project)
 		output, err := shell.CombinedOutput()
 		require.NoError(t, err, string(output))
 		assert.Equal(t, vault, strings.TrimSpace(string(output)))

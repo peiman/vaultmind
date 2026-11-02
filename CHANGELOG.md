@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `TestMeshWatch_EncodesRoomAndWakes` no longer fails intermittently on a loaded machine. It stamped its message before the watcher started; when the watcher took more than about three seconds to arm, the stamp fell before the arm time and the watcher treated the message as history. The message is now stamped once the watcher is waiting, as a hub stamps it on receipt.
+- The test guard that keeps git in tests away from the real repository now also catches git run through a shell (#381). Under a git hook, `GIT_DIR` and related variables are exported; a test that ran `bash -c "git …"` with the inherited environment acted on the developer's repository (#380 slipped through this way).
+  - **The guard:** a `bash` or `sh` call with `-c` among its leading options (`-c`, `-e -c`, `-ec`, `-lc`) is checked like a direct `git` call. It passes when the same function sets the command's `Env` to a value that doesn't copy `os.Environ()`.
+  - **No file is exempt any more:** importing `internal/testgit` used to exempt the whole file, so its other raw `exec.Command` calls went unchecked. Every raw call is now checked.
+  - **New helpers:** `testgit.ShellCommand(tb, dir, script)` runs a shell with the `GIT_*` variables removed, and `testgit.Env()` returns that environment for a hand-built command.
 
 ## [0.10.21] - 2026-11-02
 

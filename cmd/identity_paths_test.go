@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"time"
+
+	"github.com/peiman/vaultmind/internal/testgit"
 
 	"github.com/stretchr/testify/require"
 )
@@ -48,7 +49,7 @@ func TestIdentityPaths_ShellOutputIsEvalable(t *testing.T) {
 	require.NoError(t, runIdentityPaths(c, nil))
 
 	script := out.String() + "\nprintf '%s|%s|%s' \"$VM_MESH_SLUG\" \"$VM_MESH_SELF\" \"$VM_MESH_HEARTBEAT\"\n"
-	res, err := exec.Command("bash", "-c", script).Output()
+	res, err := testgit.ShellCommand(t, "", script).Output()
 	require.NoError(t, err, "the default output must be directly evalable by bash")
 
 	parts := strings.Split(string(res), "|")
