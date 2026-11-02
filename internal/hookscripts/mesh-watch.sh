@@ -147,6 +147,19 @@ WAIT_SECS="${MESH_WAIT_SECS:-28}"              # per-call long-poll window (<=30
 MAX_WALL_SECS="${MESH_WATCH_MAX_WALL_SECS:-18000}"   # ~5h quiet-heartbeat ceiling
 STREAM_STALE_SECS=$(( 2 * (WAIT_SECS + 10) ))  # a stream silent past two full poll cycles is wedged
 BACKOFF_CAP=60                                 # transport retry ceiling (exponential from 2s)
+# Before waking an agent, prove its vendor model API is reachable. Any HTTP
+# status counts as reachable. Set `off` to disable the hold; Codex agents use
+# https://api.openai.com/. The default follows the agent's own route: a probe
+# that cannot reach what the agent uses would hold every wake forever behind a
+# fresh heartbeat, so Bedrock/Vertex (endpoint unknown here) default to off.
+vendor_probe_default() {
+  if [[ "${CLAUDE_CODE_USE_BEDROCK:-}" =~ ^(1|true|yes)$ || "${CLAUDE_CODE_USE_VERTEX:-}" =~ ^(1|true|yes)$ ]]; then
+    echo off
+  else
+    echo "${ANTHROPIC_BASE_URL:-https://api.anthropic.com/}"
+  fi
+}
+VENDOR_PROBE_URL="${MESH_VENDOR_PROBE_URL:-$(vendor_probe_default)}"
 # A gap between read outcomes longer than any awake retry cycle (one long poll,
 # the capped backoff, slack) means the machine slept or the watcher was stopped.
 # The override is for tests: below the longest awake gap (~BACKOFF_CAP + 15 s)
@@ -383,6 +396,31 @@ watcher_alive() { kill -0 "$$" 2>/dev/null; }
 # nap <secs>: sleep in 1 s steps; returns 1 as soon as the watcher is gone.
 nap() { local i; for (( i = 0; i < $1; i++ )); do watcher_alive || return 1; sleep 1; done; }
 
+VENDOR_LAST_ERR=""
+VENDOR_HELD_SECS=0
+vendor_reachable() {
+  local err="${RUN_DIR}/vendor-probe.err" code
+  code="$(curl -sS -o /dev/null -m 5 -w '%{http_code}' "$VENDOR_PROBE_URL" 2>"$err")"
+  if [[ -s "$err" ]]; then VENDOR_LAST_ERR="$(tail -n1 "$err" 2>/dev/null)"; fi
+  [[ "$code" != "000" ]]
+}
+
+hold_for_vendor_api() {
+  local started now backoff=2
+  [[ "$VENDOR_PROBE_URL" == "off" || -f "$VM_MESH_DISARM" ]] && return 0
+  started=$(date +%s)
+  vendor_reachable && return 0
+  while true; do
+    nap "$backoff" || return 0
+    [[ -f "$VM_MESH_DISARM" ]] && return 0
+    date +%s > "$VM_MESH_HEARTBEAT" 2>/dev/null || true
+    if vendor_reachable; then
+      now=$(date +%s); VENDOR_HELD_SECS=$(( now - started )); return 0
+    fi
+    backoff=$(( backoff * 2 )); (( backoff > BACKOFF_CAP )) && backoff=$BACKOFF_CAP
+  done
+}
+
 # A baseline that cannot be read is retried through an outage, never faked.
 # Prints the cursor, or returns 1 after OUTAGE_GIVEUP_SECS with the last
 # curl error in $2 (each caller its own file: streams baseline in parallel).
@@ -611,8 +649,8 @@ while true; do
       if (( hb_failures >= 3 )); then
         # A watcher that cannot write its heartbeat is invisible to doctor
         # while running — permanently present-but-dead. Say so and stop.
-        echo "WATCHER ERROR: cannot write heartbeat at ${VM_MESH_HEARTBEAT} (3 consecutive failures — disk full or permissions?). Watcher exiting; fix and re-arm."
-        exit 0
+        exit_reason=hb_failed
+        break
       fi
     fi
   fi
@@ -624,16 +662,44 @@ done
 for p in "${PIDS[@]}"; do kill "$p" 2>/dev/null; done
 for p in "${PIDS[@]}"; do wait "$p" 2>/dev/null; done
 
+final_kind=""
+final_message=""
+disarm_present=0
+[[ -f "$VM_MESH_DISARM" ]] && disarm_present=1
 for ((i=0; i<NSTREAMS; i++)); do
-  [[ -f "${RUN_DIR}/s${i}.sig" ]] && { cat "${RUN_DIR}/s${i}.sig"; exit 0; }
+  if [[ -f "${RUN_DIR}/s${i}.sig" ]]; then
+    final_kind=sig; final_message="$(cat "${RUN_DIR}/s${i}.sig")"; break
+  fi
 done
+if [[ -z "$final_kind" && "$exit_reason" == "hb_failed" ]]; then
+  final_kind=heartbeat
+  final_message="WATCHER ERROR: cannot write heartbeat at ${VM_MESH_HEARTBEAT} (3 consecutive failures — disk full or permissions?). Watcher exiting; fix and re-arm."
+elif [[ -z "$final_kind" && "$disarm_present" == "1" ]]; then
+  final_kind=disarmed
+elif [[ -z "$final_kind" && "$exit_reason" == "streams_exited" ]]; then
+  final_kind=streams; final_message="WATCHER ERROR: all streams exited after ${elapsed}s without a message — not a quiet heartbeat. Check the daemon at ${VM_MESH_DAEMON}; re-arm."
+elif [[ -z "$final_kind" && "$exit_reason" == "wall_clock" ]]; then
+  final_kind=wall
+fi
 
-if [[ -f "$VM_MESH_DISARM" ]]; then echo "DISARMED (sentinel present) — not re-arming."; exit 0; fi
-if [[ "$exit_reason" == "streams_exited" ]]; then
-  echo "WATCHER ERROR: all streams exited after ${elapsed}s without a message — not a quiet heartbeat. Check the daemon at ${VM_MESH_DAEMON}; re-arm."
-  exit 3
+if [[ "$final_kind" == "disarmed" ]]; then
+  echo "DISARMED (sentinel present) — not re-arming."
+  exit 0
 fi
-if [[ "$exit_reason" == "wall_clock" ]]; then
-  echo "RE-ARM: no relevant message within ~${MAX_WALL_SECS}s (quiet heartbeat) — re-launch mesh-watch.sh.$(registry_countdown)"
+hold_for_vendor_api
+# A disarm during the hold ends the hold, but a captured wake still wins, as it
+# always has: dropping a real message is the failure this watcher exists to stop.
+if [[ "$final_kind" != "sig" && "$disarm_present" == "0" && -f "$VM_MESH_DISARM" ]]; then
+  echo "DISARMED (sentinel present) — not re-arming."
+  exit 0
 fi
+if [[ "$final_kind" == "wall" ]]; then
+  final_message="RE-ARM: no relevant message within ~${MAX_WALL_SECS}s (quiet heartbeat) — re-launch mesh-watch.sh.$(registry_countdown)"
+fi
+printf '%s\n' "$final_message"
+if (( VENDOR_HELD_SECS > 0 )); then
+  printf 'NOTE: held this wake %ss while the vendor API (%s) was unreachable (last error: %s).\n' \
+    "$VENDOR_HELD_SECS" "$VENDOR_PROBE_URL" "${VENDOR_LAST_ERR:-no response}"
+fi
+if [[ "$final_kind" == "streams" ]]; then exit 3; fi
 exit 0

@@ -40,7 +40,7 @@ case "$*" in
  *) exit 1 ;;
 esac
 `)
-	env := []string{"PATH=" + bin + ":" + os.Getenv("PATH"), "HOME=" + t.TempDir(), "TMPDIR=" + t.TempDir(), "AGENT_CHAT_PROJECT_PATH=" + dir, "VM_TEST_ROOT=" + dir, "VM_TEST_DAEMON=" + server.URL, "MESH_WAIT_SECS=2", "MESH_WATCH_MAX_WALL_SECS=60"}
+	env := []string{"PATH=" + bin + ":" + os.Getenv("PATH"), "HOME=" + t.TempDir(), "TMPDIR=" + t.TempDir(), "AGENT_CHAT_PROJECT_PATH=" + dir, "VM_TEST_ROOT=" + dir, "VM_TEST_DAEMON=" + server.URL, "MESH_VENDOR_PROBE_URL=" + server.URL, "MESH_WAIT_SECS=2", "MESH_WATCH_MAX_WALL_SECS=60"}
 	start := func() (*exec.Cmd, *bytes.Buffer) {
 		var out bytes.Buffer
 		c := exec.Command("bash", script)

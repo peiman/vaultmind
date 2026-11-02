@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Watchdog mode in the mesh watcher:** before it wakes the session, the watcher checks that the agent's model API answers. While it does not (DNS failure, no network, connection refused), the wake is held and the API is probed again with backoff, without a limit; the heartbeat stays fresh and disarm or stop still work. Once the API answers, the wake is printed with a `NOTE: held this wake …` line.
+  - **Why:** a session woken during an outage fails its next turn (`Can't reach the API server … ENOTFOUND`) and stops for good, so an always-on agent died with the network.
+  - **The probe:** `MESH_VENDOR_PROBE_URL`. By default it is `ANTHROPIC_BASE_URL` when set, else `https://api.anthropic.com/`; it is `off` under Bedrock or Vertex, whose endpoint the watcher can't know. Codex agents set `https://api.openai.com/`. Any HTTP status counts as reachable. `off` disables the hold.
+
 ### Fixed
 
 - The mesh watcher no longer gives up after the machine sleeps; sleep is not counted as hub outage.

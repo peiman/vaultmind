@@ -516,7 +516,7 @@ PY
 				"PATH=" + bin + ":" + os.Getenv("PATH"), "HOME=" + t.TempDir(),
 				"TMPDIR=" + t.TempDir(), "AGENT_CHAT_PROJECT_PATH=" + dir,
 				"VM_TEST_ROOT=" + dir, "VM_TEST_MODE=" + tc.mode,
-				"MESH_WAIT_SECS=1", "MESH_WATCH_MAX_WALL_SECS=" + tc.ceiling,
+				"MESH_VENDOR_PROBE_URL=off", "MESH_WAIT_SECS=1", "MESH_WATCH_MAX_WALL_SECS=" + tc.ceiling,
 			}
 			started := time.Now()
 			out, err := cmd.CombinedOutput()
