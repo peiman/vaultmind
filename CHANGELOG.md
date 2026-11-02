@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An in-place rewrite of the mesh watcher script, for example by `cp` or an editor during development, no longer corrupts or aborts a running watcher. Bash read the script as it ran, so a rewrite made it resume at a shifted offset and run garbage. The body is now one brace group, parsed whole before it runs. `vaultmind hooks install` already replaced the script atomically.
 - The mesh watcher no longer gives up after the machine sleeps; sleep is not counted as hub outage.
   - **Before:** a read held across a sleep returned at wake with the whole sleep as elapsed time, so a 16-minute sleep ended the watcher with a false `WATCHER ERROR`.
   - **Now:** a gap between read outcomes longer than any awake retry cycle restarts the outage clock. `MESH_SUSPEND_GAP_SECS` overrides that gap (default: poll window + backoff cap + slack, 128 s).

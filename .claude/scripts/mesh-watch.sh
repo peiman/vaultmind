@@ -37,6 +37,9 @@
 # SAFETY. Wakes the session to converse; takes no action itself. Kill switch:
 # touch the disarm file printed by `vaultmind identity paths` (VM_MESH_DISARM).
 # Bounded: exits to re-arm after MAX_WALL_SECS regardless.
+# Parse the entire watcher before running it so an in-place rewrite cannot shift
+# Bash's incremental reads underneath a live watcher.
+{
 set -uo pipefail   # NOT -e: a transient network hiccup must not abort the watch
 
 # ── Identity bootstrap — the binary answers, or we refuse to arm ─────────────
@@ -703,3 +706,5 @@ if (( VENDOR_HELD_SECS > 0 )); then
 fi
 if [[ "$final_kind" == "streams" ]]; then exit 3; fi
 exit 0
+# Keep this brace last: anything after it is read incrementally again.
+}
