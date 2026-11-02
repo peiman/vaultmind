@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `hooks install --agent codex` no longer writes the operator's absolute project path into `.codex/hooks.json` (#372).
+  - **Before:** every command began `export VAULTMIND_PROJECT_DIR='/Users/you/proj'` and ran its script by absolute path. The file is normally committed, so it published the operator's home directory and was wrong in every other checkout.
+  - **Now:** when the project is the root of a git work tree, the command is `export VAULTMIND_PROJECT_DIR="$(git rev-parse --show-toplevel)"; bash "$VAULTMIND_PROJECT_DIR"/.vaultmind/scripts/<script>`. Git is asked at run time, which also works when Codex starts in a subdirectory. A vault inside the project is stored as `$CLAUDE_PROJECT_DIR/<path>`; a vault outside it stays absolute.
+  - **Elsewhere unchanged:** a project that is not a git root, and user scope, keep their current commands.
+  - **Upgrading:** re-run `vaultmind hooks install --agent codex --merge`. An old absolute command that sits alone in its hook group is replaced in place; one you grouped with your own hooks is left for you to edit. Codex asks you to approve the changed hooks again (`/hooks`). Only the exact command VaultMind writes counts as its own; anything added to it (an option, an assignment, a trailing statement) makes it yours, and install and uninstall leave it alone.
+
 ## [0.10.20] - 2026-11-01
 
 > Run `vaultmind hooks install --force` after upgrading. Plugin users: `claude plugin update vaultmind@vaultmind`.
