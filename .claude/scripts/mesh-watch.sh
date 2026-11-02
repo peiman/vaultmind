@@ -222,7 +222,7 @@ fi
 #    a quoted heredoc cannot interpolate, and trying is how an ancestor spelled
 #    its own slug four times. Exit: 0 = clean parse, anything else = escalate.
 read -r -d '' DETECT <<'PY' || true
-import sys, json, os, hashlib, tempfile
+import sys, json, os, hashlib, tempfile, re
 
 SELF = os.environ["VM_WAKE_SELF"]
 OPERATOR = os.environ.get("VM_WAKE_OPERATOR", "")
@@ -266,6 +266,22 @@ def stream(m):
     # keyed on only one and would misfire if the daemon ever stamped the other).
     return "dm" if (not m.get("room")) or (m.get("to_agent") == SELF) else "room"
 
+def addressed(body, names):
+    # Shared addressing rule; issue #364 notes the Slack bridge needs the same definition.
+    # Slugs contain hyphens, so "@cm-bot" is another agent, not a mention of "cm".
+    for name in names:
+        if not name:
+            continue
+        escaped = re.escape(name)
+        if re.search(r"(?<![\w@])@" + escaped + r"(?![\w-])", body, re.IGNORECASE):
+            return True
+        # A line that opens with the name addresses it ("CM: ..." or "**CM:**"),
+        # on any line: one message often addresses several agents. A quoted
+        # line ("> CM: ...") quotes someone else and does not count.
+        if re.search(r"^[ \t*_]*" + escaped + r"[ \t*_]*[:,]", body, re.IGNORECASE | re.MULTILINE):
+            return True
+    return False
+
 def relevant(m):
     if stream(m) == "dm":
         return True
@@ -274,8 +290,13 @@ def relevant(m):
     frm = m.get("from_agent", "")
     if frm in WAKE_FROM:
         return True
-    body = (m.get("body") or "").lower()
-    return any(k.lower() in body for k in KEYWORDS)
+    body = m.get("body") or ""
+    names = [SELF[6:] if SELF.startswith("agent:") else SELF]
+    names.extend(k[1:] for k in KEYWORDS if k.startswith("@"))
+    if addressed(body, names):
+        return True
+    body = body.lower()
+    return any(k.lower() in body for k in KEYWORDS if not k.startswith("@"))
 
 try:
     d = json.load(sys.stdin)

@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A filtered watcher now wakes on a message addressed to its agent, not only on a configured keyword (#364). A message is addressed when it mentions `@name` anywhere, or has a line that opens with `name:` or `name,` (bold `**name:**` counts; a quoted `> name:` line does not), case-insensitively. The name is the agent's slug or any `@` keyword. `CM: …` used to be skipped by a watcher keyed on `@cm`.
+  - A keyword starting with `@` now needs the whole name, where letters, digits, `_` and `-` continue a name: `@cmx`, `@cm_x`, `@cm-bot` and `foo@cm.io` no longer wake `@cm`. Other keywords still match anywhere in the text.
 - An in-place rewrite of the mesh watcher script, for example by `cp` or an editor during development, no longer corrupts or aborts a running watcher. Bash read the script as it ran, so a rewrite made it resume at a shifted offset and run garbage. The body is now one brace group, parsed whole before it runs. `vaultmind hooks install` already replaced the script atomically.
 - The mesh watcher no longer gives up after the machine sleeps; sleep is not counted as hub outage.
   - **Before:** a read held across a sleep returned at wake with the whole sleep as elapsed time, so a 16-minute sleep ended the watcher with a false `WATCHER ERROR`.
