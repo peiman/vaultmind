@@ -229,12 +229,17 @@ func TestMeshWatch_LaterTSZeroMessageStillWakes(t *testing.T) {
 func TestMeshWatch_EncodesRoomAndWakes(t *testing.T) {
 	t.Parallel()
 	room := "a b&c#"
-	ts := int(time.Now().Unix()) + 2
 	d := newWatchDaemon(watchMsg("baseline", "agent:first", 0, room))
-	message := watchMsg("room-message", "agent:second", ts, room)
+	// Stamp the message once the watcher is waiting, as a real hub would on
+	// receipt. A stamp taken before the watcher starts can fall before its arm
+	// time on a loaded machine, and the watcher rightly treats it as history.
+	// runWatchDaemon waits for this goroutine before returning, so reading ts
+	// afterwards is ordered after the write.
+	var ts int
 	out, dir := runWatchDaemon(t, d, 8, 1, func(_ string) {
 		<-d.waits
-		d.add(message)
+		ts = int(time.Now().Unix()) + 1
+		d.add(watchMsg("room-message", "agent:second", ts, room))
 	})
 	require.Contains(t, out, "message from agent:second (ts "+strconv.Itoa(ts)+")")
 	wake, err := os.ReadFile(filepath.Join(dir, "LASTWAKE"))
