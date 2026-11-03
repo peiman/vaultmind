@@ -106,10 +106,14 @@ registry_countdown() {
   # the local one. A failure is SAID in the wake line — a silent one is how a
   # machine keeps counting from a registry the hub has replaced — and never
   # blocks the wake. Only the command's own "Error:" line is shown, not its logs.
+  # It is printed once the local copy is known (#365): with one, delivery goes
+  # on from it and the line says so, rather than reading as an outage on every
+  # transient tailnet hiccup; the countdown beside it is the health signal.
+  _vm_fetch_failed=""
   if ! _vm_fetch="$(vaultmind identity fetch-registry 2>&1)"; then
     _vm_fetch_err="$(printf '%s\n' "$_vm_fetch" | grep '^Error: ' | tail -n 1)"
     _vm_fetch_err="${_vm_fetch_err#Error: }"
-    printf ' [registry fetch failed: %s]' "${_vm_fetch_err:-(no output)}"
+    _vm_fetch_failed="${_vm_fetch_err:-(no output)}"
   fi
   _vm_days_note=""
   if _vm_now="$(vaultmind identity paths 2>/dev/null)"; then
@@ -119,6 +123,11 @@ registry_countdown() {
     VM_MESH_REGISTRY_DAYS_LEFT="${_vm_now%\'}"
   elif [ -n "${VM_MESH_REGISTRY_DAYS_LEFT:-}" ]; then
     _vm_days_note=" (as of arm time — could not re-read it)"
+  fi
+  if [ -n "$_vm_fetch_failed" ] && [ -n "${VM_MESH_REGISTRY_DAYS_LEFT:-}" ]; then
+    printf ' [registry refresh failed, using the local copy: %s]' "$_vm_fetch_failed"
+  elif [ -n "$_vm_fetch_failed" ]; then
+    printf ' [registry fetch failed: %s]' "$_vm_fetch_failed"
   fi
   [ -n "${VM_MESH_REGISTRY_DAYS_LEFT:-}" ] || return 0
   # VALIDATE FIRST. Both numeric comparisons below exit 2 on a non-numeric
