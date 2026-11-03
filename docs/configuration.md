@@ -206,6 +206,9 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.identitysignenvelope.file` | string | `` | `VAULTMIND_APP_IDENTITYSIGNENVELOPE_FILE` | Read envelope JSON from this file instead of stdin |
 | `app.identitysignenvelope.signer_socket` | string | `` | `VAULTMIND_APP_IDENTITYSIGNENVELOPE_SIGNER_SOCKET` | Signer socket path (default: XDG state dir) |
 | `app.identitysignenvelope.from_pubkey` | string | `` | `VAULTMIND_APP_IDENTITYSIGNENVELOPE_FROM_PUBKEY` | Signer public key (base64) stamped as the from_pubkey hint; not signed |
+| `app.identitysignkeeper.file` | string | `` | `VAULTMIND_APP_IDENTITYSIGNKEEPER_FILE` | Read keeper document JSON from this file instead of stdin |
+| `app.identitysignkeeper.signer_socket` | string | `` | `VAULTMIND_APP_IDENTITYSIGNKEEPER_SIGNER_SOCKET` | Signer socket path (default: XDG state dir) |
+| `app.identitysignkeeper.stamp` | bool | `false` | `VAULTMIND_APP_IDENTITYSIGNKEEPER_STAMP` | Fill absent issued_at and, for control or revocation, nonce |
 | `app.identitysignregistry.file` | string | `` | `VAULTMIND_APP_IDENTITYSIGNREGISTRY_FILE` | Read registry JSON from this file instead of stdin |
 | `app.identitysignregistry.signer_socket` | string | `` | `VAULTMIND_APP_IDENTITYSIGNREGISTRY_SIGNER_SOCKET` | Signer socket path (default: XDG state dir) |
 | `app.identitysigner.signer_key` | string | `` | `VAULTMIND_APP_IDENTITYSIGNER_SIGNER_KEY` | Sealed signer key path (default: XDG data dir) |
@@ -946,6 +949,16 @@ app:
 
     # Print the LaunchAgent plist and exit without writing or loading anything
     print: false
+
+  identitysignkeeper:
+    # Read keeper document JSON from this file instead of stdin
+    file: 
+
+    # Signer socket path (default: XDG state dir)
+    signer_socket: 
+
+    # Fill absent issued_at and, for control or revocation, nonce
+    stamp: false
 
   identitysignregistry:
     # Read registry JSON from this file instead of stdin
@@ -2013,6 +2026,15 @@ export VAULTMIND_APP_IDENTITYSIGNENVELOPE_SIGNER_SOCKET=
 
 # Signer public key (base64) stamped as the from_pubkey hint; not signed
 export VAULTMIND_APP_IDENTITYSIGNENVELOPE_FROM_PUBKEY=
+
+# Read keeper document JSON from this file instead of stdin
+export VAULTMIND_APP_IDENTITYSIGNKEEPER_FILE=
+
+# Signer socket path (default: XDG state dir)
+export VAULTMIND_APP_IDENTITYSIGNKEEPER_SIGNER_SOCKET=
+
+# Fill absent issued_at and, for control or revocation, nonce
+export VAULTMIND_APP_IDENTITYSIGNKEEPER_STAMP=false
 
 # Read registry JSON from this file instead of stdin
 export VAULTMIND_APP_IDENTITYSIGNREGISTRY_FILE=

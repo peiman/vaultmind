@@ -1138,6 +1138,26 @@
           },
           "type": "object"
         },
+        "identitysignkeeper": {
+          "properties": {
+            "file": {
+              "default": "",
+              "description": "Read keeper document JSON from this file instead of stdin",
+              "type": "string"
+            },
+            "signer_socket": {
+              "default": "",
+              "description": "Signer socket path (default: XDG state dir)",
+              "type": "string"
+            },
+            "stamp": {
+              "default": false,
+              "description": "Fill absent issued_at and, for control or revocation, nonce",
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
         "identitysignregistry": {
           "properties": {
             "file": {
