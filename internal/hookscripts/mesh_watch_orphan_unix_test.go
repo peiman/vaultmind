@@ -63,7 +63,7 @@ func startKillableWatcher(t *testing.T, d *watchDaemon) (*exec.Cmd, string) {
 case "$*" in
  'identity paths')
   printf "VM_MESH_SLUG='mesh-watch-test'\nVM_MESH_SELF='agent:mesh-watch-test'\nVM_MESH_OPERATOR=''\nVM_MESH_DAEMON='%s'\nVM_MESH_REGISTRY_DAYS_LEFT=''\n" "$VM_TEST_DAEMON"
-  for key in PID LISTEN DISARM HEARTBEAT LASTARM LASTWAKE; do printf 'VM_MESH_%s=%q\n' "$key" "$VM_TEST_ROOT/$key"; done ;;
+  for key in PID LISTEN DISARM HEARTBEAT LASTARM LASTWAKE CURSOR; do printf 'VM_MESH_%s=%q\n' "$key" "$VM_TEST_ROOT/$key"; done ;;
  'identity fetch-registry') exit 0 ;;
  *) exit 1 ;;
 esac

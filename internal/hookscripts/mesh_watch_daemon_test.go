@@ -50,14 +50,15 @@ type watchRequest struct {
 // matching later second or timeout. Reads filter/order by receiver timestamp,
 // as sqlite_store.rs does; sender timestamps need not be in response order.
 type watchDaemon struct {
-	mu       sync.Mutex
-	messages []watchMessage
-	requests []watchRequest
-	changed  chan struct{}
-	waits    chan watchRequest
-	armAdds  map[string][]watchMessage
-	down     atomic.Bool // a hub outage: every request gets 503 (#371)
-	downHits atomic.Int32
+	mu           sync.Mutex
+	messages     []watchMessage
+	requests     []watchRequest
+	changed      chan struct{}
+	waits        chan watchRequest
+	armAdds      map[string][]watchMessage
+	down         atomic.Bool // a hub outage: every request gets 503 (#371)
+	downHits     atomic.Int32
+	baselineDown atomic.Bool
 }
 
 func newWatchDaemon(messages ...watchMessage) *watchDaemon {
@@ -73,6 +74,10 @@ func (d *watchDaemon) add(messages ...watchMessage) {
 }
 
 func (d *watchDaemon) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/chat_read" && r.URL.Query().Get("room") != "" && !r.URL.Query().Has("since") && d.baselineDown.Load() {
+		http.Error(w, "room baseline down", http.StatusServiceUnavailable)
+		return
+	}
 	if d.down.Load() {
 		d.downHits.Add(1)
 		// A real outage leaves the long poll hanging until its timeout while
@@ -162,7 +167,10 @@ func runWatchDaemon(t *testing.T, d *watchDaemon, ceiling, wait int, inject func
 case "$*" in
  'identity paths')
   printf "VM_MESH_SLUG='mesh-watch-test'\nVM_MESH_SELF='agent:mesh-watch-test'\nVM_MESH_OPERATOR=''\nVM_MESH_DAEMON='%s'\nVM_MESH_REGISTRY_DAYS_LEFT=''\n" "$VM_TEST_DAEMON"
-  for key in PID LISTEN DISARM HEARTBEAT LASTARM LASTWAKE; do printf 'VM_MESH_%s=%q\n' "$key" "$VM_TEST_ROOT/$key"; done ;;
+  for key in PID LISTEN DISARM HEARTBEAT LASTARM LASTWAKE CURSOR; do
+    [ "$key" = CURSOR ] && [ "${VM_TEST_NO_CURSOR:-}" = 1 ] && continue
+    printf 'VM_MESH_%s=%q\n' "$key" "$VM_TEST_ROOT/$key"
+  done ;;
  'identity fetch-registry') exit 0 ;;
  *) exit 1 ;;
 esac

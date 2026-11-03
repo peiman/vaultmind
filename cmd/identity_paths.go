@@ -32,6 +32,7 @@ type meshIdentity struct {
 	Pid        string `json:"pid"`
 	Lastwake   string `json:"lastwake"`
 	Lastarm    string `json:"lastarm"`
+	Cursor     string `json:"cursor"`
 	Disarm     string `json:"disarm"`
 	Log        string `json:"log"`
 	Listen     string `json:"listen"`
@@ -86,6 +87,7 @@ func resolveMeshIdentity() (meshIdentity, error) {
 		Pid:        p.Pid,
 		Lastwake:   p.Lastwake,
 		Lastarm:    p.Lastarm,
+		Cursor:     p.Cursor,
 		Disarm:     p.Disarm,
 		Log:        p.Log,
 		Listen:     p.Listen,
@@ -109,12 +111,21 @@ func runIdentityPaths(cmd *cobra.Command, _ []string) error {
 		return cmdutil.WriteJSON(cmd.OutOrStdout(), "identity paths", id, "", "")
 	}
 
-	regFile, regDays := registryFreshness(time.Now())
-
 	// Shell form. Every value single-quoted: paths may carry spaces (the mesh
 	// dir historically lived under "Application Support") and quoting only the
 	// ones that look like they need it is how an eval breaks two months later.
-	for _, kv := range [][2]string{
+	for _, kv := range meshPathVars(id, time.Now()) {
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s=%s\n", kv[0], shellSingleQuote(kv[1])); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// meshPathVars lists the shell variables `identity paths` prints, in order.
+func meshPathVars(id meshIdentity, now time.Time) [][2]string {
+	regFile, regDays := registryFreshness(now)
+	return [][2]string{
 		{"VM_MESH_SLUG", id.Slug},
 		{"VM_MESH_SELF", id.Self},
 		{"VM_MESH_SLUG_SOURCE", id.SlugSource},
@@ -123,6 +134,7 @@ func runIdentityPaths(cmd *cobra.Command, _ []string) error {
 		{"VM_MESH_PID", id.Pid},
 		{"VM_MESH_LASTWAKE", id.Lastwake},
 		{"VM_MESH_LASTARM", id.Lastarm},
+		{"VM_MESH_CURSOR", id.Cursor},
 		{"VM_MESH_DISARM", id.Disarm},
 		{"VM_MESH_LOG", id.Log},
 		{"VM_MESH_LISTEN", id.Listen},
@@ -130,12 +142,7 @@ func runIdentityPaths(cmd *cobra.Command, _ []string) error {
 		{"VM_MESH_DAEMON", id.DaemonURL},
 		{"VM_MESH_REGISTRY_FILE", regFile},
 		{"VM_MESH_REGISTRY_DAYS_LEFT", regDays},
-	} {
-		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s=%s\n", kv[0], shellSingleQuote(kv[1])); err != nil {
-			return err
-		}
 	}
-	return nil
 }
 
 // registryDaysLeft reports whole days until the registry crosses the DECLARED

@@ -30,11 +30,12 @@ func TestFor_FilenameScheme(t *testing.T) {
 	require.Equal(t, "mesh-watch-mira.pid", filepath.Base(p.Pid))
 	require.Equal(t, "mesh-watch-mira.lastwake", filepath.Base(p.Lastwake))
 	require.Equal(t, "mesh-watch-mira.lastarm", filepath.Base(p.Lastarm))
+	require.Equal(t, "mesh-watch-mira.cursor", filepath.Base(p.Cursor))
 	require.Equal(t, "mesh-watch-mira.disarm", filepath.Base(p.Disarm))
 	require.Equal(t, "mesh-watch-mira.log", filepath.Base(p.Log))
 
 	// Every per-agent file lives in the same directory.
-	for _, f := range []string{p.Pid, p.Lastwake, p.Lastarm, p.Disarm, p.Log, p.Listen} {
+	for _, f := range []string{p.Pid, p.Lastwake, p.Lastarm, p.Cursor, p.Disarm, p.Log, p.Listen} {
 		require.Equal(t, dir, filepath.Dir(f))
 	}
 
