@@ -7,12 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.22] - 2026-11-03
+
 ### Added
 
 - **`vaultmind identity sign-keeper`:** an owner signs a keeper control request, a read grant or a grant revocation through the running keyless signer; the command never opens a private key.
   - It reads the JSON document from `--file` or stdin. `--stamp` fills an absent issue time and, for a control request or revocation, an absent nonce.
   - It prints one JSON line, `{"document": …, "sig": …}`, where `document` is exactly the canonical bytes that were signed. An invalid document or an unreachable signer prints nothing and exits non-zero.
-
 - **Signed keeper control (`internal/identity/keeperctl`):** the contract for controlling an always-on agent (a keeper) only with its owner's key, plus a reference verifier for the process that supervises it. Owner keys still have to be enrolled in the trust-root registry before anything uses it.
   - **Control requests** (message, rebrief, pause, drain, resume, restart, stop, read status, read context) are signed with the owner's registry key and bound to the keeper, the action, the issue time and a one-time nonce. A captured request can't be replayed, aimed at another keeper of the same owner, or used after the watchdog restarts.
   - **Read grants:** an owner can sign a grant letting another registry identity read named keepers, with scopes (`status`, `context`; context is a separate, deliberate grant) and an expiry. A grantee can never control. Revoking a grant is permanent, and rotating or revoking the owner's key invalidates every grant it signed.
@@ -21,12 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A command run through the warm server no longer collects list-option values from earlier requests (found under #179). The server resets every flag between requests so each one behaves like a fresh process, but list options such as `import --include` or `note create --field` were reset by appending their default, so values from earlier requests piled up. They now start empty, and the first value given replaces the default as in a fresh process.
 - The release configuration no longer uses settings GoReleaser has deprecated (#388), so `goreleaser check` and the release drift check pass. The archive format settings use the current `formats` key. The Homebrew formula block was left over from the project scaffold and never published anything (no tap is configured), so it is removed rather than migrated, together with the release-notes Homebrew section that never rendered and the unused CI secret. The release archives are unchanged: a snapshot build before and after differs only in the local Homebrew formula file.
 - The README's install section gives the commands, not just the steps (#332). It now shows how to download and extract the ORT build into one folder, put that folder on `PATH` for every later shell (the Claude Code hooks run `vaultmind` by name), and check the result. It also covers macOS Gatekeeper: a browser download is marked as coming from the internet, `tar` copies the mark onto the binary and libraries, and Gatekeeper refuses the unsigned binary until `xattr -dr com.apple.quarantine <folder>` clears it. A `curl` download carries no mark.
-
 - Embedding the same note twice now stores byte-identical sparse vectors (#318). The entries were written in Go's random map order, so two embeddings with the same content compared as different bytes, which caused a false alarm while checking that a dependency bump left vectors unchanged. They are now written in ascending token id order. Existing indexes need no re-embed: only the order changes, and search is unaffected.
 - A mesh watcher's wake line no longer reads like an outage when a registry refresh fails but a local copy is still valid (#365). It said `[registry fetch failed: … context deadline exceeded]` after a brief network hiccup, although delivery carried on from the local copy. With a local copy it now says `[registry refresh failed, using the local copy: …]`, next to the usual countdown, which still escalates at 7 days and when the registry goes stale. With no local copy it still says `registry fetch failed`.
-- Command tests no longer depend on their run order (#179): tests restore configuration and flag bindings, command output and contexts, logger state, experiment sessions, and cached test embedders. Slice flags also reset correctly between warm-server requests instead of accumulating values. One embedding test that resolved the model cache without isolating its home now isolates it. `task test:unit` runs in shuffled order, and Go prints the seed when an order fails. Reproduce an order with isolated directories: `XDG_DATA_HOME=$(mktemp -d) XDG_STATE_HOME=$(mktemp -d) go test ./cmd/ -count=1 -shuffle=135874732`.
+- Command tests no longer depend on their run order (#179): tests restore configuration and flag bindings, command output and contexts, logger state, experiment sessions, and cached test embedders. One embedding test that resolved the model cache without isolating its home now isolates it. `task test:unit` runs in shuffled order, and Go prints the seed when an order fails. Reproduce an order with isolated directories: `XDG_DATA_HOME=$(mktemp -d) XDG_STATE_HOME=$(mktemp -d) go test ./cmd/ -count=1 -shuffle=135874732`.
 - The pre-release memory gate (`task test:memory`) no longer fails on a busy machine because the warm server was slow to start (#368). It waited a fixed 2 seconds before its 100 asks; at a load average above 100 the server wasn't listening yet, the first ask loaded the model itself, and the gate failed. It now sends probe asks until the server answers one (up to 90 s), then measures. A server that never answers, or exits, still fails the gate by name.
 - Two tests no longer fail on a busy or stalled machine.
   - `TestRebuild_CompletesInReasonableTime` allows 1 s per note instead of 200 ms (#172). Every main run is instrumented for coverage on shared runners, and one stalled runner took 250 ms per note and failed a release pipeline. Idle runs take about 8 ms per note, so an order-of-magnitude regression still fails it.
@@ -3199,7 +3200,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.21...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.22...HEAD
+[0.10.22]: https://github.com/peiman/vaultmind/compare/v0.10.21...v0.10.22
 [0.10.21]: https://github.com/peiman/vaultmind/compare/v0.10.20...v0.10.21
 [0.10.20]: https://github.com/peiman/vaultmind/compare/v0.10.19...v0.10.20
 [0.10.19]: https://github.com/peiman/vaultmind/compare/v0.10.18...v0.10.19
