@@ -66,6 +66,15 @@ if [[ -z "${VM_MESH_SLUG:-}" ]]; then
   exit 2
 fi
 
+# Capture the session's grandparent before the watcher enters its normal setup.
+# A parent already adopted by init/launchd cannot provide a useful session
+# ancestor, so do not treat it as an arm-time identity.
+ARM_GPPID="$(ps -o ppid= -p "$PPID" 2>/dev/null)"
+ARM_GPPID="${ARM_GPPID//[[:space:]]/}"
+if ! [[ "$ARM_GPPID" =~ ^[0-9]+$ ]] || [[ "$ARM_GPPID" == 1 ]]; then
+  ARM_GPPID=""
+fi
+
 # Query values are URL-encoded (#352): an agent id carries ":" and room names
 # may carry anything.
 VM_MESH_SELF_Q="$(python3 -c 'from urllib.parse import quote; import sys; print(quote(sys.argv[1], safe=""))' "$VM_MESH_SELF")"
@@ -422,11 +431,38 @@ print(json.dumps({"ts":ts,"ids":sorted({message_id(m) for m in messages if (m.ge
 # on without a parent, holding the session's output: the outage window kept one
 # alive for 600 s. In every subshell $$ is still the watcher's own PID.
 watcher_alive() { kill -0 "$$" 2>/dev/null; }
+# watcher_orphaned: true once the session that started this watcher is gone.
+# Bash fixes $PPID at startup, so ps compares the watcher's current parent with
+# it. Claude Code's background shape is session -> non-exec wrapper shell ->
+# bash watcher; when the session dies the wrapper is reparented, not the
+# watcher, so also compare the wrapper's current parent with ARM_GPPID. An
+# unreadable answer counts as not orphaned, so it can never end a live hold.
+watcher_orphaned() {
+  local current parent_current
+  current="$(ps -o ppid= -p $$ 2>/dev/null)" || return 1
+  current="${current//[[:space:]]/}"
+  [[ "$current" =~ ^[0-9]+$ ]] || return 1
+  if [[ "$current" != "$PPID" ]]; then
+    VENDOR_HOLD_ORPHANED_REASON="parent pid $PPID -> $current"
+    return 0
+  fi
+  [[ -n "$ARM_GPPID" ]] || return 1
+  parent_current="$(ps -o ppid= -p "$PPID" 2>/dev/null)" || return 1
+  parent_current="${parent_current//[[:space:]]/}"
+  [[ "$parent_current" =~ ^[0-9]+$ ]] || return 1
+  if [[ "$parent_current" != "$ARM_GPPID" ]]; then
+    VENDOR_HOLD_ORPHANED_REASON="parent's parent pid $ARM_GPPID -> $parent_current"
+    return 0
+  fi
+  return 1
+}
 # nap <secs>: sleep in 1 s steps; returns 1 as soon as the watcher is gone.
 nap() { local i; for (( i = 0; i < $1; i++ )); do watcher_alive || return 1; sleep 1; done; }
 
 VENDOR_LAST_ERR=""
 VENDOR_HELD_SECS=0
+VENDOR_HOLD_ORPHANED=0
+VENDOR_HOLD_ORPHANED_REASON=""
 vendor_reachable() {
   local err="${RUN_DIR}/vendor-probe.err" code
   code="$(curl -sS -o /dev/null -m 5 -w '%{http_code}' "$VENDOR_PROBE_URL" 2>"$err")"
@@ -437,11 +473,19 @@ vendor_reachable() {
 hold_for_vendor_api() {
   local started now backoff=2
   [[ "$VENDOR_PROBE_URL" == "off" || -f "$VM_MESH_DISARM" ]] && return 0
+  if watcher_orphaned; then
+    VENDOR_HOLD_ORPHANED=1
+    return 0
+  fi
   started=$(date +%s)
   vendor_reachable && return 0
   while true; do
     nap "$backoff" || return 0
     [[ -f "$VM_MESH_DISARM" ]] && return 0
+    if watcher_orphaned; then
+      VENDOR_HOLD_ORPHANED=1
+      return 0
+    fi
     date +%s > "$VM_MESH_HEARTBEAT" 2>/dev/null || true
     if vendor_reachable; then
       now=$(date +%s); VENDOR_HELD_SECS=$(( now - started )); return 0
@@ -737,6 +781,10 @@ printf '%s\n' "$final_message"
 if (( VENDOR_HELD_SECS > 0 )); then
   printf 'NOTE: held this wake %ss while the vendor API (%s) was unreachable (last error: %s).\n' \
     "$VENDOR_HELD_SECS" "$VENDOR_PROBE_URL" "${VENDOR_LAST_ERR:-no response}"
+fi
+if (( VENDOR_HOLD_ORPHANED )); then
+  printf "NOTE: stopped holding this wake: the watcher's session is gone (%s).\n" \
+    "$VENDOR_HOLD_ORPHANED_REASON"
 fi
 if [[ "$final_kind" == "streams" ]]; then exit 3; fi
 exit 0

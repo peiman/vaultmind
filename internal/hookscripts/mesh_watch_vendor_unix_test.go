@@ -3,6 +3,7 @@
 package hookscripts
 
 import (
+	"bufio"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -71,6 +72,28 @@ func newVendorProbe(t *testing.T) *vendorProbe {
 	return p
 }
 
+func installVendorWatchIdentityStub(t *testing.T, bin string) {
+	t.Helper()
+	InstallStub(t, bin, "vaultmind", `
+case "$*" in
+ 'identity paths')
+  printf "VM_MESH_SLUG='mesh-watch-test'\nVM_MESH_SELF='agent:mesh-watch-test'\nVM_MESH_OPERATOR=''\nVM_MESH_DAEMON='%s'\nVM_MESH_REGISTRY_DAYS_LEFT=''\n" "$VM_TEST_DAEMON"
+  for key in PID LISTEN DISARM HEARTBEAT LASTARM LASTWAKE; do printf 'VM_MESH_%s=%q\n' "$key" "$VM_TEST_ROOT/$key"; done ;;
+ 'identity fetch-registry') exit 0 ;;
+ *) exit 1 ;;
+esac
+`)
+}
+
+func vendorWatchEnv(bin, dir, daemon, probeURL string, ceiling, wait int) []string {
+	return []string{
+		"PATH=" + bin + ":" + os.Getenv("PATH"), "HOME=" + dir, "TMPDIR=" + dir,
+		"AGENT_CHAT_PROJECT_PATH=" + dir, "VM_TEST_ROOT=" + dir, "VM_TEST_DAEMON=" + daemon,
+		"MESH_VENDOR_PROBE_URL=" + probeURL, "MESH_WAIT_SECS=" + strconv.Itoa(wait),
+		"MESH_WATCH_MAX_WALL_SECS=" + strconv.Itoa(ceiling),
+	}
+}
+
 func startVendorWatch(t *testing.T, d *watchDaemon, probeURL string, ceiling, wait int, extraEnv ...string) (*exec.Cmd, *lockedOutput, string) {
 	t.Helper()
 	server := httptest.NewServer(d)
@@ -81,24 +104,11 @@ func startVendorWatch(t *testing.T, d *watchDaemon, probeURL string, ceiling, wa
 	script := filepath.Join(dir, "mesh-watch.sh")
 	require.NoError(t, os.WriteFile(script, body, 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "LISTEN"), []byte(`{"mode":"all","agents":{"mesh-watch-test":{"rooms":{"mesh":{"scope":"all"}}}}}`), 0o600))
-	InstallStub(t, bin, "vaultmind", `
-case "$*" in
- 'identity paths')
-  printf "VM_MESH_SLUG='mesh-watch-test'\nVM_MESH_SELF='agent:mesh-watch-test'\nVM_MESH_OPERATOR=''\nVM_MESH_DAEMON='%s'\nVM_MESH_REGISTRY_DAYS_LEFT=''\n" "$VM_TEST_DAEMON"
-  for key in PID LISTEN DISARM HEARTBEAT LASTARM LASTWAKE; do printf 'VM_MESH_%s=%q\n' "$key" "$VM_TEST_ROOT/$key"; done ;;
- 'identity fetch-registry') exit 0 ;;
- *) exit 1 ;;
-esac
-`)
+	installVendorWatchIdentityStub(t, bin)
 	cmd := exec.Command("bash", script)
 	setWatchProcessGroup(cmd)
 	cmd.WaitDelay = 3 * time.Second
-	cmd.Env = []string{
-		"PATH=" + bin + ":" + os.Getenv("PATH"), "HOME=" + t.TempDir(), "TMPDIR=" + t.TempDir(),
-		"AGENT_CHAT_PROJECT_PATH=" + dir, "VM_TEST_ROOT=" + dir, "VM_TEST_DAEMON=" + server.URL,
-		"MESH_VENDOR_PROBE_URL=" + probeURL, "MESH_WAIT_SECS=" + strconv.Itoa(wait),
-		"MESH_WATCH_MAX_WALL_SECS=" + strconv.Itoa(ceiling),
-	}
+	cmd.Env = vendorWatchEnv(bin, dir, server.URL, probeURL, ceiling, wait)
 	cmd.Env = append(cmd.Env, extraEnv...)
 	out := &lockedOutput{}
 	cmd.Stdout, cmd.Stderr = out, out
@@ -119,6 +129,23 @@ func waitForVendorHits(t *testing.T, p *vendorProbe) {
 		require.True(t, time.Now().Before(deadline), "watcher did not probe the vendor API")
 		time.Sleep(20 * time.Millisecond)
 	}
+}
+
+func waitForPIDFile(t *testing.T, path string) int {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		body, err := os.ReadFile(path)
+		if err == nil {
+			pid, parseErr := strconv.Atoi(strings.TrimSpace(string(body)))
+			if parseErr == nil && pid > 0 {
+				return pid
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("watcher PID file %s was not populated", path)
+	return 0
 }
 
 func waitForHeartbeatRefresh(t *testing.T, path string, before time.Time) {
@@ -182,6 +209,122 @@ func TestMeshWatch_VendorHoldReleasesAfterProbeRecovery(t *testing.T) {
 	assert.GreaterOrEqual(t, wake, 0, "the wake is printed after recovery")
 	assert.Greater(t, note, wake, "the hold note follows the unchanged wake message")
 	assert.Contains(t, text, "vendor API ("+probe.server.URL+") was unreachable")
+}
+
+func TestMeshWatch_OrphanedWatcherStopsVendorHold(t *testing.T) {
+	t.Parallel()
+	d := newWatchDaemon()
+	probe := newVendorProbe(t)
+	t.Cleanup(probe.server.Close)
+	probe.down.Store(true)
+	server := httptest.NewServer(d)
+	t.Cleanup(server.Close)
+	body, ok := Get("mesh-watch.sh")
+	require.True(t, ok)
+	dir, bin := t.TempDir(), t.TempDir()
+	script := filepath.Join(dir, "mesh-watch.sh")
+	outFile := filepath.Join(dir, "watch.out")
+	require.NoError(t, os.WriteFile(script, body, 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "LISTEN"), []byte(`{"mode":"all","agents":{"mesh-watch-test":{"rooms":{"mesh":{"scope":"all"}}}}}`), 0o600))
+	installVendorWatchIdentityStub(t, bin)
+	cmd := exec.Command("sh", "-c", `bash "$1" >"$2" 2>&1 & echo $!; read _`, "sh", script, outFile)
+	cmd.Env = vendorWatchEnv(bin, dir, server.URL, probe.server.URL, 80, 1)
+	setWatchProcessGroup(cmd)
+	stdin, err := cmd.StdinPipe()
+	require.NoError(t, err)
+	stdout, err := cmd.StdoutPipe()
+	require.NoError(t, err)
+	cmd.Stderr = &lockedOutput{}
+	require.NoError(t, cmd.Start())
+	t.Cleanup(func() {
+		_ = stdin.Close()
+		killWatchProcessGroup(cmd.Process.Pid)
+		_ = cmd.Wait()
+	})
+	watcherPIDText, err := bufio.NewReader(stdout).ReadString('\n')
+	require.NoError(t, err)
+	watcherPID, err := strconv.Atoi(strings.TrimSpace(watcherPIDText))
+	require.NoError(t, err)
+
+	waitForArm(dir)
+	waitForLongPoll(d)
+	d.add(watchMsg("vendor-orphan", "agent:other", int(time.Now().Unix()), "mesh"))
+	waitForVendorHits(t, probe)
+	require.NoError(t, stdin.Close())
+
+	deadline := time.Now().Add(10 * time.Second)
+	gone := false
+	for time.Now().Before(deadline) {
+		if err := syscall.Kill(watcherPID, 0); err != nil {
+			require.ErrorIs(t, err, syscall.ESRCH)
+			gone = true
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	require.True(t, gone, "orphaned watcher still running")
+	text, err := os.ReadFile(outFile)
+	require.NoError(t, err)
+	assert.Contains(t, string(text), "WAKE: new mesh message from agent:other")
+	assert.Contains(t, string(text), "NOTE: stopped holding this wake: the watcher's session is gone")
+}
+
+func TestMeshWatch_WrappedWatcherStopsVendorHoldWhenSessionGoes(t *testing.T) {
+	t.Parallel()
+	d := newWatchDaemon()
+	probe := newVendorProbe(t)
+	t.Cleanup(probe.server.Close)
+	probe.down.Store(true)
+	server := httptest.NewServer(d)
+	t.Cleanup(server.Close)
+	body, ok := Get("mesh-watch.sh")
+	require.True(t, ok)
+	dir, bin := t.TempDir(), t.TempDir()
+	script := filepath.Join(dir, "mesh-watch.sh")
+	outFile := filepath.Join(dir, "watch.out")
+	require.NoError(t, os.WriteFile(script, body, 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "LISTEN"), []byte(`{"mode":"all","agents":{"mesh-watch-test":{"rooms":{"mesh":{"scope":"all"}}}}}`), 0o600))
+	installVendorWatchIdentityStub(t, bin)
+	// The outer shell is the session. Its wrapper child deliberately runs a
+	// non-exec shell so that the watcher stays one level below the session.
+	cmd := exec.Command("sh", "-c", `sh -c 'bash "$1" >"$2" 2>&1; :' wrapper "$1" "$2" & read _`, "sh", script, outFile)
+	cmd.Env = vendorWatchEnv(bin, dir, server.URL, probe.server.URL, 80, 1)
+	setWatchProcessGroup(cmd)
+	stdin, err := cmd.StdinPipe()
+	require.NoError(t, err)
+	cmd.Stdout = &lockedOutput{}
+	cmd.Stderr = cmd.Stdout
+	require.NoError(t, cmd.Start())
+	t.Cleanup(func() {
+		_ = stdin.Close()
+		killWatchProcessGroup(cmd.Process.Pid)
+		_ = cmd.Wait()
+	})
+
+	pidPath := filepath.Join(dir, "PID")
+	waitForArm(dir)
+	waitForLongPoll(d)
+	d.add(watchMsg("vendor-wrapped-orphan", "agent:other", int(time.Now().Unix()), "mesh"))
+	waitForVendorHits(t, probe)
+	watcherPID := waitForPIDFile(t, pidPath)
+	require.NoError(t, stdin.Close())
+
+	deadline := time.Now().Add(10 * time.Second)
+	gone := false
+	for time.Now().Before(deadline) {
+		if err := syscall.Kill(watcherPID, 0); err != nil {
+			require.ErrorIs(t, err, syscall.ESRCH)
+			gone = true
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	require.True(t, gone, "wrapped watcher still running")
+
+	text, err := os.ReadFile(outFile)
+	require.NoError(t, err)
+	assert.Contains(t, string(text), "WAKE: new mesh message from agent:other")
+	assert.Contains(t, string(text), "NOTE: stopped holding this wake: the watcher's session is gone")
 }
 
 func TestMeshWatch_VendorProbeOffDoesNotHold(t *testing.T) {
