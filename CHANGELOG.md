@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Signed keeper control (`internal/identity/keeperctl`):** the contract for controlling an always-on agent (a keeper) only with its owner's key, plus a reference verifier for the process that supervises it. There is no CLI yet; owner keys still have to be enrolled in the trust-root registry before anything uses it.
+  - **Control requests** (message, rebrief, pause, drain, resume, restart, stop, read status, read context) are signed with the owner's registry key and bound to the keeper, the action, the issue time and a one-time nonce. A captured request can't be replayed, aimed at another keeper of the same owner, or used after the watchdog restarts.
+  - **Read grants:** an owner can sign a grant letting another registry identity read named keepers, with scopes (`status`, `context`; context is a separate, deliberate grant) and an expiry. A grantee can never control. Revoking a grant is permanent, and rotating or revoking the owner's key invalidates every grant it signed.
+  - **Fails closed:** an expired registry, a revoked or unknown key, a stale or replayed request, or a failed nonce store refuses the request with one of a fixed set of reason codes. Stopping a keeper through the operating system is outside the verifier, so it always works.
+  - **Cross-language vectors** (`testdata/keeper_control_vectors.json`) pin the canonical bytes, signatures, every schema rejection and every refusal reason, so a verifier in another language can match it byte for byte.
+
 ### Fixed
 
 - `TestMeshWatch_EncodesRoomAndWakes` no longer fails intermittently on a loaded machine. It stamped its message before the watcher started; when the watcher took more than about three seconds to arm, the stamp fell before the arm time and the watcher treated the message as history. The message is now stamped once the watcher is waiting, as a hub stamps it on receipt.
