@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The pre-release memory gate (`task test:memory`) no longer fails on a busy machine because the warm server was slow to start (#368). It waited a fixed 2 seconds before its 100 asks; at a load average above 100 the server wasn't listening yet, the first ask loaded the model itself, and the gate failed. It now sends probe asks until the server answers one (up to 90 s), then measures. A server that never answers, or exits, still fails the gate by name.
 - `TestMeshWatch_EncodesRoomAndWakes` no longer fails intermittently on a loaded machine. It stamped its message before the watcher started; when the watcher took more than about three seconds to arm, the stamp fell before the arm time and the watcher treated the message as history. The message is now stamped once the watcher is waiting, as a hub stamps it on receipt.
 - The test guard that keeps git in tests away from the real repository now also catches git run through a shell (#381). Under a git hook, `GIT_DIR` and related variables are exported; a test that ran `bash -c "git …"` with the inherited environment acted on the developer's repository (#380 slipped through this way).
   - **The guard:** a `bash` or `sh` call with `-c` among its leading options (`-c`, `-e -c`, `-ec`, `-lc`) is checked like a direct `git` call. It passes when the same function sets the command's `Env` to a value that doesn't copy `os.Environ()`.

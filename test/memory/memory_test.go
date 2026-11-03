@@ -122,6 +122,35 @@ func TestFullEmbed_PeakMemoryStaysInBudget(t *testing.T) {
 	require.LessOrEqual(t, peak, int64(peakBudget), "a full embed peaked at %d MiB", peak>>20)
 }
 
+// askLoadedModel reports whether an ask ran the model itself, i.e. it did not
+// reach the server. An ask the server answers stays far below 1 GiB.
+const askLoadedModel = int64(1 << 30)
+
+// serverReadyDeadline bounds the wait for the server to answer its first ask.
+// Generous: the gate runs on machines shared with other agents' builds.
+const serverReadyDeadline = 90 * time.Second
+
+// waitForServer polls with probe asks until one is answered by the server,
+// failing the test by name if none is within serverReadyDeadline or if the
+// server exits first. A probe that falls back to a local model is retried.
+func waitForServer(t *testing.T, bin string, e []string, vault string, server *exec.Cmd) {
+	t.Helper()
+	deadline := time.Now().Add(serverReadyDeadline)
+	for attempt := 1; ; attempt++ {
+		require.NoError(t, server.Process.Signal(syscall.Signal(0)), "the server exited before it answered an ask")
+		probe := exec.Command(bin, "ask", "readiness probe", "--vault", vault, "--budget", "200")
+		probe.Env = e
+		out, err := probe.CombinedOutput()
+		require.NoError(t, err, "readiness probe %d failed:\n%s", attempt, out)
+		if peakOf(t, probe.ProcessState) < askLoadedModel {
+			t.Logf("server answered readiness probe %d", attempt)
+			return
+		}
+		require.True(t, time.Now().Before(deadline), "the server did not answer an ask within %s (%d probes)", serverReadyDeadline, attempt)
+		time.Sleep(time.Second)
+	}
+}
+
 func TestServe_PeakMemoryStaysInBudgetOver100Asks(t *testing.T) {
 	bin := binary(t)
 	vault, _ := longNoteVault(t)
@@ -153,11 +182,12 @@ func TestServe_PeakMemoryStaysInBudgetOver100Asks(t *testing.T) {
 		}
 		t.Logf("server output:\n%s", serverOut.String())
 	})
-	// The server listens before it loads the model, so a moment is enough. Its
-	// socket path depends on the version string (a long one moves it, see
-	// serve.SocketPath), so the test does not look for it. An ask that misses
-	// the server fails below by name, so a slow start cannot pass unnoticed.
-	time.Sleep(2 * time.Second)
+	// Wait until the server answers instead of sleeping a fixed time: under a
+	// heavy load average it can take longer than any guess to listen and load
+	// the model (#368). The socket path depends on the version string and the
+	// executable (cmd/serve_helpers.go serveSocket), so readiness is judged the
+	// way the asks below are judged: by an ask that does not load the model.
+	waitForServer(t, bin, e, vault, server)
 
 	queries := []string{"memory consolidation during sleep", "how is a batch planned", "reciprocal rank fusion",
 		"what does the noise floor calibrate", "why did the server grow", "spacing and forgetting"}
@@ -168,7 +198,7 @@ func TestServe_PeakMemoryStaysInBudgetOver100Asks(t *testing.T) {
 		require.NoError(t, err, "ask %d failed:\n%s", i, out)
 		// An ask the server answers never loads the model. One that fell back
 		// to running here would, and the server's peak would not count it.
-		require.Less(t, peakOf(t, ask.ProcessState), int64(1<<30), "ask %d loaded the model itself: it did not reach the server", i)
+		require.Less(t, peakOf(t, ask.ProcessState), askLoadedModel, "ask %d loaded the model itself: it did not reach the server", i)
 	}
 	require.NoError(t, server.Process.Signal(syscall.Signal(0)), "the server exited during the asks")
 	require.NoError(t, server.Process.Signal(syscall.SIGTERM))
