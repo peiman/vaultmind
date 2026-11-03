@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **The guard:** a `bash` or `sh` call with `-c` among its leading options (`-c`, `-e -c`, `-ec`, `-lc`) is checked like a direct `git` call. It passes when the same function sets the command's `Env` to a value that doesn't copy `os.Environ()`.
   - **No file is exempt any more:** importing `internal/testgit` used to exempt the whole file, so its other raw `exec.Command` calls went unchecked. Every raw call is now checked.
   - **New helpers:** `testgit.ShellCommand(tb, dir, script)` runs a shell with the `GIT_*` variables removed, and `testgit.Env()` returns that environment for a hand-built command.
+- A mesh watcher whose session has ended no longer waits forever for the model API (watchdog mode, 0.10.21). The hold had no time limit, so a watcher orphaned during an outage stayed until the API answered, and forever if the probe URL never would; a killed test run left one running for 8 hours. The watcher now stops holding once its parent or its parent's parent changes, covering a session's wrapper shell that outlives the session, and prints the wake with `NOTE: stopped holding this wake: the watcher's session is gone (parent pid A -> B).` or `NOTE: stopped holding this wake: the watcher's session is gone (parent's parent pid A -> B).` If `ps` can't report the relevant parent, the hold continues as before.
 
 ## [0.10.21] - 2026-11-02
 
