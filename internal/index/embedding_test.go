@@ -115,6 +115,31 @@ func TestEncodeSparseEmbedding_RoundTrip(t *testing.T) {
 	assert.InDelta(t, 0.001, decoded[9999], 1e-6)
 }
 
+// #318: the same sparse vector must encode to the same bytes, or a byte
+// comparison can't tell "same embedding" from "different embedding". Entries
+// are written in ascending token id order. Many entries and many encodings
+// make Go's randomized map order show up if the encoder follows it.
+func TestEncodeSparseEmbedding_SameMapSameBytes(t *testing.T) {
+	sparse := make(map[int32]float32, 64)
+	for i := int32(0); i < 64; i++ {
+		sparse[i*37+3] = float32(i) / 64
+	}
+	sparse[-5] = 0.25 // a negative id sorts first
+	first := index.EncodeSparseEmbedding(sparse)
+	for range 50 {
+		require.Equal(t, first, index.EncodeSparseEmbedding(sparse), "encoding must be deterministic")
+	}
+	decoded, err := index.DecodeSparseEmbedding(first)
+	require.NoError(t, err)
+	require.Equal(t, sparse, decoded)
+	prev := int64(-1 << 40)
+	for i := 0; i < len(first); i += 8 {
+		id := int64(int32(uint32(first[i]) | uint32(first[i+1])<<8 | uint32(first[i+2])<<16 | uint32(first[i+3])<<24)) //nolint:gosec // G115: bit-pattern reinterpretation
+		require.Greater(t, id, prev, "entries are in ascending token id order")
+		prev = id
+	}
+}
+
 func TestEncodeSparseEmbedding_Empty(t *testing.T) {
 	assert.Nil(t, index.EncodeSparseEmbedding(nil))
 }
