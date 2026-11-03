@@ -12,6 +12,7 @@ import (
 	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/vault"
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,12 +22,12 @@ import (
 // chosen and --tier wasn't passed. We don't want to silently default to
 // anonymous (or anything else) — the user has to make a choice.
 func TestRunExport_RequiresTier(t *testing.T) {
+	cleanupCLIState(t)
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	viper.Reset()
 	viper.Set(config.KeyExperimentsTelemetry, "")
 
-	cmd := exportCmd
-	cmd.ResetFlags()
+	cmd := &cobra.Command{}
 	cmd.Flags().String("output", "", "")
 	cmd.Flags().String("tier", "", "")
 
@@ -38,11 +39,11 @@ func TestRunExport_RequiresTier(t *testing.T) {
 // runExport with --tier=anonymous against a fresh empty DB writes a
 // manifest line plus zero session/event/outcome lines.
 func TestRunExport_AnonymousEmptyDB(t *testing.T) {
+	cleanupCLIState(t)
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	viper.Reset()
 
-	cmd := exportCmd
-	cmd.ResetFlags()
+	cmd := &cobra.Command{}
 	cmd.Flags().String("output", "", "")
 	cmd.Flags().String("tier", "anonymous", "")
 	require.NoError(t, cmd.Flags().Set("tier", "anonymous"))
@@ -64,13 +65,13 @@ func TestRunExport_AnonymousEmptyDB(t *testing.T) {
 
 // --output writes to file; stdout stays clean.
 func TestRunExport_WritesToOutputFile(t *testing.T) {
+	cleanupCLIState(t)
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	viper.Reset()
 
 	outPath := filepath.Join(t.TempDir(), "export.jsonl")
 
-	cmd := exportCmd
-	cmd.ResetFlags()
+	cmd := &cobra.Command{}
 	cmd.Flags().String("output", "", "")
 	cmd.Flags().String("tier", "", "")
 	require.NoError(t, cmd.Flags().Set("tier", "anonymous"))
@@ -91,12 +92,12 @@ func TestRunExport_WritesToOutputFile(t *testing.T) {
 // runExport falls back to experiments.telemetry from config when --tier
 // is empty.
 func TestRunExport_UsesConfiguredTierWhenFlagEmpty(t *testing.T) {
+	cleanupCLIState(t)
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	viper.Reset()
 	viper.Set(config.KeyExperimentsTelemetry, "anonymous")
 
-	cmd := exportCmd
-	cmd.ResetFlags()
+	cmd := &cobra.Command{}
 	cmd.Flags().String("output", "", "")
 	cmd.Flags().String("tier", "", "")
 
@@ -110,11 +111,11 @@ func TestRunExport_UsesConfiguredTierWhenFlagEmpty(t *testing.T) {
 // Tier=off must refuse — the export logic owns that contract; this is a
 // command-level assertion that the error surfaces to the user.
 func TestRunExport_OffTierRefuses(t *testing.T) {
+	cleanupCLIState(t)
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	viper.Reset()
 
-	cmd := exportCmd
-	cmd.ResetFlags()
+	cmd := &cobra.Command{}
 	cmd.Flags().String("output", "", "")
 	cmd.Flags().String("tier", "", "")
 	require.NoError(t, cmd.Flags().Set("tier", "off"))
@@ -128,6 +129,7 @@ func TestRunExport_OffTierRefuses(t *testing.T) {
 // payload — fingerprint + features + variant stats. This is the
 // per-vault unit of analysis Paper #2 needs.
 func TestRunExport_RollupMode(t *testing.T) {
+	cleanupCLIState(t)
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	viper.Reset()
 
@@ -147,8 +149,7 @@ func TestRunExport_RollupMode(t *testing.T) {
 	_, err = idxr.Rebuild()
 	require.NoError(t, err)
 
-	cmd := exportCmd
-	cmd.ResetFlags()
+	cmd := &cobra.Command{}
 	cmd.Flags().String("output", "", "")
 	cmd.Flags().String("tier", "", "")
 	cmd.Flags().Bool("rollup", false, "")
@@ -171,6 +172,7 @@ func TestRunExport_RollupMode(t *testing.T) {
 
 // Preview mode prints a human-readable summary instead of JSON.
 func TestRunExport_RollupPreview(t *testing.T) {
+	cleanupCLIState(t)
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	viper.Reset()
 
@@ -187,8 +189,7 @@ func TestRunExport_RollupPreview(t *testing.T) {
 	_, err = idxr.Rebuild()
 	require.NoError(t, err)
 
-	cmd := exportCmd
-	cmd.ResetFlags()
+	cmd := &cobra.Command{}
 	cmd.Flags().String("output", "", "")
 	cmd.Flags().String("tier", "", "")
 	cmd.Flags().Bool("rollup", false, "")
@@ -214,11 +215,11 @@ func TestRunExport_RollupPreview(t *testing.T) {
 
 // Raw-export preview prints a summary for the JSONL path.
 func TestRunExport_RawPreview(t *testing.T) {
+	cleanupCLIState(t)
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	viper.Reset()
 
-	cmd := exportCmd
-	cmd.ResetFlags()
+	cmd := &cobra.Command{}
 	cmd.Flags().String("output", "", "")
 	cmd.Flags().String("tier", "", "")
 	cmd.Flags().Bool("rollup", false, "")
@@ -238,14 +239,14 @@ func TestRunExport_RawPreview(t *testing.T) {
 
 // --output pointing at an unwritable path surfaces a create-file error.
 func TestRunExport_OutputPathUnwritable(t *testing.T) {
+	cleanupCLIState(t)
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	viper.Reset()
 
 	// Path under a non-existent directory — os.Create fails.
 	badPath := filepath.Join(t.TempDir(), "no-such-dir", "export.jsonl")
 
-	cmd := exportCmd
-	cmd.ResetFlags()
+	cmd := &cobra.Command{}
 	cmd.Flags().String("output", "", "")
 	cmd.Flags().String("tier", "", "")
 	require.NoError(t, cmd.Flags().Set("tier", "anonymous"))

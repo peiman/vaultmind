@@ -23,6 +23,7 @@ import (
 
 // TestInitConfig tests all cases related to the initConfig function in a table-driven format
 func TestInitConfig(t *testing.T) {
+	cleanupCLIState(t)
 	tests := []struct {
 		name               string
 		setupHome          string           // Specify HOME env var value (empty to unset)
@@ -448,6 +449,7 @@ func TestEnvPrefix(t *testing.T) {
 
 // TestEnvironmentVariables tests that environment variables are correctly read with the proper prefix
 func TestEnvironmentVariables(t *testing.T) {
+	cleanupCLIState(t)
 	tests := []struct {
 		name          string
 		binaryName    string
@@ -569,6 +571,7 @@ func TestSetupCommandConfig(t *testing.T) {
 
 // TestGetConfigValue_Types tests the getConfigValueWithFlags function with different types
 func TestGetConfigValue_Types(t *testing.T) {
+	cleanupCLIState(t)
 	// SETUP PHASE
 	// Reset viper for a clean test
 	viper.Reset()
@@ -637,6 +640,7 @@ func TestGetConfigValue_Types(t *testing.T) {
 
 // TestGetConfigValue_FlagErrors tests error handling when flags are not properly configured
 func TestGetConfigValue_FlagErrors(t *testing.T) {
+	cleanupCLIState(t)
 	tests := []struct {
 		name         string
 		setupFlags   func(*cobra.Command)
@@ -743,6 +747,7 @@ func TestGetConfigValue_FlagErrors(t *testing.T) {
 
 // TestGetConfigValue_ViperTypeMismatch tests behavior when viper has wrong type
 func TestGetConfigValue_ViperTypeMismatch(t *testing.T) {
+	cleanupCLIState(t)
 	tests := []struct {
 		name           string
 		viperValue     interface{}
@@ -810,6 +815,7 @@ func TestGetConfigValue_ViperTypeMismatch(t *testing.T) {
 
 // TestGetConfigValue_StringSlice specifically tests the string slice handling in getConfigValueWithFlags
 func TestGetConfigValue_StringSlice(t *testing.T) {
+	cleanupCLIState(t)
 	// SETUP PHASE
 	// Reset viper for a clean test
 	viper.Reset()
@@ -906,6 +912,7 @@ func TestLoggingFlagBindings(t *testing.T) {
 }
 
 func TestLoggingFlagsIntegration(t *testing.T) {
+	cleanupCLIState(t)
 	// This test verifies that the logging system works with the flags
 	tempDir := t.TempDir()
 	logFile := filepath.Join(tempDir, "test.log")
@@ -987,6 +994,7 @@ func TestLoggingFlagsIntegration(t *testing.T) {
 // TestInitConfigWithoutHomeDir tests that initConfig works without $HOME environment variable
 // This test will initially FAIL - initConfig currently returns error without HOME
 func TestInitConfigWithoutHomeDir(t *testing.T) {
+	cleanupCLIState(t)
 	// SETUP PHASE
 	savedLogger, savedLevel := logger.SaveLoggerState()
 	defer logger.RestoreLoggerState(savedLogger, savedLevel)
@@ -1030,6 +1038,7 @@ func TestInitConfigWithoutHomeDir(t *testing.T) {
 // TestConfigFromCurrentDirectory tests that config is discovered from current directory
 // This test will initially FAIL - only searches home directory currently
 func TestConfigFromCurrentDirectory(t *testing.T) {
+	cleanupCLIState(t)
 	// SETUP PHASE
 	savedLogger, savedLevel := logger.SaveLoggerState()
 	defer logger.RestoreLoggerState(savedLogger, savedLevel)
@@ -1086,6 +1095,7 @@ func TestConfigFromCurrentDirectory(t *testing.T) {
 
 // TestConfigPriorityCurrentDirFirst tests that current directory config has priority over XDG config
 func TestConfigPriorityCurrentDirFirst(t *testing.T) {
+	cleanupCLIState(t)
 	// Skip on Windows due to path handling differences
 	if runtime.GOOS == "windows" {
 		t.Skip("Skipping config priority test on Windows")
@@ -1163,6 +1173,7 @@ func TestConfigPriorityCurrentDirFirst(t *testing.T) {
 
 // TestConfigFromXDGDirectory tests config discovery when config only exists in XDG config directory
 func TestConfigFromXDGDirectory(t *testing.T) {
+	cleanupCLIState(t)
 	// Skip on Windows due to path handling differences
 	if runtime.GOOS == "windows" {
 		t.Skip("Skipping XDG config test on Windows")
@@ -1235,6 +1246,7 @@ func TestConfigFromXDGDirectory(t *testing.T) {
 
 // TestConfigFromXDGDirectoryDefault tests config discovery from XDG directory in default mode.
 func TestConfigFromXDGDirectoryDefault(t *testing.T) {
+	cleanupCLIState(t)
 	if runtime.GOOS == "windows" {
 		t.Skip("Skipping XDG directory config test on Windows")
 	}
@@ -1295,6 +1307,7 @@ func TestConfigFromXDGDirectoryDefault(t *testing.T) {
 
 // TestConfigFromNativeDirectoryOnDarwin tests macOS native config discovery when mode is native.
 func TestConfigFromNativeDirectoryOnDarwin(t *testing.T) {
+	cleanupCLIState(t)
 	if runtime.GOOS != "darwin" {
 		t.Skip("Skipping native macOS config test on non-darwin platforms")
 	}

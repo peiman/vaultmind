@@ -88,6 +88,7 @@ func TestVersionCommandRegistered(t *testing.T) {
 // TestVersionCommandOutput pins the output to the same shape as the global
 // --version flag: "<name> version <Version>, commit <Commit>, built at <Date>".
 func TestVersionCommandOutput(t *testing.T) {
+	cleanupCLIState(t)
 	origV, origC, origD := Version, Commit, Date
 	t.Cleanup(func() { Version, Commit, Date = origV, origC, origD })
 	Version, Commit, Date = "v9.9.9", "abc1234", "2026-01-01_00:00:00"

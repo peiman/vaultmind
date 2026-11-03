@@ -16,6 +16,7 @@ import (
 )
 
 func TestRunConfigValidate(t *testing.T) {
+	cleanupCLIState(t)
 	tests := []struct {
 		name              string
 		configContent     string
@@ -137,6 +138,7 @@ func TestRunConfigValidate_NonexistentFile(t *testing.T) {
 }
 
 func TestRunConfigValidate_DefaultXDGPath(t *testing.T) {
+	cleanupCLIState(t)
 	// Reset global state
 	viper.Reset()
 	validateConfigFile = ""

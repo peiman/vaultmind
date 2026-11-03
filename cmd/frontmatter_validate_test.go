@@ -12,6 +12,7 @@ import (
 )
 
 func TestFrontmatterValidateLive_ReportsMissingRequiredField(t *testing.T) {
+	cleanupCLIState(t)
 	vault := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(vault, ".vaultmind"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(vault, ".vaultmind", "config.yaml"), []byte(`
@@ -53,6 +54,7 @@ body
 }
 
 func TestFrontmatterValidateLive_NoIndexRequired(t *testing.T) {
+	cleanupCLIState(t)
 	// Confirms --live works on a vault that has never been indexed
 	// (no .vaultmind/index.db file).
 	vault := t.TempDir()

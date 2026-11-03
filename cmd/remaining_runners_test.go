@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
+
 	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/index"
@@ -530,7 +532,7 @@ func TestDataviewLintText_RendersSummaryAndIssues(t *testing.T) {
 	}
 	var buf bytes.Buffer
 	// dataviewLintText takes *cobra.Command; use a bare one with Out set.
-	cmd := dataviewLintCmd
+	cmd := &cobra.Command{}
 	cmd.SetOut(&buf)
 	require.NoError(t, dataviewLintText(cmd, result))
 	out := buf.String()
@@ -542,7 +544,7 @@ func TestDataviewLintText_RendersSummaryAndIssues(t *testing.T) {
 // dataviewRenderText must distinguish dry-run, dry-run-with-diff, and real
 // run output so users know what happened.
 func TestDataviewRenderText_ModeDistinctions(t *testing.T) {
-	cmd := dataviewRenderCmd
+	cmd := &cobra.Command{}
 	// Real render
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)

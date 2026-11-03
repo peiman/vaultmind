@@ -21,7 +21,7 @@ import (
 // release that belongs to the process must not run.
 func servedAsks(t *testing.T, dir string) {
 	t.Helper()
-	t.Cleanup(resetCLIState)
+	cleanupCLIState(t)
 	for i := 1; i <= 2; i++ {
 		resetCLIState()
 		var out, errw bytes.Buffer
@@ -51,8 +51,6 @@ func TestNotePropose_OneShotLoadsOnceAndReleasesAtExit(t *testing.T) {
 	emb, loads := useLoadCountEmbedder(t)
 	dir := proposeVault(t)
 	seedMiniLMEmbeddings(t, dir, emb.vec)
-	t.Cleanup(resetCLIState)
-
 	code, text := runProcess(t, "note", "propose",
 		"--vault", dir,
 		"--question", "Where does the embedder session live?",
@@ -68,10 +66,16 @@ func TestNotePropose_OneShotLoadsOnceAndReleasesAtExit(t *testing.T) {
 // command returns. Output is captured so a failure is readable.
 func runProcess(t *testing.T, args ...string) (int, string) {
 	t.Helper()
+	cleanupCLIState(t)
 	r, w, err := os.Pipe()
 	require.NoError(t, err)
 	stdout, stderr := os.Stdout, os.Stderr
 	os.Stdout, os.Stderr = w, w
+	defer func() {
+		os.Stdout, os.Stderr = stdout, stderr
+		_ = w.Close()
+		_ = r.Close()
+	}()
 	var buf bytes.Buffer
 	done := make(chan struct{})
 	go func() {

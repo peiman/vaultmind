@@ -117,6 +117,7 @@ func TestExecuteApply_FileNotFound(t *testing.T) {
 }
 
 func TestExecuteApply_JSONOutput(t *testing.T) {
+	cleanupCLIState(t)
 	// Setup a temp vault
 	dir := t.TempDir()
 	configDir := filepath.Join(dir, ".vaultmind")
@@ -174,6 +175,7 @@ func TestExecuteApply_JSONOutput(t *testing.T) {
 }
 
 func TestExecuteApply_TextOutput(t *testing.T) {
+	cleanupCLIState(t)
 	// Setup a temp vault
 	dir := t.TempDir()
 	configDir := filepath.Join(dir, ".vaultmind")

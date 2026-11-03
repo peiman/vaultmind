@@ -39,6 +39,7 @@ func env(extra map[string]string) map[string]string {
 // resets the CLI's state between requests, so a warm process answers what a
 // fresh one would.
 func TestServeExec_ARequestIsAnsweredAsInAFreshProcess(t *testing.T) {
+	cleanupCLIState(t)
 	vault := testvault.IndexedFixtureVault(t)
 	here, err := os.Getwd()
 	require.NoError(t, err)
@@ -66,6 +67,7 @@ func TestServeExec_ARequestIsAnsweredAsInAFreshProcess(t *testing.T) {
 // The server's own directory and environment are back as they were after a
 // request.
 func TestServeExec_RestoresTheServersDirAndEnv(t *testing.T) {
+	cleanupCLIState(t)
 	here, err := os.Getwd()
 	require.NoError(t, err)
 	before := os.Getenv("VAULTMIND_SERVE_PROBE")
@@ -83,6 +85,7 @@ func TestServeExec_RestoresTheServersDirAndEnv(t *testing.T) {
 // even right after a request in JSON mode: an unknown command fails before
 // the output mode is set, so a mode left over would change how it reads.
 func TestServeExec_AFailedCommandIsReportedAsMainWould(t *testing.T) {
+	cleanupCLIState(t)
 	here, err := os.Getwd()
 	require.NoError(t, err)
 	inJSON := serveExec(serve.Request{Args: []string{"--output-format", "json", "ping"}, Dir: here, Env: env(nil)})
@@ -96,6 +99,7 @@ func TestServeExec_AFailedCommandIsReportedAsMainWould(t *testing.T) {
 // A request whose directory is gone fails cleanly instead of running
 // somewhere else.
 func TestServeExec_AMissingDirIsAnError(t *testing.T) {
+	cleanupCLIState(t)
 	resp := serveExec(serve.Request{Args: []string{"--version"}, Dir: filepath.Join(t.TempDir(), "gone"), Env: env(nil)})
 	assert.Equal(t, 1, resp.Code)
 	assert.Contains(t, string(resp.Stderr), "gone")
@@ -137,6 +141,7 @@ func TestResetCLIState_ForgetsTheConfigFileFound(t *testing.T) {
 // A command that panics skips the post-run hook; the request still closes
 // the experiment session it opened, so a long-lived server leaks no handles.
 func TestServeExec_APanicStillClosesTheSession(t *testing.T) {
+	cleanupCLIState(t)
 	probe := &cobra.Command{Use: "panic-probe", RunE: func(*cobra.Command, []string) error {
 		require.NotNil(t, experimentSession, "the pre-run hook opened a session")
 		panic("probe")

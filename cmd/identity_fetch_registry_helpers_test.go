@@ -61,6 +61,7 @@ func TestResolveRootPin_NothingPinnedIsNoPin(t *testing.T) {
 }
 
 func TestResolveRootPin_ConfigPinAlone(t *testing.T) {
+	cleanupCLIState(t)
 	pinEnv(t)
 	k := pinKey(t, "root-pin-config-seed-padding-xxxx")
 	viper.Set(config.KeyAppIdentityfetchregistryRootPubkey, b64(k))
@@ -83,6 +84,7 @@ func TestResolveRootPin_AnchorAlone(t *testing.T) {
 }
 
 func TestResolveRootPin_FlagBeatsConfigBeatsAnchor(t *testing.T) {
+	cleanupCLIState(t)
 	xdg := pinEnv(t)
 	flagK := pinKey(t, "root-pin-flag-seed-padding-xxxxxx")
 	cfgK := pinKey(t, "root-pin-config-seed-padding-xxxx")
@@ -101,6 +103,7 @@ func TestResolveRootPin_FlagBeatsConfigBeatsAnchor(t *testing.T) {
 // A value an operator typed that does not decode is an error naming where it
 // came from — never a silent fall-through to a weaker source.
 func TestResolveRootPin_MalformedValuesNameTheirSource(t *testing.T) {
+	cleanupCLIState(t)
 	pinEnv(t)
 	_, err := resolveRootPin("not base64!!", "--mesh-root-pubkey")
 	require.ErrorContains(t, err, "--mesh-root-pubkey")
@@ -114,6 +117,7 @@ func TestResolveRootPin_MalformedValuesNameTheirSource(t *testing.T) {
 // With no running signer the pinned path's honest verdict is key-mismatch —
 // the same verdict the anchor-pinned test gets — and never "unpinned".
 func TestDoctor_MeshConfigPinIsAPin(t *testing.T) {
+	cleanupCLIState(t)
 	chdirToTemp(t)
 	pinEnv(t)
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())

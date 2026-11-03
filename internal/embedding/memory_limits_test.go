@@ -17,6 +17,11 @@ func TestBGEM3EmbedMaxTokens_StaysWithinTheMeasuredBound(t *testing.T) {
 }
 
 func TestBGEM3Config_TruncatesAtTheEmbedCap(t *testing.T) {
+	// BGEM3Config resolves the model cache, which may migrate a legacy cache
+	// under the real home. Isolate both before resolving: in shuffled order
+	// nothing earlier has done it for this test (#179).
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	cfg := BGEM3Config()
 	assert.Equal(t, BGEM3EmbedMaxTokens, cfg.MaxTokens, "the embedder is configured with the embed cap, not the model limit")
 	assert.Equal(t, BGEM3EmbedMaxTokens, safeTokenizerLimit(cfg.MaxTokens), "the tokenizer clamp honors the embed cap")

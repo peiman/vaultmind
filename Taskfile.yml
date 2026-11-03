@@ -424,6 +424,8 @@ tasks:
       - cmd: |
           export XDG_DATA_HOME="${XDG_DATA_HOME:-$(mktemp -d -t vm-test-unit.XXXXXX)}"
           export XDG_STATE_HOME="$XDG_DATA_HOME/state"  # #176: state isolated too
+          # Keep order dependencies reproducible: Go prints the shuffle seed.
+          export GOFLAGS="${GOFLAGS:+$GOFLAGS }-shuffle=on"
           trap '[ -n "$XDG_DATA_HOME" ] && [ -d "$XDG_DATA_HOME" ] && rm -rf "$XDG_DATA_HOME"' EXIT
           task ckeletin:test:unit
 

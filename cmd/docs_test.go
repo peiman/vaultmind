@@ -18,6 +18,7 @@ import (
 
 // TestRunDocsConfig tests the runDocsConfig function
 func TestRunDocsConfig(t *testing.T) {
+	cleanupCLIState(t)
 	tests := []struct {
 		name        string
 		format      string
@@ -87,6 +88,7 @@ func TestRunDocsConfig(t *testing.T) {
 
 // TestDocsCommands tests the initialization and correct setup of the docs commands
 func TestDocsCommands(t *testing.T) {
+	cleanupCLIState(t)
 	// SETUP PHASE
 	// Reset Viper state for clean testing
 	viper.Reset()

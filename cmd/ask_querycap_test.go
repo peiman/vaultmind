@@ -87,16 +87,8 @@ func TestAskQueryCap_JSONAndText(t *testing.T) {
 }
 
 func TestAskQueryForwardTokens_Precedence(t *testing.T) {
+	cleanupCLIState(t)
 	isolateAskCap(t)
-	// --config sticks in configFileUsed for the life of the process, and the
-	// next test would validate that deleted temp file. Clearing the two
-	// package vars is the whole fix: viper.Reset in the subtests already
-	// drops flag bindings, and rebinding them (resetCLIState) would resurrect
-	// a --vaults value an earlier test had blanked with viper.Set.
-	t.Cleanup(func() {
-		configFileUsed, configFileStatus = "", ""
-		cfgFile = ""
-	})
 	vault := indexedBaselineVault(t)
 	query := nWords(1160, "LASTWORD")
 	configPath := filepath.Join(t.TempDir(), "config.yaml")
@@ -151,6 +143,7 @@ func TestAskQueryForwardTokens_Precedence(t *testing.T) {
 }
 
 func TestAskQuerySalientTerms_Precedence(t *testing.T) {
+	cleanupCLIState(t)
 	isolateAskCap(t)
 	t.Cleanup(func() {
 		configFileUsed, configFileStatus = "", ""

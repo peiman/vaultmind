@@ -103,7 +103,7 @@ func resetContexts(cmd *cobra.Command) {
 // its declared default. Covers persistent and local flags.
 func resetFlagsRecursive(cmd *cobra.Command) {
 	reset := func(f *pflag.Flag) {
-		_ = f.Value.Set(f.DefValue)
+		resetFlagValue(f)
 		f.Changed = false
 		// A flag that remembers its occurrences must forget them here: this
 		// simulates a FRESH PROCESS, and a real one has parsed nothing yet.

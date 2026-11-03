@@ -39,6 +39,7 @@ func TestComputeActivationScores_NoActivationExperiment(t *testing.T) {
 }
 
 func TestComputeActivationScores_WithSimilarities(t *testing.T) {
+	cleanupCLIState(t)
 	db := openTestExpDB(t)
 	sid, err := db.StartSession("/vault")
 	require.NoError(t, err)
