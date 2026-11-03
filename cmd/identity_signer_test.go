@@ -42,7 +42,10 @@ func signerTestKey(t *testing.T) (keyPath string, pub ed25519.PublicKey) {
 // the path can exist briefly before the listener accepts connections.
 func waitForSocket(t *testing.T, path string) {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
+	// Generous: the wait ends at the first successful dial, so the deadline
+	// only matters when the signer never listens. 2 s was a guess that a
+	// suite under a load average above 100 can exceed (#180).
+	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
 		if conn, err := net.DialTimeout("unix", path, 50*time.Millisecond); err == nil {
 			_ = conn.Close()
