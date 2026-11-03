@@ -517,11 +517,9 @@ jobs:
           # The workflow-provided token (job has contents: write) creates the
           # release in this repo. The inherited scaffold referenced a custom
           # secret (CKELETIN_GITHUB_TOKEN) that isn't set here, so goreleaser
-          # failed with "missing GITHUB_TOKEN". The Homebrew tap push (a
-          # separate repo) still uses a PAT, but skip_upload makes it optional
-          # when HOMEBREW_TAP_OWNER is unset.
+          # failed with "missing GITHUB_TOKEN". No Homebrew tap is published
+          # (the scaffold's brews block never uploaded and was removed, #388).
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
 
       # SLSA build provenance, generated HERE rather than in a workflow that
       # reacts to the release being published.
