@@ -46,6 +46,7 @@ func TestDevCommandHasSubcommands(t *testing.T) {
 }
 
 func TestDevCommandHelp(t *testing.T) {
+	cleanupCLIState(t)
 	// SETUP PHASE
 	buf := new(bytes.Buffer)
 	RootCmd.SetOut(buf)
@@ -67,6 +68,7 @@ func TestDevCommandHelp(t *testing.T) {
 }
 
 func TestDevCommandWithoutSubcommand(t *testing.T) {
+	cleanupCLIState(t)
 	// SETUP PHASE
 	buf := new(bytes.Buffer)
 	RootCmd.SetOut(buf)

@@ -6,34 +6,14 @@ import (
 	"os"
 	"testing"
 
-	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/internal/config/commands"
 	"github.com/peiman/vaultmind/internal/testvault"
-	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 )
 
 // Multi-vault was not merely unsupported — it was silently wrong. `--vault A
 // --vault B` kept B and answered "nothing relevant" without ever opening A.
 // These cover the parsing half: which vaults a run will actually search.
-
-// isolateVaultsFlag stops a test's --vaults from leaking into the rest of the
-// package. NewCommand binds every flag into the GLOBAL viper, and that binding
-// is replayed by resetCLIState, so clearing viper alone is not enough: the
-// flag still holds the value and the next reset puts it back. That sent later
-// asks, including a served-ask test, down the federation path.
-func isolateVaultsFlag(t *testing.T) {
-	t.Cleanup(func() {
-		for _, b := range flagBindings {
-			if b.key != config.KeyAppAskVaults || b.flag == nil {
-				continue
-			}
-			_ = b.flag.Value.Set(b.flag.DefValue)
-			b.flag.Changed = false
-		}
-		viper.Set(config.KeyAppAskVaults, "")
-	})
-}
 
 func TestResolveAskVaultPaths_SingleVaultUnchanged(t *testing.T) {
 	got, err := resolveAskVaultPaths("/a/identity", "")
@@ -72,7 +52,7 @@ func TestVaultDisplayName_IsTheDirectoryName(t *testing.T) {
 // checked the PARSER, which was correct, while the CALLER threw the answer
 // away. A parser test cannot see a caller that ignores it.
 func TestAsk_SingleVaultsPathIsSearchedNotDiscarded(t *testing.T) {
-	isolateVaultsFlag(t)
+	cleanupCLIState(t)
 	vault := testvault.IndexedFixtureVault(t)
 	cmd := MustNewCommand(commands.AskMetadata, runAsk)
 	var out bytes.Buffer
@@ -99,7 +79,7 @@ func TestAsk_SingleVaultsPathIsSearchedNotDiscarded(t *testing.T) {
 // obviously about the path you typed, while with three the other two answer
 // and the typo disappears into a header that claims it was searched.
 func TestAsk_FederationRejectsAPathThatIsNotAVault(t *testing.T) {
-	isolateVaultsFlag(t)
+	cleanupCLIState(t)
 	real := testvault.IndexedFixtureVault(t)
 	typo := t.TempDir()
 	cmd := MustNewCommand(commands.AskMetadata, runAsk)

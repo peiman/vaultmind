@@ -599,6 +599,7 @@ func TestStringSliceDefault(t *testing.T) {
 // TestRegisterFlagsForPrefixWithOverrides_ShortFlags tests that short flags are properly registered
 // by using the ping command's actual configuration which includes short flags
 func TestRegisterFlagsForPrefixWithOverrides_ShortFlags(t *testing.T) {
+	cleanupCLIState(t)
 	// Reset viper for clean test
 	viper.Reset()
 
@@ -672,6 +673,7 @@ func TestShortFlagRegistration_DirectCobra(t *testing.T) {
 // TestRegisterFlagsForPrefixWithOverrides_AllTypesWithShortFlags tests ShortFlag branches for all types
 // This test uses the test options registered in init() above
 func TestRegisterFlagsForPrefixWithOverrides_AllTypesWithShortFlags(t *testing.T) {
+	cleanupCLIState(t)
 	viper.Reset()
 	cmd := &cobra.Command{Use: "test"}
 

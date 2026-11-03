@@ -14,6 +14,7 @@ import (
 // — the manual hunt (shapes a phrase-matcher misses), the 5-part bar, the
 // non-negotiables, the diff test, and the propose-only framing.
 func TestArcGuideCommand_EmitsDiscipline(t *testing.T) {
+	cleanupCLIState(t)
 	buf := &bytes.Buffer{}
 	arcGuideCmd.SetOut(buf)
 	require.NoError(t, arcGuideCmd.RunE(arcGuideCmd, []string{}))

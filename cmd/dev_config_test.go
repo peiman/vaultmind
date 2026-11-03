@@ -25,6 +25,7 @@ func TestDevConfigCommand(t *testing.T) {
 }
 
 func TestDevConfigList(t *testing.T) {
+	cleanupCLIState(t)
 	// SETUP PHASE
 	// Reset flags to avoid test pollution
 	configList = false
@@ -55,6 +56,7 @@ func TestDevConfigList(t *testing.T) {
 }
 
 func TestDevConfigShow(t *testing.T) {
+	cleanupCLIState(t)
 	// SETUP PHASE
 	// Reset flags
 	configList = false
@@ -82,6 +84,7 @@ func TestDevConfigShow(t *testing.T) {
 }
 
 func TestDevConfigExportJSON(t *testing.T) {
+	cleanupCLIState(t)
 	// SETUP PHASE
 	// Reset flags
 	configList = false
@@ -113,6 +116,7 @@ func TestDevConfigExportJSON(t *testing.T) {
 }
 
 func TestDevConfigValidate(t *testing.T) {
+	cleanupCLIState(t)
 	// SETUP PHASE
 	// Reset flags
 	configList = false
@@ -145,6 +149,7 @@ func TestDevConfigValidate(t *testing.T) {
 }
 
 func TestDevConfigHelp(t *testing.T) {
+	cleanupCLIState(t)
 	// SETUP PHASE
 	// Reset flags
 	configList = false

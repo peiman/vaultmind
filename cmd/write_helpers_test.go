@@ -57,6 +57,7 @@ func TestEmbedOnWrite_BGEM3WithoutORTSaysHowToFinish(t *testing.T) {
 }
 
 func TestEmbedOnWrite_CanBeTurnedOff(t *testing.T) {
+	cleanupCLIState(t)
 	vault := buildIndexedTestVault(t)
 	markEmbedded(t, vault)
 	viper.Set(config.KeyAppEmbedOnWrite, false)

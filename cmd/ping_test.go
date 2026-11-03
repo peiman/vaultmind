@@ -19,6 +19,7 @@ import (
 
 // TestPingCommand tests the ping command integration with configuration
 func TestPingCommand(t *testing.T) {
+	cleanupCLIState(t)
 	// SETUP PHASE: Save logger state and restore after test
 	savedLogger, savedLevel := logger.SaveLoggerState()
 	defer logger.RestoreLoggerState(savedLogger, savedLevel)
@@ -126,6 +127,7 @@ func TestPingCommand(t *testing.T) {
 
 // TestPingCommandFlags tests flag precedence over configuration
 func TestPingCommandFlags(t *testing.T) {
+	cleanupCLIState(t)
 	// SETUP PHASE: Set viper config
 	viper.Reset()
 	viper.Set("app.ping.output_message", "ConfigMessage")
@@ -179,6 +181,7 @@ func TestPingCommandFlags(t *testing.T) {
 
 // TestPingConfigDefaults ensures the default values from config registry are used
 func TestPingConfigDefaults(t *testing.T) {
+	cleanupCLIState(t)
 	// SETUP PHASE: Reset viper and apply config defaults
 	viper.Reset()
 	config.SetDefaults()
@@ -220,6 +223,7 @@ func TestPingConfigDefaults(t *testing.T) {
 // This test verifies that the wrapper correctly instantiates the default UIRunner
 // and delegates to runPingWithUIRunner.
 func TestRunPingWrapper(t *testing.T) {
+	cleanupCLIState(t)
 	// SETUP PHASE: Reset viper and set defaults
 	viper.Reset()
 	config.SetDefaults()

@@ -60,6 +60,7 @@ func TestNewCommand_ReturnsErrorOnInvalidFlags(t *testing.T) {
 }
 
 func TestMustNewCommand_Success(t *testing.T) {
+	cleanupCLIState(t)
 	// SETUP: Create valid command metadata
 	meta := config.CommandMetadata{
 		Use:          "test-must",

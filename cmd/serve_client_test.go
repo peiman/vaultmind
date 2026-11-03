@@ -141,9 +141,9 @@ func TestSpawnServer_RunsServeFromTheTempDir(t *testing.T) {
 
 // The serve command reads --idle and rejects a value that isn't a duration.
 func TestServeCommand_RejectsABadIdle(t *testing.T) {
+	cleanupCLIState(t)
 	isolatedState(t)
 	resetCLIState()
-	t.Cleanup(resetCLIState)
 	var out, errw bytes.Buffer
 	assert.Equal(t, 1, ExecuteWithIO([]string{"serve", "--idle", "soon"}, &out, &errw))
 	assert.Contains(t, errw.String(), `--idle "soon"`)
@@ -152,9 +152,9 @@ func TestServeCommand_RejectsABadIdle(t *testing.T) {
 // In JSON mode a failed command's error is an envelope on stdout, as main
 // reported it before the server existed.
 func TestExecuteWithIO_JSONErrorIsAnEnvelope(t *testing.T) {
+	cleanupCLIState(t)
 	isolatedState(t)
 	resetCLIState()
-	t.Cleanup(resetCLIState)
 	var out, errw bytes.Buffer
 	assert.Equal(t, 1, ExecuteWithIO([]string{"serve", "--idle", "soon", "--output-format", "json"}, &out, &errw))
 	assert.Contains(t, out.String(), `"status": "error"`)

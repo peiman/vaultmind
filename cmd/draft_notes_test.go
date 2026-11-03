@@ -146,6 +146,7 @@ func TestDraftNotes_StayOutOfRecallUntilAsked(t *testing.T) {
 }
 
 func TestDraftNotes_ConfigAndEnvOptIn(t *testing.T) {
+	cleanupCLIState(t)
 	isolateXDG(t)
 	// --config sticks for the process. Clear it so the next test does not
 	// validate a deleted temp file. Same cleanup as the query-cap precedence tests.
