@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Mesh watchers no longer lose messages that arrive after a wake or quiet heartbeat and before the next watcher arms. They save their cursors when they stop and catch up on the next arm for up to six hours. A catch-up can occasionally wake again for a message the session already read, by design: a duplicate wake beats a missed message.
+
 ## [0.10.22] - 2026-11-03
 
 ### Added

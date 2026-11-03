@@ -198,9 +198,84 @@ SWEEP_SECS="${MESH_SWEEP_SECS:-15}"            # overlap-read cadence (same-seco
 OUTAGE_GIVEUP_SECS="${MESH_OUTAGE_GIVEUP_SECS:-600}"
 
 RUN_DIR="$(mktemp -d "${TMPDIR:-/tmp}/mesh-watch.XXXXXX")"
+CURSORS_SAVED=0
+# The 2026-11-03 wake/re-arm gap lost messages baselined by the next watcher.
+# Stop writers before saving their last atomic cursors (including the wake),
+# then replay the gap on the next arm; duplicate wakes beat missed messages.
+save_cursors() {
+  [[ -n "${VM_MESH_CURSOR:-}" && "$CURSORS_SAVED" == 0 ]] || return 0
+  local tmp
+  tmp="$(mktemp "${VM_MESH_CURSOR}.XXXXXX")" || return 0
+  if python3 - "$RUN_DIR" "${ARM_TS:-0}" > "$tmp" <<'PYSAVE'
+import glob, json, os, sys, time
+root = sys.argv[1]
+paths = glob.glob(os.path.join(root, "s*.cursor"))
+if not paths:
+    sys.exit(1)
+# A partially failed arm must retain the unstarted streams' saved cursors.
+try:
+    with open(os.path.join(root, "catchup.json")) as f:
+        state = json.load(f)
+except (OSError, ValueError):
+    state = {}
+state.setdefault("rooms", {})
+state["saved_at"] = int(time.time())
+state["sweep_floor"] = min(int(sys.argv[2]), state.get("sweep_floor", int(sys.argv[2])))
+for path in glob.glob(os.path.join(root, "s*.floor")):
+    with open(path) as f:
+        state["sweep_floor"] = min(state["sweep_floor"], int(f.read()))
+for path in paths:
+    with open(path) as f:
+        cursors = json.load(f)
+    with open(path[:-7] + ".room") as f:
+        room = f.read()
+    state["rooms"][room] = cursors["room"]
+    if "dm" in cursors:
+        state["dm"] = cursors["dm"]
+json.dump(state, sys.stdout)
+PYSAVE
+  then
+    if mv -f "$tmp" "$VM_MESH_CURSOR"; then CURSORS_SAVED=1; else rm -f "$tmp"; fi
+  else
+    rm -f "$tmp"
+  fi
+}
+
+load_cursors() {
+  [[ -n "${VM_MESH_CURSOR:-}" ]] || return 0
+  python3 - "$VM_MESH_CURSOR" "${MESH_CATCHUP_MAX_SECS:-21600}" > "${RUN_DIR}/catchup.json" <<'PYLOAD'
+import json, sys, time
+def cursor(c):
+    return (isinstance(c, dict) and type(c.get("ts")) is int and c["ts"] >= 0
+            and isinstance(c.get("ids"), list)
+            and all(isinstance(mid, str) for mid in c["ids"]))
+try:
+    with open(sys.argv[1]) as f:
+        state = json.load(f)
+except FileNotFoundError:
+    state = None
+except (OSError, ValueError):
+    state = False
+if state is not None:
+    valid = (isinstance(state, dict) and type(state.get("saved_at")) is int
+             and isinstance(state.get("rooms"), dict)
+             and all(cursor(c) for c in state["rooms"].values())
+             and type(state.get("sweep_floor", 0)) is int and state.get("sweep_floor", 0) >= 0
+             and ("dm" not in state or cursor(state["dm"])))
+    if not valid:
+        print("mesh-watch: ignoring saved cursor: corrupt or unreadable; using live baseline.", file=sys.stderr)
+        state = None
+    elif not 0 <= int(time.time()) - state["saved_at"] <= int(sys.argv[2]):
+        state = None
+json.dump(state or {}, sys.stdout)
+PYLOAD
+}
+
 cleanup() {
-  rm -rf "$RUN_DIR" 2>/dev/null
   local j; for j in $(jobs -p 2>/dev/null); do kill "$j" 2>/dev/null; done
+  for j in $(jobs -p 2>/dev/null); do wait "$j" 2>/dev/null; done
+  save_cursors
+  rm -rf "$RUN_DIR" 2>/dev/null
   # Clear the pidfile only if it is still OURS — a successor that already took
   # over must not have its claim deleted by our late exit.
   if [[ "$(cat "$VM_MESH_PID" 2>/dev/null)" == "$$" ]]; then rm -f "$VM_MESH_PID" 2>/dev/null; fi
@@ -525,10 +600,11 @@ baseline_retry() {
   return 0
 }
 
-# Everything the hub received before this moment is in the baseline. A stream
-# whose newest message is stamped ts=0 has no usable cursor floor, so its sweep
-# starts here instead of re-reading the whole history every sweep (#352).
+# Fresh baselines treat earlier messages as history. A ts=0 stream has no
+# usable timestamp floor, so fresh sweeps start here (#352); catch-up retains
+# the saved receive-time floor to cover the gap between watchers too.
 ARM_TS=$(date +%s)
+load_cursors
 if ! dm_baseline="$(baseline_retry "${VM_MESH_DAEMON}/chat_read?to_agent=${VM_MESH_SELF_Q}")"; then
   printf 'mesh-watch: cannot establish a baseline — daemon unreachable at %s for %ss (last error: %s). Refusing to arm against a fabricated zero.\n' \
     "$VM_MESH_DAEMON" "$OUTAGE_GIVEUP_SECS" "$(tail -n1 "${RUN_DIR}/baseline.err" 2>/dev/null)" >&2
@@ -565,18 +641,35 @@ wait_loop() {
 
   # An empty mailbox has no historical second to overlap. Seed it from the
   # newest arm cursor (or arm time if both stores are empty), never epoch - 1.
-  python3 - "${cursor}.tmp" "$start_ts" <<'PYINIT'
+  python3 - "${cursor}.tmp" "$start_ts" "${RUN_DIR}/catchup.json" "$room" "${cursor}.floor" "$ARM_TS" <<'PYINIT'
 import json, sys
 with open(sys.argv[1]) as f:
     cursors = json.load(f)
+try:
+    with open(sys.argv[3]) as f:
+        saved = json.load(f)
+except (OSError, ValueError):
+    saved = {}
+sweep_floor = int(sys.argv[6])
+for kind, live in list(cursors.items()):
+    previous = saved.get("rooms", {}).get(sys.argv[4]) if kind == "room" else saved.get("dm")
+    if previous is not None and previous["ts"] <= live["ts"]:
+        cursors[kind] = previous
+        # A ts=0 cursor needs the old receive-time floor to include the gap.
+        if not previous["ts"]:
+            sweep_floor = min(sweep_floor, saved.get("sweep_floor", saved["saved_at"]))
 newest = max(c["ts"] for c in cursors.values()) or int(sys.argv[2])
 for c in cursors.values():
     if not c["ts"] and not c["ids"]:
         c["ts"] = newest
 with open(sys.argv[1], "w") as f:
     json.dump(cursors, f)
+with open(sys.argv[5], "w") as f:
+    f.write(str(sweep_floor))
 PYINIT
   mv "${cursor}.tmp" "$cursor" || return 0
+  local sweep_floor
+  sweep_floor="$(cat "${cursor}.floor")"
 
   local wait_pid="" wait_out="${RUN_DIR}/s${idx}.wait" wait_err="${RUN_DIR}/s${idx}.wait.err"
   local read_err="${RUN_DIR}/s${idx}.read.err" outage_since=0 last_err="" last_seen
@@ -663,7 +756,7 @@ print(max(c["ts"] for c in cursors.values()))' "$cursor")" || {
           sweep_since="$(python3 -c 'import json,sys
 with open(sys.argv[1]) as f: cursors=json.load(f)
 ts = cursors[sys.argv[2]]["ts"]
-print(ts - 1 if ts else int(sys.argv[3]) - 1)' "$cursor" "$kind" "$ARM_TS")" || {
+print(ts - 1 if ts else int(sys.argv[3]) - 1)' "$cursor" "$kind" "$sweep_floor")" || {
             echo "WATCHER ERROR: ${room} cursor unreadable — re-arm." > "$sig"
             return 0
           }
@@ -704,6 +797,7 @@ print(ts - 1 if ts else int(sys.argv[3]) - 1)' "$cursor" "$kind" "$ARM_TS")" || 
 idx=0 first=1 PIDS=()
 while IFS='|' read -r room scope wfrom kws; do
   [[ -z "$room" ]] && continue
+  printf '%s' "$room" > "${RUN_DIR}/s${idx}.room"
   wait_loop "$idx" "$room" "$scope" "$wfrom" "$kws" "$first" &
   PIDS+=($!)
   idx=$((idx + 1)); first=0
@@ -751,6 +845,7 @@ done
 
 for p in "${PIDS[@]}"; do kill "$p" 2>/dev/null; done
 for p in "${PIDS[@]}"; do wait "$p" 2>/dev/null; done
+save_cursors
 
 final_kind=""
 final_message=""

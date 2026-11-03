@@ -561,7 +561,7 @@ func TestMeshWatch_StreamExitReason(t *testing.T) {
 case "$*" in
   'identity paths')
     printf "VM_MESH_SLUG='mesh-watch-test'\nVM_MESH_SELF='agent:mesh-watch-test'\nVM_MESH_OPERATOR=''\nVM_MESH_DAEMON='http://mesh-watch-test.invalid'\nVM_MESH_REGISTRY_DAYS_LEFT=''\n"
-    for key in PID LISTEN DISARM HEARTBEAT LASTARM LASTWAKE; do
+    for key in PID LISTEN DISARM HEARTBEAT LASTARM LASTWAKE CURSOR; do
       printf 'VM_MESH_%s=%q\n' "$key" "$VM_TEST_ROOT/$key"
     done ;;
   'identity fetch-registry') exit 0 ;;

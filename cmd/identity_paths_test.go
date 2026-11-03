@@ -48,15 +48,16 @@ func TestIdentityPaths_ShellOutputIsEvalable(t *testing.T) {
 	c.SetErr(&out)
 	require.NoError(t, runIdentityPaths(c, nil))
 
-	script := out.String() + "\nprintf '%s|%s|%s' \"$VM_MESH_SLUG\" \"$VM_MESH_SELF\" \"$VM_MESH_HEARTBEAT\"\n"
+	script := out.String() + "\nprintf '%s|%s|%s|%s' \"$VM_MESH_SLUG\" \"$VM_MESH_SELF\" \"$VM_MESH_HEARTBEAT\" \"$VM_MESH_CURSOR\"\n"
 	res, err := testgit.ShellCommand(t, "", script).Output()
 	require.NoError(t, err, "the default output must be directly evalable by bash")
 
 	parts := strings.Split(string(res), "|")
-	require.Len(t, parts, 3)
+	require.Len(t, parts, 4)
 	require.Equal(t, "mira", parts[0])
 	require.Equal(t, "agent:mira", parts[1])
 	require.Equal(t, "mesh-watch-mira.heartbeat", filepath.Base(parts[2]))
+	require.Equal(t, "mesh-watch-mira.cursor", filepath.Base(parts[3]))
 }
 
 // TestIdentityPaths_JSONCarriesTheSameFacts — the machine-readable twin, used
@@ -83,6 +84,7 @@ func TestIdentityPaths_JSONCarriesTheSameFacts(t *testing.T) {
 			Dir       string `json:"dir"`
 			Heartbeat string `json:"heartbeat"`
 			Lastarm   string `json:"lastarm"`
+			Cursor    string `json:"cursor"`
 			DaemonURL string `json:"daemon_url"`
 		} `json:"result"`
 	}
@@ -91,6 +93,7 @@ func TestIdentityPaths_JSONCarriesTheSameFacts(t *testing.T) {
 	require.Equal(t, "agent:workhorse", env.Result.Self)
 	require.Equal(t, meshDir, env.Result.Dir)
 	require.Equal(t, "mesh-watch-workhorse.lastarm", filepath.Base(env.Result.Lastarm))
+	require.Equal(t, "mesh-watch-workhorse.cursor", filepath.Base(env.Result.Cursor))
 	// Changed 2026-08-23: there IS no default any more — a fossil daemon on the
 	// old loopback port is why. The URL must come from the registry here.
 	require.Equal(t, "http://reg.example:8080", env.Result.DaemonURL,

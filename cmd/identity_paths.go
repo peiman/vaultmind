@@ -32,6 +32,7 @@ type meshIdentity struct {
 	Pid        string `json:"pid"`
 	Lastwake   string `json:"lastwake"`
 	Lastarm    string `json:"lastarm"`
+	Cursor     string `json:"cursor"`
 	Disarm     string `json:"disarm"`
 	Log        string `json:"log"`
 	Listen     string `json:"listen"`
@@ -86,6 +87,7 @@ func resolveMeshIdentity() (meshIdentity, error) {
 		Pid:        p.Pid,
 		Lastwake:   p.Lastwake,
 		Lastarm:    p.Lastarm,
+		Cursor:     p.Cursor,
 		Disarm:     p.Disarm,
 		Log:        p.Log,
 		Listen:     p.Listen,
@@ -123,6 +125,7 @@ func runIdentityPaths(cmd *cobra.Command, _ []string) error {
 		{"VM_MESH_PID", id.Pid},
 		{"VM_MESH_LASTWAKE", id.Lastwake},
 		{"VM_MESH_LASTARM", id.Lastarm},
+		{"VM_MESH_CURSOR", id.Cursor},
 		{"VM_MESH_DISARM", id.Disarm},
 		{"VM_MESH_LOG", id.Log},
 		{"VM_MESH_LISTEN", id.Listen},
