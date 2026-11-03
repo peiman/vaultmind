@@ -497,7 +497,7 @@ markers; `task check` fails if it drifts from the catalog. Everything outside th
 hand-written and stays.
 
 <!-- VAULTMIND:GENERATED:commands:START -->
-<!-- checksum:6c9a0dd6ac0795f422355a2c9273334e25b511b0da4f5bda15a92ec68f2fdd95 -->
+<!-- checksum:e62f04b39c9b1f5d621a8361019ee5e3ec5d431dcb3d4f3aed15fcced91437af -->
 # VaultMind Commands
 
 Every user-facing command, grouped by intent, with its when-to-use trigger.
@@ -576,6 +576,7 @@ Generated from the command tree — do not edit by hand (run `task generate:docs
 | `vaultmind identity sign` | Validate, canonicalize, and sign an entry via the keyless signer | you have a Contract-B entry to sign and want it validated, canonicalized, and signed by the keyless signer. |
 | `vaultmind identity sign-enrollment` | Self-sign an agent enrollment request via the keyless signer (Contract-B) | you are enrolling an agent and need to self-sign its enrollment request (proof-of-possession) before an admin adds the binding to the trust-root registry. |
 | `vaultmind identity sign-envelope` | Sign a chat message envelope via the keyless signer (Contract-B slice 5) | you have a chat MESSAGE envelope to sign so a receiving daemon can verify the signature and the signer's registry binding. |
+| `vaultmind identity sign-keeper` | Sign a keeper control request, read grant, or revocation via the keyless signer | you own a keeper and need to sign a control request, a read grant, or a revocation for its watchdog. |
 | `vaultmind identity sign-registry` | Sign a trust-root registry via the keyless signer (Contract-B) | you have a trust-root registry to sign so consumers can verify the root signature, anti-rollback epoch, and freshness at load. |
 | `vaultmind identity signer` | Run the keyless custody signer daemon (Contract-B) | you need to RUN the keyless custody signer daemon so the sign-* commands have a process to connect to. |
 | `vaultmind identity signer install` | Run the signer under launchd: start at login, restart if it dies (macOS) | your signer must survive logouts, reboots, and crashes — without it a dead signer fails every signed send until someone notices. |

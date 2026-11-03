@@ -587,6 +587,16 @@ app:
     # Print the LaunchAgent plist and exit without writing or loading anything
     print: false
 
+  identitysignkeeper:
+    # Read keeper document JSON from this file instead of stdin
+    file: 
+
+    # Signer socket path (default: XDG state dir)
+    signer_socket: 
+
+    # Fill absent issued_at and, for control or revocation, nonce
+    stamp: false
+
   identitysignregistry:
     # Read registry JSON from this file instead of stdin
     file: 
