@@ -475,9 +475,22 @@ func TestMeshWatchCountdown_AFailedFetchIsSaidNotSwallowed(t *testing.T) {
 	out := runCountdownFn(t, countdownFn(t), "29",
 		`if [ "$2" = fetch-registry ]; then echo '{"level":"info"}' >&2; echo 'Error: no pinned root key: pass --root-pubkey' >&2; exit 1; fi`+"\n"+
 			`echo "VM_MESH_REGISTRY_DAYS_LEFT='29'"`)
-	require.Contains(t, out, "registry fetch failed: no pinned root key: pass --root-pubkey")
+	require.Contains(t, out, "registry refresh failed, using the local copy: no pinned root key: pass --root-pubkey")
 	require.NotContains(t, out, "level", "the error line, not the log noise")
 	require.Contains(t, out, "29 more day(s)", "the countdown still runs from the local copy")
+}
+
+// #365: a transient failure (a tailnet hiccup, a busy hub) with a valid local
+// copy read as an outage on every wake. Delivery continues on the local copy,
+// so the line says that; the countdown beside it is the health signal, and it
+// escalates on its own at 7 days and at staleness.
+func TestMeshWatchCountdown_AFailedRefreshWithALocalCopySaysItIsUsed(t *testing.T) {
+	out := runCountdownFn(t, countdownFn(t), "24",
+		`if [ "$2" = fetch-registry ]; then echo 'Error: relayclient: fetch signed registry: context deadline exceeded' >&2; exit 1; fi`+"\n"+
+			`echo "VM_MESH_REGISTRY_DAYS_LEFT='24'"`)
+	require.Contains(t, out, "[registry refresh failed, using the local copy: relayclient: fetch signed registry: context deadline exceeded]")
+	require.NotContains(t, out, "registry fetch failed", "with a local copy it is a refresh, not a missing registry")
+	require.Contains(t, out, "24 more day(s)")
 }
 
 // With no local registry there is no countdown — and that is exactly the

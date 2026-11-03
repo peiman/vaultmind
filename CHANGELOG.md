@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A mesh watcher's wake line no longer reads like an outage when a registry refresh fails but a local copy is still valid (#365). It said `[registry fetch failed: … context deadline exceeded]` after a brief network hiccup, although delivery carried on from the local copy. With a local copy it now says `[registry refresh failed, using the local copy: …]`, next to the usual countdown, which still escalates at 7 days and when the registry goes stale. With no local copy it still says `registry fetch failed`.
 - The pre-release memory gate (`task test:memory`) no longer fails on a busy machine because the warm server was slow to start (#368). It waited a fixed 2 seconds before its 100 asks; at a load average above 100 the server wasn't listening yet, the first ask loaded the model itself, and the gate failed. It now sends probe asks until the server answers one (up to 90 s), then measures. A server that never answers, or exits, still fails the gate by name.
 - Two tests no longer fail on a busy or stalled machine.
   - `TestRebuild_CompletesInReasonableTime` allows 1 s per note instead of 200 ms (#172). Every main run is instrumented for coverage on shared runners, and one stalled runner took 250 ms per note and failed a release pipeline. Idle runs take about 8 ms per note, so an order-of-magnitude regression still fails it.
