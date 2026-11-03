@@ -5,7 +5,9 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
+	"slices"
 	"strings"
 )
 
@@ -36,17 +38,18 @@ func DecodeEmbedding(data []byte) ([]float32, error) {
 	return vec, nil
 }
 
-// EncodeSparseEmbedding serializes a sparse vector as packed (int32 token_id, float32 weight) pairs.
+// EncodeSparseEmbedding serializes a sparse vector as packed (int32 token_id, float32 weight) pairs,
+// in ascending token id order, so the same vector always encodes to the same bytes (#318): a byte
+// comparison of two embeddings then means what it says.
 func EncodeSparseEmbedding(sparse map[int32]float32) []byte {
 	if len(sparse) == 0 {
 		return nil
 	}
+	ids := slices.Sorted(maps.Keys(sparse))
 	buf := make([]byte, len(sparse)*8)
-	i := 0
-	for id, w := range sparse {
-		binary.LittleEndian.PutUint32(buf[i:], uint32(id)) //nolint:gosec // G115: intentional bit-pattern reinterpretation, not arithmetic
-		binary.LittleEndian.PutUint32(buf[i+4:], math.Float32bits(w))
-		i += 8
+	for i, id := range ids {
+		binary.LittleEndian.PutUint32(buf[i*8:], uint32(id)) //nolint:gosec // G115: intentional bit-pattern reinterpretation, not arithmetic
+		binary.LittleEndian.PutUint32(buf[i*8+4:], math.Float32bits(sparse[id]))
 	}
 	return buf
 }
