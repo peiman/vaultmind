@@ -43,6 +43,11 @@ func changelogSection(changelog, version string) (string, bool) {
 	return strings.Join(out, "\n"), len(out) > 0
 }
 
+// lf strips carriage returns so line endings never count as a change.
+func lf(b []byte) string {
+	return strings.ReplaceAll(string(b), "\r\n", "\n")
+}
+
 // firstDifference names the first differing line of two sections.
 func firstDifference(tagged, current string) string {
 	a, b := strings.Split(tagged, "\n"), strings.Split(current, "\n")
@@ -95,9 +100,10 @@ func TestReleasedChangelogSectionsMatchTheirTags(t *testing.T) {
 	for _, version := range versions {
 		tagged, err := testgit.Command(t, ".", "show", "v"+version+":CHANGELOG.md").Output()
 		require.NoError(t, err, "v%s has no CHANGELOG.md", version)
-		want, found := changelogSection(string(tagged), version)
+		// A Windows checkout (text=auto) has CRLF on disk; git show gives LF.
+		want, found := changelogSection(lf(tagged), version)
 		require.True(t, found, "v%s CHANGELOG.md has no [%s] section", version, version)
-		got, _ := changelogSection(string(changelog), version)
+		got, _ := changelogSection(lf(changelog), version)
 		if got != want {
 			failures = append(failures, fmt.Sprintf("[%s] differs from v%s: %s", version, version, firstDifference(want, got)))
 		}
