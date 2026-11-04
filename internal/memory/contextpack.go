@@ -71,6 +71,10 @@ type ContextPackTarget struct {
 	// ShownBefore marks a note whose body this conversation already received
 	// recently; it is sent as its title alone. See ContextItem.ShownBefore.
 	ShownBefore bool `json:"shown_before,omitempty"`
+	// ChangedOnDisk is set when this note's file changed (or vanished) after it
+	// was indexed, so Body is the indexed copy and may be out of date. Absent
+	// when current. schema_version stays v1.
+	ChangedOnDisk bool `json:"stale,omitempty"`
 	// BodyOmittedBudget records a non-empty body excluded by the token budget.
 	// Empty or unavailable bodies must never be described as budget losses.
 	BodyOmittedBudget bool `json:"body_omitted_budget,omitempty"`
@@ -100,6 +104,10 @@ type ContextItem struct {
 	// recently. It degrades to its title — never dropped, so an agent that lost
 	// the earlier copy to compaction still sees the note exists.
 	ShownBefore bool `json:"shown_before,omitempty"`
+	// ChangedOnDisk is set when this note's file changed (or vanished) after it
+	// was indexed, so Body is the indexed copy and may be out of date. Absent
+	// when current. schema_version stays v1.
+	ChangedOnDisk bool `json:"stale,omitempty"`
 	// BodyOmittedBudget records a non-empty body excluded by the token budget.
 	// Empty or unavailable bodies must never be described as budget losses.
 	BodyOmittedBudget bool `json:"body_omitted_budget,omitempty"`
