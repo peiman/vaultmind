@@ -182,6 +182,25 @@ func TestForward_AClosedConnectionWithNoAnswerIsUnanswered(t *testing.T) {
 	assert.NotErrorIs(t, err, serve.ErrNoServer)
 }
 
+// The server stamps each request when it reads it, so the time an ask waits
+// for its turn counts in how long it took.
+func TestServe_StampsWhenItReadARequest(t *testing.T) {
+	sock := socketIn(t)
+	got := make(chan time.Time, 1)
+	start(t, sock, func(r serve.Request) serve.Response {
+		if r.Args[0] == "ask" {
+			got <- r.Received
+		}
+		return serve.Response{}
+	}, time.Minute)
+	before := time.Now()
+	_, err := serve.Forward(sock, serve.Request{Args: []string{"ask"}}, time.Second, 5*time.Second)
+	require.NoError(t, err)
+	received := <-got
+	assert.False(t, received.Before(before))
+	assert.False(t, received.After(time.Now()))
+}
+
 // An idle server exits and removes its socket, releasing what it holds.
 func TestServe_ExitsWhenIdle(t *testing.T) {
 	sock := socketIn(t)

@@ -30,6 +30,9 @@ type Request struct {
 	Args []string          `json:"args"`
 	Dir  string            `json:"dir"`
 	Env  map[string]string `json:"env"`
+	// Received is when the server read the request, so the time it waited
+	// for its turn counts in how long it took. Set by Serve, never sent.
+	Received time.Time `json:"-"`
 }
 
 // Response is what the command printed and the exit code it ended with.
@@ -181,6 +184,7 @@ func Serve(ctx context.Context, sock string, exec Exec, idle time.Duration, opts
 			if err := json.NewDecoder(conn).Decode(&req); err != nil {
 				return
 			}
+			req.Received = time.Now()
 			mu.Lock()
 			if clientGone(conn) {
 				// Its client gave up while it waited its turn (a hook's

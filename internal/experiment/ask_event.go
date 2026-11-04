@@ -1,6 +1,24 @@
 package experiment
 
-import "github.com/rs/zerolog/log"
+import (
+	"time"
+
+	"github.com/rs/zerolog/log"
+)
+
+// How an ask reached the process that ran it, recorded so a slow or doubled
+// ask can be traced to its path (#406).
+const (
+	// AskPathServed: the warm server answered it.
+	AskPathServed = "served"
+	// AskPathFallback: the server was asked but could not take it (none was
+	// running, it could not be reached, or it closed without answering), so
+	// the ask ran in its own process.
+	AskPathFallback = "fallback"
+	// AskPathInProcess: the server was not asked (turned off, or not
+	// supported here), so the ask ran in its own process.
+	AskPathInProcess = "in_process"
+)
 
 // Why bodies were withheld from an ask result. These name the branches that
 // already exist in the formatter; recording which one fired turns "the agent
@@ -60,6 +78,13 @@ type AskEventParams struct {
 	// median z was once committed and then found uncomputable because this
 	// value lived only in the CLI output, never in the event.
 	RelevanceZ *float64
+	// AskPath says how the ask reached the process that ran it; one of the
+	// AskPath* constants, or empty when not known.
+	AskPath string
+	// Duration is how long the ask took, from when it reached the process
+	// that ran it (for a served ask, when the server read it) to this event;
+	// zero when not measured.
+	Duration time.Duration
 }
 
 // BuildAskEventData composes the event_data payload for an ask event.
@@ -86,6 +111,12 @@ func BuildAskEventData(p AskEventParams) map[string]any {
 	}
 	if p.ActivationOn {
 		data["primary_variant"] = p.PrimaryVariant
+	}
+	if p.AskPath != "" {
+		data["ask_path"] = p.AskPath
+	}
+	if p.Duration > 0 {
+		data["duration_ms"] = p.Duration.Milliseconds()
 	}
 	return data
 }

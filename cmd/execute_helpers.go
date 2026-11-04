@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/output"
 	"github.com/peiman/vaultmind/internal/cmdutil"
+	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/query"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -20,12 +22,22 @@ import (
 // embedder is released after that command returns. A request the resident
 // server handles calls ExecuteWithIO, not Main, so it does not release.
 func Main(args []string) int {
+	askRun.path, askRun.start = experiment.AskPathInProcess, time.Now()
 	if code, ok := tryServer(args); ok {
 		return code
 	}
 	code := ExecuteWithIO(args, os.Stdout, os.Stderr)
 	query.CloseSharedEmbedder()
 	return code
+}
+
+// askRun is how the command running now reached this process and when, for
+// an ask's usage event (see experiment.AskPath*). Main sets it for a
+// process's own command, serveExec for each request the server runs, and
+// resetCLIState clears it.
+var askRun struct {
+	path  string
+	start time.Time
 }
 
 // ExecuteWithIO runs the CLI for args with its output on out and errw, and
@@ -82,6 +94,7 @@ func resetCLIState() {
 	output.SetOutputMode("")
 	output.SetCommandName("")
 	configFileUsed, configFileStatus = "", ""
+	askRun.path, askRun.start = "", time.Time{}
 	viper.Reset()
 	for _, b := range flagBindings {
 		_ = viper.BindPFlag(b.key, b.flag)

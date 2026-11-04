@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/memguard"
 	"github.com/peiman/vaultmind/internal/query"
 	"github.com/peiman/vaultmind/internal/serve"
@@ -62,6 +63,10 @@ func serveExec(req serve.Request) serve.Response {
 	// experiment session; close it here so its handle doesn't leak.
 	defer closeExperimentSession()
 	resetCLIState()
+	askRun.path, askRun.start = experiment.AskPathServed, req.Received
+	if askRun.start.IsZero() {
+		askRun.start = time.Now()
+	}
 	var out, errw bytes.Buffer
 	code := ExecuteWithIO(req.Args, &out, &errw)
 	return serve.Response{Stdout: out.Bytes(), Stderr: errw.Bytes(), Code: code}
@@ -142,8 +147,10 @@ func tryServer(args []string) (int, bool) {
 	switch {
 	case errors.Is(err, serve.ErrNoServer):
 		startServer()
+		askRun.path = experiment.AskPathFallback
 		return 0, false
 	case errors.Is(err, serve.ErrUnanswered):
+		askRun.path = experiment.AskPathFallback
 		return 0, false
 	case err != nil:
 		_, _ = fmt.Fprintf(os.Stderr, "Error: %v (set %s=1 to run without the server)\n", err, envNoServe)

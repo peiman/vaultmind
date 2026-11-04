@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/serve"
@@ -156,4 +158,49 @@ func TestServeExec_APanicStillClosesTheSession(t *testing.T) {
 		serveExec(serve.Request{Args: []string{"panic-probe"}, Dir: here, Env: env(nil)})
 	}()
 	assert.Nil(t, experimentSession)
+}
+
+// Each ask's event says how it ran and how long it took: answered by the
+// server (counting the time it waited for its turn), run here after the
+// server could not take it, or run here with the server off (#406).
+func TestAskEvent_RecordsHowTheAskRanAndHowLongItTook(t *testing.T) {
+	cleanupCLIState(t)
+	isolatedState(t)
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	vault := testvault.IndexedFixtureVault(t)
+	here, err := os.Getwd()
+	require.NoError(t, err)
+	ask := []string{"ask", "spreading activation", "--vault", vault, "--pointers-only"}
+
+	resp := serveExec(serve.Request{Args: ask, Dir: here, Env: env(nil), Received: time.Now().Add(-2 * time.Second)})
+	require.Equal(t, 0, resp.Code, string(resp.Stderr))
+	// Main runs once per process; reset as a fresh process would start.
+	resetCLIState()
+	require.Equal(t, 0, Main(ask), "no server is running: the ask runs here")
+	resetCLIState()
+	t.Setenv(envNoServe, "1")
+	require.Equal(t, 0, Main(ask))
+
+	db, err := openExperimentDB()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	rows, err := db.Query(`SELECT event_data FROM events WHERE event_type = 'ask' ORDER BY rowid`)
+	require.NoError(t, err)
+	defer func() { _ = rows.Close() }()
+	var paths []string
+	var durations []float64
+	for rows.Next() {
+		var raw string
+		require.NoError(t, rows.Scan(&raw))
+		var data struct {
+			AskPath    string   `json:"ask_path"`
+			DurationMS *float64 `json:"duration_ms"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(raw), &data))
+		require.NotNil(t, data.DurationMS, "every ask records how long it took")
+		paths, durations = append(paths, data.AskPath), append(durations, *data.DurationMS)
+	}
+	require.NoError(t, rows.Err())
+	assert.Equal(t, []string{experiment.AskPathServed, experiment.AskPathFallback, experiment.AskPathInProcess}, paths)
+	assert.GreaterOrEqual(t, durations[0], 2000.0, "a served ask counts from when the server read it")
 }
