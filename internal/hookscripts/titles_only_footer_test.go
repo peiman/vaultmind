@@ -19,7 +19,10 @@ func TestRecallHooks_FooterMatchesDeliveredContent(t *testing.T) {
 	}{
 		{"confidence withheld", titles + "(pointers only: 220 tokens assembled and withheld — the top hit's confidence is below the delivery floor)\n", true},
 		{"budget withheld", titles + "(pointers only: no body fits the budget)\n", true},
-		{"deduplicated", titles + "(pointers only — all bodies were recently delivered)\n", true},
+		// The shape ask prints (internal/query/format.go writeContextHeader and
+		// shownBeforeSuffix) when every note was delivered earlier this session:
+		// no "(pointers only" line, only the delivered count.
+		{"all shown earlier", "Search: retries\n  0.42  x   Retry policy\nContext from: x — 1 note, 0 delivered, 1 shown earlier this session\n  [reference] Retry policy — shown earlier this session\n", true},
 		{"delivered excerpt", "Search: retries\n  0.42  x   Retry policy\nContext from: x — 1 note, 1 delivered as excerpt (10 tok)\nUse bounded retries.\n", false},
 		{"marker inside delivered text", "Context from: x — 1 note, 1 delivered as excerpt (10 tok)\nThe marker (pointers only is discussed here.\n", false},
 	}

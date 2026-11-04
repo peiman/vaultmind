@@ -705,7 +705,7 @@ echo "VAULT — from your own notes, relevant to what you just said:"
 echo ""
 echo "$POINTERS"
 echo ""
-if printf '%s\n' "$POINTERS" | grep -q '^[(]pointers only'; then
+if printf '%s\n' "$POINTERS" | grep -qE '^[(]pointers only|^Context from: .* — [0-9]+ notes?, 0 delivered'; then
   echo "(Titles only: no note text was delivered above. Read one with: vaultmind note get <id> $NOTE_GET_WHERE)"
 else
   echo "(the note's own text — a Principle section where it has one, else its opening lines. Full note: vaultmind note get <id> $NOTE_GET_WHERE)"
