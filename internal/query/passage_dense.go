@@ -27,7 +27,7 @@ func selectDensePassages(ctx context.Context, db *index.DB, cfg AskConfig, targe
 	if err != nil || len(queryVec) != cfg.Embedder.Dims() {
 		return "", false
 	}
-	ranked := rankDensePassages(queryVec, vectors)
+	ranked := rankDensePassages(raw, units, queryVec, vectors)
 	if len(ranked) == 0 {
 		return "", false
 	}
@@ -37,13 +37,21 @@ func selectDensePassages(ctx context.Context, db *index.DB, cfg AskConfig, targe
 			return best, best != ""
 		}
 		if len(ranked) == 1 {
-			u := units[ranked[0]]
-			heading := capHeadingTokens(nearestGoverningHeading(u.Heading, title), min(firstBlockHeadingTokens, limit))
-			text := memory.Excerpt(raw[u.Start:u.End], limit)
-			if heading != "" {
-				text = fitHeadingAndBlock(heading, raw[u.Start:u.End], limit)
+			block := ranked[0]
+			u := units[block.best]
+			heading := capHeadingTokens(nearestGoverningHeading(u.Heading, title), firstBlockHeadingTokens)
+			body := raw[u.Start:units[block.last].End]
+			if block.best != block.first {
+				body = "…" + body
 			}
-			return text, text != "" && memory.EstimateTokens(text) <= limit
+			text := memory.Excerpt(body, limit)
+			if heading != "" {
+				text = fitHeadingAndBlock(heading, body, limit)
+			}
+			if text != "" && memory.EstimateTokens(text) <= limit {
+				return text, true
+			}
+			return "", false
 		}
 		ranked = ranked[:len(ranked)-1] // discard the lowest cosine, not the last in document order
 	}
@@ -63,38 +71,53 @@ func matchingPassageSpans(units []passage.Unit, vectors []index.PassageVector, d
 	return true
 }
 
-func rankDensePassages(queryVec []float32, vectors []index.PassageVector) []int {
-	order, scores := make([]int, len(vectors)), make([]float64, len(vectors))
-	for i, v := range vectors {
-		order[i], scores[i] = i, CosineSimilarity(queryVec, v.Dense)
-		if math.IsNaN(scores[i]) || math.IsInf(scores[i], 0) {
-			return nil
-		}
-	}
-	sort.SliceStable(order, func(i, j int) bool { return scores[order[i]] > scores[order[j]] })
-	return order[:min(3, len(order))]
+type densePassageBlock struct {
+	first, last, best, index int
+	score                    float64
 }
 
-func renderDensePassages(raw, title string, units []passage.Unit, ranked []int) string {
-	order := append([]int(nil), ranked...)
-	sort.Ints(order)
-	var spans []string
-	for i := 0; i < len(order); {
-		first, last := units[order[i]], units[order[i]]
-		j := i + 1
-		// Heading and fence boundaries remain separate spans even when their
-		// units are consecutive: each must carry its own qualification.
-		for j < len(order) && order[j] == order[j-1]+1 && units[order[j]].Section == first.Section {
-			last = units[order[j]]
-			j++
+func rankDensePassages(raw string, units []passage.Unit, queryVec []float32, vectors []index.PassageVector) []densePassageBlock {
+	var blocks []densePassageBlock
+	for i, v := range vectors {
+		score := CosineSimilarity(queryVec, v.Dense)
+		if math.IsNaN(score) || math.IsInf(score, 0) {
+			return nil
 		}
-		text := strings.TrimSpace(raw[first.Start:last.End])
-		heading := capHeadingTokens(nearestGoverningHeading(first.Heading, title), firstBlockHeadingTokens)
-		if heading != "" {
-			text = heading + "\n\n" + text
+		if i == 0 || units[i].Section != units[i-1].Section || passage.BlankLine.MatchString(raw[units[i-1].End:units[i].Start]) {
+			blocks = append(blocks, densePassageBlock{first: i, last: i, best: i, index: len(blocks), score: score})
+			continue
 		}
-		spans = append(spans, text)
-		i = j
+		block := &blocks[len(blocks)-1]
+		block.last = i
+		if score > block.score {
+			block.score, block.best = score, i
+		}
 	}
-	return strings.Join(spans, "\n…\n")
+	sort.SliceStable(blocks, func(i, j int) bool { return blocks[i].score > blocks[j].score })
+	return blocks[:min(3, len(blocks))]
+}
+
+func renderDensePassages(raw, title string, units []passage.Unit, ranked []densePassageBlock) string {
+	order := append([]densePassageBlock(nil), ranked...)
+	sort.Slice(order, func(i, j int) bool { return order[i].index < order[j].index })
+	var out strings.Builder
+	previousHeading := ""
+	for i, block := range order {
+		first, last := units[block.first], units[block.last]
+		if i > 0 {
+			previous := order[i-1]
+			if block.index == previous.index+1 && first.Section == units[previous.first].Section {
+				out.WriteString("\n\n")
+			} else {
+				out.WriteString("\n…\n")
+			}
+		}
+		heading := capHeadingTokens(nearestGoverningHeading(first.Heading, title), firstBlockHeadingTokens)
+		if heading != "" && heading != previousHeading {
+			out.WriteString(heading + "\n\n")
+		}
+		out.WriteString(strings.TrimSpace(raw[first.Start:last.End]))
+		previousHeading = heading
+	}
+	return out.String()
 }

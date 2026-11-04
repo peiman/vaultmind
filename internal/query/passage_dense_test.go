@@ -86,7 +86,7 @@ func TestAsk_DensePassageTopThree(t *testing.T) {
 	db, _ := densePassageFixture(t)
 	emb := &passageMemoEmbedder{}
 	r := askDensePassage(t, db, emb, 160)
-	assert.Equal(t, "## Answer\n\nUse a stable snapshot. Preserve the immutable receipt.\n…\n## Final\n\nVerify the restored state.", r.Context.Target.Body)
+	assert.Equal(t, passageParagraph("alpha", 100)+"\n…\n## Answer\n\nUse a stable snapshot. Preserve the immutable receipt.\n…\n## Final\n\nVerify the restored state.", r.Context.Target.Body)
 	assert.Equal(t, "dense", passageSelector(t, r.Context.Target))
 	assert.Equal(t, 1, emb.forwards, "passages and NoteSimilarities must share the ranking query memo")
 	require.Len(t, emb.texts, 2)
@@ -182,6 +182,95 @@ func TestAsk_DensePassageBudgetAndTies(t *testing.T) {
 			if tc.name == "expanded_cap" {
 				assert.Greater(t, memory.EstimateTokens(r.Context.Target.Body), tc.cap)
 			}
+			if tc.name == "drop_lowest" {
+				assert.Contains(t, r.Context.Target.Body, "Verify the restored state", "keep the higher-scored last block")
+			}
 		})
+	}
+}
+
+func TestAsk_DensePassageWholeParagraph(t *testing.T) {
+	db, _ := densePassageFixture(t)
+	paragraph := "What I changed: the regression guard asserts the query plan, not elapsed time. The answer is the covering index on receipt_id. Keep this qualification with the answer."
+	raw := passageParagraph("alpha", 100) + "\n\n## Guard\n\n" + paragraph + "\n\nAnother useful result.\n\nA final useful result."
+	replaceDenseUnits(t, db, raw, []float32{0, 1, 0.05, 0.01, 0.95, 0.9})
+	r := askDensePassage(t, db, &passageMemoEmbedder{}, 160)
+	assert.Equal(t, "dense", passageSelector(t, r.Context.Target))
+	assert.Equal(t, "## Guard\n\n"+paragraph+"\n\nAnother useful result.\n\nA final useful result.", r.Context.Target.Body)
+}
+
+func TestAsk_DensePassageBlockHeadings(t *testing.T) {
+	for _, tc := range []struct {
+		name, body, want string
+		scores           []float32
+	}{
+		{
+			name:   "adjacent_with_whitespace_blank_line",
+			body:   "## Answer\n\nFirst result.\n \t\nSecond result.\n\n## Final\n\nLast result.",
+			want:   "## Answer\n\nFirst result.\n\nSecond result.\n…\n## Final\n\nLast result.",
+			scores: []float32{1, 0.9, 0.8},
+		},
+		{
+			name:   "skipped_block_same_heading",
+			body:   "## Answer\n\nFirst result.\n\nOmitted result.\n\nSecond result.\n\n## Final\n\nLast result.",
+			want:   "## Answer\n\nFirst result.\n…\nSecond result.\n…\n## Final\n\nLast result.",
+			scores: []float32{0.9, 0.1, 0.8, 1},
+		},
+		{
+			name:   "heading_returns_after_change",
+			body:   "## Answer\n\nFirst result.\n## Other\nSecond result.\n## Answer\nLast result.",
+			want:   "## Answer\n\nFirst result.\n…\n## Other\n\nSecond result.\n…\n## Answer\n\nLast result.",
+			scores: []float32{1, 0.9, 0.8},
+		},
+		{
+			name:   "fence_breaks_block_without_repeating_heading",
+			body:   "## Answer\nFirst result.\n```\nnot delivered\n```\nSecond result.",
+			want:   "## Answer\n\nFirst result.\n…\nSecond result.",
+			scores: []float32{1, 0.9},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, _ := densePassageFixture(t)
+			raw := passageParagraph("alpha", 140) + "\n\n" + tc.body
+			replaceDenseUnits(t, db, raw, append([]float32{0}, tc.scores...))
+			r := askDensePassage(t, db, &passageMemoEmbedder{}, 160)
+			assert.Equal(t, "dense", passageSelector(t, r.Context.Target))
+			assert.Equal(t, tc.want, r.Context.Target.Body)
+		})
+	}
+}
+
+// The strongest sentence is deliberately not first: using the first score,
+// a mean, or a sum instead of the maximum changes which three blocks win.
+func TestAsk_DensePassageBlockMax(t *testing.T) {
+	db, _ := densePassageFixture(t)
+	paragraph := "A weak lead. The strongest sentence answers the question."
+	raw := passageParagraph("alpha", 140) + "\n\n" + paragraph + "\n\nMedium one. Medium two. Medium three.\n\nRunner up.\n\nThird place."
+	replaceDenseUnits(t, db, raw, []float32{0, 0.01, 1, 0.7, 0.7, 0.7, 0.9, 0.8})
+	r := askDensePassage(t, db, &passageMemoEmbedder{}, 160)
+	assert.Equal(t, "dense", passageSelector(t, r.Context.Target))
+	assert.Equal(t, paragraph+"\n…\nRunner up.\n\nThird place.", r.Context.Target.Body)
+}
+
+func TestAsk_DensePassageSingleBlockBestUnit(t *testing.T) {
+	for _, tc := range []struct{ name, lead, best string }{
+		{"cut_best", "Discard this weak lead.", "Best answer " + strings.Repeat("detail ", 100) + "ends."},
+		{"keep_following_sentence", "Discard this weak lead " + strings.Repeat("detail ", 100) + "ends.", "Best answer is the covering index."},
+	} {
+		for _, heading := range []string{"", "## Answer\n\n"} {
+			t.Run(tc.name+"/"+strings.TrimSpace(heading), func(t *testing.T) {
+				db, _ := densePassageFixture(t)
+				raw := passageParagraph("alpha", 100) + "\n\n" + heading + tc.lead + " " + tc.best + " Tail qualification."
+				replaceDenseUnits(t, db, raw, []float32{0, 0.1, 1, 0.2})
+				r := askDensePassage(t, db, &passageMemoEmbedder{}, 30)
+				assert.Equal(t, "dense", passageSelector(t, r.Context.Target))
+				assert.True(t, strings.HasPrefix(r.Context.Target.Body, heading+"…Best answer"), r.Context.Target.Body)
+				assert.NotContains(t, r.Context.Target.Body, "weak lead")
+				assert.LessOrEqual(t, memory.EstimateTokens(r.Context.Target.Body), 45)
+				if tc.name == "keep_following_sentence" {
+					assert.Equal(t, heading+"…"+tc.best+" Tail qualification.", r.Context.Target.Body)
+				}
+			})
+		}
 	}
 }

@@ -16,7 +16,9 @@ var atxHeading = regexp.MustCompile(`^#{1,6}[ \t]+`)
 
 // Setext recognizes a Markdown heading underline.
 var Setext = regexp.MustCompile(`^[=-]+$`)
-var blank = regexp.MustCompile(`\n\s*\n`)
+
+// BlankLine recognizes the paragraph boundaries shared by indexing and delivery.
+var BlankLine = regexp.MustCompile(`\n\s*\n`)
 
 // VectorThresholdTokens is the measured excerpt size above which units are indexed.
 // Ask's CLI excerpt default is 0 (off); no shared 160-token default exists.
@@ -45,7 +47,7 @@ func Units(body, title string) []Unit {
 	flush := func(end int) {
 		raw := body[start:end]
 		blockStart := 0
-		ends := blank.FindAllStringIndex(raw, -1)
+		ends := BlankLine.FindAllStringIndex(raw, -1)
 		ends = append(ends, []int{len(raw), len(raw)})
 		for _, end := range ends {
 			block := raw[blockStart:end[0]]

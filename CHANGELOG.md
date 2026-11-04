@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `ask` delivers the top note's best-matching passages by meaning when `index --embed` has stored passage vectors (#330). Run `vaultmind index --embed` once to get them.
+- `ask` delivers the top note's best-matching paragraphs, ranked by their best sentence, when `index --embed` has stored passage vectors (#330). It shows each governing heading once per run and trims from the best sentence when a single paragraph exceeds the budget. Run `vaultmind index --embed` once to get the vectors.
 
 ### Fixed
 
