@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The pre-release memory gate (`task test:memory`) no longer times out before its second test. Since the passage backfill (#330) each of its two tests takes 25 to 29 minutes on a loaded machine, so the 30 minute limit always ended the run early; the limit is now 90 minutes.
+
 ## [0.10.23] - 2026-11-04
 
 ### Added
