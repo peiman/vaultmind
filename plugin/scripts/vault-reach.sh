@@ -599,7 +599,9 @@ footer = ('\nThat is the note\'s own text, not a pointer to it: a Principle '
           'section where it has one, else its opening lines, which may be '
           'context rather than a rule. Act on it if it bears on this call — '
           'full note: vaultmind note get <id> ' + vault + '.')
-if any(line.startswith('(pointers only') for line in pointers.splitlines()):
+import re
+if any(line.startswith('(pointers only') or re.match(r'Context from: .* — [0-9]+ notes?, 0 delivered', line)
+       for line in pointers.splitlines()):
     footer = ('\nTitles only: no note text was delivered above. Read one with: '
               'vaultmind note get <id> ' + vault + '.')
 print(json.dumps({
