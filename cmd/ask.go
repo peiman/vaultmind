@@ -240,7 +240,7 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	mode := retrievalModeLabel(ret)
 	if result != nil {
 		result.RetrievalMode = mode
-		noteAskFormatStale(result, vdb.DB)
+		noteAskFormatStale(result, vdb.DB, vaultPath)
 		if len(federated) > 0 {
 			result.Federated = federated
 			result.FederatedVaults = federatedVaults
