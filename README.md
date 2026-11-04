@@ -153,6 +153,8 @@ A vault can also hold who an agent is: the moments that changed how it works, it
 
 Notes are the source of truth; the SQLite index is derived from them and rebuilt by `vaultmind index`. Search fuses full-text, dense, sparse and ColBERT lanes, and reports how far the top hit clears the vault's own off-topic noise floor, so "nothing relevant" is an honest answer. A hit brings along the notes it links to. See **[docs/how-it-works.md](docs/how-it-works.md)** for retrieval, context packs, excerpts and delivery.
 
+Run `vaultmind index --embed` once with local BGE-M3 to enable passage selection by meaning. With `ask --excerpt N`, the top note can then add up to three best-matching paragraphs after its keyword pick, within 2 × N tokens and the pack budget. Existing indexes get passage vectors without re-embedding their notes; MiniLM and sidecar indexing keep their current behavior.
+
 ## The local usage log
 
 VaultMind keeps a local SQLite log of retrieval events — which queries surfaced which notes, and which notes an agent then opened — as the raw material for learning from use. Today it is a record, not an input: it does not change what search returns. It is on by default, and it is worth knowing exactly what that means.

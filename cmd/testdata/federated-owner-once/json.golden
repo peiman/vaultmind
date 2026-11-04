@@ -65,7 +65,8 @@
           "title": "Spreading Activation",
           "type": "concept"
         },
-        "id": "concept-spreading-activation"
+        "id": "concept-spreading-activation",
+        "passage_selector": "lexical"
       },
       "target_id": "concept-spreading-activation",
       "truncated": false,

@@ -102,6 +102,7 @@ components:
       # VaultMind infrastructure (shared services used by business logic):
       - internal/vault/**
       - internal/parser/**
+      - internal/passage/**
       - internal/schema/**
       - internal/envelope/**
       - internal/index/**

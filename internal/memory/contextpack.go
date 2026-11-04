@@ -53,8 +53,10 @@ const EdgeTypeSearchHit = "search_hit"
 
 // ContextPackTarget holds the fully-loaded target note.
 type ContextPackTarget struct {
-	ID          string                 `json:"id"`
-	Frontmatter map[string]interface{} `json:"frontmatter"`
+	// PassageSelector is ask's selection outcome; absent on memory-pack targets.
+	PassageSelector string                 `json:"passage_selector,omitempty"`
+	ID              string                 `json:"id"`
+	Frontmatter     map[string]interface{} `json:"frontmatter"`
 	// BodyExcerpted marks Body as the note's decision-bearing passage rather
 	// than its whole text — same meaning as on ContextItem, and needed here for
 	// the same reason: a renderer that cannot tell the difference will truncate

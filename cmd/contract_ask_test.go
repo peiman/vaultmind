@@ -112,6 +112,21 @@ func TestAskJSONContract_EnvelopeDecodesIntoConsumerShape(t *testing.T) {
 		"a query under both bounds must omit result.query_capped — the field is additive and present only when a bound applied")
 }
 
+func TestAskJSONContract_PassageSelectorIsAdditive(t *testing.T) {
+	vault := indexedBaselineVault(t)
+	for _, tc := range []struct{ excerpt, selector string }{{"0", "none"}, {"160", "lexical"}} {
+		out, _, err := runRootCmd(t, "ask", "spreading activation", "--vault", vault,
+			"--max-items", "4", "--budget", "1500", "--excerpt", tc.excerpt, "--json")
+		require.NoError(t, err)
+		var env AskEnvelope
+		require.NoError(t, json.Unmarshal(out.Bytes(), &env))
+		require.NotNil(t, env.Result.Context)
+		require.NotNil(t, env.Result.Context.Target)
+		assert.Equal(t, "v1", env.SchemaVersion)
+		assert.Equal(t, tc.selector, env.Result.Context.Target.PassageSelector)
+	}
+}
+
 // A query longer than the forward bound still echoes the original text.
 // result.query_capped is added beside it and schema_version stays v1.
 func TestAskJSONContract_QueryCappedIsAdditive(t *testing.T) {

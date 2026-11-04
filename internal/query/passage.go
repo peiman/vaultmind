@@ -1,6 +1,7 @@
 package query
 
 import (
+	"context"
 	"math"
 	"strings"
 
@@ -128,7 +129,10 @@ const (
 // applyPassageExcerpt changes only ask's already-excerpted target. Packing has
 // already reserved the context bodies, so a larger window must fit the budget
 // left after those reservations; it cannot evict or rewrite a neighbor.
-func applyPassageExcerpt(db *index.DB, cfg AskConfig, pack *memory.ContextPackResult) error {
+func applyPassageExcerpt(ctx context.Context, db *index.DB, cfg AskConfig, rankingQuery string, pack *memory.ContextPackResult) error {
+	if pack != nil && pack.Target != nil {
+		pack.Target.PassageSelector = "none"
+	}
 	if (cfg.PointersOnly && !cfg.JSONOutput) || cfg.ExcerptTokens <= 0 || pack == nil || pack.Target == nil || !pack.Target.BodyExcerpted {
 		return nil
 	}
@@ -138,12 +142,15 @@ func applyPassageExcerpt(db *index.DB, cfg AskConfig, pack *memory.ContextPackRe
 		return err
 	}
 	if memory.HasPrincipleSection(raw) {
+		target.PassageSelector = "principle"
 		return nil
 	}
-	limit := min(cfg.ExcerptTokens, cfg.Budget-pack.UsedTokens+memory.EstimateTokens(target.Body))
+	left := cfg.Budget - pack.UsedTokens + memory.EstimateTokens(target.Body)
+	limit := min(cfg.ExcerptTokens, left)
 	if limit <= 0 {
 		return nil
 	}
+	target.PassageSelector = "lexical"
 	title, _ := target.Frontmatter["title"].(string)
 	selected, err := selectPassage(db, cfg.Query, raw, target.Body, limit, title)
 	if err != nil {
@@ -153,10 +160,24 @@ func applyPassageExcerpt(db *index.DB, cfg AskConfig, pack *memory.ContextPackRe
 	if best == target.Body {
 		best = firstBlockHeadingExcerpt(raw, best, title, limit)
 	}
+	// The lexical pick answers exact terms and has first claim on the budget;
+	// dense blocks answer paraphrases in whatever room is left.
+	separator := ""
+	if best != "" {
+		separator = passageGap
+	}
+	allowance := min(2*cfg.ExcerptTokens, left) - memory.EstimateTokens(best+separator)
+	if dense := selectDensePassages(ctx, db, cfg, target.ID, rankingQuery, raw, title, best, allowance); dense != "" {
+		best += separator + dense
+		target.PassageSelector = "dense"
+	}
 	pack.UsedTokens += memory.EstimateTokens(best) - memory.EstimateTokens(target.Body)
 	target.Body = best
 	return nil
 }
+
+// passageGap joins delivered text that is not adjacent in the note.
+const passageGap = "\n…\n"
 
 // firstBlockHeadingTokens bounds the nearest heading on a kept first block.
 // Sixteen tokens is at most a tenth of the 160-token excerpt, so a warning
@@ -208,43 +229,6 @@ func nearestGoverningHeading(path, title string) string {
 		return ""
 	}
 	return strings.Join(lines[start:], "\n")
-}
-
-// h1RepeatsTitle reports whether a level-1 heading is the note title. The
-// title is already shown on the note. A setext underline, a closing hash run,
-// case, and runs of spaces do not make it a different title.
-func h1RepeatsTitle(label, title string) bool {
-	if strings.TrimSpace(title) == "" {
-		return false
-	}
-	return sameTitle(headingPlain(label), title)
-}
-
-// headingPlain is one stored heading's visible text: no ATX marker, no
-// closing hash run, and no setext underline.
-func headingPlain(label string) string {
-	line, _, _ := strings.Cut(label, "\n")
-	text := strings.TrimSpace(strings.TrimLeft(line, "#"))
-	if i := strings.LastIndex(text, " "); i >= 0 {
-		tail := strings.TrimSpace(text[i+1:])
-		if tail != "" && strings.Trim(tail, "#") == "" {
-			text = strings.TrimSpace(text[:i])
-		}
-	}
-	return text
-}
-
-func sameTitle(a, b string) bool {
-	af, bf := strings.Fields(a), strings.Fields(b)
-	if len(af) != len(bf) || len(af) == 0 {
-		return false
-	}
-	for i := range af {
-		if !strings.EqualFold(af[i], bf[i]) {
-			return false
-		}
-	}
-	return true
 }
 
 // capHeadingTokens cuts a heading at a word boundary and marks the cut.

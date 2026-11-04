@@ -354,8 +354,8 @@ func formatIndexResult(r index.IndexAndEmbedResult, model string, w io.Writer) e
 		// the agent can tell the user "your build is on minilm; for BGE-M3
 		// upgrade, run task setup:ort and rebuild" without a separate
 		// inspection step.
-		if _, err := fmt.Fprintf(w, "Embedded %d notes (%d skipped, %d errors) [model: %s]\n",
-			r.Embed.Embedded, r.Embed.Skipped, r.Embed.Errors, model); err != nil {
+		if _, err := fmt.Fprintf(w, "Embedded %d notes (%d skipped, %d errors) [model: %s]%s\n",
+			r.Embed.Embedded, r.Embed.Skipped, r.Embed.Errors, model, r.Embed.PassageSummary()); err != nil {
 			return err
 		}
 		if r.Embed.Errors > 0 {

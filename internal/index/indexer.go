@@ -90,11 +90,13 @@ type PostIndexWarning struct {
 // colbert_embedding columns would be NULL); they remain pending for the next
 // run. See vaultmind#22 for the silent-failure pattern this surfaces.
 type EmbedResult struct {
-	Embedded    int    `json:"embedded"`
-	Skipped     int    `json:"skipped"`
-	Errors      int    `json:"errors"`
-	EmptyOutput int    `json:"empty_output,omitempty"`
-	Model       string `json:"model,omitempty"`
+	// PassageEmbedded counts notes whose passage vectors were stored, including backfills.
+	PassageEmbedded int    `json:"passage_embedded,omitempty"`
+	Embedded        int    `json:"embedded"`
+	Skipped         int    `json:"skipped"`
+	Errors          int    `json:"errors"`
+	EmptyOutput     int    `json:"empty_output,omitempty"`
+	Model           string `json:"model,omitempty"`
 	// SparseReembedded is how many sparse vectors a format upgrade rewrote.
 	// Dense and ColBERT bytes are left as they were. Absent when nothing was rewritten.
 	SparseReembedded int `json:"sparse_reembedded,omitempty"`
@@ -428,6 +430,14 @@ func countPendingForModel(dbPath, model string) (pending int, skipped int, err e
 	}
 	if err := db.QueryRow(skipQuery).Scan(&skipped); err != nil {
 		return 0, 0, fmt.Errorf("counting skipped notes: %w", err)
+	}
+	if model == embedding.ModelBGEM3 {
+		units, err := passagePending(db)
+		if err != nil {
+			return 0, 0, err
+		}
+		pending += len(units)
+		skipped -= len(units)
 	}
 	return pending, skipped, nil
 }
@@ -1072,6 +1082,14 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 	defer func() { _ = db.Close() }()
 
 	result := &EmbedResult{}
+	backfill := 0
+	if supportsPassageVectors(embedder) && !idx.reembedAll {
+		units, err := passagePending(db)
+		if err != nil {
+			return nil, err
+		}
+		backfill = len(units)
+	}
 
 	// FullEmbedder (BGE-M3): a note is pending when any of the three columns
 	// is NULL. Dense-only (MiniLM): pending when the dense column is NULL.
@@ -1086,32 +1104,13 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 	}
 	result.Skipped = skippedCount
 
-	rows, err := db.Query(pendingQuery)
+	pending, err := loadPendingNoteTexts(ctx, db, pendingQuery, result)
 	if err != nil {
-		return nil, fmt.Errorf("querying unembedded notes: %w", err)
-	}
-
-	var pending []noteText
-	for rows.Next() {
-		var nt noteText
-		if err := rows.Scan(&nt.id, &nt.path, &nt.title, &nt.body); err != nil {
-			_ = rows.Close()
-			return nil, fmt.Errorf("scanning unembedded note: %w", err)
-		}
-		// Count a skip (not just log it) so the result stays auditable —
-		// consistent with surfacing dropped notes (#40), never a silent omission.
-		if skipEmptyEmbed(ctx, nt.id, nt.path, nt.body) {
-			result.Skipped++
-			continue
-		}
-		pending = append(pending, nt)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, fmt.Errorf("closing unembedded rows: %w", err)
+		return nil, err
 	}
 
 	if len(pending) == 0 {
-		return result, nil
+		return finishPassageEmbedding(ctx, db, embedder, result, backfill)
 	}
 
 	// Process in batches. BGE-M3 memory grows with the padded tokens in a
@@ -1271,7 +1270,7 @@ func (idx *Indexer) EmbedNotes(ctx context.Context, dbPath string, embedder embe
 	if err := clearNoteVectors(db, unrewritten); err != nil {
 		return result, err
 	}
-	return result, nil
+	return finishPassageEmbedding(ctx, db, embedder, result, backfill)
 }
 
 // ResolveLinks updates unresolved links by matching dst_raw against note IDs,

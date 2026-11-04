@@ -536,7 +536,7 @@ func deliverAsk(ctx context.Context, resolver *graph.Resolver, db *index.DB, cfg
 		return result, nil
 	}
 
-	if excerptErr := applyPassageExcerpt(db, cfg, packResult); excerptErr != nil {
+	if excerptErr := applyPassageExcerpt(ctx, db, cfg, result.rankingQuery, packResult); excerptErr != nil {
 		log.Debug().Err(excerptErr).Str("note_id", hits[0].ID).Msg("passage selection unavailable; keeping original excerpt")
 	}
 
@@ -598,6 +598,7 @@ func markShownBefore(pack *memory.ContextPackResult, shown map[string]bool) {
 	if t := pack.Target; t != nil && shown[pack.TargetID] {
 		pack.UsedTokens -= memory.EstimateTokens(t.Body)
 		t.Body, t.BodyExcerpted, t.ShownBefore = "", false, true
+		t.PassageSelector = "none"
 	}
 	for i := range pack.Context {
 		item := &pack.Context[i]
