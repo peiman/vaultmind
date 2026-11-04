@@ -34,7 +34,7 @@ Output format (JSON):
 
 The target at `result.context.target` includes `passage_selector`: `dense` when stored passage vectors added at least one paragraph by meaning after the keyword pick, `lexical` when only the keyword selector's pick was delivered, `principle` when the note's Principle section was kept, and `none` when no excerpt was applied or its body was already shown. This is additive in `schema_version: "v1"`. Run `vaultmind index --embed` once with the local BGE-M3 embedder to backfill passage vectors for notes longer than 160 tokens; existing note embeddings are preserved. MiniLM and sidecar indexing store no passage vectors.
 
-With `--excerpt N`, the top note can use up to 2 × N tokens, within the remaining pack budget. The keyword pick comes first, unchanged, within N tokens. Up to three paragraphs follow it, best match first, that the pick does not already contain and that fit in the room left; a paragraph that does not fit is skipped, not cut. They are returned in document order, with `…` between separate spans. Other notes keep their N-token cap. Missing or stale passage vectors use the existing lexical selection; Principle sections keep their behavior.
+With `--excerpt N`, the top note can use up to 2 × N tokens, within the remaining pack budget. The keyword pick comes first, unchanged, within N tokens. The three best-matching paragraphs follow it in the room left; one the pick already contains, or one that does not fit, is skipped, not cut, and its slot is not given to a lower-ranked paragraph. They are returned in document order, with `…` between separate spans. Other notes keep their N-token cap. Missing or stale passage vectors use the existing lexical selection; Principle sections keep their behavior.
 
 ```json
 {

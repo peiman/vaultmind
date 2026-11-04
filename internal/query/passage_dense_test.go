@@ -126,13 +126,25 @@ func TestAsk_DensePassageUnionKeepsExactTerm(t *testing.T) {
 	assert.Equal(t, unionLex+"\n…\n"+unionDense, r.Context.Target.Body)
 }
 
-// Dense ranks the lexical pick first; it is delivered once.
+// Dense ranks the lexical pick first; it is delivered once, and the two
+// other top-three blocks join it.
 func TestAsk_DensePassageUnionDedupe(t *testing.T) {
 	db := unionPassageFixture(t, []float32{0, 0.9, 0.8, 0.7, 1})
 	r := askDensePassageQuery(t, db, &passageMemoEmbedder{}, unionQuery, 160, 1500)
 	assert.Equal(t, "dense", passageSelector(t, r.Context.Target))
 	assert.Equal(t, 1, strings.Count(r.Context.Target.Body, "This directive appeared"))
-	assert.Equal(t, unionLex+"\n…\n"+unionDense, r.Context.Target.Body)
+	assert.Equal(t, unionLex+"\n…\n## Usage\n\nEnable the listener for incoming peers.\n\nEach peer negotiates a session key.", r.Context.Target.Body)
+}
+
+// Only the top three blocks are candidates. History ranks second and is
+// already the lexical pick; its slot stays empty rather than going to the
+// fourth block, which barely matches.
+func TestAsk_DensePassageNoBackfill(t *testing.T) {
+	db := unionPassageFixture(t, []float32{0, 1, 0.1, 0.9, 0.95})
+	r := askDensePassageQuery(t, db, &passageMemoEmbedder{}, unionQuery, 160, 1500)
+	assert.Equal(t, "dense", passageSelector(t, r.Context.Target))
+	assert.NotContains(t, r.Context.Target.Body, "Each peer negotiates")
+	assert.Equal(t, unionLex+"\n…\n## Usage\n\nEnable the listener for incoming peers.\n…\nRestart after changing the listener.", r.Context.Target.Body)
 }
 
 // Two tokens of room past the lexical pick fit no dense block: the pick
@@ -164,9 +176,10 @@ func TestAsk_DensePassageTopThree(t *testing.T) {
 	db, _ := densePassageFixture(t)
 	emb := &passageMemoEmbedder{}
 	r := askDensePassage(t, db, emb, 160)
-	// The opening paragraph ties the distraction at zero but no longer fits
-	// after the lexical pick, so the distraction takes the third slot.
-	assert.Equal(t, "## Answer\n\nUse a stable snapshot. Preserve the immutable receipt.\n\nAn irrelevant distraction.\n…\n## Final\n\nVerify the restored state.", densePart(t, db, r, 160))
+	// The opening paragraph ranks third (it ties the distraction at zero and
+	// comes first) but no longer fits after the lexical pick; its slot stays
+	// empty, so the distraction is not delivered.
+	assert.Equal(t, "## Answer\n\nUse a stable snapshot. Preserve the immutable receipt.\n…\n## Final\n\nVerify the restored state.", densePart(t, db, r, 160))
 	assert.Equal(t, "dense", passageSelector(t, r.Context.Target))
 	assert.Equal(t, 1, emb.forwards, "passages and NoteSimilarities must share the ranking query memo")
 	require.Len(t, emb.texts, 2)
@@ -244,8 +257,8 @@ func TestAsk_DensePassageBudgetAndTies(t *testing.T) {
 		want, absent string
 	}{
 		{"expanded_cap", 10, 160, []float32{0, 0.8, 1, 0, 0.9}, "Use a stable snapshot", "An irrelevant distraction"},
-		{"skip_unfit", 26, 160, []float32{0, 0.8, 1, 0, 0.9}, "An irrelevant distraction", "Use a stable snapshot"},
-		{"oversized_skipped", 80, 20, []float32{0, 0.8, 1, 0, 0.9}, "An irrelevant distraction", "Preserve"},
+		{"skip_unfit", 26, 160, []float32{0, 0.8, 1, 0, 0.9}, "Preserve the immutable receipt", "Use a stable snapshot"},
+		{"oversized_skipped", 80, 20, []float32{0, 0.8, 1, 0.85, 0.9}, "An irrelevant distraction", "Preserve"},
 		{"ties_earlier", 0, 160, []float32{0, 1, 1, 1, 1}, "An irrelevant distraction", "Verify the restored state"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -264,8 +277,11 @@ func TestAsk_DensePassageBudgetAndTies(t *testing.T) {
 				assert.Greater(t, memory.EstimateTokens(r.Context.Target.Body), tc.cap)
 			}
 			if tc.name == "skip_unfit" {
-				assert.Contains(t, dense, "Preserve the immutable receipt")
-				assert.Contains(t, dense, "Verify the restored state", "a block that does not fit is skipped; the next ones still join")
+				assert.Contains(t, dense, "Verify the restored state")
+				assert.NotContains(t, dense, "An irrelevant distraction", "an unfit top-three block is not replaced by a lower-ranked one")
+			}
+			if tc.name == "oversized_skipped" {
+				assert.NotContains(t, dense, "Verify the restored state", "oversized blocks ranked above the distraction are skipped; the distraction still joins")
 			}
 		})
 	}

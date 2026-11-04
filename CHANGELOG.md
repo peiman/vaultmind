@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `ask` adds the top note's best-matching paragraphs by meaning, ranked by their best sentence, when `index --embed` has stored passage vectors (#330). The keyword pick still comes first, exactly as before, so exact-term answers are kept; up to three paragraphs it does not already contain follow it in the room left, up to twice the excerpt size. A paragraph that does not fit is skipped, not cut. Each governing heading is shown once per run. Run `vaultmind index --embed` once to get the vectors.
+- `ask` adds the top note's best-matching paragraphs by meaning, ranked by their best sentence, when `index --embed` has stored passage vectors (#330). The keyword pick still comes first, exactly as before, so exact-term answers are kept; the three best-matching paragraphs follow it in the room left, up to twice the excerpt size. One it already contains, or one that does not fit, is skipped, not cut, and not replaced by a weaker match. Each governing heading is shown once per run. Run `vaultmind index --embed` once to get the vectors.
 
 ### Fixed
 

@@ -12,13 +12,15 @@ import (
 	"github.com/peiman/vaultmind/internal/passage"
 )
 
-// densePassageBlocks caps how many dense blocks join the lexical pick.
+// densePassageBlocks is how many top-ranked dense blocks are candidates to
+// join the lexical pick.
 const densePassageBlocks = 3
 
-// selectDensePassages renders up to three paragraph blocks, best cosine
-// first, that lex does not already contain and that fit within limit
-// tokens. It returns "" when nothing is added; any unavailable or stale
-// input leaves the lexical pick alone.
+// selectDensePassages renders the top three paragraph blocks by cosine,
+// dropping any that lex already contains or that do not fit within limit
+// tokens. A dropped block is not replaced by a lower-ranked one: a weak
+// match would only pad the body. It returns "" when nothing is added; any
+// unavailable or stale input leaves the lexical pick alone.
 func selectDensePassages(ctx context.Context, db *index.DB, cfg AskConfig, targetID, rankingQuery, raw, title, lex string, limit int) string {
 	if cfg.Embedder == nil || limit <= 0 {
 		return ""
@@ -35,16 +37,15 @@ func selectDensePassages(ctx context.Context, db *index.DB, cfg AskConfig, targe
 	}
 	seen := strings.Join(strings.Fields(lex), " ")
 	var chosen []densePassageBlock
-	for _, block := range rankDensePassages(raw, units, queryVec, vectors) {
+	ranked := rankDensePassages(raw, units, queryVec, vectors)
+	for _, block := range ranked[:min(densePassageBlocks, len(ranked))] {
 		if strings.Contains(seen, strings.Join(strings.Fields(raw[units[block.first].Start:units[block.last].End]), " ")) {
 			continue
 		}
 		if memory.EstimateTokens(renderDensePassages(raw, title, units, append(chosen, block))) > limit {
 			continue
 		}
-		if chosen = append(chosen, block); len(chosen) == densePassageBlocks {
-			break
-		}
+		chosen = append(chosen, block)
 	}
 	return renderDensePassages(raw, title, units, chosen)
 }
