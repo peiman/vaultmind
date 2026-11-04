@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `ask` now says so when a note it delivers was edited or deleted after the last `vaultmind index`. Before, it returned the pre-edit text with no sign of it. A line under that note's text reads "changed on disk since indexed", and the JSON item gets `"stale": true` with a top-level `stale_notes` count. The check is one file stat per delivered note, and it reads the file only when the modification time differs, so a touch that changed nothing is not flagged. Notes that are current print exactly as before (#407).
 - Recall and reach hooks now say when only titles were delivered and show how to read a note, instead of claiming the titles are note text (#409).
 - Mesh watchers no longer lose messages that arrive after a wake or quiet heartbeat and before the next watcher arms. They save their cursors when they stop and catch up on the next arm for up to six hours. A catch-up can occasionally wake again for a message the session already read, by design: a duplicate wake beats a missed message.
 

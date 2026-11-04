@@ -539,10 +539,23 @@ func writeContextTarget(w io.Writer, target *memory.ContextPackTarget, opts form
 		if _, err := fmt.Fprintf(w, "%s\n", indentBody(target.Body)); err != nil {
 			return err
 		}
+		if err := writeChangedOnDiskLine(w, target.ChangedOnDisk); err != nil {
+			return err
+		}
 	}
 	return writeGapCreditLine(w, target.AnswersGap, target.ShownBefore,
 		!opts.pointersOnly && !target.ShownBefore && target.Body != "",
 		knowledgeNote(target.Frontmatter))
+}
+
+// writeChangedOnDiskLine marks a delivered note whose file moved on after it
+// was indexed. Nothing is written for a current note.
+func writeChangedOnDiskLine(w io.Writer, changed bool) error {
+	if !changed {
+		return nil
+	}
+	_, err := fmt.Fprintf(w, "    %s\n", changedOnDiskNote)
+	return err
 }
 
 // writeContextItems emits one block per context-pack neighbor —
@@ -558,6 +571,9 @@ func writeContextItems(w io.Writer, items []memory.ContextItem, opts formatOpts)
 			// Shown as packed, like the target: the header counts these tokens
 			// as delivered, so the reader gets all of them.
 			if _, err := fmt.Fprintf(w, "%s\n", indentBody(item.Body)); err != nil {
+				return err
+			}
+			if err := writeChangedOnDiskLine(w, item.ChangedOnDisk); err != nil {
 				return err
 			}
 		}
