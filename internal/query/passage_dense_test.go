@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/embedding"
 	"github.com/peiman/vaultmind/internal/graph"
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/memory"
@@ -73,20 +74,99 @@ func densePassageFixture(t *testing.T) (*index.DB, string) {
 	return db, body
 }
 
+var denseQuestion = "alpha " + strings.Repeat(".", 40)
+
 func askDensePassage(t *testing.T, db *index.DB, emb *passageMemoEmbedder, excerpt int) *query.AskResult {
 	t.Helper()
-	r, err := query.Ask(context.Background(), &stubRetriever{results: []retrieval.ScoredResult{{ID: "target", Title: "Passage title", Score: 1}}}, graph.NewResolver(db), db, query.AskConfig{Query: "alpha " + strings.Repeat(".", 40), Embedder: emb, Budget: 1500, MaxItems: 3, SearchLimit: 5, ExcerptTokens: excerpt})
+	return askDensePassageQuery(t, db, emb, denseQuestion, excerpt, 1500)
+}
+
+// densePart requires the body to open with the lexical pick, byte for byte as
+// a run without an embedder delivers it, and returns what dense added after.
+func densePart(t *testing.T, db *index.DB, r *query.AskResult, excerpt int) string {
+	t.Helper()
+	lex := askDensePassageQuery(t, db, nil, denseQuestion, excerpt, 1500).Context.Target.Body
+	require.True(t, strings.HasPrefix(r.Context.Target.Body, lex+"\n…\n"), r.Context.Target.Body)
+	return strings.TrimPrefix(r.Context.Target.Body, lex+"\n…\n")
+}
+
+func askDensePassageQuery(t *testing.T, db *index.DB, emb embedding.Embedder, question string, excerpt, budget int) *query.AskResult {
+	t.Helper()
+	r, err := query.Ask(context.Background(), &stubRetriever{results: []retrieval.ScoredResult{{ID: "target", Title: "Passage title", Score: 1}}}, graph.NewResolver(db), db, query.AskConfig{Query: question, Embedder: emb, Budget: budget, MaxItems: 3, SearchLimit: 5, ExcerptTokens: excerpt})
 	require.NoError(t, err)
 	require.NotNil(t, r.Context)
 	require.NotNil(t, r.Context.Target)
 	return r
 }
 
+// The lexical pick answers exact-term questions; dense ranking answers
+// paraphrases. Each block is its own paragraph, so the lexical window is the
+// History section alone, and the scores decide where dense ranks it.
+const (
+	unionLex   = "## History\n\nThis directive appeared in version 1.11.8."
+	unionDense = "## Usage\n\nEnable the listener for incoming peers.\n\nEach peer negotiates a session key.\n\nRestart after changing the listener."
+	unionQuery = "directive appeared version"
+)
+
+func unionPassageFixture(t *testing.T, scores []float32) *index.DB {
+	t.Helper()
+	db, _ := densePassageFixture(t)
+	// The opening paragraph is the packed excerpt; keeping it shorter than the
+	// lexical pick means swapping one for the other frees no budget.
+	replaceDenseUnits(t, db, passageParagraph("intro", 4)+"\n\n"+unionDense+"\n\n"+unionLex, scores)
+	return db
+}
+
+// Dense alone ranks the three Usage blocks above History and would drop the
+// version line; the union keeps it and still adds the dense blocks.
+func TestAsk_DensePassageUnionKeepsExactTerm(t *testing.T) {
+	db := unionPassageFixture(t, []float32{0, 1, 0.9, 0.8, 0.1})
+	r := askDensePassageQuery(t, db, &passageMemoEmbedder{}, unionQuery, 160, 1500)
+	assert.Equal(t, "dense", passageSelector(t, r.Context.Target))
+	assert.Equal(t, unionLex+"\n…\n"+unionDense, r.Context.Target.Body)
+}
+
+// Dense ranks the lexical pick first; it is delivered once.
+func TestAsk_DensePassageUnionDedupe(t *testing.T) {
+	db := unionPassageFixture(t, []float32{0, 0.9, 0.8, 0.7, 1})
+	r := askDensePassageQuery(t, db, &passageMemoEmbedder{}, unionQuery, 160, 1500)
+	assert.Equal(t, "dense", passageSelector(t, r.Context.Target))
+	assert.Equal(t, 1, strings.Count(r.Context.Target.Body, "This directive appeared"))
+	assert.Equal(t, unionLex+"\n…\n"+unionDense, r.Context.Target.Body)
+}
+
+// Two tokens of room past the lexical pick fit no dense block: the pick
+// survives whole and the dense blocks are dropped.
+func TestAsk_DensePassageUnionBudget(t *testing.T) {
+	db := unionPassageFixture(t, []float32{0, 1, 0.9, 0.8, 0.1})
+	lexOnly := askDensePassageQuery(t, db, nil, unionQuery, 160, 1500)
+	require.Equal(t, unionLex, lexOnly.Context.Target.Body)
+	budget := lexOnly.Context.UsedTokens + 2
+	r := askDensePassageQuery(t, db, &passageMemoEmbedder{}, unionQuery, 160, budget)
+	assert.Equal(t, "lexical", passageSelector(t, r.Context.Target))
+	assert.Equal(t, unionLex, r.Context.Target.Body)
+	assert.LessOrEqual(t, r.Context.UsedTokens, budget)
+	body := memory.EstimateTokens(r.Context.Target.Body)
+	assert.LessOrEqual(t, body, min(2*160, budget-r.Context.UsedTokens+body))
+}
+
+// Without vectors the delivered body is the lexical pick, byte for byte.
+func TestAsk_DensePassageNoVectorsIsLexical(t *testing.T) {
+	db := unionPassageFixture(t, []float32{0, 1, 0.9, 0.8, 0.1})
+	_, err := db.Exec(`DELETE FROM passage_vectors`)
+	require.NoError(t, err)
+	r := askDensePassageQuery(t, db, &passageMemoEmbedder{}, unionQuery, 160, 1500)
+	assert.Equal(t, "lexical", passageSelector(t, r.Context.Target))
+	assert.Equal(t, unionLex, r.Context.Target.Body)
+}
+
 func TestAsk_DensePassageTopThree(t *testing.T) {
 	db, _ := densePassageFixture(t)
 	emb := &passageMemoEmbedder{}
 	r := askDensePassage(t, db, emb, 160)
-	assert.Equal(t, passageParagraph("alpha", 100)+"\n…\n## Answer\n\nUse a stable snapshot. Preserve the immutable receipt.\n…\n## Final\n\nVerify the restored state.", r.Context.Target.Body)
+	// The opening paragraph ties the distraction at zero but no longer fits
+	// after the lexical pick, so the distraction takes the third slot.
+	assert.Equal(t, "## Answer\n\nUse a stable snapshot. Preserve the immutable receipt.\n\nAn irrelevant distraction.\n…\n## Final\n\nVerify the restored state.", densePart(t, db, r, 160))
 	assert.Equal(t, "dense", passageSelector(t, r.Context.Target))
 	assert.Equal(t, 1, emb.forwards, "passages and NoteSimilarities must share the ranking query memo")
 	require.Len(t, emb.texts, 2)
@@ -163,9 +243,9 @@ func TestAsk_DensePassageBudgetAndTies(t *testing.T) {
 		scores       []float32
 		want, absent string
 	}{
-		{"expanded_cap", 26, 160, []float32{0, 0.8, 1, 0, 0.9}, "Use a stable snapshot", "alpha"},
-		{"drop_lowest", 42, 160, []float32{0, 0.8, 1, 0, 0.9}, "Preserve the immutable receipt", "Use a stable snapshot"},
-		{"cut_one", 80, 20, []float32{0, 0.8, 1, 0, 0.9}, "Preserve", "Verify the restored state"},
+		{"expanded_cap", 10, 160, []float32{0, 0.8, 1, 0, 0.9}, "Use a stable snapshot", "An irrelevant distraction"},
+		{"skip_unfit", 26, 160, []float32{0, 0.8, 1, 0, 0.9}, "An irrelevant distraction", "Use a stable snapshot"},
+		{"oversized_skipped", 80, 20, []float32{0, 0.8, 1, 0, 0.9}, "An irrelevant distraction", "Preserve"},
 		{"ties_earlier", 0, 160, []float32{0, 1, 1, 1, 1}, "An irrelevant distraction", "Verify the restored state"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -175,15 +255,17 @@ func TestAsk_DensePassageBudgetAndTies(t *testing.T) {
 			replaceDenseUnits(t, db, raw, tc.scores)
 			r := askDensePassage(t, db, &passageMemoEmbedder{}, tc.cap)
 			assert.Equal(t, "dense", passageSelector(t, r.Context.Target))
-			assert.Contains(t, r.Context.Target.Body, tc.want)
-			assert.NotContains(t, r.Context.Target.Body, tc.absent)
-			assert.LessOrEqual(t, memory.EstimateTokens(r.Context.Target.Body), tc.cap+tc.cap/2)
+			dense := densePart(t, db, r, tc.cap)
+			assert.Contains(t, dense, tc.want)
+			assert.NotContains(t, dense, tc.absent)
+			assert.LessOrEqual(t, memory.EstimateTokens(r.Context.Target.Body), 2*tc.cap)
 			assert.LessOrEqual(t, r.Context.UsedTokens, r.Context.BudgetTokens)
 			if tc.name == "expanded_cap" {
 				assert.Greater(t, memory.EstimateTokens(r.Context.Target.Body), tc.cap)
 			}
-			if tc.name == "drop_lowest" {
-				assert.Contains(t, r.Context.Target.Body, "Verify the restored state", "keep the higher-scored last block")
+			if tc.name == "skip_unfit" {
+				assert.Contains(t, dense, "Preserve the immutable receipt")
+				assert.Contains(t, dense, "Verify the restored state", "a block that does not fit is skipped; the next ones still join")
 			}
 		})
 	}
@@ -196,7 +278,7 @@ func TestAsk_DensePassageWholeParagraph(t *testing.T) {
 	replaceDenseUnits(t, db, raw, []float32{0, 1, 0.05, 0.01, 0.95, 0.9})
 	r := askDensePassage(t, db, &passageMemoEmbedder{}, 160)
 	assert.Equal(t, "dense", passageSelector(t, r.Context.Target))
-	assert.Equal(t, "## Guard\n\n"+paragraph+"\n\nAnother useful result.\n\nA final useful result.", r.Context.Target.Body)
+	assert.Equal(t, "## Guard\n\n"+paragraph+"\n\nAnother useful result.\n\nA final useful result.", densePart(t, db, r, 160))
 }
 
 func TestAsk_DensePassageBlockHeadings(t *testing.T) {
@@ -235,7 +317,7 @@ func TestAsk_DensePassageBlockHeadings(t *testing.T) {
 			replaceDenseUnits(t, db, raw, append([]float32{0}, tc.scores...))
 			r := askDensePassage(t, db, &passageMemoEmbedder{}, 160)
 			assert.Equal(t, "dense", passageSelector(t, r.Context.Target))
-			assert.Equal(t, tc.want, r.Context.Target.Body)
+			assert.Equal(t, tc.want, densePart(t, db, r, 160))
 		})
 	}
 }
@@ -249,28 +331,17 @@ func TestAsk_DensePassageBlockMax(t *testing.T) {
 	replaceDenseUnits(t, db, raw, []float32{0, 0.01, 1, 0.7, 0.7, 0.7, 0.9, 0.8})
 	r := askDensePassage(t, db, &passageMemoEmbedder{}, 160)
 	assert.Equal(t, "dense", passageSelector(t, r.Context.Target))
-	assert.Equal(t, paragraph+"\n…\nRunner up.\n\nThird place.", r.Context.Target.Body)
+	assert.Equal(t, paragraph+"\n…\nRunner up.\n\nThird place.", densePart(t, db, r, 160))
 }
 
-func TestAsk_DensePassageSingleBlockBestUnit(t *testing.T) {
-	for _, tc := range []struct{ name, lead, best string }{
-		{"cut_best", "Discard this weak lead.", "Best answer " + strings.Repeat("detail ", 100) + "ends."},
-		{"keep_following_sentence", "Discard this weak lead " + strings.Repeat("detail ", 100) + "ends.", "Best answer is the covering index."},
-	} {
-		for _, heading := range []string{"", "## Answer\n\n"} {
-			t.Run(tc.name+"/"+strings.TrimSpace(heading), func(t *testing.T) {
-				db, _ := densePassageFixture(t)
-				raw := passageParagraph("alpha", 100) + "\n\n" + heading + tc.lead + " " + tc.best + " Tail qualification."
-				replaceDenseUnits(t, db, raw, []float32{0, 0.1, 1, 0.2})
-				r := askDensePassage(t, db, &passageMemoEmbedder{}, 30)
-				assert.Equal(t, "dense", passageSelector(t, r.Context.Target))
-				assert.True(t, strings.HasPrefix(r.Context.Target.Body, heading+"…Best answer"), r.Context.Target.Body)
-				assert.NotContains(t, r.Context.Target.Body, "weak lead")
-				assert.LessOrEqual(t, memory.EstimateTokens(r.Context.Target.Body), 45)
-				if tc.name == "keep_following_sentence" {
-					assert.Equal(t, heading+"…"+tc.best+" Tail qualification.", r.Context.Target.Body)
-				}
-			})
-		}
-	}
+// A block wider than the room left after the lexical pick is skipped, not
+// cut down: when no block fits, the body is the lexical pick alone.
+func TestAsk_DensePassageOversizedBlockNotTrimmed(t *testing.T) {
+	db, _ := densePassageFixture(t)
+	raw := passageParagraph("alpha", 100) + "\n\n## Answer\n\nDiscard this weak lead. Best answer " + strings.Repeat("detail ", 100) + "ends. Tail qualification."
+	replaceDenseUnits(t, db, raw, []float32{0, 0.1, 1, 0.2})
+	r := askDensePassage(t, db, &passageMemoEmbedder{}, 30)
+	assert.Equal(t, "lexical", passageSelector(t, r.Context.Target))
+	assert.Equal(t, askDensePassageQuery(t, db, nil, denseQuestion, 30, 1500).Context.Target.Body, r.Context.Target.Body)
+	assert.NotContains(t, r.Context.Target.Body, "Best answer")
 }

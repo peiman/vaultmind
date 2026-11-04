@@ -12,50 +12,41 @@ import (
 	"github.com/peiman/vaultmind/internal/passage"
 )
 
-// Any unavailable or stale input falls back to the established lexical path.
-func selectDensePassages(ctx context.Context, db *index.DB, cfg AskConfig, targetID, rankingQuery, raw, title string, limit int) (string, bool) {
+// densePassageBlocks caps how many dense blocks join the lexical pick.
+const densePassageBlocks = 3
+
+// selectDensePassages renders up to three paragraph blocks, best cosine
+// first, that lex does not already contain and that fit within limit
+// tokens. It returns "" when nothing is added; any unavailable or stale
+// input leaves the lexical pick alone.
+func selectDensePassages(ctx context.Context, db *index.DB, cfg AskConfig, targetID, rankingQuery, raw, title, lex string, limit int) string {
 	if cfg.Embedder == nil || limit <= 0 {
-		return "", false
+		return ""
 	}
 	vectors, err := index.LoadPassageVectors(db, targetID)
 	raw = parser.StripHTMLComments(raw)
 	units := passage.Units(raw, title)
 	if err != nil || !matchingPassageSpans(units, vectors, cfg.Embedder.Dims()) {
-		return "", false
+		return ""
 	}
 	queryVec, err := cfg.Embedder.Embed(ctx, rankingQuery)
 	if err != nil || len(queryVec) != cfg.Embedder.Dims() {
-		return "", false
+		return ""
 	}
-	ranked := rankDensePassages(raw, units, queryVec, vectors)
-	if len(ranked) == 0 {
-		return "", false
-	}
-	for len(ranked) > 0 {
-		best := renderDensePassages(raw, title, units, ranked)
-		if memory.EstimateTokens(best) <= limit {
-			return best, best != ""
+	seen := strings.Join(strings.Fields(lex), " ")
+	var chosen []densePassageBlock
+	for _, block := range rankDensePassages(raw, units, queryVec, vectors) {
+		if strings.Contains(seen, strings.Join(strings.Fields(raw[units[block.first].Start:units[block.last].End]), " ")) {
+			continue
 		}
-		if len(ranked) == 1 {
-			block := ranked[0]
-			u := units[block.best]
-			heading := capHeadingTokens(nearestGoverningHeading(u.Heading, title), firstBlockHeadingTokens)
-			body := raw[u.Start:units[block.last].End]
-			if block.best != block.first {
-				body = "…" + body
-			}
-			text := memory.Excerpt(body, limit)
-			if heading != "" {
-				text = fitHeadingAndBlock(heading, body, limit)
-			}
-			if text != "" && memory.EstimateTokens(text) <= limit {
-				return text, true
-			}
-			return "", false
+		if memory.EstimateTokens(renderDensePassages(raw, title, units, append(chosen, block))) > limit {
+			continue
 		}
-		ranked = ranked[:len(ranked)-1] // discard the lowest cosine, not the last in document order
+		if chosen = append(chosen, block); len(chosen) == densePassageBlocks {
+			break
+		}
 	}
-	return "", false
+	return renderDensePassages(raw, title, units, chosen)
 }
 
 func matchingPassageSpans(units []passage.Unit, vectors []index.PassageVector, dims int) bool {
@@ -72,8 +63,8 @@ func matchingPassageSpans(units []passage.Unit, vectors []index.PassageVector, d
 }
 
 type densePassageBlock struct {
-	first, last, best, index int
-	score                    float64
+	first, last, index int
+	score              float64
 }
 
 func rankDensePassages(raw string, units []passage.Unit, queryVec []float32, vectors []index.PassageVector) []densePassageBlock {
@@ -84,17 +75,15 @@ func rankDensePassages(raw string, units []passage.Unit, queryVec []float32, vec
 			return nil
 		}
 		if i == 0 || units[i].Section != units[i-1].Section || passage.BlankLine.MatchString(raw[units[i-1].End:units[i].Start]) {
-			blocks = append(blocks, densePassageBlock{first: i, last: i, best: i, index: len(blocks), score: score})
+			blocks = append(blocks, densePassageBlock{first: i, last: i, index: len(blocks), score: score})
 			continue
 		}
 		block := &blocks[len(blocks)-1]
 		block.last = i
-		if score > block.score {
-			block.score, block.best = score, i
-		}
+		block.score = math.Max(block.score, score)
 	}
 	sort.SliceStable(blocks, func(i, j int) bool { return blocks[i].score > blocks[j].score })
-	return blocks[:min(3, len(blocks))]
+	return blocks
 }
 
 func renderDensePassages(raw, title string, units []passage.Unit, ranked []densePassageBlock) string {
@@ -109,7 +98,7 @@ func renderDensePassages(raw, title string, units []passage.Unit, ranked []dense
 			if block.index == previous.index+1 && first.Section == units[previous.first].Section {
 				out.WriteString("\n\n")
 			} else {
-				out.WriteString("\n…\n")
+				out.WriteString(passageGap)
 			}
 		}
 		heading := capHeadingTokens(nearestGoverningHeading(first.Heading, title), firstBlockHeadingTokens)

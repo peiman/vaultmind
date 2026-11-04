@@ -19,6 +19,6 @@
 
 Everything is `--json`-able for programmatic use; every command returns a stable envelope.
 
-With local BGE-M3 passage vectors, the top note's excerpt uses up to three units ranked by cosine similarity to the same query used for ranking notes. Run `vaultmind index --embed` once to backfill them. The target can use up to 1.5 × the `--excerpt` cap within the pack budget; other notes keep their cap. The target's JSON `passage_selector` reports `dense`, `lexical`, `principle`, or `none`. Missing or stale units fall back to lexical selection, and a Principle section keeps its existing behavior.
+With local BGE-M3 passage vectors, the top note's excerpt keeps its keyword pick and adds up to three paragraphs ranked by cosine similarity to the same query used for ranking notes. Run `vaultmind index --embed` once to backfill them. The target can use up to 2 × the `--excerpt` cap within the pack budget, with the keyword pick served first; other notes keep their cap. The target's JSON `passage_selector` reports `dense`, `lexical`, `principle`, or `none`. Missing or stale units fall back to lexical selection, and a Principle section keeps its existing behavior.
 
 See also [embedding-backends.md](embedding-backends.md) for the backends and the dense-only vs. 4-way hybrid tradeoff.

@@ -145,18 +145,13 @@ func applyPassageExcerpt(ctx context.Context, db *index.DB, cfg AskConfig, ranki
 		target.PassageSelector = "principle"
 		return nil
 	}
-	denseLimit := min(cfg.ExcerptTokens+cfg.ExcerptTokens/2, cfg.Budget-pack.UsedTokens+memory.EstimateTokens(target.Body))
-	title, _ := target.Frontmatter["title"].(string)
-	if best, ok := selectDensePassages(ctx, db, cfg, target.ID, rankingQuery, raw, title, denseLimit); ok {
-		pack.UsedTokens += memory.EstimateTokens(best) - memory.EstimateTokens(target.Body)
-		target.Body, target.PassageSelector = best, "dense"
-		return nil
-	}
-	limit := min(cfg.ExcerptTokens, cfg.Budget-pack.UsedTokens+memory.EstimateTokens(target.Body))
+	left := cfg.Budget - pack.UsedTokens + memory.EstimateTokens(target.Body)
+	limit := min(cfg.ExcerptTokens, left)
 	if limit <= 0 {
 		return nil
 	}
 	target.PassageSelector = "lexical"
+	title, _ := target.Frontmatter["title"].(string)
 	selected, err := selectPassage(db, cfg.Query, raw, target.Body, limit, title)
 	if err != nil {
 		return err
@@ -165,10 +160,24 @@ func applyPassageExcerpt(ctx context.Context, db *index.DB, cfg AskConfig, ranki
 	if best == target.Body {
 		best = firstBlockHeadingExcerpt(raw, best, title, limit)
 	}
+	// The lexical pick answers exact terms and has first claim on the budget;
+	// dense blocks answer paraphrases in whatever room is left.
+	separator := ""
+	if best != "" {
+		separator = passageGap
+	}
+	allowance := min(2*cfg.ExcerptTokens, left) - memory.EstimateTokens(best+separator)
+	if dense := selectDensePassages(ctx, db, cfg, target.ID, rankingQuery, raw, title, best, allowance); dense != "" {
+		best += separator + dense
+		target.PassageSelector = "dense"
+	}
 	pack.UsedTokens += memory.EstimateTokens(best) - memory.EstimateTokens(target.Body)
 	target.Body = best
 	return nil
 }
+
+// passageGap joins delivered text that is not adjacent in the note.
+const passageGap = "\n…\n"
 
 // firstBlockHeadingTokens bounds the nearest heading on a kept first block.
 // Sixteen tokens is at most a tenth of the 160-token excerpt, so a warning

@@ -32,9 +32,9 @@ vaultmind ask "how should I write notes" --vault examples/ada-vault --json
 
 Output format (JSON):
 
-The target at `result.context.target` includes `passage_selector`: `dense` when stored passage vectors select up to three units by meaning, `lexical` when the keyword selector ran, `principle` when the note's Principle section was kept, and `none` when no excerpt was applied or its body was already shown. This is additive in `schema_version: "v1"`. Run `vaultmind index --embed` once with the local BGE-M3 embedder to backfill passage vectors for notes longer than 160 tokens; existing note embeddings are preserved. MiniLM and sidecar indexing store no passage vectors.
+The target at `result.context.target` includes `passage_selector`: `dense` when stored passage vectors added at least one paragraph by meaning after the keyword pick, `lexical` when only the keyword selector's pick was delivered, `principle` when the note's Principle section was kept, and `none` when no excerpt was applied or its body was already shown. This is additive in `schema_version: "v1"`. Run `vaultmind index --embed` once with the local BGE-M3 embedder to backfill passage vectors for notes longer than 160 tokens; existing note embeddings are preserved. MiniLM and sidecar indexing store no passage vectors.
 
-With `--excerpt N`, dense selection can use up to 1.5 × N tokens for the top note, within the remaining pack budget. It keeps the best three units that fit, returns them in document order, and puts `…` between separate spans. Other notes keep their N-token cap. Missing or stale passage vectors use the existing lexical selection; Principle sections keep their behavior.
+With `--excerpt N`, the top note can use up to 2 × N tokens, within the remaining pack budget. The keyword pick comes first, unchanged, within N tokens. Up to three paragraphs follow it, best match first, that the pick does not already contain and that fit in the room left; a paragraph that does not fit is skipped, not cut. They are returned in document order, with `…` between separate spans. Other notes keep their N-token cap. Missing or stale passage vectors use the existing lexical selection; Principle sections keep their behavior.
 
 ```json
 {
@@ -65,7 +65,7 @@ vaultmind ask "spreading activation" --vault <path> --budget 4000 --excerpt 120
 ```
 
 With `--excerpt N` such a note contributes an excerpt instead of zero tokens. The
-usual cap is N tokens; dense selection for the top note can use 1.5 × N. It prefers
+usual cap is N tokens; the top note can use 2 × N when dense paragraphs are added. It prefers
 the note's **Principle** section where one exists, falling back to opening prose. That
 default is deliberate: arcs are written trigger → push → deeper sight → principle, so the
 opening is story setup and the decision rule sits several sections down. Injecting "the
