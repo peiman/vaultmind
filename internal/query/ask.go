@@ -164,6 +164,9 @@ type AskResult struct {
 	// EmbedTextStale is true when stored dense vectors predate title embedding.
 	// Absent when current. schema_version stays v1.
 	EmbedTextStale bool `json:"embed_text_stale,omitempty"`
+	// StaleNotes counts delivered notes whose file changed on disk since they
+	// were indexed (see MarkChangedOnDisk). Absent when none did.
+	StaleNotes int `json:"stale_notes,omitempty"`
 	// rankingQuery is the text the forward pass embedded. The cosine uses it,
 	// so it stays the same string the dense lane embedded and the memo hits.
 	rankingQuery string
