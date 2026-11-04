@@ -481,6 +481,8 @@ tasks:
       ORT-tagged unit tests (the session's memory settings). Needs the BGE-M3
       model in the cache; the first run downloads it (about 2.2 GB). Run it
       before tagging a release: 0.10.13 shipped a re-embed that passed 100 GB.
+      Allow about an hour: each of the two tests takes 25-29 minutes on a
+      loaded machine.
     cmds:
       - cmd: |
           set -e
@@ -488,7 +490,10 @@ tasks:
           trap 'rm -rf "$(dirname "$BIN")"' EXIT
           CGO_ENABLED=1 CGO_LDFLAGS="-L$(pwd)/lib" go build -tags ORT -o "$BIN" .
           CGO_ENABLED=1 CGO_LDFLAGS="-L$(pwd)/lib" go test -tags ORT -count=1 ./internal/embedding/
-          VAULTMIND_MEMORY_BINARY="$BIN" go test -tags memory -count=1 -timeout 30m -v ./test/memory/
+          # 90m: since the passage backfill (#330) each of the two tests takes
+          # 25-29 min on a loaded machine (TestFullEmbed 1514 s, the 100-ask
+          # server test 1710 s run alone), so 30m timed out before the second.
+          VAULTMIND_MEMORY_BINARY="$BIN" go test -tags memory -count=1 -timeout 90m -v ./test/memory/
 
   test:golden:
     desc: Test CLI output against golden files
