@@ -32,6 +32,10 @@ vaultmind ask "how should I write notes" --vault examples/ada-vault --json
 
 Output format (JSON):
 
+The target at `result.context.target` includes `passage_selector`: `dense` when stored passage vectors select up to three units by meaning, `lexical` when the keyword selector ran, `principle` when the note's Principle section was kept, and `none` when no excerpt was applied or its body was already shown. This is additive in `schema_version: "v1"`. Run `vaultmind index --embed` once with the local BGE-M3 embedder to backfill passage vectors for notes longer than 160 tokens; existing note embeddings are preserved. MiniLM and sidecar indexing store no passage vectors.
+
+With `--excerpt N`, dense selection can use up to 1.5 × N tokens for the top note, within the remaining pack budget. It keeps the best three units that fit, returns them in document order, and puts `…` between separate spans. Other notes keep their N-token cap. Missing or stale passage vectors use the existing lexical selection; Principle sections keep their behavior.
+
 ```json
 {
   "command": "ask",
@@ -60,16 +64,17 @@ common case, not the edge case.
 vaultmind ask "spreading activation" --vault <path> --budget 4000 --excerpt 120
 ```
 
-With `--excerpt N` such a note contributes at most N tokens instead of zero. It prefers
+With `--excerpt N` such a note contributes an excerpt instead of zero tokens. The
+usual cap is N tokens; dense selection for the top note can use 1.5 × N. It prefers
 the note's **Principle** section where one exists, falling back to opening prose. That
 default is deliberate: arcs are written trigger → push → deeper sight → principle, so the
 opening is story setup and the decision rule sits several sections down. Injecting "the
 first paragraph" hands you the anecdote and withholds the lesson.
 
-For `ask`'s target note without a Principle section, a passage matching the question
+For `ask`'s target note without a Principle section or usable passage vectors, a lexical passage matching the question
 replaces the first block only when it scores at least twice as highly; a positive match
 wins when the first block scores zero. Context-note excerpts keep their existing behavior,
-and every excerpt stays within the same token cap. A selected later passage includes
+and lexical excerpts stay within the N-token cap. A selected later lexical passage includes
 its governing headings in document order, so warnings and deprecation notices travel with
 the answer. An H1 that repeats the note title is left out; the title is already shown.
 Headings count toward the cap; the passage is shortened to fit. Oversized

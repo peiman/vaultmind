@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `ask` delivers the top note's best-matching passages by meaning when `index --embed` has stored passage vectors (#330). Run `vaultmind index --embed` once to get them.
+
 ### Fixed
 
 - Recall and reach hooks now say when only titles were delivered and show how to read a note, instead of claiming the titles are note text (#409).
