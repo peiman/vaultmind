@@ -232,3 +232,26 @@ func TestPassageVectors_PlansEveryUnitAndPreservesVectorOrder(t *testing.T) {
 		assert.Equal(t, float32(len("Title\n\n"+raw[u.Start:u.End])), vectors[i].Dense[0])
 	}
 }
+
+// A unit is capped like the whole note is (embedding.CapSymbolRuns): a long
+// run of symbols must not reach the tokenizer, whose lattice can stall on it.
+func TestPassageVectors_CapsSymbolRunsLikeTheNote(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "index.db")
+	db, err := index.Open(path)
+	require.NoError(t, err)
+	defer db.Close()
+	run := strings.Repeat("|", 64)
+	raw := strings.Repeat("filler words here. ", 60) + "\n\nborder " + run + " end.\n\n" + strings.Repeat("more text. ", 40)
+	require.NoError(t, index.StoreNote(db, index.NoteRecord{ID: "n", Path: "n.md", Title: "Title", BodyRaw: raw, BodyText: "normalized"}))
+	emb := &passageRecordingEmbedder{fakeFullEmbedder: fakeFullEmbedder{fakeDenseEmbedder{dims: 4}}}
+	_, err = index.NewIndexer(t.TempDir(), path, nil).EmbedNotes(context.Background(), path, emb)
+	require.NoError(t, err)
+	require.NotEmpty(t, emb.texts)
+	sawBorder := false
+	for _, text := range emb.texts {
+		assert.NotContains(t, text, run)
+		assert.Equal(t, embedding.CapSymbolRuns(text), text)
+		sawBorder = sawBorder || strings.Contains(text, "border")
+	}
+	assert.True(t, sawBorder, "the unit holding the symbol run must still be embedded")
+}

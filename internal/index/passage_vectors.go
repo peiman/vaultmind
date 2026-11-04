@@ -89,7 +89,7 @@ func supportsPassageVectors(e embedding.Embedder) bool {
 func embedPassageNote(ctx context.Context, db *DB, e embedding.Embedder, n passageNote) error {
 	texts, lengths := make([]string, len(n.units)), make([]int, len(n.units))
 	for i, u := range n.units {
-		texts[i] = noteEmbedText(n.title, n.raw[u.Start:u.End])
+		texts[i] = embedding.CapSymbolRuns(noteEmbedText(n.title, n.raw[u.Start:u.End]))
 		lengths[i] = len(texts[i])
 	}
 	vectors := make([][]float32, len(texts))
