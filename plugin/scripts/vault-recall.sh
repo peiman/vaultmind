@@ -705,7 +705,11 @@ echo "VAULT — from your own notes, relevant to what you just said:"
 echo ""
 echo "$POINTERS"
 echo ""
-echo "(the note's own text — a Principle section where it has one, else its opening lines. Full note: vaultmind note get <id> $NOTE_GET_WHERE)"
+if printf '%s\n' "$POINTERS" | grep -q '^[(]pointers only'; then
+  echo "(Titles only: no note text was delivered above. Read one with: vaultmind note get <id> $NOTE_GET_WHERE)"
+else
+  echo "(the note's own text — a Principle section where it has one, else its opening lines. Full note: vaultmind note get <id> $NOTE_GET_WHERE)"
+fi
 
 # Log the successful injection
 printf '{"timestamp":"%s","prompt_len":%d,"ask_status":0,"injection":true,"pointer_chars":%d,"query_chars":%d,"kind":"%s"}\n' \
