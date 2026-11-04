@@ -215,6 +215,11 @@ jobs:
         shell: bash
         run: bash .github/scripts/fetch-bge-m3-tokenizer.sh
 
+      # The checkout is shallow with no tags. TestReleasedChangelogSectionsMatchTheirTags
+      # compares released CHANGELOG sections to their tags and fails without them.
+      - name: Fetch release tags
+        run: git fetch --tags --depth=1 origin
+
       - name: Run Tests with Race Detection (Unix)
         if: runner.os != 'Windows'
         run: task test:race
@@ -278,6 +283,9 @@ jobs:
           BINARY_NAME=$(grep 'BINARY_NAME:' Taskfile.yml | head -1 | awk '{print $2}')
           echo "name=$BINARY_NAME" >> "$GITHUB_OUTPUT"
           echo "Binary name: $BINARY_NAME"
+
+      - name: Fetch release tags
+        run: git fetch --tags --depth=1 origin
 
       - name: Build Dev Binary
         run: task build:dev
@@ -412,6 +420,11 @@ jobs:
       - name: Fetch and verify BGE-M3 tokenizer
         shell: bash
         run: bash .github/scripts/fetch-bge-m3-tokenizer.sh
+
+      # The checkout is shallow with no tags. TestReleasedChangelogSectionsMatchTheirTags
+      # compares released CHANGELOG sections to their tags and fails without them.
+      - name: Fetch release tags
+        run: git fetch --tags --depth=1 origin
 
       - name: Run Quality Checks (Fast - PRs only)
         if: github.event_name == 'pull_request'
