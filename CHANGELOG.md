@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `ask` now says so when a note it delivers was edited or deleted after the last `vaultmind index`. Before, it returned the pre-edit text with no sign of it. A line under that note's text reads "changed on disk since indexed", and the JSON item gets `"stale": true` with a top-level `stale_notes` count. The check is one file stat per delivered note, and it reads the file only when the modification time differs, so a touch that changed nothing is not flagged. Notes that are current print exactly as before (#407).
+- The pre-release memory gate (`task test:memory`) no longer times out before its second test. Since the passage backfill (#330) each of its two tests takes 25 to 29 minutes on a loaded machine, so the 30 minute limit always ended the run early; the limit is now 90 minutes.
+
+## [0.10.23] - 2026-11-04
+
 ### Added
 
 - `ask` adds the top note's best-matching paragraphs by meaning, ranked by their best sentence, when `index --embed` has stored passage vectors (#330). The keyword pick still comes first, exactly as before, so exact-term answers are kept; the three best-matching paragraphs follow it in the room left, up to twice the excerpt size. One it already contains, or one that does not fit, is skipped, not cut, and not replaced by a weaker match. Each governing heading is shown once per run. Run `vaultmind index --embed` once to get the vectors. That first run embeds every passage of each note longer than the excerpt and takes much longer than a normal embed: about 18 minutes for a 450-note vault and 2 minutes for a 20-note vault on one Apple-silicon Mac. Later runs only embed changed notes.
@@ -3211,7 +3218,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.22...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.23...HEAD
+[0.10.23]: https://github.com/peiman/vaultmind/compare/v0.10.22...v0.10.23
 [0.10.22]: https://github.com/peiman/vaultmind/compare/v0.10.21...v0.10.22
 [0.10.21]: https://github.com/peiman/vaultmind/compare/v0.10.20...v0.10.21
 [0.10.20]: https://github.com/peiman/vaultmind/compare/v0.10.19...v0.10.20
