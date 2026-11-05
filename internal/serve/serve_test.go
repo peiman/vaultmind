@@ -105,6 +105,102 @@ func TestForward_GivesUpAfterItsBudget(t *testing.T) {
 	assert.False(t, errors.Is(err, serve.ErrNoServer))
 }
 
+// A request whose client has gone while it waited its turn is not run: no
+// one is left to read the answer, and running it would only delay the asks
+// queued behind it. A hook that times out kills its client this way (#406).
+func TestServe_SkipsAQueuedRequestWhoseClientHasGone(t *testing.T) {
+	sock := socketIn(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	entered, release := make(chan struct{}), make(chan struct{})
+	var abandonedRuns atomic.Int32
+	done := make(chan error, 1)
+	go func() {
+		done <- serve.Serve(ctx, sock, func(r serve.Request) serve.Response {
+			switch r.Args[0] {
+			case "hold":
+				close(entered)
+				<-release
+			case "abandoned":
+				abandonedRuns.Add(1)
+			}
+			return serve.Response{}
+		}, time.Minute)
+	}()
+	require.Eventually(t, func() bool {
+		_, err := serve.Forward(sock, serve.Request{Args: []string{"ping"}}, time.Second, time.Second)
+		return err == nil
+	}, 2*time.Second, 10*time.Millisecond)
+
+	held := make(chan error, 1)
+	go func() {
+		_, err := serve.Forward(sock, serve.Request{Args: []string{"hold"}}, time.Second, 5*time.Second)
+		held <- err
+	}()
+	<-entered
+	// Queued behind "hold"; the client gives up and closes its connection.
+	_, err := serve.Forward(sock, serve.Request{Args: []string{"abandoned"}}, time.Second, 100*time.Millisecond)
+	require.Error(t, err)
+	close(release)
+	require.NoError(t, <-held)
+
+	// Serve returns only after every accepted request is handled.
+	cancel()
+	require.NoError(t, <-done)
+	assert.Zero(t, abandonedRuns.Load(), "a request whose client had gone was run")
+}
+
+// A server that closes the connection without a word of answer refused the
+// request or died first: Forward says it went unanswered, so the caller may
+// run it itself. A server that is still working is not that (#406).
+func TestForward_AClosedConnectionWithNoAnswerIsUnanswered(t *testing.T) {
+	sock := socketIn(t)
+	ln, err := net.Listen("unix", sock)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = ln.Close() })
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			_, _ = c.Read(make([]byte, 4096))
+			_ = c.Close()
+		}
+	}()
+	_, err = serve.Forward(sock, serve.Request{Args: []string{"ask"}}, time.Second, 5*time.Second)
+	assert.ErrorIs(t, err, serve.ErrUnanswered)
+
+	slow := socketIn(t)
+	start(t, slow, func(serve.Request) serve.Response {
+		time.Sleep(500 * time.Millisecond)
+		return serve.Response{}
+	}, time.Minute)
+	_, err = serve.Forward(slow, serve.Request{Args: []string{"ask"}}, time.Second, 100*time.Millisecond)
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, serve.ErrUnanswered, "a server past the cap still has the request")
+	assert.NotErrorIs(t, err, serve.ErrNoServer)
+}
+
+// The server stamps each request when it reads it, so the time an ask waits
+// for its turn counts in how long it took.
+func TestServe_StampsWhenItReadARequest(t *testing.T) {
+	sock := socketIn(t)
+	got := make(chan time.Time, 1)
+	start(t, sock, func(r serve.Request) serve.Response {
+		if r.Args[0] == "ask" {
+			got <- r.Received
+		}
+		return serve.Response{}
+	}, time.Minute)
+	before := time.Now()
+	_, err := serve.Forward(sock, serve.Request{Args: []string{"ask"}}, time.Second, 5*time.Second)
+	require.NoError(t, err)
+	received := <-got
+	assert.False(t, received.Before(before))
+	assert.False(t, received.After(time.Now()))
+}
+
 // An idle server exits and removes its socket, releasing what it holds.
 func TestServe_ExitsWhenIdle(t *testing.T) {
 	sock := socketIn(t)

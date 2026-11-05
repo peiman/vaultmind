@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -19,6 +20,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 // Request is one CLI invocation: its arguments, working directory and
@@ -27,6 +30,9 @@ type Request struct {
 	Args []string          `json:"args"`
 	Dir  string            `json:"dir"`
 	Env  map[string]string `json:"env"`
+	// Received is when the server read the request, so the time it waited
+	// for its turn counts in how long it took. Set by Serve, never sent.
+	Received time.Time `json:"-"`
 }
 
 // Response is what the command printed and the exit code it ended with.
@@ -79,6 +85,12 @@ var (
 	// ErrNoServer means nothing answers on the socket; the caller runs the
 	// command itself.
 	ErrNoServer = errors.New("no vaultmind server is running")
+	// ErrUnanswered means the server never took the request to an answer:
+	// it could not be reached, or it closed the connection without a word,
+	// having refused the request or died first. The caller may run the
+	// command itself. Any other Forward error means the server may still be
+	// running the request, so running it again would run it twice.
+	ErrUnanswered = errors.New("the vaultmind server did not take the request")
 	// ErrAlreadyServing means another server already answers on the socket.
 	ErrAlreadyServing = errors.New("a vaultmind server is already running on this socket")
 	// ErrUnsafeDir means the socket's directory could be reached by another
@@ -111,7 +123,8 @@ func SocketPath(stateDir, version string) string {
 }
 
 // Serve answers requests on sock until ctx ends or no request arrives for
-// idle, then removes the socket. Requests run one at a time. WithShutdown
+// idle, then removes the socket. Requests run one at a time; one whose
+// client has gone before its turn comes is skipped. WithShutdown
 // runs once the accept loop ends, and not when this process never takes
 // the socket.
 func Serve(ctx context.Context, sock string, exec Exec, idle time.Duration, opts ...Option) error {
@@ -171,7 +184,16 @@ func Serve(ctx context.Context, sock string, exec Exec, idle time.Duration, opts
 			if err := json.NewDecoder(conn).Decode(&req); err != nil {
 				return
 			}
+			req.Received = time.Now()
 			mu.Lock()
+			if clientGone(conn) {
+				// Its client gave up while it waited its turn (a hook's
+				// timeout killed it): no one would read the answer, and
+				// running it would only delay the requests behind it.
+				mu.Unlock()
+				log.Debug().Msg("vaultmind serve: skipped a queued request whose client had gone")
+				return
+			}
 			resp := run(exec, req)
 			mu.Unlock()
 			touch(activity)
@@ -182,6 +204,25 @@ func Serve(ctx context.Context, sock string, exec Exec, idle time.Duration, opts
 				cancel()
 			}
 		}()
+	}
+}
+
+// clientGone reports whether the client has closed its end of conn. A client
+// sends its request and then only reads, so a read that finds the end of the
+// stream, or an error, means it has gone; a read that times out means it is
+// still waiting. The probe waits a millisecond at most.
+func clientGone(conn net.Conn) bool {
+	if err := conn.SetReadDeadline(time.Now().Add(time.Millisecond)); err != nil {
+		return false
+	}
+	defer func() { _ = conn.SetReadDeadline(time.Time{}) }()
+	var buf [64]byte
+	for {
+		// Bytes here are the whitespace after the request; read past them.
+		if _, err := conn.Read(buf[:]); err != nil {
+			var ne net.Error
+			return !errors.As(err, &ne) || !ne.Timeout()
+		}
 	}
 }
 
@@ -246,14 +287,16 @@ func alive(sock string) bool {
 }
 
 // Forward sends req to the server on sock and returns its response. With no
-// server it returns ErrNoServer at once; a server slower than total is
-// abandoned with an error.
+// server it returns ErrNoServer at once. A server it cannot reach, or one that
+// closes the connection without answering, is ErrUnanswered. A server still
+// working after total is left with an error that is neither: it has the
+// request, so the caller must not run it again.
 func Forward(sock string, req Request, connect, total time.Duration) (Response, error) {
 	if err := checkPrivateDir(filepath.Dir(sock)); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return Response{}, ErrNoServer
 		}
-		return Response{}, err
+		return Response{}, fmt.Errorf("%w: %w", ErrUnanswered, err)
 	}
 	conn, err := net.DialTimeout("unix", sock, connect)
 	if err != nil {
@@ -262,15 +305,25 @@ func Forward(sock string, req Request, connect, total time.Duration) (Response, 
 		if errors.Is(err, os.ErrNotExist) || errors.Is(err, syscall.ECONNREFUSED) || errors.Is(err, syscall.ENOENT) || errors.Is(err, syscall.ENOTSOCK) {
 			return Response{}, ErrNoServer
 		}
-		return Response{}, fmt.Errorf("connecting to the vaultmind server: %w", err)
+		return Response{}, fmt.Errorf("%w: connecting: %w", ErrUnanswered, err)
 	}
 	defer func() { _ = conn.Close() }()
 	_ = conn.SetDeadline(time.Now().Add(total))
 	if err := json.NewEncoder(conn).Encode(req); err != nil {
-		return Response{}, fmt.Errorf("sending to the vaultmind server: %w", err)
+		return Response{}, fmt.Errorf("%w: sending: %w", ErrUnanswered, err)
 	}
 	var resp Response
 	if err := json.NewDecoder(conn).Decode(&resp); err != nil {
+		// The end of the stream, or a reset, before any answer: the server
+		// refused the request or died. Linux resets a Unix socket closed
+		// with unread bytes; macOS ends it.
+		if errors.Is(err, io.EOF) || errors.Is(err, syscall.ECONNRESET) {
+			return Response{}, fmt.Errorf("%w: it closed the connection without answering", ErrUnanswered)
+		}
+		var ne net.Error
+		if errors.As(err, &ne) && ne.Timeout() {
+			return Response{}, fmt.Errorf("the vaultmind server did not answer within %s", total)
+		}
 		return Response{}, fmt.Errorf("reading from the vaultmind server: %w", err)
 	}
 	return resp, nil
