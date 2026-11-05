@@ -38,7 +38,7 @@ func serveFake(t *testing.T, exec serve.Exec) {
 	go func() { _ = serve.Serve(ctx, sock, exec, time.Minute); close(done) }()
 	t.Cleanup(func() { cancel(); <-done })
 	require.Eventually(t, func() bool {
-		_, err := serve.Forward(sock, serve.Request{Args: []string{"ping"}}, time.Second, time.Second)
+		_, err := serve.Forward(sock, serve.Request{Args: []string{"ping"}}, time.Second, time.Second, time.Second)
 		return err == nil
 	}, 2*time.Second, 10*time.Millisecond)
 }
@@ -148,6 +148,86 @@ func TestTryServer_ASlowServedAskRunsOnlyOnce(t *testing.T) {
 // abandons slow asks that are still running (#406).
 func TestServeRequestTimeout_IsALongSafetyCap(t *testing.T) {
 	assert.GreaterOrEqual(t, serveRequestTimeout, time.Minute)
+}
+
+// Waiting to start is a short cap, separate from the wait for an answer.
+// Past it an ask runs here, and that is a different ask from the one still
+// queued on the server (#421).
+func TestServeQueueTimeout_BoundsTheWaitToStart(t *testing.T) {
+	assert.Equal(t, 10*time.Second, serveQueueTimeout)
+	assert.Less(t, serveQueueTimeout, serveRequestTimeout)
+}
+
+// An ask queued behind one the server has already started gives up at the
+// queue cap and runs here. The server does not run it as well (#421).
+func TestTryServer_AnAskQueuedBehindAnotherFallsBackHere(t *testing.T) {
+	isolatedState(t)
+	orig := serveQueueTimeout
+	serveQueueTimeout = 150 * time.Millisecond
+	t.Cleanup(func() { serveQueueTimeout = orig })
+
+	sock, err := serveSocket()
+	require.NoError(t, err)
+	release := make(chan struct{})
+	started := make(chan struct{})
+	var runs atomic.Int32
+	ctx, cancel := context.WithCancel(context.Background())
+	serverDone := make(chan struct{})
+	go func() {
+		_ = serve.Serve(ctx, sock, func(r serve.Request) serve.Response {
+			if len(r.Args) > 1 {
+				switch r.Args[1] {
+				case "hold":
+					runs.Add(1)
+					close(started)
+					<-release
+				case "next":
+					runs.Add(1)
+				}
+			}
+			return serve.Response{}
+		}, time.Minute)
+		close(serverDone)
+	}()
+	t.Cleanup(func() {
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+		cancel()
+		select {
+		case <-serverDone:
+		case <-time.After(5 * time.Second):
+		}
+	})
+	require.Eventually(t, func() bool {
+		_, err := serve.Forward(sock, serve.Request{Args: []string{"ping"}}, time.Second, time.Second, time.Second)
+		return err == nil
+	}, 2*time.Second, 10*time.Millisecond)
+
+	go func() { _, _ = tryServer([]string{"ask", "hold"}) }()
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the held ask did not start")
+	}
+
+	begin := time.Now()
+	_, ok := tryServer([]string{"ask", "next"})
+	elapsed := time.Since(begin)
+	assert.False(t, ok, "an ask the server had not started was not run here")
+	assert.GreaterOrEqual(t, elapsed, serveQueueTimeout/2, "fell back without waiting for the queue")
+	assert.Less(t, elapsed, 20*serveQueueTimeout)
+
+	close(release)
+	cancel()
+	select {
+	case <-serverDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the server did not finish the abandoned ask")
+	}
+	assert.Equal(t, int32(1), runs.Load(), "the queued ask was also run on the server")
 }
 
 // Main answers an ask from the server, with the server's exit code.
