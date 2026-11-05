@@ -531,6 +531,7 @@ func deliverAsk(ctx context.Context, resolver *graph.Resolver, db *index.DB, cfg
 		Slim:             true,
 		ActivationScores: activationScores,
 		ExcerptTokens:    cfg.ExcerptTokens,
+		OverflowExcerpt:  overflowPassage(ctx, db, cfg, result.rankingQuery),
 		Seeds:            relevantLaterHits(hits, result),
 		IncludeDrafts:    cfg.IncludeDrafts,
 	})
@@ -610,6 +611,7 @@ func markShownBefore(pack *memory.ContextPackResult, shown map[string]bool) {
 		}
 		pack.UsedTokens -= memory.EstimateTokens(item.Body)
 		item.Body, item.BodyIncluded, item.BodyExcerpted, item.ShownBefore = "", false, false, true
+		item.PassageSelector = ""
 	}
 }
 

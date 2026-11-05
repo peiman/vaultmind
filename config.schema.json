@@ -128,7 +128,7 @@
             },
             "excerpt": {
               "default": 0,
-              "description": "Cap each note's contribution at N tokens, preferring its decision-bearing passage — the Principle section where a note has one (an arc's rule lives there; its opening is story setup), else the opening prose. Applies to the target note and every context item. 0 = off, which also means an over-budget note contributes no text at all while the pack still counts it, so a tight budget yields items with no content",
+              "description": "Cap each note's contribution at N tokens, preferring its decision-bearing passage — the Principle section where a note has one (an arc's rule lives there; its opening is story setup), else the opening prose. Applies to the target note and every context item. 0 = off: a note that fits is delivered whole, and a context note larger than the budget left gets the heading sections best matching the question, within that room, instead of no text",
               "type": "integer"
             },
             "explain": {

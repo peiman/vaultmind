@@ -77,21 +77,10 @@ func Units(body, title string) []Unit {
 			skipUnderline = false
 			continue
 		}
-		trimmed := strings.TrimSpace(line)
-		fence := strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~")
-		marker := atxHeading.FindString(trimmed)
-		level, label := len(strings.TrimSpace(marker)), trimmed
-		if !fenced && !fence && marker == "" && trimmed != "" && i+1 < len(lines) {
-			underline := strings.TrimSpace(lines[i+1])
-			if Setext.MatchString(underline) {
-				level = 2
-				if underline[0] == '=' {
-					level = 1
-				}
-				label += "\n" + underline
-				skipUnderline = true
-			}
-		}
+		var fence bool
+		var level int
+		var label string
+		fence, level, label, skipUnderline = classifyLine(lines, i, fenced)
 		if fence {
 			if !fenced {
 				flush(at)
@@ -115,6 +104,29 @@ func Units(body, title string) []Unit {
 		flush(len(body))
 	}
 	return units
+}
+
+// classifyLine reads lines[i] the way Units and Sections both do: whether it
+// opens or closes a code fence, and otherwise its heading level and label (0
+// when it is not a heading). setext reports a label that carries the next
+// line as its underline, which the caller then skips.
+func classifyLine(lines []string, i int, fenced bool) (fence bool, level int, label string, setext bool) {
+	trimmed := strings.TrimSpace(lines[i])
+	fence = strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~")
+	marker := atxHeading.FindString(trimmed)
+	level, label = len(strings.TrimSpace(marker)), trimmed
+	if !fenced && !fence && marker == "" && trimmed != "" && i+1 < len(lines) {
+		underline := strings.TrimSpace(lines[i+1])
+		if Setext.MatchString(underline) {
+			level = 2
+			if underline[0] == '=' {
+				level = 1
+			}
+			label += "\n" + underline
+			setext = true
+		}
+	}
+	return fence, level, label, setext
 }
 
 // Linear sentence/bullet scan avoids a regexp match and allocation per short

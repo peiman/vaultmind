@@ -80,23 +80,26 @@ func TestAsk_DeliveringAskRecordsDelivery(t *testing.T) {
 // A note whose body was NOT packed is not a delivery even on a delivering ask —
 // per-item text decides, not the whole-result verdict.
 //
-// Budget 400 is chosen so the raw-body fixture produces BOTH kinds of item.
-// The earlier normalized-body fixture used 500; faithfully delivered markup
-// changes the pack's token accounting. The first draft used 8192, where every
-// item had text and the loop asserted nothing.
+// The text-less item comes from session dedup: the first item is named in
+// ShownBefore, so it is sent as its title. This used a tight budget (400)
+// until #331, when an over-budget context note started getting an excerpt
+// sized to the room left; budget omission no longer leaves an item without
+// text. The first draft used 8192 with no dedup, where every item had text
+// and the loop asserted nothing.
 //
-// The require() below is the guard that matters more than the budget: if the
-// fixture ever drifts so that one kind disappears, this fails loudly instead of
+// The require() below is the guard that matters more than the fixture: if it
+// ever drifts so that one kind disappears, this fails loudly instead of
 // quietly going hollow again.
 func TestAsk_ItemsWithoutTextAreNotDeliveries(t *testing.T) {
+	cfg := query.AskConfig{Query: "spreading activation", Budget: 8192, MaxItems: 5, SearchLimit: 5}
+	probe := askOnFreshVault(t, cfg)
+	require.NotEmpty(t, probe.Context.Context)
+	cfg.ShownBefore = map[string]bool{probe.Context.Context[0].ID: true}
+
 	dbPath := filepath.Join(t.TempDir(), "idx.db")
 	db := testvault.OpenSharedDB(t, testVaultPath, dbPath)
 	t.Cleanup(func() { _ = db.Close() })
-	resolver := graph.NewResolver(db)
-
-	result, err := query.Ask(t.Context(), &query.FTSRetriever{DB: db}, resolver, db, query.AskConfig{
-		Query: "spreading activation", Budget: 400, MaxItems: 5, SearchLimit: 5,
-	})
+	result, err := query.Ask(t.Context(), &query.FTSRetriever{DB: db}, graph.NewResolver(db), db, cfg)
 	require.NoError(t, err)
 	require.NotNil(t, result.Context)
 
@@ -120,4 +123,16 @@ func TestAsk_ItemsWithoutTextAreNotDeliveries(t *testing.T) {
 			"any implementation, which is the defect it exists to catch")
 	require.Positive(t, withText,
 		"every item lacked text, so the mixed case this test is about was never exercised")
+}
+
+// askOnFreshVault runs ask on its own copy of the test vault, so the access
+// rows it records cannot leak into the copy a test asserts on.
+func askOnFreshVault(t *testing.T, cfg query.AskConfig) *query.AskResult {
+	t.Helper()
+	db := testvault.OpenSharedDB(t, testVaultPath, filepath.Join(t.TempDir(), "probe.db"))
+	t.Cleanup(func() { _ = db.Close() })
+	result, err := query.Ask(t.Context(), &query.FTSRetriever{DB: db}, graph.NewResolver(db), db, cfg)
+	require.NoError(t, err)
+	require.NotNil(t, result.Context)
+	return result
 }

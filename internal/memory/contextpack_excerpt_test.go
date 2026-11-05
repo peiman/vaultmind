@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/graph"
+	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/memory"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -117,6 +118,56 @@ func TestContextPack_ExcerptOptInIsDefaultOff(t *testing.T) {
 	assert.Equal(t, a.UsedTokens, b.UsedTokens)
 	for i := range a.Context {
 		assert.False(t, a.Context[i].BodyExcerpted, "no excerpting without opting in")
+	}
+}
+
+// #331: with ExcerptTokens 0, a body larger than the room left used to deliver
+// nothing, and that room went to smaller, lower-ranked notes. OverflowExcerpt
+// fills that room with the caller's chosen excerpt instead. Both packers do it.
+func TestContextPack_OverflowExcerptFillsTheRoomLeft(t *testing.T) {
+	db := buildTestDB(t)
+	resolver := graph.NewResolver(db)
+	const tightBudget = 200
+	for _, maxItems := range []int{3, 0} {
+		cfg := memory.ContextPackConfig{Input: "proj-vaultmind", Budget: tightBudget, MaxItems: maxItems}
+		before, err := memory.ContextPack(resolver, db, cfg)
+		require.NoError(t, err)
+		cfg.OverflowExcerpt = func(n *index.FullNote, maxTokens int) (string, string) {
+			return memory.Excerpt(n.Body, maxTokens), "stub"
+		}
+		after, err := memory.ContextPack(resolver, db, cfg)
+		require.NoError(t, err)
+
+		assert.Zero(t, withText(before), "max_items=%d: without the option an over-budget body delivers nothing", maxItems)
+		assert.Positive(t, withText(after), "max_items=%d: the over-budget body must deliver an excerpt", maxItems)
+		assert.LessOrEqual(t, after.UsedTokens, tightBudget)
+		for _, item := range after.Context {
+			if item.Body != "" {
+				assert.True(t, item.BodyIncluded && item.BodyExcerpted, "item %s", item.ID)
+				assert.False(t, item.BodyOmittedBudget, "item %s carries text, so it was not omitted", item.ID)
+				assert.Equal(t, "stub", item.PassageSelector, "item %s names what chose its text", item.ID)
+			}
+		}
+	}
+}
+
+// An OverflowExcerpt that returns more than the room it was given cannot
+// break the budget: the packer's own excerpt replaces it.
+func TestContextPack_OverflowExcerptOverRoomFallsBack(t *testing.T) {
+	db := buildTestDB(t)
+	const tightBudget = 200
+	result, err := memory.ContextPack(graph.NewResolver(db), db, memory.ContextPackConfig{
+		Input: "proj-vaultmind", Budget: tightBudget, MaxItems: 3,
+		OverflowExcerpt: func(n *index.FullNote, _ int) (string, string) { return n.Body + n.Body, "greedy" },
+	})
+	require.NoError(t, err)
+
+	assert.Positive(t, withText(result))
+	assert.LessOrEqual(t, result.UsedTokens, tightBudget)
+	for _, item := range result.Context {
+		if item.Body != "" {
+			assert.Equal(t, "none", item.PassageSelector, "item %s", item.ID)
+		}
 	}
 }
 
