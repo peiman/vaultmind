@@ -145,12 +145,14 @@ func formatAskWithOptions(result *AskResult, w io.Writer, opts formatOpts) error
 	// reflect the same epistemic posture without the agent having to
 	// remember to check.
 	//
-	// Exception: a vault below the calibration gate. There the low-confidence
-	// verdict is not a finding about the top hit, it is an artifact of judging a
-	// handful of notes against a floor calibrated for a large corpus — and a
-	// vault that small has no working-context budget worth protecting. Withhold
-	// the body there and a new user's first query, on the vault `init` just
-	// scaffolded for them, returns the right note and refuses to show it.
+	// Exception: a single vault below the calibration gate. There the
+	// low-confidence verdict is not a finding about the top hit, it is an
+	// artifact of judging a handful of notes against a floor calibrated for a
+	// large corpus — and a vault that small has no working-context budget worth
+	// protecting. Withhold the body there and a new user's first query, on the
+	// vault `init` just scaffolded for them, returns the right note and refuses
+	// to show it. A federated owner is not exempt: peer vaults judged the same
+	// query, so its own label stands.
 	// Same decision the telemetry records, from the same function — see
 	// AskResult.BodyDecision. Two copies of this rule would let the log claim a
 	// body was delivered on a render that withheld it.
@@ -234,9 +236,16 @@ func writeAskHeader(w io.Writer, result *AskResult, explain, bodyDelivered bool)
 			if result.floorUnmeasured {
 				why = ", and this embedding model has no measured default floor to judge against"
 			}
+			// The closing clause has to be true of the body that follows. A single
+			// small vault still shows the hit. A federated one is judged by its
+			// label, and a weak label withholds the text.
+			shown := "; showing the top hit anyway"
+			if !bodyDelivered {
+				shown = "; body suppressed; use --read N to override"
+			}
 			header += fmt.Sprintf(
-				"  [relevance: not yet measurable — %d notes is below the %d needed to calibrate this vault%s; showing the top hit anyway]",
-				result.VaultNoteCount, noisefloor.MinCalibNotes, why)
+				"  [relevance: not yet measurable — %d notes is below the %d needed to calibrate this vault%s%s]",
+				result.VaultNoteCount, noisefloor.MinCalibNotes, why, shown)
 			return emitAskHeader(w, header, result)
 		}
 		switch result.TopHitConfidence {

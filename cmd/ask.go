@@ -230,6 +230,11 @@ func runAsk(cmd *cobra.Command, args []string) error {
 			return computeActivationScores(cmd.Context(), sims, delta)
 		},
 	}
+	if ownerRank != nil && len(federated) > 0 {
+		ownerRank.Federated = federated
+		ownerRank.FederatedVaults = federatedVaults
+		ownerRank.Vault = vaultDisplayName(vaultPath)
+	}
 	var result *query.AskResult
 	if ownerRank != nil {
 		result, err = query.AskFromRank(cmd.Context(), resolver, vdb.DB, cfg, ownerRank)
@@ -241,11 +246,6 @@ func runAsk(cmd *cobra.Command, args []string) error {
 	if result != nil {
 		result.RetrievalMode = mode
 		noteAskFormatStale(result, vdb.DB, vaultPath)
-		if len(federated) > 0 {
-			result.Federated = federated
-			result.FederatedVaults = federatedVaults
-			result.Vault = vaultDisplayName(vaultPath)
-		}
 	}
 
 	// Recall floor: nothing relevant (honest noise-floor no_match) and the
