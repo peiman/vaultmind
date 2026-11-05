@@ -161,6 +161,13 @@ type AskResult struct {
 	// FederatedVaults reports every vault that was SEARCHED and what its own
 	// floor said, so a reader can tell an empty vault from an unsearched one.
 	FederatedVaults []FederatedVaultStatus `json:"federated_vaults,omitempty"`
+	// CalibratedPeer is true when a vault other than the owner has at least
+	// noisefloor.MinCalibNotes notes and a noise-floor verdict. Set with
+	// Federated, before AskFromRank, from HasCalibratedPeer — the one place
+	// that rule is computed. BodyDecision drops the small-vault exemption
+	// only then. Two fresh vaults have no such peer, and the exemption stays.
+	// Not part of the JSON contract.
+	CalibratedPeer bool `json:"-"`
 	// QueryCapped is set only when a bound shortened ranking.
 	// Query itself stays the caller's original text.
 	QueryCapped *QueryCapped `json:"query_capped,omitempty"`
@@ -185,6 +192,23 @@ type AskResult struct {
 // cannot drift apart.
 func (r *AskResult) tooSmallToJudge() bool {
 	return r.NoiseFloorApplied && r.VaultNoteCount > 0 && r.VaultNoteCount < noisefloor.MinCalibNotes
+}
+
+// HasCalibratedPeer reports whether a vault other than owner can judge the
+// query. That takes both halves of the same gate tooSmallToJudge uses: at
+// least noisefloor.MinCalibNotes notes, and a noise-floor verdict. An empty
+// verdict is unmeasured (no embedder), not a judgement. The owner's own size
+// is not a peer.
+func HasCalibratedPeer(owner string, noteCounts map[string]int, verdicts map[string]string) bool {
+	for name, n := range noteCounts {
+		if name == owner {
+			continue
+		}
+		if n >= noisefloor.MinCalibNotes && verdicts[name] != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // withholdsRelevanceJudgement is the header's rule for not quoting a band.

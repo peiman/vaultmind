@@ -151,8 +151,10 @@ func formatAskWithOptions(result *AskResult, w io.Writer, opts formatOpts) error
 	// large corpus — and a vault that small has no working-context budget worth
 	// protecting. Withhold the body there and a new user's first query, on the
 	// vault `init` just scaffolded for them, returns the right note and refuses
-	// to show it. A federated owner is not exempt: peer vaults judged the same
-	// query, so its own label stands.
+	// to show it. A federated owner is not exempt when another vault in the
+	// ask is calibrated: that peer judged the same query, so this vault's
+	// own label stands. Two fresh vaults have no such peer, and the
+	// exemption stays.
 	// Same decision the telemetry records, from the same function — see
 	// AskResult.BodyDecision. Two copies of this rule would let the log claim a
 	// body was delivered on a render that withheld it.

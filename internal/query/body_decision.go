@@ -65,19 +65,18 @@ func (r *AskResult) BodyDecision(callerAsked bool) (delivered bool, reason strin
 	if r == nil {
 		return false, experiment.SuppressedBelowFloor
 	}
-	// A vault too small to calibrate is exempt when it is the only vault in the
-	// ask. There the low-confidence verdict is an artifact of judging a handful
-	// of notes against a floor built for a large corpus, not a finding about
-	// the hit. A new vault right after init has nothing else to compare
-	// against, and withholding the body returns the right note and refuses to
-	// show it.
+	// A vault too small to calibrate is exempt unless some other vault in the
+	// ask can judge the query. There the low-confidence verdict is an artifact
+	// of judging a handful of notes against a floor built for a large corpus,
+	// not a finding about the hit. A new vault right after init has nothing
+	// else to compare against, and neither do two fresh vaults: withholding
+	// the body returns the right note and refuses to show it.
 	//
-	// Federated, when non-empty, is the merged ranking from a multi-vault ask.
-	// Peer vaults judged this same query, so this vault's own label stands and
-	// the exemption does not. The field is stamped before AskFromRank, which
-	// is the first BodyDecision (the access ledger); the formatter reads it
-	// again. One field, so the ledger and the text cannot disagree.
-	if r.tooSmallToJudge() && len(r.Federated) == 0 {
+	// CalibratedPeer is that other vault: at least MinCalibNotes notes and a
+	// noise-floor verdict. It is stamped with Federated before AskFromRank,
+	// which is the first BodyDecision (the access ledger); the formatter
+	// reads it again. One field, so the ledger and the text cannot disagree.
+	if r.tooSmallToJudge() && !r.CalibratedPeer {
 		return true, ""
 	}
 	switch r.TopHitConfidence {

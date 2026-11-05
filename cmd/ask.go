@@ -141,11 +141,17 @@ func runAsk(cmd *cobra.Command, args []string) error {
 		vaultPath = vaultPaths[0]
 	}
 	if len(vaultPaths) > 1 {
-		hits, statuses, owner, ranked, ferr := federateAndPickOwner(cmd, args[0], vaultPaths, searchLimitForFederation, forwardTokens, salientTerms)
+		hits, statuses, owner, ranked, peer, ferr := federateAndPickOwner(cmd, args[0], vaultPaths, searchLimitForFederation, forwardTokens, salientTerms)
 		if ferr != nil {
 			return ferr
 		}
 		federated, federatedVaults, vaultPath, ownerRank = hits, statuses, owner, ranked
+		if ownerRank != nil && len(federated) > 0 {
+			ownerRank.Federated = federated
+			ownerRank.FederatedVaults = federatedVaults
+			ownerRank.Vault = vaultDisplayName(vaultPath)
+			ownerRank.CalibratedPeer = peer
+		}
 	}
 
 	vdb, err := cmdutil.OpenVaultDBOrWriteErr(cmd, vaultPath, "ask")
@@ -230,18 +236,12 @@ func runAsk(cmd *cobra.Command, args []string) error {
 			return computeActivationScores(cmd.Context(), sims, delta)
 		},
 	}
-	if ownerRank != nil && len(federated) > 0 {
-		ownerRank.Federated = federated
-		ownerRank.FederatedVaults = federatedVaults
-		ownerRank.Vault = vaultDisplayName(vaultPath)
-	}
 	var result *query.AskResult
 	if ownerRank != nil {
 		result, err = query.AskFromRank(cmd.Context(), resolver, vdb.DB, cfg, ownerRank)
 	} else {
 		result, err = query.Ask(cmd.Context(), ret.Retriever, resolver, vdb.DB, cfg)
 	}
-
 	mode := retrievalModeLabel(ret)
 	if result != nil {
 		result.RetrievalMode = mode
