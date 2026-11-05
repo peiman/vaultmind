@@ -3,17 +3,20 @@ package query
 import (
 	"context"
 	"math"
+	"slices"
 	"strings"
 
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/memory"
 	"github.com/peiman/vaultmind/internal/parser"
-	"github.com/rs/zerolog/log"
 )
 
 type passageResult struct {
 	Text                  string
 	BestScore, FirstScore float64
+	// Start and End locate the window Text came from, in the comment-stripped
+	// body. Both are 0 when Text is still the packed excerpt.
+	Start, End int
 }
 
 func passageMarginWins(best, first, ratio float64) bool {
@@ -23,7 +26,8 @@ func passageMarginWins(best, first, ratio float64) bool {
 // selectPassage normalizes and tokenizes the body once. SQLite supplies the
 // keyword lane's actual unicode61 folding for each distinct token; windows reuse that
 // token stream and corpus frequencies without indexing individual windows.
-func selectPassage(db *index.DB, query, raw, today string, limit int, title string) (passageResult, error) {
+// skip, when set, drops the windows it reports true for before scoring.
+func selectPassage(db *index.DB, query, raw, today string, limit int, title string, skip func(string) bool) (passageResult, error) {
 	result := passageResult{Text: today}
 	raw = parser.StripHTMLComments(raw)
 	text, offsets := parser.StripForFTSOffsets(raw)
@@ -41,6 +45,9 @@ func selectPassage(db *index.DB, query, raw, today string, limit int, title stri
 		tokens[i] = passageToken{term: lex.body[ordinals[i]], start: offsets[b[0]], end: offsets[b[1]-1] + 1}
 	}
 	cs := passageWindows(raw, title, limit, tokens, lex.terms)
+	if skip != nil {
+		cs = slices.DeleteFunc(cs, func(w passageWindow) bool { return skip(raw[w.start:w.end]) })
+	}
 	if len(cs) == 0 {
 		return result, nil
 	}
@@ -110,6 +117,7 @@ func selectPassage(db *index.DB, query, raw, today string, limit int, title stri
 		start := strings.Index(raw, first)
 		if cs[best].start < start || cs[best].start >= start+len(first) {
 			result.Text = cs[best].deliver(raw, tokens, lex.terms)
+			result.Start, result.End = cs[best].start, cs[best].end
 		}
 	}
 	return result, nil
@@ -151,25 +159,6 @@ func applyPassageExcerpt(ctx context.Context, db *index.DB, cfg AskConfig, ranki
 	return nil
 }
 
-// overflowPassage is ask's OverflowExcerpt (#331): the same selection the
-// target gets, for a context note whose whole text does not fit the room
-// left, sized to that room. The packer calls it in rank order, so the note
-// is sized before any lower-ranked note takes room. Text-mode pointers-only
-// renders no bodies, so it skips the selection there, as the target does.
-func overflowPassage(ctx context.Context, db *index.DB, cfg AskConfig, rankingQuery string) func(*index.FullNote, int) (string, string) {
-	return func(n *index.FullNote, room int) (string, string) {
-		packed := memory.Excerpt(n.Body, room)
-		if packed == "" || (cfg.PointersOnly && !cfg.JSONOutput) {
-			return packed, "none"
-		}
-		text, selector, err := notePassage(ctx, db, cfg, rankingQuery, passageNote{id: n.ID, title: n.Title, packed: packed}, room, room)
-		if err != nil {
-			log.Debug().Err(err).Str("note_id", n.ID).Msg("passage selection unavailable; keeping original excerpt")
-		}
-		return text, selector
-	}
-}
-
 // passageNote is one packed note the selector may re-excerpt: its id, its
 // title, and the excerpt the packer chose for it.
 type passageNote struct {
@@ -191,7 +180,7 @@ func notePassage(ctx context.Context, db *index.DB, cfg AskConfig, rankingQuery 
 	if limit <= 0 {
 		return note.packed, "none", nil
 	}
-	selected, err := selectPassage(db, cfg.Query, raw, note.packed, limit, note.title)
+	selected, err := selectPassage(db, cfg.Query, raw, note.packed, limit, note.title, nil)
 	if err != nil {
 		return note.packed, "lexical", err
 	}

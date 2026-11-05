@@ -5,12 +5,15 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/peiman/vaultmind/internal/embedding"
 	"github.com/peiman/vaultmind/internal/graph"
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/memory"
 	"github.com/peiman/vaultmind/internal/parser"
+	"github.com/peiman/vaultmind/internal/passage"
 	"github.com/peiman/vaultmind/internal/query"
 	"github.com/peiman/vaultmind/internal/retrieval"
 	"github.com/stretchr/testify/assert"
@@ -85,6 +88,116 @@ func TestAsk_OverflowingContextItemGetsPassageExcerpt(t *testing.T) {
 	require.NoError(t, query.FormatAsk(r, &out))
 	assert.Contains(t, out.String(), "register command checks")
 	assert.Contains(t, out.String(), "as excerpt")
+}
+
+// tocGuide is a note larger than the ask budget. Its contents list repeats
+// the question's words in short lines; the answer is a later section with
+// prose, a code fence and a second step.
+const tocGuide = "# Guide\n\nThis guide explains the project.\n\n## Contents\n\n" +
+	"- [Overview](#overview)\n- [Register a command](#register-a-command)\n" +
+	"- [Register a command flag](#register-a-command-flag)\n- [Release notes](#release-notes)\n\n" +
+	"## Overview\n\nThe project is a scaffold for tools.\n\n" +
+	"## Register a command\n\n### Step 1: Scaffold\n\nTo register a command, run the scaffold.\n\n" +
+	"```bash\ntask scaffold name=demo\n```\n\n### Step 2: Declare options\n\nDeclare every option before wiring.\n\n" +
+	"## Release notes\n\n"
+
+// tocGuideAnswer is what the answer section must deliver: its second step
+// and the code in its first.
+var tocGuideAnswer = []string{"## Register a command", "task scaffold name=demo", "### Step 2: Declare options", "Declare every option before wiring."}
+
+func tocGuideDB(t *testing.T) *index.DB {
+	t.Helper()
+	db, err := index.Open(filepath.Join(t.TempDir(), "toc.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	target := "A short target note."
+	require.NoError(t, index.StoreNote(db, index.NoteRecord{ID: "target", Path: "target.md", Type: "reference", Title: "Target", BodyRaw: target, BodyText: target, Links: []index.LinkRecord{{DstNoteID: "guide", DstRaw: "guide", EdgeType: "explicit_relation", Resolved: true}}}))
+	guide := tocGuide + passageParagraph("unrelated", 400)
+	require.NoError(t, index.StoreNote(db, index.NoteRecord{ID: "guide", Path: "guide.md", Type: "reference", Title: "Guide", BodyRaw: guide, BodyText: parser.StripForFTS(guide)}))
+	return db
+}
+
+func askGuide(t *testing.T, db *index.DB, emb embedding.Embedder, question string) memory.ContextItem {
+	t.Helper()
+	retriever := &stubRetriever{results: []retrieval.ScoredResult{{ID: "target", Title: "Target", Score: 1}}}
+	r, err := query.Ask(context.Background(), retriever, graph.NewResolver(db), db, query.AskConfig{Query: question, Embedder: emb, Budget: 600, MaxItems: 3, SearchLimit: 5})
+	require.NoError(t, err)
+	require.NotEmpty(t, r.Context.Context)
+	require.LessOrEqual(t, r.Context.UsedTokens, r.Context.BudgetTokens)
+	item := r.Context.Context[0]
+	require.Equal(t, "guide", item.ID)
+	return item
+}
+
+// #331 v2: an over-budget note whose contents list repeats the question used
+// to deliver that list, a line of links. Navigation is not content: the pick
+// lands in the answer section, which is delivered whole, code included.
+func TestAsk_OverflowSkipsContentsAndDeliversTheSection(t *testing.T) {
+	item := askGuide(t, tocGuideDB(t), nil, "register command")
+
+	for _, want := range tocGuideAnswer {
+		assert.Contains(t, item.Body, want)
+	}
+	assert.NotContains(t, item.Body, "](#", "a contents list is navigation, not an answer")
+	assert.Equal(t, "lexical", itemSelector(t, item))
+}
+
+// The same holds when the dense lane ranks the contents list first: it is
+// skipped, and the next block grows to its section.
+func TestAsk_OverflowDenseSkipsContents(t *testing.T) {
+	db := tocGuideDB(t)
+	var raw string
+	require.NoError(t, db.QueryRow(`SELECT body_raw FROM notes WHERE id='guide'`).Scan(&raw))
+	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS passage_vectors (note_id TEXT NOT NULL REFERENCES notes(id), unit_idx INTEGER NOT NULL, start INTEGER NOT NULL, end INTEGER NOT NULL, dense BLOB NOT NULL, PRIMARY KEY(note_id,unit_idx))`)
+	require.NoError(t, err)
+	for i, u := range passage.Units(raw, "Guide") {
+		x := float32(0)
+		switch text := raw[u.Start:u.End]; {
+		case strings.Contains(text, "](#"):
+			x = 1
+		case strings.Contains(text, "Declare every option"):
+			x = 0.9
+		}
+		_, err = db.Exec(`INSERT INTO passage_vectors VALUES ('guide', ?, ?, ?, ?)`, i, u.Start, u.End, index.EncodeEmbedding([]float32{x, 1 - x}))
+		require.NoError(t, err)
+	}
+
+	item := askGuide(t, db, &passageMemoEmbedder{}, "zzz")
+
+	for _, want := range tocGuideAnswer {
+		assert.Contains(t, item.Body, want)
+	}
+	assert.NotContains(t, item.Body, "](#")
+	assert.Equal(t, "dense", itemSelector(t, item))
+}
+
+// A pick with no heading section around it that is larger than the room is
+// cut at a line, not dropped: a note that is one long list still delivers its
+// opening items alongside a dense block.
+func TestAsk_OverflowCutsAPickThatDoesNotFit(t *testing.T) {
+	item := strings.Repeat("detail ", 120)
+	list := "- First item " + item + "end.\n- Second item " + item + "end.\n- Third item " + item + "end.\n- Fourth item " + item + "end."
+	db := tocGuideDB(t)
+	raw := list + "\n\nThe closing line."
+	_, err := db.Exec(`UPDATE notes SET body_raw=?, body_text=? WHERE id='guide'`, raw+"\n\n"+passageParagraph("unrelated", 400), raw)
+	require.NoError(t, err)
+	require.NoError(t, db.QueryRow(`SELECT body_raw FROM notes WHERE id='guide'`).Scan(&raw))
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS passage_vectors (note_id TEXT NOT NULL REFERENCES notes(id), unit_idx INTEGER NOT NULL, start INTEGER NOT NULL, end INTEGER NOT NULL, dense BLOB NOT NULL, PRIMARY KEY(note_id,unit_idx))`)
+	require.NoError(t, err)
+	for i, u := range passage.Units(raw, "Guide") {
+		x := float32(0)
+		if raw[u.Start:u.End] == "The closing line." {
+			x = 1
+		}
+		_, err = db.Exec(`INSERT INTO passage_vectors VALUES ('guide', ?, ?, ?, ?)`, i, u.Start, u.End, index.EncodeEmbedding([]float32{x, 1 - x}))
+		require.NoError(t, err)
+	}
+
+	got := askGuide(t, db, &passageMemoEmbedder{}, "zzz")
+
+	assert.Contains(t, got.Body, "- First item")
+	assert.Contains(t, got.Body, "The closing line.")
+	assert.NotContains(t, got.Body, "Fourth item", "the room holds about two items")
 }
 
 // Text-mode pointers-only renders no bodies, so the overflow note keeps the

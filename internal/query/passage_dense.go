@@ -22,22 +22,13 @@ const densePassageBlocks = 3
 // match would only pad the body. It returns "" when nothing is added; any
 // unavailable or stale input leaves the lexical pick alone.
 func selectDensePassages(ctx context.Context, db *index.DB, cfg AskConfig, targetID, rankingQuery, raw, title, lex string, limit int) string {
-	if cfg.Embedder == nil || limit <= 0 {
+	if limit <= 0 {
 		return ""
 	}
-	vectors, err := index.LoadPassageVectors(db, targetID)
 	raw = parser.StripHTMLComments(raw)
-	units := passage.Units(raw, title)
-	if err != nil || !matchingPassageSpans(units, vectors, cfg.Embedder.Dims()) {
-		return ""
-	}
-	queryVec, err := cfg.Embedder.Embed(ctx, rankingQuery)
-	if err != nil || len(queryVec) != cfg.Embedder.Dims() {
-		return ""
-	}
+	units, ranked := rankedDenseBlocks(ctx, db, cfg, targetID, rankingQuery, raw, title)
 	seen := strings.Join(strings.Fields(lex), " ")
 	var chosen []densePassageBlock
-	ranked := rankDensePassages(raw, units, queryVec, vectors)
 	for _, block := range ranked[:min(densePassageBlocks, len(ranked))] {
 		if strings.Contains(seen, strings.Join(strings.Fields(raw[units[block.first].Start:units[block.last].End]), " ")) {
 			continue
@@ -48,6 +39,25 @@ func selectDensePassages(ctx context.Context, db *index.DB, cfg AskConfig, targe
 		chosen = append(chosen, block)
 	}
 	return renderDensePassages(raw, title, units, chosen)
+}
+
+// rankedDenseBlocks ranks the paragraph blocks of a comment-stripped body by
+// cosine to the query. It returns nothing when there is no embedder, or when
+// the stored vectors are missing or no longer match the body's spans.
+func rankedDenseBlocks(ctx context.Context, db *index.DB, cfg AskConfig, id, rankingQuery, raw, title string) ([]passage.Unit, []densePassageBlock) {
+	if cfg.Embedder == nil {
+		return nil, nil
+	}
+	vectors, err := index.LoadPassageVectors(db, id)
+	units := passage.Units(raw, title)
+	if err != nil || !matchingPassageSpans(units, vectors, cfg.Embedder.Dims()) {
+		return nil, nil
+	}
+	queryVec, err := cfg.Embedder.Embed(ctx, rankingQuery)
+	if err != nil || len(queryVec) != cfg.Embedder.Dims() {
+		return nil, nil
+	}
+	return units, rankDensePassages(raw, units, queryVec, vectors)
 }
 
 func matchingPassageSpans(units []passage.Unit, vectors []index.PassageVector, dims int) bool {
