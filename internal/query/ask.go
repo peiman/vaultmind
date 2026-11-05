@@ -131,6 +131,12 @@ type AskResult struct {
 	// a "weak" top hit often means the best available correct match, not
 	// "irrelevant". The formatter renders a one-line hint when it's set.
 	LowContrastVault bool `json:"low_contrast_vault,omitempty"`
+	// TopHitUnembedded is true when a noise floor was requested and similarities
+	// were computed, but the top hit has no stored embedding, so its cosine
+	// cannot be read. The RRF-gap label is then capped at weak: that gap
+	// measures separation from the next hit, not relevance, and a note added
+	// since the last index --embed would otherwise read as strong.
+	TopHitUnembedded bool `json:"top_hit_unembedded,omitempty"`
 	// VaultNoteCount is how many notes the vault holds, used to decide whether a
 	// relevance judgement is meaningful at all. Below noisefloor.MinCalibNotes
 	// the floor is a shipped default calibrated for a large corpus, so a "weak"
@@ -439,13 +445,18 @@ func applyTopHitRelevance(ctx context.Context, result *AskResult, db *index.DB, 
 				result.VaultNoteCount = n
 			}
 		} else {
-			// Caller wanted honest noise-floor labeling but the top hit has no
-			// cosine in the similarities map (keyword-only hit, or similarity
-			// computation skipped above). We silently keep the RRF-gap fallback
-			// label — leave a breadcrumb so this degradation is diagnosable
-			// rather than invisible.
+			// The top hit has no stored embedding, so the floor cannot judge
+			// it. The RRF gap only measures separation from the next hit; a
+			// lone keyword hit separates well and would otherwise read strong.
+			// Cap that label at weak. A label that is already weak or no_match
+			// stays as it is — never raise one.
 			log.Debug().Str("top_hit_id", hits[0].ID).
 				Msg("noise floor requested but top hit has no cosine; keeping RRF-gap confidence")
+			result.TopHitUnembedded = true
+			switch result.TopHitConfidence {
+			case ConfidenceStrong, ConfidenceModerate:
+				result.TopHitConfidence = ConfidenceWeak
+			}
 		}
 	}
 }

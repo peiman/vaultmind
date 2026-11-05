@@ -807,6 +807,9 @@ func emitAskHeader(w io.Writer, header string, result *AskResult) error {
 			header += "\n" + line
 		}
 	}
+	if result.TopHitUnembedded {
+		header += "\n  [top hit has no embedding — relevance can't be judged; run vaultmind index --embed]"
+	}
 	if len(result.Federated) > 0 {
 		header += "\n" + strings.TrimRight(formatFederationBlock(result), "\n")
 	}
