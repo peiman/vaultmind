@@ -78,6 +78,58 @@ func TestBodyDecision_FederatedSmallVaultWeakWithholdsBody(t *testing.T) {
 	assert.Contains(t, header, "body suppressed")
 }
 
+// The #405 recall. The owner is under the calibration gate and labelled weak.
+// The other vault has enough notes to judge and its own verdict is no_match.
+// CalibratedPeer is the return value of HasCalibratedPeer, the same call
+// federateAndPickOwner makes from the per-vault counts and verdicts. A
+// hand-set true would still pass if a no_match verdict stopped counting.
+func TestBodyDecision_FederatedSmallOwnerNoMatchPeerWithholdsBody(t *testing.T) {
+	const (
+		owner = "vaultmind-mine"
+		peer  = "vaultmind-identity"
+	)
+	noteCounts := map[string]int{
+		owner: noisefloor.MinCalibNotes - 1,
+		peer:  noisefloor.MinCalibNotes,
+	}
+	verdicts := map[string]string{
+		owner: ConfidenceWeak,
+		peer:  ConfidenceNoMatch,
+	}
+
+	r := smallVaultResult(noteCounts[owner], verdicts[owner], -0.11)
+	r.Vault = owner
+	r.Context = &memory.ContextPackResult{
+		TargetID:     r.TopHits[0].ID,
+		BudgetTokens: 900,
+		UsedTokens:   40,
+		Target: &memory.ContextPackTarget{
+			Frontmatter: map[string]any{"title": r.TopHits[0].Title},
+			Body:        federatedSmallBody,
+		},
+	}
+	r.Federated = []FederatedHit{{
+		ScoredResult: r.TopHits[0],
+		Vault:        owner,
+	}}
+	r.FederatedVaults = []FederatedVaultStatus{
+		{Name: peer, Verdict: verdicts[peer]},
+		{Name: owner, Verdict: verdicts[owner], Contributed: true},
+	}
+	r.CalibratedPeer = HasCalibratedPeer(owner, noteCounts, verdicts)
+
+	delivered, reason := r.BodyDecision(false)
+
+	assert.False(t, delivered)
+	assert.Equal(t, experiment.SuppressedBelowFloor, reason)
+
+	out := renderAsk(t, r)
+	assert.NotContains(t, out, federatedSmallBody)
+	header := strings.SplitN(out, "\n", 2)[0]
+	assert.NotContains(t, header, "showing the top hit anyway")
+	assert.Contains(t, header, "body suppressed")
+}
+
 // Single vault, too small, label weak: the exemption stays. A new user's
 // vault has no peer to compare against.
 func TestBodyDecision_SingleSmallVaultWeakStillDeliversBody(t *testing.T) {
