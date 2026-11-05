@@ -85,11 +85,12 @@ var (
 	// ErrNoServer means nothing answers on the socket; the caller runs the
 	// command itself.
 	ErrNoServer = errors.New("no vaultmind server is running")
-	// ErrUnanswered means the server never started the request: it could not
-	// be reached, it closed the connection without a word, or the request
-	// was still queued when the caller's queue wait ran out. The caller may
-	// run the command itself. Any other Forward error means the server may
-	// still be running the request, so running it again would run it twice.
+	// ErrUnanswered means no server process is still running this request, so
+	// the caller may run the command itself without making a second live copy.
+	// The server was unreachable, it closed the connection without a word, the
+	// request was still queued when the queue wait ran out, or the server died
+	// after starting it. Any other Forward error means a server may still be
+	// running the request, so running it again would run it twice.
 	ErrUnanswered = errors.New("the vaultmind server did not take the request")
 	// ErrAlreadyServing means another server already answers on the socket.
 	ErrAlreadyServing = errors.New("a vaultmind server is already running on this socket")
