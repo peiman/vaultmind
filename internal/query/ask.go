@@ -451,7 +451,7 @@ func applyTopHitRelevance(ctx context.Context, result *AskResult, db *index.DB, 
 			// Cap that label at weak. A label that is already weak or no_match
 			// stays as it is — never raise one.
 			log.Debug().Str("top_hit_id", hits[0].ID).
-				Msg("noise floor requested but top hit has no cosine; keeping RRF-gap confidence")
+				Msg("noise floor requested but top hit has no cosine; label capped at weak")
 			result.TopHitUnembedded = true
 			switch result.TopHitConfidence {
 			case ConfidenceStrong, ConfidenceModerate:
