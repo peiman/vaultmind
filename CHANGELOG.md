@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.24] - 2026-11-05
+
 ### Fixed
 
 - Default `ask` (no `--excerpt`) no longer reduces a large relevant note to its title. A context note whose whole text did not fit the budget left delivered nothing, and its room went to smaller, lower-ranked notes. It now gets the parts that best match the question, found the same way as the top note's excerpt (#330), each grown to the heading section around it, code blocks included, within the room left. A section that does not fit is cut at a line and marked with "…". A table of contents, or any other block made only of links to headings in the same note, is never picked. The note is marked as an excerpt, and its JSON item names the `passage_selector` that chose it. Notes that fit are still delivered whole, and `ask --excerpt N` is unchanged (#331).
@@ -3219,7 +3221,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.23...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.24...HEAD
+[0.10.24]: https://github.com/peiman/vaultmind/compare/v0.10.23...v0.10.24
 [0.10.23]: https://github.com/peiman/vaultmind/compare/v0.10.22...v0.10.23
 [0.10.22]: https://github.com/peiman/vaultmind/compare/v0.10.21...v0.10.22
 [0.10.21]: https://github.com/peiman/vaultmind/compare/v0.10.20...v0.10.21
