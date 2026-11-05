@@ -134,13 +134,14 @@ func SocketPath(stateDir, version string) string {
 }
 
 // Serve answers requests on sock until ctx ends or idle passes without a
-// request running, then removes the socket. Accepting a connection does not
-// reset that wait: a request queued behind one that never finishes must not
-// keep the server alive (#421). Requests run one at a time. One whose client
-// has gone before its turn is skipped, and one that starts is announced with
-// ackStarted before it runs, so the client can tell "still queued" from
-// "started". WithShutdown runs once the accept loop ends, and not when this
-// process never takes the socket.
+// request running, then removes the socket it bound. Accepting a connection
+// does not reset that wait: a request queued behind one that never finishes
+// must not keep the server alive (#421). A replacement may have bound the
+// same path by then; that file is left in place. Requests run one at a time.
+// One whose client has gone before its turn is skipped, and one that starts
+// is announced with ackStarted before it runs, so the client can tell "still
+// queued" from "started". WithShutdown runs once the accept loop ends, and
+// not when this process never takes the socket.
 func Serve(ctx context.Context, sock string, exec Exec, idle time.Duration, opts ...Option) error {
 	var opt serveOptions
 	for _, o := range opts {
@@ -150,7 +151,14 @@ func Serve(ctx context.Context, sock string, exec Exec, idle time.Duration, opts
 	if err != nil {
 		return err
 	}
-	defer func() { _ = os.Remove(sock) }()
+	// The file this call bound. Closing the listener unlinks it; by the time
+	// Serve returns, a replacement may be listening on the same path.
+	bound, err := os.Stat(sock)
+	if err != nil {
+		_ = ln.Close()
+		return fmt.Errorf("statting %s: %w", sock, err)
+	}
+	defer func() { removeSocket(sock, bound) }()
 	defer func() {
 		if opt.onShutdown != nil {
 			opt.onShutdown()
@@ -268,6 +276,23 @@ func run(exec Exec, req Request) (resp Response) {
 		}
 	}()
 	return exec(req)
+}
+
+// removeSocket removes path when it is still the file bound at info. The
+// listener's own close already unlinks that file; this covers a return
+// where the file is still there. A path that is gone, or that a replacement
+// server has since bound, is left alone (#421).
+func removeSocket(path string, info os.FileInfo) {
+	if info == nil {
+		return
+	}
+	cur, err := os.Stat(path)
+	if err != nil {
+		return
+	}
+	if os.SameFile(info, cur) {
+		_ = os.Remove(path)
+	}
 }
 
 // listen opens a private socket at sock. A live server already there is

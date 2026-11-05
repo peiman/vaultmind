@@ -444,6 +444,92 @@ func TestServe_AWedgedRequestGoesIdleWhileConnectionsArrive(t *testing.T) {
 	}, 2*time.Second, 10*time.Millisecond, "a new server could not take the socket the wedged one had closed")
 }
 
+// A wedged server goes idle and a replacement binds the same path. When the
+// wedge finally ends, the first server must not unlink the replacement.
+func TestServe_AFinishedWedgeLeavesTheReplacementSocket(t *testing.T) {
+	sock := socketIn(t)
+	const idle = time.Second
+	started := make(chan struct{})
+	release := make(chan struct{})
+	ctxA, cancelA := context.WithCancel(context.Background())
+	aDone := make(chan error, 1)
+	go func() {
+		aDone <- serve.Serve(ctxA, sock, func(r serve.Request) serve.Response {
+			if len(r.Args) > 0 && r.Args[0] == "wedge" {
+				close(started)
+				<-release
+			}
+			return serve.Response{}
+		}, idle)
+	}()
+	t.Cleanup(func() {
+		cancelA()
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+		select {
+		case <-aDone:
+		case <-time.After(5 * time.Second):
+		}
+	})
+	require.Eventually(t, func() bool {
+		_, err := serve.Forward(sock, serve.Request{Args: []string{"ping"}}, time.Second, time.Second, time.Second)
+		return err == nil
+	}, 2*time.Second, 10*time.Millisecond)
+
+	go func() {
+		_, _ = serve.Forward(sock, serve.Request{Args: []string{"wedge"}}, time.Second, time.Second, time.Minute)
+	}()
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the wedged request did not start")
+	}
+
+	// Idle closes A's listener and unlinks A's socket. Twelve times the idle
+	// period, for a loaded machine (#415). B must bind only after that file
+	// is gone, or it finds A still listening.
+	require.Eventually(t, func() bool {
+		_, err := os.Stat(sock)
+		return os.IsNotExist(err)
+	}, 12*time.Second, 15*time.Millisecond, "the wedged server did not release its socket")
+
+	ctxB, cancelB := context.WithCancel(context.Background())
+	bDone := make(chan error, 1)
+	go func() {
+		bDone <- serve.Serve(ctxB, sock, func(serve.Request) serve.Response {
+			return serve.Response{Code: 7}
+		}, time.Minute)
+	}()
+	t.Cleanup(func() {
+		cancelB()
+		select {
+		case <-bDone:
+		case <-time.After(5 * time.Second):
+		}
+	})
+	require.Eventually(t, func() bool {
+		resp, err := serve.Forward(sock, serve.Request{Args: []string{"ask"}}, time.Second, time.Second, time.Second)
+		return err == nil && resp.Code == 7
+	}, 2*time.Second, 10*time.Millisecond, "the replacement server did not answer")
+
+	close(release)
+	select {
+	case err := <-aDone:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("the wedged server did not return after its request was released")
+	}
+
+	_, err := os.Stat(sock)
+	require.NoError(t, err, "the finished server removed the replacement's socket")
+	resp, err := serve.Forward(sock, serve.Request{Args: []string{"ask"}}, time.Second, time.Second, time.Second)
+	require.NoError(t, err)
+	assert.Equal(t, 7, resp.Code)
+}
+
 // An ask queued behind one that never finishes must give up at the queue cap
 // and leave that ask to run only on the server. The client then runs its own
 // ask, and the server skips the one whose client has gone, so the two are
