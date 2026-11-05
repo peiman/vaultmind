@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- An ask no longer waits 5 minutes, and then fails, when the warm server is stuck on another ask (#421). The server runs one ask at a time. A stuck ask held that place forever, so every later ask waited out the full cap, and each new connection reset the idle timer, so the stuck server never let go of its socket. An ask now waits 10 seconds to start. If the server has not started it by then, the ask runs in its own process and the server drops it, so it is not run twice. Once the server has started an ask, the client still waits for the answer, up to 5 minutes. A server stuck on an ask now goes idle and releases its socket, and the next ask starts a fresh server.
+
 ## [0.10.24] - 2026-11-05
 
 ### Fixed

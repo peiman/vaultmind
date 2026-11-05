@@ -39,6 +39,13 @@ const serveConnectTimeout = 200 * time.Millisecond
 // tests.
 var serveRequestTimeout = 5 * time.Minute
 
+// serveQueueTimeout bounds how long an ask waits to start, behind other
+// sessions' asks. Past it the ask runs in this process. That run is a
+// different ask from the one still queued: the server skips a queued ask
+// whose client has gone, so this is not a second copy (#421). A variable
+// for tests.
+var serveQueueTimeout = 10 * time.Second
+
 // serveExec runs one request in this process as a fresh process would: in
 // the request's directory, with its environment, from a reset CLI. The
 // server's own directory and environment are restored afterwards.
@@ -143,7 +150,8 @@ func tryServer(args []string) (int, bool) {
 			env[k] = v
 		}
 	}
-	resp, err := serve.Forward(sock, serve.Request{Args: args, Dir: dir, Env: env}, serveConnectTimeout, serveRequestTimeout)
+	resp, err := serve.Forward(sock, serve.Request{Args: args, Dir: dir, Env: env},
+		serveConnectTimeout, serveQueueTimeout, serveRequestTimeout)
 	switch {
 	case errors.Is(err, serve.ErrNoServer):
 		startServer()

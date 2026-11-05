@@ -44,7 +44,7 @@ func TestServe_ExitsAfterARequestOverItsMemoryCap(t *testing.T) {
 				return err == nil
 			}, 2*time.Second, 10*time.Millisecond)
 
-			resp, err := serve.Forward(sock, serve.Request{Args: []string{"ask"}}, time.Second, 5*time.Second)
+			resp, err := serve.Forward(sock, serve.Request{Args: []string{"ask"}}, time.Second, time.Second, 5*time.Second)
 			require.NoError(t, err)
 			assert.Equal(t, "ok", string(resp.Stdout), "the request in hand is still answered")
 
@@ -64,6 +64,6 @@ func TestServe_ExitsAfterARequestOverItsMemoryCap(t *testing.T) {
 func TestServe_NoMemoryCapByDefault(t *testing.T) {
 	sock := socketIn(t)
 	start(t, sock, func(serve.Request) serve.Response { return serve.Response{} }, time.Minute)
-	_, err := serve.Forward(sock, serve.Request{Args: []string{"ask"}}, time.Second, 5*time.Second)
+	_, err := serve.Forward(sock, serve.Request{Args: []string{"ask"}}, time.Second, time.Second, 5*time.Second)
 	require.NoError(t, err)
 }
