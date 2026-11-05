@@ -14,6 +14,9 @@ the question scores at least twice as highly; a positive match wins when the fir
 block scores zero. Principle sections and context-note excerpts keep their existing
 behavior, within the same token cap.
 
+Without --excerpt, a context note whose whole text does not fit the budget left
+gets the same passage selection, sized to that room, instead of its title alone.
+
 CHOOSE A RENDERING MODE BY INTENT
 
   vaultmind ask "spreading activation" --pointers-only
@@ -127,7 +130,7 @@ func AskOptions() []config.ConfigOption {
 		{Key: "app.ask.preview", DefaultValue: false, Description: "Render a one-line body snippet under each ranked hit; bridges --pointers-only (titles only) and the full context-pack output", Type: "bool"},
 		{Key: "app.ask.read", DefaultValue: "", Description: "Read the body of the named hit inline after the menu — accepts a 1-indexed rank (e.g. --read 2) or an exact id (e.g. --read concept-foo). Single-command shortcut for probe→read when you already know which hit from the titles", Type: "string"},
 		{Key: "app.ask.quiet_on_nomatch", DefaultValue: false, Description: "Print nothing when the top hit is at/below the noise floor (no_match). For ambient recall: inject silence instead of irrelevant pointers when the prompt is off-domain. Also skips the context-pack and access fan-out so off-domain prompts don't reinforce irrelevant notes.", Type: "bool"},
-		{Key: "app.ask.excerpt", DefaultValue: 0, Description: "Cap each note's contribution at N tokens, preferring its decision-bearing passage — the Principle section where a note has one (an arc's rule lives there; its opening is story setup), else the opening prose. Applies to the target note and every context item. 0 = off, which also means an over-budget note contributes no text at all while the pack still counts it, so a tight budget yields items with no content", Type: "int"},
+		{Key: "app.ask.excerpt", DefaultValue: 0, Description: "Cap each note's contribution at N tokens, preferring its decision-bearing passage — the Principle section where a note has one (an arc's rule lives there; its opening is story setup), else the opening prose. Applies to the target note and every context item. 0 = off: a note that fits is delivered whole, and a context note larger than the budget left gets the passage best matching the question, sized to that room, instead of no text", Type: "int"},
 		{Key: "app.ask.type", DefaultValue: "", Description: "Rank only notes of this type (e.g. decision, concept)", Type: "string"},
 		{Key: "app.ask.tag", DefaultValue: "", Description: "Rank only notes carrying this tag", Type: "string"},
 		{Key: "app.ask.path", DefaultValue: "", Description: "Rank only notes under this vault folder (path prefix, e.g. decisions/) — the same match as tree --path", Type: "string"},

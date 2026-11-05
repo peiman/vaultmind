@@ -101,7 +101,7 @@ app:
     # Print nothing when the top hit is at/below the noise floor (no_match). For ambient recall: inject silence instead of irrelevant pointers when the prompt is off-domain. Also skips the context-pack and access fan-out so off-domain prompts don't reinforce irrelevant notes.
     quiet_on_nomatch: false
 
-    # Cap each note's contribution at N tokens, preferring its decision-bearing passage — the Principle section where a note has one (an arc's rule lives there; its opening is story setup), else the opening prose. Applies to the target note and every context item. 0 = off, which also means an over-budget note contributes no text at all while the pack still counts it, so a tight budget yields items with no content
+    # Cap each note's contribution at N tokens, preferring its decision-bearing passage — the Principle section where a note has one (an arc's rule lives there; its opening is story setup), else the opening prose. Applies to the target note and every context item. 0 = off: a note that fits is delivered whole, and a context note larger than the budget left gets the passage best matching the question, sized to that room, instead of no text
     excerpt: 0
 
     # Rank only notes of this type (e.g. decision, concept)

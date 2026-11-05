@@ -60,7 +60,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.ask.preview` | bool | `false` | `VAULTMIND_APP_ASK_PREVIEW` | Render a one-line body snippet under each ranked hit; bridges --pointers-only (titles only) and the full context-pack output |
 | `app.ask.read` | string | `` | `VAULTMIND_APP_ASK_READ` | Read the body of the named hit inline after the menu — accepts a 1-indexed rank (e.g. --read 2) or an exact id (e.g. --read concept-foo). Single-command shortcut for probe→read when you already know which hit from the titles |
 | `app.ask.quiet_on_nomatch` | bool | `false` | `VAULTMIND_APP_ASK_QUIET_ON_NOMATCH` | Print nothing when the top hit is at/below the noise floor (no_match). For ambient recall: inject silence instead of irrelevant pointers when the prompt is off-domain. Also skips the context-pack and access fan-out so off-domain prompts don't reinforce irrelevant notes. |
-| `app.ask.excerpt` | int | `0` | `VAULTMIND_APP_ASK_EXCERPT` | Cap each note's contribution at N tokens, preferring its decision-bearing passage — the Principle section where a note has one (an arc's rule lives there; its opening is story setup), else the opening prose. Applies to the target note and every context item. 0 = off, which also means an over-budget note contributes no text at all while the pack still counts it, so a tight budget yields items with no content |
+| `app.ask.excerpt` | int | `0` | `VAULTMIND_APP_ASK_EXCERPT` | Cap each note's contribution at N tokens, preferring its decision-bearing passage — the Principle section where a note has one (an arc's rule lives there; its opening is story setup), else the opening prose. Applies to the target note and every context item. 0 = off: a note that fits is delivered whole, and a context note larger than the budget left gets the passage best matching the question, sized to that room, instead of no text |
 | `app.ask.type` | string | `` | `VAULTMIND_APP_ASK_TYPE` | Rank only notes of this type (e.g. decision, concept) |
 | `app.ask.tag` | string | `` | `VAULTMIND_APP_ASK_TAG` | Rank only notes carrying this tag |
 | `app.ask.path` | string | `` | `VAULTMIND_APP_ASK_PATH` | Rank only notes under this vault folder (path prefix, e.g. decisions/) — the same match as tree --path |
@@ -464,7 +464,7 @@ app:
     # Print nothing when the top hit is at/below the noise floor (no_match). For ambient recall: inject silence instead of irrelevant pointers when the prompt is off-domain. Also skips the context-pack and access fan-out so off-domain prompts don't reinforce irrelevant notes.
     quiet_on_nomatch: false
 
-    # Cap each note's contribution at N tokens, preferring its decision-bearing passage — the Principle section where a note has one (an arc's rule lives there; its opening is story setup), else the opening prose. Applies to the target note and every context item. 0 = off, which also means an over-budget note contributes no text at all while the pack still counts it, so a tight budget yields items with no content
+    # Cap each note's contribution at N tokens, preferring its decision-bearing passage — the Principle section where a note has one (an arc's rule lives there; its opening is story setup), else the opening prose. Applies to the target note and every context item. 0 = off: a note that fits is delivered whole, and a context note larger than the budget left gets the passage best matching the question, sized to that room, instead of no text
     excerpt: 0
 
     # Rank only notes of this type (e.g. decision, concept)
@@ -1589,7 +1589,7 @@ export VAULTMIND_APP_ASK_READ=
 # Print nothing when the top hit is at/below the noise floor (no_match). For ambient recall: inject silence instead of irrelevant pointers when the prompt is off-domain. Also skips the context-pack and access fan-out so off-domain prompts don't reinforce irrelevant notes.
 export VAULTMIND_APP_ASK_QUIET_ON_NOMATCH=false
 
-# Cap each note's contribution at N tokens, preferring its decision-bearing passage — the Principle section where a note has one (an arc's rule lives there; its opening is story setup), else the opening prose. Applies to the target note and every context item. 0 = off, which also means an over-budget note contributes no text at all while the pack still counts it, so a tight budget yields items with no content
+# Cap each note's contribution at N tokens, preferring its decision-bearing passage — the Principle section where a note has one (an arc's rule lives there; its opening is story setup), else the opening prose. Applies to the target note and every context item. 0 = off: a note that fits is delivered whole, and a context note larger than the budget left gets the passage best matching the question, sized to that room, instead of no text
 export VAULTMIND_APP_ASK_EXCERPT=0
 
 # Rank only notes of this type (e.g. decision, concept)

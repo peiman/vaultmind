@@ -8,6 +8,7 @@ import (
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/memory"
 	"github.com/peiman/vaultmind/internal/parser"
+	"github.com/rs/zerolog/log"
 )
 
 type passageResult struct {
@@ -137,28 +138,66 @@ func applyPassageExcerpt(ctx context.Context, db *index.DB, cfg AskConfig, ranki
 		return nil
 	}
 	target := pack.Target
-	var raw string
-	if err := db.QueryRow("SELECT COALESCE(body_raw, body_text, '') FROM notes WHERE id = ?", target.ID).Scan(&raw); err != nil {
-		return err
-	}
-	if memory.HasPrincipleSection(raw) {
-		target.PassageSelector = "principle"
-		return nil
-	}
-	left := cfg.Budget - pack.UsedTokens + memory.EstimateTokens(target.Body)
-	limit := min(cfg.ExcerptTokens, left)
-	if limit <= 0 {
-		return nil
-	}
-	target.PassageSelector = "lexical"
 	title, _ := target.Frontmatter["title"].(string)
-	selected, err := selectPassage(db, cfg.Query, raw, target.Body, limit, title)
+	note := passageNote{id: target.ID, title: title, packed: target.Body}
+	left := cfg.Budget - pack.UsedTokens + memory.EstimateTokens(target.Body)
+	best, selector, err := notePassage(ctx, db, cfg, rankingQuery, note, min(cfg.ExcerptTokens, left), min(2*cfg.ExcerptTokens, left))
+	target.PassageSelector = selector
 	if err != nil {
 		return err
 	}
+	pack.UsedTokens += memory.EstimateTokens(best) - memory.EstimateTokens(target.Body)
+	target.Body = best
+	return nil
+}
+
+// overflowPassage is ask's OverflowExcerpt (#331): the same selection the
+// target gets, for a context note whose whole text does not fit the room
+// left, sized to that room. The packer calls it in rank order, so the note
+// is sized before any lower-ranked note takes room. Text-mode pointers-only
+// renders no bodies, so it skips the selection there, as the target does.
+func overflowPassage(ctx context.Context, db *index.DB, cfg AskConfig, rankingQuery string) func(*index.FullNote, int) (string, string) {
+	return func(n *index.FullNote, room int) (string, string) {
+		packed := memory.Excerpt(n.Body, room)
+		if packed == "" || (cfg.PointersOnly && !cfg.JSONOutput) {
+			return packed, "none"
+		}
+		text, selector, err := notePassage(ctx, db, cfg, rankingQuery, passageNote{id: n.ID, title: n.Title, packed: packed}, room, room)
+		if err != nil {
+			log.Debug().Err(err).Str("note_id", n.ID).Msg("passage selection unavailable; keeping original excerpt")
+		}
+		return text, selector
+	}
+}
+
+// passageNote is one packed note the selector may re-excerpt: its id, its
+// title, and the excerpt the packer chose for it.
+type passageNote struct {
+	id, title, packed string
+}
+
+// notePassage is #330's selection for one note. limit bounds the lexical
+// pick; total bounds the pick plus the dense blocks added after it. It returns
+// the text to deliver and the selector that chose it. On "none", "principle"
+// or an error the packed excerpt comes back unchanged.
+func notePassage(ctx context.Context, db *index.DB, cfg AskConfig, rankingQuery string, note passageNote, limit, total int) (string, string, error) {
+	var raw string
+	if err := db.QueryRow("SELECT COALESCE(body_raw, body_text, '') FROM notes WHERE id = ?", note.id).Scan(&raw); err != nil {
+		return note.packed, "none", err
+	}
+	if memory.HasPrincipleSection(raw) {
+		return note.packed, "principle", nil
+	}
+	if limit <= 0 {
+		return note.packed, "none", nil
+	}
+	selected, err := selectPassage(db, cfg.Query, raw, note.packed, limit, note.title)
+	if err != nil {
+		return note.packed, "lexical", err
+	}
 	best := selected.Text
-	if best == target.Body {
-		best = firstBlockHeadingExcerpt(raw, best, title, limit)
+	if best == note.packed {
+		best = firstBlockHeadingExcerpt(raw, best, note.title, limit)
 	}
 	// The lexical pick answers exact terms and has first claim on the budget;
 	// dense blocks answer paraphrases in whatever room is left.
@@ -166,14 +205,11 @@ func applyPassageExcerpt(ctx context.Context, db *index.DB, cfg AskConfig, ranki
 	if best != "" {
 		separator = passageGap
 	}
-	allowance := min(2*cfg.ExcerptTokens, left) - memory.EstimateTokens(best+separator)
-	if dense := selectDensePassages(ctx, db, cfg, target.ID, rankingQuery, raw, title, best, allowance); dense != "" {
-		best += separator + dense
-		target.PassageSelector = "dense"
+	allowance := total - memory.EstimateTokens(best+separator)
+	if dense := selectDensePassages(ctx, db, cfg, note.id, rankingQuery, raw, note.title, best, allowance); dense != "" {
+		return best + separator + dense, "dense", nil
 	}
-	pack.UsedTokens += memory.EstimateTokens(best) - memory.EstimateTokens(target.Body)
-	target.Body = best
-	return nil
+	return best, "lexical", nil
 }
 
 // passageGap joins delivered text that is not adjacent in the note.
