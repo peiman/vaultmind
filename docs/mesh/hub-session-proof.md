@@ -22,9 +22,9 @@ JCS sorts the keys. For this object the order is `challenge`, `key_epoch`, `netw
 | --- | --- |
 | `challenge` | Standard base64 (RFC 4648 §4, with padding). Decodes to 16–64 bytes. Stored exactly as the hub issued it. Not re-encoded. |
 | `key_epoch` | Integer in `[1, 2^53]`, inclusive. The signer's own registry epoch. |
-| `network_id` | The string the hub issued with the challenge. Non-empty, at most 128 bytes, valid UTF-8, NFC. Rejected when it is not. Never normalized. |
+| `network_id` | The string the hub issued with the challenge. Non-empty, at most 128 bytes, valid UTF-8, NFC, and no ASCII control (U+0000–U+001F or U+007F). Rejected when it is not. Never normalized. |
 | `purpose` | Exactly `hub-session`. |
-| `slug` | The signer's own bare registry slug. |
+| `slug` | The signer's own bare registry slug. Non-empty, valid UTF-8, NFC, and no ASCII control (U+0000–U+001F or U+007F). Rejected when it is not. Never normalized. |
 | `ts` | Unix seconds in `[0, 2^53]`, inclusive, taken from the signer's clock. `2^53` is the JCS-safe ceiling, not a freshness window. |
 
 `slug` and `key_epoch` are resolved from this machine's enrollment: the `agents.yaml` entry whose `project_path` matches this project, then the live binding `registry.Resolve` returns under the pinned root. The command has no `--slug`, `--key-epoch`, or `--mesh-slug`. `app.doctor.mesh_slug` is not read. A caller cannot name another agent.

@@ -114,6 +114,22 @@ func TestSignSession_FailClosedWritesNothing(t *testing.T) {
 			want:    identity.ErrSessionSlug,
 		},
 		{
+			name:    "control character in network_id",
+			client:  &fakeSignerClient{priv: priv, failErr: signerDown},
+			binding: binding,
+			chal:    challenge,
+			net:     "vmnet1:\n",
+			want:    identity.ErrSessionNetworkID,
+		},
+		{
+			name:    "control character in slug",
+			client:  &fakeSignerClient{priv: priv, failErr: signerDown},
+			binding: OwnBinding{Slug: "mira\x7f", KeyEpoch: 3, PubKey: pub},
+			chal:    challenge,
+			net:     networkID,
+			want:    identity.ErrSessionSlug,
+		},
+		{
 			name:    "signer error",
 			client:  &fakeSignerClient{priv: priv, failErr: signerDown},
 			binding: binding,

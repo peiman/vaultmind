@@ -167,6 +167,28 @@ func TestSessionStatement_NetworkIDRules(t *testing.T) {
 	require.ErrorContains(t, err, ErrSessionNetworkID)
 }
 
+func TestSessionStatement_RejectsASCIIControls(t *testing.T) {
+	pub, _ := testKey(t)
+	controls := []byte{0x00, 0x01, 0x09, 0x0A, 0x1F, 0x7F}
+	for _, c := range controls {
+		st := testStatement(t)
+		st.NetworkID = "vmnet1:" + string(c)
+		_, err := SessionTaggedBytes(st)
+		require.ErrorContains(t, err, ErrSessionNetworkID, "network_id control %#x", c)
+		ok, err := VerifySessionStatement(pub, st, bytes.Repeat([]byte{0}, 64))
+		require.ErrorContains(t, err, ErrSessionNetworkID, "verify network_id control %#x", c)
+		assert.False(t, ok)
+
+		st = testStatement(t)
+		st.Slug = "mira" + string(c)
+		_, err = SessionTaggedBytes(st)
+		require.ErrorContains(t, err, ErrSessionSlug, "slug control %#x", c)
+		ok, err = VerifySessionStatement(pub, st, bytes.Repeat([]byte{0}, 64))
+		require.ErrorContains(t, err, ErrSessionSlug, "verify slug control %#x", c)
+		assert.False(t, ok)
+	}
+}
+
 func TestSessionStatement_PurposeSlugEpochAndTime(t *testing.T) {
 	st := testStatement(t)
 	st.Purpose = "login"

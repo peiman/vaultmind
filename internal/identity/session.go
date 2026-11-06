@@ -40,12 +40,14 @@ const (
 	// (RFC 4648 §4) of 16 to 64 decoded bytes.
 	ErrSessionChallenge = "identity: session: challenge must be standard base64 of 16 to 64 bytes"
 	// ErrSessionNetworkID is returned when network_id is empty, longer than
-	// 128 bytes, not valid UTF-8, or not NFC. It is rejected, never normalized.
-	ErrSessionNetworkID = "identity: session: network_id must be non-empty NFC UTF-8 of at most 128 bytes"
+	// 128 bytes, not valid UTF-8, not NFC, or contains an ASCII control
+	// (U+0000–U+001F or U+007F). It is rejected, never normalized.
+	ErrSessionNetworkID = "identity: session: network_id must be non-empty NFC UTF-8 of at most 128 bytes with no ASCII control"
 	// ErrSessionPurpose is returned when purpose is not SessionPurpose.
 	ErrSessionPurpose = "identity: session: purpose must be hub-session"
-	// ErrSessionSlug is returned when slug is empty, not valid UTF-8, or not NFC.
-	ErrSessionSlug = "identity: session: slug must be non-empty NFC UTF-8"
+	// ErrSessionSlug is returned when slug is empty, not valid UTF-8, not NFC,
+	// or contains an ASCII control (U+0000–U+001F or U+007F).
+	ErrSessionSlug = "identity: session: slug must be non-empty NFC UTF-8 with no ASCII control"
 	// ErrSessionKeyEpoch is returned when key_epoch is outside [1, 2^53].
 	ErrSessionKeyEpoch = "identity: session: key_epoch must be in [1, 2^53]"
 	// ErrSessionTS is returned when ts is outside [0, 2^53].
@@ -135,17 +137,30 @@ func checkSessionChallenge(challenge string) error {
 }
 
 func checkSessionNetworkID(id string) error {
-	if id == "" || len(id) > sessionNetworkIDMax || !utf8.ValidString(id) || !norm.NFC.IsNormalString(id) {
+	if id == "" || len(id) > sessionNetworkIDMax || !utf8.ValidString(id) || !norm.NFC.IsNormalString(id) || hasSessionControl(id) {
 		return fmt.Errorf("%s", ErrSessionNetworkID)
 	}
 	return nil
 }
 
 func checkSessionSlug(slug string) error {
-	if slug == "" || !utf8.ValidString(slug) || !norm.NFC.IsNormalString(slug) {
+	if slug == "" || !utf8.ValidString(slug) || !norm.NFC.IsNormalString(slug) || hasSessionControl(slug) {
 		return fmt.Errorf("%s", ErrSessionSlug)
 	}
 	return nil
+}
+
+// hasSessionControl reports whether s contains an ASCII control
+// (U+0000–U+001F or U+007F). Those bytes never occur inside a multibyte
+// UTF-8 sequence, so a byte scan is the whole check. RFC 8785 escapes
+// controls, and that escaping is where Go and Rust JCS libraries can diverge.
+func hasSessionControl(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] <= 0x1F || s[i] == 0x7F {
+			return true
+		}
+	}
+	return false
 }
 
 func checkSessionInts(epoch, ts int64) error {
