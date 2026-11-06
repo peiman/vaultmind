@@ -41,6 +41,25 @@ func waitForLongPoll(d *watchDaemon) {
 	}
 }
 
+// requireStreamLongPoll waits until that room's long poll is in progress.
+// The first poll of either room is not enough: a message added then is still
+// ahead of the other room's baseline, and that baseline records it as history.
+func requireStreamLongPoll(t *testing.T, d *watchDaemon, stream string, budget time.Duration) {
+	t.Helper()
+	timer := time.NewTimer(budget)
+	defer timer.Stop()
+	for {
+		select {
+		case r := <-d.waits:
+			if r.Path == "/chat_wait" && r.Stream == stream {
+				return
+			}
+		case <-timer.C:
+			t.Fatalf("watcher did not open a %s long poll within %s", stream, budget)
+		}
+	}
+}
+
 func TestMeshWatch_ShortHubOutageDoesNotEndTheWatcher(t *testing.T) {
 	t.Parallel()
 	d := newWatchDaemon()
