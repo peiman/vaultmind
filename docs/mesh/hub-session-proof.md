@@ -48,10 +48,13 @@ Cross-language vectors: `internal/identity/testdata/session_statement_vectors.js
 - `wrong_domain_envelope`
 - `wrong_domain_no_tag` (byte-identical to the envelope case)
 - `wrong_domain_doctor_selfverify`
+- `wrong_domain_envelope_shaped` (a correct signature over a JCS object whose keys are `alg_version`, `body`, `from_agent`, `nonce`, `room`, `seq`, `ts`)
 - `tampered_network_id`
 - `tampered_challenge`
 - `tampered_ts`
 - `tampered_slug`
+- `tampered_key_epoch`
+- `tampered_purpose` (purpose is not `hub-session`, so `VerifySessionStatement` returns the purpose error; the recorded signature still verifies over `signed_bytes_hex`)
 
 Regenerate with:
 

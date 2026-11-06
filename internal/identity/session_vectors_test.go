@@ -126,6 +126,24 @@ func buildSessionVectors(t *testing.T) sessionVectorFile {
 		"correct signature over the doctor self-verify tag plus the same canonical JSON",
 		st, append([]byte(doctorSelfVerifyDomainTag), canon...))
 
+	// Signed with no session tag. The presented statement stays the valid one,
+	// so the gate passes and the signature does not match.
+	shapedRaw, err := json.Marshal(sessionEnvelopeShaped{
+		AlgVersion: 1,
+		Body:       "hello",
+		FromAgent:  "mira",
+		Nonce:      "YWJjZGVmZ2hpamtsbW5vcA==",
+		Room:       "dev",
+		Seq:        7,
+		TS:         2_000_000,
+	})
+	require.NoError(t, err)
+	shapedCanon, err := Canonicalize(shapedRaw)
+	require.NoError(t, err)
+	add("wrong_domain_envelope_shaped",
+		"correct signature over a JCS object shaped like an envelope (alg_version, body, from_agent, nonce, room, seq, ts), not a session statement",
+		st, shapedCanon.Bytes())
+
 	tamperedNet := st
 	tamperedNet.NetworkID = "vmnet1:ffffffffffffffffffffffffffffffff"
 	add("tampered_network_id",
@@ -150,7 +168,31 @@ func buildSessionVectors(t *testing.T) sessionVectorFile {
 		"signature over the original statement; slug changed after signing",
 		tamperedSlug, tagged.Bytes())
 
+	tamperedEpoch := st
+	tamperedEpoch.KeyEpoch = 4
+	add("tampered_key_epoch",
+		"signature over the original statement; key_epoch changed after signing, still inside [1, 2^53]",
+		tamperedEpoch, tagged.Bytes())
+
+	tamperedPurpose := st
+	tamperedPurpose.Purpose = "login"
+	add("tampered_purpose",
+		"signature over the original statement; purpose changed after signing, so the session gate rejects it",
+		tamperedPurpose, tagged.Bytes())
+
 	return fx
+}
+
+// sessionEnvelopeShaped is a plausible envelope-shaped JCS object. Its keys
+// are alg_version, body, from_agent, nonce, room, seq, and ts.
+type sessionEnvelopeShaped struct {
+	AlgVersion int64  `json:"alg_version"`
+	Body       string `json:"body"`
+	FromAgent  string `json:"from_agent"`
+	Nonce      string `json:"nonce"`
+	Room       string `json:"room"`
+	Seq        int64  `json:"seq"`
+	TS         int64  `json:"ts"`
 }
 
 func marshalSessionVectors(t *testing.T, fx sessionVectorFile) []byte {
@@ -219,16 +261,95 @@ func TestSessionStatementVectors_Verify(t *testing.T) {
 		require.NoError(t, err, rc.Name)
 		assert.True(t, ok, rc.Name)
 		ok, err = VerifySessionStatement(rejectPub, rc.Statement, rejectSig)
-		require.NoError(t, err, rc.Name)
+		// tampered_purpose changes purpose off hub-session, so the shared
+		// gate fails before the signature is compared. The recorded signature
+		// still verifies over signed_bytes_hex above.
+		if rc.Name == "tampered_purpose" {
+			require.ErrorContains(t, err, ErrSessionPurpose, rc.Name)
+		} else {
+			require.NoError(t, err, rc.Name)
+		}
 		assert.False(t, ok, rc.Name)
+		if rc.Name == "wrong_domain_envelope_shaped" {
+			var obj map[string]json.RawMessage
+			require.NoError(t, json.Unmarshal(signed, &obj), rc.Name)
+			require.Len(t, obj, 7, rc.Name)
+			for _, k := range []string{"alg_version", "body", "from_agent", "nonce", "room", "seq", "ts"} {
+				_, present := obj[k]
+				assert.True(t, present, "%s missing %s", rc.Name, k)
+			}
+		}
 	}
 	assert.Equal(t, []string{
 		"wrong_domain_envelope",
 		"wrong_domain_no_tag",
 		"wrong_domain_doctor_selfverify",
+		"wrong_domain_envelope_shaped",
 		"tampered_network_id",
 		"tampered_challenge",
 		"tampered_ts",
 		"tampered_slug",
+		"tampered_key_epoch",
+		"tampered_purpose",
 	}, names)
+}
+
+// sessionVectorStablePins are the bytes of the cases that already shipped.
+// Regeneration may append cases. It must not rewrite these.
+var sessionVectorStablePins = struct {
+	canonHex    string
+	taggedHex   string
+	doctorHex   string
+	validSig    string
+	envelopeSig string
+	doctorSig   string
+	pubKey      string
+}{
+	canonHex:    "7b226368616c6c656e6765223a22455245524552455245524552455245524552455245524552455245524552455245524552455245524552453d222c226b65795f65706f6368223a332c226e6574776f726b5f6964223a22766d6e6574313a3030313132323333343435353636373738383939616162626363646465656666222c22707572706f7365223a226875622d73657373696f6e222c22736c7567223a226d697261222c227473223a313730303030303030307d",
+	taggedHex:   "7661756c746d696e642d6875622d73657373696f6e2d76313a7b226368616c6c656e6765223a22455245524552455245524552455245524552455245524552455245524552455245524552455245524552453d222c226b65795f65706f6368223a332c226e6574776f726b5f6964223a22766d6e6574313a3030313132323333343435353636373738383939616162626363646465656666222c22707572706f7365223a226875622d73657373696f6e222c22736c7567223a226d697261222c227473223a313730303030303030307d",
+	doctorHex:   "7661756c746d696e642d646f63746f722d73656c667665726966792d76313a7b226368616c6c656e6765223a22455245524552455245524552455245524552455245524552455245524552455245524552455245524552453d222c226b65795f65706f6368223a332c226e6574776f726b5f6964223a22766d6e6574313a3030313132323333343435353636373738383939616162626363646465656666222c22707572706f7365223a226875622d73657373696f6e222c22736c7567223a226d697261222c227473223a313730303030303030307d",
+	validSig:    "hl6l9LOJLbft2ogJ5KSaPn8g0nugg0RjHcANh+GEteUjGPmSnUl/E+4IGPIosOg2BKrj/dFmQHMhHiTJ7rUdDQ==",
+	envelopeSig: "U+ttgunxO21ALrsAnGsjFtZjNKt54ZX9r9+mACd1eMLQnnWXfnwFgZtQfcrupSOuBBhji98Z7pusbs35cAF/DQ==",
+	doctorSig:   "TUqq4so50jSS/IKQhW5KdfavE89ohIncKWPNKbvNTocoxSoyC14/71X/8nVP5oGfPMCkmuurJFUdkxN+PZlECg==",
+	pubKey:      "stWdnOhyOzOUW9nhjDOtnzxlCi1BDupvuYAtqhM3HWA=",
+}
+
+func TestSessionStatementVectors_ExistingCasesStayByteIdentical(t *testing.T) {
+	pin := sessionVectorStablePins
+	check := func(t *testing.T, fx sessionVectorFile) {
+		t.Helper()
+		assert.Equal(t, pin.canonHex, fx.Valid.CanonicalJSONHex)
+		assert.Equal(t, pin.taggedHex, fx.Valid.TaggedBytesHex)
+		assert.Equal(t, pin.validSig, fx.Valid.Sig)
+		assert.Equal(t, pin.pubKey, fx.Valid.PubKey)
+
+		want := map[string]struct{ signed, sig string }{
+			"wrong_domain_envelope":          {pin.canonHex, pin.envelopeSig},
+			"wrong_domain_no_tag":            {pin.canonHex, pin.envelopeSig},
+			"wrong_domain_doctor_selfverify": {pin.doctorHex, pin.doctorSig},
+			"tampered_network_id":            {pin.taggedHex, pin.validSig},
+			"tampered_challenge":             {pin.taggedHex, pin.validSig},
+			"tampered_ts":                    {pin.taggedHex, pin.validSig},
+			"tampered_slug":                  {pin.taggedHex, pin.validSig},
+		}
+		got := make(map[string]sessionVectorReject, len(fx.Reject))
+		for _, rc := range fx.Reject {
+			got[rc.Name] = rc
+		}
+		for name, wantCase := range want {
+			rc, ok := got[name]
+			require.True(t, ok, "missing %s", name)
+			assert.Equal(t, wantCase.signed, rc.SignedBytesHex, name)
+			assert.Equal(t, wantCase.sig, rc.Sig, name)
+			assert.Equal(t, pin.pubKey, rc.PubKey, name)
+		}
+	}
+
+	check(t, buildSessionVectors(t))
+
+	raw, err := os.ReadFile(sessionVectorPath)
+	require.NoError(t, err)
+	var filed sessionVectorFile
+	require.NoError(t, json.Unmarshal(raw, &filed))
+	check(t, filed)
 }
