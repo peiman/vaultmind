@@ -200,6 +200,9 @@ const (
 	KeyAppIdentitysignkeeperStamp            = "app.identitysignkeeper.stamp"             // Fill absent issued_at and, for control or revocation, nonce
 	KeyAppIdentitysignregistryFile           = "app.identitysignregistry.file"            // Read registry JSON from this file instead of stdin
 	KeyAppIdentitysignregistrySignerSocket   = "app.identitysignregistry.signer_socket"   // Signer socket path (default: XDG state dir)
+	KeyAppIdentitysignsessionChallenge       = "app.identitysignsession.challenge"        // Hub challenge, standard base64 of 16 to 64 bytes
+	KeyAppIdentitysignsessionNetworkId       = "app.identitysignsession.network_id"       // Network id the hub issued with the challenge
+	KeyAppIdentitysignsessionSignerSocket    = "app.identitysignsession.signer_socket"    // Signer socket path (default: XDG state dir)
 	KeyAppIdentitysignerSignerKey            = "app.identitysigner.signer_key"            // Sealed signer key path (default: XDG data dir)
 	KeyAppIdentitysignerSignerSocket         = "app.identitysigner.signer_socket"         // Signer socket path (default: XDG state dir)
 	KeyAppIdentitysignerinstallSignerKey     = "app.identitysignerinstall.signer_key"     // Sealed signer key path (default: XDG data dir, per --config-path-mode)

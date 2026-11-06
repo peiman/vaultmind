@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `vaultmind identity sign-session` signs a hub login proof for the agent enrolled on this machine, through the keyless signer, and prints one JSON line (`statement`, `sig`, `pubkey`). The slug and key epoch are that agent's own binding. An invalid challenge, a missing enrollment, or an unreachable signer prints nothing and exits non-zero.
+
 ### Fixed
 
 - The macOS ORT release build now runs on the macos-15 runner, after GitHub stopped serving macos-14. The binary still runs on macOS 14: the minimum is pinned to 14.0 and checked in CI.

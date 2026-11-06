@@ -211,6 +211,9 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.identitysignkeeper.stamp` | bool | `false` | `VAULTMIND_APP_IDENTITYSIGNKEEPER_STAMP` | Fill absent issued_at and, for control or revocation, nonce |
 | `app.identitysignregistry.file` | string | `` | `VAULTMIND_APP_IDENTITYSIGNREGISTRY_FILE` | Read registry JSON from this file instead of stdin |
 | `app.identitysignregistry.signer_socket` | string | `` | `VAULTMIND_APP_IDENTITYSIGNREGISTRY_SIGNER_SOCKET` | Signer socket path (default: XDG state dir) |
+| `app.identitysignsession.challenge` | string | `` | `VAULTMIND_APP_IDENTITYSIGNSESSION_CHALLENGE` | Hub challenge, standard base64 of 16 to 64 bytes |
+| `app.identitysignsession.network_id` | string | `` | `VAULTMIND_APP_IDENTITYSIGNSESSION_NETWORK_ID` | Network id the hub issued with the challenge |
+| `app.identitysignsession.signer_socket` | string | `` | `VAULTMIND_APP_IDENTITYSIGNSESSION_SIGNER_SOCKET` | Signer socket path (default: XDG state dir) |
 | `app.identitysigner.signer_key` | string | `` | `VAULTMIND_APP_IDENTITYSIGNER_SIGNER_KEY` | Sealed signer key path (default: XDG data dir) |
 | `app.identitysigner.signer_socket` | string | `` | `VAULTMIND_APP_IDENTITYSIGNER_SIGNER_SOCKET` | Signer socket path (default: XDG state dir) |
 | `app.identitysignerinstall.signer_key` | string | `` | `VAULTMIND_APP_IDENTITYSIGNERINSTALL_SIGNER_KEY` | Sealed signer key path (default: XDG data dir, per --config-path-mode) |
@@ -963,6 +966,16 @@ app:
   identitysignregistry:
     # Read registry JSON from this file instead of stdin
     file: 
+
+    # Signer socket path (default: XDG state dir)
+    signer_socket: 
+
+  identitysignsession:
+    # Hub challenge, standard base64 of 16 to 64 bytes
+    challenge: 
+
+    # Network id the hub issued with the challenge
+    network_id: 
 
     # Signer socket path (default: XDG state dir)
     signer_socket: 
@@ -2041,6 +2054,15 @@ export VAULTMIND_APP_IDENTITYSIGNREGISTRY_FILE=
 
 # Signer socket path (default: XDG state dir)
 export VAULTMIND_APP_IDENTITYSIGNREGISTRY_SIGNER_SOCKET=
+
+# Hub challenge, standard base64 of 16 to 64 bytes
+export VAULTMIND_APP_IDENTITYSIGNSESSION_CHALLENGE=
+
+# Network id the hub issued with the challenge
+export VAULTMIND_APP_IDENTITYSIGNSESSION_NETWORK_ID=
+
+# Signer socket path (default: XDG state dir)
+export VAULTMIND_APP_IDENTITYSIGNSESSION_SIGNER_SOCKET=
 
 # Sealed signer key path (default: XDG data dir)
 export VAULTMIND_APP_IDENTITYSIGNER_SIGNER_KEY=

@@ -338,6 +338,11 @@ var commandCatalog = map[string]catalogEntry{
 		when:  "you own a keeper and need to sign a control request, a read grant, or a revocation for its watchdog.",
 		short: "Sign a keeper control request, read grant, or revocation via the keyless signer",
 	},
+	"vaultmind identity sign-session": {
+		group: groupLifecycle,
+		when:  "the hub challenged you and you must prove which agent is reading, with a signature that cannot be replayed as a chat message or a doctor check.",
+		short: "Sign a hub session statement via the keyless signer",
+	},
 	"vaultmind identity fetch-registry": {
 		group: groupLifecycle,
 		when:  "this machine needs a current copy of the mesh's signed registry — it downloads it from the hub, verifies it against the pinned root, and refuses older epochs.",
