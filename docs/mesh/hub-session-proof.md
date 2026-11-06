@@ -63,11 +63,20 @@ Do not pass `-update` to `./internal/identity/...`. Other packages use that flag
 
 ## What the hub must also check
 
-`VerifySessionStatement` returning true is not a login. The hub must also:
+`VerifySessionStatement` returning true is not a login. The hub MUST re-validate the whole statement itself, and must not trust the signer's validation:
+
+- `purpose` is exactly `hub-session`;
+- `challenge` decodes as standard base64 to 16–64 bytes;
+- `network_id` is non-empty, valid UTF-8, NFC, at most 128 bytes, and contains no ASCII control (U+0000–U+001F or U+007F);
+- `slug` likewise: non-empty, valid UTF-8, NFC, at most 128 bytes, and no ASCII control;
+- `key_epoch` is in `[1, 2^53]`;
+- `ts` is in `[0, 2^53]`.
+
+The hub must also:
 
 - accept the challenge only once, and only while it is unexpired;
 - require `network_id` to equal the hub's own network id;
 - require `ts` to fall inside the hub's acceptance window;
 - resolve `slug` and `key_epoch` to a live, unrevoked registry binding, and verify the signature with that binding's pubkey.
 
-The signer does not do those checks. It only refuses to emit a statement that is structurally invalid or that does not verify under its own binding.
+The keyless signer signs arbitrary bytes for any same-UID caller on its socket. `Config.Policy` in `internal/identity/signer/signer.go` is nil by default, and that dev-interim note says a nil policy is permissive: any allowlisted caller gets whatever bytes it asks for signed. A local process can therefore sign a structurally invalid statement under the agent's key. It still cannot impersonate another agent, because the signature verifies only under that agent's own pubkey. `sign-session` refuses a statement its own gate rejects and writes nothing; that is the command, not a check the hub may skip.
