@@ -87,6 +87,9 @@ func buildRolesFixture(t *testing.T) rolesFixture {
 		Epoch: epoch, ValidFrom: regFrom, ValidUntil: regUntil,
 		Agents: []AgentBinding{rolesFixtureBinding(t, 0xC2, "bridge", "Bridge", nil)},
 	}
+	// non_nfc uses U+0301 as an escape (nfdAcute) so the source cannot precompose
+	// "human:peima\u0301n" into a single code point before it is signed.
+	nfdVouch := `[{"kind":"bridge","vouches_for":["human:peima` + nfdAcute + `n"]}]`
 	rejects := []struct {
 		name, reason, roles string
 	}{
@@ -95,6 +98,10 @@ func buildRolesFixture(t *testing.T) rolesFixture {
 		{"bridge_missing_vouches_for", "bridge role has no vouches_for list", `[{"kind":"bridge"}]`},
 		{"code_signing_missing_platforms", "code_signing role has no platforms list", `[{"kind":"code_signing"}]`},
 		{"roles_not_array", "roles is a JSON object, not an array", `{"kind":"bridge"}`},
+		{"roles_null", "roles is JSON null, not an array", `null`},
+		{"vouches_for_null", "vouches_for is JSON null, not an array of strings", `[{"kind":"bridge","vouches_for":null}]`},
+		{"non_string_in_vouches_for", "vouches_for contains a non-string element", `[{"kind":"bridge","vouches_for":["human:peiman",1]}]`},
+		{"non_nfc_vouches_for", "vouches_for is not Unicode NFC", nfdVouch},
 	}
 	cases := make([]rolesRejectCase, 0, len(rejects))
 	for _, rc := range rejects {
@@ -227,26 +234,33 @@ func TestCrossLanguageRolesFixture_ValidRoundTripsRoles(t *testing.T) {
 func TestCrossLanguageRolesFixture_RejectsAreSchemaNotSignature(t *testing.T) {
 	fx := loadRolesFixture(t)
 	rootPub := mustB64Pub(t, fx.RootPubKey)
-	want := []string{
-		"unknown_kind",
-		"bridge_extra_field",
-		"bridge_missing_vouches_for",
-		"code_signing_missing_platforms",
-		"roles_not_array",
+	want := []struct {
+		name string
+		err  string
+	}{
+		{"unknown_kind", ErrMalformedRole},
+		{"bridge_extra_field", ErrMalformedRole},
+		{"bridge_missing_vouches_for", ErrMalformedRole},
+		{"code_signing_missing_platforms", ErrMalformedRole},
+		{"roles_not_array", ErrMalformedRole},
+		{"roles_null", ErrMalformedRole},
+		{"vouches_for_null", ErrMalformedRole},
+		{"non_string_in_vouches_for", ErrMalformedRole},
+		{"non_nfc_vouches_for", identity.ErrSchemaNotNFC},
 	}
 	require.Len(t, fx.Reject, len(want))
 	for i, rc := range fx.Reject {
 		t.Run(rc.Name, func(t *testing.T) {
-			assert.Equal(t, want[i], rc.Name)
+			assert.Equal(t, want[i].name, rc.Name)
 			assert.Equal(t, "reject", rc.Expect)
 			parsed, err := ParseDistribution(rc.Envelope)
 			require.NoError(t, err, "the envelope itself is well formed")
 			ok, err := identity.VerifyCanonical(rootPub, identity.CanonicalBytesFromTrusted(parsed.Registry), parsed.RootSig)
 			require.NoError(t, err)
-			assert.True(t, ok, "root signature must hold; the reject is the role schema")
+			assert.True(t, ok, "root signature must hold; the reject is the schema")
 			_, _, err = VerifyAndLoad(rootPub, parsed, fx.Valid.PersistedEpoch,
 				time.Unix(fx.Now, 0), time.Duration(fx.MaxStalenessSec)*time.Second)
-			require.ErrorContains(t, err, ErrMalformedRole)
+			require.ErrorContains(t, err, want[i].err)
 		})
 	}
 }

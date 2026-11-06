@@ -88,6 +88,46 @@
         "root_key_epoch": 0,
         "root_sig": "ZbdQ1LSXnxOI2SesU6jJhMr+2AMbk2nYRIDYEI/k26rzQCQDvcffM3qJ2IfEdLjGTYtU3Z2H/e2WhhB2AkXKCg=="
       }
+    },
+    {
+      "name": "roles_null",
+      "reason": "roles is JSON null, not an array",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiQnJpZGdlIiwia2V5X2Vwb2NoIjoxLCJwdWJrZXkiOiJ0eWd2NUhMNWRrSEJjSmVDR2xONGRLcXFVeVpGclRUYjFaaHpNYVRuUDQwPSIsInJvbGVzIjpudWxsLCJzbHVnIjoiYnJpZGdlIiwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9XSwiZXBvY2giOjEwLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH0=",
+        "root_key_epoch": 0,
+        "root_sig": "jaPHe89j3P7YfjlvWBC1hCg5oWuGybOOHuI3Gn+Od0IRAQkPMCN+ze/hpxoB/hWE5rc8yUm8M8M41f/90d6NBw=="
+      }
+    },
+    {
+      "name": "vouches_for_null",
+      "reason": "vouches_for is JSON null, not an array of strings",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiQnJpZGdlIiwia2V5X2Vwb2NoIjoxLCJwdWJrZXkiOiJ0eWd2NUhMNWRrSEJjSmVDR2xONGRLcXFVeVpGclRUYjFaaHpNYVRuUDQwPSIsInJvbGVzIjpbeyJraW5kIjoiYnJpZGdlIiwidm91Y2hlc19mb3IiOm51bGx9XSwic2x1ZyI6ImJyaWRnZSIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfV0sImVwb2NoIjoxMCwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9",
+        "root_key_epoch": 0,
+        "root_sig": "RFyiyraTmKFPRYd/qMe/HpKNaxLyiZidfglWkq7bcEGjsbga1qh8PI5BJn9E5jTyEUrToMTi5zeqKHyXYWI1Cg=="
+      }
+    },
+    {
+      "name": "non_string_in_vouches_for",
+      "reason": "vouches_for contains a non-string element",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiQnJpZGdlIiwia2V5X2Vwb2NoIjoxLCJwdWJrZXkiOiJ0eWd2NUhMNWRrSEJjSmVDR2xONGRLcXFVeVpGclRUYjFaaHpNYVRuUDQwPSIsInJvbGVzIjpbeyJraW5kIjoiYnJpZGdlIiwidm91Y2hlc19mb3IiOlsiaHVtYW46cGVpbWFuIiwxXX1dLCJzbHVnIjoiYnJpZGdlIiwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9XSwiZXBvY2giOjEwLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH0=",
+        "root_key_epoch": 0,
+        "root_sig": "1cZ0VRyWAk4NM5bKTO9H265LABma3zKI5U1gzpzvf8BbCzSItwx/G+ddIvaFDrom5KqmPBLYeMokT/b3Pv+oCQ=="
+      }
+    },
+    {
+      "name": "non_nfc_vouches_for",
+      "reason": "vouches_for is not Unicode NFC",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiQnJpZGdlIiwia2V5X2Vwb2NoIjoxLCJwdWJrZXkiOiJ0eWd2NUhMNWRrSEJjSmVDR2xONGRLcXFVeVpGclRUYjFaaHpNYVRuUDQwPSIsInJvbGVzIjpbeyJraW5kIjoiYnJpZGdlIiwidm91Y2hlc19mb3IiOlsiaHVtYW46cGVpbWHMgW4iXX1dLCJzbHVnIjoiYnJpZGdlIiwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9XSwiZXBvY2giOjEwLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH0=",
+        "root_key_epoch": 0,
+        "root_sig": "+OT25vAM1N1reCNC0/MRyS6SuQM/1tfBHqSkIM5w/YvqxSUlRrVkv0caV4k8Bx1UXP7hufwjaCF+Dq9NVr+vAQ=="
+      }
     }
   ]
 }

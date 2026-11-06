@@ -413,12 +413,8 @@ func VerifyAndLoad(
 	// Decode the now-authenticated bytes. Pubkeys are re-validated in fromWire,
 	// and roles is parsed there. A malformed role rejects the registry. Any
 	// other unknown field in the signed bytes stays ignored, as it was before
-	// roles existed.
-	var w wireRegistry
-	if err := json.Unmarshal(env.Registry, &w); err != nil {
-		return Registry{}, persistedHighestEpoch, fmt.Errorf("%s: %w", errUnmarshalRegistry, err)
-	}
-	reg, err := fromWire(w)
+	// roles existed. A non-NFC string anywhere in those bytes is then refused.
+	reg, err := decodeAuthenticatedRegistry(env.Registry)
 	if err != nil {
 		return Registry{}, persistedHighestEpoch, err
 	}
@@ -467,6 +463,27 @@ func VerifyAndLoad(
 		newHighest = reg.Epoch
 	}
 	return reg, newHighest, nil
+}
+
+// decodeAuthenticatedRegistry decodes a registry whose root signature has
+// already been checked. Role shape is parsed first, so a malformed role still
+// returns ErrMalformedRole. The NFC walk then covers every string in the raw
+// JSON, including a field the typed decode ignores. It uses
+// identity.ValidateDocumentNFC, which merges duplicate keys and does not reject
+// them: Rust's verifier does the same through serde_json::Value.
+func decodeAuthenticatedRegistry(raw []byte) (Registry, error) {
+	var w wireRegistry
+	if err := json.Unmarshal(raw, &w); err != nil {
+		return Registry{}, fmt.Errorf("%s: %w", errUnmarshalRegistry, err)
+	}
+	reg, err := fromWire(w)
+	if err != nil {
+		return Registry{}, err
+	}
+	if err := identity.ValidateDocumentNFC(raw); err != nil {
+		return Registry{}, err
+	}
+	return reg, nil
 }
 
 // Resolve returns the LIVE binding for slug at now. It default-denies: a binding

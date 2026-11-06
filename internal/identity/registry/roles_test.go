@@ -11,6 +11,7 @@ import (
 	"github.com/peiman/vaultmind/internal/identity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/text/unicode/norm"
 )
 
 // rolesFreeCanonicalHex is the JCS canonical encoding of rolesFreeRegistry, captured
@@ -191,6 +192,61 @@ func TestVerifyAndLoad_AcceptsEmptyRolesArray(t *testing.T) {
 	loaded, _, err := VerifyAndLoad(rootPub, env, 4, fixedNow, time.Hour*24*365)
 	require.NoError(t, err)
 	require.Empty(t, loaded.Agents[0].Roles)
+}
+
+// TestVerifyAndLoad_RejectsNonNFCStrings is the verify-side twin of the sign
+// gate. A root-signed registry whose display name, vouches_for, or platforms
+// is NFD must be refused with the NFC rule. The signature still holds. The
+// precomposed form of the same text still loads.
+func TestVerifyAndLoad_RejectsNonNFCStrings(t *testing.T) {
+	nfdVouch := "human:peima" + nfdAcute + "n"
+	require.NotEqual(t, nfdVouch, norm.NFC.String(nfdVouch), "fixture must stay NFD")
+
+	rootPub, rootPriv := fixedEd25519(t, 0x11)
+	pub, _ := fixedEd25519(t, 0x22)
+	b64 := base64.StdEncoding.EncodeToString(pub)
+	sign := func(t *testing.T, body string) SignedRegistry {
+		t.Helper()
+		canonical, err := identity.Canonicalize([]byte(body))
+		require.NoError(t, err)
+		sig, err := identity.SignCanonical(rootPriv, canonical)
+		require.NoError(t, err)
+		return SignedRegistry{Registry: canonical.Bytes(), RootSig: sig}
+	}
+	base := func(display, roles string) string {
+		rolesField := ""
+		if roles != "" {
+			rolesField = `,"roles":` + roles
+		}
+		return `{"agents":[{"authorized_origin_daemons":["daemon-eu-1"],"display_name":"` + display + `",` +
+			`"key_epoch":1,"pubkey":"` + b64 + `"` + rolesField + `,"slug":"mira",` +
+			`"valid_from":1770000000,"valid_until":1780000000}],` +
+			`"epoch":5,"valid_from":1770000000,"valid_until":1780000000}`
+	}
+	cases := []struct {
+		name string
+		body string
+	}{
+		{name: "display_name", body: base("Mira e"+nfdAcute, "")},
+		{name: "vouches_for", body: base("Mira", `[{"kind":"bridge","vouches_for":["`+nfdVouch+`"]}]`)},
+		{name: "platforms", body: base("Mira", `[{"kind":"code_signing","platforms":["darwin-e`+nfdAcute+`"]}]`)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := sign(t, tc.body)
+			ok, err := identity.VerifyCanonical(rootPub, identity.CanonicalBytesFromTrusted(env.Registry), env.RootSig)
+			require.NoError(t, err)
+			assert.True(t, ok, "root signature must hold; the reject is NFC")
+			_, _, err = VerifyAndLoad(rootPub, env, 4, fixedNow, time.Hour*24*365)
+			require.ErrorContains(t, err, identity.ErrSchemaNotNFC)
+		})
+	}
+
+	env := sign(t, base("Mir\u00e9", `[{"kind":"bridge","vouches_for":["human:peiman-\u00e9"]}]`))
+	loaded, _, err := VerifyAndLoad(rootPub, env, 4, fixedNow, time.Hour*24*365)
+	require.NoError(t, err)
+	require.Equal(t, "Mir\u00e9", loaded.Agents[0].DisplayName)
+	require.Equal(t, []string{"human:peiman-\u00e9"}, loaded.Agents[0].Roles[0].VouchesFor())
 }
 
 func TestVerifyAndLoad_RejectsMalformedRoles(t *testing.T) {

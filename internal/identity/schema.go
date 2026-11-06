@@ -350,6 +350,45 @@ func walkRegistryObject(dec *json.Decoder, depth int) error {
 	return nil
 }
 
+// ValidateDocumentNFC rejects a JSON document that contains a string value
+// which is not Unicode NFC. encoding/json merges a duplicated key, the same
+// way serde_json::Value does, and this function does not reject duplicates.
+// The sign path uses ValidateRegistrySchema for that. Verify uses this so a
+// signed body Rust accepts after the merge still loads, while a non-NFC string
+// anywhere in the authenticated document is refused.
+func ValidateDocumentNFC(jsonBytes []byte) error {
+	var v any
+	if err := json.Unmarshal(jsonBytes, &v); err != nil {
+		return fmt.Errorf("%s: %w", errSchemaInvalidJSON, err)
+	}
+	return walkDocumentNFC(v, 0)
+}
+
+func walkDocumentNFC(v any, depth int) error {
+	if depth > registrySchemaMaxDepth {
+		return fmt.Errorf("%s", errSchemaTooDeep)
+	}
+	switch t := v.(type) {
+	case map[string]any:
+		for _, child := range t {
+			if err := walkDocumentNFC(child, depth+1); err != nil {
+				return err
+			}
+		}
+	case []any:
+		for _, child := range t {
+			if err := walkDocumentNFC(child, depth+1); err != nil {
+				return err
+			}
+		}
+	case string:
+		if !isNFC(t) {
+			return fmt.Errorf("%s: %q", ErrSchemaNotNFC, t)
+		}
+	}
+	return nil
+}
+
 func walkRegistryArray(dec *json.Decoder, depth int) error {
 	if depth > registrySchemaMaxDepth {
 		return fmt.Errorf("%s", errSchemaTooDeep)
