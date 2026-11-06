@@ -1,0 +1,93 @@
+{
+  "root_pubkey": "rNzISU1Fj0SnqqwdaoTsYk2u6IQ22yribme6ZFoQYig=",
+  "now": 2000000,
+  "max_staleness_secs": 86400,
+  "valid": {
+    "envelope": {
+      "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiQnJpZGdlIiwia2V5X2Vwb2NoIjoxLCJwdWJrZXkiOiJ0eWd2NUhMNWRrSEJjSmVDR2xONGRLcXFVeVpGclRUYjFaaHpNYVRuUDQwPSIsInJvbGVzIjpbeyJraW5kIjoiYnJpZGdlIiwidm91Y2hlc19mb3IiOlsiaHVtYW46cGVpbWFuIl19XSwic2x1ZyI6ImJyaWRnZSIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfSx7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiU2lnbmVyIiwia2V5X2Vwb2NoIjoxLCJwdWJrZXkiOiIxQVM4UkZaYTdidUprVkRsc0xPeks1UkJ2d3kzaUV3ekV3Mm8yOEo5MHM4PSIsInJvbGVzIjpbeyJraW5kIjoiY29kZV9zaWduaW5nIiwicGxhdGZvcm1zIjpbImRhcndpbi1hcm02NCJdfV0sInNsdWciOiJzaWduZXIiLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH0seyJhdXRob3JpemVkX29yaWdpbl9kYWVtb25zIjpbImRhZW1vbi0xIl0sImRpc3BsYXlfbmFtZSI6IlBsYWluIiwia2V5X2Vwb2NoIjoxLCJwdWJrZXkiOiIzRkYvOVNmbnZQcXdaL0xNWWJ2dmpuWDV1bzRUTXEwOVF2aVRqZ0JGN1lrPSIsInNsdWciOiJwbGFpbiIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfV0sImVwb2NoIjoxMCwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9",
+      "root_key_epoch": 0,
+      "root_sig": "u9patwP36e/67B9wl6lF014vPiGpQ3OxxhUj3dUU8f+WlHOP3YhnCawyQEzDAVMG8np0FUx3170g/Qk+ctoqDw=="
+    },
+    "persisted_highest_epoch": 9,
+    "bindings": [
+      {
+        "slug": "bridge",
+        "roles": [
+          {
+            "kind": "bridge",
+            "vouches_for": [
+              "human:peiman"
+            ]
+          }
+        ]
+      },
+      {
+        "slug": "signer",
+        "roles": [
+          {
+            "kind": "code_signing",
+            "platforms": [
+              "darwin-arm64"
+            ]
+          }
+        ]
+      },
+      {
+        "slug": "plain",
+        "roles": []
+      }
+    ]
+  },
+  "reject": [
+    {
+      "name": "unknown_kind",
+      "reason": "role kind is not bridge or code_signing",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiQnJpZGdlIiwia2V5X2Vwb2NoIjoxLCJwdWJrZXkiOiJ0eWd2NUhMNWRrSEJjSmVDR2xONGRLcXFVeVpGclRUYjFaaHpNYVRuUDQwPSIsInJvbGVzIjpbeyJraW5kIjoid2l6YXJkIiwidm91Y2hlc19mb3IiOlsiaHVtYW46cGVpbWFuIl19XSwic2x1ZyI6ImJyaWRnZSIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfV0sImVwb2NoIjoxMCwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9",
+        "root_key_epoch": 0,
+        "root_sig": "g9A2MCgf+jyB8k8SUEUABEm1yq4BjaCu/RsA/c+mHKS5SqqQjxI0MZoGoLRMKRMZyEVA1S6weJEgc+atQWpZDQ=="
+      }
+    },
+    {
+      "name": "bridge_extra_field",
+      "reason": "bridge role carries a field other than kind and vouches_for",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiQnJpZGdlIiwia2V5X2Vwb2NoIjoxLCJwdWJrZXkiOiJ0eWd2NUhMNWRrSEJjSmVDR2xONGRLcXFVeVpGclRUYjFaaHpNYVRuUDQwPSIsInJvbGVzIjpbeyJleHRyYSI6dHJ1ZSwia2luZCI6ImJyaWRnZSIsInZvdWNoZXNfZm9yIjpbImh1bWFuOnBlaW1hbiJdfV0sInNsdWciOiJicmlkZ2UiLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJlcG9jaCI6MTAsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
+        "root_key_epoch": 0,
+        "root_sig": "JOumYCkcbCKSwL61CqwrXvNtV1KJMXA9J44ZANmXd1PmMovtIWOm3fTzuTjtCSNTAzesYXHVo8G4yQeD/kVKAg=="
+      }
+    },
+    {
+      "name": "bridge_missing_vouches_for",
+      "reason": "bridge role has no vouches_for list",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiQnJpZGdlIiwia2V5X2Vwb2NoIjoxLCJwdWJrZXkiOiJ0eWd2NUhMNWRrSEJjSmVDR2xONGRLcXFVeVpGclRUYjFaaHpNYVRuUDQwPSIsInJvbGVzIjpbeyJraW5kIjoiYnJpZGdlIn1dLCJzbHVnIjoiYnJpZGdlIiwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9XSwiZXBvY2giOjEwLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH0=",
+        "root_key_epoch": 0,
+        "root_sig": "/r6UMm7EOkTFkTUgq8cFaIGNqItoXPednepDs8sHg85VM7b6YLw2BwEL4Plo5dbnqcuCvpGiWuLBr+aBTtjMDA=="
+      }
+    },
+    {
+      "name": "code_signing_missing_platforms",
+      "reason": "code_signing role has no platforms list",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiQnJpZGdlIiwia2V5X2Vwb2NoIjoxLCJwdWJrZXkiOiJ0eWd2NUhMNWRrSEJjSmVDR2xONGRLcXFVeVpGclRUYjFaaHpNYVRuUDQwPSIsInJvbGVzIjpbeyJraW5kIjoiY29kZV9zaWduaW5nIn1dLCJzbHVnIjoiYnJpZGdlIiwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9XSwiZXBvY2giOjEwLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH0=",
+        "root_key_epoch": 0,
+        "root_sig": "kngZFIlXwAG+4vJxLDwoBErJ/6XJxtCX2F3XzwEHDmk/dGmBkBEE5HHL8YHn14npikdeOCERgG54eHwUrlgDCg=="
+      }
+    },
+    {
+      "name": "roles_not_array",
+      "reason": "roles is a JSON object, not an array",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiQnJpZGdlIiwia2V5X2Vwb2NoIjoxLCJwdWJrZXkiOiJ0eWd2NUhMNWRrSEJjSmVDR2xONGRLcXFVeVpGclRUYjFaaHpNYVRuUDQwPSIsInJvbGVzIjp7ImtpbmQiOiJicmlkZ2UifSwic2x1ZyI6ImJyaWRnZSIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfV0sImVwb2NoIjoxMCwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9",
+        "root_key_epoch": 0,
+        "root_sig": "ZbdQ1LSXnxOI2SesU6jJhMr+2AMbk2nYRIDYEI/k26rzQCQDvcffM3qJ2IfEdLjGTYtU3Z2H/e2WhhB2AkXKCg=="
+      }
+    }
+  ]
+}
