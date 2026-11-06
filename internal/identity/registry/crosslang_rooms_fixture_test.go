@@ -138,6 +138,11 @@ func buildRoomsFixture(t *testing.T) roomsFixture {
 		{"unknown_room_field", "a room object carries an unknown field", `[{"name":"ops","controller":"human:peiman","extra":true}]`, "", ""},
 		{"admin_extra_field", "an admin role carries a field other than kind", "", "", `[{"kind":"admin","scope":"all"}]`},
 		{"too_many_rooms", "rooms has more than 256 entries", many.String(), "", ""},
+		{"room_name_leading_dot", "room name starts with a dot", `[{"name":".ops","controller":"human:peiman"}]`, "", ""},
+		{"room_name_leading_dash", "room name starts with a dash", `[{"name":"-ops","controller":"human:peiman"}]`, "", ""},
+		{"too_many_members", "a room has more than 256 members", membersRoom(257), "", ""},
+		{"too_many_approval_required", "approval_required has more than 32 entries", approvalRoom(33), "", ""},
+		{"approval_required_name_too_long", "an approval_required name is longer than 32 bytes", `[{"name":"ops","controller":"human:peiman","approval_required":["` + ("a" + strings.Repeat("b", 32)) + `"]}]`, "", ""},
 	}
 	cases := make([]roomsRejectCase, 0, len(rejects))
 	for _, rc := range rejects {
@@ -209,6 +214,36 @@ func signPatchedPolicy(t *testing.T, rootPriv ed25519.PrivateKey, reg Registry, 
 	out, err := MarshalDistribution(SignedRegistry{Registry: canonical.Bytes(), RootSig: sig, RootKeyEpoch: 0})
 	require.NoError(t, err)
 	return out
+}
+
+func membersRoom(n int) string {
+	var b strings.Builder
+	b.WriteString(`[{"name":"ops","controller":"human:peiman","members":[`)
+	for i := 0; i < n; i++ {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		b.WriteString(`{"principal":"agent:m`)
+		b.WriteString(itoa(i))
+		b.WriteString(`","access":["read"]}`)
+	}
+	b.WriteString(`]}]`)
+	return b.String()
+}
+
+func approvalRoom(n int) string {
+	var b strings.Builder
+	b.WriteString(`[{"name":"ops","controller":"human:peiman","approval_required":[`)
+	for i := 0; i < n; i++ {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		b.WriteString(`"a`)
+		b.WriteString(itoa(i))
+		b.WriteString(`"`)
+	}
+	b.WriteString(`]}]`)
+	return b.String()
 }
 
 func marshalRoomsFixture(t *testing.T) []byte {
@@ -321,6 +356,11 @@ func TestCrossLanguageRoomsFixture_RejectsAreSchemaNotSignature(t *testing.T) {
 		{"unknown_room_field", ErrMalformedRoom},
 		{"admin_extra_field", ErrMalformedRole},
 		{"too_many_rooms", ErrMalformedRoom},
+		{"room_name_leading_dot", ErrMalformedRoom},
+		{"room_name_leading_dash", ErrMalformedRoom},
+		{"too_many_members", ErrMalformedRoom},
+		{"too_many_approval_required", ErrMalformedRoom},
+		{"approval_required_name_too_long", ErrMalformedRoom},
 	}
 	require.Len(t, fx.Reject, len(want))
 	for i, rc := range fx.Reject {

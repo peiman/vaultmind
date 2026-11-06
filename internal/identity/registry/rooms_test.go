@@ -302,6 +302,19 @@ func TestParseRooms_BoundsAndShapes(t *testing.T) {
 	_, err = ParseRooms([]byte(approval.String()))
 	require.ErrorContains(t, err, ErrMalformedRoom)
 
+	_, err = ParseRooms([]byte(`[{"name":".ops","controller":"human:peiman"}]`))
+	require.ErrorContains(t, err, ErrMalformedRoom)
+	_, err = ParseRooms([]byte(`[{"name":"-ops","controller":"human:peiman"}]`))
+	require.ErrorContains(t, err, ErrMalformedRoom)
+
+	name32 := "a" + strings.Repeat("b", 31)
+	rooms, err = ParseRooms([]byte(`[{"name":"ops","controller":"human:peiman","approval_required":["` + name32 + `"]}]`))
+	require.NoError(t, err)
+	require.Equal(t, []string{name32}, rooms[0].ApprovalRequired())
+	name33 := "a" + strings.Repeat("b", 32)
+	_, err = ParseRooms([]byte(`[{"name":"ops","controller":"human:peiman","approval_required":["` + name33 + `"]}]`))
+	require.ErrorContains(t, err, ErrMalformedRoom)
+
 	_, err = ParseRooms([]byte(`[{"name":"ops","controller":"human:peiman","members":[{"principal":"agent:workhorse","access":["read"],"note":1}]}]`))
 	require.ErrorContains(t, err, ErrMalformedRoom)
 	_, err = NewRoom("dm:a/b.C_1-z", "agent:Mira.v2_1", nil, nil)
