@@ -4,9 +4,9 @@
   "max_staleness_secs": 86400,
   "valid": {
     "envelope": {
-      "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiS2VlcGVyIiwia2V5X2Vwb2NoIjoxLCJwdWJrZXkiOiJRZWo5NFRLdFp3NVRUTml5ZGRMTmZ1eDNjenhtK050SW9jcmFmNnY4UlZVPSIsInJvbGVzIjpbeyJraW5kIjoiYWRtaW4ifV0sInNsdWciOiJrZWVwZXIiLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJkbXMiOiJhZ2VudHNfb2ZmIiwiZXBvY2giOjEwLCJyb29tcyI6W3siYXBwcm92YWxfcmVxdWlyZWQiOlsicHVibGlzaCIsIm1lcmdlIl0sImNvbnRyb2xsZXIiOiJodW1hbjpwZWltYW4iLCJtZW1iZXJzIjpbeyJhY2Nlc3MiOlsicG9zdCIsInJlYWQiXSwicHJpbmNpcGFsIjoiYWdlbnQ6d29ya2hvcnNlIn1dLCJuYW1lIjoicHJvZHVjdC1jb250cm9sIn0seyJjb250cm9sbGVyIjoiYWdlbnQ6bWlyYSIsIm5hbWUiOiJvcHMifV0sInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
+      "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiS2VlcGVyIiwia2V5X2Vwb2NoIjoxLCJwdWJrZXkiOiJRZWo5NFRLdFp3NVRUTml5ZGRMTmZ1eDNjenhtK050SW9jcmFmNnY4UlZVPSIsInJvbGVzIjpbeyJraW5kIjoiYWRtaW4ifV0sInNsdWciOiJrZWVwZXIiLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJkbXMiOiJhZ2VudHNfb2ZmIiwiZXBvY2giOjEwLCJyb29tcyI6W3siYXBwcm92YWxfcmVxdWlyZWQiOlsicHVibGlzaCIsIm1lcmdlIl0sImNvbnRyb2xsZXIiOiJodW1hbjpwZWltYW4iLCJtZW1iZXJzIjpbeyJhY2Nlc3MiOlsicG9zdCIsInJlYWQiXSwicHJpbmNpcGFsIjoiYWdlbnQ6d29ya2hvcnNlIn1dLCJuYW1lIjoicHJvZHVjdC1jb250cm9sIn0seyJjb250cm9sbGVyIjoiYWdlbnQ6bWlyYSIsIm5hbWUiOiJvcHMifSx7ImNvbnRyb2xsZXIiOiJodW1hbjpwZWltYW4iLCJtZW1iZXJzIjpbeyJhY2Nlc3MiOlsicmVhZCJdLCJwcmluY2lwYWwiOiJodW1hbjpQZWltYW4ifV0sIm5hbWUiOiJyZXZpZXcifV0sInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
       "root_key_epoch": 0,
-      "root_sig": "rDzF9DPxox9zrjLv4pqwoQ44Io1CxX7oUf3e10hnQxWQLmVvi6nQ/xmsbtIYpinPjhmTVvSzmWW+90yeycloBQ=="
+      "root_sig": "2NPumWxAl9N/ar69PmLo6yEFsXhvHJHn5o9YI0o2HkY0jE9w4miUXcwPRZUcPL6WLyK8ev2bKtPs5B1yV4SRCw=="
     },
     "persisted_highest_epoch": 9,
     "dms": "agents_off",
@@ -31,6 +31,18 @@
       {
         "name": "ops",
         "controller": "agent:mira"
+      },
+      {
+        "name": "review",
+        "controller": "human:peiman",
+        "members": [
+          {
+            "principal": "human:Peiman",
+            "access": [
+              "read"
+            ]
+          }
+        ]
       }
     ],
     "bindings": [

@@ -82,13 +82,20 @@ func buildRoomsFixture(t *testing.T) roomsFixture {
 	require.NoError(t, err)
 	controllerOnly, err := NewRoom("ops", "agent:mira", nil, nil)
 	require.NoError(t, err)
+	// human:Peiman differs from the controller human:peiman only by ASCII case.
+	// Principals compare byte-exact, so this member is a different principal
+	// and the room is valid. Do not fold this the way room names are folded.
+	caseVariant, err := NewRoomMember("human:Peiman", []string{"read"})
+	require.NoError(t, err)
+	review, err := NewRoom("review", "human:peiman", []RoomMember{caseVariant}, nil)
+	require.NoError(t, err)
 	off, err := NewDMPolicy(DMPolicyAgentsOff)
 	require.NoError(t, err)
 	keeper := rolesFixtureBinding(t, 0xD2, "keeper", "Keeper", []Role{NewAdminRole()})
 	reg := Registry{
 		Epoch: epoch, ValidFrom: regFrom, ValidUntil: regUntil,
 		Agents: []AgentBinding{keeper},
-		Rooms:  []Room{withMembers, controllerOnly},
+		Rooms:  []Room{withMembers, controllerOnly, review},
 		DMs:    off,
 	}
 	validEnv := genEnvelope(t, rootPriv, reg)
@@ -154,6 +161,10 @@ func buildRoomsFixture(t *testing.T) roomsFixture {
 					ApprovalRequired: []string{"publish", "merge"},
 				},
 				{Name: "ops", Controller: "agent:mira"},
+				{
+					Name: "review", Controller: "human:peiman",
+					Members: []expectedMember{{Principal: "human:Peiman", Access: []string{"read"}}},
+				},
 			},
 			Bindings: []expectedRoomBind{
 				{Slug: "keeper", Roles: []expectedRole{{Kind: "admin"}}},
@@ -270,11 +281,18 @@ func TestCrossLanguageRoomsFixture_ValidRoundTrips(t *testing.T) {
 	assert.True(t, hasDMs)
 	var rooms []map[string]json.RawMessage
 	require.NoError(t, json.Unmarshal(body["rooms"], &rooms))
-	require.Len(t, rooms, 2)
+	require.Len(t, rooms, 3)
 	_, hasMembers := rooms[1]["members"]
 	_, hasApproval := rooms[1]["approval_required"]
 	assert.False(t, hasMembers, "a controller-only room omits members")
 	assert.False(t, hasApproval, "a controller-only room omits approval_required")
+	// human:Peiman differs from controller human:peiman only by ASCII case.
+	// Principals compare byte-exact, so the member is a different principal.
+	require.GreaterOrEqual(t, len(reg.Rooms), 3)
+	assert.Equal(t, "review", reg.Rooms[2].Name())
+	assert.Equal(t, "human:peiman", reg.Rooms[2].Controller())
+	require.Len(t, reg.Rooms[2].Members(), 1)
+	assert.Equal(t, "human:Peiman", reg.Rooms[2].Members()[0].Principal())
 }
 
 func TestCrossLanguageRoomsFixture_RejectsAreSchemaNotSignature(t *testing.T) {
