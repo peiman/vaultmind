@@ -78,6 +78,62 @@ func TestCanonicalBytes_RejectsZeroRole(t *testing.T) {
 	require.ErrorContains(t, err, ErrMalformedRole)
 }
 
+// nfdAcute is U+0301 COMBINING ACUTE ACCENT. Keep it as an escape so a source
+// formatter cannot precompose it onto the preceding letter.
+const nfdAcute = "\u0301"
+
+// TestSignRegistry_RejectsNonNFCStrings pins the sign-path schema gate: any
+// string in the registry, not only role fields, must be Unicode NFC. A registry
+// Go minted and Rust refused is an outage. NFC text still signs.
+func TestSignRegistry_RejectsNonNFCStrings(t *testing.T) {
+	_, rootPriv := fixedEd25519(t, 0x11)
+	cases := []struct {
+		name string
+		mut  func(*Registry)
+	}{
+		{name: "display_name", mut: func(reg *Registry) {
+			reg.Agents[0].DisplayName = "Mira e" + nfdAcute
+		}},
+		{name: "slug", mut: func(reg *Registry) {
+			reg.Agents[0].Slug = "mira" + nfdAcute
+		}},
+		{name: "daemon", mut: func(reg *Registry) {
+			reg.Agents[0].AuthorizedOriginDaemons = []string{"daemon-e" + nfdAcute}
+		}},
+		{name: "vouches_for", mut: func(reg *Registry) {
+			reg.Agents[0].Roles = []Role{NewBridgeRole([]string{"human:peima" + nfdAcute + "n"})}
+		}},
+		{name: "platforms", mut: func(reg *Registry) {
+			reg.Agents[0].Roles = []Role{NewCodeSigningRole([]string{"darwin-e" + nfdAcute})}
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			reg := rolesFreeRegistry(t, nil)
+			tc.mut(&reg)
+			_, err := SignRegistry(rootPriv, reg)
+			require.ErrorContains(t, err, identity.ErrSchemaNotNFC)
+
+			signer := &keyBackedSigner{priv: rootPriv}
+			_, err = SignRegistryWithSigner(signer, reg)
+			require.ErrorContains(t, err, identity.ErrSchemaNotNFC)
+			assert.Nil(t, signer.gotCanonical, "signer must not see a non-NFC registry")
+		})
+	}
+}
+
+func TestSignRegistry_AcceptsNFCStrings(t *testing.T) {
+	_, rootPriv := fixedEd25519(t, 0x11)
+	reg := rolesFreeRegistry(t, []Role{
+		NewBridgeRole([]string{"human:peiman-\u00e9"}),
+		NewCodeSigningRole([]string{"linux-\u00e9"}),
+	})
+	reg.Agents[0].DisplayName = "Mir\u00e9"
+	reg.Agents[0].Slug = "mir\u00e9"
+	_, err := SignRegistry(rootPriv, reg)
+	require.NoError(t, err)
+}
+
 func TestRoleConstructors_DoNotAliasCallerSlices(t *testing.T) {
 	in := []string{"human:peiman"}
 	role := NewBridgeRole(in)

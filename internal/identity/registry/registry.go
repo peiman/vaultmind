@@ -309,7 +309,18 @@ func canonicalizeForSign(reg Registry) (identity.CanonicalBytes, error) {
 			return identity.CanonicalBytes{}, fmt.Errorf("%s", ErrEpochRange)
 		}
 	}
-	return canonicalBytes(reg)
+	canonical, err := canonicalBytes(reg)
+	if err != nil {
+		return identity.CanonicalBytes{}, err
+	}
+	// One document walk covers every string the root is about to sign
+	// (display name, slug, daemons, vouches_for, platforms). Canonical bytes
+	// have no duplicate keys; the unsigned sign-registry input is checked
+	// before decode, where a duplicated key is still visible.
+	if err := identity.ValidateRegistrySchema(canonical.Bytes()); err != nil {
+		return identity.CanonicalBytes{}, err
+	}
+	return canonical, nil
 }
 
 // SignRegistry is the OFFLINE-ROOT operation: it JCS-canonicalizes reg and

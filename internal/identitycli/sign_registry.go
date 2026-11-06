@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/peiman/vaultmind/internal/identity"
 	"github.com/peiman/vaultmind/internal/identity/registry"
 )
 
@@ -68,6 +69,12 @@ type wireRegistry struct {
 // pubkey, epoch-gate, signer, or marshal error returns non-nil and prints
 // nothing (never a partial/unsigned result).
 func SignRegistry(out io.Writer, client registry.RegistrySigner, registryJSON []byte) error {
+	// Before decode: encoding/json would keep the last duplicated key and the
+	// signer would then mint that meaning. The same walk rejects a non-NFC
+	// string anywhere in the unsigned input.
+	if err := identity.ValidateRegistrySchema(registryJSON); err != nil {
+		return err
+	}
 	w, err := decodeWireRegistry(registryJSON)
 	if err != nil {
 		return err

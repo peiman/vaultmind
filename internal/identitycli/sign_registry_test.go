@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/peiman/vaultmind/internal/identity"
 	"github.com/peiman/vaultmind/internal/identity/registry"
 )
 
@@ -459,6 +460,107 @@ func TestSignRegistryRejectsMalformedRoles(t *testing.T) {
 				t.Fatalf("reject must print nothing, got %q", out.String())
 			}
 		})
+	}
+}
+
+// nfdAcute is U+0301 COMBINING ACUTE ACCENT, written as an escape so the
+// source cannot be precomposed to U+00E9.
+const nfdAcute = "\u0301"
+
+// TestSignRegistryRejectsNonNFCStrings proves the unsigned sign-registry input
+// is refused when any string — display name, vouches_for, or platforms — is not
+// Unicode NFC. The signer is not called and nothing is printed.
+func TestSignRegistryRejectsNonNFCStrings(t *testing.T) {
+	_, rootPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey root: %v", err)
+	}
+	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	b64 := base64.StdEncoding.EncodeToString(pub)
+	base := testRegistryJSON(b64)
+	cases := []struct {
+		name string
+		in   string
+	}{
+		{name: "display_name", in: strings.Replace(base, `"display_name":"Mira"`, `"display_name":"Mira e`+nfdAcute+`"`, 1)},
+		{name: "vouches_for", in: strings.Replace(base, `"slug":"mira"`, `"roles":[{"kind":"bridge","vouches_for":["human:peima`+nfdAcute+`n"]}],"slug":"mira"`, 1)},
+		{name: "platforms", in: strings.Replace(base, `"slug":"mira"`, `"roles":[{"kind":"code_signing","platforms":["darwin-e`+nfdAcute+`"]}],"slug":"mira"`, 1)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := &fakeSignerClient{priv: rootPriv}
+			var out bytes.Buffer
+			err := SignRegistry(&out, fake, []byte(tc.in))
+			if err == nil || !strings.Contains(err.Error(), identity.ErrSchemaNotNFC) {
+				t.Fatalf("got %v, want substring %q", err, identity.ErrSchemaNotNFC)
+			}
+			if fake.gotCanonical != nil {
+				t.Fatal("signer was called for a non-NFC registry")
+			}
+			if out.Len() != 0 {
+				t.Fatalf("reject must print nothing, got %q", out.String())
+			}
+		})
+	}
+}
+
+// TestSignRegistryAcceptsNFCStrings is the positive control for the schema gate:
+// the precomposed form of the same letters still signs.
+func TestSignRegistryAcceptsNFCStrings(t *testing.T) {
+	_, rootPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey agent: %v", err)
+	}
+	in := strings.Replace(testRegistryJSON(base64.StdEncoding.EncodeToString(pub)),
+		`"display_name":"Mira"`, `"display_name":"Mir\u00e9"`, 1)
+	in = strings.Replace(in, `"slug":"mira"`,
+		`"roles":[{"kind":"bridge","vouches_for":["human:peiman-\u00e9"]}],"slug":"mir\u00e9"`, 1)
+	fake := &fakeSignerClient{priv: rootPriv}
+	var out bytes.Buffer
+	if err := SignRegistry(&out, fake, []byte(in)); err != nil {
+		t.Fatalf("NFC registry must sign: %v", err)
+	}
+	if fake.gotCanonical == nil {
+		t.Fatal("signer was not called for an NFC registry")
+	}
+}
+
+// TestSignRegistryRejectsDuplicateRoleKind proves encoding/json's last-key-wins
+// cannot turn {"kind":"code_signing","kind":"bridge",...} into a signed bridge.
+// The unsigned input is rejected before decode, and the signer is not called.
+func TestSignRegistryRejectsDuplicateRoleKind(t *testing.T) {
+	_, rootPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey root: %v", err)
+	}
+	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	b64 := base64.StdEncoding.EncodeToString(pub)
+	in := `{"agents":[{"authorized_origin_daemons":["d"],"display_name":"M",` +
+		`"key_epoch":1,"pubkey":"` + b64 + `",` +
+		`"roles":[{"kind":"code_signing","kind":"bridge","vouches_for":["human:evil"]}],` +
+		`"slug":"mira","valid_from":1770000000,"valid_until":1780000000}],` +
+		`"epoch":5,"valid_from":1770000000,"valid_until":1780000000}`
+	fake := &fakeSignerClient{priv: rootPriv}
+	var out bytes.Buffer
+	err = SignRegistry(&out, fake, []byte(in))
+	if err == nil || !strings.Contains(err.Error(), identity.ErrSchemaDuplicateKey) {
+		t.Fatalf("got %v, want substring %q", err, identity.ErrSchemaDuplicateKey)
+	}
+	if fake.gotCanonical != nil {
+		t.Fatal("signer was called for a duplicate-key role")
+	}
+	if out.Len() != 0 {
+		t.Fatalf("reject must print nothing, got %q", out.String())
 	}
 }
 
