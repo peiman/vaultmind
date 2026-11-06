@@ -96,6 +96,7 @@ func TestCompletionCommandMetadata(t *testing.T) {
 
 // TestCompletionCommandExecution tests that the completion command generates output via RunE
 func TestCompletionCommandExecution(t *testing.T) {
+	cleanupCLIState(t)
 	tests := []struct {
 		name           string
 		args           []string
@@ -165,6 +166,7 @@ func min(a, b int) int {
 
 // TestCompletionCommandRunE tests the RunE function directly
 func TestCompletionCommandRunE(t *testing.T) {
+	cleanupCLIState(t)
 	// SETUP PHASE
 	// Find completion command
 	var completionCmd *cobra.Command

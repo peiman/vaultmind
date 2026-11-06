@@ -9,6 +9,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The macOS ORT release build now runs on the macos-15 runner, after GitHub stopped serving macos-14. The binary still runs on macOS 14: the minimum is pinned to 14.0 and checked in CI.
+- In a multi-vault recall, a vault with fewer than 30 notes no longer delivers its top note's text when another vault has at least 30 notes and a noise-floor verdict, unless the small vault's own label says the note matches (#405). When no other vault is that large — one vault just created with `init`, or several vaults all under 30 notes — that text is still shown.
+- A note added since the last `vaultmind index --embed` is no longer labelled strong or moderate for an unrelated question and delivered as if the vault covered it (#405). That note has no embedding, so ask cannot judge how close it is. When a noise floor is in use and the note is the top hit, the label is now capped at weak (a weak or no-match label is left as it is), and ask prints that the top hit has no embedding and that relevance can't be judged until `vaultmind index --embed`. Keyword-only ask, with no embedder, is unchanged.
+- An ask no longer waits 5 minutes, and then fails, when the warm server is stuck on another ask (#421). The server runs one ask at a time. A stuck ask held that place forever, so every later ask waited out the full cap, and each new connection reset the idle timer, so the stuck server never let go of its socket. An ask now waits 10 seconds to start. If the server has not started it by then, the ask runs in its own process and the server drops it, so it is not run twice. Once the server has started an ask, the client still waits for the answer, up to 5 minutes. A server stuck on an ask now goes idle and releases its socket, and the next ask starts a fresh server. A stuck server that later finishes no longer takes down the server that replaced it.
+
+## [0.10.24] - 2026-11-05
+
+### Fixed
+
+- Default `ask` (no `--excerpt`) no longer reduces a large relevant note to its title. A context note whose whole text did not fit the budget left delivered nothing, and its room went to smaller, lower-ranked notes. It now gets the parts that best match the question, found the same way as the top note's excerpt (#330), each grown to the heading section around it, code blocks included, within the room left. A section that does not fit is cut at a line and marked with "…". A table of contents, or any other block made only of links to headings in the same note, is never picked. The note is marked as an excerpt, and its JSON item names the `passage_selector` that chose it. Notes that fit are still delivered whole, and `ask --excerpt N` is unchanged (#331).
+- `ask` now says so when a note it delivers was edited or deleted after the last `vaultmind index`. Before, it returned the pre-edit text with no sign of it. A line under that note's text reads "changed on disk since indexed", and the JSON item gets `"stale": true` with a top-level `stale_notes` count. The check is one file stat per delivered note, and it reads the file only when the modification time differs, so a touch that changed nothing is not flagged. Notes that are current print exactly as before (#407).
+- The pre-release memory gate (`task test:memory`) no longer times out before its second test. Since the passage backfill (#330) each of its two tests takes 25 to 29 minutes on a loaded machine, so the 30 minute limit always ended the run early; the limit is now 90 minutes.
+- A slow `ask` answered by the warm server is no longer run a second time (#406). The client gave up on the server after 10 seconds and ran the ask itself while the server kept running it, so the two copies slowed each other to 20–46 seconds, past the recall hook's 25-second limit, and one query logged two ask events. Once the server has the ask, the client now waits for its answer. It runs the ask itself only when no server could take it: none is running, it can't be reached, or it closed the connection without answering. A 5-minute cap still guards against a stuck server; past it the ask fails with an error and is not rerun. The server also skips a queued ask whose client has already gone, such as one a hook's timeout killed, instead of running it for no one.
+- Each ask event in the usage log now records how the ask ran and how long it took (#406): `ask_path` is `served` (answered by the warm server), `fallback` (the server was asked but could not take it, so the ask ran in its own process) or `in_process` (the server was off or not supported), and `duration_ms` is the time from when the ask arrived to when its event was written. A served ask counts the time it waited for its turn.
+
+## [0.10.23] - 2026-11-04
+
+### Added
+
+- `ask` adds the top note's best-matching paragraphs by meaning, ranked by their best sentence, when `index --embed` has stored passage vectors (#330). The keyword pick still comes first, exactly as before, so exact-term answers are kept; the three best-matching paragraphs follow it in the room left, up to twice the excerpt size. One it already contains, or one that does not fit, is skipped, not cut, and not replaced by a weaker match. Each governing heading is shown once per run. Run `vaultmind index --embed` once to get the vectors. That first run embeds every passage of each note longer than the excerpt and takes much longer than a normal embed: about 18 minutes for a 450-note vault and 2 minutes for a 20-note vault on one Apple-silicon Mac. Later runs only embed changed notes.
+
+### Fixed
+
+- Recall and reach hooks now say when only titles were delivered and show how to read a note, instead of claiming the titles are note text (#409).
+- Mesh watchers no longer lose messages that arrive after a wake or quiet heartbeat and before the next watcher arms. They save their cursors when they stop and catch up on the next arm for up to six hours. A catch-up can occasionally wake again for a message the session already read, by design: a duplicate wake beats a missed message.
+
+## [0.10.22] - 2026-11-03
+
+### Added
+
+- **`vaultmind identity sign-keeper`:** an owner signs a keeper control request, a read grant or a grant revocation through the running keyless signer; the command never opens a private key.
+  - It reads the JSON document from `--file` or stdin. `--stamp` fills an absent issue time and, for a control request or revocation, an absent nonce.
+  - It prints one JSON line, `{"document": …, "sig": …}`, where `document` is exactly the canonical bytes that were signed. An invalid document or an unreachable signer prints nothing and exits non-zero.
+- **Signed keeper control (`internal/identity/keeperctl`):** the contract for controlling an always-on agent (a keeper) only with its owner's key, plus a reference verifier for the process that supervises it. Owner keys still have to be enrolled in the trust-root registry before anything uses it.
+  - **Control requests** (message, rebrief, pause, drain, resume, restart, stop, read status, read context) are signed with the owner's registry key and bound to the keeper, the action, the issue time and a one-time nonce. A captured request can't be replayed, aimed at another keeper of the same owner, or used after the watchdog restarts.
+  - **Read grants:** an owner can sign a grant letting another registry identity read named keepers, with scopes (`status`, `context`; context is a separate, deliberate grant) and an expiry. A grantee can never control. Revoking a grant is permanent, and rotating or revoking the owner's key invalidates every grant it signed.
+  - **Fails closed:** an expired registry, a revoked or unknown key, a stale or replayed request, or a failed nonce store refuses the request with one of a fixed set of reason codes. Stopping a keeper through the operating system is outside the verifier, so it always works.
+  - **Cross-language vectors** (`testdata/keeper_control_vectors.json`) pin the canonical bytes, signatures, every schema rejection and every refusal reason, so a verifier in another language can match it byte for byte.
+
+### Fixed
+
+- A command run through the warm server no longer collects list-option values from earlier requests (found under #179). The server resets every flag between requests so each one behaves like a fresh process, but list options such as `import --include` or `note create --field` were reset by appending their default, so values from earlier requests piled up. They now start empty, and the first value given replaces the default as in a fresh process.
+- The release configuration no longer uses settings GoReleaser has deprecated (#388), so `goreleaser check` and the release drift check pass. The archive format settings use the current `formats` key. The Homebrew formula block was left over from the project scaffold and never published anything (no tap is configured), so it is removed rather than migrated, together with the release-notes Homebrew section that never rendered and the unused CI secret. The release archives are unchanged: a snapshot build before and after differs only in the local Homebrew formula file.
+- The README's install section gives the commands, not just the steps (#332). It now shows how to download and extract the ORT build into one folder, put that folder on `PATH` for every later shell (the Claude Code hooks run `vaultmind` by name), and check the result. It also covers macOS Gatekeeper: a browser download is marked as coming from the internet, `tar` copies the mark onto the binary and libraries, and Gatekeeper refuses the unsigned binary until `xattr -dr com.apple.quarantine <folder>` clears it. A `curl` download carries no mark.
+- Embedding the same note twice now stores byte-identical sparse vectors (#318). The entries were written in Go's random map order, so two embeddings with the same content compared as different bytes, which caused a false alarm while checking that a dependency bump left vectors unchanged. They are now written in ascending token id order. Existing indexes need no re-embed: only the order changes, and search is unaffected.
+- A mesh watcher's wake line no longer reads like an outage when a registry refresh fails but a local copy is still valid (#365). It said `[registry fetch failed: … context deadline exceeded]` after a brief network hiccup, although delivery carried on from the local copy. With a local copy it now says `[registry refresh failed, using the local copy: …]`, next to the usual countdown, which still escalates at 7 days and when the registry goes stale. With no local copy it still says `registry fetch failed`.
+- Command tests no longer depend on their run order (#179): tests restore configuration and flag bindings, command output and contexts, logger state, experiment sessions, and cached test embedders. One embedding test that resolved the model cache without isolating its home now isolates it. `task test:unit` runs in shuffled order, and Go prints the seed when an order fails. Reproduce an order with isolated directories: `XDG_DATA_HOME=$(mktemp -d) XDG_STATE_HOME=$(mktemp -d) go test ./cmd/ -count=1 -shuffle=135874732`.
+- The pre-release memory gate (`task test:memory`) no longer fails on a busy machine because the warm server was slow to start (#368). It waited a fixed 2 seconds before its 100 asks; at a load average above 100 the server wasn't listening yet, the first ask loaded the model itself, and the gate failed. It now sends probe asks until the server answers one (up to 90 s), then measures. A server that never answers, or exits, still fails the gate by name.
+- Two tests no longer fail on a busy or stalled machine.
+  - `TestRebuild_CompletesInReasonableTime` allows 1 s per note instead of 200 ms (#172). Every main run is instrumented for coverage on shared runners, and one stalled runner took 250 ms per note and failed a release pipeline. Idle runs take about 8 ms per note, so an order-of-magnitude regression still fails it.
+  - The signer round-trip test waits up to 30 s instead of 2 s for the signer to accept a connection (#180). The wait already ends at the first successful connection, so the longer deadline costs nothing unless the signer never listens.
+- `TestMeshWatch_EncodesRoomAndWakes` no longer fails intermittently on a loaded machine. It stamped its message before the watcher started; when the watcher took more than about three seconds to arm, the stamp fell before the arm time and the watcher treated the message as history. The message is now stamped once the watcher is waiting, as a hub stamps it on receipt.
+- The test guard that keeps git in tests away from the real repository now also catches git run through a shell (#381). Under a git hook, `GIT_DIR` and related variables are exported; a test that ran `bash -c "git …"` with the inherited environment acted on the developer's repository (#380 slipped through this way).
+  - **The guard:** a `bash` or `sh` call with `-c` among its leading options (`-c`, `-e -c`, `-ec`, `-lc`) is checked like a direct `git` call. It passes when the same function sets the command's `Env` to a value that doesn't copy `os.Environ()`.
+  - **No file is exempt any more:** importing `internal/testgit` used to exempt the whole file, so its other raw `exec.Command` calls went unchecked. Every raw call is now checked.
+  - **New helpers:** `testgit.ShellCommand(tb, dir, script)` runs a shell with the `GIT_*` variables removed, and `testgit.Env()` returns that environment for a hand-built command.
+- A mesh watcher whose session has ended no longer waits forever for the model API (watchdog mode, 0.10.21). The hold had no time limit, so a watcher orphaned during an outage stayed until the API answered, and forever if the probe URL never would; a killed test run left one running for 8 hours. The watcher now stops holding once its parent or its parent's parent changes, covering a session's wrapper shell that outlives the session, and prints the wake with `NOTE: stopped holding this wake: the watcher's session is gone (parent pid A -> B).` or `NOTE: stopped holding this wake: the watcher's session is gone (parent's parent pid A -> B).` If `ps` can't report the relevant parent, the hold continues as before.
+
+## [0.10.21] - 2026-11-02
+
+### Added
+
+- **Watchdog mode in the mesh watcher:** before it wakes the session, the watcher checks that the agent's model API answers. While it does not (DNS failure, no network, connection refused), the wake is held and the API is probed again with backoff, without a limit; the heartbeat stays fresh and disarm or stop still work. Once the API answers, the wake is printed with a `NOTE: held this wake …` line.
+  - **Why:** a session woken during an outage fails its next turn (`Can't reach the API server … ENOTFOUND`) and stops for good, so an always-on agent died with the network.
+  - **The probe:** `MESH_VENDOR_PROBE_URL`. By default it is `ANTHROPIC_BASE_URL` when set, else `https://api.anthropic.com/`; it is `off` under Bedrock or Vertex, whose endpoint the watcher can't know. Codex agents set `https://api.openai.com/`. Any HTTP status counts as reachable. `off` disables the hold.
+
+### Fixed
+
+- A filtered watcher now wakes on a message addressed to its agent, not only on a configured keyword (#364). A message is addressed when it mentions `@name` anywhere, or has a line that opens with `name:` or `name,` (bold `**name:**` counts; a quoted `> name:` line does not), case-insensitively. The name is the agent's slug or any `@` keyword. `CM: …` used to be skipped by a watcher keyed on `@cm`.
+  - A keyword starting with `@` now needs the whole name, where letters, digits, `_` and `-` continue a name: `@cmx`, `@cm_x`, `@cm-bot` and `foo@cm.io` no longer wake `@cm`. Other keywords still match anywhere in the text.
+- A watcher stream whose newest message is stamped ts=0 no longer re-reads the room's whole history on every sweep (#352). It swept with `since=-1`. Its sweep now starts at the moment the watcher armed, because everything before that is in the baseline. The cursor stays at 0, so a later message stamped ts=0 still wakes.
+  - Room names and the agent id are URL-encoded in every hub query, so a room such as `a b&c#` is read and watched correctly.
+- An in-place rewrite of the mesh watcher script, for example by `cp` or an editor during development, no longer corrupts or aborts a running watcher. Bash read the script as it ran, so a rewrite made it resume at a shifted offset and run garbage. The body is now one brace group, parsed whole before it runs. `vaultmind hooks install` already replaced the script atomically.
+- The mesh watcher no longer gives up after the machine sleeps; sleep is not counted as hub outage.
+  - **Before:** a read held across a sleep returned at wake with the whole sleep as elapsed time, so a 16-minute sleep ended the watcher with a false `WATCHER ERROR`.
+  - **Now:** a gap between read outcomes longer than any awake retry cycle restarts the outage clock. `MESH_SUSPEND_GAP_SECS` overrides that gap (default: poll window + backoff cap + slack, 128 s).
 - `hooks install --agent codex` no longer writes the operator's absolute project path into `.codex/hooks.json` (#372).
   - **Before:** every command began `export VAULTMIND_PROJECT_DIR='/Users/you/proj'` and ran its script by absolute path. The file is normally committed, so it published the operator's home directory and was wrong in every other checkout.
   - **Now:** when the project is the root of a git work tree, the command is `export VAULTMIND_PROJECT_DIR="$(git rev-parse --show-toplevel)"; bash "$VAULTMIND_PROJECT_DIR"/.vaultmind/scripts/<script>`. Git is asked at run time, which also works when Codex starts in a subdirectory. A vault inside the project is stored as `$CLAUDE_PROJECT_DIR/<path>`; a vault outside it stays absolute.
@@ -3152,7 +3228,11 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.20...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.24...HEAD
+[0.10.24]: https://github.com/peiman/vaultmind/compare/v0.10.23...v0.10.24
+[0.10.23]: https://github.com/peiman/vaultmind/compare/v0.10.22...v0.10.23
+[0.10.22]: https://github.com/peiman/vaultmind/compare/v0.10.21...v0.10.22
+[0.10.21]: https://github.com/peiman/vaultmind/compare/v0.10.20...v0.10.21
 [0.10.20]: https://github.com/peiman/vaultmind/compare/v0.10.19...v0.10.20
 [0.10.19]: https://github.com/peiman/vaultmind/compare/v0.10.18...v0.10.19
 [0.10.18]: https://github.com/peiman/vaultmind/compare/v0.10.17...v0.10.18

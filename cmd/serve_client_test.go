@@ -3,9 +3,11 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -36,7 +38,7 @@ func serveFake(t *testing.T, exec serve.Exec) {
 	go func() { _ = serve.Serve(ctx, sock, exec, time.Minute); close(done) }()
 	t.Cleanup(func() { cancel(); <-done })
 	require.Eventually(t, func() bool {
-		_, err := serve.Forward(sock, serve.Request{Args: []string{"ping"}}, time.Second, time.Second)
+		_, err := serve.Forward(sock, serve.Request{Args: []string{"ping"}}, time.Second, time.Second, time.Second)
 		return err == nil
 	}, 2*time.Second, 10*time.Millisecond)
 }
@@ -78,6 +80,28 @@ func TestTryServer_NoServerRunsHereAndStartsOne(t *testing.T) {
 	assert.Equal(t, 1, *started)
 }
 
+// A server that closes the connection without answering never ran the ask
+// to the end, so it runs here. One is listening, so no second is started.
+func TestTryServer_AServerThatDiesBeforeAnsweringRunsHere(t *testing.T) {
+	started := isolatedState(t)
+	sock, err := serveSocket()
+	require.NoError(t, err)
+	require.NoError(t, os.MkdirAll(filepath.Dir(sock), 0o700))
+	ln, err := net.Listen("unix", sock)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = ln.Close() })
+	go func() {
+		if c, err := ln.Accept(); err == nil {
+			_, _ = c.Read(make([]byte, 1<<16))
+			_ = c.Close()
+		}
+	}()
+
+	_, ok := tryServer([]string{"ask", "q"})
+	assert.False(t, ok)
+	assert.Zero(t, *started)
+}
+
 // The server serves until idle, and a second one for the same binary steps
 // aside without an error.
 func TestServeUntilIdle(t *testing.T) {
@@ -94,23 +118,116 @@ func TestServeUntilIdle(t *testing.T) {
 	assert.Error(t, serveUntilIdle(context.Background(), "0s", 0))
 }
 
-// A server slower than the client's budget is abandoned: the ask runs here,
-// and no second server is started, since one is running.
-func TestTryServer_ASlowServerIsAbandoned(t *testing.T) {
+// An ask the server has taken is never run a second time here, however long
+// it takes. Rerunning it left two copies of one ask competing for the CPU and
+// two ask events for one query (#406). Even past the client's safety cap the
+// client reports an error rather than rerunning, and starts no second server.
+func TestTryServer_ASlowServedAskRunsOnlyOnce(t *testing.T) {
 	started := isolatedState(t)
 	orig := serveRequestTimeout
 	serveRequestTimeout = 100 * time.Millisecond
 	t.Cleanup(func() { serveRequestTimeout = orig })
+	var runs atomic.Int32
 	serveFake(t, func(r serve.Request) serve.Response {
 		if r.Args[0] == "ask" {
-			time.Sleep(time.Second)
+			runs.Add(1)
+			time.Sleep(400 * time.Millisecond)
 		}
 		return serve.Response{}
 	})
 
-	_, ok := tryServer([]string{"ask", "q"})
-	assert.False(t, ok)
+	code, ok := tryServer([]string{"ask", "q"})
+	assert.True(t, ok, "the ask was rerun in this process")
+	assert.NotZero(t, code, "an ask the server never answered is not a success")
+	assert.Equal(t, int32(1), runs.Load())
 	assert.Zero(t, *started)
+}
+
+// The client's cap on a served ask is a safety net for a wedged server, not a
+// latency budget: callers such as the hooks bound their own wait. A short cap
+// abandons slow asks that are still running (#406).
+func TestServeRequestTimeout_IsALongSafetyCap(t *testing.T) {
+	assert.GreaterOrEqual(t, serveRequestTimeout, time.Minute)
+}
+
+// Waiting to start is a short cap, separate from the wait for an answer.
+// Past it an ask runs here, and that is a different ask from the one still
+// queued on the server (#421).
+func TestServeQueueTimeout_BoundsTheWaitToStart(t *testing.T) {
+	assert.Equal(t, 10*time.Second, serveQueueTimeout)
+	assert.Less(t, serveQueueTimeout, serveRequestTimeout)
+}
+
+// An ask queued behind one the server has already started gives up at the
+// queue cap and runs here. The server does not run it as well (#421).
+func TestTryServer_AnAskQueuedBehindAnotherFallsBackHere(t *testing.T) {
+	isolatedState(t)
+	orig := serveQueueTimeout
+	serveQueueTimeout = 150 * time.Millisecond
+	t.Cleanup(func() { serveQueueTimeout = orig })
+
+	sock, err := serveSocket()
+	require.NoError(t, err)
+	release := make(chan struct{})
+	started := make(chan struct{})
+	var runs atomic.Int32
+	ctx, cancel := context.WithCancel(context.Background())
+	serverDone := make(chan struct{})
+	go func() {
+		_ = serve.Serve(ctx, sock, func(r serve.Request) serve.Response {
+			if len(r.Args) > 1 {
+				switch r.Args[1] {
+				case "hold":
+					runs.Add(1)
+					close(started)
+					<-release
+				case "next":
+					runs.Add(1)
+				}
+			}
+			return serve.Response{}
+		}, time.Minute)
+		close(serverDone)
+	}()
+	t.Cleanup(func() {
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+		cancel()
+		select {
+		case <-serverDone:
+		case <-time.After(5 * time.Second):
+		}
+	})
+	require.Eventually(t, func() bool {
+		_, err := serve.Forward(sock, serve.Request{Args: []string{"ping"}}, time.Second, time.Second, time.Second)
+		return err == nil
+	}, 2*time.Second, 10*time.Millisecond)
+
+	go func() { _, _ = tryServer([]string{"ask", "hold"}) }()
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the held ask did not start")
+	}
+
+	begin := time.Now()
+	_, ok := tryServer([]string{"ask", "next"})
+	elapsed := time.Since(begin)
+	assert.False(t, ok, "an ask the server had not started was not run here")
+	assert.GreaterOrEqual(t, elapsed, serveQueueTimeout/2, "fell back without waiting for the queue")
+	assert.Less(t, elapsed, 20*serveQueueTimeout)
+
+	close(release)
+	cancel()
+	select {
+	case <-serverDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the server did not finish the abandoned ask")
+	}
+	assert.Equal(t, int32(1), runs.Load(), "the queued ask was also run on the server")
 }
 
 // Main answers an ask from the server, with the server's exit code.
@@ -141,9 +258,9 @@ func TestSpawnServer_RunsServeFromTheTempDir(t *testing.T) {
 
 // The serve command reads --idle and rejects a value that isn't a duration.
 func TestServeCommand_RejectsABadIdle(t *testing.T) {
+	cleanupCLIState(t)
 	isolatedState(t)
 	resetCLIState()
-	t.Cleanup(resetCLIState)
 	var out, errw bytes.Buffer
 	assert.Equal(t, 1, ExecuteWithIO([]string{"serve", "--idle", "soon"}, &out, &errw))
 	assert.Contains(t, errw.String(), `--idle "soon"`)
@@ -152,9 +269,9 @@ func TestServeCommand_RejectsABadIdle(t *testing.T) {
 // In JSON mode a failed command's error is an envelope on stdout, as main
 // reported it before the server existed.
 func TestExecuteWithIO_JSONErrorIsAnEnvelope(t *testing.T) {
+	cleanupCLIState(t)
 	isolatedState(t)
 	resetCLIState()
-	t.Cleanup(resetCLIState)
 	var out, errw bytes.Buffer
 	assert.Equal(t, 1, ExecuteWithIO([]string{"serve", "--idle", "soon", "--output-format", "json"}, &out, &errw))
 	assert.Contains(t, out.String(), `"status": "error"`)

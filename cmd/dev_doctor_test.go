@@ -25,6 +25,7 @@ func TestDevDoctorCommand(t *testing.T) {
 }
 
 func TestDevDoctorRun(t *testing.T) {
+	cleanupCLIState(t)
 	// SETUP PHASE
 	buf := new(bytes.Buffer)
 	RootCmd.SetOut(buf)
@@ -54,6 +55,7 @@ func TestDevDoctorRun(t *testing.T) {
 }
 
 func TestDevDoctorHelp(t *testing.T) {
+	cleanupCLIState(t)
 	// SETUP PHASE
 	buf := new(bytes.Buffer)
 	RootCmd.SetOut(buf)

@@ -11,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/internal/cmdutil"
 	"github.com/peiman/vaultmind/internal/config/commands"
 	"github.com/peiman/vaultmind/internal/embedding"
@@ -20,7 +19,6 @@ import (
 	"github.com/peiman/vaultmind/internal/retrieval"
 	"github.com/peiman/vaultmind/internal/testvault"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -121,19 +119,6 @@ func copyNamedVaults(t *testing.T, names []string) []string {
 	return paths
 }
 
-func restoreAskViper(t *testing.T, keys ...string) {
-	t.Helper()
-	saved := make(map[string]any, len(keys))
-	for _, k := range keys {
-		saved[k] = viper.Get(k)
-	}
-	t.Cleanup(func() {
-		for k, v := range saved {
-			viper.Set(k, v)
-		}
-	})
-}
-
 // One search per vault, and the owner's embedder forwards once.
 //
 // federateAndPickOwner already searches the owner. runAsk used to open it
@@ -143,6 +128,7 @@ func restoreAskViper(t *testing.T, keys ...string) {
 // reuses the shaped query on the same memoizing embedder, and goes red when
 // delivery embeds a different string.
 func TestAsk_FederatedOwnerIsSearchedOnce(t *testing.T) {
+	cleanupCLIState(t)
 	longQuery := strings.TrimSpace(strings.Repeat("spreading activation memory consolidation ", 12))
 	tests := []struct {
 		name    string
@@ -157,7 +143,7 @@ func TestAsk_FederatedOwnerIsSearchedOnce(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			restoreAskViper(t, config.KeyAppAskVaults, config.KeyAppAskQueryForwardTokens)
+			cleanupCLIState(t)
 			paths := copyNamedVaults(t, tt.vaults)
 			probes := installCountingOpener(t, retrieval.ScoredResult{
 				ID:    "concept-spreading-activation",
@@ -210,7 +196,7 @@ func TestAsk_FederatedOwnerOutputMatchesCurrent(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			restoreAskViper(t, config.KeyAppAskVaults, config.KeyAppAskJson, config.KeyAppAskMaxItems, config.KeyAppAskBudget, config.KeyAppAskExcerpt)
+			cleanupCLIState(t)
 			paths := copyNamedVaults(t, []string{"desk", "research"})
 			stdout, access := runFixtureFederation(t, paths, tt.json)
 			assert.Equal(t, readGolden(t, tt.stdout), blankFederatedOutput(t, stdout, tt.json, paths))

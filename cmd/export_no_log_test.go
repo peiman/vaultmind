@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,12 +20,12 @@ import (
 // export that writes a database to tell you there is nothing to export breaks
 // that promise with a file on disk.
 func TestRunExport_NoLogEmitsEmptyStreamWithoutCreatingOne(t *testing.T) {
+	cleanupCLIState(t)
 	dataHome := t.TempDir()
 	t.Setenv("XDG_DATA_HOME", dataHome)
 	viper.Reset()
 
-	cmd := exportCmd
-	cmd.ResetFlags()
+	cmd := &cobra.Command{}
 	cmd.Flags().String("output", "", "")
 	cmd.Flags().String("tier", "anonymous", "")
 	require.NoError(t, cmd.Flags().Set("tier", "anonymous"))

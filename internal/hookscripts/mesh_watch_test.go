@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/peiman/vaultmind/internal/testgit"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -130,6 +131,82 @@ func TestMeshWatchDetector_Behaviour(t *testing.T) {
 		require.Equal(t, "agent:other|11", out, "keyword match is case-insensitive")
 	})
 
+	t.Run("filtered scope: addressed messages wake with strict boundaries", func(t *testing.T) {
+		env := detectorEnv(t, map[string]string{
+			"VM_WAKE_SELF":     "agent:cm",
+			"VM_WAKE_SCOPE":    "filtered",
+			"VM_WAKE_KEYWORDS": "@cm",
+		})
+		cases := []struct {
+			name string
+			body string
+			wake bool
+		}{
+			{"leading uppercase colon", "CM: hi", true},
+			{"leading lowercase colon", "cm: hi", true},
+			{"leading comma", "cm, hi", true},
+			{"mention lowercase", "@cm hi", true},
+			{"mention uppercase", "@CM hi", true},
+			{"mention in sentence", "hey @cm", true},
+			{"leading whitespace", "  Cm : hi", true},
+			{"plain text", "I told the cm team", false},
+			{"command prefix", "cmd: run it", false},
+			{"email", "email foo@cm.io", false},
+			{"longer mention", "@cmx hello", false},
+			{"hyphenated other agent", "@cm-bot hello", false},
+			{"later line opens with the name", "Status: done.\nCM: please review", true},
+			{"bold label", "**CM:** hi", true},
+			{"quoted line is someone else's", "> CM: hi", false},
+			{"underscore continues the name", "@cm_x hi", false},
+		}
+		for i, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				out, rc := runDetector(t, env, `{"messages":[{"from_agent":"agent:other","ts":`+strconv.Itoa(20+i)+`,"room":"mesh","body":`+strconv.Quote(tc.body)+`}]}`)
+				require.Zero(t, rc)
+				if tc.wake {
+					require.Equal(t, "agent:other|"+strconv.Itoa(20+i), out)
+				} else {
+					require.Empty(t, out)
+				}
+			})
+		}
+	})
+
+	t.Run("filtered scope: a keyword name is literal, not a pattern", func(t *testing.T) {
+		env := detectorEnv(t, map[string]string{
+			"VM_WAKE_SELF":     "agent:zz",
+			"VM_WAKE_SCOPE":    "filtered",
+			"VM_WAKE_KEYWORDS": "@c.m",
+		})
+		out, rc := runDetector(t, env, `{"messages":[{"from_agent":"agent:other","ts":40,"room":"mesh","body":"@cxm hi"}]}`)
+		require.Zero(t, rc)
+		require.Empty(t, out, "the dot in @c.m must not match any character")
+		out, rc = runDetector(t, env, `{"messages":[{"from_agent":"agent:other","ts":41,"room":"mesh","body":"@c.m hi"}]}`)
+		require.Zero(t, rc)
+		require.Equal(t, "agent:other|41", out)
+	})
+
+	t.Run("filtered scope: slug addresses without keywords", func(t *testing.T) {
+		env := detectorEnv(t, map[string]string{
+			"VM_WAKE_SELF":     "agent:cm",
+			"VM_WAKE_SCOPE":    "filtered",
+			"VM_WAKE_KEYWORDS": "",
+		})
+		for i, body := range []string{"CM: hi", "@cm"} {
+			out, rc := runDetector(t, env, `{"messages":[{"from_agent":"agent:other","ts":`+strconv.Itoa(40+i)+`,"room":"mesh","body":`+strconv.Quote(body)+`}]}`)
+			require.Zero(t, rc)
+			require.Equal(t, "agent:other|"+strconv.Itoa(40+i), out)
+		}
+	})
+
+	t.Run("filtered scope: plain keyword remains a substring match", func(t *testing.T) {
+		env := detectorEnv(t, map[string]string{"VM_WAKE_SCOPE": "filtered", "VM_WAKE_KEYWORDS": "deploy"})
+		out, rc := runDetector(t, env,
+			`{"messages":[{"from_agent":"agent:other","ts":50,"room":"mesh","body":"deployer started"}]}`)
+		require.Zero(t, rc)
+		require.Equal(t, "agent:other|50", out)
+	})
+
 	t.Run("filtered scope: wake_from principal always wakes", func(t *testing.T) {
 		env := detectorEnv(t, map[string]string{"VM_WAKE_SCOPE": "filtered", "VM_WAKE_FROM": "human:op,human:other"})
 		out, rc := runDetector(t, env,
@@ -208,7 +285,7 @@ func TestMeshWatch_EvalsOnlyVMLines(t *testing.T) {
 	require.Positive(t, end)
 	bootstrap := s[start : start+end]
 
-	out, err := exec.Command("bash", "-c",
+	out, err := testgit.ShellCommand(t, "",
 		"PATH="+dir+":$PATH\n"+bootstrap+"\nprintf '%s' \"$VM_MESH_SLUG\"").CombinedOutput()
 	require.NoError(t, err, "bootstrap must succeed on poisoned-but-parseable output: %s", out)
 	require.Equal(t, "mira", string(out), "the VM_ line must still be applied")
@@ -266,8 +343,8 @@ func runCountdownFn(t *testing.T, fn, armValue, fakeBody string) string {
 	InstallStub(t, dir, "vaultmind", "#!/bin/sh\n"+fakeBody+"\n")
 
 	script := "set -u\n" + fn + "\nregistry_countdown\n"
-	cmd := exec.Command("bash", "-c", script)
-	cmd.Env = append(os.Environ(), "VM_MESH_REGISTRY_DAYS_LEFT="+armValue, "PATH="+dir+":"+os.Getenv("PATH"))
+	cmd := testgit.ShellCommand(t, "", script)
+	cmd.Env = append(cmd.Env, "VM_MESH_REGISTRY_DAYS_LEFT="+armValue, "PATH="+dir+":"+os.Getenv("PATH"))
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, "countdown must never fail the wake line: %s", out)
 	return string(out)
@@ -398,9 +475,22 @@ func TestMeshWatchCountdown_AFailedFetchIsSaidNotSwallowed(t *testing.T) {
 	out := runCountdownFn(t, countdownFn(t), "29",
 		`if [ "$2" = fetch-registry ]; then echo '{"level":"info"}' >&2; echo 'Error: no pinned root key: pass --root-pubkey' >&2; exit 1; fi`+"\n"+
 			`echo "VM_MESH_REGISTRY_DAYS_LEFT='29'"`)
-	require.Contains(t, out, "registry fetch failed: no pinned root key: pass --root-pubkey")
+	require.Contains(t, out, "registry refresh failed, using the local copy: no pinned root key: pass --root-pubkey")
 	require.NotContains(t, out, "level", "the error line, not the log noise")
 	require.Contains(t, out, "29 more day(s)", "the countdown still runs from the local copy")
+}
+
+// #365: a transient failure (a tailnet hiccup, a busy hub) with a valid local
+// copy read as an outage on every wake. Delivery continues on the local copy,
+// so the line says that; the countdown beside it is the health signal, and it
+// escalates on its own at 7 days and at staleness.
+func TestMeshWatchCountdown_AFailedRefreshWithALocalCopySaysItIsUsed(t *testing.T) {
+	out := runCountdownFn(t, countdownFn(t), "24",
+		`if [ "$2" = fetch-registry ]; then echo 'Error: relayclient: fetch signed registry: context deadline exceeded' >&2; exit 1; fi`+"\n"+
+			`echo "VM_MESH_REGISTRY_DAYS_LEFT='24'"`)
+	require.Contains(t, out, "[registry refresh failed, using the local copy: relayclient: fetch signed registry: context deadline exceeded]")
+	require.NotContains(t, out, "registry fetch failed", "with a local copy it is a refresh, not a missing registry")
+	require.Contains(t, out, "24 more day(s)")
 }
 
 // With no local registry there is no countdown — and that is exactly the
@@ -471,7 +561,7 @@ func TestMeshWatch_StreamExitReason(t *testing.T) {
 case "$*" in
   'identity paths')
     printf "VM_MESH_SLUG='mesh-watch-test'\nVM_MESH_SELF='agent:mesh-watch-test'\nVM_MESH_OPERATOR=''\nVM_MESH_DAEMON='http://mesh-watch-test.invalid'\nVM_MESH_REGISTRY_DAYS_LEFT=''\n"
-    for key in PID LISTEN DISARM HEARTBEAT LASTARM LASTWAKE; do
+    for key in PID LISTEN DISARM HEARTBEAT LASTARM LASTWAKE CURSOR; do
       printf 'VM_MESH_%s=%q\n' "$key" "$VM_TEST_ROOT/$key"
     done ;;
   'identity fetch-registry') exit 0 ;;
@@ -516,7 +606,7 @@ PY
 				"PATH=" + bin + ":" + os.Getenv("PATH"), "HOME=" + t.TempDir(),
 				"TMPDIR=" + t.TempDir(), "AGENT_CHAT_PROJECT_PATH=" + dir,
 				"VM_TEST_ROOT=" + dir, "VM_TEST_MODE=" + tc.mode,
-				"MESH_WAIT_SECS=1", "MESH_WATCH_MAX_WALL_SECS=" + tc.ceiling,
+				"MESH_VENDOR_PROBE_URL=off", "MESH_WAIT_SECS=1", "MESH_WATCH_MAX_WALL_SECS=" + tc.ceiling,
 			}
 			started := time.Now()
 			out, err := cmd.CombinedOutput()

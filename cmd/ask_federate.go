@@ -94,13 +94,14 @@ func vaultDisplayName(path string) string {
 // A vault that fails to open is reported, never skipped: a federation that
 // quietly drops a vault answers "nothing relevant" while not having looked,
 // which is the failure this whole feature exists to end.
-func federateAndPickOwner(cmd *cobra.Command, queryText string, paths []string, searchLimit, forwardTokens, salientTerms int) ([]query.FederatedHit, []query.FederatedVaultStatus, string, *query.AskResult, error) {
+func federateAndPickOwner(cmd *cobra.Command, queryText string, paths []string, searchLimit, forwardTokens, salientTerms int) ([]query.FederatedHit, []query.FederatedVaultStatus, string, *query.AskResult, bool, error) {
 	if err := requireRealVaults(paths); err != nil {
-		return nil, nil, "", nil, err
+		return nil, nil, "", nil, false, err
 	}
 	perVault := make(map[string][]retrieval.ScoredResult, len(paths))
 	verdicts := make(map[string]string, len(paths))
 	relevance := make(map[string]float64, len(paths))
+	noteCounts := make(map[string]int, len(paths))
 	rankedByName := make(map[string]*query.AskResult, len(paths))
 	byName := make(map[string]string, len(paths))
 	names := make([]string, 0, len(paths))
@@ -121,11 +122,12 @@ func federateAndPickOwner(cmd *cobra.Command, queryText string, paths []string, 
 
 		searched, err := searchOneVault(cmd, p, queryText, searchLimit, forwardTokens, salientTerms)
 		if err != nil {
-			return nil, nil, "", nil, fmt.Errorf("federated ask: vault %s: %w", p, err)
+			return nil, nil, "", nil, false, fmt.Errorf("federated ask: vault %s: %w", p, err)
 		}
 		perVault[name] = searched.Hits
 		verdicts[name] = searched.Verdict
 		relevance[name] = searched.RelevanceZ
+		noteCounts[name] = searched.NoteCount
 		rankedByName[name] = searched.Ranked
 	}
 
@@ -148,13 +150,16 @@ func federateAndPickOwner(cmd *cobra.Command, queryText string, paths []string, 
 		// gets the normal no-match path, floor and diagnostics. Reuse that
 		// vault's empty rank so it is not searched again on the way out.
 		fallback := vaultDisplayName(paths[0])
-		return nil, statuses, paths[0], rankedByName[fallback], nil
+		return nil, statuses, paths[0], rankedByName[fallback], false, nil
 	}
 	owner, ok := byName[merged[0].Vault]
 	if !ok {
-		return nil, nil, "", nil, fmt.Errorf("federated ask: merged top hit names unknown vault %q", merged[0].Vault)
+		return nil, nil, "", nil, false, fmt.Errorf("federated ask: merged top hit names unknown vault %q", merged[0].Vault)
 	}
-	return merged, statuses, owner, rankedByName[merged[0].Vault], nil
+	// HasCalibratedPeer is the one computation. The bool is stamped onto the
+	// result with Federated; BodyDecision does not derive it again.
+	peer := query.HasCalibratedPeer(merged[0].Vault, noteCounts, verdicts)
+	return merged, statuses, owner, rankedByName[merged[0].Vault], peer, nil
 }
 
 // searchOneVault opens a vault, searches it, computes its OWN relevance

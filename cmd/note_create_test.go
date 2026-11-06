@@ -51,6 +51,7 @@ func newNoteCreateCmd(t *testing.T) *cobra.Command {
 // ─── C1: Path traversal validation ───────────────────────────────────────────
 
 func TestExecuteNoteCreate_PathTraversal_Rejected(t *testing.T) {
+	cleanupCLIState(t)
 	vaultCfg := `types:
   note:
     required: []
@@ -76,6 +77,7 @@ func TestExecuteNoteCreate_PathTraversal_Rejected(t *testing.T) {
 }
 
 func TestExecuteNoteCreate_PathTraversal_AbsoluteEscapeRejected(t *testing.T) {
+	cleanupCLIState(t)
 	vaultCfg := `types:
   note:
     required: []
@@ -102,6 +104,7 @@ func TestExecuteNoteCreate_PathTraversal_AbsoluteEscapeRejected(t *testing.T) {
 }
 
 func TestExecuteNoteCreate_PathTraversal_ValidPathAccepted(t *testing.T) {
+	cleanupCLIState(t)
 	vaultCfg := `types:
   note:
     required: []
@@ -134,6 +137,7 @@ func TestExecuteNoteCreate_PathTraversal_ValidPathAccepted(t *testing.T) {
 // ─── C2: write_hash is SHA-256 of content, not DB file hash ──────────────────
 
 func TestExecuteNoteCreate_WriteHash_IsContentSHA256(t *testing.T) {
+	cleanupCLIState(t)
 	vaultCfg := `types:
   project:
     required: []
@@ -174,6 +178,7 @@ func TestExecuteNoteCreate_WriteHash_IsContentSHA256(t *testing.T) {
 // ─── I1: Required field validation ───────────────────────────────────────────
 
 func TestExecuteNoteCreate_RequiredFieldMissing_ReturnsError(t *testing.T) {
+	cleanupCLIState(t)
 	vaultCfg := `types:
   project:
     required: [goal]
@@ -205,6 +210,7 @@ func TestExecuteNoteCreate_RequiredFieldMissing_ReturnsError(t *testing.T) {
 }
 
 func TestExecuteNoteCreate_RequiredFieldProvided_Succeeds(t *testing.T) {
+	cleanupCLIState(t)
 	vaultCfg := `types:
   project:
     required: [goal]
@@ -237,6 +243,7 @@ func TestExecuteNoteCreate_RequiredFieldProvided_Succeeds(t *testing.T) {
 // ─── --body-stdin flag ────────────────────────────────────────────────────────
 
 func TestExecuteNoteCreate_BodyStdin_ReplacesTemplateBody(t *testing.T) {
+	cleanupCLIState(t)
 	vaultCfg := `types:
   concept:
     required: []

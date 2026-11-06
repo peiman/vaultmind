@@ -333,6 +333,11 @@ var commandCatalog = map[string]catalogEntry{
 		when:  "you have a chat MESSAGE envelope to sign so a receiving daemon can verify the signature and the signer's registry binding.",
 		short: "Sign a chat message envelope via the keyless signer (Contract-B slice 5)",
 	},
+	"vaultmind identity sign-keeper": {
+		group: groupLifecycle,
+		when:  "you own a keeper and need to sign a control request, a read grant, or a revocation for its watchdog.",
+		short: "Sign a keeper control request, read grant, or revocation via the keyless signer",
+	},
 	"vaultmind identity fetch-registry": {
 		group: groupLifecycle,
 		when:  "this machine needs a current copy of the mesh's signed registry — it downloads it from the hub, verifies it against the pinned root, and refuses older epochs.",

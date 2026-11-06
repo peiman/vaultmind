@@ -45,3 +45,13 @@ func TestFormatIndexResult_SaysWhatEmbedErrorsMean(t *testing.T) {
 	out := buf.String()
 	assert.True(t, strings.Contains(out, "⚠ 28 note(s) have no embedding"), out)
 }
+
+func TestFormatIndexResult_ReportsPassageBackfill(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, formatIndexResult(index.IndexAndEmbedResult{
+		Index: &index.IndexResult{},
+		Embed: &index.EmbedResult{PassageEmbedded: 4},
+	}, "bge-m3", &buf))
+	assert.Contains(t, buf.String(), "passage vectors stored for 4 notes")
+	assert.Contains(t, buf.String(), "0 skipped")
+}

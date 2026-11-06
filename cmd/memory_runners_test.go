@@ -239,6 +239,7 @@ func TestMemorySummarize_NoIDsErrors(t *testing.T) {
 // no args are supplied, --ids must be split and trimmed just like note mget.
 // This test locks the unit-level contract for the helper.
 func TestCollectSummarizeIDs_ArgsWinOverIDsFlag(t *testing.T) {
+	cleanupCLIState(t)
 	cmd := memorySummarizeCmd
 	require.NoError(t, cmd.Flags().Set("ids", "from-flag-a,from-flag-b"))
 	// args present → args win

@@ -69,3 +69,21 @@ func TestCommand_HookEnvironmentCannotDamageAnotherWorktree(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, indexBefore, indexAfter, "hook's worktree index must be untouched")
 }
+
+func TestShellCommand_StripsGitEnvironmentAndLeavesDirUnset(t *testing.T) {
+	t.Setenv("GIT_DIR", "/must/not/use")
+	t.Setenv("TESTGIT_KEEP", "value")
+	cmd := ShellCommand(t, "", "printf '%s' \"$TESTGIT_KEEP\"")
+	assert.Empty(t, cmd.Dir)
+	assert.Equal(t, []string{"bash", "-c", "printf '%s' \"$TESTGIT_KEEP\""}, cmd.Args)
+	assert.NotContains(t, cmd.Env, "GIT_DIR=/must/not/use")
+	assert.Contains(t, cmd.Env, "TESTGIT_KEEP=value")
+	assert.Contains(t, cmd.Env, "GIT_CONFIG_NOSYSTEM=1")
+}
+
+func TestEnv_StripsGitEnvironment(t *testing.T) {
+	t.Setenv("GIT_DIR", "/must/not/use")
+	env := Env()
+	assert.NotContains(t, env, "GIT_DIR=/must/not/use")
+	assert.Contains(t, env, "GIT_CONFIG_NOSYSTEM=1")
+}

@@ -81,7 +81,7 @@ func StoreNote(d *DB, rec NoteRecord) error {
 // an id migration so no orphans linger after the row is re-keyed. SSOT for
 // "what hangs off a note id" — keep aligned with StoreNoteInTx's delete loop.
 var pathIDDependentTables = []string{
-	"aliases", "tags", "frontmatter_kv", "blocks", "headings", "generated_sections",
+	"aliases", "tags", "frontmatter_kv", "blocks", "headings", "generated_sections", "passage_vectors",
 }
 
 // StoreNoteInTx stores a note within an existing transaction.
@@ -339,6 +339,7 @@ func DeleteNoteByPath(d *DB, path string) error {
 		{"DELETE FROM blocks WHERE note_id = ?", "blocks"},
 		{"DELETE FROM headings WHERE note_id = ?", "headings"},
 		{"DELETE FROM generated_sections WHERE note_id = ?", "generated_sections"},
+		{"DELETE FROM passage_vectors WHERE note_id = ?", "passage_vectors"},
 		{"DELETE FROM fts_notes WHERE note_id = ?", "fts_notes"},
 	}
 	for _, dep := range dependentDeletes {

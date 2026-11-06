@@ -127,6 +127,7 @@ func TestDoctor_GapLoopReadsTheClaim(t *testing.T) {
 }
 
 func TestGapClosingCounts_QueryErrorIsNull(t *testing.T) {
+	cleanupCLIState(t)
 	vault, err := index.Open(filepath.Join(t.TempDir(), "index.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = vault.Close() })

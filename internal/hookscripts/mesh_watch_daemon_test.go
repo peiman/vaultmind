@@ -50,14 +50,15 @@ type watchRequest struct {
 // matching later second or timeout. Reads filter/order by receiver timestamp,
 // as sqlite_store.rs does; sender timestamps need not be in response order.
 type watchDaemon struct {
-	mu       sync.Mutex
-	messages []watchMessage
-	requests []watchRequest
-	changed  chan struct{}
-	waits    chan watchRequest
-	armAdds  map[string][]watchMessage
-	down     atomic.Bool // a hub outage: every request gets 503 (#371)
-	downHits atomic.Int32
+	mu           sync.Mutex
+	messages     []watchMessage
+	requests     []watchRequest
+	changed      chan struct{}
+	waits        chan watchRequest
+	armAdds      map[string][]watchMessage
+	down         atomic.Bool // a hub outage: every request gets 503 (#371)
+	downHits     atomic.Int32
+	baselineDown atomic.Bool
 }
 
 func newWatchDaemon(messages ...watchMessage) *watchDaemon {
@@ -73,6 +74,10 @@ func (d *watchDaemon) add(messages ...watchMessage) {
 }
 
 func (d *watchDaemon) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/chat_read" && r.URL.Query().Get("room") != "" && !r.URL.Query().Has("since") && d.baselineDown.Load() {
+		http.Error(w, "room baseline down", http.StatusServiceUnavailable)
+		return
+	}
 	if d.down.Load() {
 		d.downHits.Add(1)
 		// A real outage leaves the long poll hanging until its timeout while
@@ -146,12 +151,26 @@ func runWatchDaemon(t *testing.T, d *watchDaemon, ceiling, wait int, inject func
 	dir, bin := t.TempDir(), t.TempDir()
 	script := filepath.Join(dir, "mesh-watch.sh")
 	require.NoError(t, os.WriteFile(script, body, 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "LISTEN"), []byte(`{"mode":"all","agents":{"mesh-watch-test":{"rooms":{"mesh":{"scope":"all"},"other":{"scope":"all"}}}}}`), 0o600))
+	// Rooms of the messages seeded at construction are watched too, so a test can
+	// use its own room. A test that needs an UNwatched room must not seed it here.
+	rooms := map[string]any{"mesh": map[string]string{"scope": "all"}, "other": map[string]string{"scope": "all"}}
+	for _, message := range d.messages {
+		if message.Room != "" {
+			rooms[message.Room] = map[string]string{"scope": "all"}
+		}
+	}
+	listen := map[string]any{"mode": "all", "agents": map[string]any{"mesh-watch-test": map[string]any{"rooms": rooms}}}
+	listenBody, err := json.Marshal(listen)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "LISTEN"), listenBody, 0o600))
 	InstallStub(t, bin, "vaultmind", `
 case "$*" in
  'identity paths')
   printf "VM_MESH_SLUG='mesh-watch-test'\nVM_MESH_SELF='agent:mesh-watch-test'\nVM_MESH_OPERATOR=''\nVM_MESH_DAEMON='%s'\nVM_MESH_REGISTRY_DAYS_LEFT=''\n" "$VM_TEST_DAEMON"
-  for key in PID LISTEN DISARM HEARTBEAT LASTARM LASTWAKE; do printf 'VM_MESH_%s=%q\n' "$key" "$VM_TEST_ROOT/$key"; done ;;
+  for key in PID LISTEN DISARM HEARTBEAT LASTARM LASTWAKE CURSOR; do
+    [ "$key" = CURSOR ] && [ "${VM_TEST_NO_CURSOR:-}" = 1 ] && continue
+    printf 'VM_MESH_%s=%q\n' "$key" "$VM_TEST_ROOT/$key"
+  done ;;
  'identity fetch-registry') exit 0 ;;
  *) exit 1 ;;
 esac
@@ -159,8 +178,11 @@ esac
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(ceiling+12)*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "bash", script)
+	setWatchProcessGroup(cmd)
 	cmd.WaitDelay = 3 * time.Second
-	cmd.Env = []string{"PATH=" + bin + ":" + os.Getenv("PATH"), "HOME=" + t.TempDir(), "TMPDIR=" + t.TempDir(), "AGENT_CHAT_PROJECT_PATH=" + dir, "VM_TEST_ROOT=" + dir, "VM_TEST_DAEMON=" + server.URL, "MESH_WAIT_SECS=" + strconv.Itoa(wait), "MESH_WATCH_MAX_WALL_SECS=" + strconv.Itoa(ceiling)}
+	cmd.Env = []string{"PATH=" + bin + ":" + os.Getenv("PATH"), "HOME=" + t.TempDir(), "TMPDIR=" + t.TempDir(), "AGENT_CHAT_PROJECT_PATH=" + dir, "VM_TEST_ROOT=" + dir, "VM_TEST_DAEMON=" + server.URL, "MESH_VENDOR_PROBE_URL=" + server.URL, "MESH_WAIT_SECS=" + strconv.Itoa(wait), "MESH_WATCH_MAX_WALL_SECS=" + strconv.Itoa(ceiling)}
+	// extraEnv comes last: exec keeps the last value of a duplicate key, so a
+	// test can override MESH_VENDOR_PROBE_URL.
 	cmd.Env = append(cmd.Env, extraEnv...)
 	done := make(chan struct{})
 	if inject != nil {
@@ -169,10 +191,77 @@ esac
 		close(done)
 	}
 	out, err := cmd.CombinedOutput()
+	if cmd.Process != nil { // the context kills only the leader; reap its group too
+		killWatchProcessGroup(cmd.Process.Pid)
+	}
 	require.NoError(t, ctx.Err(), "watcher timeout: %s", out)
 	require.NoError(t, err, "%s", out)
 	<-done
 	return string(out), dir
+}
+
+func TestMeshWatch_TSZeroCursorSweepIsBounded(t *testing.T) {
+	t.Parallel()
+	d := newWatchDaemon(watchMsg("zero", "agent:first", 0, "mesh"))
+	// The hub filters reads on receive time, so a sweep from 0 (or -1) re-reads
+	// the whole history. Every read must start near the arm instead.
+	armFloor := int(time.Now().Unix()) - 5
+	runWatchDaemon(t, d, 4, 1, nil, "MESH_SWEEP_SECS=1")
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	var bounded int
+	for _, request := range d.requests {
+		if request.HasSince {
+			bounded++
+			require.GreaterOrEqual(t, request.Since, armFloor, "a ts=0 stream must not sweep its whole history: %+v", request)
+		}
+	}
+	require.Greater(t, bounded, 0, "exercise cursor-bearing requests")
+}
+
+// The sweep floor moves; the cursor does not. A later message also stamped
+// ts=0 is still new and must wake (seeding the cursor past 0 would drop it).
+func TestMeshWatch_LaterTSZeroMessageStillWakes(t *testing.T) {
+	t.Parallel()
+	d := newWatchDaemon(watchMsg("zero", "agent:first", 0, "mesh"))
+	out, _ := runWatchDaemon(t, d, 8, 1, func(dir string) {
+		waitForArm(dir)
+		waitForLongPoll(d)
+		late := watchMsg("late-zero", "agent:other", 0, "mesh")
+		late.ReceiveTS = int(time.Now().Unix()) + 1
+		d.add(late)
+	}, "MESH_SWEEP_SECS=1")
+	require.Contains(t, out, "message from agent:other")
+}
+
+func TestMeshWatch_EncodesRoomAndWakes(t *testing.T) {
+	t.Parallel()
+	room := "a b&c#"
+	d := newWatchDaemon(watchMsg("baseline", "agent:first", 0, room))
+	// Stamp the message once the watcher is waiting, as a real hub would on
+	// receipt. A stamp taken before the watcher starts can fall before its arm
+	// time on a loaded machine, and the watcher rightly treats it as history.
+	// runWatchDaemon waits for this goroutine before returning, so reading ts
+	// afterwards is ordered after the write.
+	var ts int
+	out, dir := runWatchDaemon(t, d, 8, 1, func(_ string) {
+		<-d.waits
+		ts = int(time.Now().Unix()) + 1
+		d.add(watchMsg("room-message", "agent:second", ts, room))
+	})
+	require.Contains(t, out, "message from agent:second (ts "+strconv.Itoa(ts)+")")
+	wake, err := os.ReadFile(filepath.Join(dir, "LASTWAKE"))
+	require.NoError(t, err)
+	require.Equal(t, "agent:second|"+strconv.Itoa(ts), string(wake))
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	seenRoom := false
+	for _, request := range d.requests {
+		if request.Stream == room {
+			seenRoom = true
+		}
+	}
+	require.True(t, seenRoom, "daemon must receive the decoded room name")
 }
 
 func TestMeshWatch_QuietCallBound(t *testing.T) {

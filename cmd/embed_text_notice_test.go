@@ -9,6 +9,7 @@ import (
 
 	"github.com/peiman/vaultmind/internal/embedding"
 	"github.com/peiman/vaultmind/internal/index"
+	"github.com/peiman/vaultmind/internal/query"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -32,11 +33,15 @@ func (noticeEmbedder) Close() error { return nil }
 
 func stubMiniLM(t *testing.T) {
 	t.Helper()
+	query.CloseSharedEmbedder()
 	saved := embedding.ConstructMiniLM
 	embedding.ConstructMiniLM = func(context.Context, embedding.HugotConfig) (embedding.Embedder, error) {
 		return noticeEmbedder{}, nil
 	}
-	t.Cleanup(func() { embedding.ConstructMiniLM = saved })
+	t.Cleanup(func() {
+		query.CloseSharedEmbedder()
+		embedding.ConstructMiniLM = saved
+	})
 }
 
 func setStaleEmbedText(t *testing.T, vault string) []byte {

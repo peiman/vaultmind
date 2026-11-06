@@ -77,7 +77,18 @@ A pure-Go binary: full-text + MiniLM dense retrieval (2 lanes). Ideal for trying
 
 **Full 4-way hybrid — BGE-M3 (recommended for real use):**
 
-The ORT archives carry a `v` in the version. The two published for v0.10.20 are `vaultmind_v0.10.20_darwin_arm64_ort.tar.gz` and `vaultmind_v0.10.20_linux_amd64_ort.tar.gz` (`darwin_arm64` and `linux_amd64`) on the [releases page](https://github.com/peiman/vaultmind/releases). Extract the archive, keep `libonnxruntime*` in the same directory as the binary, and put that directory on `PATH`. The official `libonnxruntime` is bundled, so there's nothing else to install — **no compiler required.** Upgrading an existing install? Extract elsewhere and `mv` the new binary and its `libonnxruntime*` libraries into place rather than copying over the old ones — `mv` is atomic and gives a fresh inode. Overwriting in place has been seen once on macOS to trip a codesigning SIGKILL; the cause is unconfirmed, but replacing rather than overwriting avoids it and is the safer form anyway.
+The ORT archives carry a `v` in the version. The two published for v0.10.24 are `vaultmind_v0.10.24_darwin_arm64_ort.tar.gz` and `vaultmind_v0.10.24_linux_amd64_ort.tar.gz` (`darwin_arm64` and `linux_amd64`) on the [releases page](https://github.com/peiman/vaultmind/releases). The binary and `libonnxruntime*` must stay in the same folder, and that folder goes on `PATH`. The official `libonnxruntime` is bundled, so there's nothing else to install — **no compiler required.** On an Apple Silicon Mac (on Linux, use `linux_amd64` and `~/.bashrc`):
+
+```bash
+V=$(curl -fsSL https://api.github.com/repos/peiman/vaultmind/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
+mkdir -p ~/.local/share/vaultmind
+curl -fsSL "https://github.com/peiman/vaultmind/releases/download/$V/vaultmind_${V}_darwin_arm64_ort.tar.gz" | tar -xz --strip-components=1 -C ~/.local/share/vaultmind
+echo 'export PATH="$HOME/.local/share/vaultmind:$PATH"' >> ~/.zshrc
+export PATH="$HOME/.local/share/vaultmind:$PATH"
+vaultmind version
+```
+
+The line added to `~/.zshrc` (add it once) keeps `vaultmind` on `PATH` in every later shell, which the Claude Code hooks need: they run `vaultmind` by name. **macOS and browser downloads:** a file downloaded with `curl` runs as is, but a browser marks the archive as downloaded from the internet, `tar` copies that mark onto the extracted binary and libraries, and Gatekeeper then refuses to run the binary (it isn't signed with an Apple developer ID). Clear the mark on the extracted folder with `xattr -dr com.apple.quarantine <folder>`. Upgrading an existing install? Extract elsewhere and `mv` the new binary and its `libonnxruntime*` libraries into place rather than copying over the old ones — `mv` is atomic and gives a fresh inode. Overwriting in place has been seen once on macOS to trip a codesigning SIGKILL; the cause is unconfirmed, but replacing rather than overwriting avoids it and is the safer form anyway.
 
 With the ORT build, the first `vaultmind index --embed` downloads the BGE-M3 model (about 2.3 GB). On an Apple Silicon Mac a first embed of 74 notes took 133 seconds and used 2.7 GB peak memory.
 
@@ -141,6 +152,8 @@ A vault can also hold who an agent is: the moments that changed how it works, it
 ## How it works
 
 Notes are the source of truth; the SQLite index is derived from them and rebuilt by `vaultmind index`. Search fuses full-text, dense, sparse and ColBERT lanes, and reports how far the top hit clears the vault's own off-topic noise floor, so "nothing relevant" is an honest answer. A hit brings along the notes it links to. See **[docs/how-it-works.md](docs/how-it-works.md)** for retrieval, context packs, excerpts and delivery.
+
+Run `vaultmind index --embed` once with local BGE-M3 to enable passage selection by meaning. With `ask --excerpt N`, the top note can then add up to three best-matching paragraphs after its keyword pick, within 2 × N tokens and the pack budget. Existing indexes get passage vectors without re-embedding their notes; MiniLM and sidecar indexing keep their current behavior.
 
 ## The local usage log
 

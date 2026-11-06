@@ -11,6 +11,7 @@ import (
 )
 
 func TestExperimentCompare_JSONOutput(t *testing.T) {
+	cleanupCLIState(t)
 	tmp := t.TempDir()
 	// Set both HOME and XDG_DATA_HOME so xdg.DataFile points into tmp on
 	// macOS (uses HOME) and Linux (uses XDG_DATA_HOME).
@@ -111,6 +112,7 @@ func TestFormatCompareResult_WithRowsAndPerEvent(t *testing.T) {
 }
 
 func TestExperimentCompare_JSONEncodesNaNAsNull(t *testing.T) {
+	cleanupCLIState(t)
 	// Regression test for the bug found in code review: when a pair has
 	// fewer than 2 shared items, MeanKendallTau is undefined. Storing NaN
 	// breaks encoding/json. Pointer-with-nil serializes as JSON null.

@@ -189,6 +189,23 @@ type VaultSearch struct {
 	Verdict    string
 	RelevanceZ float64
 	Ranked     *AskResult
+	// NoteCount is how many notes the index holds. With Verdict it is what
+	// HasCalibratedPeer reads. Zero means the count failed.
+	NoteCount int
+}
+
+// vaultNoteCount is the index size HasCalibratedPeer needs. A nil db or a
+// failed count is zero, which is not a calibrated vault.
+func vaultNoteCount(db *index.DB) int {
+	if db == nil {
+		return 0
+	}
+	n, err := db.NoteCount()
+	if err != nil {
+		log.Debug().Err(err).Msg("federated: note count failed; vault not treated as calibrated")
+		return 0
+	}
+	return n
 }
 
 // SearchVault searches a vault once and judges its top hit against that
@@ -208,10 +225,14 @@ func SearchVault(
 	if err != nil {
 		return VaultSearch{}, err
 	}
+	// Count on every path. The peer gate needs the size next to a noise-floor
+	// verdict; a failed count is zero, which is not calibrated. No hits leaves
+	// the verdict empty, so that vault is not a peer either.
+	count := vaultNoteCount(db)
 	if res == nil || len(res.TopHits) == 0 {
-		return VaultSearch{Ranked: res}, nil
+		return VaultSearch{Ranked: res, NoteCount: count}, nil
 	}
-	out := VaultSearch{Hits: res.TopHits, Ranked: res}
+	out := VaultSearch{Hits: res.TopHits, Ranked: res, NoteCount: count}
 	if emb == nil {
 		return out, nil
 	}

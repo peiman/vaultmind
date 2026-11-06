@@ -202,6 +202,7 @@ func TestAsk_PassageFailureKeepsPackedExcerpt(t *testing.T) {
 	retriever := &stubRetriever{results: []retrieval.ScoredResult{{ID: "target", Score: 1}}}
 	result, err := query.Ask(context.Background(), retriever, resolver, db, query.AskConfig{Query: "beta gamma", Budget: 1500, MaxItems: 3, SearchLimit: 5, ExcerptTokens: 160})
 	require.NoError(t, err)
+	baseline.Target.PassageSelector = "lexical"
 	assert.Equal(t, baseline, result.Context)
 	var out bytes.Buffer
 	require.NoError(t, query.FormatAsk(result, &out))
@@ -222,6 +223,7 @@ func TestAsk_PassagePointersEqualMain(t *testing.T) {
 			assert.Contains(t, result.Context.Target.Body, "TLS_VERIFY=false")
 			continue
 		}
+		baseline.Target.PassageSelector = "none"
 		assert.Equal(t, baseline, result.Context)
 		var actual, expected bytes.Buffer
 		require.NoError(t, query.FormatAskPointersOnly(result, &actual))
@@ -241,6 +243,7 @@ func TestAsk_PassageFirstBlockUnchanged(t *testing.T) {
 	retriever := &stubRetriever{results: []retrieval.ScoredResult{{ID: "target", Score: 1}}}
 	result, err := query.Ask(context.Background(), retriever, resolver, db, query.AskConfig{Query: "WAL_RECOVERY", Budget: 1500, MaxItems: 3, SearchLimit: 5, ExcerptTokens: 160})
 	require.NoError(t, err)
+	baseline.Target.PassageSelector = "lexical"
 	assert.Equal(t, baseline, result.Context)
 }
 
@@ -328,6 +331,10 @@ func TestAsk_PassageFirstBlockHeading(t *testing.T) {
 			assert.Equal(t, baseline.Context, result.Context.Context)
 			assert.Equal(t, baseline.UsedTokens-memory.EstimateTokens(baseline.Target.Body)+memory.EstimateTokens(got), result.Context.UsedTokens)
 			if tt.unchanged {
+				baseline.Target.PassageSelector = "lexical"
+				if tt.name == "principle" {
+					baseline.Target.PassageSelector = "principle"
+				}
 				assert.Equal(t, baseline, result.Context)
 			}
 			var out bytes.Buffer

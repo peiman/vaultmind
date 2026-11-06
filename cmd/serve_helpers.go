@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/memguard"
 	"github.com/peiman/vaultmind/internal/query"
 	"github.com/peiman/vaultmind/internal/serve"
@@ -28,9 +29,22 @@ const envNoServe = "VAULTMIND_NO_SERVE"
 // accept; a missing server fails at once.
 const serveConnectTimeout = 200 * time.Millisecond
 
-// serveRequestTimeout bounds a whole forwarded ask. A server that takes longer
-// is abandoned and the ask runs here instead. A variable for tests.
-var serveRequestTimeout = 10 * time.Second
+// serveRequestTimeout caps the wait for an ask the server has taken. It is a
+// safety net for a wedged server, not a latency budget, so it is long: the
+// server runs one request at a time for every session on the machine, so an
+// ask can wait behind others, and it keeps running an ask whose client gives
+// up. A short cap that reran slow asks here ran them twice, each slowing the
+// other past the hooks' bound (#406). Callers such as the hooks bound their
+// own wait. Past the cap the ask fails; it is never rerun. A variable for
+// tests.
+var serveRequestTimeout = 5 * time.Minute
+
+// serveQueueTimeout bounds how long an ask waits to start, behind other
+// sessions' asks. Past it the ask runs in this process. That run is a
+// different ask from the one still queued: the server skips a queued ask
+// whose client has gone, so this is not a second copy (#421). A variable
+// for tests.
+var serveQueueTimeout = 10 * time.Second
 
 // serveExec runs one request in this process as a fresh process would: in
 // the request's directory, with its environment, from a reset CLI. The
@@ -56,6 +70,10 @@ func serveExec(req serve.Request) serve.Response {
 	// experiment session; close it here so its handle doesn't leak.
 	defer closeExperimentSession()
 	resetCLIState()
+	askRun.path, askRun.start = experiment.AskPathServed, req.Received
+	if askRun.start.IsZero() {
+		askRun.start = time.Now()
+	}
 	var out, errw bytes.Buffer
 	code := ExecuteWithIO(req.Args, &out, &errw)
 	return serve.Response{Stdout: out.Bytes(), Stderr: errw.Bytes(), Code: code}
@@ -110,8 +128,10 @@ func serveSocket() (string, error) {
 
 // tryServer answers an ask from the warm server when one is running, and
 // reports whether it did. With none it starts one in the background for the
-// next ask and lets this one run here; on any failure the command runs here,
-// so the server can make an ask faster but never wrong.
+// next ask and lets this one run here. A server that cannot take the ask lets
+// it run here too, so the server can make an ask faster but never wrong. An
+// ask the server has taken is waited for and never run here as well: the
+// server would still be running it, and two copies slow each other (#406).
 func tryServer(args []string) (int, bool) {
 	if len(args) == 0 || args[0] != "ask" || os.Getenv(envNoServe) != "" || !serveSupported {
 		return 0, false
@@ -130,13 +150,19 @@ func tryServer(args []string) (int, bool) {
 			env[k] = v
 		}
 	}
-	resp, err := serve.Forward(sock, serve.Request{Args: args, Dir: dir, Env: env}, serveConnectTimeout, serveRequestTimeout)
-	if errors.Is(err, serve.ErrNoServer) {
+	resp, err := serve.Forward(sock, serve.Request{Args: args, Dir: dir, Env: env},
+		serveConnectTimeout, serveQueueTimeout, serveRequestTimeout)
+	switch {
+	case errors.Is(err, serve.ErrNoServer):
 		startServer()
+		askRun.path = experiment.AskPathFallback
 		return 0, false
-	}
-	if err != nil {
+	case errors.Is(err, serve.ErrUnanswered):
+		askRun.path = experiment.AskPathFallback
 		return 0, false
+	case err != nil:
+		_, _ = fmt.Fprintf(os.Stderr, "Error: %v (set %s=1 to run without the server)\n", err, envNoServe)
+		return 1, true
 	}
 	_, _ = os.Stdout.Write(resp.Stdout)
 	_, _ = os.Stderr.Write(resp.Stderr)

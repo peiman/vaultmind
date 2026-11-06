@@ -164,6 +164,7 @@ func possibleGapLogs(t *testing.T, state string) []string {
 }
 
 func TestRecordPossibleGap_LogsWeakAsksOnly(t *testing.T) {
+	cleanupCLIState(t)
 	isolateXDG(t)
 	state := os.Getenv("XDG_STATE_HOME")
 	dir := t.TempDir()

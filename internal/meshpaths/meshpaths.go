@@ -49,6 +49,7 @@ type Paths struct {
 	Pid       string
 	Lastwake  string
 	Lastarm   string
+	Cursor    string
 	Disarm    string
 	Log       string
 	Listen    string
@@ -83,6 +84,7 @@ func For(slug string) (Paths, error) {
 		Pid:       per("pid"),
 		Lastwake:  per("lastwake"),
 		Lastarm:   per("lastarm"),
+		Cursor:    per("cursor"),
 		Disarm:    per("disarm"),
 		Log:       per("log"),
 		Listen:    filepath.Join(dir, ListenFilename),

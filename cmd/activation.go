@@ -3,6 +3,7 @@ package cmd
 
 import (
 	"context"
+	"time"
 
 	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/peiman/vaultmind/internal/memory"
@@ -80,6 +81,10 @@ func logAskExperiment(cmd *cobra.Command, queryText, vaultPath, retrievalMode st
 		RetrievalMode: retrievalMode,
 		TopHits:       askRetrievalHits(result),
 		RetrievalErr:  retrievalErr,
+		AskPath:       askRun.path,
+	}
+	if !askRun.start.IsZero() {
+		params.Duration = time.Since(askRun.start)
 	}
 	// Whether the caller actually received text, and if not which rule withheld
 	// it. Without this the log cannot separate "surfaced and ignored" from

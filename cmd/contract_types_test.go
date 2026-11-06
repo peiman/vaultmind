@@ -38,6 +38,10 @@ type AskEnvelope struct {
 			TargetID     string `json:"target_id"`
 			UsedTokens   int    `json:"used_tokens"`
 			BudgetTokens int    `json:"budget_tokens"`
+			Target       *struct {
+				ID              string `json:"id"`
+				PassageSelector string `json:"passage_selector"`
+			} `json:"target"`
 		} `json:"context,omitempty"`
 	} `json:"result"`
 	Meta struct {

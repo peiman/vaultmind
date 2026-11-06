@@ -27,6 +27,15 @@ type ContextPackConfig struct {
 	// vault whose median note is larger than the budget.
 	ExcerptTokens int
 
+	// OverflowExcerpt applies only when ExcerptTokens is 0. A context item
+	// whose whole body does not fit the budget left gets the text it returns
+	// for that room, at most maxTokens, and the name of what chose it. Without
+	// it the room went to smaller, lower-ranked notes and the large relevant
+	// one came back as a title (#331). It runs while packing, so the item is
+	// sized before any lower-ranked note takes room. Ask sets it to its passage
+	// selector; nil keeps all-or-nothing.
+	OverflowExcerpt func(note *index.FullNote, maxTokens int) (text, selector string)
+
 	// Seeds are notes the caller already judged relevant — ask passes the
 	// search hits after the first that clear the weak band. They are packed
 	// ahead of every graph neighbour, in the order given, because a note that
@@ -53,8 +62,10 @@ const EdgeTypeSearchHit = "search_hit"
 
 // ContextPackTarget holds the fully-loaded target note.
 type ContextPackTarget struct {
-	ID          string                 `json:"id"`
-	Frontmatter map[string]interface{} `json:"frontmatter"`
+	// PassageSelector is ask's selection outcome; absent on memory-pack targets.
+	PassageSelector string                 `json:"passage_selector,omitempty"`
+	ID              string                 `json:"id"`
+	Frontmatter     map[string]interface{} `json:"frontmatter"`
 	// BodyExcerpted marks Body as the note's decision-bearing passage rather
 	// than its whole text — same meaning as on ContextItem, and needed here for
 	// the same reason: a renderer that cannot tell the difference will truncate
@@ -69,6 +80,10 @@ type ContextPackTarget struct {
 	// ShownBefore marks a note whose body this conversation already received
 	// recently; it is sent as its title alone. See ContextItem.ShownBefore.
 	ShownBefore bool `json:"shown_before,omitempty"`
+	// ChangedOnDisk is set when this note's file changed (or vanished) after it
+	// was indexed, so Body is the indexed copy and may be out of date. Absent
+	// when current. schema_version stays v1.
+	ChangedOnDisk bool `json:"stale,omitempty"`
 	// BodyOmittedBudget records a non-empty body excluded by the token budget.
 	// Empty or unavailable bodies must never be described as budget losses.
 	BodyOmittedBudget bool `json:"body_omitted_budget,omitempty"`
@@ -92,12 +107,19 @@ type ContextItem struct {
 	// rather than its whole text. It is recorded rather than inferred because
 	// "the agent got the note" and "the agent got the gist" are different facts,
 	// and a metric that cannot tell them apart reports the second as the first.
-	BodyExcerpted bool   `json:"body_excerpted,omitempty"`
-	Body          string `json:"body,omitempty"`
+	BodyExcerpted bool `json:"body_excerpted,omitempty"`
+	// PassageSelector names what chose an overflow excerpt in ask (#331), as
+	// on ContextPackTarget. Absent on every other item.
+	PassageSelector string `json:"passage_selector,omitempty"`
+	Body            string `json:"body,omitempty"`
 	// ShownBefore marks a note whose body this conversation already received
 	// recently. It degrades to its title — never dropped, so an agent that lost
 	// the earlier copy to compaction still sees the note exists.
 	ShownBefore bool `json:"shown_before,omitempty"`
+	// ChangedOnDisk is set when this note's file changed (or vanished) after it
+	// was indexed, so Body is the indexed copy and may be out of date. Absent
+	// when current. schema_version stays v1.
+	ChangedOnDisk bool `json:"stale,omitempty"`
 	// BodyOmittedBudget records a non-empty body excluded by the token budget.
 	// Empty or unavailable bodies must never be described as budget losses.
 	BodyOmittedBudget bool `json:"body_omitted_budget,omitempty"`
@@ -317,7 +339,7 @@ func packBodyFirst(
 
 		// Try to include body within remaining budget.
 		if noteFull != nil {
-			result.UsedTokens += attachBody(&item, noteFull.Body, remaining, cfg.ExcerptTokens)
+			result.UsedTokens += attachBody(&item, noteFull, remaining, cfg)
 		}
 
 		result.Context = append(result.Context, item)
@@ -366,7 +388,7 @@ func packTwoPass(
 		if err != nil || fullNote == nil || fullNote.Body == "" {
 			continue
 		}
-		result.UsedTokens += attachBody(&result.Context[i], fullNote.Body, remaining, cfg.ExcerptTokens)
+		result.UsedTokens += attachBody(&result.Context[i], fullNote, remaining, cfg)
 	}
 	return nil
 }
@@ -378,9 +400,10 @@ func packTwoPass(
 // The released behaviour was all-or-nothing — a body one token over the
 // remaining budget contributed nothing, and the pack still counted the item.
 // That is how a pack reports "3 items, 0 with bodies": three notes named, none
-// delivered. Excerpting is opt-in so this cannot change what an existing caller
-// receives.
-func attachBody(item *ContextItem, body string, remaining *int, excerptTokens int) int {
+// delivered. Excerpting is opt-in (ExcerptTokens, or OverflowExcerpt for a body
+// that does not fit) so this cannot change what an existing caller receives.
+func attachBody(item *ContextItem, note *index.FullNote, remaining *int, cfg ContextPackConfig) int {
+	body := note.Body
 	if body == "" {
 		return 0
 	}
@@ -393,21 +416,47 @@ func attachBody(item *ContextItem, body string, remaining *int, excerptTokens in
 	// that happened to fit contribute ~670 tokens against a requested 80, which
 	// makes the budget unpredictable in exactly the setting this exists for — a
 	// hook fitting several notes into a small fixed allowance.
-	if excerptTokens <= 0 {
-		if tokens := EstimateTokens(body); tokens <= *remaining {
-			item.BodyIncluded = true
-			item.Body = body
-			*remaining -= tokens
-			return tokens
-		}
-		item.BodyOmittedBudget = true
+	if excerptTokens := cfg.ExcerptTokens; excerptTokens > 0 {
+		excerpt := Excerpt(body, min(excerptTokens, *remaining))
+		// A policy cap or a frontmatter-only note is not a budget omission.
+		item.BodyOmittedBudget = excerpt == "" && *remaining < excerptTokens && Excerpt(body, excerptTokens) != ""
+		return attachExcerpt(item, excerpt, remaining)
+	}
+	if tokens := EstimateTokens(body); tokens <= *remaining {
+		item.BodyIncluded = true
+		item.Body = body
+		*remaining -= tokens
+		return tokens
+	}
+	if tokens := attachOverflow(item, note, remaining, cfg.OverflowExcerpt); tokens > 0 {
+		return tokens
+	}
+	item.BodyOmittedBudget = true
+	return 0
+}
+
+// attachOverflow gives a body that does not fit whole the excerpt the
+// caller's OverflowExcerpt chooses for the room left. Text over that room
+// would break the budget, so it is replaced by the packer's own Excerpt.
+func attachOverflow(item *ContextItem, note *index.FullNote, remaining *int, overflow func(*index.FullNote, int) (string, string)) int {
+	if overflow == nil {
 		return 0
 	}
-	budget := min(excerptTokens, *remaining)
-	excerpt := Excerpt(body, budget)
+	text, selector := overflow(note, *remaining)
+	if EstimateTokens(text) > *remaining {
+		text, selector = Excerpt(note.Body, *remaining), "none"
+	}
+	tokens := attachExcerpt(item, text, remaining)
+	if tokens > 0 {
+		item.PassageSelector = selector
+	}
+	return tokens
+}
+
+// attachExcerpt records excerpt as the item's text and charges it to the
+// budget. An empty excerpt changes nothing and costs nothing.
+func attachExcerpt(item *ContextItem, excerpt string, remaining *int) int {
 	if excerpt == "" {
-		// A policy cap or a frontmatter-only note is not a budget omission.
-		item.BodyOmittedBudget = *remaining < excerptTokens && Excerpt(body, excerptTokens) != ""
 		return 0
 	}
 	tokens := EstimateTokens(excerpt)

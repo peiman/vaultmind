@@ -3,6 +3,7 @@ package experiment_test
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/peiman/vaultmind/internal/experiment"
 	"github.com/stretchr/testify/assert"
@@ -89,6 +90,19 @@ func TestBuildAskEventData_ShadowVariantCollisionIsOverwrittenDeterministically(
 // never carried z. The pointer keeps unset distinguishable from a true 0.0 —
 // a z of exactly zero is a real measurement (top hit ON the floor), not
 // absence, and conflating them would quietly bias any median toward zero.
+
+// Every ask says how it ran, answered by the warm server, run here after the
+// server could not take it, or run here with no server asked, and how long it
+// took, so a slow or doubled ask can be traced to its path (#406).
+func TestBuildAskEventData_RecordsThePathAndDuration(t *testing.T) {
+	data := experiment.BuildAskEventData(experiment.AskEventParams{RetrievalMode: "hybrid", AskPath: experiment.AskPathServed, Duration: 1500 * time.Millisecond})
+	assert.Equal(t, "served", data["ask_path"])
+	assert.Equal(t, int64(1500), data["duration_ms"])
+
+	bare := experiment.BuildAskEventData(experiment.AskEventParams{RetrievalMode: "hybrid"})
+	assert.NotContains(t, bare, "ask_path")
+	assert.NotContains(t, bare, "duration_ms", "an unmeasured duration is absent, not zero")
+}
 
 func TestBuildAskEventData_RelevanceZPresentWhenMeasured(t *testing.T) {
 	z := -0.42

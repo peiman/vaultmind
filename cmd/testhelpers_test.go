@@ -6,10 +6,41 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/peiman/vaultmind/.ckeletin/pkg/logger"
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/vault"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 )
+
+// cleanupCLIState gives tests that mutate the process CLI a common ownership
+// boundary. In particular, standalone commands register flags in global Viper
+// AND flagBindings; resetting Viper alone would replay those temporary flags
+// on the next served request. Keep only the bindings that predate this test.
+// Register before mutation so cleanup also runs after a fatal assertion.
+func cleanupCLIState(t *testing.T) {
+	t.Helper()
+	bindings := append([]flagBinding(nil), flagBindings...)
+	savedLogger, savedLevel := logger.SaveLoggerState()
+	t.Cleanup(func() {
+		closeExperimentSession()
+		logger.Cleanup()
+		flagBindings = bindings
+		resetCLIState()
+		resetCommandIO(RootCmd)
+		logger.RestoreLoggerState(savedLogger, savedLevel)
+	})
+}
+
+func resetCommandIO(cmd *cobra.Command) {
+	cmd.SetArgs(nil)
+	cmd.SetIn(nil)
+	cmd.SetOut(nil)
+	cmd.SetErr(nil)
+	for _, child := range cmd.Commands() {
+		resetCommandIO(child)
+	}
+}
 
 // isolateMeshEnv makes the Contract-B mesh-doctor section dormant for a test by
 // pointing every XDG base dir at fresh empty temp dirs (no identity key, no
@@ -215,10 +246,7 @@ func indexedBaselineVault(t *testing.T) string {
 func runRootCmd(t *testing.T, args ...string) (*bytes.Buffer, *bytes.Buffer, error) {
 	t.Helper()
 	resetFlagsRecursive(RootCmd)
-	// And after: a test that calls a runner directly with a bare command reads
-	// its settings through the flags left on RootCmd, so a value set here would
-	// leak into it (a --profile from one init test broke the next).
-	t.Cleanup(func() { resetFlagsRecursive(RootCmd) })
+	cleanupCLIState(t)
 	out := &bytes.Buffer{}
 	errOut := &bytes.Buffer{}
 	RootCmd.SetOut(out)

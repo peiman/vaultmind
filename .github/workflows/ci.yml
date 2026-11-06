@@ -215,6 +215,11 @@ jobs:
         shell: bash
         run: bash .github/scripts/fetch-bge-m3-tokenizer.sh
 
+      # The checkout is shallow with no tags. TestReleasedChangelogSectionsMatchTheirTags
+      # compares released CHANGELOG sections to their tags and fails without them.
+      - name: Fetch release tags
+        run: git fetch --tags --depth=1 origin
+
       - name: Run Tests with Race Detection (Unix)
         if: runner.os != 'Windows'
         run: task test:race
@@ -278,6 +283,9 @@ jobs:
           BINARY_NAME=$(grep 'BINARY_NAME:' Taskfile.yml | head -1 | awk '{print $2}')
           echo "name=$BINARY_NAME" >> "$GITHUB_OUTPUT"
           echo "Binary name: $BINARY_NAME"
+
+      - name: Fetch release tags
+        run: git fetch --tags --depth=1 origin
 
       - name: Build Dev Binary
         run: task build:dev
@@ -413,6 +421,11 @@ jobs:
         shell: bash
         run: bash .github/scripts/fetch-bge-m3-tokenizer.sh
 
+      # The checkout is shallow with no tags. TestReleasedChangelogSectionsMatchTheirTags
+      # compares released CHANGELOG sections to their tags and fails without them.
+      - name: Fetch release tags
+        run: git fetch --tags --depth=1 origin
+
       - name: Run Quality Checks (Fast - PRs only)
         if: github.event_name == 'pull_request'
         run: task check:fast
@@ -517,11 +530,9 @@ jobs:
           # The workflow-provided token (job has contents: write) creates the
           # release in this repo. The inherited scaffold referenced a custom
           # secret (CKELETIN_GITHUB_TOKEN) that isn't set here, so goreleaser
-          # failed with "missing GITHUB_TOKEN". The Homebrew tap push (a
-          # separate repo) still uses a PAT, but skip_upload makes it optional
-          # when HOMEBREW_TAP_OWNER is unset.
+          # failed with "missing GITHUB_TOKEN". No Homebrew tap is published
+          # (the scaffold's brews block never uploaded and was removed, #388).
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
 
       # SLSA build provenance, generated HERE rather than in a workflow that
       # reacts to the release being published.
@@ -604,10 +615,15 @@ jobs:
       fail-fast: false # one platform failing must not block the other
       matrix:
         include:
-          - os: macos-14
+          # GitHub retired macos-14 (the job was cancelled: configuration
+          # macos-14-arm64-us-default is not supported). macos-15's SDK
+          # defaults to minos 15.0, which would drop macOS 14, so the
+          # deployment target stays 14.0 and is checked after the build.
+          - os: macos-15
             goos: darwin
             goarch: arm64
             ort_asset: onnxruntime-osx-arm64-1.29.1.tgz
+            macosx_deployment_target: '14.0'
           - os: ubuntu-latest
             goos: linux
             goarch: amd64
@@ -683,13 +699,67 @@ jobs:
           fi
 
       - name: Download Go modules
-        run: go mod download # setup-ort.sh reads hugot's go.mod from the module cache; a cold runner cache (first macos-14 run) wouldn't have it
+        run: go mod download # setup-ort.sh reads hugot's go.mod from the module cache; a cold runner cache (first macos-15 run) wouldn't have it
 
       - name: Set up ORT toolchain
         run: bash .claude/scripts/setup-ort.sh
 
       - name: Build ORT binary (prod, -tags ORT)
+        # Step env, not job env: the pin is the darwin matrix field. The
+        # Linux entry has no such field, so this is empty there and the
+        # Linux toolchain ignores MACOSX_DEPLOYMENT_TARGET. clang reads it
+        # for the cgo external link; task passes the step environment through.
+        env:
+          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macosx_deployment_target }}
         run: task build:ort # outputs /tmp/vaultmind-ort, version-stamped from the tag
+
+      - name: Verify the minimum macOS version
+        if: matrix.goos == 'darwin'
+        env:
+          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macosx_deployment_target }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Captured, then parsed. Piping otool into head, or into awk that
+          # exits early, delivers SIGPIPE; pipefail then fails the step on a
+          # binary that was fine (the doctor smoke test below hit this).
+          if [ -z "${MACOSX_DEPLOYMENT_TARGET}" ]; then
+            echo "::error::MACOSX_DEPLOYMENT_TARGET is empty; the darwin ORT build has no pinned minimum macOS"
+            exit 1
+          fi
+          OTOOL_OUT="$(otool -l /tmp/vaultmind-ort)"
+          found=0
+          in_build=0
+          while IFS= read -r line || [ -n "$line" ]; do
+            case "$line" in
+              *"cmd LC_BUILD_VERSION"*)
+                in_build=1
+                continue
+                ;;
+              *"cmd LC_"*)
+                in_build=0
+                continue
+                ;;
+            esac
+            [ "$in_build" -eq 1 ] || continue
+            trimmed="${line#"${line%%[![:space:]]*}"}"
+            case "$trimmed" in
+              minos\ *)
+                found=1
+                value="${trimmed#minos }"
+                value="${value%"${value##*[![:space:]]}"}"
+                if [ "$value" != "$MACOSX_DEPLOYMENT_TARGET" ]; then
+                  echo "::error::minimum macOS is ${value}, want ${MACOSX_DEPLOYMENT_TARGET}. The ORT binary would not launch on macOS 14."
+                  exit 1
+                fi
+                ;;
+            esac
+          done <<< "$OTOOL_OUT"
+          if [ "$found" -eq 0 ]; then
+            echo "::error::no LC_BUILD_VERSION minos in /tmp/vaultmind-ort; cannot confirm it still runs on macOS ${MACOSX_DEPLOYMENT_TARGET}"
+            exit 1
+          fi
+          echo "minimum macOS is ${MACOSX_DEPLOYMENT_TARGET}"
 
       - name: Verify ORT lib discovery
         run: CGO_ENABLED=1 CGO_LDFLAGS="-L$PWD/lib" go test -tags ORT -run TestResolveORTLibDir ./internal/embedding/...

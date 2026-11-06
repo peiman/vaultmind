@@ -35,12 +35,12 @@ func TestMeshWatch_ReplacedWatcherSaysSoAndDoesNotAskForReArm(t *testing.T) {
 case "$*" in
  'identity paths')
   printf "VM_MESH_SLUG='mesh-watch-test'\nVM_MESH_SELF='agent:mesh-watch-test'\nVM_MESH_OPERATOR=''\nVM_MESH_DAEMON='%s'\nVM_MESH_REGISTRY_DAYS_LEFT=''\n" "$VM_TEST_DAEMON"
-  for key in PID LISTEN DISARM HEARTBEAT LASTARM LASTWAKE; do printf 'VM_MESH_%s=%q\n' "$key" "$VM_TEST_ROOT/$key"; done ;;
+  for key in PID LISTEN DISARM HEARTBEAT LASTARM LASTWAKE CURSOR; do printf 'VM_MESH_%s=%q\n' "$key" "$VM_TEST_ROOT/$key"; done ;;
  'identity fetch-registry') exit 0 ;;
  *) exit 1 ;;
 esac
 `)
-	env := []string{"PATH=" + bin + ":" + os.Getenv("PATH"), "HOME=" + t.TempDir(), "TMPDIR=" + t.TempDir(), "AGENT_CHAT_PROJECT_PATH=" + dir, "VM_TEST_ROOT=" + dir, "VM_TEST_DAEMON=" + server.URL, "MESH_WAIT_SECS=2", "MESH_WATCH_MAX_WALL_SECS=60"}
+	env := []string{"PATH=" + bin + ":" + os.Getenv("PATH"), "HOME=" + t.TempDir(), "TMPDIR=" + t.TempDir(), "AGENT_CHAT_PROJECT_PATH=" + dir, "VM_TEST_ROOT=" + dir, "VM_TEST_DAEMON=" + server.URL, "MESH_VENDOR_PROBE_URL=" + server.URL, "MESH_WAIT_SECS=2", "MESH_WATCH_MAX_WALL_SECS=60"}
 	start := func() (*exec.Cmd, *bytes.Buffer) {
 		var out bytes.Buffer
 		c := exec.Command("bash", script)

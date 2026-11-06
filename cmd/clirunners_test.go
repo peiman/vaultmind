@@ -104,6 +104,7 @@ func TestNoteMget_RequiresIDSource(t *testing.T) {
 // collectMgetIDs splits comma inputs and trims whitespace — hidden commas
 // or whitespace in IDs have caused real bugs in batching pipelines.
 func TestCollectMgetIDs_SplitsAndTrims(t *testing.T) {
+	cleanupCLIState(t)
 	cmd := noteMgetCmd
 	require.NoError(t, cmd.Flags().Set("ids", " a , b,  c ,"))
 	ids, err := collectMgetIDs(cmd)

@@ -32,6 +32,10 @@ vaultmind ask "how should I write notes" --vault examples/ada-vault --json
 
 Output format (JSON):
 
+The target at `result.context.target` includes `passage_selector`: `dense` when stored passage vectors added at least one paragraph by meaning after the keyword pick, `lexical` when only the keyword selector's pick was delivered, `principle` when the note's Principle section was kept, and `none` when no excerpt was applied or its body was already shown. This is additive in `schema_version: "v1"`. Run `vaultmind index --embed` once with the local BGE-M3 embedder to backfill passage vectors for notes longer than 160 tokens; existing note embeddings are preserved. MiniLM and sidecar indexing store no passage vectors.
+
+With `--excerpt N`, the top note can use up to 2 × N tokens, within the remaining pack budget. The keyword pick comes first, unchanged, within N tokens. The three best-matching paragraphs follow it in the room left; one the pick already contains, or one that does not fit, is skipped, not cut, and its slot is not given to a lower-ranked paragraph. They are returned in document order, with `…` between separate spans. Other notes keep their N-token cap. Missing or stale passage vectors use the existing lexical selection; Principle sections keep their behavior.
+
 ```json
 {
   "command": "ask",
@@ -47,6 +51,8 @@ Output format (JSON):
 
 **`retrieval_mode`** tells you which lane ran. If it's `"keyword"`, the vault has no embeddings — your paraphrase queries will miss. Run `vaultmind index --embed --vault <path>` to fix (`vaultmind doctor` says which model the vault uses).
 
+**`top_hit_unembedded: true`** means the top hit has no stored embedding, so relevance can't be judged. The confidence label is capped at weak (the recall hook then shows titles only). The fix is `vaultmind index --embed`.
+
 A note that closed a recorded gap adds `answers_gap` (`question`, `opened_at`, `closed_at`) on the delivered target and on a context item whose body was delivered. It is absent when that note was already shown. A draft or a gap never carries it. The text form adds one line under that note: `↳ answers a question first investigated 2026-10-14: "<question>"`. `--pointers-only` omits the line. `schema_version` stays `v1`.
 
 #### `--excerpt N` — get the passage that matters when the whole note will not fit
@@ -60,16 +66,17 @@ common case, not the edge case.
 vaultmind ask "spreading activation" --vault <path> --budget 4000 --excerpt 120
 ```
 
-With `--excerpt N` such a note contributes at most N tokens instead of zero. It prefers
+With `--excerpt N` such a note contributes an excerpt instead of zero tokens. The
+usual cap is N tokens; the top note can use 2 × N when dense paragraphs are added. It prefers
 the note's **Principle** section where one exists, falling back to opening prose. That
 default is deliberate: arcs are written trigger → push → deeper sight → principle, so the
 opening is story setup and the decision rule sits several sections down. Injecting "the
 first paragraph" hands you the anecdote and withholds the lesson.
 
-For `ask`'s target note without a Principle section, a passage matching the question
+For `ask`'s target note without a Principle section or usable passage vectors, a lexical passage matching the question
 replaces the first block only when it scores at least twice as highly; a positive match
 wins when the first block scores zero. Context-note excerpts keep their existing behavior,
-and every excerpt stays within the same token cap. A selected later passage includes
+and lexical excerpts stay within the N-token cap. A selected later lexical passage includes
 its governing headings in document order, so warnings and deprecation notices travel with
 the answer. An H1 that repeats the note title is left out; the title is already shown.
 Headings count toward the cap; the passage is shortened to fit. Oversized
@@ -497,7 +504,7 @@ markers; `task check` fails if it drifts from the catalog. Everything outside th
 hand-written and stays.
 
 <!-- VAULTMIND:GENERATED:commands:START -->
-<!-- checksum:6c9a0dd6ac0795f422355a2c9273334e25b511b0da4f5bda15a92ec68f2fdd95 -->
+<!-- checksum:e62f04b39c9b1f5d621a8361019ee5e3ec5d431dcb3d4f3aed15fcced91437af -->
 # VaultMind Commands
 
 Every user-facing command, grouped by intent, with its when-to-use trigger.
@@ -576,6 +583,7 @@ Generated from the command tree — do not edit by hand (run `task generate:docs
 | `vaultmind identity sign` | Validate, canonicalize, and sign an entry via the keyless signer | you have a Contract-B entry to sign and want it validated, canonicalized, and signed by the keyless signer. |
 | `vaultmind identity sign-enrollment` | Self-sign an agent enrollment request via the keyless signer (Contract-B) | you are enrolling an agent and need to self-sign its enrollment request (proof-of-possession) before an admin adds the binding to the trust-root registry. |
 | `vaultmind identity sign-envelope` | Sign a chat message envelope via the keyless signer (Contract-B slice 5) | you have a chat MESSAGE envelope to sign so a receiving daemon can verify the signature and the signer's registry binding. |
+| `vaultmind identity sign-keeper` | Sign a keeper control request, read grant, or revocation via the keyless signer | you own a keeper and need to sign a control request, a read grant, or a revocation for its watchdog. |
 | `vaultmind identity sign-registry` | Sign a trust-root registry via the keyless signer (Contract-B) | you have a trust-root registry to sign so consumers can verify the root signature, anti-rollback epoch, and freshness at load. |
 | `vaultmind identity signer` | Run the keyless custody signer daemon (Contract-B) | you need to RUN the keyless custody signer daemon so the sign-* commands have a process to connect to. |
 | `vaultmind identity signer install` | Run the signer under launchd: start at login, restart if it dies (macOS) | your signer must survive logouts, reboots, and crashes — without it a dead signer fails every signed send until someone notices. |

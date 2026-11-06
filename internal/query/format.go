@@ -145,12 +145,16 @@ func formatAskWithOptions(result *AskResult, w io.Writer, opts formatOpts) error
 	// reflect the same epistemic posture without the agent having to
 	// remember to check.
 	//
-	// Exception: a vault below the calibration gate. There the low-confidence
-	// verdict is not a finding about the top hit, it is an artifact of judging a
-	// handful of notes against a floor calibrated for a large corpus — and a
-	// vault that small has no working-context budget worth protecting. Withhold
-	// the body there and a new user's first query, on the vault `init` just
-	// scaffolded for them, returns the right note and refuses to show it.
+	// Exception: a single vault below the calibration gate. There the
+	// low-confidence verdict is not a finding about the top hit, it is an
+	// artifact of judging a handful of notes against a floor calibrated for a
+	// large corpus — and a vault that small has no working-context budget worth
+	// protecting. Withhold the body there and a new user's first query, on the
+	// vault `init` just scaffolded for them, returns the right note and refuses
+	// to show it. A federated owner is not exempt when another vault in the
+	// ask is calibrated: that peer judged the same query, so this vault's
+	// own label stands. Two fresh vaults have no such peer, and the
+	// exemption stays.
 	// Same decision the telemetry records, from the same function — see
 	// AskResult.BodyDecision. Two copies of this rule would let the log claim a
 	// body was delivered on a render that withheld it.
@@ -234,9 +238,16 @@ func writeAskHeader(w io.Writer, result *AskResult, explain, bodyDelivered bool)
 			if result.floorUnmeasured {
 				why = ", and this embedding model has no measured default floor to judge against"
 			}
+			// The closing clause has to be true of the body that follows. A single
+			// small vault still shows the hit. A federated one is judged by its
+			// label, and a weak label withholds the text.
+			shown := "; showing the top hit anyway"
+			if !bodyDelivered {
+				shown = "; body suppressed; use --read N to override"
+			}
 			header += fmt.Sprintf(
-				"  [relevance: not yet measurable — %d notes is below the %d needed to calibrate this vault%s; showing the top hit anyway]",
-				result.VaultNoteCount, noisefloor.MinCalibNotes, why)
+				"  [relevance: not yet measurable — %d notes is below the %d needed to calibrate this vault%s%s]",
+				result.VaultNoteCount, noisefloor.MinCalibNotes, why, shown)
 			return emitAskHeader(w, header, result)
 		}
 		switch result.TopHitConfidence {
@@ -539,10 +550,23 @@ func writeContextTarget(w io.Writer, target *memory.ContextPackTarget, opts form
 		if _, err := fmt.Fprintf(w, "%s\n", indentBody(target.Body)); err != nil {
 			return err
 		}
+		if err := writeChangedOnDiskLine(w, target.ChangedOnDisk); err != nil {
+			return err
+		}
 	}
 	return writeGapCreditLine(w, target.AnswersGap, target.ShownBefore,
 		!opts.pointersOnly && !target.ShownBefore && target.Body != "",
 		knowledgeNote(target.Frontmatter))
+}
+
+// writeChangedOnDiskLine marks a delivered note whose file moved on after it
+// was indexed. Nothing is written for a current note.
+func writeChangedOnDiskLine(w io.Writer, changed bool) error {
+	if !changed {
+		return nil
+	}
+	_, err := fmt.Fprintf(w, "    %s\n", changedOnDiskNote)
+	return err
 }
 
 // writeContextItems emits one block per context-pack neighbor —
@@ -558,6 +582,9 @@ func writeContextItems(w io.Writer, items []memory.ContextItem, opts formatOpts)
 			// Shown as packed, like the target: the header counts these tokens
 			// as delivered, so the reader gets all of them.
 			if _, err := fmt.Fprintf(w, "%s\n", indentBody(item.Body)); err != nil {
+				return err
+			}
+			if err := writeChangedOnDiskLine(w, item.ChangedOnDisk); err != nil {
 				return err
 			}
 		}
@@ -790,6 +817,9 @@ func emitAskHeader(w io.Writer, header string, result *AskResult) error {
 		} else {
 			header += "\n" + line
 		}
+	}
+	if result.TopHitUnembedded {
+		header += "\n  [top hit has no embedding — relevance can't be judged; run vaultmind index --embed]"
 	}
 	if len(result.Federated) > 0 {
 		header += "\n" + strings.TrimRight(formatFederationBlock(result), "\n")

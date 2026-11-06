@@ -1,7 +1,9 @@
 package query
 
 import (
+	"context"
 	"math"
+	"slices"
 	"strings"
 
 	"github.com/peiman/vaultmind/internal/index"
@@ -12,6 +14,9 @@ import (
 type passageResult struct {
 	Text                  string
 	BestScore, FirstScore float64
+	// Start and End locate the window Text came from, in the comment-stripped
+	// body. Both are 0 when Text is still the packed excerpt.
+	Start, End int
 }
 
 func passageMarginWins(best, first, ratio float64) bool {
@@ -21,7 +26,8 @@ func passageMarginWins(best, first, ratio float64) bool {
 // selectPassage normalizes and tokenizes the body once. SQLite supplies the
 // keyword lane's actual unicode61 folding for each distinct token; windows reuse that
 // token stream and corpus frequencies without indexing individual windows.
-func selectPassage(db *index.DB, query, raw, today string, limit int, title string) (passageResult, error) {
+// skip, when set, drops the windows it reports true for before scoring.
+func selectPassage(db *index.DB, query, raw, today string, limit int, title string, skip func(string) bool) (passageResult, error) {
 	result := passageResult{Text: today}
 	raw = parser.StripHTMLComments(raw)
 	text, offsets := parser.StripForFTSOffsets(raw)
@@ -39,6 +45,9 @@ func selectPassage(db *index.DB, query, raw, today string, limit int, title stri
 		tokens[i] = passageToken{term: lex.body[ordinals[i]], start: offsets[b[0]], end: offsets[b[1]-1] + 1}
 	}
 	cs := passageWindows(raw, title, limit, tokens, lex.terms)
+	if skip != nil {
+		cs = slices.DeleteFunc(cs, func(w passageWindow) bool { return skip(raw[w.start:w.end]) })
+	}
 	if len(cs) == 0 {
 		return result, nil
 	}
@@ -108,6 +117,7 @@ func selectPassage(db *index.DB, query, raw, today string, limit int, title stri
 		start := strings.Index(raw, first)
 		if cs[best].start < start || cs[best].start >= start+len(first) {
 			result.Text = cs[best].deliver(raw, tokens, lex.terms)
+			result.Start, result.End = cs[best].start, cs[best].end
 		}
 	}
 	return result, nil
@@ -128,35 +138,71 @@ const (
 // applyPassageExcerpt changes only ask's already-excerpted target. Packing has
 // already reserved the context bodies, so a larger window must fit the budget
 // left after those reservations; it cannot evict or rewrite a neighbor.
-func applyPassageExcerpt(db *index.DB, cfg AskConfig, pack *memory.ContextPackResult) error {
+func applyPassageExcerpt(ctx context.Context, db *index.DB, cfg AskConfig, rankingQuery string, pack *memory.ContextPackResult) error {
+	if pack != nil && pack.Target != nil {
+		pack.Target.PassageSelector = "none"
+	}
 	if (cfg.PointersOnly && !cfg.JSONOutput) || cfg.ExcerptTokens <= 0 || pack == nil || pack.Target == nil || !pack.Target.BodyExcerpted {
 		return nil
 	}
 	target := pack.Target
-	var raw string
-	if err := db.QueryRow("SELECT COALESCE(body_raw, body_text, '') FROM notes WHERE id = ?", target.ID).Scan(&raw); err != nil {
-		return err
-	}
-	if memory.HasPrincipleSection(raw) {
-		return nil
-	}
-	limit := min(cfg.ExcerptTokens, cfg.Budget-pack.UsedTokens+memory.EstimateTokens(target.Body))
-	if limit <= 0 {
-		return nil
-	}
 	title, _ := target.Frontmatter["title"].(string)
-	selected, err := selectPassage(db, cfg.Query, raw, target.Body, limit, title)
+	note := passageNote{id: target.ID, title: title, packed: target.Body}
+	left := cfg.Budget - pack.UsedTokens + memory.EstimateTokens(target.Body)
+	best, selector, err := notePassage(ctx, db, cfg, rankingQuery, note, min(cfg.ExcerptTokens, left), min(2*cfg.ExcerptTokens, left))
+	target.PassageSelector = selector
 	if err != nil {
 		return err
-	}
-	best := selected.Text
-	if best == target.Body {
-		best = firstBlockHeadingExcerpt(raw, best, title, limit)
 	}
 	pack.UsedTokens += memory.EstimateTokens(best) - memory.EstimateTokens(target.Body)
 	target.Body = best
 	return nil
 }
+
+// passageNote is one packed note the selector may re-excerpt: its id, its
+// title, and the excerpt the packer chose for it.
+type passageNote struct {
+	id, title, packed string
+}
+
+// notePassage is #330's selection for one note. limit bounds the lexical
+// pick; total bounds the pick plus the dense blocks added after it. It returns
+// the text to deliver and the selector that chose it. On "none", "principle"
+// or an error the packed excerpt comes back unchanged.
+func notePassage(ctx context.Context, db *index.DB, cfg AskConfig, rankingQuery string, note passageNote, limit, total int) (string, string, error) {
+	var raw string
+	if err := db.QueryRow("SELECT COALESCE(body_raw, body_text, '') FROM notes WHERE id = ?", note.id).Scan(&raw); err != nil {
+		return note.packed, "none", err
+	}
+	if memory.HasPrincipleSection(raw) {
+		return note.packed, "principle", nil
+	}
+	if limit <= 0 {
+		return note.packed, "none", nil
+	}
+	selected, err := selectPassage(db, cfg.Query, raw, note.packed, limit, note.title, nil)
+	if err != nil {
+		return note.packed, "lexical", err
+	}
+	best := selected.Text
+	if best == note.packed {
+		best = firstBlockHeadingExcerpt(raw, best, note.title, limit)
+	}
+	// The lexical pick answers exact terms and has first claim on the budget;
+	// dense blocks answer paraphrases in whatever room is left.
+	separator := ""
+	if best != "" {
+		separator = passageGap
+	}
+	allowance := total - memory.EstimateTokens(best+separator)
+	if dense := selectDensePassages(ctx, db, cfg, note.id, rankingQuery, raw, note.title, best, allowance); dense != "" {
+		return best + separator + dense, "dense", nil
+	}
+	return best, "lexical", nil
+}
+
+// passageGap joins delivered text that is not adjacent in the note.
+const passageGap = "\n…\n"
 
 // firstBlockHeadingTokens bounds the nearest heading on a kept first block.
 // Sixteen tokens is at most a tenth of the 160-token excerpt, so a warning
@@ -208,43 +254,6 @@ func nearestGoverningHeading(path, title string) string {
 		return ""
 	}
 	return strings.Join(lines[start:], "\n")
-}
-
-// h1RepeatsTitle reports whether a level-1 heading is the note title. The
-// title is already shown on the note. A setext underline, a closing hash run,
-// case, and runs of spaces do not make it a different title.
-func h1RepeatsTitle(label, title string) bool {
-	if strings.TrimSpace(title) == "" {
-		return false
-	}
-	return sameTitle(headingPlain(label), title)
-}
-
-// headingPlain is one stored heading's visible text: no ATX marker, no
-// closing hash run, and no setext underline.
-func headingPlain(label string) string {
-	line, _, _ := strings.Cut(label, "\n")
-	text := strings.TrimSpace(strings.TrimLeft(line, "#"))
-	if i := strings.LastIndex(text, " "); i >= 0 {
-		tail := strings.TrimSpace(text[i+1:])
-		if tail != "" && strings.Trim(tail, "#") == "" {
-			text = strings.TrimSpace(text[:i])
-		}
-	}
-	return text
-}
-
-func sameTitle(a, b string) bool {
-	af, bf := strings.Fields(a), strings.Fields(b)
-	if len(af) != len(bf) || len(af) == 0 {
-		return false
-	}
-	for i := range af {
-		if !strings.EqualFold(af[i], bf[i]) {
-			return false
-		}
-	}
-	return true
 }
 
 // capHeadingTokens cuts a heading at a word boundary and marks the cut.

@@ -1,6 +1,7 @@
 package index
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -22,6 +23,27 @@ type noteText struct {
 	path  string
 	title string
 	body  string
+}
+
+func loadPendingNoteTexts(ctx context.Context, db *DB, query string, result *EmbedResult) ([]noteText, error) {
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("querying unembedded notes: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var pending []noteText
+	for rows.Next() {
+		var nt noteText
+		if err := rows.Scan(&nt.id, &nt.path, &nt.title, &nt.body); err != nil {
+			return nil, fmt.Errorf("scanning unembedded note: %w", err)
+		}
+		if skipEmptyEmbed(ctx, nt.id, nt.path, nt.body) {
+			result.Skipped++
+			continue
+		}
+		pending = append(pending, nt)
+	}
+	return pending, rows.Err()
 }
 
 func noteIDs(batch []noteText) []string {

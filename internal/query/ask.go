@@ -131,6 +131,12 @@ type AskResult struct {
 	// a "weak" top hit often means the best available correct match, not
 	// "irrelevant". The formatter renders a one-line hint when it's set.
 	LowContrastVault bool `json:"low_contrast_vault,omitempty"`
+	// TopHitUnembedded is true when a noise floor was requested and similarities
+	// were computed, but the top hit has no stored embedding, so its cosine
+	// cannot be read. The RRF-gap label is then capped at weak: that gap
+	// measures separation from the next hit, not relevance, and a note added
+	// since the last index --embed would otherwise read as strong.
+	TopHitUnembedded bool `json:"top_hit_unembedded,omitempty"`
 	// VaultNoteCount is how many notes the vault holds, used to decide whether a
 	// relevance judgement is meaningful at all. Below noisefloor.MinCalibNotes
 	// the floor is a shipped default calibrated for a large corpus, so a "weak"
@@ -155,6 +161,13 @@ type AskResult struct {
 	// FederatedVaults reports every vault that was SEARCHED and what its own
 	// floor said, so a reader can tell an empty vault from an unsearched one.
 	FederatedVaults []FederatedVaultStatus `json:"federated_vaults,omitempty"`
+	// CalibratedPeer is true when a vault other than the owner has at least
+	// noisefloor.MinCalibNotes notes and a noise-floor verdict. Set with
+	// Federated, before AskFromRank, from HasCalibratedPeer — the one place
+	// that rule is computed. BodyDecision drops the small-vault exemption
+	// only then. Two fresh vaults have no such peer, and the exemption stays.
+	// Not part of the JSON contract.
+	CalibratedPeer bool `json:"-"`
 	// QueryCapped is set only when a bound shortened ranking.
 	// Query itself stays the caller's original text.
 	QueryCapped *QueryCapped `json:"query_capped,omitempty"`
@@ -164,6 +177,9 @@ type AskResult struct {
 	// EmbedTextStale is true when stored dense vectors predate title embedding.
 	// Absent when current. schema_version stays v1.
 	EmbedTextStale bool `json:"embed_text_stale,omitempty"`
+	// StaleNotes counts delivered notes whose file changed on disk since they
+	// were indexed (see MarkChangedOnDisk). Absent when none did.
+	StaleNotes int `json:"stale_notes,omitempty"`
 	// rankingQuery is the text the forward pass embedded. The cosine uses it,
 	// so it stays the same string the dense lane embedded and the memo hits.
 	rankingQuery string
@@ -176,6 +192,23 @@ type AskResult struct {
 // cannot drift apart.
 func (r *AskResult) tooSmallToJudge() bool {
 	return r.NoiseFloorApplied && r.VaultNoteCount > 0 && r.VaultNoteCount < noisefloor.MinCalibNotes
+}
+
+// HasCalibratedPeer reports whether a vault other than owner can judge the
+// query. That takes both halves of the same gate tooSmallToJudge uses: at
+// least noisefloor.MinCalibNotes notes, and a noise-floor verdict. An empty
+// verdict is unmeasured (no embedder), not a judgement. The owner's own size
+// is not a peer.
+func HasCalibratedPeer(owner string, noteCounts map[string]int, verdicts map[string]string) bool {
+	for name, n := range noteCounts {
+		if name == owner {
+			continue
+		}
+		if n >= noisefloor.MinCalibNotes && verdicts[name] != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // withholdsRelevanceJudgement is the header's rule for not quoting a band.
@@ -436,13 +469,18 @@ func applyTopHitRelevance(ctx context.Context, result *AskResult, db *index.DB, 
 				result.VaultNoteCount = n
 			}
 		} else {
-			// Caller wanted honest noise-floor labeling but the top hit has no
-			// cosine in the similarities map (keyword-only hit, or similarity
-			// computation skipped above). We silently keep the RRF-gap fallback
-			// label — leave a breadcrumb so this degradation is diagnosable
-			// rather than invisible.
+			// The top hit has no stored embedding, so the floor cannot judge
+			// it. The RRF gap only measures separation from the next hit; a
+			// lone keyword hit separates well and would otherwise read strong.
+			// Cap that label at weak. A label that is already weak or no_match
+			// stays as it is — never raise one.
 			log.Debug().Str("top_hit_id", hits[0].ID).
-				Msg("noise floor requested but top hit has no cosine; keeping RRF-gap confidence")
+				Msg("noise floor requested but top hit has no cosine; label capped at weak")
+			result.TopHitUnembedded = true
+			switch result.TopHitConfidence {
+			case ConfidenceStrong, ConfidenceModerate:
+				result.TopHitConfidence = ConfidenceWeak
+			}
 		}
 	}
 }
@@ -528,6 +566,7 @@ func deliverAsk(ctx context.Context, resolver *graph.Resolver, db *index.DB, cfg
 		Slim:             true,
 		ActivationScores: activationScores,
 		ExcerptTokens:    cfg.ExcerptTokens,
+		OverflowExcerpt:  overflowPassage(ctx, db, cfg, result.rankingQuery),
 		Seeds:            relevantLaterHits(hits, result),
 		IncludeDrafts:    cfg.IncludeDrafts,
 	})
@@ -536,7 +575,7 @@ func deliverAsk(ctx context.Context, resolver *graph.Resolver, db *index.DB, cfg
 		return result, nil
 	}
 
-	if excerptErr := applyPassageExcerpt(db, cfg, packResult); excerptErr != nil {
+	if excerptErr := applyPassageExcerpt(ctx, db, cfg, result.rankingQuery, packResult); excerptErr != nil {
 		log.Debug().Err(excerptErr).Str("note_id", hits[0].ID).Msg("passage selection unavailable; keeping original excerpt")
 	}
 
@@ -598,6 +637,7 @@ func markShownBefore(pack *memory.ContextPackResult, shown map[string]bool) {
 	if t := pack.Target; t != nil && shown[pack.TargetID] {
 		pack.UsedTokens -= memory.EstimateTokens(t.Body)
 		t.Body, t.BodyExcerpted, t.ShownBefore = "", false, true
+		t.PassageSelector = "none"
 	}
 	for i := range pack.Context {
 		item := &pack.Context[i]
@@ -606,6 +646,7 @@ func markShownBefore(pack *memory.ContextPackResult, shown map[string]bool) {
 		}
 		pack.UsedTokens -= memory.EstimateTokens(item.Body)
 		item.Body, item.BodyIncluded, item.BodyExcerpted, item.ShownBefore = "", false, false, true
+		item.PassageSelector = ""
 	}
 }
 

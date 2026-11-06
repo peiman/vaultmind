@@ -63,14 +63,14 @@ func startKillableWatcher(t *testing.T, d *watchDaemon) (*exec.Cmd, string) {
 case "$*" in
  'identity paths')
   printf "VM_MESH_SLUG='mesh-watch-test'\nVM_MESH_SELF='agent:mesh-watch-test'\nVM_MESH_OPERATOR=''\nVM_MESH_DAEMON='%s'\nVM_MESH_REGISTRY_DAYS_LEFT=''\n" "$VM_TEST_DAEMON"
-  for key in PID LISTEN DISARM HEARTBEAT LASTARM LASTWAKE; do printf 'VM_MESH_%s=%q\n' "$key" "$VM_TEST_ROOT/$key"; done ;;
+  for key in PID LISTEN DISARM HEARTBEAT LASTARM LASTWAKE CURSOR; do printf 'VM_MESH_%s=%q\n' "$key" "$VM_TEST_ROOT/$key"; done ;;
  'identity fetch-registry') exit 0 ;;
  *) exit 1 ;;
 esac
 `)
 	var out bytes.Buffer
 	c := exec.Command("bash", script)
-	c.Env = []string{"PATH=" + bin + ":" + os.Getenv("PATH"), "HOME=" + t.TempDir(), "TMPDIR=" + t.TempDir(), "AGENT_CHAT_PROJECT_PATH=" + dir, "VM_TEST_ROOT=" + dir, "VM_TEST_DAEMON=" + server.URL, "MESH_WAIT_SECS=2", "MESH_WATCH_MAX_WALL_SECS=120"}
+	c.Env = []string{"PATH=" + bin + ":" + os.Getenv("PATH"), "HOME=" + t.TempDir(), "TMPDIR=" + t.TempDir(), "AGENT_CHAT_PROJECT_PATH=" + dir, "VM_TEST_ROOT=" + dir, "VM_TEST_DAEMON=" + server.URL, "MESH_VENDOR_PROBE_URL=" + server.URL, "MESH_WAIT_SECS=2", "MESH_WATCH_MAX_WALL_SECS=120"}
 	c.Stdout, c.Stderr = &out, &out
 	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	require.NoError(t, c.Start())
@@ -92,4 +92,12 @@ func killAndRequireNoSurvivors(t *testing.T, c *exec.Cmd, what string) {
 	case <-time.After(20 * time.Second):
 		t.Fatalf("%s outlived the watcher: 20 s after SIGKILL its output was still held open", what)
 	}
+}
+
+func stopWatchProcessGroup(pid int) error {
+	return syscall.Kill(-pid, syscall.SIGSTOP)
+}
+
+func continueWatchProcessGroup(pid int) error {
+	return syscall.Kill(-pid, syscall.SIGCONT)
 }

@@ -57,6 +57,7 @@ func TestViperKeyToFlagName(t *testing.T) {
 
 // TestBindFlags_FunctionExists tests that the bindFlags function exists and can be called
 func TestBindFlags_FunctionExists(t *testing.T) {
+	cleanupCLIState(t)
 	// Reset viper state
 	viper.Reset()
 
@@ -68,6 +69,7 @@ func TestBindFlags_FunctionExists(t *testing.T) {
 
 // TestFlagBindings_RegistryDriven validates all flags from the config registry
 func TestFlagBindings_RegistryDriven(t *testing.T) {
+	cleanupCLIState(t)
 	// SETUP PHASE
 	viper.Reset()
 
@@ -161,6 +163,7 @@ func verifyDefaultValue(t *testing.T, opt config.ConfigOption, flagName string) 
 
 // TestBindFlags_AllFlagsHaveViperBinding tests that all persistent flags have viper bindings
 func TestBindFlags_AllFlagsHaveViperBinding(t *testing.T) {
+	cleanupCLIState(t)
 	// SETUP
 	viper.Reset()
 
@@ -195,6 +198,7 @@ func TestBindFlags_AllFlagsHaveViperBinding(t *testing.T) {
 
 // TestBindFlags_ErrorCollection tests that bindFlags properly collects multiple errors
 func TestBindFlags_ErrorCollection(t *testing.T) {
+	cleanupCLIState(t)
 	// Test that bindFlags collects and returns errors when flag bindings fail
 	// This happens when flags don't exist (Lookup returns nil)
 
@@ -226,6 +230,7 @@ func TestBindFlags_ErrorCollection(t *testing.T) {
 
 // TestBindFlags_Integration tests the full flag binding flow
 func TestBindFlags_Integration(t *testing.T) {
+	cleanupCLIState(t)
 	// SETUP
 	viper.Reset()
 
@@ -272,6 +277,7 @@ func TestBindFlags_Integration(t *testing.T) {
 // cmd.PersistentFlags() instead of cmd.Root().PersistentFlags(), causing all subcommands
 // to fail with "flag for X is nil" errors.
 func TestBindFlags_FromSubcommand(t *testing.T) {
+	cleanupCLIState(t)
 	// SETUP
 	viper.Reset()
 

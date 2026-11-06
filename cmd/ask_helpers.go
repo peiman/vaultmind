@@ -19,7 +19,9 @@ import (
 
 // noteAskFormatStale records the sparse and title stamps on an ask result.
 // A failed read leaves the field unset and is logged, the same as before.
-func noteAskFormatStale(result *query.AskResult, db *index.DB) {
+// It also marks delivered notes whose files changed since they were indexed.
+func noteAskFormatStale(result *query.AskResult, db *index.DB, vaultPath string) {
+	query.MarkChangedOnDisk(result, db, vaultPath)
 	if stale, serr := index.SparseFormatStale(db); serr != nil {
 		log.Debug().Err(serr).Msg("sparse format check failed")
 	} else {

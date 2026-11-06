@@ -23,6 +23,7 @@ import (
 // The bridge is one place because 37 of the 38 JSON call sites already funnel
 // through getConfigValueWithFlags(cmd, "json", ...).
 func TestOutputFormatJSON_IsHonouredByTheJSONFlagLookup(t *testing.T) {
+	cleanupCLIState(t)
 	t.Cleanup(func() { output.SetOutputMode("text") })
 
 	cmd := MustNewCommand(commands.DoctorMetadata, func(*cobra.Command, []string) error { return nil })
@@ -37,6 +38,7 @@ func TestOutputFormatJSON_IsHonouredByTheJSONFlagLookup(t *testing.T) {
 
 // Text mode must stay text — the bridge must not force JSON on everyone.
 func TestOutputFormatText_LeavesTheJSONFlagAlone(t *testing.T) {
+	cleanupCLIState(t)
 	t.Cleanup(func() { output.SetOutputMode("text") })
 	output.SetOutputMode("text")
 
@@ -48,6 +50,7 @@ func TestOutputFormatText_LeavesTheJSONFlagAlone(t *testing.T) {
 
 // The bridge is scoped to the json flag only — it must not alter other bools.
 func TestOutputFormatJSON_DoesNotAffectOtherBoolFlags(t *testing.T) {
+	cleanupCLIState(t)
 	t.Cleanup(func() { output.SetOutputMode("text") })
 	output.SetOutputMode("json")
 
