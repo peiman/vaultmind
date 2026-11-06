@@ -32,10 +32,8 @@ fi
 # Create output directory
 mkdir -p "$OUTPUT_DIR"
 
-# go-licenses tells the standard library apart by GOROOT, and without one it
-# uses the GOROOT of the Go that built it. When go.mod's toolchain line is newer
-# than that Go, `go` runs a downloaded toolchain and every standard package reads
-# as "does not have module info" (ckeletin-go#176). Hand it the GOROOT `go` uses.
+# go-licenses classifies the standard library by the GOROOT of the Go that
+# built it. This module may select a newer toolchain. Hand that GOROOT over.
 GOROOT="$(go env GOROOT)"
 export GOROOT
 
