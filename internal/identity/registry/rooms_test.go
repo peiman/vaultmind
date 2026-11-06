@@ -58,6 +58,8 @@ func TestRoomConstructors_RejectAndDoNotAlias(t *testing.T) {
 
 	_, err = NewRoom("room.control", "human:peiman", nil, nil)
 	require.ErrorContains(t, err, ErrMalformedRoom)
+	_, err = NewRoom("Ops.Control", "human:peiman", nil, nil)
+	require.ErrorContains(t, err, ErrMalformedRoom)
 	_, err = NewRoomMember("human:peiman", nil)
 	require.ErrorContains(t, err, ErrMalformedRoom)
 	_, err = NewDMPolicy("sometimes")
@@ -182,6 +184,7 @@ func TestVerifyAndLoad_RejectsRoomAndDMRules(t *testing.T) {
 		{name: "bad_room_name_chars", rooms: `[{"name":"bad name","controller":"human:peiman"}]`, err: ErrMalformedRoom},
 		{name: "room_name_too_long", rooms: `[{"name":"` + longName + `","controller":"human:peiman"}]`, err: ErrMalformedRoom},
 		{name: "room_name_control_suffix", rooms: `[{"name":"room.control","controller":"human:peiman"}]`, err: ErrMalformedRoom},
+		{name: "room_name_control_suffix_case_variant", rooms: `[{"name":"Ops.Control","controller":"human:peiman"}]`, err: ErrMalformedRoom},
 		{name: "duplicate_room_name", rooms: `[{"name":"product-control","controller":"human:peiman"},{"name":"product-control","controller":"agent:mira"}]`, err: ErrMalformedRoom},
 		{name: "case_fold_duplicate_room_name", rooms: `[{"name":"Product-Control","controller":"human:peiman"},{"name":"product-control","controller":"agent:mira"}]`, err: ErrMalformedRoom},
 		{name: "controller_kind_daemon", rooms: `[{"name":"ops","controller":"daemon:eu-1"}]`, err: ErrMalformedRoom},
@@ -238,7 +241,7 @@ func TestParseRooms_BoundsAndShapes(t *testing.T) {
 	assert.Equal(t, name, rooms[0].Name())
 
 	_, err = ParseRooms([]byte(`[{"name":"Room.Control","controller":"human:peiman"}]`))
-	require.NoError(t, err)
+	require.ErrorContains(t, err, ErrMalformedRoom)
 
 	_, err = ParseRooms([]byte(`[{"name":"ops","controller":"human:peiman","members":[{"principal":"human:Peiman","access":["read"]}]}]`))
 	require.NoError(t, err)

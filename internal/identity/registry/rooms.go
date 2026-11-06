@@ -132,11 +132,11 @@ type Room struct {
 }
 
 // NewRoom returns a room. name follows validate_routing_name and must not end
-// with ".control". controller follows the member principal rule. members is
-// optional, at most 256, unique by principal, and no member equals the
-// controller. approval is optional, at most 32, unique, each matching
-// ^[a-z][a-z0-9_-]{0,31}$. List order is preserved. Uniqueness of room names
-// across a registry is ParseRooms' job.
+// with ".control" after ASCII case-folding. controller follows the member
+// principal rule. members is optional, at most 256, unique by principal, and
+// no member equals the controller. approval is optional, at most 32, unique,
+// each matching ^[a-z][a-z0-9_-]{0,31}$. List order is preserved. Uniqueness
+// of room names across a registry is ParseRooms' job.
 func NewRoom(name, controller string, members []RoomMember, approval []string) (Room, error) {
 	if err := validateOneRoom(name, controller, members, approval); err != nil {
 		return Room{}, err
@@ -530,7 +530,8 @@ func validRoutingName(s string) error {
 	if !asciiAlnum(s[0]) || !routingBytes(s) {
 		return fmt.Errorf("%s: room name has an invalid character", ErrMalformedRoom)
 	}
-	if strings.HasSuffix(s, roomNameForbiddenSuffix) {
+	// Same ASCII fold as room-name uniqueness: "Ops.Control" is ".control".
+	if strings.HasSuffix(asciiFold(s), roomNameForbiddenSuffix) {
 		return fmt.Errorf("%s: room name ends with .control", ErrMalformedRoom)
 	}
 	return nil

@@ -76,6 +76,16 @@
       }
     },
     {
+      "name": "room_name_control_suffix_case_variant",
+      "reason": "room name ends with .control after ASCII case-folding",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiS2VlcGVyIiwia2V5X2Vwb2NoIjoxLCJwdWJrZXkiOiJRZWo5NFRLdFp3NVRUTml5ZGRMTmZ1eDNjenhtK050SW9jcmFmNnY4UlZVPSIsInNsdWciOiJrZWVwZXIiLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJlcG9jaCI6MTAsInJvb21zIjpbeyJjb250cm9sbGVyIjoiaHVtYW46cGVpbWFuIiwibmFtZSI6Ik9wcy5Db250cm9sIn1dLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH0=",
+        "root_key_epoch": 0,
+        "root_sig": "H1HoeYM1/+QrsWHoUrir3uh9mLtxBVFYUUruNwW18Ek/sE2teShDLtz3nve53j3mdp8FxZd9LPaRpFrHa19ZBg=="
+      }
+    },
+    {
       "name": "duplicate_room_name",
       "reason": "two rooms share a name byte for byte",
       "expect": "reject",
