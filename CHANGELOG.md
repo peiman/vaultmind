@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `identity sign-registry` can sign agent roles (`bridge`, `code_signing`) on a registry binding. A registry with no roles is unchanged, so registries already signed still verify. A verifier that predates roles rejects a registry that carries them, so do not sign roles until every verifier that must accept the registry parses them.
+
 ### Fixed
 
 - The macOS ORT release build now runs on the macos-15 runner, after GitHub stopped serving macos-14. The binary still runs on macOS 14: the minimum is pinned to 14.0 and checked in CI.
