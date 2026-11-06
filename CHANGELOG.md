@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The ckeletin-go framework is updated from 0.2.4 to 0.2.10. This changes development checks only, not the `vaultmind` CLI: the license check uses this module's Go toolchain, `task check` refuses `mkdir` used as a lock, regenerated config key constants no longer need a framework changelog entry, and the framework update notice works on Windows.
+
 ### Fixed
 
 - The macOS ORT release build now runs on the macos-15 runner, after GitHub stopped serving macos-14. The binary still runs on macOS 14: the minimum is pinned to 14.0 and checked in CI.

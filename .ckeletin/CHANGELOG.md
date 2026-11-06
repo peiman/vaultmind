@@ -7,15 +7,46 @@ Only framework changes are tracked here — project-level changes belong in the 
 
 ## [Unreleased]
 
+## [0.2.10] - 2026-11-06
+
 ### Fixed
 
-- Regenerated config key comments describe checkout-local git exclusion for hook scripts and the profile file, and its removal during local uninstall.
-- **The license scripts give go-licenses the GOROOT that `go` uses.** When `go.mod`'s toolchain is newer than the Go that built go-licenses, `go` runs a downloaded toolchain and every standard package used to read as "does not have module info". `check-licenses-source.sh` and `generate-license-report.sh` now export `GOROOT="$(go env GOROOT)"` before calling go-licenses (ckeletin-go#176).
+- **`mkdir -p` followed by `|| return` or `|| exit` is not a lock.** `mkdir -p` succeeds when the directory already exists, so that failure is not another holder. `--parents` and a short cluster such as `-pm` are the same, including inside `if` or `until`. `mkdir "$LOCK" || exit` and `if mkdir "$LOCK"` are still locks. `mkdir -p` of a path named like a lock is still flagged.
+
+## [0.2.9] - 2026-11-04
+
+### Fixed
+
+- **The license check uses this module's Go toolchain.** `go-licenses` classifies the standard library by the `GOROOT` of the Go that built the tool. When `go.mod` selects a newer toolchain, every standard-library package was reported as having no module info. The source check and the license report now export `GOROOT` from `go env GOROOT` before they run the tool.
+- **A deprecated GoReleaser config is not called invalid.** GoReleaser v2.15 exits 1 when the config is valid and uses deprecated properties. The drift check reports that as deprecated. A real validation failure is still invalid.
+- **The update-check stamp is not a framework change.** `.ckeletin/cache/` is gitignored. The changelog gate ignores it too, so a tracked `.ckeletin/cache/.last-update-check` rewritten by `task check` does not demand a changelog edit. Any other change under `.ckeletin/` still does.
+
+## [0.2.8] - 2026-10-28
 
 ### Added
 
-- Config key constants for `identity sign-keeper`: `app.identitysignkeeper.file`, `app.identitysignkeeper.signer_socket`, and `app.identitysignkeeper.stamp`.
-- **Config key constants for `note pinned`.** Regenerated `keys_generated.go` now has `app.notepinned.vault`, `app.notepinned.vaults`, `app.notepinned.json`, `app.notepinned.budget`, and `app.notepinned.excerpt`.
+- **A check for mkdir used as a lock.** `task check` fails when a tracked shell script, Taskfile, or GitHub workflow takes a lock with `mkdir`. On ubuntu-26.04 two of those calls can both succeed. The exclusive form is noclobber: `( set -C; printf '%s\n' "$$" > "$LOCK" ) 2>/dev/null`. `mkdir -p` of a directory still passes.
+- **`task test:scaffold` allows 40 minutes.** Those tests run two nested `task check`s. Go's 10 minute default stops the package while the second check is still running. The task still exits when the tests finish.
+
+## [0.2.7] - 2026-10-25
+
+### Fixed
+
+- **The update notice can read the upstream version on Windows.** Git Bash rewrites a `git show` argument shaped like `remote/branch:path`, so the notice never saw `.ckeletin/VERSION` and stayed silent. The check resolves the commit, then reads the version from that commit id.
+
+## [0.2.6] - 2026-10-24
+
+### Fixed
+
+- **A CRLF checkout is not a local framework edit.** The update guard compares text after stripping carriage returns. A Windows checkout that only differs by line endings no longer stops `task ckeletin:update`. A real content change still stops it.
+- **The update notice fetches on Windows.** `timeout.exe` is not GNU `timeout`. Wrapping `git fetch` in it skipped the fetch, so the notice stayed silent and the JSON check reported no latest version. The fetch uses GNU `timeout` or `gtimeout` only.
+
+## [0.2.5] - 2026-10-23
+
+### Fixed
+
+- **A derived project can add a config key without a framework changelog edit.** `.ckeletin/pkg/config/keys_generated.go` is regenerated from that project's registry. The changelog gate ignores that file. Any other change under `.ckeletin/` still needs a changelog edit. Docs under `.ckeletin/docs/` stay exempt.
+- **Conformance evidence cannot hardcode the requirement count.** `task conform` rejects `all <digits> requirement` in mapping evidence even when the number matches the mapped total. The completeness line is the count. A matching sentence is what went stale when the spec gained a requirement.
 
 ## [0.2.4] - 2026-10-17
 
