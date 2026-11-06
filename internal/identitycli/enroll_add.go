@@ -454,6 +454,8 @@ func appendAndBump(reg registry.Registry, binding registry.AgentBinding, validit
 		ValidFrom:  now,
 		ValidUntil: now + validity,
 		Agents:     agents,
+		Rooms:      reg.Rooms,
+		DMs:        reg.DMs,
 	}, nil
 }
 
@@ -513,6 +515,14 @@ func ephemeralSignKey() ed25519.PrivateKey {
 // toWireRegistry converts a registry.Registry into the wireRegistry shape that
 // sign-registry reads (the SAME struct decodeWireRegistry/buildRegistry use).
 func toWireRegistry(reg registry.Registry) (wireRegistry, error) {
+	rooms, err := registry.MarshalRooms(reg.Rooms)
+	if err != nil {
+		return wireRegistry{}, err
+	}
+	dms, err := registry.MarshalDMPolicy(reg.DMs)
+	if err != nil {
+		return wireRegistry{}, err
+	}
 	agents := make([]wireBinding, len(reg.Agents))
 	for i, a := range reg.Agents {
 		roles, err := registry.MarshalRoles(a.Roles)
@@ -533,7 +543,9 @@ func toWireRegistry(reg registry.Registry) (wireRegistry, error) {
 	}
 	return wireRegistry{
 		Agents:     agents,
+		DMs:        dms,
 		Epoch:      int64(reg.Epoch),
+		Rooms:      rooms,
 		ValidFrom:  reg.ValidFrom,
 		ValidUntil: reg.ValidUntil,
 	}, nil

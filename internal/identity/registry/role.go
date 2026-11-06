@@ -12,7 +12,8 @@ import (
 // unknown kind, a missing variant field, an extra field, a roles value that is
 // not an array, or a parameter list that is not an array of strings all fail
 // closed with this error. An empty vouches_for or platforms list is valid and
-// grants nothing; it is not this error.
+// grants nothing; it is not this error. An admin role is {"kind":"admin"} and
+// any extra field is this error.
 const ErrMalformedRole = "registry: malformed agent role"
 
 // RoleKind is the wire discriminant of a root-granted agent role.
@@ -23,16 +24,18 @@ const (
 	RoleKindBridge RoleKind = "bridge"
 	// RoleKindCodeSigning is a code-signing role: it may sign for the platforms list.
 	RoleKindCodeSigning RoleKind = "code_signing"
+	// RoleKindAdmin is an admin role. It carries no parameter list.
+	RoleKindAdmin RoleKind = "admin"
 )
 
 // Role is one root-granted agent capability.
 //
-// The kind and its parameter list are unexported. NewBridgeRole and
-// NewCodeSigningRole are the only constructors, so another package cannot build
-// a third kind or a role that carries the other variant's parameters. The zero
-// Role is not a role; signing it returns ErrMalformedRole. Wire-level rejects
-// (unknown kind, missing field, extra field) are ParseRoles' job, because those
-// states exist only in JSON.
+// The kind and its parameter list are unexported. NewBridgeRole,
+// NewCodeSigningRole, and NewAdminRole are the only constructors, so another
+// package cannot build a fourth kind or a role that carries another variant's
+// parameters. The zero Role is not a role; signing it returns ErrMalformedRole.
+// Wire-level rejects (unknown kind, missing field, extra field) are ParseRoles'
+// job, because those states exist only in JSON.
 //
 // An empty parameter list is a real role that grants nothing. Constructors store
 // nil as an empty slice so the wire form is [] and never null.
@@ -50,6 +53,11 @@ func NewBridgeRole(vouchesFor []string) Role {
 // NewCodeSigningRole returns a code-signing role. An empty or nil platforms grants nothing.
 func NewCodeSigningRole(platforms []string) Role {
 	return Role{kind: RoleKindCodeSigning, platforms: cloneStrings(platforms)}
+}
+
+// NewAdminRole returns an admin role. It has no parameter list.
+func NewAdminRole() Role {
+	return Role{kind: RoleKindAdmin}
 }
 
 // Kind returns the role discriminant. It is empty for the zero Role.
@@ -76,15 +84,18 @@ func (r Role) Platforms() []string {
 	return cloneStrings(r.platforms)
 }
 
-// wellFormed reports whether r is one of the two variants and carries only that
-// variant's parameter list. A same-package composite literal can still break
-// this; signing refuses it rather than emitting a role the verifier must reject.
+// wellFormed reports whether r is one of the three variants and carries only
+// that variant's parameter list. Admin carries none. A same-package composite
+// literal can still break this; signing refuses it rather than emitting a role
+// the verifier must reject.
 func (r Role) wellFormed() bool {
 	switch r.kind {
 	case RoleKindBridge:
 		return len(r.platforms) == 0
 	case RoleKindCodeSigning:
 		return len(r.vouchesFor) == 0
+	case RoleKindAdmin:
+		return len(r.vouchesFor) == 0 && len(r.platforms) == 0
 	default:
 		return false
 	}
@@ -117,6 +128,10 @@ type codeSigningWire struct {
 	Platforms []string `json:"platforms"`
 }
 
+type adminWire struct {
+	Kind string `json:"kind"`
+}
+
 func marshalRole(role Role) ([]byte, error) {
 	if !role.wellFormed() {
 		return nil, fmt.Errorf("%s", ErrMalformedRole)
@@ -126,6 +141,8 @@ func marshalRole(role Role) ([]byte, error) {
 		return json.Marshal(bridgeWire{Kind: string(RoleKindBridge), VouchesFor: stringListOrEmpty(role.vouchesFor)})
 	case RoleKindCodeSigning:
 		return json.Marshal(codeSigningWire{Kind: string(RoleKindCodeSigning), Platforms: stringListOrEmpty(role.platforms)})
+	case RoleKindAdmin:
+		return json.Marshal(adminWire{Kind: string(RoleKindAdmin)})
 	default:
 		return nil, fmt.Errorf("%s", ErrMalformedRole)
 	}
@@ -246,6 +263,11 @@ func parseOneRole(raw json.RawMessage) (Role, error) {
 			return Role{}, err
 		}
 		return NewCodeSigningRole(list), nil
+	case RoleKindAdmin:
+		if len(obj.VouchesFor) != 0 || len(obj.Platforms) != 0 {
+			return Role{}, fmt.Errorf("%s: extra field on admin role", ErrMalformedRole)
+		}
+		return NewAdminRole(), nil
 	default:
 		return Role{}, fmt.Errorf("%s: unknown kind %q", ErrMalformedRole, obj.Kind)
 	}

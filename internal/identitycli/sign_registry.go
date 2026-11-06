@@ -25,7 +25,7 @@ const (
 	// negative (a pre-epoch revocation timestamp is nonsensical — fail closed).
 	ErrRegistryRevokedAtNegative = "identitycli: binding revoked_at must not be negative"
 	// ErrRegistryMalformedRole is returned when a binding's roles value is not a
-	// list of bridge or code_signing roles. The schema is registry.ParseRoles:
+	// list of bridge, code_signing, or admin roles. The schema is registry.ParseRoles:
 	// unknown kind, missing or extra field, or a roles value that is not an array.
 	ErrRegistryMalformedRole = "identitycli: malformed agent role"
 )
@@ -56,10 +56,12 @@ type wireBinding struct {
 // UNSIGNED registry (NOT a SignedRegistry). epoch decodes as int64 for the same
 // platform-parity reason as the binding integers.
 type wireRegistry struct {
-	Agents     []wireBinding `json:"agents"`
-	Epoch      int64         `json:"epoch"`
-	ValidFrom  int64         `json:"valid_from"`
-	ValidUntil int64         `json:"valid_until"`
+	Agents     []wireBinding   `json:"agents"`
+	DMs        json.RawMessage `json:"dms,omitempty"`
+	Epoch      int64           `json:"epoch"`
+	Rooms      json.RawMessage `json:"rooms,omitempty"`
+	ValidFrom  int64           `json:"valid_from"`
+	ValidUntil int64           `json:"valid_until"`
 }
 
 // SignRegistry reads an UNSIGNED registry (the registry.Registry shape), signs
@@ -125,11 +127,21 @@ func buildRegistry(w wireRegistry) (registry.Registry, error) {
 		}
 		agents[i] = ab
 	}
+	rooms, err := registry.ParseRooms(w.Rooms)
+	if err != nil {
+		return registry.Registry{}, err
+	}
+	dms, err := registry.ParseDMPolicy(w.DMs)
+	if err != nil {
+		return registry.Registry{}, err
+	}
 	return registry.Registry{
 		Epoch:      int(w.Epoch),
 		ValidFrom:  w.ValidFrom,
 		ValidUntil: w.ValidUntil,
 		Agents:     agents,
+		Rooms:      rooms,
+		DMs:        dms,
 	}, nil
 }
 

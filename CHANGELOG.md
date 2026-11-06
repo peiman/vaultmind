@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `identity sign-registry` can sign agent roles (`bridge`, `code_signing`) on a registry binding. A registry with no roles is unchanged, so registries already signed still verify. A verifier that predates roles rejects a registry that carries them, so do not sign roles until every verifier that must accept the registry parses them.
+- `identity sign-registry` can sign room policy, DM policy and the admin role. A registry with neither rooms nor a DM policy is unchanged, so registries already signed still verify. A verifier that predates these fields rejects a registry that carries them, so do not sign them until every verifier that must accept the registry parses them.
 
 ### Fixed
 

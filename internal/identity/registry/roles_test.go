@@ -39,11 +39,28 @@ func rolesFreeRegistry(t *testing.T, roles []Role) Registry {
 }
 
 func TestCanonicalBytes_RolesFreeMatchesPreRolesGolden(t *testing.T) {
-	for _, roles := range [][]Role{nil, {}, {}} {
-		cb, err := canonicalBytes(rolesFreeRegistry(t, roles))
-		require.NoError(t, err)
-		assert.Equal(t, rolesFreeCanonicalHex, hex.EncodeToString(cb.Bytes()))
-		assert.NotContains(t, string(cb.Bytes()), "roles")
+	// Rooms and a DM policy are the P0b extension of this golden. Absent and
+	// empty must stay omitted, so the bytes stay the pre-rooms encoding.
+	policies := []struct {
+		rooms []Room
+		dms   DMPolicy
+	}{
+		{nil, DMPolicy{}},
+		{[]Room{}, DMPolicy{}},
+	}
+	for _, roles := range [][]Role{nil, {}} {
+		for _, p := range policies {
+			reg := rolesFreeRegistry(t, roles)
+			reg.Rooms = p.rooms
+			reg.DMs = p.dms
+			cb, err := canonicalBytes(reg)
+			require.NoError(t, err)
+			assert.Equal(t, rolesFreeCanonicalHex, hex.EncodeToString(cb.Bytes()))
+			body := string(cb.Bytes())
+			assert.NotContains(t, body, "roles")
+			assert.NotContains(t, body, `"rooms"`)
+			assert.NotContains(t, body, `"dms"`)
+		}
 	}
 }
 

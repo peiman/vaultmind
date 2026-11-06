@@ -129,9 +129,9 @@ type AgentBinding struct {
 	// live. A revoked binding never resolves or verifies.
 	RevokedAt *int
 	// Roles are the root-granted capabilities of this binding (bridge,
-	// code_signing). Nil and empty both mean the binding has no roles, and the
-	// canonical form then omits the roles key so a roles-free registry stays
-	// byte-identical to one signed before the field existed. Order is
+	// code_signing, admin). Nil and empty both mean the binding has no roles,
+	// and the canonical form then omits the roles key so a roles-free registry
+	// stays byte-identical to one signed before the field existed. Order is
 	// significant and is preserved. Class and VouchAllowlist are a different,
 	// not-yet-wired authority channel and are not these roles.
 	Roles []Role
@@ -167,6 +167,13 @@ type Registry struct {
 	ValidUntil int64
 	// Agents are the bindings.
 	Agents []AgentBinding
+	// Rooms is the root-signed room policy. Nil and empty both mean no rooms,
+	// and the canonical form then omits the rooms key. Order is the order signed.
+	Rooms []Room
+	// DMs is the root-signed DM policy. The zero value is absent, which means
+	// allow, and the canonical form omits the key. An explicit allow is present
+	// in the signed bytes.
+	DMs DMPolicy
 }
 
 // SignedRegistry is the distribution envelope: the JCS-canonical registry bytes,
@@ -201,16 +208,27 @@ type wireBinding struct {
 // field order here is for readability only; the canonical bytes are
 // Canonicalize's output.
 type wireRegistry struct {
-	Agents     []wireBinding `json:"agents"`
-	Epoch      int           `json:"epoch"`
-	ValidFrom  int64         `json:"valid_from"`
-	ValidUntil int64         `json:"valid_until"`
+	Agents     []wireBinding   `json:"agents"`
+	DMs        json.RawMessage `json:"dms,omitempty"`
+	Epoch      int             `json:"epoch"`
+	Rooms      json.RawMessage `json:"rooms,omitempty"`
+	ValidFrom  int64           `json:"valid_from"`
+	ValidUntil int64           `json:"valid_until"`
 }
 
 // toWire converts a Registry to its wire shape (base64 pubkeys). roles is
-// omitted when empty (see MarshalRoles). A role that is not one of the two
-// variants fails closed.
+// omitted when empty (see MarshalRoles). rooms and dms are omitted when
+// absent (see MarshalRooms, MarshalDMPolicy). A role or room that is not
+// well formed fails closed.
 func toWire(reg Registry) (wireRegistry, error) {
+	rooms, err := MarshalRooms(reg.Rooms)
+	if err != nil {
+		return wireRegistry{}, err
+	}
+	dms, err := MarshalDMPolicy(reg.DMs)
+	if err != nil {
+		return wireRegistry{}, err
+	}
 	agents := make([]wireBinding, len(reg.Agents))
 	for i, a := range reg.Agents {
 		roles, err := MarshalRoles(a.Roles)
@@ -231,7 +249,9 @@ func toWire(reg Registry) (wireRegistry, error) {
 	}
 	return wireRegistry{
 		Agents:     agents,
+		DMs:        dms,
 		Epoch:      reg.Epoch,
+		Rooms:      rooms,
 		ValidFrom:  reg.ValidFrom,
 		ValidUntil: reg.ValidUntil,
 	}, nil
@@ -263,11 +283,21 @@ func fromWire(w wireRegistry) (Registry, error) {
 			Roles:                   roles,
 		}
 	}
+	rooms, err := ParseRooms(w.Rooms)
+	if err != nil {
+		return Registry{}, err
+	}
+	dms, err := ParseDMPolicy(w.DMs)
+	if err != nil {
+		return Registry{}, err
+	}
 	return Registry{
 		Epoch:      w.Epoch,
 		ValidFrom:  w.ValidFrom,
 		ValidUntil: w.ValidUntil,
 		Agents:     agents,
+		Rooms:      rooms,
+		DMs:        dms,
 	}, nil
 }
 
@@ -314,9 +344,10 @@ func canonicalizeForSign(reg Registry) (identity.CanonicalBytes, error) {
 		return identity.CanonicalBytes{}, err
 	}
 	// One document walk covers every string the root is about to sign
-	// (display name, slug, daemons, vouches_for, platforms). Canonical bytes
-	// have no duplicate keys; the unsigned sign-registry input is checked
-	// before decode, where a duplicated key is still visible.
+	// (display name, slug, daemons, vouches_for, platforms, room names,
+	// principals, approval names, dms). Canonical bytes have no duplicate
+	// keys; the unsigned sign-registry input is checked before decode, where
+	// a duplicated key is still visible.
 	if err := identity.ValidateRegistrySchema(canonical.Bytes()); err != nil {
 		return identity.CanonicalBytes{}, err
 	}
@@ -411,9 +442,10 @@ func VerifyAndLoad(
 	}
 
 	// Decode the now-authenticated bytes. Pubkeys are re-validated in fromWire,
-	// and roles is parsed there. A malformed role rejects the registry. Any
-	// other unknown field in the signed bytes stays ignored, as it was before
-	// roles existed. A non-NFC string anywhere in those bytes is then refused.
+	// and roles, rooms, and dms are parsed there. A malformed role, room, or
+	// DM policy rejects the registry. Any other unknown field in the signed
+	// bytes stays ignored, as it was before those fields existed. A non-NFC
+	// string anywhere in those bytes is then refused.
 	reg, err := decodeAuthenticatedRegistry(env.Registry)
 	if err != nil {
 		return Registry{}, persistedHighestEpoch, err
@@ -466,8 +498,9 @@ func VerifyAndLoad(
 }
 
 // decodeAuthenticatedRegistry decodes a registry whose root signature has
-// already been checked. Role shape is parsed first, so a malformed role still
-// returns ErrMalformedRole. The NFC walk then covers every string in the raw
+// already been checked. Role, room, and DM shape are parsed first, so a
+// malformed role still returns ErrMalformedRole and a malformed room or dms
+// returns its own constant. The NFC walk then covers every string in the raw
 // JSON, including a field the typed decode ignores. It uses
 // identity.ValidateDocumentNFC, which merges duplicate keys and does not reject
 // them: Rust's verifier does the same through serde_json::Value.
