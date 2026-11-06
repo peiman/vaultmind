@@ -128,6 +128,13 @@ type AgentBinding struct {
 	// RevokedAt is the unix-seconds revocation time, or nil if the binding is
 	// live. A revoked binding never resolves or verifies.
 	RevokedAt *int
+	// Roles are the root-granted capabilities of this binding (bridge,
+	// code_signing). Nil and empty both mean the binding has no roles, and the
+	// canonical form then omits the roles key so a roles-free registry stays
+	// byte-identical to one signed before the field existed. Order is
+	// significant and is preserved. Class and VouchAllowlist are a different,
+	// not-yet-wired authority channel and are not these roles.
+	Roles []Role
 	// Class is the AUTHORITY class the root GRANTS this binding (agent | bridge |
 	// human). An empty Class means agent (see ClassAgent / EffectiveClass). It is
 	// the registry's authoritative answer to a message's signed from_class CLAIM:
@@ -179,14 +186,15 @@ type SignedRegistry struct {
 // pubkey as base64). omitempty on revoked_at means a live binding emits no key
 // (nil pointer == "live"), matching the decisions-doc canonical example.
 type wireBinding struct {
-	AuthorizedOriginDaemons []string `json:"authorized_origin_daemons"`
-	DisplayName             string   `json:"display_name"`
-	KeyEpoch                int      `json:"key_epoch"`
-	PubKey                  string   `json:"pubkey"`
-	RevokedAt               *int     `json:"revoked_at,omitempty"`
-	Slug                    string   `json:"slug"`
-	ValidFrom               int64    `json:"valid_from"`
-	ValidUntil              int64    `json:"valid_until"`
+	AuthorizedOriginDaemons []string        `json:"authorized_origin_daemons"`
+	DisplayName             string          `json:"display_name"`
+	KeyEpoch                int             `json:"key_epoch"`
+	PubKey                  string          `json:"pubkey"`
+	RevokedAt               *int            `json:"revoked_at,omitempty"`
+	Roles                   json.RawMessage `json:"roles,omitempty"`
+	Slug                    string          `json:"slug"`
+	ValidFrom               int64           `json:"valid_from"`
+	ValidUntil              int64           `json:"valid_until"`
 }
 
 // wireRegistry is the JSON/JCS shape of the registry. JCS sorts keys, so the Go
@@ -199,16 +207,23 @@ type wireRegistry struct {
 	ValidUntil int64         `json:"valid_until"`
 }
 
-// toWire converts a Registry to its wire shape (base64 pubkeys).
-func toWire(reg Registry) wireRegistry {
+// toWire converts a Registry to its wire shape (base64 pubkeys). roles is
+// omitted when empty (see MarshalRoles). A role that is not one of the two
+// variants fails closed.
+func toWire(reg Registry) (wireRegistry, error) {
 	agents := make([]wireBinding, len(reg.Agents))
 	for i, a := range reg.Agents {
+		roles, err := MarshalRoles(a.Roles)
+		if err != nil {
+			return wireRegistry{}, err
+		}
 		agents[i] = wireBinding{
 			AuthorizedOriginDaemons: a.AuthorizedOriginDaemons,
 			DisplayName:             a.DisplayName,
 			KeyEpoch:                a.KeyEpoch,
 			PubKey:                  base64.StdEncoding.EncodeToString(a.PubKey.Bytes()),
 			RevokedAt:               a.RevokedAt,
+			Roles:                   roles,
 			Slug:                    a.Slug,
 			ValidFrom:               a.ValidFrom,
 			ValidUntil:              a.ValidUntil,
@@ -219,7 +234,7 @@ func toWire(reg Registry) wireRegistry {
 		Epoch:      reg.Epoch,
 		ValidFrom:  reg.ValidFrom,
 		ValidUntil: reg.ValidUntil,
-	}
+	}, nil
 }
 
 // fromWire converts a decoded wire registry back to a Registry, re-validating
@@ -255,7 +270,11 @@ func fromWire(w wireRegistry) (Registry, error) {
 // Canonicalize primitive — the EXACT bytes the root signs and the consumer
 // verifies.
 func canonicalBytes(reg Registry) (identity.CanonicalBytes, error) {
-	raw, err := json.Marshal(toWire(reg))
+	wire, err := toWire(reg)
+	if err != nil {
+		return identity.CanonicalBytes{}, err
+	}
+	raw, err := json.Marshal(wire)
 	if err != nil {
 		return identity.CanonicalBytes{}, fmt.Errorf("%s: %w", errMarshalRegistry, err)
 	}
