@@ -187,6 +187,9 @@ var (
 	pinnedBinErr  error
 )
 
+// pinnedTestBinary builds the dev-tagged vaultmind once per process.
+// The migrated-index recall test shares it, so that test's ask bound does
+// not include a compile and -count=N does not compile N times.
 func pinnedTestBinary(t *testing.T) string {
 	t.Helper()
 	pinnedBinOnce.Do(func() {
