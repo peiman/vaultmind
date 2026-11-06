@@ -15,6 +15,7 @@ Only framework changes are tracked here — project-level changes belong in the 
 ### Added
 
 - Config key constants for `identity sign-keeper`: `app.identitysignkeeper.file`, `app.identitysignkeeper.signer_socket`, and `app.identitysignkeeper.stamp`.
+- Config key constants for `identity sign-session`: `app.identitysignsession.challenge`, `app.identitysignsession.network_id`, and `app.identitysignsession.signer_socket`.
 - **Config key constants for `note pinned`.** Regenerated `keys_generated.go` now has `app.notepinned.vault`, `app.notepinned.vaults`, `app.notepinned.json`, `app.notepinned.budget`, and `app.notepinned.excerpt`.
 
 ## [0.2.4] - 2026-10-17
