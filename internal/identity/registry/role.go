@@ -1,8 +1,11 @@
 package registry
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 )
 
 // ErrMalformedRole is returned when a role cannot be signed or parsed. An
@@ -126,6 +129,170 @@ func marshalRole(role Role) ([]byte, error) {
 	default:
 		return nil, fmt.Errorf("%s", ErrMalformedRole)
 	}
+}
+
+// ParseRoles decodes a binding's roles JSON. It is the single parser for
+// VerifyAndLoad and for sign-registry (Principle 7 — one schema, both doors).
+// Empty or absent input is no roles. A null, a non-array, an unknown kind, a
+// missing variant field, an extra field, or a parameter list that is not an
+// array of strings returns ErrMalformedRole.
+func ParseRoles(raw []byte) ([]Role, error) {
+	if len(bytes.TrimSpace(raw)) == 0 {
+		return []Role{}, nil
+	}
+	elems, err := decodeRoleArray(raw)
+	if err != nil {
+		return nil, err
+	}
+	roles := make([]Role, 0, len(elems))
+	for _, elem := range elems {
+		role, err := parseOneRole(elem)
+		if err != nil {
+			return nil, err
+		}
+		roles = append(roles, role)
+	}
+	return roles, nil
+}
+
+func roleErr(err error) error {
+	return fmt.Errorf("%s: %w", ErrMalformedRole, err)
+}
+
+func decodeRoleArray(raw []byte) ([]json.RawMessage, error) {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	tok, err := dec.Token()
+	if err != nil {
+		return nil, roleErr(err)
+	}
+	delim, ok := tok.(json.Delim)
+	if !ok || delim != '[' {
+		return nil, fmt.Errorf("%s: roles must be an array", ErrMalformedRole)
+	}
+	var elems []json.RawMessage
+	for dec.More() {
+		var elem json.RawMessage
+		if err := dec.Decode(&elem); err != nil {
+			return nil, roleErr(err)
+		}
+		elems = append(elems, elem)
+	}
+	tok, err = dec.Token()
+	if err != nil {
+		return nil, roleErr(err)
+	}
+	delim, ok = tok.(json.Delim)
+	if !ok || delim != ']' {
+		return nil, fmt.Errorf("%s: roles must be an array", ErrMalformedRole)
+	}
+	if err := rejectTrailing(dec); err != nil {
+		return nil, err
+	}
+	if elems == nil {
+		return []json.RawMessage{}, nil
+	}
+	return elems, nil
+}
+
+func rejectTrailing(dec *json.Decoder) error {
+	_, err := dec.Token()
+	if errors.Is(err, io.EOF) {
+		return nil
+	}
+	if err != nil {
+		return roleErr(err)
+	}
+	return fmt.Errorf("%s: trailing data after roles", ErrMalformedRole)
+}
+
+// roleObject lists every field a role may carry. DisallowUnknownFields then
+// rejects anything else. Which of vouches_for / platforms is legal depends on
+// kind and is checked after the object decodes, so a bridge role that also
+// carries platforms is an extra field rather than a silent drop.
+type roleObject struct {
+	Kind       string          `json:"kind"`
+	VouchesFor json.RawMessage `json:"vouches_for"`
+	Platforms  json.RawMessage `json:"platforms"`
+}
+
+func decodeRoleObject(raw json.RawMessage) (roleObject, error) {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	var obj roleObject
+	if err := dec.Decode(&obj); err != nil {
+		return roleObject{}, roleErr(err)
+	}
+	if rest := bytes.TrimSpace(raw[dec.InputOffset():]); len(rest) != 0 {
+		return roleObject{}, fmt.Errorf("%s: trailing data in role", ErrMalformedRole)
+	}
+	return obj, nil
+}
+
+func parseOneRole(raw json.RawMessage) (Role, error) {
+	obj, err := decodeRoleObject(raw)
+	if err != nil {
+		return Role{}, err
+	}
+	switch RoleKind(obj.Kind) {
+	case RoleKindBridge:
+		list, err := roleParams(RoleKindBridge, obj.VouchesFor, obj.Platforms)
+		if err != nil {
+			return Role{}, err
+		}
+		return NewBridgeRole(list), nil
+	case RoleKindCodeSigning:
+		list, err := roleParams(RoleKindCodeSigning, obj.Platforms, obj.VouchesFor)
+		if err != nil {
+			return Role{}, err
+		}
+		return NewCodeSigningRole(list), nil
+	default:
+		return Role{}, fmt.Errorf("%s: unknown kind %q", ErrMalformedRole, obj.Kind)
+	}
+}
+
+// roleParams reads the active variant's string list. inactive must be absent;
+// a present value is the other variant's field, which is an extra field.
+func roleParams(kind RoleKind, active, inactive json.RawMessage) ([]string, error) {
+	if len(inactive) != 0 {
+		return nil, fmt.Errorf("%s: extra field on %s role", ErrMalformedRole, kind)
+	}
+	if len(active) == 0 {
+		return nil, fmt.Errorf("%s: missing parameter list on %s role", ErrMalformedRole, kind)
+	}
+	return decodeStringList(active)
+}
+
+func decodeStringList(raw json.RawMessage) ([]string, error) {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	tok, err := dec.Token()
+	if err != nil {
+		return nil, roleErr(err)
+	}
+	delim, ok := tok.(json.Delim)
+	if !ok || delim != '[' {
+		return nil, fmt.Errorf("%s: role parameter must be an array of strings", ErrMalformedRole)
+	}
+	out := []string{}
+	for dec.More() {
+		var s string
+		if err := dec.Decode(&s); err != nil {
+			return nil, fmt.Errorf("%s: role parameter must be an array of strings", ErrMalformedRole)
+		}
+		out = append(out, s)
+	}
+	tok, err = dec.Token()
+	if err != nil {
+		return nil, roleErr(err)
+	}
+	delim, ok = tok.(json.Delim)
+	if !ok || delim != ']' {
+		return nil, fmt.Errorf("%s: role parameter must be an array of strings", ErrMalformedRole)
+	}
+	if err := rejectTrailing(dec); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // MarshalRoles encodes roles as a JSON array for embedding in a registry

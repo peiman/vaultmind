@@ -1,9 +1,14 @@
 package registry
 
 import (
+	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"testing"
+	"time"
 
+	"github.com/peiman/vaultmind/internal/identity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -92,4 +97,129 @@ func TestRoleConstructors_DoNotAliasCallerSlices(t *testing.T) {
 	assert.Equal(t, []string{"darwin-arm64"}, signing.Platforms())
 	assert.Nil(t, signing.VouchesFor())
 	assert.True(t, Role{}.IsZero())
+}
+
+func TestVerifyAndLoad_RolesRoundTrip(t *testing.T) {
+	rootPub, rootPriv := fixedEd25519(t, 0x11)
+	base := rolesFreeRegistry(t, nil).Agents[0]
+
+	plain := base
+	plain.Slug = "plain"
+
+	bridge := base
+	bridge.Slug = "bridge"
+	bridge.Roles = []Role{
+		NewBridgeRole([]string{"human:peiman"}),
+		NewCodeSigningRole(nil),
+	}
+
+	signer := base
+	signer.Slug = "signer"
+	signer.Roles = []Role{NewCodeSigningRole([]string{"darwin-arm64", "linux-amd64"})}
+
+	reg := rolesFreeRegistry(t, nil)
+	reg.Agents = []AgentBinding{bridge, signer, plain}
+
+	env, err := SignRegistry(rootPriv, reg)
+	require.NoError(t, err)
+	loaded, _, err := VerifyAndLoad(rootPub, env, 4, fixedNow, time.Hour*24*365)
+	require.NoError(t, err)
+
+	assertAgentRoles(t, loaded, "bridge", bridge.Roles)
+	assertAgentRoles(t, loaded, "signer", signer.Roles)
+	assertAgentRoles(t, loaded, "plain", nil)
+}
+
+func TestVerifyAndLoad_AcceptsEmptyRolesArray(t *testing.T) {
+	rootPub, env := signedBodyWithRoles(t, `[]`)
+	loaded, _, err := VerifyAndLoad(rootPub, env, 4, fixedNow, time.Hour*24*365)
+	require.NoError(t, err)
+	require.Empty(t, loaded.Agents[0].Roles)
+}
+
+func TestVerifyAndLoad_RejectsMalformedRoles(t *testing.T) {
+	cases := []struct {
+		name  string
+		roles string
+	}{
+		{name: "unknown_kind", roles: `[{"kind":"wizard","vouches_for":["human:peiman"]}]`},
+		{name: "bridge_extra_field", roles: `[{"kind":"bridge","vouches_for":["human:peiman"],"extra":true}]`},
+		{name: "bridge_missing_vouches_for", roles: `[{"kind":"bridge"}]`},
+		{name: "code_signing_missing_platforms", roles: `[{"kind":"code_signing"}]`},
+		{name: "roles_not_array", roles: `{"kind":"bridge"}`},
+		{name: "bridge_with_platforms", roles: `[{"kind":"bridge","vouches_for":[],"platforms":["darwin-arm64"]}]`},
+		{name: "code_signing_extra_field", roles: `[{"kind":"code_signing","platforms":[],"extra":1}]`},
+		{name: "vouches_for_not_array", roles: `[{"kind":"bridge","vouches_for":"human:peiman"}]`},
+		{name: "roles_null", roles: `null`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rootPub, env := signedBodyWithRoles(t, tc.roles)
+			_, _, err := VerifyAndLoad(rootPub, env, 4, fixedNow, time.Hour*24*365)
+			require.ErrorContains(t, err, ErrMalformedRole)
+		})
+	}
+}
+
+func TestVerifyAndLoad_IgnoresUnknownBindingFieldButParsesRoles(t *testing.T) {
+	rootPub, rootPriv := fixedEd25519(t, 0x11)
+	reg := rolesFreeRegistry(t, []Role{NewBridgeRole([]string{"human:peiman"})})
+	env, err := SignRegistry(rootPriv, reg)
+	require.NoError(t, err)
+
+	var obj map[string]any
+	require.NoError(t, json.Unmarshal(env.Registry, &obj))
+	agents, ok := obj["agents"].([]any)
+	require.True(t, ok)
+	binding, ok := agents[0].(map[string]any)
+	require.True(t, ok)
+	binding["note"] = "not a role field"
+	patched, err := json.Marshal(obj)
+	require.NoError(t, err)
+	canonical, err := identity.Canonicalize(patched)
+	require.NoError(t, err)
+	sig, err := identity.SignCanonical(rootPriv, canonical)
+	require.NoError(t, err)
+
+	loaded, _, err := VerifyAndLoad(rootPub, SignedRegistry{Registry: canonical.Bytes(), RootSig: sig}, 4, fixedNow, time.Hour*24*365)
+	require.NoError(t, err)
+	assertAgentRoles(t, loaded, "mira", reg.Agents[0].Roles)
+}
+
+func assertAgentRoles(t *testing.T, reg Registry, slug string, want []Role) {
+	t.Helper()
+	var got []Role
+	found := false
+	for _, b := range reg.Agents {
+		if b.Slug == slug {
+			got = b.Roles
+			found = true
+			break
+		}
+	}
+	require.True(t, found, "slug %s", slug)
+	require.Len(t, got, len(want))
+	for i := range want {
+		assert.Equal(t, want[i].Kind(), got[i].Kind(), "slug %s role %d kind", slug, i)
+		assert.Equal(t, want[i].VouchesFor(), got[i].VouchesFor(), "slug %s role %d vouches_for", slug, i)
+		assert.Equal(t, want[i].Platforms(), got[i].Platforms(), "slug %s role %d platforms", slug, i)
+	}
+}
+
+// signedBodyWithRoles root-signs a registry whose only interesting deviation is
+// the roles value, so a VerifyAndLoad failure is the role schema and not the signature.
+func signedBodyWithRoles(t *testing.T, rolesJSON string) (ed25519.PublicKey, SignedRegistry) {
+	t.Helper()
+	rootPub, rootPriv := fixedEd25519(t, 0x11)
+	pub, _ := fixedEd25519(t, 0x22)
+	body := `{"agents":[{"authorized_origin_daemons":["daemon-eu-1"],"display_name":"Mira",` +
+		`"key_epoch":1,"pubkey":"` + base64.StdEncoding.EncodeToString(pub) + `",` +
+		`"roles":` + rolesJSON + `,"slug":"mira",` +
+		`"valid_from":1770000000,"valid_until":1780000000}],` +
+		`"epoch":5,"valid_from":1770000000,"valid_until":1780000000}`
+	canonical, err := identity.Canonicalize([]byte(body))
+	require.NoError(t, err)
+	sig, err := identity.SignCanonical(rootPriv, canonical)
+	require.NoError(t, err)
+	return rootPub, SignedRegistry{Registry: canonical.Bytes(), RootSig: sig, RootKeyEpoch: 0}
 }

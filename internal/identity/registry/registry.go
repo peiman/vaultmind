@@ -247,6 +247,10 @@ func fromWire(w wireRegistry) (Registry, error) {
 		if err != nil {
 			return Registry{}, err
 		}
+		roles, err := ParseRoles(a.Roles)
+		if err != nil {
+			return Registry{}, err
+		}
 		agents[i] = AgentBinding{
 			Slug:                    a.Slug,
 			DisplayName:             a.DisplayName,
@@ -256,6 +260,7 @@ func fromWire(w wireRegistry) (Registry, error) {
 			ValidUntil:              a.ValidUntil,
 			AuthorizedOriginDaemons: a.AuthorizedOriginDaemons,
 			RevokedAt:               a.RevokedAt,
+			Roles:                   roles,
 		}
 	}
 	return Registry{
@@ -394,7 +399,10 @@ func VerifyAndLoad(
 		return Registry{}, persistedHighestEpoch, fmt.Errorf("%s", ErrRootSig)
 	}
 
-	// Decode the now-authenticated bytes. Pubkeys are re-validated in fromWire.
+	// Decode the now-authenticated bytes. Pubkeys are re-validated in fromWire,
+	// and roles is parsed there. A malformed role rejects the registry. Any
+	// other unknown field in the signed bytes stays ignored, as it was before
+	// roles existed.
 	var w wireRegistry
 	if err := json.Unmarshal(env.Registry, &w); err != nil {
 		return Registry{}, persistedHighestEpoch, fmt.Errorf("%s: %w", errUnmarshalRegistry, err)
