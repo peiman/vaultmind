@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.25] - 2026-11-07
+
 ### Added
 
 - `identity sign-registry` can sign agent roles (`bridge`, `code_signing`) on a registry binding. A registry with no roles is unchanged, so registries already signed still verify. A verifier that predates roles rejects a registry that carries them, so do not sign roles until every verifier that must accept the registry parses them.
@@ -3240,7 +3242,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.24...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.25...HEAD
+[0.10.25]: https://github.com/peiman/vaultmind/compare/v0.10.24...v0.10.25
 [0.10.24]: https://github.com/peiman/vaultmind/compare/v0.10.23...v0.10.24
 [0.10.23]: https://github.com/peiman/vaultmind/compare/v0.10.22...v0.10.23
 [0.10.22]: https://github.com/peiman/vaultmind/compare/v0.10.21...v0.10.22
