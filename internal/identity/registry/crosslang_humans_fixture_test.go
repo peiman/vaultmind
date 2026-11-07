@@ -184,6 +184,21 @@ func humansFixtureRejects(t *testing.T, rootPriv ed25519.PrivateKey, reg Registr
 			agents := obj["agents"].([]any)
 			agents[0].(map[string]any)["slug"] = "human:peiman"
 		}},
+		{name: "two_live_human_keys", reason: "a slug may have at most one non-revoked binding (two live keys for one person)", patch: func(obj map[string]any) {
+			second := liveRotation(humansFixtureHuman(obj, 0))
+			delete(second, "roles")
+			obj["humans"] = append(obj["humans"].([]any), second)
+		}},
+		{name: "two_live_agent_keys", reason: "a slug may have at most one non-revoked binding (two live keys for one agent)", patch: func(obj map[string]any) {
+			agents := obj["agents"].([]any)
+			obj["agents"] = append(agents, liveRotation(agents[0].(map[string]any)))
+		}},
+		{name: "god_kept_on_revoked_rotation", reason: "a god rotation must drop god from the revoked epoch: every human binding holding god counts, revoked or not", patch: func(obj map[string]any) {
+			old := humansFixtureHuman(obj, 0)
+			next := liveRotation(old)
+			old["revoked_at"] = old["valid_from"]
+			obj["humans"] = append(obj["humans"].([]any), next)
+		}},
 	}
 	out := make([]humansReject, 0, len(specs))
 	for _, spec := range specs {
@@ -191,6 +206,26 @@ func humansFixtureRejects(t *testing.T, rootPriv ed25519.PrivateKey, reg Registr
 			Name: spec.name, Reason: spec.reason, Expect: "reject",
 			Envelope: humansRejectEnvelope(t, rootPriv, reg, spec.patch),
 		})
+	}
+	return out
+}
+
+// liveRotation copies a wire binding with key_epoch one higher and no revoked_at:
+// the new epoch of a key rotation, still live.
+func liveRotation(b map[string]any) map[string]any {
+	out := make(map[string]any, len(b))
+	for k, v := range b {
+		out[k] = v
+	}
+	delete(out, "revoked_at")
+	switch e := b["key_epoch"].(type) {
+	case float64:
+		out["key_epoch"] = e + 1
+	case int:
+		out["key_epoch"] = e + 1
+	case json.Number:
+		n, _ := e.Int64()
+		out["key_epoch"] = n + 1
 	}
 	return out
 }
@@ -345,6 +380,9 @@ func TestCrossLanguageHumansFixture_RejectsAreSchemaNotSignature(t *testing.T) {
 		{"god_extra_field", ErrMalformedRole, "peiman"},
 		{"human_missing_pubkey", ErrPubKeyBadLen, "peiman"},
 		{"slug_with_colon", ErrSlugColon, "human:peiman"},
+		{"two_live_human_keys", ErrDuplicateBinding, "peiman"},
+		{"two_live_agent_keys", ErrDuplicateBinding, "mira"},
+		{"god_kept_on_revoked_rotation", ErrMultipleGods, "peiman"},
 	}
 	require.Len(t, fx.Reject, len(want))
 	for i, rc := range fx.Reject {

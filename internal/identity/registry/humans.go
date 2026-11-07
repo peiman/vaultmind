@@ -132,6 +132,11 @@ func holdsGod(b AgentBinding) bool {
 	return false
 }
 
+// checkRolePlacement enforces where roles may sit. Every human binding that
+// holds god counts toward the one-god rule, revoked or not, so a God key
+// rotation drops god from the revoked epoch and carries it on the new live one
+// (pinned by the cross-language reject god_kept_on_revoked_rotation; Rust
+// counts the same way).
 func checkRolePlacement(reg Registry) error {
 	for _, b := range reg.Agents {
 		if holdsGod(b) {
