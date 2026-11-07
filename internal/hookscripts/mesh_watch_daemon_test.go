@@ -267,7 +267,11 @@ func TestMeshWatch_EncodesRoomAndWakes(t *testing.T) {
 func TestMeshWatch_QuietCallBound(t *testing.T) {
 	t.Parallel()
 	d := newWatchDaemon(watchMsg("r", "agent:first", 100, "mesh"), watchMsg("d", "agent:first", 100, "dm"), watchMsg("o", "agent:first", 100, "other"))
-	out, dir := runWatchDaemon(t, d, 18, 28, nil)
+	// A 24 s ceiling puts the second sweep (t=15 s) 9 s inside the run and the third
+	// (t=30 s) outside it. An 18 s ceiling left 3 s, and under load (a release's
+	// memory gate in parallel) the t=15 sweep missed the window: 2 reads, not 3.
+	// The long poll (34 s) still outlasts the run, so a quiet wait blocks once.
+	out, dir := runWatchDaemon(t, d, 24, 34, nil)
 	require.Contains(t, out, "(quiet heartbeat)")
 	require.FileExists(t, filepath.Join(dir, "HEARTBEAT"))
 	d.mu.Lock()
