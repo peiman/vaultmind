@@ -688,7 +688,7 @@ func TestSignRegistryCarriesHumansGodAndCustody(t *testing.T) {
 	if loaded.Agents[0].Custody != "" || loaded.Agents[0].Class != "" {
 		t.Fatalf("shared custody or class stuck on the agent: %+v", loaded.Agents[0])
 	}
-	god, ok := registry.GodBinding(loaded)
+	god, ok := registry.GodBinding(loaded, time.Unix(1_770_000_500, 0))
 	if !ok || god.Slug != "peiman" {
 		t.Fatalf("GodBinding = %s %v", god.Slug, ok)
 	}

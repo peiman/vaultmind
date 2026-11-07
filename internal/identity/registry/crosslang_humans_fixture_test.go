@@ -313,7 +313,7 @@ func TestCrossLanguageHumansFixture_ValidRoundTrip(t *testing.T) {
 			assert.Equal(t, RoleKind(role.Kind), got.Roles[j].Kind())
 		}
 	}
-	god, ok := GodBinding(reg)
+	god, ok := GodBinding(reg, time.Unix(fx.Now, 0))
 	require.True(t, ok)
 	assert.Equal(t, "peiman", god.Slug)
 	assert.Equal(t, ClassHuman, god.Class)

@@ -163,7 +163,7 @@ func TestSignAndLoad_HumansRoundTrip(t *testing.T) {
 	assert.Empty(t, loaded.Agents[0].Class)
 	assert.Equal(t, ClassAgent, loaded.Agents[0].EffectiveClass())
 
-	god, ok := GodBinding(loaded)
+	god, ok := GodBinding(loaded, fixedNow)
 	require.True(t, ok)
 	assert.Equal(t, "human:peiman", god.EffectiveClass()+":"+god.Slug)
 	assert.Equal(t, "peiman", god.Slug)
@@ -366,12 +366,47 @@ func TestResolveHuman_LivenessAndClassSeparation(t *testing.T) {
 	_, err = ResolveHumanTuple(reg, "peiman", 2, fixedNow)
 	require.ErrorContains(t, err, ErrKeyEpochMismatch)
 
-	_, ok := GodBinding(rolesFreeRegistry(t, nil))
+	_, ok := GodBinding(rolesFreeRegistry(t, nil), fixedNow)
 	assert.False(t, ok)
 	two := cloneRegistry(reg)
 	two.Humans[1].Roles = []Role{NewGodRole()}
-	_, ok = GodBinding(two)
+	_, ok = GodBinding(two, fixedNow)
 	assert.False(t, ok, "two gods is not a god binding")
+}
+
+func TestGodBinding_LivenessRequired(t *testing.T) {
+	base := peopleRegistry(t) // peiman holds god; siavoush does not
+
+	// A revoked god is not counted as the god binding.
+	revoked := cloneRegistry(base)
+	revokedAt := 1
+	revoked.Humans[0].RevokedAt = &revokedAt
+	_, ok := GodBinding(revoked, fixedNow)
+	assert.False(t, ok, "revoked god must not count")
+
+	// An expired god (ValidUntil before now) is not counted.
+	expired := cloneRegistry(base)
+	expired.Humans[0].ValidUntil = fixedNow.Unix() - 1
+	_, ok = GodBinding(expired, fixedNow)
+	assert.False(t, ok, "expired god must not count")
+
+	// A not-yet-valid god (ValidFrom after now) is not counted.
+	future := cloneRegistry(base)
+	future.Humans[0].ValidFrom = fixedNow.Unix() + 1
+	_, ok = GodBinding(future, fixedNow)
+	assert.False(t, ok, "not-yet-valid god must not count")
+
+	// One live god plus one revoked god: returns the live binding.
+	liveAndRevoked := cloneRegistry(base)
+	rotated := cloneBindings(base.Humans[:1]) // copy of peiman, epoch 1
+	rotated[0].KeyEpoch = 2
+	revokedAt2 := int(fixedNow.Unix() - 1)
+	rotated[0].RevokedAt = &revokedAt2
+	liveAndRevoked.Humans = append(liveAndRevoked.Humans, rotated...)
+	got, ok := GodBinding(liveAndRevoked, fixedNow)
+	require.True(t, ok, "one live god should be found even when another binding for the same slug is revoked")
+	assert.Equal(t, "peiman", got.Slug)
+	assert.Nil(t, got.RevokedAt)
 }
 
 func TestVerifyHumanMessage_UsesTheHumanKey(t *testing.T) {

@@ -158,20 +158,32 @@ func ResolveHumanTuple(reg Registry, slug string, keyEpoch int, now time.Time) (
 	return asHuman(b), nil
 }
 
-// GodBinding returns the one binding that holds god. The bool is false when
-// none do, or when more than one does.
-func GodBinding(reg Registry) (AgentBinding, bool) {
+// isLive reports whether binding b is live at now: not revoked, within its
+// validity window. This is the shared liveness predicate used by resolveSlug
+// and GodBinding so both apply the same rule.
+func isLive(b AgentBinding, now time.Time) bool {
+	if b.RevokedAt != nil {
+		return false
+	}
+	t := now.Unix()
+	return t >= b.ValidFrom && t <= b.ValidUntil
+}
+
+// GodBinding returns the one live binding that holds god at now. The bool is
+// false when no live binding holds god, or when more than one live binding
+// does. A revoked, expired, or not-yet-valid god binding is not counted.
+func GodBinding(reg Registry, now time.Time) (AgentBinding, bool) {
 	var found AgentBinding
 	n := 0
 	for _, b := range reg.Humans {
-		if !holdsGod(b) {
+		if !holdsGod(b) || !isLive(b, now) {
 			continue
 		}
 		found = asHuman(b)
 		n++
 	}
 	for _, b := range reg.Agents {
-		if !holdsGod(b) {
+		if !holdsGod(b) || !isLive(b, now) {
 			continue
 		}
 		found = b
