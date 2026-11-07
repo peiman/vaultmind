@@ -187,6 +187,10 @@ func TestSignRegistry_RejectsHumanRules(t *testing.T) {
 	badEpoch.Humans[0].KeyEpoch = 0
 	dupHuman := cloneRegistry(base)
 	dupHuman.Humans = append(dupHuman.Humans, cloneBindings(base.Humans[:1])...)
+	agentColonSlug := rolesFreeRegistry(t, nil)
+	agentColonSlug.Agents[0].Slug = "human:peiman"
+	humanColonSlug := cloneRegistry(base)
+	humanColonSlug.Humans[1].Slug = "foo:bar"
 
 	cases := []struct {
 		name string
@@ -202,6 +206,8 @@ func TestSignRegistry_RejectsHumanRules(t *testing.T) {
 		{name: "bad_custody", reg: badCustody, want: ErrBadCustody, slug: "peiman"},
 		{name: "human_epoch", reg: badEpoch, want: ErrEpochRange},
 		{name: "duplicate_human", reg: dupHuman, want: ErrDuplicateBinding, slug: "peiman"},
+		{name: "agent_slug_colon", reg: agentColonSlug, want: ErrSlugColon, slug: "human:peiman"},
+		{name: "human_slug_colon", reg: humanColonSlug, want: ErrSlugColon, slug: "foo:bar"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -290,6 +296,13 @@ func TestVerifyAndLoad_RejectsHumanRules(t *testing.T) {
 			patch: func(t *testing.T, obj map[string]any) {
 				humans := obj["humans"].([]any)
 				delete(humans[0].(map[string]any), "pubkey")
+			},
+		},
+		{
+			name: "agent_slug_colon", slug: "human:peiman", want: ErrSlugColon,
+			patch: func(t *testing.T, obj map[string]any) {
+				agents := obj["agents"].([]any)
+				agents[0].(map[string]any)["slug"] = "human:peiman"
 			},
 		},
 	}

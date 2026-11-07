@@ -178,6 +178,7 @@ func TestGates_Reject(t *testing.T) {
 		{"non_ascii_nonce", func(f *Fields) { f.Nonce = "nØnce" }, ErrNonceASCII},
 		{"empty_slug", func(f *Fields) { f.Slug = "" }, ErrSlugEmpty},
 		{"non_ascii_slug", func(f *Fields) { f.Slug = "mîra" }, ErrSlugASCII},
+		{"colon_slug", func(f *Fields) { f.Slug = "human:peiman" }, ErrSlugColon},
 		{"empty_network_id", func(f *Fields) { f.NetworkID = "" }, ErrNetworkIDEmpty},
 		{"empty_pubkey", func(f *Fields) { f.PubKey = "" }, ErrPubKey},
 		{"bad_base64_pubkey", func(f *Fields) { f.PubKey = "not-base64!!!" }, ErrPubKey},

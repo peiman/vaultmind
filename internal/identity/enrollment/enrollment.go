@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"unicode/utf8"
 
 	"golang.org/x/text/unicode/norm"
@@ -76,6 +77,10 @@ const (
 	ErrSlugEmpty = "enrollment: slug must not be empty"
 	// ErrSlugASCII is returned when slug is not ASCII.
 	ErrSlugASCII = "enrollment: slug must be ASCII"
+	// ErrSlugColon is returned when slug contains a colon. A colon is the
+	// class-qualifier separator in a principal id (human:<slug>), so a slug
+	// containing one would be silently mis-routed after enrollment.
+	ErrSlugColon = "enrollment: slug must not contain a colon"
 	// ErrNetworkIDEmpty is returned when network_id is empty.
 	ErrNetworkIDEmpty = "enrollment: network_id must not be empty"
 	// ErrPubKey is returned when pubkey is not base64-std of a validatable
@@ -256,12 +261,16 @@ func checkStringGates(f Fields) error {
 	if !isASCII(f.Nonce) {
 		return fmt.Errorf("%s", ErrNonceASCII)
 	}
-	// slug: non-empty ASCII.
+	// slug: non-empty ASCII, no colon (a colon is the class-qualifier separator
+	// in principal ids; a slug containing one would be mis-routed after enroll).
 	if f.Slug == "" {
 		return fmt.Errorf("%s", ErrSlugEmpty)
 	}
 	if !isASCII(f.Slug) {
 		return fmt.Errorf("%s", ErrSlugASCII)
+	}
+	if strings.ContainsRune(f.Slug, ':') {
+		return fmt.Errorf("%s", ErrSlugColon)
 	}
 	// network_id: non-empty (opaque here — never recomputed).
 	if f.NetworkID == "" {

@@ -180,6 +180,10 @@ func humansFixtureRejects(t *testing.T, rootPriv ed25519.PrivateKey, reg Registr
 		{name: "human_missing_pubkey", reason: "human binding has no pubkey", patch: func(obj map[string]any) {
 			delete(humansFixtureHuman(obj, 0), "pubkey")
 		}},
+		{name: "slug_with_colon", reason: "slug must not contain a colon", patch: func(obj map[string]any) {
+			agents := obj["agents"].([]any)
+			agents[0].(map[string]any)["slug"] = "human:peiman"
+		}},
 	}
 	out := make([]humansReject, 0, len(specs))
 	for _, spec := range specs {
@@ -340,6 +344,7 @@ func TestCrossLanguageHumansFixture_RejectsAreSchemaNotSignature(t *testing.T) {
 		{"bad_custody", ErrBadCustody, "siavoush"},
 		{"god_extra_field", ErrMalformedRole, "peiman"},
 		{"human_missing_pubkey", ErrPubKeyBadLen, "peiman"},
+		{"slug_with_colon", ErrSlugColon, "human:peiman"},
 	}
 	require.Len(t, fx.Reject, len(want))
 	for i, rc := range fx.Reject {

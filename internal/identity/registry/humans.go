@@ -34,6 +34,11 @@ const (
 	ErrSlugAcrossClasses = "registry: slug is bound as both an agent and a human"
 	// ErrBadCustody is returned when custody is not shared or isolated.
 	ErrBadCustody = "registry: custody must be shared or isolated"
+	// ErrSlugColon is returned when a binding slug contains a colon. A colon is
+	// the class-qualifier separator in a principal id (human:<slug>), so allowing
+	// it in a raw slug would let an agent slug like "human:peiman" be routed to
+	// the humans array and silently discarded.
+	ErrSlugColon = "registry: slug must not contain a colon"
 )
 
 // NormalizeCustody returns the in-memory custody of a binding. Empty and
@@ -53,8 +58,9 @@ func NormalizeCustody(slug, custody string) (string, error) {
 // validateRegistryBindings is the shared schema gate for SignRegistry and
 // VerifyAndLoad (Principle 7 — one schema, both doors). It refuses a duplicate
 // tuple or a second live binding inside either array, the same slug in both
-// arrays, a bad custody value, god on an agent, bridge or code_signing on a
-// human, and a second binding that holds god. Every refusal names the slug.
+// arrays, a slug that contains a colon, a bad custody value, god on an agent,
+// bridge or code_signing on a human, a second binding that holds god, and a
+// registry that exceeds MaxBindings in total. Every refusal names the slug.
 func validateRegistryBindings(reg Registry) error {
 	if err := checkBindingUniqueness(reg.Agents); err != nil {
 		return err
@@ -65,6 +71,12 @@ func validateRegistryBindings(reg Registry) error {
 	if err := checkSlugDisjoint(reg.Agents, reg.Humans); err != nil {
 		return err
 	}
+	if err := checkSlugNoColon(reg.Agents); err != nil {
+		return err
+	}
+	if err := checkSlugNoColon(reg.Humans); err != nil {
+		return err
+	}
 	if err := checkCustody(reg.Agents); err != nil {
 		return err
 	}
@@ -72,6 +84,18 @@ func validateRegistryBindings(reg Registry) error {
 		return err
 	}
 	return checkRolePlacement(reg)
+}
+
+// checkSlugNoColon rejects any binding whose slug contains a colon. A colon is
+// the class-qualifier separator used in principal ids (human:<slug>), so a slug
+// that embeds one would be silently mis-routed by envelopePrincipal.
+func checkSlugNoColon(bindings []AgentBinding) error {
+	for _, b := range bindings {
+		if strings.Contains(b.Slug, ":") {
+			return fmt.Errorf("%s: %q", ErrSlugColon, b.Slug)
+		}
+	}
+	return nil
 }
 
 func checkCustody(bindings []AgentBinding) error {
