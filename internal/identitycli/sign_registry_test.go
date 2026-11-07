@@ -5,9 +5,12 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/peiman/vaultmind/internal/identity"
 	"github.com/peiman/vaultmind/internal/identity/registry"
 )
 
@@ -316,4 +319,362 @@ func TestSignRegistryRejectsNegativeRevokedAt(t *testing.T) {
 	if fake.gotCanonical != nil {
 		t.Fatal("signer was called for a negative revoked_at")
 	}
+}
+
+// TestSignRegistryRolesRoundTrip proves sign-registry accepts bridge and
+// code_signing roles, that a binding with no roles stays roles-free, and that
+// the canonical bytes match the domain signer.
+func TestSignRegistryRolesRoundTrip(t *testing.T) {
+	rootPub, rootPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey root: %v", err)
+	}
+	bridgePub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey bridge: %v", err)
+	}
+	signerPub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey signer: %v", err)
+	}
+	plainPub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey plain: %v", err)
+	}
+	bridgeB64 := base64.StdEncoding.EncodeToString(bridgePub)
+	signerB64 := base64.StdEncoding.EncodeToString(signerPub)
+	plainB64 := base64.StdEncoding.EncodeToString(plainPub)
+
+	in := `{"agents":[` +
+		`{"authorized_origin_daemons":["d"],"display_name":"Bridge","key_epoch":1,` +
+		`"pubkey":"` + bridgeB64 + `","roles":[{"kind":"bridge","vouches_for":["human:peiman"]},` +
+		`{"kind":"code_signing","platforms":[]}],"slug":"bridge",` +
+		`"valid_from":1770000000,"valid_until":1780000000},` +
+		`{"authorized_origin_daemons":["d"],"display_name":"Signer","key_epoch":1,` +
+		`"pubkey":"` + signerB64 + `","roles":[{"kind":"code_signing","platforms":["darwin-arm64","linux-amd64"]}],` +
+		`"slug":"signer","valid_from":1770000000,"valid_until":1780000000},` +
+		`{"authorized_origin_daemons":["d"],"display_name":"Plain","key_epoch":1,` +
+		`"pubkey":"` + plainB64 + `","slug":"plain",` +
+		`"valid_from":1770000000,"valid_until":1780000000}],` +
+		`"epoch":5,"valid_from":1770000000,"valid_until":1780000000}`
+
+	fake := &fakeSignerClient{priv: rootPriv}
+	var out bytes.Buffer
+	if err := SignRegistry(&out, fake, []byte(in)); err != nil {
+		t.Fatalf("SignRegistry: %v", err)
+	}
+	env, err := registry.ParseDistribution(out.Bytes())
+	if err != nil {
+		t.Fatalf("ParseDistribution: %v", err)
+	}
+	now := time.Unix(1_770_000_500, 0)
+	loaded, _, err := registry.VerifyAndLoad(rootPub, env, 4, now, time.Hour*24*365)
+	if err != nil {
+		t.Fatalf("VerifyAndLoad: %v", err)
+	}
+	want := map[string][]registry.Role{
+		"bridge": {
+			registry.NewBridgeRole([]string{"human:peiman"}),
+			registry.NewCodeSigningRole(nil),
+		},
+		"signer": {registry.NewCodeSigningRole([]string{"darwin-arm64", "linux-amd64"})},
+		"plain":  nil,
+	}
+	if len(loaded.Agents) != len(want) {
+		t.Fatalf("loaded %d agents, want %d", len(loaded.Agents), len(want))
+	}
+	for _, b := range loaded.Agents {
+		if !rolesEqual(b.Roles, want[b.Slug]) {
+			t.Fatalf("slug %s roles = %#v", b.Slug, roleView(b.Roles))
+		}
+	}
+	if strings.Contains(agentObject(env.Registry, "plain"), "roles") {
+		t.Fatalf("roles-free binding emitted roles: %s", env.Registry)
+	}
+
+	bridgePK, err := registry.NewPublicKey(bridgePub)
+	if err != nil {
+		t.Fatalf("NewPublicKey bridge: %v", err)
+	}
+	signerPK, err := registry.NewPublicKey(signerPub)
+	if err != nil {
+		t.Fatalf("NewPublicKey signer: %v", err)
+	}
+	plainPK, err := registry.NewPublicKey(plainPub)
+	if err != nil {
+		t.Fatalf("NewPublicKey plain: %v", err)
+	}
+	dom, err := registry.SignRegistryWithSigner(&keyBackedSigner{priv: rootPriv}, registry.Registry{
+		Epoch: 5, ValidFrom: 1770000000, ValidUntil: 1780000000,
+		Agents: []registry.AgentBinding{
+			{Slug: "bridge", DisplayName: "Bridge", PubKey: bridgePK, KeyEpoch: 1,
+				ValidFrom: 1770000000, ValidUntil: 1780000000, AuthorizedOriginDaemons: []string{"d"},
+				Roles: want["bridge"]},
+			{Slug: "signer", DisplayName: "Signer", PubKey: signerPK, KeyEpoch: 1,
+				ValidFrom: 1770000000, ValidUntil: 1780000000, AuthorizedOriginDaemons: []string{"d"},
+				Roles: want["signer"]},
+			{Slug: "plain", DisplayName: "Plain", PubKey: plainPK, KeyEpoch: 1,
+				ValidFrom: 1770000000, ValidUntil: 1780000000, AuthorizedOriginDaemons: []string{"d"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("SignRegistryWithSigner: %v", err)
+	}
+	if !bytes.Equal(env.Registry, dom.Registry) {
+		t.Fatalf("CLI canonical bytes differ from domain:\n cli=%s\n dom=%s", env.Registry, dom.Registry)
+	}
+}
+
+func TestSignRegistryRejectsMalformedRoles(t *testing.T) {
+	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	b64 := base64.StdEncoding.EncodeToString(pub)
+	cases := []struct {
+		name  string
+		roles string
+	}{
+		{name: "unknown_kind", roles: `[{"kind":"wizard","vouches_for":["human:peiman"]}]`},
+		{name: "bridge_extra_field", roles: `[{"kind":"bridge","vouches_for":["human:peiman"],"extra":true}]`},
+		{name: "bridge_missing_vouches_for", roles: `[{"kind":"bridge"}]`},
+		{name: "code_signing_missing_platforms", roles: `[{"kind":"code_signing"}]`},
+		{name: "roles_not_array", roles: `{"kind":"bridge"}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := &fakeSignerClient{}
+			var out bytes.Buffer
+			in := `{"agents":[{"authorized_origin_daemons":["d"],"display_name":"M",` +
+				`"key_epoch":1,"pubkey":"` + b64 + `","roles":` + tc.roles + `,"slug":"mira",` +
+				`"valid_from":1770000000,"valid_until":1780000000}],` +
+				`"epoch":5,"valid_from":1770000000,"valid_until":1780000000}`
+			err := SignRegistry(&out, fake, []byte(in))
+			if err == nil || !strings.Contains(err.Error(), ErrRegistryMalformedRole) {
+				t.Fatalf("got %v, want substring %q", err, ErrRegistryMalformedRole)
+			}
+			if fake.gotCanonical != nil {
+				t.Fatal("signer was called for a malformed role")
+			}
+			if out.Len() != 0 {
+				t.Fatalf("reject must print nothing, got %q", out.String())
+			}
+		})
+	}
+}
+
+// nfdAcute is U+0301 COMBINING ACUTE ACCENT, written as an escape so the
+// source cannot be precomposed to U+00E9.
+const nfdAcute = "\u0301"
+
+// TestSignRegistryRejectsNonNFCStrings proves the unsigned sign-registry input
+// is refused when any string — display name, vouches_for, or platforms — is not
+// Unicode NFC. The signer is not called and nothing is printed.
+func TestSignRegistryRejectsNonNFCStrings(t *testing.T) {
+	_, rootPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey root: %v", err)
+	}
+	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	b64 := base64.StdEncoding.EncodeToString(pub)
+	base := testRegistryJSON(b64)
+	cases := []struct {
+		name string
+		in   string
+	}{
+		{name: "display_name", in: strings.Replace(base, `"display_name":"Mira"`, `"display_name":"Mira e`+nfdAcute+`"`, 1)},
+		{name: "vouches_for", in: strings.Replace(base, `"slug":"mira"`, `"roles":[{"kind":"bridge","vouches_for":["human:peima`+nfdAcute+`n"]}],"slug":"mira"`, 1)},
+		{name: "platforms", in: strings.Replace(base, `"slug":"mira"`, `"roles":[{"kind":"code_signing","platforms":["darwin-e`+nfdAcute+`"]}],"slug":"mira"`, 1)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := &fakeSignerClient{priv: rootPriv}
+			var out bytes.Buffer
+			err := SignRegistry(&out, fake, []byte(tc.in))
+			if err == nil || !strings.Contains(err.Error(), identity.ErrSchemaNotNFC) {
+				t.Fatalf("got %v, want substring %q", err, identity.ErrSchemaNotNFC)
+			}
+			if fake.gotCanonical != nil {
+				t.Fatal("signer was called for a non-NFC registry")
+			}
+			if out.Len() != 0 {
+				t.Fatalf("reject must print nothing, got %q", out.String())
+			}
+		})
+	}
+}
+
+// TestSignRegistryAcceptsNFCStrings is the positive control for the schema gate:
+// the precomposed form of the same letters still signs.
+func TestSignRegistryAcceptsNFCStrings(t *testing.T) {
+	_, rootPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey agent: %v", err)
+	}
+	in := strings.Replace(testRegistryJSON(base64.StdEncoding.EncodeToString(pub)),
+		`"display_name":"Mira"`, `"display_name":"Mir\u00e9"`, 1)
+	in = strings.Replace(in, `"slug":"mira"`,
+		`"roles":[{"kind":"bridge","vouches_for":["human:peiman-\u00e9"]}],"slug":"mir\u00e9"`, 1)
+	fake := &fakeSignerClient{priv: rootPriv}
+	var out bytes.Buffer
+	if err := SignRegistry(&out, fake, []byte(in)); err != nil {
+		t.Fatalf("NFC registry must sign: %v", err)
+	}
+	if fake.gotCanonical == nil {
+		t.Fatal("signer was not called for an NFC registry")
+	}
+}
+
+// TestSignRegistryRejectsDuplicateRoleKind proves encoding/json's last-key-wins
+// cannot turn {"kind":"code_signing","kind":"bridge",...} into a signed bridge.
+// The unsigned input is rejected before decode, and the signer is not called.
+func TestSignRegistryRejectsDuplicateRoleKind(t *testing.T) {
+	_, rootPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey root: %v", err)
+	}
+	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	b64 := base64.StdEncoding.EncodeToString(pub)
+	in := `{"agents":[{"authorized_origin_daemons":["d"],"display_name":"M",` +
+		`"key_epoch":1,"pubkey":"` + b64 + `",` +
+		`"roles":[{"kind":"code_signing","kind":"bridge","vouches_for":["human:evil"]}],` +
+		`"slug":"mira","valid_from":1770000000,"valid_until":1780000000}],` +
+		`"epoch":5,"valid_from":1770000000,"valid_until":1780000000}`
+	fake := &fakeSignerClient{priv: rootPriv}
+	var out bytes.Buffer
+	err = SignRegistry(&out, fake, []byte(in))
+	if err == nil || !strings.Contains(err.Error(), identity.ErrSchemaDuplicateKey) {
+		t.Fatalf("got %v, want substring %q", err, identity.ErrSchemaDuplicateKey)
+	}
+	if fake.gotCanonical != nil {
+		t.Fatal("signer was called for a duplicate-key role")
+	}
+	if out.Len() != 0 {
+		t.Fatalf("reject must print nothing, got %q", out.String())
+	}
+}
+
+func TestSignRegistryEmptyRolesArrayOmitsTheKey(t *testing.T) {
+	rootPub, rootPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey agent: %v", err)
+	}
+	b64 := base64.StdEncoding.EncodeToString(pub)
+	withEmpty := testRegistryJSON(b64)
+	// Insert an empty roles array into the single binding.
+	withEmpty = strings.Replace(withEmpty, `"slug":"mira"`, `"roles":[],"slug":"mira"`, 1)
+
+	fake := &fakeSignerClient{priv: rootPriv}
+	var out bytes.Buffer
+	if err := SignRegistry(&out, fake, []byte(withEmpty)); err != nil {
+		t.Fatalf("SignRegistry empty roles: %v", err)
+	}
+	env, err := registry.ParseDistribution(out.Bytes())
+	if err != nil {
+		t.Fatalf("ParseDistribution: %v", err)
+	}
+	if strings.Contains(string(env.Registry), "roles") {
+		t.Fatalf("empty roles must be omitted, got %s", env.Registry)
+	}
+	loaded, _, err := registry.VerifyAndLoad(rootPub, env, 4, time.Unix(1_770_000_500, 0), time.Hour*24*365)
+	if err != nil {
+		t.Fatalf("VerifyAndLoad: %v", err)
+	}
+	if len(loaded.Agents) != 1 || len(loaded.Agents[0].Roles) != 0 {
+		t.Fatalf("empty roles did not load as no roles: %+v", loaded.Agents)
+	}
+}
+
+func TestWireRegistryRoundTripsRoles(t *testing.T) {
+	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	pk, err := registry.NewPublicKey(pub)
+	if err != nil {
+		t.Fatalf("NewPublicKey: %v", err)
+	}
+	reg := registry.Registry{
+		Epoch: 5, ValidFrom: 1_770_000_000, ValidUntil: 1_780_000_000,
+		Agents: []registry.AgentBinding{{
+			Slug: "mira", DisplayName: "Mira", PubKey: pk, KeyEpoch: 1,
+			ValidFrom: 1_770_000_000, ValidUntil: 1_780_000_000,
+			AuthorizedOriginDaemons: []string{"daemon-eu-1"},
+			Roles: []registry.Role{
+				registry.NewBridgeRole([]string{"human:peiman"}),
+			},
+		}},
+	}
+	wire, err := toWireRegistry(reg)
+	if err != nil {
+		t.Fatalf("toWireRegistry: %v", err)
+	}
+	raw, err := json.Marshal(wire)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	decoded, err := decodeWireRegistry(raw)
+	if err != nil {
+		t.Fatalf("decodeWireRegistry: %v", err)
+	}
+	built, err := buildRegistry(decoded)
+	if err != nil {
+		t.Fatalf("buildRegistry: %v", err)
+	}
+	if !rolesEqual(built.Agents[0].Roles, reg.Agents[0].Roles) {
+		t.Fatalf("roles dropped on wire round-trip: %#v", roleView(built.Agents[0].Roles))
+	}
+}
+
+func rolesEqual(got, want []registry.Role) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range want {
+		if got[i].Kind() != want[i].Kind() {
+			return false
+		}
+		if strings.Join(got[i].VouchesFor(), "\x00") != strings.Join(want[i].VouchesFor(), "\x00") {
+			return false
+		}
+		if strings.Join(got[i].Platforms(), "\x00") != strings.Join(want[i].Platforms(), "\x00") {
+			return false
+		}
+	}
+	return true
+}
+
+func roleView(roles []registry.Role) []string {
+	out := make([]string, len(roles))
+	for i, r := range roles {
+		out[i] = string(r.Kind()) + " vouches=" + strings.Join(r.VouchesFor(), ",") + " platforms=" + strings.Join(r.Platforms(), ",")
+	}
+	return out
+}
+
+func agentObject(canonical []byte, slug string) string {
+	s := string(canonical)
+	i := strings.Index(s, `"slug":"`+slug+`"`)
+	if i < 0 {
+		return s
+	}
+	start := strings.LastIndex(s[:i], "{")
+	if start < 0 {
+		return s
+	}
+	return s[start:]
 }

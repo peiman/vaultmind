@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `identity sign-registry` can sign agent roles (`bridge`, `code_signing`) on a registry binding. A registry with no roles is unchanged, so registries already signed still verify. A verifier that predates roles rejects a registry that carries them, so do not sign roles until every verifier that must accept the registry parses them.
+- `vaultmind identity sign-session` signs a hub login proof for the agent enrolled on this machine, through the keyless signer, and prints one JSON line (`statement`, `sig`, `pubkey`). The slug and key epoch are that agent's own binding. An invalid challenge, a missing enrollment, or an unreachable signer prints nothing and exits non-zero.
+
 ### Changed
 
 - The ckeletin-go framework is updated from 0.2.4 to 0.2.10. This changes development checks only, not the `vaultmind` CLI: the license check uses this module's Go toolchain, `task check` refuses `mkdir` used as a lock, regenerated config key constants no longer need a framework changelog entry, and the framework update notice works on Windows.
@@ -14,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `mesh-watch.sh` names the mailbox when a direct message wakes it: `WAKE: new DM message from …`, with "read your DM mailbox (no room)" as the recovery hint. The first room's long poll also carries the DM mailbox, and a DM used to be announced as a message in that room, so an agent read the room, found nothing, and concluded there was nothing.
+- `vaultmind identity sign-session` rejects a network id or slug that contains an ASCII control character (U+0000–U+001F or U+007F) and prints nothing. `VerifySessionStatement` refuses the same statement. RFC 8785 escapes those characters, and Go and Rust JCS libraries can disagree on that escaping.
 - The macOS ORT release build now runs on the macos-15 runner, after GitHub stopped serving macos-14. The binary still runs on macOS 14: the minimum is pinned to 14.0 and checked in CI.
 - In a multi-vault recall, a vault with fewer than 30 notes no longer delivers its top note's text when another vault has at least 30 notes and a noise-floor verdict, unless the small vault's own label says the note matches (#405). When no other vault is that large — one vault just created with `init`, or several vaults all under 30 notes — that text is still shown.
 - A note added since the last `vaultmind index --embed` is no longer labelled strong or moderate for an unrelated question and delivered as if the vault covered it (#405). That note has no embedding, so ask cannot judge how close it is. When a noise floor is in use and the note is the top hit, the label is now capped at weak (a weak or no-match label is left as it is), and ask prints that the top hit has no embedding and that relevance can't be judged until `vaultmind index --embed`. Keyword-only ask, with no embedder, is unchanged.

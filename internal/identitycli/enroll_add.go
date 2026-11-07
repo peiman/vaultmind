@@ -462,7 +462,10 @@ func appendAndBump(reg registry.Registry, binding registry.AgentBinding, validit
 // buildRegistry+canonicalizes — proving the emitted document is guaranteed
 // signable by `sign-registry` before it is written out.
 func serializeSignable(reg registry.Registry, now time.Time) ([]byte, error) {
-	wire := toWireRegistry(reg)
+	wire, err := toWireRegistry(reg)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", errEnrollAddNotSignable, err)
+	}
 	emitted, err := json.Marshal(wire)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", errEnrollAddNotSignable, err)
@@ -509,15 +512,20 @@ func ephemeralSignKey() ed25519.PrivateKey {
 
 // toWireRegistry converts a registry.Registry into the wireRegistry shape that
 // sign-registry reads (the SAME struct decodeWireRegistry/buildRegistry use).
-func toWireRegistry(reg registry.Registry) wireRegistry {
+func toWireRegistry(reg registry.Registry) (wireRegistry, error) {
 	agents := make([]wireBinding, len(reg.Agents))
 	for i, a := range reg.Agents {
+		roles, err := registry.MarshalRoles(a.Roles)
+		if err != nil {
+			return wireRegistry{}, err
+		}
 		agents[i] = wireBinding{
 			AuthorizedOriginDaemons: a.AuthorizedOriginDaemons,
 			DisplayName:             a.DisplayName,
 			KeyEpoch:                int64(a.KeyEpoch),
 			PubKey:                  base64.StdEncoding.EncodeToString(a.PubKey.Bytes()),
 			RevokedAt:               revokedAtI64(a.RevokedAt),
+			Roles:                   roles,
 			Slug:                    a.Slug,
 			ValidFrom:               a.ValidFrom,
 			ValidUntil:              a.ValidUntil,
@@ -528,7 +536,7 @@ func toWireRegistry(reg registry.Registry) wireRegistry {
 		Epoch:      int64(reg.Epoch),
 		ValidFrom:  reg.ValidFrom,
 		ValidUntil: reg.ValidUntil,
-	}
+	}, nil
 }
 
 // revokedAtI64 widens the registry's *int revoked_at back to the wire *int64,
