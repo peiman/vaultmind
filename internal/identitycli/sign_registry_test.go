@@ -440,6 +440,7 @@ func TestSignRegistryRejectsMalformedRoles(t *testing.T) {
 		{name: "bridge_missing_vouches_for", roles: `[{"kind":"bridge"}]`},
 		{name: "code_signing_missing_platforms", roles: `[{"kind":"code_signing"}]`},
 		{name: "roles_not_array", roles: `{"kind":"bridge"}`},
+		{name: "god_extra_field", roles: `[{"kind":"god","extra":true}]`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -638,6 +639,157 @@ func TestWireRegistryRoundTripsRoles(t *testing.T) {
 	if !rolesEqual(built.Agents[0].Roles, reg.Agents[0].Roles) {
 		t.Fatalf("roles dropped on wire round-trip: %#v", roleView(built.Agents[0].Roles))
 	}
+}
+
+func TestSignRegistryCarriesHumansGodAndCustody(t *testing.T) {
+	rootPub, rootPriv := fixedAgentKey(t, 0x11)
+	agentPub, _ := fixedAgentKey(t, 0x22)
+	peimanPub, _ := fixedAgentKey(t, 0x31)
+	siaPub, _ := fixedAgentKey(t, 0x32)
+	agentB64 := base64.StdEncoding.EncodeToString(agentPub)
+	peimanB64 := base64.StdEncoding.EncodeToString(peimanPub)
+	siaB64 := base64.StdEncoding.EncodeToString(siaPub)
+
+	in := `{"agents":[` + bindingJSON("mira", "Mira", agentB64, `,"custody":"shared","roles":[{"kind":"bridge","vouches_for":["human:peiman"]}]`) +
+		`],"epoch":5,"humans":[` +
+		bindingJSON("peiman", "Peiman", peimanB64, `,"custody":"isolated","roles":[{"kind":"god"}]`) + `,` +
+		bindingJSON("siavoush", "Siavoush", siaB64, "") +
+		`],"valid_from":1770000000,"valid_until":1780000000}`
+
+	fake := &fakeSignerClient{priv: rootPriv}
+	var out bytes.Buffer
+	if err := SignRegistry(&out, fake, []byte(in)); err != nil {
+		t.Fatalf("SignRegistry: %v", err)
+	}
+	env, err := registry.ParseDistribution(out.Bytes())
+	if err != nil {
+		t.Fatalf("ParseDistribution: %v", err)
+	}
+	body := string(env.Registry)
+	if strings.Contains(body, `"custody":"shared"`) || strings.Contains(body, `"class"`) {
+		t.Fatalf("canonical registry leaked shared custody or class: %s", body)
+	}
+	if !strings.Contains(body, `"humans"`) || !strings.Contains(body, `"custody":"isolated"`) || !strings.Contains(body, `"kind":"god"`) {
+		t.Fatalf("canonical registry dropped humans, god, or isolated custody: %s", body)
+	}
+	loaded, _, err := registry.VerifyAndLoad(rootPub, env, 4, time.Unix(1_770_000_500, 0), time.Hour*24*365)
+	if err != nil {
+		t.Fatalf("VerifyAndLoad: %v", err)
+	}
+	if len(loaded.Humans) != 2 || loaded.Humans[0].Slug != "peiman" || loaded.Humans[0].Class != registry.ClassHuman {
+		t.Fatalf("humans = %+v", loaded.Humans)
+	}
+	if loaded.Humans[0].Custody != registry.CustodyIsolated || len(loaded.Humans[0].Roles) != 1 || loaded.Humans[0].Roles[0].Kind() != registry.RoleKindGod {
+		t.Fatalf("peiman = %+v", loaded.Humans[0])
+	}
+	if loaded.Humans[1].Custody != "" || len(loaded.Humans[1].Roles) != 0 {
+		t.Fatalf("siavoush should have no role and default custody: %+v", loaded.Humans[1])
+	}
+	if loaded.Agents[0].Custody != "" || loaded.Agents[0].Class != "" {
+		t.Fatalf("shared custody or class stuck on the agent: %+v", loaded.Agents[0])
+	}
+	god, ok := registry.GodBinding(loaded, time.Unix(1_770_000_500, 0))
+	if !ok || god.Slug != "peiman" {
+		t.Fatalf("GodBinding = %s %v", god.Slug, ok)
+	}
+
+	agentPK, _ := registry.NewPublicKey(agentPub)
+	peimanPK, _ := registry.NewPublicKey(peimanPub)
+	siaPK, _ := registry.NewPublicKey(siaPub)
+	dom, err := registry.SignRegistryWithSigner(&keyBackedSigner{priv: rootPriv}, registry.Registry{
+		Epoch: 5, ValidFrom: 1770000000, ValidUntil: 1780000000,
+		Agents: []registry.AgentBinding{{
+			Slug: "mira", DisplayName: "Mira", PubKey: agentPK, KeyEpoch: 1,
+			ValidFrom: 1770000000, ValidUntil: 1780000000, AuthorizedOriginDaemons: []string{"d"},
+			Roles: []registry.Role{registry.NewBridgeRole([]string{"human:peiman"})}, Custody: registry.CustodyShared,
+		}},
+		Humans: []registry.AgentBinding{
+			{Slug: "peiman", DisplayName: "Peiman", PubKey: peimanPK, KeyEpoch: 1,
+				ValidFrom: 1770000000, ValidUntil: 1780000000, AuthorizedOriginDaemons: []string{"d"},
+				Roles: []registry.Role{registry.NewGodRole()}, Custody: registry.CustodyIsolated, Class: registry.ClassHuman},
+			{Slug: "siavoush", DisplayName: "Siavoush", PubKey: siaPK, KeyEpoch: 1,
+				ValidFrom: 1770000000, ValidUntil: 1780000000, AuthorizedOriginDaemons: []string{"d"},
+				Class: registry.ClassHuman},
+		},
+	})
+	if err != nil {
+		t.Fatalf("domain sign: %v", err)
+	}
+	if !bytes.Equal(env.Registry, dom.Registry) {
+		t.Fatalf("CLI canonical bytes differ from domain:\n cli=%s\n dom=%s", env.Registry, dom.Registry)
+	}
+}
+
+func TestSignRegistryRejectsHumanPlacement(t *testing.T) {
+	agentPub, _ := fixedAgentKey(t, 0x22)
+	humanPub, _ := fixedAgentKey(t, 0x31)
+	otherPub, _ := fixedAgentKey(t, 0x32)
+	agentB64 := base64.StdEncoding.EncodeToString(agentPub)
+	humanB64 := base64.StdEncoding.EncodeToString(humanPub)
+	otherB64 := base64.StdEncoding.EncodeToString(otherPub)
+	agent := bindingJSON("mira", "Mira", agentB64, "")
+	cases := []struct {
+		name string
+		in   string
+		want string
+		slug string
+	}{
+		{
+			name: "god_on_agent", slug: "mira", want: registry.ErrGodOnlyOnHuman,
+			in: registryJSON(bindingJSON("mira", "Mira", agentB64, `,"roles":[{"kind":"god"}]`), ""),
+		},
+		{
+			name: "bridge_on_human", slug: "peiman", want: registry.ErrAgentRoleOnlyOnAgent,
+			in: registryJSON(agent, bindingJSON("peiman", "Peiman", humanB64, `,"roles":[{"kind":"bridge","vouches_for":["human:ada"]}]`)),
+		},
+		{
+			name: "code_signing_on_human", slug: "peiman", want: registry.ErrAgentRoleOnlyOnAgent,
+			in: registryJSON(agent, bindingJSON("peiman", "Peiman", humanB64, `,"roles":[{"kind":"code_signing","platforms":["darwin-arm64"]}]`)),
+		},
+		{
+			name: "two_gods", slug: "peiman", want: registry.ErrMultipleGods,
+			in: registryJSON(agent, bindingJSON("peiman", "Peiman", humanB64, `,"roles":[{"kind":"god"}]`)+","+
+				bindingJSON("siavoush", "Siavoush", otherB64, `,"roles":[{"kind":"god"}]`)),
+		},
+		{
+			name: "slug_across_classes", slug: "mira", want: registry.ErrSlugAcrossClasses,
+			in: registryJSON(agent, bindingJSON("mira", "Mira", humanB64, "")),
+		},
+		{
+			name: "bad_custody", slug: "peiman", want: registry.ErrBadCustody,
+			in: registryJSON(agent, bindingJSON("peiman", "Peiman", humanB64, `,"custody":"private"`)),
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := &fakeSignerClient{}
+			var out bytes.Buffer
+			err := SignRegistry(&out, fake, []byte(tc.in))
+			if err == nil || !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), tc.slug) {
+				t.Fatalf("got %v, want %q and %q", err, tc.want, tc.slug)
+			}
+			if tc.want == registry.ErrMultipleGods && !strings.Contains(err.Error(), "siavoush") {
+				t.Fatalf("two gods must name both slugs: %v", err)
+			}
+			if fake.gotCanonical != nil {
+				t.Fatal("signer was called for a registry that breaks a human rule")
+			}
+			if out.Len() != 0 {
+				t.Fatalf("reject must print nothing, got %q", out.String())
+			}
+		})
+	}
+}
+
+func bindingJSON(slug, name, pubB64, extra string) string {
+	return `{"authorized_origin_daemons":["d"],"display_name":"` + name + `","key_epoch":1,"pubkey":"` + pubB64 + `"` + extra + `,"slug":"` + slug + `","valid_from":1770000000,"valid_until":1780000000}`
+}
+
+func registryJSON(agents, humans string) string {
+	if humans == "" {
+		return `{"agents":[` + agents + `],"epoch":5,"valid_from":1770000000,"valid_until":1780000000}`
+	}
+	return `{"agents":[` + agents + `],"epoch":5,"humans":[` + humans + `],"valid_from":1770000000,"valid_until":1780000000}`
 }
 
 func rolesEqual(got, want []registry.Role) bool {

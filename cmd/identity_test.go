@@ -675,6 +675,73 @@ func TestIdentityEnrollAddCommandViaFile(t *testing.T) {
 	}
 }
 
+func TestIdentityEnrollAddCommandHumanGodIsolated(t *testing.T) {
+	rootPub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey root: %v", err)
+	}
+	memberPub, memberPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey member: %v", err)
+	}
+	net := registry.NetworkID(rootPub)
+	f := enrollment.Fields{
+		AlgVersion: enrollment.AlgVersion, Created: 1_700_000_000, DisplayName: "Peiman",
+		KeyEpoch: 1, NetworkID: net, Nonce: "YWJjZGVm",
+		PubKey:          base64.StdEncoding.EncodeToString(memberPub),
+		Slug:            "peiman",
+		TransportPubKey: base64.StdEncoding.EncodeToString(make([]byte, 32)),
+	}
+	canon, err := enrollment.CanonicalizeEnrollment(f)
+	if err != nil {
+		t.Fatalf("CanonicalizeEnrollment: %v", err)
+	}
+	reqJSON, err := enrollment.MarshalWire(f, base64.StdEncoding.EncodeToString(ed25519.Sign(memberPriv, canon.Bytes())))
+	if err != nil {
+		t.Fatalf("MarshalWire: %v", err)
+	}
+	dir := t.TempDir()
+	reqPath := filepath.Join(dir, "request.json")
+	if err := os.WriteFile(reqPath, reqJSON, 0o600); err != nil {
+		t.Fatalf("write request: %v", err)
+	}
+
+	out, _, err := runRootCmd(t, "identity", "enroll-add",
+		"--request", reqPath,
+		"--root-pubkey", base64.StdEncoding.EncodeToString(rootPub),
+		"--class", "human",
+		"--role", "god",
+		"--custody", "isolated",
+	)
+	if err != nil {
+		t.Fatalf("identity enroll-add: %v", err)
+	}
+	var emitted struct {
+		Agents []struct {
+			Slug string `json:"slug"`
+		} `json:"agents"`
+		Humans []struct {
+			Slug    string `json:"slug"`
+			Custody string `json:"custody"`
+			Roles   []struct {
+				Kind string `json:"kind"`
+			} `json:"roles"`
+		} `json:"humans"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &emitted); err != nil {
+		t.Fatalf("decode emitted registry: %v\nout=%q", err, out.String())
+	}
+	if len(emitted.Agents) != 0 {
+		t.Fatalf("a human enroll must not add an agent: %+v", emitted.Agents)
+	}
+	if len(emitted.Humans) != 1 || emitted.Humans[0].Slug != "peiman" || emitted.Humans[0].Custody != "isolated" {
+		t.Fatalf("humans = %+v", emitted.Humans)
+	}
+	if len(emitted.Humans[0].Roles) != 1 || emitted.Humans[0].Roles[0].Kind != "god" {
+		t.Fatalf("roles = %+v", emitted.Humans[0].Roles)
+	}
+}
+
 // TestIdentityEnrollAddCommandRejectsCrossNetwork drives the command with a
 // request whose network_id is not the admin network and asserts it fails closed
 // (no emitted registry).

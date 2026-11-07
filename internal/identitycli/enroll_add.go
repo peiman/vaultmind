@@ -96,6 +96,12 @@ const (
 	// ErrEnrollAddEpochOverflow is returned when bumping the epoch would exceed
 	// the JCS-safe ceiling (MaxSafeEpoch).
 	ErrEnrollAddEpochOverflow = "identitycli: new registry epoch exceeds the JCS-safe ceiling"
+	// ErrEnrollAddBadClass is returned when --class is not agent or human.
+	ErrEnrollAddBadClass = "identitycli: --class must be agent or human"
+	// ErrEnrollAddBadRole is returned when --role is not god or empty.
+	ErrEnrollAddBadRole = "identitycli: --role must be god or empty"
+	// ErrEnrollAddBadCustody is returned when --custody is not shared or isolated.
+	ErrEnrollAddBadCustody = "identitycli: --custody must be shared or isolated"
 	// errEnrollAddNotSignable wraps the final guarantee check: the emitted
 	// registry must round-trip buildRegistry+canonicalize.
 	errEnrollAddNotSignable = "identitycli: emitted registry failed the signable round-trip"
@@ -123,6 +129,16 @@ type EnrollAddConfig struct {
 	// OriginDaemons is the comma-separated AuthorizedOriginDaemons list (parsed
 	// here). Empty => no authorized origin daemons.
 	OriginDaemons string
+	// Class is the binding class the admin chose. Empty and "agent" append to
+	// agents[]. "human" appends to humans[]. The enrollment request itself does
+	// not carry a class.
+	Class string
+	// Role is the role to grant. Empty grants none. "god" is allowed only when
+	// Class is human.
+	Role string
+	// Custody is who holds the new binding's key. Empty and "shared" are the
+	// default and are omitted on the wire. "isolated" is carried through.
+	Custody string
 
 	// Now is the timestamp source (nil => time.Now). Injected for deterministic
 	// issuance windows in tests.
@@ -170,11 +186,16 @@ func EnrollAdd(out, errOut io.Writer, in io.Reader, cfg EnrollAddConfig) error {
 		return err
 	}
 
-	if err := checkUniqueness(reg, fields.Slug, int(fields.KeyEpoch)); err != nil {
+	class, roles, custody, err := resolveEnrollPlacement(cfg, fields.Slug)
+	if err != nil {
 		return err
 	}
 
-	binding, err := buildNewBinding(fields, cfg, validity)
+	if err := checkUniqueness(reg, fields.Slug, int(fields.KeyEpoch), class); err != nil {
+		return err
+	}
+
+	binding, err := buildNewBinding(fields, cfg, validity, class, roles, custody)
 	if err != nil {
 		return err
 	}
@@ -384,12 +405,22 @@ func extractSignedRegistry(input []byte, rootPub ed25519.PublicKey) ([]byte, err
 }
 
 // checkUniqueness FAIL-CLOSED pre-checks the new binding against the current
-// registry: it refuses a {slug,key_epoch} tuple that already exists, and refuses
-// a slug that already has a LIVE (non-revoked) binding (rotation is out of scope
-// for v1). A bad append would poison the WHOLE registry (the consumer rejects the
-// entire document), so this gate runs BEFORE any append.
-func checkUniqueness(reg registry.Registry, slug string, keyEpoch int) error {
-	for _, b := range reg.Agents {
+// registry: it refuses a {slug,key_epoch} tuple that already exists in the same
+// array, a slug that already has a LIVE binding in that array (rotation is out
+// of scope for v1), and the same slug in the other array even when that binding
+// is revoked. A bad append would poison the WHOLE registry, so this gate runs
+// BEFORE any append.
+func checkUniqueness(reg registry.Registry, slug string, keyEpoch int, class string) error {
+	same, other := reg.Agents, reg.Humans
+	if class == registry.ClassHuman {
+		same, other = reg.Humans, reg.Agents
+	}
+	for _, b := range other {
+		if b.Slug == slug {
+			return fmt.Errorf("%s: %q", registry.ErrSlugAcrossClasses, slug)
+		}
+	}
+	for _, b := range same {
 		if b.Slug == slug && b.KeyEpoch == keyEpoch {
 			return fmt.Errorf("%s: %q@%d", ErrEnrollAddTupleExists, slug, keyEpoch)
 		}
@@ -400,12 +431,47 @@ func checkUniqueness(reg registry.Registry, slug string, keyEpoch int) error {
 	return nil
 }
 
+// resolveEnrollPlacement reads the admin's --class, --role, and --custody.
+// The enrollment request format is frozen, so the admin decides the class.
+// god is refused unless the class is human. Empty custody and "shared" are
+// the default, which the wire omits.
+func resolveEnrollPlacement(cfg EnrollAddConfig, slug string) (string, []registry.Role, string, error) {
+	var class string
+	switch cfg.Class {
+	case "", registry.ClassAgent:
+		class = ""
+	case registry.ClassHuman:
+		class = registry.ClassHuman
+	default:
+		return "", nil, "", fmt.Errorf("%s: %q", ErrEnrollAddBadClass, cfg.Class)
+	}
+	var roles []registry.Role
+	switch cfg.Role {
+	case "":
+	case string(registry.RoleKindGod):
+		if class != registry.ClassHuman {
+			return "", nil, "", fmt.Errorf("%s: %q", registry.ErrGodOnlyOnHuman, slug)
+		}
+		roles = []registry.Role{registry.NewGodRole()}
+	default:
+		return "", nil, "", fmt.Errorf("%s: %q", ErrEnrollAddBadRole, cfg.Role)
+	}
+	switch cfg.Custody {
+	case "", registry.CustodyShared:
+		return class, roles, "", nil
+	case registry.CustodyIsolated:
+		return class, roles, registry.CustodyIsolated, nil
+	default:
+		return "", nil, "", fmt.Errorf("%s: %q", ErrEnrollAddBadCustody, cfg.Custody)
+	}
+}
+
 // buildNewBinding constructs the new AgentBinding from the verified request: the
 // validated pubkey, the request's key_epoch, a fresh issuance window (now ..
 // now+validity), the parsed authorized-origin-daemons, and a nil revoked_at
 // (live). Transport fields are deliberately NOT carried (WireGuard = later
 // slice).
-func buildNewBinding(fields enrollment.Fields, cfg EnrollAddConfig, validity int64) (registry.AgentBinding, error) {
+func buildNewBinding(fields enrollment.Fields, cfg EnrollAddConfig, validity int64, class string, roles []registry.Role, custody string) (registry.AgentBinding, error) {
 	raw, err := base64.StdEncoding.DecodeString(fields.PubKey)
 	if err != nil {
 		return registry.AgentBinding{}, fmt.Errorf("%s: %w", ErrRegistryBadPubKey, err)
@@ -424,6 +490,9 @@ func buildNewBinding(fields enrollment.Fields, cfg EnrollAddConfig, validity int
 		ValidUntil:              now + validity,
 		AuthorizedOriginDaemons: parseOriginDaemons(cfg.OriginDaemons),
 		RevokedAt:               nil,
+		Roles:                   roles,
+		Custody:                 custody,
+		Class:                   class,
 	}, nil
 }
 
@@ -448,12 +517,19 @@ func appendAndBump(reg registry.Registry, binding registry.AgentBinding, validit
 	if int64(newEpoch) > int64(registry.MaxSafeEpoch) {
 		return registry.Registry{}, fmt.Errorf("%s", ErrEnrollAddEpochOverflow)
 	}
-	agents := append(append([]registry.AgentBinding(nil), reg.Agents...), binding)
+	agents := append([]registry.AgentBinding(nil), reg.Agents...)
+	humans := append([]registry.AgentBinding(nil), reg.Humans...)
+	if binding.Class == registry.ClassHuman {
+		humans = append(humans, binding)
+	} else {
+		agents = append(agents, binding)
+	}
 	return registry.Registry{
 		Epoch:      newEpoch,
 		ValidFrom:  now,
 		ValidUntil: now + validity,
 		Agents:     agents,
+		Humans:     humans,
 	}, nil
 }
 
@@ -480,13 +556,11 @@ func serializeSignable(reg registry.Registry, now time.Time) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", errEnrollAddNotSignable, err)
 	}
-	// Exercise the FULL consumer trust gate over an ephemeral throwaway root key:
-	// sign the rebuilt registry, then VerifyAndLoad it. This runs the EXACT gates
-	// the real consumer applies — including checkBindingUniqueness, which
-	// buildRegistry/SignRegistry do NOT — so a pre-poisoned CURRENT registry (e.g.
-	// two live bindings for one slug already present, untouched by this add) is
-	// caught HERE rather than silently re-emitted and rejected wholesale by the
-	// consumer. The ephemeral signature never leaves this process.
+	// Exercise the consumer trust gate over an ephemeral throwaway root key:
+	// sign the rebuilt registry, then VerifyAndLoad it. SignRegistry refuses a
+	// pre-poisoned current registry (two live bindings for one slug, untouched
+	// by this add) before anything is emitted. The ephemeral signature never
+	// leaves this process.
 	priv := ephemeralSignKey()
 	env, err := registry.SignRegistry(priv, built)
 	if err != nil {
@@ -513,14 +587,39 @@ func ephemeralSignKey() ed25519.PrivateKey {
 // toWireRegistry converts a registry.Registry into the wireRegistry shape that
 // sign-registry reads (the SAME struct decodeWireRegistry/buildRegistry use).
 func toWireRegistry(reg registry.Registry) (wireRegistry, error) {
-	agents := make([]wireBinding, len(reg.Agents))
-	for i, a := range reg.Agents {
+	agents, err := bindingsToCLIWire(reg.Agents)
+	if err != nil {
+		return wireRegistry{}, err
+	}
+	humans, err := bindingsToCLIWire(reg.Humans)
+	if err != nil {
+		return wireRegistry{}, err
+	}
+	return wireRegistry{
+		Agents:     agents,
+		Epoch:      int64(reg.Epoch),
+		Humans:     humans,
+		ValidFrom:  reg.ValidFrom,
+		ValidUntil: reg.ValidUntil,
+	}, nil
+}
+
+// bindingsToCLIWire converts one binding slice. An empty slice stays empty so
+// agents marshal as [] and humans, which is omitempty, stays off the wire.
+func bindingsToCLIWire(bindings []registry.AgentBinding) ([]wireBinding, error) {
+	out := make([]wireBinding, len(bindings))
+	for i, a := range bindings {
 		roles, err := registry.MarshalRoles(a.Roles)
 		if err != nil {
-			return wireRegistry{}, err
+			return nil, err
 		}
-		agents[i] = wireBinding{
+		custody, err := registry.NormalizeCustody(a.Slug, a.Custody)
+		if err != nil {
+			return nil, err
+		}
+		out[i] = wireBinding{
 			AuthorizedOriginDaemons: a.AuthorizedOriginDaemons,
+			Custody:                 custody,
 			DisplayName:             a.DisplayName,
 			KeyEpoch:                int64(a.KeyEpoch),
 			PubKey:                  base64.StdEncoding.EncodeToString(a.PubKey.Bytes()),
@@ -531,12 +630,7 @@ func toWireRegistry(reg registry.Registry) (wireRegistry, error) {
 			ValidUntil:              a.ValidUntil,
 		}
 	}
-	return wireRegistry{
-		Agents:     agents,
-		Epoch:      int64(reg.Epoch),
-		ValidFrom:  reg.ValidFrom,
-		ValidUntil: reg.ValidUntil,
-	}, nil
+	return out, nil
 }
 
 // revokedAtI64 widens the registry's *int revoked_at back to the wire *int64,

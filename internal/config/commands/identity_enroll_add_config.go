@@ -29,7 +29,12 @@ At least one of --root-pubkey or --network-id is required to resolve the admin
 network; when both are set they must AGREE. A request whose network_id is not the
 admin network is REFUSED (cross-network). Uniqueness is checked FAIL-CLOSED before
 the append: a duplicate {slug,key_epoch} or a slug that already has a live binding
-is refused (a bad append would poison the whole registry at the consumer).
+is refused (a bad append would poison the whole registry at the consumer). The
+same slug cannot appear in both agents and humans.
+
+--class is agent (the default) or human. A human binding is appended to humans[].
+--role god is allowed only with --class human. --custody is shared (the default,
+omitted on the wire) or isolated.
 
 NOTE: transport_pubkey/transport_endpoint are NOT yet carried into the binding
 (WireGuard wiring is a later slice). This CLI is KEYLESS: it never signs.`,
@@ -41,6 +46,9 @@ NOTE: transport_pubkey/transport_endpoint are NOT yet carried into the binding
 		"app.identityenrolladd.network_id":       "network-id",
 		"app.identityenrolladd.validity_seconds": "validity-seconds",
 		"app.identityenrolladd.origin_daemon":    "origin-daemon",
+		"app.identityenrolladd.class":            "class",
+		"app.identityenrolladd.role":             "role",
+		"app.identityenrolladd.custody":          "custody",
 	},
 }
 
@@ -54,6 +62,9 @@ func IdentityEnrollAddOptions() []config.ConfigOption {
 		{Key: "app.identityenrolladd.network_id", DefaultValue: "", Description: "Admin network id (vmnet1:…); alternative to --root-pubkey (>=1 required; both must agree)", Type: "string"},
 		{Key: "app.identityenrolladd.validity_seconds", DefaultValue: "", Description: "Registry+binding issuance window in seconds (default 31536000 = one year)", Type: "string"},
 		{Key: "app.identityenrolladd.origin_daemon", DefaultValue: "", Description: "Comma-separated authorized origin daemon ids for the new binding (default none)", Type: "string"},
+		{Key: "app.identityenrolladd.class", DefaultValue: "", Description: "Binding class: agent (default) or human. human appends the binding to humans[]", Type: "string"},
+		{Key: "app.identityenrolladd.role", DefaultValue: "", Description: "Role to grant on the new binding: god, and only with --class human", Type: "string"},
+		{Key: "app.identityenrolladd.custody", DefaultValue: "", Description: "Key custody: shared (default, omitted on the wire) or isolated", Type: "string"},
 	}
 }
 

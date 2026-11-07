@@ -9,6 +9,7 @@ Only framework changes are tracked here — project-level changes belong in the 
 
 ### Added
 
+- Config key constants for `identity enroll-add` class, role, and custody: `app.identityenrolladd.class`, `app.identityenrolladd.role`, and `app.identityenrolladd.custody`.
 - Config key constants for `identity sign-session`: `app.identitysignsession.challenge`, `app.identitysignsession.network_id`, and `app.identitysignsession.signer_socket`.
 
 ## [0.2.10] - 2026-11-06

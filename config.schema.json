@@ -960,6 +960,16 @@
         },
         "identityenrolladd": {
           "properties": {
+            "class": {
+              "default": "",
+              "description": "Binding class: agent (default) or human. human appends the binding to humans[]",
+              "type": "string"
+            },
+            "custody": {
+              "default": "",
+              "description": "Key custody: shared (default, omitted on the wire) or isolated",
+              "type": "string"
+            },
             "network_id": {
               "default": "",
               "description": "Admin network id (vmnet1:…); alternative to --root-pubkey (\u003e=1 required; both must agree)",
@@ -978,6 +988,11 @@
             "request": {
               "default": "",
               "description": "Signed enrollment-request JSON file (stdin when empty or \"-\")",
+              "type": "string"
+            },
+            "role": {
+              "default": "",
+              "description": "Role to grant on the new binding: god, and only with --class human",
               "type": "string"
             },
             "root_pubkey": {

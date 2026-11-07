@@ -368,15 +368,16 @@ func TestVerifyAndLoad_RejectsDuplicateSlugEpoch(t *testing.T) {
 	rootPub, rootPriv := genKey(t)
 	pub1, _ := genKey(t)
 	pub2, _ := genKey(t)
-	// Two bindings with the SAME {slug,key_epoch} tuple must be rejected.
+	// Two bindings with the SAME {slug,key_epoch} tuple must be rejected at
+	// sign and, if a root signs the body anyway, at load.
 	b1 := liveBinding(t, "mira", pub1, 1)
 	b2 := liveBinding(t, "mira", pub2, 1)
 	reg := freshRegistry(5, b1, b2)
-	env, err := SignRegistry(rootPriv, reg)
-	if err != nil {
-		t.Fatalf("SignRegistry: %v", err)
+	if _, err := SignRegistry(rootPriv, reg); err == nil || !strings.Contains(err.Error(), ErrDuplicateBinding) {
+		t.Fatalf("SignRegistry must refuse a duplicate {slug,key_epoch}: %v", err)
 	}
-	if _, _, err := VerifyAndLoad(rootPub, env, 4, fixedNow, time.Hour*24*365); err == nil {
+	env := signPatchedObject(t, rootPriv, reg, func(*testing.T, map[string]any) {})
+	if _, _, err := VerifyAndLoad(rootPub, env, 4, fixedNow, time.Hour*24*365); err == nil || !strings.Contains(err.Error(), ErrDuplicateBinding) {
 		t.Fatal("expected reject for duplicate {slug,key_epoch} tuple")
 	}
 }
@@ -390,11 +391,11 @@ func TestVerifyAndLoad_RejectsMultipleLiveBindingsPerSlug(t *testing.T) {
 	b1 := liveBinding(t, "mira", pub1, 1)
 	b2 := liveBinding(t, "mira", pub2, 2)
 	reg := freshRegistry(5, b1, b2)
-	env, err := SignRegistry(rootPriv, reg)
-	if err != nil {
-		t.Fatalf("SignRegistry: %v", err)
+	if _, err := SignRegistry(rootPriv, reg); err == nil || !strings.Contains(err.Error(), ErrDuplicateBinding) {
+		t.Fatalf("SignRegistry must refuse two live bindings for one slug: %v", err)
 	}
-	if _, _, err := VerifyAndLoad(rootPub, env, 4, fixedNow, time.Hour*24*365); err == nil {
+	env := signPatchedObject(t, rootPriv, reg, func(*testing.T, map[string]any) {})
+	if _, _, err := VerifyAndLoad(rootPub, env, 4, fixedNow, time.Hour*24*365); err == nil || !strings.Contains(err.Error(), ErrDuplicateBinding) {
 		t.Fatal("expected reject for more than one live binding per slug")
 	}
 }

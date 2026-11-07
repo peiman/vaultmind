@@ -1,0 +1,252 @@
+{
+  "root_pubkey": "buCR/SgKm2hVT6c8WIEl1H00JcaKJroja02tkPkKj5I=",
+  "now": 2000000,
+  "max_staleness_secs": 86400,
+  "valid": {
+    "envelope": {
+      "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSIsImtleV9lcG9jaCI6MSwicHVia2V5IjoiUWVqOTRUS3RadzVUVE5peWRkTE5mdXgzY3p4bStOdElvY3JhZjZ2OFJWVT0iLCJyb2xlcyI6W3sia2luZCI6ImJyaWRnZSIsInZvdWNoZXNfZm9yIjpbImh1bWFuOnBlaW1hbiJdfV0sInNsdWciOiJtaXJhIiwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9LHsiYXV0aG9yaXplZF9vcmlnaW5fZGFlbW9ucyI6WyJkYWVtb24tMSJdLCJkaXNwbGF5X25hbWUiOiJBZGEiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6InRIUUxwT0QzNEZkdkVlZ1VuYnV5VXB3aEloUGJaNWd4KzEwYkloNkVWUzA9Iiwic2x1ZyI6ImFkYSIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfV0sImVwb2NoIjoxMCwiaHVtYW5zIjpbeyJhdXRob3JpemVkX29yaWdpbl9kYWVtb25zIjpbImRhZW1vbi0xIl0sImN1c3RvZHkiOiJpc29sYXRlZCIsImRpc3BsYXlfbmFtZSI6IlBlaW1hbiIsImtleV9lcG9jaCI6MSwicHVia2V5IjoiN1RJMHNuYlV6dHBYMVp1dEZQdXZXbmM4RHpHTW1aM2pwZzFUeGFXelRBVT0iLCJyb2xlcyI6W3sia2luZCI6ImdvZCJ9XSwic2x1ZyI6InBlaW1hbiIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfSx7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiU2lhdm91c2giLCJrZXlfZXBvY2giOjEsInB1YmtleSI6Im9SZ0VNMW5ueTBYcWk3SUI1OGk1US9FMFZzQ2swYkVkUTBPbmdvQ0orN289Iiwic2x1ZyI6InNpYXZvdXNoIiwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9XSwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9",
+      "root_key_epoch": 0,
+      "root_sig": "XIXbuBRkLTI0+7NworURUjv/ePS8LrIJxLCBjEBKrJelyeun4TrH5dSZKDZ5+l40xUaB/fkWJeCJlqNU6/FHAQ=="
+    },
+    "persisted_highest_epoch": 9,
+    "canonical_registry": "{\"agents\":[{\"authorized_origin_daemons\":[\"daemon-1\"],\"display_name\":\"Mira\",\"key_epoch\":1,\"pubkey\":\"Qej94TKtZw5TTNiyddLNfux3czxm+NtIocraf6v8RVU=\",\"roles\":[{\"kind\":\"bridge\",\"vouches_for\":[\"human:peiman\"]}],\"slug\":\"mira\",\"valid_from\":1990000,\"valid_until\":3000000},{\"authorized_origin_daemons\":[\"daemon-1\"],\"display_name\":\"Ada\",\"key_epoch\":1,\"pubkey\":\"tHQLpOD34FdvEegUnbuyUpwhIhPbZ5gx+10bIh6EVS0=\",\"slug\":\"ada\",\"valid_from\":1990000,\"valid_until\":3000000}],\"epoch\":10,\"humans\":[{\"authorized_origin_daemons\":[\"daemon-1\"],\"custody\":\"isolated\",\"display_name\":\"Peiman\",\"key_epoch\":1,\"pubkey\":\"7TI0snbUztpX1ZutFPuvWnc8DzGMmZ3jpg1TxaWzTAU=\",\"roles\":[{\"kind\":\"god\"}],\"slug\":\"peiman\",\"valid_from\":1990000,\"valid_until\":3000000},{\"authorized_origin_daemons\":[\"daemon-1\"],\"display_name\":\"Siavoush\",\"key_epoch\":1,\"pubkey\":\"oRgEM1nny0Xqi7IB58i5Q/E0VsCk0bEdQ0OngoCJ+7o=\",\"slug\":\"siavoush\",\"valid_from\":1990000,\"valid_until\":3000000}],\"valid_from\":1990000,\"valid_until\":3000000}",
+    "canonical_sha256": "666127ddc02c026d1bc7c8f7661a2ec5e28869489e0118e99a7f68300e706de5",
+    "bindings": [
+      {
+        "slug": "mira",
+        "class": "agent",
+        "roles": [
+          {
+            "kind": "bridge",
+            "vouches_for": [
+              "human:peiman"
+            ]
+          }
+        ]
+      },
+      {
+        "slug": "ada",
+        "class": "agent",
+        "roles": []
+      },
+      {
+        "slug": "peiman",
+        "class": "human",
+        "custody": "isolated",
+        "roles": [
+          {
+            "kind": "god"
+          }
+        ]
+      },
+      {
+        "slug": "siavoush",
+        "class": "human",
+        "roles": []
+      }
+    ]
+  },
+  "reject": [
+    {
+      "name": "god_on_agent",
+      "reason": "god role is allowed only on a human",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSIsImtleV9lcG9jaCI6MSwicHVia2V5IjoiUWVqOTRUS3RadzVUVE5peWRkTE5mdXgzY3p4bStOdElvY3JhZjZ2OFJWVT0iLCJyb2xlcyI6W3sia2luZCI6ImdvZCJ9XSwic2x1ZyI6Im1pcmEiLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH0seyJhdXRob3JpemVkX29yaWdpbl9kYWVtb25zIjpbImRhZW1vbi0xIl0sImRpc3BsYXlfbmFtZSI6IkFkYSIsImtleV9lcG9jaCI6MSwicHVia2V5IjoidEhRTHBPRDM0RmR2RWVnVW5idXlVcHdoSWhQYlo1Z3grMTBiSWg2RVZTMD0iLCJzbHVnIjoiYWRhIiwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9XSwiZXBvY2giOjEwLCJodW1hbnMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiY3VzdG9keSI6Imlzb2xhdGVkIiwiZGlzcGxheV9uYW1lIjoiUGVpbWFuIiwia2V5X2Vwb2NoIjoxLCJwdWJrZXkiOiI3VEkwc25iVXp0cFgxWnV0RlB1dlduYzhEekdNbVozanBnMVR4YVd6VEFVPSIsInJvbGVzIjpbeyJraW5kIjoiZ29kIn1dLCJzbHVnIjoicGVpbWFuIiwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9LHsiYXV0aG9yaXplZF9vcmlnaW5fZGFlbW9ucyI6WyJkYWVtb24tMSJdLCJkaXNwbGF5X25hbWUiOiJTaWF2b3VzaCIsImtleV9lcG9jaCI6MSwicHVia2V5Ijoib1JnRU0xbm55MFhxaTdJQjU4aTVRL0UwVnNDazBiRWRRME9uZ29DSis3bz0iLCJzbHVnIjoic2lhdm91c2giLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH0=",
+        "root_key_epoch": 0,
+        "root_sig": "36DEiC9uDzDRWHywmWnbKNRcidZsNC3snY6gEqeiFwSSYzxjMCg/5jk3s5xra+A0ebnZewNTlbWNDcQVVLuhBA=="
+      }
+    },
+    {
+      "name": "bridge_on_human",
+      "reason": "bridge role is allowed only on an agent",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSIsImtleV9lcG9jaCI6MSwicHVia2V5IjoiUWVqOTRUS3RadzVUVE5peWRkTE5mdXgzY3p4bStOdElvY3JhZjZ2OFJWVT0iLCJyb2xlcyI6W3sia2luZCI6ImJyaWRnZSIsInZvdWNoZXNfZm9yIjpbImh1bWFuOnBlaW1hbiJdfV0sInNsdWciOiJtaXJhIiwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9LHsiYXV0aG9yaXplZF9vcmlnaW5fZGFlbW9ucyI6WyJkYWVtb24tMSJdLCJkaXNwbGF5X25hbWUiOiJBZGEiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6InRIUUxwT0QzNEZkdkVlZ1VuYnV5VXB3aEloUGJaNWd4KzEwYkloNkVWUzA9Iiwic2x1ZyI6ImFkYSIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfV0sImVwb2NoIjoxMCwiaHVtYW5zIjpbeyJhdXRob3JpemVkX29yaWdpbl9kYWVtb25zIjpbImRhZW1vbi0xIl0sImN1c3RvZHkiOiJpc29sYXRlZCIsImRpc3BsYXlfbmFtZSI6IlBlaW1hbiIsImtleV9lcG9jaCI6MSwicHVia2V5IjoiN1RJMHNuYlV6dHBYMVp1dEZQdXZXbmM4RHpHTW1aM2pwZzFUeGFXelRBVT0iLCJyb2xlcyI6W3sia2luZCI6ImdvZCJ9XSwic2x1ZyI6InBlaW1hbiIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfSx7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiU2lhdm91c2giLCJrZXlfZXBvY2giOjEsInB1YmtleSI6Im9SZ0VNMW5ueTBYcWk3SUI1OGk1US9FMFZzQ2swYkVkUTBPbmdvQ0orN289Iiwicm9sZXMiOlt7ImtpbmQiOiJicmlkZ2UiLCJ2b3VjaGVzX2ZvciI6WyJodW1hbjphZGEiXX1dLCJzbHVnIjoic2lhdm91c2giLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH0=",
+        "root_key_epoch": 0,
+        "root_sig": "u+c7moyY/VyesQnLYTQo6drBRz/10V7SSZWt1h/w9vPzhLzOABDsiGX25NtbAVZyTTlTeca8P4VbsQxPwCDoCg=="
+      }
+    },
+    {
+      "name": "code_signing_on_human",
+      "reason": "code_signing role is allowed only on an agent",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSIsImtleV9lcG9jaCI6MSwicHVia2V5IjoiUWVqOTRUS3RadzVUVE5peWRkTE5mdXgzY3p4bStOdElvY3JhZjZ2OFJWVT0iLCJyb2xlcyI6W3sia2luZCI6ImJyaWRnZSIsInZvdWNoZXNfZm9yIjpbImh1bWFuOnBlaW1hbiJdfV0sInNsdWciOiJtaXJhIiwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9LHsiYXV0aG9yaXplZF9vcmlnaW5fZGFlbW9ucyI6WyJkYWVtb24tMSJdLCJkaXNwbGF5X25hbWUiOiJBZGEiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6InRIUUxwT0QzNEZkdkVlZ1VuYnV5VXB3aEloUGJaNWd4KzEwYkloNkVWUzA9Iiwic2x1ZyI6ImFkYSIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfV0sImVwb2NoIjoxMCwiaHVtYW5zIjpbeyJhdXRob3JpemVkX29yaWdpbl9kYWVtb25zIjpbImRhZW1vbi0xIl0sImN1c3RvZHkiOiJpc29sYXRlZCIsImRpc3BsYXlfbmFtZSI6IlBlaW1hbiIsImtleV9lcG9jaCI6MSwicHVia2V5IjoiN1RJMHNuYlV6dHBYMVp1dEZQdXZXbmM4RHpHTW1aM2pwZzFUeGFXelRBVT0iLCJyb2xlcyI6W3sia2luZCI6ImdvZCJ9XSwic2x1ZyI6InBlaW1hbiIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfSx7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiU2lhdm91c2giLCJrZXlfZXBvY2giOjEsInB1YmtleSI6Im9SZ0VNMW5ueTBYcWk3SUI1OGk1US9FMFZzQ2swYkVkUTBPbmdvQ0orN289Iiwicm9sZXMiOlt7ImtpbmQiOiJjb2RlX3NpZ25pbmciLCJwbGF0Zm9ybXMiOlsiZGFyd2luLWFybTY0Il19XSwic2x1ZyI6InNpYXZvdXNoIiwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9XSwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9",
+        "root_key_epoch": 0,
+        "root_sig": "dxGm2/9B7x/ipDX+JMrxJIwHk+Ca9s1KEGbZdPxnzTgpcUiQBtdkqfrR75uo/aLx6WsO+wtf19xeypXi8hSYDQ=="
+      }
+    },
+    {
+      "name": "two_gods",
+      "reason": "at most one binding may hold god",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSIsImtleV9lcG9jaCI6MSwicHVia2V5IjoiUWVqOTRUS3RadzVUVE5peWRkTE5mdXgzY3p4bStOdElvY3JhZjZ2OFJWVT0iLCJyb2xlcyI6W3sia2luZCI6ImJyaWRnZSIsInZvdWNoZXNfZm9yIjpbImh1bWFuOnBlaW1hbiJdfV0sInNsdWciOiJtaXJhIiwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9LHsiYXV0aG9yaXplZF9vcmlnaW5fZGFlbW9ucyI6WyJkYWVtb24tMSJdLCJkaXNwbGF5X25hbWUiOiJBZGEiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6InRIUUxwT0QzNEZkdkVlZ1VuYnV5VXB3aEloUGJaNWd4KzEwYkloNkVWUzA9Iiwic2x1ZyI6ImFkYSIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfV0sImVwb2NoIjoxMCwiaHVtYW5zIjpbeyJhdXRob3JpemVkX29yaWdpbl9kYWVtb25zIjpbImRhZW1vbi0xIl0sImN1c3RvZHkiOiJpc29sYXRlZCIsImRpc3BsYXlfbmFtZSI6IlBlaW1hbiIsImtleV9lcG9jaCI6MSwicHVia2V5IjoiN1RJMHNuYlV6dHBYMVp1dEZQdXZXbmM4RHpHTW1aM2pwZzFUeGFXelRBVT0iLCJyb2xlcyI6W3sia2luZCI6ImdvZCJ9XSwic2x1ZyI6InBlaW1hbiIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfSx7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiU2lhdm91c2giLCJrZXlfZXBvY2giOjEsInB1YmtleSI6Im9SZ0VNMW5ueTBYcWk3SUI1OGk1US9FMFZzQ2swYkVkUTBPbmdvQ0orN289Iiwicm9sZXMiOlt7ImtpbmQiOiJnb2QifV0sInNsdWciOiJzaWF2b3VzaCIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfV0sInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
+        "root_key_epoch": 0,
+        "root_sig": "xKHlP3YIzYv+7EUTj/fnbsjlzUeFOFombDFB6oJR3gwb9zLtkCE1KyBkPokTT9evDKsJsCouugUmE/c2YXuSBQ=="
+      }
+    },
+    {
+      "name": "slug_across_classes",
+      "reason": "slug is bound as both an agent and a human",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSIsImtleV9lcG9jaCI6MSwicHVia2V5IjoiUWVqOTRUS3RadzVUVE5peWRkTE5mdXgzY3p4bStOdElvY3JhZjZ2OFJWVT0iLCJyb2xlcyI6W3sia2luZCI6ImJyaWRnZSIsInZvdWNoZXNfZm9yIjpbImh1bWFuOnBlaW1hbiJdfV0sInNsdWciOiJtaXJhIiwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9LHsiYXV0aG9yaXplZF9vcmlnaW5fZGFlbW9ucyI6WyJkYWVtb24tMSJdLCJkaXNwbGF5X25hbWUiOiJBZGEiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6InRIUUxwT0QzNEZkdkVlZ1VuYnV5VXB3aEloUGJaNWd4KzEwYkloNkVWUzA9Iiwic2x1ZyI6ImFkYSIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfV0sImVwb2NoIjoxMCwiaHVtYW5zIjpbeyJhdXRob3JpemVkX29yaWdpbl9kYWVtb25zIjpbImRhZW1vbi0xIl0sImN1c3RvZHkiOiJpc29sYXRlZCIsImRpc3BsYXlfbmFtZSI6IlBlaW1hbiIsImtleV9lcG9jaCI6MSwicHVia2V5IjoiN1RJMHNuYlV6dHBYMVp1dEZQdXZXbmM4RHpHTW1aM2pwZzFUeGFXelRBVT0iLCJyb2xlcyI6W3sia2luZCI6ImdvZCJ9XSwic2x1ZyI6InBlaW1hbiIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfSx7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiU2lhdm91c2giLCJrZXlfZXBvY2giOjEsInB1YmtleSI6Im9SZ0VNMW5ueTBYcWk3SUI1OGk1US9FMFZzQ2swYkVkUTBPbmdvQ0orN289Iiwic2x1ZyI6Im1pcmEiLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH0=",
+        "root_key_epoch": 0,
+        "root_sig": "Nme4Q54MCMaFIkHiVbCcaWiW4B+/iIsL2vOb7cTRTLujCIj3lbZf90OZDEF53EIF7oyTZH0X0v851HAgYitcDQ=="
+      }
+    },
+    {
+      "name": "bad_custody",
+      "reason": "custody must be shared or isolated",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSIsImtleV9lcG9jaCI6MSwicHVia2V5IjoiUWVqOTRUS3RadzVUVE5peWRkTE5mdXgzY3p4bStOdElvY3JhZjZ2OFJWVT0iLCJyb2xlcyI6W3sia2luZCI6ImJyaWRnZSIsInZvdWNoZXNfZm9yIjpbImh1bWFuOnBlaW1hbiJdfV0sInNsdWciOiJtaXJhIiwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9LHsiYXV0aG9yaXplZF9vcmlnaW5fZGFlbW9ucyI6WyJkYWVtb24tMSJdLCJkaXNwbGF5X25hbWUiOiJBZGEiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6InRIUUxwT0QzNEZkdkVlZ1VuYnV5VXB3aEloUGJaNWd4KzEwYkloNkVWUzA9Iiwic2x1ZyI6ImFkYSIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfV0sImVwb2NoIjoxMCwiaHVtYW5zIjpbeyJhdXRob3JpemVkX29yaWdpbl9kYWVtb25zIjpbImRhZW1vbi0xIl0sImN1c3RvZHkiOiJpc29sYXRlZCIsImRpc3BsYXlfbmFtZSI6IlBlaW1hbiIsImtleV9lcG9jaCI6MSwicHVia2V5IjoiN1RJMHNuYlV6dHBYMVp1dEZQdXZXbmM4RHpHTW1aM2pwZzFUeGFXelRBVT0iLCJyb2xlcyI6W3sia2luZCI6ImdvZCJ9XSwic2x1ZyI6InBlaW1hbiIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfSx7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiY3VzdG9keSI6InByaXZhdGUiLCJkaXNwbGF5X25hbWUiOiJTaWF2b3VzaCIsImtleV9lcG9jaCI6MSwicHVia2V5Ijoib1JnRU0xbm55MFhxaTdJQjU4aTVRL0UwVnNDazBiRWRRME9uZ29DSis3bz0iLCJzbHVnIjoic2lhdm91c2giLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH0=",
+        "root_key_epoch": 0,
+        "root_sig": "OUQkfF+vhHKYp2aGwWrMv/8Y7ixtd5Q/mPymWEI5xVPl+aJY7HrJcKmvmPsMmKEIBSBPK/1mOE6iH0VndpegCw=="
+      }
+    },
+    {
+      "name": "god_extra_field",
+      "reason": "god role carries a field other than kind",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSIsImtleV9lcG9jaCI6MSwicHVia2V5IjoiUWVqOTRUS3RadzVUVE5peWRkTE5mdXgzY3p4bStOdElvY3JhZjZ2OFJWVT0iLCJyb2xlcyI6W3sia2luZCI6ImJyaWRnZSIsInZvdWNoZXNfZm9yIjpbImh1bWFuOnBlaW1hbiJdfV0sInNsdWciOiJtaXJhIiwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9LHsiYXV0aG9yaXplZF9vcmlnaW5fZGFlbW9ucyI6WyJkYWVtb24tMSJdLCJkaXNwbGF5X25hbWUiOiJBZGEiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6InRIUUxwT0QzNEZkdkVlZ1VuYnV5VXB3aEloUGJaNWd4KzEwYkloNkVWUzA9Iiwic2x1ZyI6ImFkYSIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfV0sImVwb2NoIjoxMCwiaHVtYW5zIjpbeyJhdXRob3JpemVkX29yaWdpbl9kYWVtb25zIjpbImRhZW1vbi0xIl0sImN1c3RvZHkiOiJpc29sYXRlZCIsImRpc3BsYXlfbmFtZSI6IlBlaW1hbiIsImtleV9lcG9jaCI6MSwicHVia2V5IjoiN1RJMHNuYlV6dHBYMVp1dEZQdXZXbmM4RHpHTW1aM2pwZzFUeGFXelRBVT0iLCJyb2xlcyI6W3siZXh0cmEiOnRydWUsImtpbmQiOiJnb2QifV0sInNsdWciOiJwZWltYW4iLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH0seyJhdXRob3JpemVkX29yaWdpbl9kYWVtb25zIjpbImRhZW1vbi0xIl0sImRpc3BsYXlfbmFtZSI6IlNpYXZvdXNoIiwia2V5X2Vwb2NoIjoxLCJwdWJrZXkiOiJvUmdFTTFubnkwWHFpN0lCNThpNVEvRTBWc0NrMGJFZFEwT25nb0NKKzdvPSIsInNsdWciOiJzaWF2b3VzaCIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfV0sInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
+        "root_key_epoch": 0,
+        "root_sig": "NZhjTe13sdnx8Fawjpx8eS3jXgcoHdp5fhGZsruhlichzBdf2r9imyO0VmFrW4yoaeo5eHEUHqbKTDXke8hcDA=="
+      }
+    },
+    {
+      "name": "human_missing_pubkey",
+      "reason": "human binding has no pubkey",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSIsImtleV9lcG9jaCI6MSwicHVia2V5IjoiUWVqOTRUS3RadzVUVE5peWRkTE5mdXgzY3p4bStOdElvY3JhZjZ2OFJWVT0iLCJyb2xlcyI6W3sia2luZCI6ImJyaWRnZSIsInZvdWNoZXNfZm9yIjpbImh1bWFuOnBlaW1hbiJdfV0sInNsdWciOiJtaXJhIiwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9LHsiYXV0aG9yaXplZF9vcmlnaW5fZGFlbW9ucyI6WyJkYWVtb24tMSJdLCJkaXNwbGF5X25hbWUiOiJBZGEiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6InRIUUxwT0QzNEZkdkVlZ1VuYnV5VXB3aEloUGJaNWd4KzEwYkloNkVWUzA9Iiwic2x1ZyI6ImFkYSIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfV0sImVwb2NoIjoxMCwiaHVtYW5zIjpbeyJhdXRob3JpemVkX29yaWdpbl9kYWVtb25zIjpbImRhZW1vbi0xIl0sImN1c3RvZHkiOiJpc29sYXRlZCIsImRpc3BsYXlfbmFtZSI6IlBlaW1hbiIsImtleV9lcG9jaCI6MSwicm9sZXMiOlt7ImtpbmQiOiJnb2QifV0sInNsdWciOiJwZWltYW4iLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH0seyJhdXRob3JpemVkX29yaWdpbl9kYWVtb25zIjpbImRhZW1vbi0xIl0sImRpc3BsYXlfbmFtZSI6IlNpYXZvdXNoIiwia2V5X2Vwb2NoIjoxLCJwdWJrZXkiOiJvUmdFTTFubnkwWHFpN0lCNThpNVEvRTBWc0NrMGJFZFEwT25nb0NKKzdvPSIsInNsdWciOiJzaWF2b3VzaCIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfV0sInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
+        "root_key_epoch": 0,
+        "root_sig": "f09VyOcyuzI4brbSIDlrCZN2CjvrMXBhbL/8uVyE5vKKW5qn9n0i4BucoSsbQEUclg5pMRX0/09X5J/5E9xjCA=="
+      }
+    },
+    {
+      "name": "slug_with_colon",
+      "reason": "slug must not contain a colon",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSIsImtleV9lcG9jaCI6MSwicHVia2V5IjoiUWVqOTRUS3RadzVUVE5peWRkTE5mdXgzY3p4bStOdElvY3JhZjZ2OFJWVT0iLCJyb2xlcyI6W3sia2luZCI6ImJyaWRnZSIsInZvdWNoZXNfZm9yIjpbImh1bWFuOnBlaW1hbiJdfV0sInNsdWciOiJodW1hbjpwZWltYW4iLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH0seyJhdXRob3JpemVkX29yaWdpbl9kYWVtb25zIjpbImRhZW1vbi0xIl0sImRpc3BsYXlfbmFtZSI6IkFkYSIsImtleV9lcG9jaCI6MSwicHVia2V5IjoidEhRTHBPRDM0RmR2RWVnVW5idXlVcHdoSWhQYlo1Z3grMTBiSWg2RVZTMD0iLCJzbHVnIjoiYWRhIiwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9XSwiZXBvY2giOjEwLCJodW1hbnMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiY3VzdG9keSI6Imlzb2xhdGVkIiwiZGlzcGxheV9uYW1lIjoiUGVpbWFuIiwia2V5X2Vwb2NoIjoxLCJwdWJrZXkiOiI3VEkwc25iVXp0cFgxWnV0RlB1dlduYzhEekdNbVozanBnMVR4YVd6VEFVPSIsInJvbGVzIjpbeyJraW5kIjoiZ29kIn1dLCJzbHVnIjoicGVpbWFuIiwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9LHsiYXV0aG9yaXplZF9vcmlnaW5fZGFlbW9ucyI6WyJkYWVtb24tMSJdLCJkaXNwbGF5X25hbWUiOiJTaWF2b3VzaCIsImtleV9lcG9jaCI6MSwicHVia2V5Ijoib1JnRU0xbm55MFhxaTdJQjU4aTVRL0UwVnNDazBiRWRRME9uZ29DSis3bz0iLCJzbHVnIjoic2lhdm91c2giLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH0=",
+        "root_key_epoch": 0,
+        "root_sig": "Pp1z2xni0/pSItUcMpv7q6Gk4/aWC5jitDh+Ka63TDsv8jk6zha3xoi3C59G0jPJIwi5H36kmFw3p1cZvcyNDQ=="
+      }
+    },
+    {
+      "name": "empty_slug",
+      "reason": "slug must not be empty",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSIsImtleV9lcG9jaCI6MSwicHVia2V5IjoiUWVqOTRUS3RadzVUVE5peWRkTE5mdXgzY3p4bStOdElvY3JhZjZ2OFJWVT0iLCJyb2xlcyI6W3sia2luZCI6ImJyaWRnZSIsInZvdWNoZXNfZm9yIjpbImh1bWFuOnBlaW1hbiJdfV0sInNsdWciOiJtaXJhIiwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9LHsiYXV0aG9yaXplZF9vcmlnaW5fZGFlbW9ucyI6WyJkYWVtb24tMSJdLCJkaXNwbGF5X25hbWUiOiJBZGEiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6InRIUUxwT0QzNEZkdkVlZ1VuYnV5VXB3aEloUGJaNWd4KzEwYkloNkVWUzA9Iiwic2x1ZyI6ImFkYSIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfV0sImVwb2NoIjoxMCwiaHVtYW5zIjpbeyJhdXRob3JpemVkX29yaWdpbl9kYWVtb25zIjpbImRhZW1vbi0xIl0sImN1c3RvZHkiOiJpc29sYXRlZCIsImRpc3BsYXlfbmFtZSI6IlBlaW1hbiIsImtleV9lcG9jaCI6MSwicHVia2V5IjoiN1RJMHNuYlV6dHBYMVp1dEZQdXZXbmM4RHpHTW1aM2pwZzFUeGFXelRBVT0iLCJyb2xlcyI6W3sia2luZCI6ImdvZCJ9XSwic2x1ZyI6InBlaW1hbiIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfSx7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiU2lhdm91c2giLCJrZXlfZXBvY2giOjEsInB1YmtleSI6Im9SZ0VNMW5ueTBYcWk3SUI1OGk1US9FMFZzQ2swYkVkUTBPbmdvQ0orN289Iiwic2x1ZyI6IiIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfV0sInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
+        "root_key_epoch": 0,
+        "root_sig": "jDa3+5QYHDihsF/mm/3+DwHFHYtWKjUrnebPNWyVrAQj7zjwBPVaYnVYsnZzXMuDLs2pemmQ2QknwcU5580nAg=="
+      }
+    },
+    {
+      "name": "two_live_human_keys",
+      "reason": "a slug may have at most one non-revoked binding (two live keys for one person)",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSIsImtleV9lcG9jaCI6MSwicHVia2V5IjoiUWVqOTRUS3RadzVUVE5peWRkTE5mdXgzY3p4bStOdElvY3JhZjZ2OFJWVT0iLCJyb2xlcyI6W3sia2luZCI6ImJyaWRnZSIsInZvdWNoZXNfZm9yIjpbImh1bWFuOnBlaW1hbiJdfV0sInNsdWciOiJtaXJhIiwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9LHsiYXV0aG9yaXplZF9vcmlnaW5fZGFlbW9ucyI6WyJkYWVtb24tMSJdLCJkaXNwbGF5X25hbWUiOiJBZGEiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6InRIUUxwT0QzNEZkdkVlZ1VuYnV5VXB3aEloUGJaNWd4KzEwYkloNkVWUzA9Iiwic2x1ZyI6ImFkYSIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfV0sImVwb2NoIjoxMCwiaHVtYW5zIjpbeyJhdXRob3JpemVkX29yaWdpbl9kYWVtb25zIjpbImRhZW1vbi0xIl0sImN1c3RvZHkiOiJpc29sYXRlZCIsImRpc3BsYXlfbmFtZSI6IlBlaW1hbiIsImtleV9lcG9jaCI6MSwicHVia2V5IjoiN1RJMHNuYlV6dHBYMVp1dEZQdXZXbmM4RHpHTW1aM2pwZzFUeGFXelRBVT0iLCJyb2xlcyI6W3sia2luZCI6ImdvZCJ9XSwic2x1ZyI6InBlaW1hbiIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfSx7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiU2lhdm91c2giLCJrZXlfZXBvY2giOjEsInB1YmtleSI6Im9SZ0VNMW5ueTBYcWk3SUI1OGk1US9FMFZzQ2swYkVkUTBPbmdvQ0orN289Iiwic2x1ZyI6InNpYXZvdXNoIiwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9LHsiYXV0aG9yaXplZF9vcmlnaW5fZGFlbW9ucyI6WyJkYWVtb24tMSJdLCJjdXN0b2R5IjoiaXNvbGF0ZWQiLCJkaXNwbGF5X25hbWUiOiJQZWltYW4iLCJrZXlfZXBvY2giOjIsInB1YmtleSI6IjdUSTBzbmJVenRwWDFadXRGUHV2V25jOER6R01tWjNqcGcxVHhhV3pUQVU9Iiwic2x1ZyI6InBlaW1hbiIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfV0sInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
+        "root_key_epoch": 0,
+        "root_sig": "1YBp5OVxvzaIuwclQeQ4AReRb/8bNLCqTlxvYWJhIyHrKE3EjfG1b4LMPA1ASwBs4cwNFsAcNK6X5Blxz8OXDg=="
+      }
+    },
+    {
+      "name": "two_live_agent_keys",
+      "reason": "a slug may have at most one non-revoked binding (two live keys for one agent)",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSIsImtleV9lcG9jaCI6MSwicHVia2V5IjoiUWVqOTRUS3RadzVUVE5peWRkTE5mdXgzY3p4bStOdElvY3JhZjZ2OFJWVT0iLCJyb2xlcyI6W3sia2luZCI6ImJyaWRnZSIsInZvdWNoZXNfZm9yIjpbImh1bWFuOnBlaW1hbiJdfV0sInNsdWciOiJtaXJhIiwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9LHsiYXV0aG9yaXplZF9vcmlnaW5fZGFlbW9ucyI6WyJkYWVtb24tMSJdLCJkaXNwbGF5X25hbWUiOiJBZGEiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6InRIUUxwT0QzNEZkdkVlZ1VuYnV5VXB3aEloUGJaNWd4KzEwYkloNkVWUzA9Iiwic2x1ZyI6ImFkYSIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfSx7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSIsImtleV9lcG9jaCI6MiwicHVia2V5IjoiUWVqOTRUS3RadzVUVE5peWRkTE5mdXgzY3p4bStOdElvY3JhZjZ2OFJWVT0iLCJyb2xlcyI6W3sia2luZCI6ImJyaWRnZSIsInZvdWNoZXNfZm9yIjpbImh1bWFuOnBlaW1hbiJdfV0sInNsdWciOiJtaXJhIiwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9XSwiZXBvY2giOjEwLCJodW1hbnMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiY3VzdG9keSI6Imlzb2xhdGVkIiwiZGlzcGxheV9uYW1lIjoiUGVpbWFuIiwia2V5X2Vwb2NoIjoxLCJwdWJrZXkiOiI3VEkwc25iVXp0cFgxWnV0RlB1dlduYzhEekdNbVozanBnMVR4YVd6VEFVPSIsInJvbGVzIjpbeyJraW5kIjoiZ29kIn1dLCJzbHVnIjoicGVpbWFuIiwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9LHsiYXV0aG9yaXplZF9vcmlnaW5fZGFlbW9ucyI6WyJkYWVtb24tMSJdLCJkaXNwbGF5X25hbWUiOiJTaWF2b3VzaCIsImtleV9lcG9jaCI6MSwicHVia2V5Ijoib1JnRU0xbm55MFhxaTdJQjU4aTVRL0UwVnNDazBiRWRRME9uZ29DSis3bz0iLCJzbHVnIjoic2lhdm91c2giLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH0=",
+        "root_key_epoch": 0,
+        "root_sig": "KnagQOYPr0F84xquuz1wIJun6bKnTwTCQhKlZozMWyqdDUhd9v09S9fzdJVBzUpPS8Sym1jxy7mTp1cbN+6EBg=="
+      }
+    },
+    {
+      "name": "god_kept_on_revoked_rotation",
+      "reason": "a god rotation must drop god from the revoked epoch: every human binding holding god counts, revoked or not",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSIsImtleV9lcG9jaCI6MSwicHVia2V5IjoiUWVqOTRUS3RadzVUVE5peWRkTE5mdXgzY3p4bStOdElvY3JhZjZ2OFJWVT0iLCJyb2xlcyI6W3sia2luZCI6ImJyaWRnZSIsInZvdWNoZXNfZm9yIjpbImh1bWFuOnBlaW1hbiJdfV0sInNsdWciOiJtaXJhIiwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9LHsiYXV0aG9yaXplZF9vcmlnaW5fZGFlbW9ucyI6WyJkYWVtb24tMSJdLCJkaXNwbGF5X25hbWUiOiJBZGEiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6InRIUUxwT0QzNEZkdkVlZ1VuYnV5VXB3aEloUGJaNWd4KzEwYkloNkVWUzA9Iiwic2x1ZyI6ImFkYSIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfV0sImVwb2NoIjoxMCwiaHVtYW5zIjpbeyJhdXRob3JpemVkX29yaWdpbl9kYWVtb25zIjpbImRhZW1vbi0xIl0sImN1c3RvZHkiOiJpc29sYXRlZCIsImRpc3BsYXlfbmFtZSI6IlBlaW1hbiIsImtleV9lcG9jaCI6MSwicHVia2V5IjoiN1RJMHNuYlV6dHBYMVp1dEZQdXZXbmM4RHpHTW1aM2pwZzFUeGFXelRBVT0iLCJyZXZva2VkX2F0IjoxOTkwMDAwLCJyb2xlcyI6W3sia2luZCI6ImdvZCJ9XSwic2x1ZyI6InBlaW1hbiIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfSx7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiU2lhdm91c2giLCJrZXlfZXBvY2giOjEsInB1YmtleSI6Im9SZ0VNMW5ueTBYcWk3SUI1OGk1US9FMFZzQ2swYkVkUTBPbmdvQ0orN289Iiwic2x1ZyI6InNpYXZvdXNoIiwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9LHsiYXV0aG9yaXplZF9vcmlnaW5fZGFlbW9ucyI6WyJkYWVtb24tMSJdLCJjdXN0b2R5IjoiaXNvbGF0ZWQiLCJkaXNwbGF5X25hbWUiOiJQZWltYW4iLCJrZXlfZXBvY2giOjIsInB1YmtleSI6IjdUSTBzbmJVenRwWDFadXRGUHV2V25jOER6R01tWjNqcGcxVHhhV3pUQVU9Iiwicm9sZXMiOlt7ImtpbmQiOiJnb2QifV0sInNsdWciOiJwZWltYW4iLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH1dLCJ2YWxpZF9mcm9tIjoxOTkwMDAwLCJ2YWxpZF91bnRpbCI6MzAwMDAwMH0=",
+        "root_key_epoch": 0,
+        "root_sig": "fUK56SRCq3NJteUZex7v7NtDyig+FqoI7rkBM8cAmfh9wD4IM2EZgQE7iEczb0bFl7snADKwnZ/8bN3vVLeDAw=="
+      }
+    }
+  ],
+  "envelopes": {
+    "valid": {
+      "name": "human_peiman_chat",
+      "expect": "accept",
+      "alg_version": 1,
+      "body": "hello from peiman",
+      "from_agent": "human:peiman",
+      "from_class": "human",
+      "key_epoch": 1,
+      "kind": "chat",
+      "nonce": "n-human",
+      "room": "mesh",
+      "seq": 1,
+      "ts": 2000000,
+      "canonical": "{\"alg_version\":1,\"body\":\"hello from peiman\",\"from_agent\":\"human:peiman\",\"from_class\":\"human\",\"key_epoch\":1,\"kind\":\"chat\",\"nonce\":\"n-human\",\"room\":\"mesh\",\"seq\":1,\"ts\":2000000}",
+      "signature": "HwcHbImChWmNBbtGqLhVukqs6PRHJbdQb3oymaKeyL9l5tY+rGihVRG3U0Vv9MlRW6oooaOqZCi8DZM0wCWxDA=="
+    },
+    "reject": [
+      {
+        "name": "human_claims_from_class_agent",
+        "reason": "human: prefix requires from_class human",
+        "expect": "reject",
+        "alg_version": 1,
+        "body": "hello from peiman",
+        "from_agent": "human:peiman",
+        "from_class": "agent",
+        "key_epoch": 1,
+        "kind": "chat",
+        "nonce": "n-human",
+        "room": "mesh",
+        "seq": 1,
+        "ts": 2000000,
+        "canonical": "{\"alg_version\":1,\"body\":\"hello from peiman\",\"from_agent\":\"human:peiman\",\"from_class\":\"agent\",\"key_epoch\":1,\"kind\":\"chat\",\"nonce\":\"n-human\",\"room\":\"mesh\",\"seq\":1,\"ts\":2000000}",
+        "signature": "DtPJatxo4DmfvrrBomN6aJYV9/IocLXyToU7sB4s7J4Pnhm8qCJyPIgs5xg3JZ/qd3L3U/G0/0LwhLyCadtSBw=="
+      },
+      {
+        "name": "agent_claims_from_class_human",
+        "reason": "from_class human requires a human: principal",
+        "expect": "reject",
+        "alg_version": 1,
+        "body": "hello from peiman",
+        "from_agent": "mira",
+        "from_class": "human",
+        "key_epoch": 1,
+        "kind": "chat",
+        "nonce": "n-human",
+        "room": "mesh",
+        "seq": 1,
+        "ts": 2000000,
+        "canonical": "{\"alg_version\":1,\"body\":\"hello from peiman\",\"from_agent\":\"mira\",\"from_class\":\"human\",\"key_epoch\":1,\"kind\":\"chat\",\"nonce\":\"n-human\",\"room\":\"mesh\",\"seq\":1,\"ts\":2000000}",
+        "signature": "V5NBnpXZw1Ok54JlNCvERjrzqo0K9oTbzll0xiUHzSQq6MCVa0OaWXHNKpVKA4VikgoeUQ0XqoTKAOZHRTiWDg=="
+      },
+      {
+        "name": "unknown_human",
+        "reason": "no live human binding for the slug",
+        "expect": "reject",
+        "alg_version": 1,
+        "body": "hello from peiman",
+        "from_agent": "human:nobody",
+        "from_class": "human",
+        "key_epoch": 1,
+        "kind": "chat",
+        "nonce": "n-human",
+        "room": "mesh",
+        "seq": 1,
+        "ts": 2000000,
+        "canonical": "{\"alg_version\":1,\"body\":\"hello from peiman\",\"from_agent\":\"human:nobody\",\"from_class\":\"human\",\"key_epoch\":1,\"kind\":\"chat\",\"nonce\":\"n-human\",\"room\":\"mesh\",\"seq\":1,\"ts\":2000000}",
+        "signature": "5GKBxD1tBPtM4q/nDVVtDmAqPh18CvtNpOA7ElF/LVutED3pwt3PSTlrwzDdfsqPfvY5evp9DZoe1x2yqBSnBw=="
+      }
+    ]
+  }
+}

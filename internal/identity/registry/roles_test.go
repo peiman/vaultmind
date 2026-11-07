@@ -154,6 +154,15 @@ func TestRoleConstructors_DoNotAliasCallerSlices(t *testing.T) {
 	assert.Equal(t, []string{"darwin-arm64"}, signing.Platforms())
 	assert.Nil(t, signing.VouchesFor())
 	assert.True(t, Role{}.IsZero())
+
+	god := NewGodRole()
+	assert.Equal(t, RoleKindGod, god.Kind())
+	assert.Nil(t, god.VouchesFor())
+	assert.Nil(t, god.Platforms())
+	assert.False(t, god.IsZero())
+	raw, err := marshalRole(god)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"kind":"god"}`, string(raw))
 }
 
 func TestVerifyAndLoad_RolesRoundTrip(t *testing.T) {
@@ -263,6 +272,7 @@ func TestVerifyAndLoad_RejectsMalformedRoles(t *testing.T) {
 		{name: "code_signing_extra_field", roles: `[{"kind":"code_signing","platforms":[],"extra":1}]`},
 		{name: "vouches_for_not_array", roles: `[{"kind":"bridge","vouches_for":"human:peiman"}]`},
 		{name: "roles_null", roles: `null`},
+		{name: "god_extra_field", roles: `[{"kind":"god","extra":true}]`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

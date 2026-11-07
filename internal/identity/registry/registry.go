@@ -95,6 +95,14 @@ const (
 	// rejected at load too. Alternative: a round-trip re-canonicalization equality
 	// check in VerifyAndLoad (closes the whole JCS-normalized-field-smuggling class).
 	MaxSafeEpoch = 1 << 53
+
+	// MaxBindings is the inclusive upper bound for the total number of bindings
+	// in a registry (agents[] + humans[] together). It is a denial-of-service
+	// guard: a registry with 1025 bindings is refused at sign and load.
+	MaxBindings = 1024
+	// ErrTooManyBindings is returned by SignRegistry and VerifyAndLoad when the
+	// total number of agent and human bindings exceeds MaxBindings.
+	ErrTooManyBindings = "registry: too many bindings (max 1024)"
 )
 
 // epochInRange reports whether e is within the JCS-safe, anti-rollback-floored
@@ -129,19 +137,21 @@ type AgentBinding struct {
 	// live. A revoked binding never resolves or verifies.
 	RevokedAt *int
 	// Roles are the root-granted capabilities of this binding (bridge,
-	// code_signing). Nil and empty both mean the binding has no roles, and the
-	// canonical form then omits the roles key so a roles-free registry stays
+	// code_signing, god). Nil and empty both mean the binding has no roles, and
+	// the canonical form then omits the roles key so a roles-free registry stays
 	// byte-identical to one signed before the field existed. Order is
-	// significant and is preserved. Class and VouchAllowlist are a different,
-	// not-yet-wired authority channel and are not these roles.
+	// significant and is preserved. god is allowed only on a human binding;
+	// bridge and code_signing only on an agent binding.
 	Roles []Role
-	// Class is the AUTHORITY class the root GRANTS this binding (agent | bridge |
-	// human). An empty Class means agent (see ClassAgent / EffectiveClass). It is
-	// the registry's authoritative answer to a message's signed from_class CLAIM:
-	// the claim is authenticated by the signature, but only the binding's Class
-	// AUTHORIZES it. NOTE: not yet parsed from the signed registry wire schema —
-	// populating Class/VouchAllowlist from the canonical bytes is a separate
-	// cross-language slice; for now these default to empty/agent.
+	// Custody is who holds the binding's private key. Empty and "shared" are the
+	// default and are omitted on the wire. "isolated" is carried through.
+	// Anything else is refused. Only the root sets it, by signing the registry.
+	Custody string
+	// Class is the authority class of this binding. An empty Class means agent
+	// (see ClassAgent / EffectiveClass). A binding loaded from humans[] has
+	// Class human; the class is not a field on the binding's wire object — the
+	// array it was loaded from is the source of truth. VouchAllowlist is a
+	// separate, in-memory authority channel and is not on the registry wire.
 	Class string
 	// VouchAllowlist is the set of principals (e.g. "human:siavoush") a bridge
 	// binding may vouch for. An empty allowlist authorizes NO vouch (fail closed).
@@ -165,8 +175,12 @@ type Registry struct {
 	// ValidFrom / ValidUntil bound registry freshness (unix seconds).
 	ValidFrom  int64
 	ValidUntil int64
-	// Agents are the bindings.
+	// Agents are the agent bindings. A human is not an agent: people live in Humans.
 	Agents []AgentBinding
+	// Humans are the person bindings. Nil and empty both mean no people, and the
+	// canonical form then omits the humans key so an existing registry stays
+	// byte-identical. A human binding's Class is human.
+	Humans []AgentBinding
 }
 
 // SignedRegistry is the distribution envelope: the JCS-canonical registry bytes,
@@ -187,6 +201,7 @@ type SignedRegistry struct {
 // (nil pointer == "live"), matching the decisions-doc canonical example.
 type wireBinding struct {
 	AuthorizedOriginDaemons []string        `json:"authorized_origin_daemons"`
+	Custody                 string          `json:"custody,omitempty"`
 	DisplayName             string          `json:"display_name"`
 	KeyEpoch                int             `json:"key_epoch"`
 	PubKey                  string          `json:"pubkey"`
@@ -201,24 +216,56 @@ type wireBinding struct {
 // field order here is for readability only; the canonical bytes are
 // Canonicalize's output.
 type wireRegistry struct {
-	Agents     []wireBinding `json:"agents"`
+	Agents []wireBinding `json:"agents"`
+	// Humans is omitted when empty so a people-free registry stays byte-identical.
+	Humans     []wireBinding `json:"humans,omitempty"`
 	Epoch      int           `json:"epoch"`
 	ValidFrom  int64         `json:"valid_from"`
 	ValidUntil int64         `json:"valid_until"`
 }
 
 // toWire converts a Registry to its wire shape (base64 pubkeys). roles is
-// omitted when empty (see MarshalRoles). A role that is not one of the two
-// variants fails closed.
+// omitted when empty (see MarshalRoles). humans is omitted when empty. custody
+// is omitted when it is the shared default. A role that is not one of the
+// three variants fails closed, as does a custody value other than shared or
+// isolated.
 func toWire(reg Registry) (wireRegistry, error) {
-	agents := make([]wireBinding, len(reg.Agents))
-	for i, a := range reg.Agents {
+	agents, err := bindingsToWire(reg.Agents)
+	if err != nil {
+		return wireRegistry{}, err
+	}
+	humans, err := bindingsToWire(reg.Humans)
+	if err != nil {
+		return wireRegistry{}, err
+	}
+	return wireRegistry{
+		Agents:     agents,
+		Humans:     humans,
+		Epoch:      reg.Epoch,
+		ValidFrom:  reg.ValidFrom,
+		ValidUntil: reg.ValidUntil,
+	}, nil
+}
+
+// bindingsToWire encodes bindings. An empty input returns nil so the humans
+// array is omitted. A bad custody value or a malformed role fails closed.
+func bindingsToWire(in []AgentBinding) ([]wireBinding, error) {
+	if len(in) == 0 {
+		return nil, nil
+	}
+	out := make([]wireBinding, len(in))
+	for i, a := range in {
 		roles, err := MarshalRoles(a.Roles)
 		if err != nil {
-			return wireRegistry{}, err
+			return nil, err
 		}
-		agents[i] = wireBinding{
+		custody, err := NormalizeCustody(a.Slug, a.Custody)
+		if err != nil {
+			return nil, err
+		}
+		out[i] = wireBinding{
 			AuthorizedOriginDaemons: a.AuthorizedOriginDaemons,
+			Custody:                 custody,
 			DisplayName:             a.DisplayName,
 			KeyEpoch:                a.KeyEpoch,
 			PubKey:                  base64.StdEncoding.EncodeToString(a.PubKey.Bytes()),
@@ -229,29 +276,51 @@ func toWire(reg Registry) (wireRegistry, error) {
 			ValidUntil:              a.ValidUntil,
 		}
 	}
-	return wireRegistry{
-		Agents:     agents,
-		Epoch:      reg.Epoch,
-		ValidFrom:  reg.ValidFrom,
-		ValidUntil: reg.ValidUntil,
-	}, nil
+	return out, nil
 }
 
 // fromWire converts a decoded wire registry back to a Registry, re-validating
 // every pubkey through NewPublicKey so a small-order/garbage key in the bytes
-// cannot enter a binding (an invalid binding is unrepresentable).
+// cannot enter a binding (an invalid binding is unrepresentable). Bindings in
+// humans[] are marked Class human. A bad custody value fails closed and names
+// the slug.
 func fromWire(w wireRegistry) (Registry, error) {
-	agents := make([]AgentBinding, len(w.Agents))
-	for i, a := range w.Agents {
+	agents, err := bindingsFromWire(w.Agents, "")
+	if err != nil {
+		return Registry{}, err
+	}
+	humans, err := bindingsFromWire(w.Humans, ClassHuman)
+	if err != nil {
+		return Registry{}, err
+	}
+	return Registry{
+		Epoch:      w.Epoch,
+		ValidFrom:  w.ValidFrom,
+		ValidUntil: w.ValidUntil,
+		Agents:     agents,
+		Humans:     humans,
+	}, nil
+}
+
+func bindingsFromWire(in []wireBinding, class string) ([]AgentBinding, error) {
+	if len(in) == 0 {
+		return nil, nil
+	}
+	out := make([]AgentBinding, len(in))
+	for i, a := range in {
 		pk, err := decodePubKey(a.PubKey)
 		if err != nil {
-			return Registry{}, err
+			return nil, fmt.Errorf("registry: binding %q: %w", a.Slug, err)
 		}
 		roles, err := ParseRoles(a.Roles)
 		if err != nil {
-			return Registry{}, err
+			return nil, fmt.Errorf("registry: binding %q: %w", a.Slug, err)
 		}
-		agents[i] = AgentBinding{
+		custody, err := NormalizeCustody(a.Slug, a.Custody)
+		if err != nil {
+			return nil, err
+		}
+		out[i] = AgentBinding{
 			Slug:                    a.Slug,
 			DisplayName:             a.DisplayName,
 			PubKey:                  pk,
@@ -261,14 +330,11 @@ func fromWire(w wireRegistry) (Registry, error) {
 			AuthorizedOriginDaemons: a.AuthorizedOriginDaemons,
 			RevokedAt:               a.RevokedAt,
 			Roles:                   roles,
+			Custody:                 custody,
+			Class:                   class,
 		}
 	}
-	return Registry{
-		Epoch:      w.Epoch,
-		ValidFrom:  w.ValidFrom,
-		ValidUntil: w.ValidUntil,
-		Agents:     agents,
-	}, nil
+	return out, nil
 }
 
 // canonicalBytes marshals a Registry to its JCS-canonical bytes via the slice-1
@@ -304,10 +370,16 @@ func canonicalizeForSign(reg Registry) (identity.CanonicalBytes, error) {
 	if !epochInRange(reg.Epoch) {
 		return identity.CanonicalBytes{}, fmt.Errorf("%s", ErrEpochRange)
 	}
-	for _, a := range reg.Agents {
-		if !epochInRange(a.KeyEpoch) {
-			return identity.CanonicalBytes{}, fmt.Errorf("%s", ErrEpochRange)
-		}
+	if err := epochsInRange(reg.Agents); err != nil {
+		return identity.CanonicalBytes{}, err
+	}
+	if err := epochsInRange(reg.Humans); err != nil {
+		return identity.CanonicalBytes{}, err
+	}
+	// Role placement, custody, and slug uniqueness are refused here so a root
+	// signature is never minted over a registry VerifyAndLoad would reject.
+	if err := validateRegistryBindings(reg); err != nil {
+		return identity.CanonicalBytes{}, err
 	}
 	canonical, err := canonicalBytes(reg)
 	if err != nil {
@@ -375,9 +447,12 @@ func SignRegistryWithSigner(client RegistrySigner, reg Registry) (SignedRegistry
 //     identity.VerifyCanonical (which rejects a small-order/non-canonical root
 //     key and a non-canonical signature). A bad sig is rejected.
 //  2. EPOCH RANGE: reject if reg.epoch or any binding key_epoch is outside
-//     [1, MaxSafeEpoch] (JCS-safe + anti-rollback floor).
-//  3. UNIQUENESS: reject duplicate {slug,key_epoch} tuples or more than one live
-//     binding per slug.
+//     [1, MaxSafeEpoch] (JCS-safe + anti-rollback floor). Agent and human
+//     bindings are both checked.
+//  3. BINDINGS: reject duplicate {slug,key_epoch} tuples or more than one live
+//     binding per slug, in agents and in humans; the same slug in both arrays;
+//     a bad custody value; god on an agent; bridge or code_signing on a human;
+//     and more than one binding that holds god.
 //  4. ANTI-ROLLBACK: reject if reg.epoch <= persistedHighestEpoch.
 //  5. FRESHNESS: reject (fail closed) if now is before reg.valid_from, past
 //     reg.valid_until, OR (now - reg.valid_from) > maxStaleness.
@@ -425,16 +500,17 @@ func VerifyAndLoad(
 	if !epochInRange(reg.Epoch) {
 		return Registry{}, persistedHighestEpoch, fmt.Errorf("%s", ErrEpochRange)
 	}
-	for _, b := range reg.Agents {
-		if !epochInRange(b.KeyEpoch) {
-			return Registry{}, persistedHighestEpoch, fmt.Errorf("%s", ErrEpochRange)
-		}
+	if err := epochsInRange(reg.Agents); err != nil {
+		return Registry{}, persistedHighestEpoch, err
+	}
+	if err := epochsInRange(reg.Humans); err != nil {
+		return Registry{}, persistedHighestEpoch, err
 	}
 
-	// 3. Uniqueness — reject duplicate {slug,key_epoch} tuples and more than one
-	// live (non-revoked) binding per slug, so a shadow binding cannot mask the
-	// intended one.
-	if err := checkBindingUniqueness(reg.Agents); err != nil {
+	// 3. Bindings — uniqueness inside each array, slug disjointness across
+	// them, custody, and where god / bridge / code_signing may sit. A shadow
+	// binding or a second god cannot load.
+	if err := validateRegistryBindings(reg); err != nil {
 		return Registry{}, persistedHighestEpoch, err
 	}
 
@@ -494,29 +570,8 @@ func decodeAuthenticatedRegistry(raw []byte) (Registry, error) {
 // When multiple bindings share a slug (rotation), the first live, in-window one
 // is returned.
 func Resolve(reg Registry, slug string, now time.Time) (AgentBinding, error) {
-	sawRevoked := false
-	for _, b := range reg.Agents {
-		if b.Slug != slug {
-			continue
-		}
-		if b.RevokedAt != nil {
-			sawRevoked = true
-			continue
-		}
-		if now.Unix() < b.ValidFrom {
-			continue
-		}
-		if now.Unix() > b.ValidUntil {
-			continue
-		}
-		return b, nil
-	}
-	// Distinguish "the slug exists but every binding for it is revoked" from
-	// "no such slug" so callers can alert specifically on revocation probing.
-	if sawRevoked {
-		return AgentBinding{}, fmt.Errorf("%s: %q", ErrRevoked, slug)
-	}
-	return AgentBinding{}, fmt.Errorf("%s: %q", ErrUnknownSlug, slug)
+	// Agents only. A human slug is not an agent slug, even when the text matches.
+	return resolveSlug(reg.Agents, slug, now)
 }
 
 // checkBindingUniqueness rejects a binding set that contains duplicate
@@ -533,12 +588,12 @@ func checkBindingUniqueness(agents []AgentBinding) error {
 	for _, b := range agents {
 		tk := tuple{slug: b.Slug, epoch: b.KeyEpoch}
 		if _, dup := seenTuple[tk]; dup {
-			return fmt.Errorf("%s", ErrDuplicateBinding)
+			return fmt.Errorf("%s: %q", ErrDuplicateBinding, b.Slug)
 		}
 		seenTuple[tk] = struct{}{}
 		if b.RevokedAt == nil {
 			if _, dup := liveSlug[b.Slug]; dup {
-				return fmt.Errorf("%s", ErrDuplicateBinding)
+				return fmt.Errorf("%s: %q", ErrDuplicateBinding, b.Slug)
 			}
 			liveSlug[b.Slug] = struct{}{}
 		}
@@ -576,31 +631,9 @@ func ResolveTuple(reg Registry, slug string, keyEpoch int, now time.Time) (Agent
 	return resolveTuple(reg, slug, keyEpoch, now)
 }
 
-// resolveTuple resolves the live binding for the EXACT {slug,key_epoch} tuple at
-// now, default-denying a revoked, expired, or epoch-mismatched binding. It is
-// the shared default-deny path behind VerifyMessage.
+// resolveTuple resolves the live agent binding for the EXACT {slug,key_epoch}
+// tuple at now. It does not look at humans. resolveTupleIn is the shared
+// default-deny scan.
 func resolveTuple(reg Registry, slug string, keyEpoch int, now time.Time) (AgentBinding, error) {
-	for _, b := range reg.Agents {
-		if b.Slug != slug || b.KeyEpoch != keyEpoch {
-			continue
-		}
-		if b.RevokedAt != nil {
-			return AgentBinding{}, fmt.Errorf("%s: %q", ErrRevoked, slug)
-		}
-		if now.Unix() < b.ValidFrom {
-			return AgentBinding{}, fmt.Errorf("%s: %q", ErrNotYetValid, slug)
-		}
-		if now.Unix() > b.ValidUntil {
-			return AgentBinding{}, fmt.Errorf("%s: %q", ErrExpiredBinding, slug)
-		}
-		return b, nil
-	}
-	// No tuple matched. Distinguish "slug exists but epoch differs" (mismatch)
-	// from "no such slug" for a clearer default-deny signal.
-	for _, b := range reg.Agents {
-		if b.Slug == slug {
-			return AgentBinding{}, fmt.Errorf("%s: %q", ErrKeyEpochMismatch, slug)
-		}
-	}
-	return AgentBinding{}, fmt.Errorf("%s: %q", ErrUnknownSlug, slug)
+	return resolveTupleIn(reg.Agents, slug, keyEpoch, now)
 }

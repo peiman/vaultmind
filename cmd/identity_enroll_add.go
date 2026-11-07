@@ -33,6 +33,9 @@ func runIdentityEnrollAdd(cmd *cobra.Command, _ []string) error {
 		RegistryInput:   registryBytes,
 		ValiditySeconds: getConfigValueWithFlags[string](cmd, "validity-seconds", config.KeyAppIdentityenrolladdValiditySeconds),
 		OriginDaemons:   getConfigValueWithFlags[string](cmd, "origin-daemon", config.KeyAppIdentityenrolladdOriginDaemon),
+		Class:           getConfigValueWithFlags[string](cmd, "class", config.KeyAppIdentityenrolladdClass),
+		Role:            getConfigValueWithFlags[string](cmd, "role", config.KeyAppIdentityenrolladdRole),
+		Custody:         getConfigValueWithFlags[string](cmd, "custody", config.KeyAppIdentityenrolladdCustody),
 	}
 	return identitycli.EnrollAdd(cmd.OutOrStdout(), cmd.ErrOrStderr(), requestReader, cfg)
 }
