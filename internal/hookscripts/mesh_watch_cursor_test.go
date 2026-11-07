@@ -41,7 +41,7 @@ func TestMeshWatchDetector_ResponseSnapshot(t *testing.T) {
 			env["VM_WAKE_LISTEN_FILE"] = listen
 			out, rc := runDetector(t, env, `{"messages":[{"id":"B","from_agent":"`+sender+`","ts":101,"room":"mesh"},{"id":"A","from_agent":"agent:other","ts":100,"room":"mesh"}]}`)
 			require.Zero(t, rc)
-			require.Equal(t, "agent:other|100", out)
+			require.Equal(t, "agent:other|room|100", out)
 			require.Equal(t, watchCursor{TS: 101, IDs: []string{"B"}}, readWatchCursors(t, path)["room"])
 		})
 	}
@@ -52,7 +52,7 @@ func TestMeshWatchDetector_BoundedSeenIDs(t *testing.T) {
 	// Duplicate IDs in one batch must be a set; advancing must discard old IDs.
 	out, rc := runDetector(t, env, `{"messages":[{"id":"new","from_agent":"agent:me","ts":101,"room":"mesh"},{"id":"new","from_agent":"agent:me","ts":101,"room":"mesh"},{"id":"older","from_agent":"agent:other","ts":100,"room":"mesh"}]}`)
 	require.Zero(t, rc)
-	require.Equal(t, "agent:other|100", out, "dropping old IDs must not drop an unseen message in the same response")
+	require.Equal(t, "agent:other|room|100", out, "dropping old IDs must not drop an unseen message in the same response")
 	require.Equal(t, watchCursor{TS: 101, IDs: []string{"new"}}, readWatchCursors(t, path)["room"])
 }
 
@@ -82,7 +82,7 @@ func TestMeshWatchDetector_MissingIDsAndDescendingBaseline(t *testing.T) {
 	require.Empty(t, hit, "baseline fallback identity must agree with the detector")
 	hit, rc = runDetector(t, env, `{"messages":[{"from_agent":"agent:first","ts":101,"room":"mesh","body":"different"}]}`)
 	require.Zero(t, rc)
-	require.Equal(t, "agent:first|101", hit, "same sender and second, different body is new")
+	require.Equal(t, "agent:first|room|101", hit, "same sender and second, different body is new")
 	require.Len(t, readWatchCursors(t, path)["room"].IDs, 2)
 	hit, rc = runDetector(t, env, replay)
 	require.Zero(t, rc)
