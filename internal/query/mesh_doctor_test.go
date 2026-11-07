@@ -241,7 +241,7 @@ func TestMeshDoctor_Tier2_PinnedResolvesSelfVerifyGreen(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	rootPub, rootPriv := lowEntropyKey(t, "doctor-root-seed-green")
 	memberPub, memberPriv := lowEntropyKey(t, "doctor-member-seed-green")
-	raw, nid := buildSignedRegistry(t, rootPub, rootPriv, "agent:mira", memberPub, now)
+	raw, nid := buildSignedRegistry(t, rootPub, rootPriv, "mira", memberPub, now)
 
 	dir := t.TempDir()
 	keyPath := filepath.Join(dir, "identity-signer.key")
@@ -253,7 +253,7 @@ func TestMeshDoctor_Tier2_PinnedResolvesSelfVerifyGreen(t *testing.T) {
 		PinnedRootPub: rootPub,
 		NetworkID:     nid,
 		RegistryBytes: raw,
-		Slug:          "agent:mira",
+		Slug:          "mira",
 		Now:           now,
 		Signer:        &stubSigner{priv: memberPriv},
 	})
@@ -271,7 +271,7 @@ func TestMeshDoctor_Tier2_PinnedResolvesSelfVerifyFailKeyMismatch(t *testing.T) 
 	rootPub, rootPriv := lowEntropyKey(t, "doctor-root-seed-mismatch")
 	memberPub, _ := lowEntropyKey(t, "doctor-member-seed-mismatch")
 	_, wrongPriv := lowEntropyKey(t, "doctor-WRONG-signer-seed")
-	raw, nid := buildSignedRegistry(t, rootPub, rootPriv, "agent:mira", memberPub, now)
+	raw, nid := buildSignedRegistry(t, rootPub, rootPriv, "mira", memberPub, now)
 
 	dir := t.TempDir()
 	keyPath := filepath.Join(dir, "identity-signer.key")
@@ -283,7 +283,7 @@ func TestMeshDoctor_Tier2_PinnedResolvesSelfVerifyFailKeyMismatch(t *testing.T) 
 		PinnedRootPub: rootPub,
 		NetworkID:     nid,
 		RegistryBytes: raw,
-		Slug:          "agent:mira",
+		Slug:          "mira",
 		Now:           now,
 		Signer:        &stubSigner{priv: wrongPriv}, // signer holds the WRONG key
 	})
@@ -299,7 +299,7 @@ func TestMeshDoctor_Tier2_PinnedSlugAbsentNotEnrolled(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	rootPub, rootPriv := lowEntropyKey(t, "doctor-root-seed-absent")
 	memberPub, memberPriv := lowEntropyKey(t, "doctor-member-seed-absent")
-	raw, nid := buildSignedRegistry(t, rootPub, rootPriv, "agent:someoneelse", memberPub, now)
+	raw, nid := buildSignedRegistry(t, rootPub, rootPriv, "someoneelse", memberPub, now)
 
 	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{
 		KeyPath:       filepath.Join(t.TempDir(), "k.key"),
@@ -307,7 +307,7 @@ func TestMeshDoctor_Tier2_PinnedSlugAbsentNotEnrolled(t *testing.T) {
 		PinnedRootPub: rootPub,
 		NetworkID:     nid,
 		RegistryBytes: raw,
-		Slug:          "agent:mira",
+		Slug:          "mira",
 		Now:           now,
 		Signer:        &stubSigner{priv: memberPriv},
 	})
@@ -324,7 +324,7 @@ func TestMeshDoctor_Tier2_PinnedBadSigRed(t *testing.T) {
 	rootPub, rootPriv := lowEntropyKey(t, "doctor-root-seed-badsig")
 	otherPub, _ := lowEntropyKey(t, "doctor-OTHER-root")
 	memberPub, _ := lowEntropyKey(t, "doctor-member-seed-badsig")
-	raw, _ := buildSignedRegistry(t, rootPub, rootPriv, "agent:mira", memberPub, now)
+	raw, _ := buildSignedRegistry(t, rootPub, rootPriv, "mira", memberPub, now)
 
 	// Pin a DIFFERENT root than the one that signed → VerifyAndLoad fails.
 	otherNID := registry.NetworkID(otherPub)
@@ -334,7 +334,7 @@ func TestMeshDoctor_Tier2_PinnedBadSigRed(t *testing.T) {
 		PinnedRootPub: otherPub,
 		NetworkID:     otherNID,
 		RegistryBytes: raw,
-		Slug:          "agent:mira",
+		Slug:          "mira",
 		Now:           now,
 	})
 	require.NoError(t, err)
@@ -348,7 +348,7 @@ func TestMeshDoctor_Tier2_PinnedStaleRed(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	rootPub, rootPriv := lowEntropyKey(t, "doctor-root-seed-stale")
 	memberPub, _ := lowEntropyKey(t, "doctor-member-seed-stale")
-	raw, nid := buildSignedRegistry(t, rootPub, rootPriv, "agent:mira", memberPub, now)
+	raw, nid := buildSignedRegistry(t, rootPub, rootPriv, "mira", memberPub, now)
 
 	// Verify FAR in the future → registry valid_until passed → ErrStale.
 	future := now.Add(72 * time.Hour)
@@ -358,7 +358,7 @@ func TestMeshDoctor_Tier2_PinnedStaleRed(t *testing.T) {
 		PinnedRootPub: rootPub,
 		NetworkID:     nid,
 		RegistryBytes: raw,
-		Slug:          "agent:mira",
+		Slug:          "mira",
 		Now:           future,
 	})
 	require.NoError(t, err)
@@ -370,7 +370,7 @@ func TestMeshDoctor_Tier2_UnpinnedSelfConsistentWarn(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	rootPub, rootPriv := lowEntropyKey(t, "doctor-root-seed-unpinned")
 	memberPub, memberPriv := lowEntropyKey(t, "doctor-member-seed-unpinned")
-	raw, nid := buildSignedRegistry(t, rootPub, rootPriv, "agent:mira", memberPub, now)
+	raw, nid := buildSignedRegistry(t, rootPub, rootPriv, "mira", memberPub, now)
 
 	// NO pin. The daemon advertises its own root; doctor verifies for
 	// self-consistency ONLY → authenticated=false, never green.
@@ -378,7 +378,7 @@ func TestMeshDoctor_Tier2_UnpinnedSelfConsistentWarn(t *testing.T) {
 		KeyPath:       filepath.Join(t.TempDir(), "k.key"),
 		SocketPath:    filepath.Join(t.TempDir(), "missing.sock"),
 		RegistryBytes: raw,
-		Slug:          "agent:mira",
+		Slug:          "mira",
 		Now:           now,
 		Signer:        &stubSigner{priv: memberPriv},
 		Daemon: &stubDaemon{
@@ -398,7 +398,7 @@ func TestMeshDoctor_Tier2_FetchesDirectoryFromDaemonWhenNoOfflineRegistry(t *tes
 	now := time.Unix(1_700_000_000, 0)
 	rootPub, rootPriv := lowEntropyKey(t, "doctor-root-seed-fetch")
 	memberPub, memberPriv := lowEntropyKey(t, "doctor-member-seed-fetch")
-	raw, nid := buildSignedRegistry(t, rootPub, rootPriv, "agent:mira", memberPub, now)
+	raw, nid := buildSignedRegistry(t, rootPub, rootPriv, "mira", memberPub, now)
 
 	dir := t.TempDir()
 	keyPath := filepath.Join(dir, "identity-signer.key")
@@ -409,7 +409,7 @@ func TestMeshDoctor_Tier2_FetchesDirectoryFromDaemonWhenNoOfflineRegistry(t *tes
 		SocketPath:    filepath.Join(dir, "missing.sock"),
 		PinnedRootPub: rootPub,
 		NetworkID:     nid,
-		Slug:          "agent:mira",
+		Slug:          "mira",
 		Now:           now,
 		Signer:        &stubSigner{priv: memberPriv},
 		Daemon:        &stubDaemon{directory: raw, whoamiOK: true, root: doctorclient.WellKnownRoot{RootPubKey: b64(rootPub), NetworkID: nid}},
@@ -537,7 +537,7 @@ func TestMeshDoctor_AnchorAutoDiscoverPin(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	rootPub, rootPriv := lowEntropyKey(t, "doctor-anchor-root")
 	memberPub, memberPriv := lowEntropyKey(t, "doctor-anchor-member")
-	raw, nid := buildSignedRegistry(t, rootPub, rootPriv, "agent:mira", memberPub, now)
+	raw, nid := buildSignedRegistry(t, rootPub, rootPriv, "mira", memberPub, now)
 
 	// Persist an anchor and resolve the pin from it (no --mesh-root-pubkey).
 	dir := t.TempDir()
@@ -563,7 +563,7 @@ func TestMeshDoctor_AnchorAutoDiscoverPin(t *testing.T) {
 		PinnedRootPub: pinnedPub,
 		NetworkID:     nid,
 		RegistryBytes: raw,
-		Slug:          "agent:mira",
+		Slug:          "mira",
 		Now:           now,
 		Signer:        &stubSigner{priv: memberPriv},
 	})
@@ -623,7 +623,7 @@ func TestMeshDoctor_UnpinnedStaleRegistryIsLoud(t *testing.T) {
 	signed := time.Unix(1_700_000_000, 0)
 	rootPub, rootPriv := lowEntropyKey(t, "doctor-root-seed-stale")
 	memberPub, memberPriv := lowEntropyKey(t, "doctor-member-seed-stale")
-	raw, nid := buildSignedRegistry(t, rootPub, rootPriv, "agent:mira", memberPub, signed)
+	raw, nid := buildSignedRegistry(t, rootPub, rootPriv, "mira", memberPub, signed)
 
 	// Read 23h30m later. buildSignedRegistry backdates valid_from by an hour,
 	// so age is 24h30m — past doctor's 24h bound — while valid_until (signed
@@ -636,7 +636,7 @@ func TestMeshDoctor_UnpinnedStaleRegistryIsLoud(t *testing.T) {
 		KeyPath:       filepath.Join(t.TempDir(), "k.key"),
 		SocketPath:    filepath.Join(t.TempDir(), "missing.sock"),
 		RegistryBytes: raw,
-		Slug:          "agent:mira",
+		Slug:          "mira",
 		Now:           now,
 		Signer:        &stubSigner{priv: memberPriv},
 		Daemon: &stubDaemon{
@@ -663,14 +663,14 @@ func TestMeshDoctor_UnpinnedPastDeclaredBoundIsLoud(t *testing.T) {
 	signed := time.Unix(1_700_000_000, 0)
 	rootPub, rootPriv := lowEntropyKey(t, "doctor-root-seed-declared-loud")
 	memberPub, memberPriv := lowEntropyKey(t, "doctor-member-seed-declared-loud")
-	raw, nid := buildSignedRegistryWindow(t, rootPub, rootPriv, "agent:mira", memberPub,
+	raw, nid := buildSignedRegistryWindow(t, rootPub, rootPriv, "mira", memberPub,
 		signed, signed.Add(365*24*time.Hour))
 
 	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{
 		KeyPath:       filepath.Join(t.TempDir(), "k.key"),
 		SocketPath:    filepath.Join(t.TempDir(), "missing.sock"),
 		RegistryBytes: raw,
-		Slug:          "agent:mira",
+		Slug:          "mira",
 		Now:           signed.Add(31 * 24 * time.Hour),
 		Signer:        &stubSigner{priv: memberPriv},
 		MaxStaleness:  30 * 24 * time.Hour,
@@ -688,13 +688,13 @@ func TestMeshDoctor_UnpinnedFreshRegistryIsNotFlaggedStale(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	rootPub, rootPriv := lowEntropyKey(t, "doctor-root-seed-fresh")
 	memberPub, memberPriv := lowEntropyKey(t, "doctor-member-seed-fresh")
-	raw, nid := buildSignedRegistry(t, rootPub, rootPriv, "agent:mira", memberPub, now)
+	raw, nid := buildSignedRegistry(t, rootPub, rootPriv, "mira", memberPub, now)
 
 	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{
 		KeyPath:       filepath.Join(t.TempDir(), "k.key"),
 		SocketPath:    filepath.Join(t.TempDir(), "missing.sock"),
 		RegistryBytes: raw,
-		Slug:          "agent:mira",
+		Slug:          "mira",
 		Now:           now,
 		Signer:        &stubSigner{priv: memberPriv},
 		Daemon: &stubDaemon{
@@ -716,13 +716,13 @@ func TestMeshDoctor_StaleRegistryWarnsWithNoDaemonAndNoPin(t *testing.T) {
 	signed := time.Unix(1_700_000_000, 0)
 	rootPub, rootPriv := lowEntropyKey(t, "doctor-root-offline-stale")
 	memberPub, memberPriv := lowEntropyKey(t, "doctor-member-offline-stale")
-	raw, _ := buildSignedRegistry(t, rootPub, rootPriv, "agent:mira", memberPub, signed)
+	raw, _ := buildSignedRegistry(t, rootPub, rootPriv, "mira", memberPub, signed)
 
 	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{
 		KeyPath:       filepath.Join(t.TempDir(), "k.key"),
 		SocketPath:    filepath.Join(t.TempDir(), "missing.sock"),
 		RegistryBytes: raw,
-		Slug:          "agent:mira",
+		Slug:          "mira",
 		Now:           signed.Add(23*time.Hour + 30*time.Minute),
 		// Declares the hub bound, so the REFUSAL verdict is the one under test.
 		MaxStaleness: 24 * time.Hour,
@@ -738,13 +738,13 @@ func TestMeshDoctor_FreshRegistryOfflineIsQuiet(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	rootPub, rootPriv := lowEntropyKey(t, "doctor-root-offline-fresh")
 	memberPub, memberPriv := lowEntropyKey(t, "doctor-member-offline-fresh")
-	raw, _ := buildSignedRegistry(t, rootPub, rootPriv, "agent:mira", memberPub, now)
+	raw, _ := buildSignedRegistry(t, rootPub, rootPriv, "mira", memberPub, now)
 
 	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{
 		KeyPath:       filepath.Join(t.TempDir(), "k.key"),
 		SocketPath:    filepath.Join(t.TempDir(), "missing.sock"),
 		RegistryBytes: raw,
-		Slug:          "agent:mira",
+		Slug:          "mira",
 		Now:           now,
 		Signer:        &stubSigner{priv: memberPriv},
 		Daemon:        nil,
@@ -768,13 +768,13 @@ func TestMeshDoctor_StaleRegistryWarnsEvenWhenTheDaemonIsReachable(t *testing.T)
 	signed := time.Unix(1_700_000_000, 0)
 	rootPub, rootPriv := lowEntropyKey(t, "doctor-root-reachable-stale")
 	memberPub, memberPriv := lowEntropyKey(t, "doctor-member-reachable-stale")
-	raw, _ := buildSignedRegistry(t, rootPub, rootPriv, "agent:mira", memberPub, signed)
+	raw, _ := buildSignedRegistry(t, rootPub, rootPriv, "mira", memberPub, signed)
 
 	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{
 		KeyPath:       filepath.Join(t.TempDir(), "k.key"),
 		SocketPath:    filepath.Join(t.TempDir(), "missing.sock"),
 		RegistryBytes: raw, // declared via agents.yaml — the normal case now
-		Slug:          "agent:mira",
+		Slug:          "mira",
 		Now:           signed.Add(23*time.Hour + 30*time.Minute),
 		// Declares the hub bound, so the REFUSAL verdict is the one under test.
 		MaxStaleness: 24 * time.Hour,
@@ -802,7 +802,7 @@ func TestMeshDoctor_UndeclaredRegistryReportsFreshnessUnchecked(t *testing.T) {
 	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{
 		KeyPath:    filepath.Join(t.TempDir(), "k.key"),
 		SocketPath: filepath.Join(t.TempDir(), "missing.sock"),
-		Slug:       "agent:mira",
+		Slug:       "mira",
 		Now:        time.Unix(1_700_000_000, 0),
 	})
 	require.NoError(t, err)
@@ -814,7 +814,7 @@ func TestMeshDoctor_DeclaredButUnreadableRegistryIsLoud(t *testing.T) {
 	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{
 		KeyPath:        filepath.Join(t.TempDir(), "k.key"),
 		SocketPath:     filepath.Join(t.TempDir(), "missing.sock"),
-		Slug:           "agent:mira",
+		Slug:           "mira",
 		Now:            time.Unix(1_700_000_000, 0),
 		RegistryUnread: "/declared/but/absent/registry.json",
 	})
@@ -827,7 +827,7 @@ func TestMeshDoctor_CorruptRegistryIsNotSwallowed(t *testing.T) {
 	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{
 		KeyPath:       filepath.Join(t.TempDir(), "k.key"),
 		SocketPath:    filepath.Join(t.TempDir(), "missing.sock"),
-		Slug:          "agent:mira",
+		Slug:          "mira",
 		Now:           time.Unix(1_700_000_000, 0),
 		RegistryBytes: []byte(`{"registry":"not-base64!!","root_sig":"x"}`),
 	})
@@ -850,12 +850,12 @@ func TestMeshDoctor_UnreadableDeclaredPathStillChecksTheRegistryInPlay(t *testin
 	signed := time.Unix(1_700_000_000, 0)
 	rootPub, rootPriv := lowEntropyKey(t, "doctor-root-unread-plus-daemon")
 	memberPub, memberPriv := lowEntropyKey(t, "doctor-member-unread-plus-daemon")
-	raw, _ := buildSignedRegistry(t, rootPub, rootPriv, "agent:mira", memberPub, signed)
+	raw, _ := buildSignedRegistry(t, rootPub, rootPriv, "mira", memberPub, signed)
 
 	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{
 		KeyPath:    filepath.Join(t.TempDir(), "k.key"),
 		SocketPath: filepath.Join(t.TempDir(), "missing.sock"),
-		Slug:       "agent:mira",
+		Slug:       "mira",
 		Now:        signed.Add(23*time.Hour + 30*time.Minute),
 		// Declares the hub bound, so the REFUSAL verdict is the one under test.
 		MaxStaleness:   24 * time.Hour,
@@ -889,7 +889,7 @@ func TestMeshDoctor_EnvelopeWrappingGarbageIsNotSilent(t *testing.T) {
 	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{
 		KeyPath:       filepath.Join(t.TempDir(), "k.key"),
 		SocketPath:    filepath.Join(t.TempDir(), "missing.sock"),
-		Slug:          "agent:mira",
+		Slug:          "mira",
 		Now:           time.Unix(1_700_000_000, 0),
 		RegistryBytes: env,
 	})
@@ -910,14 +910,14 @@ func TestMeshDoctor_DeclaredBoundDecidesTheRefusalVerdict(t *testing.T) {
 	signed := time.Unix(1_700_000_000, 0)
 	rootPub, rootPriv := lowEntropyKey(t, "doctor-root-declared-bound")
 	memberPub, memberPriv := lowEntropyKey(t, "doctor-member-declared-bound")
-	raw, _ := buildSignedRegistryWindow(t, rootPub, rootPriv, "agent:mira", memberPub,
+	raw, _ := buildSignedRegistryWindow(t, rootPub, rootPriv, "mira", memberPub,
 		signed, signed.Add(365*24*time.Hour))
 
 	// Two days old against a declared 30-day hub bound: sends work.
 	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{
 		KeyPath:       filepath.Join(t.TempDir(), "k.key"),
 		SocketPath:    filepath.Join(t.TempDir(), "missing.sock"),
-		Slug:          "agent:mira",
+		Slug:          "mira",
 		Now:           signed.Add(48 * time.Hour),
 		Signer:        &stubSigner{priv: memberPriv},
 		RegistryBytes: raw,
@@ -932,13 +932,13 @@ func TestMeshDoctor_DeclaredBoundStillCatchesGenuinelyPastDue(t *testing.T) {
 	signed := time.Unix(1_700_000_000, 0)
 	rootPub, rootPriv := lowEntropyKey(t, "doctor-root-past-declared")
 	memberPub, memberPriv := lowEntropyKey(t, "doctor-member-past-declared")
-	raw, _ := buildSignedRegistryWindow(t, rootPub, rootPriv, "agent:mira", memberPub,
+	raw, _ := buildSignedRegistryWindow(t, rootPub, rootPriv, "mira", memberPub,
 		signed, signed.Add(365*24*time.Hour))
 
 	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{
 		KeyPath:       filepath.Join(t.TempDir(), "k.key"),
 		SocketPath:    filepath.Join(t.TempDir(), "missing.sock"),
-		Slug:          "agent:mira",
+		Slug:          "mira",
 		Now:           signed.Add(31 * 24 * time.Hour),
 		Signer:        &stubSigner{priv: memberPriv},
 		RegistryBytes: raw,
@@ -954,12 +954,12 @@ func TestMeshDoctor_UndeclaredBoundWarnsAdvisoryNotRefusal(t *testing.T) {
 	signed := time.Unix(1_700_000_000, 0)
 	rootPub, rootPriv := lowEntropyKey(t, "doctor-root-advisory")
 	memberPub, memberPriv := lowEntropyKey(t, "doctor-member-advisory")
-	raw, _ := buildSignedRegistry(t, rootPub, rootPriv, "agent:mira", memberPub, signed)
+	raw, _ := buildSignedRegistry(t, rootPub, rootPriv, "mira", memberPub, signed)
 
 	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{
 		KeyPath:       filepath.Join(t.TempDir(), "k.key"),
 		SocketPath:    filepath.Join(t.TempDir(), "missing.sock"),
-		Slug:          "agent:mira",
+		Slug:          "mira",
 		Now:           signed.Add(48 * time.Hour),
 		Signer:        &stubSigner{priv: memberPriv},
 		RegistryBytes: raw,

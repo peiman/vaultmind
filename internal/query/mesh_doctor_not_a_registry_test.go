@@ -37,7 +37,7 @@ func TestMeshDoctor_RosterPassedAsRegistryIsNamedAsSuch(t *testing.T) {
 			in.KeyPath = filepath.Join(t.TempDir(), "k.key")
 			in.SocketPath = filepath.Join(t.TempDir(), "missing.sock")
 			in.RegistryBytes = []byte(rosterYAML)
-			in.Slug = "agent:mira"
+			in.Slug = "mira"
 			in.Now = time.Unix(1_700_000_000, 0)
 
 			mi, err := BuildMeshIdentity(context.Background(), in)

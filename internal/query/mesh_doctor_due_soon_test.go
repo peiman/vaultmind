@@ -21,12 +21,12 @@ func dueSoonInput(t *testing.T, age time.Duration) MeshDoctorInput {
 	signed := time.Unix(1_700_000_000, 0)
 	rootPub, rootPriv := lowEntropyKey(t, "due-soon-root")
 	memberPub, memberPriv := lowEntropyKey(t, "due-soon-member")
-	raw, _ := buildSignedRegistryWindow(t, rootPub, rootPriv, "agent:mira", memberPub,
+	raw, _ := buildSignedRegistryWindow(t, rootPub, rootPriv, "mira", memberPub,
 		signed, signed.Add(365*24*time.Hour))
 	return MeshDoctorInput{
 		KeyPath:       filepath.Join(t.TempDir(), "k.key"),
 		SocketPath:    filepath.Join(t.TempDir(), "missing.sock"),
-		Slug:          "agent:mira",
+		Slug:          "mira",
 		Now:           signed.Add(age),
 		Signer:        &stubSigner{priv: memberPriv},
 		RegistryBytes: raw,

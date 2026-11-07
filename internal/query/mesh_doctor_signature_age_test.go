@@ -29,7 +29,7 @@ func agedRegistry(t *testing.T, seed string) (raw []byte, nid string, rootPub ed
 	signed := time.Unix(1_700_000_000, 0)
 	rootPub, rootPriv := lowEntropyKey(t, seed+"-root")
 	memberPub, memberPriv := lowEntropyKey(t, seed+"-member")
-	raw, nid = buildSignedRegistryWindow(t, rootPub, rootPriv, "agent:mira", memberPub,
+	raw, nid = buildSignedRegistryWindow(t, rootPub, rootPriv, "mira", memberPub,
 		signed, signed.Add(365*24*time.Hour))
 	return raw, nid, rootPub, memberPriv, signed.Add(liveRegistryAge)
 }
@@ -43,7 +43,7 @@ func TestMeshDoctor_PinnedValidSignatureIsNotReportedForgedBecauseItIsOld(t *tes
 		PinnedRootPub: rootPub,
 		NetworkID:     nid,
 		RegistryBytes: raw,
-		Slug:          "agent:mira",
+		Slug:          "mira",
 		Now:           now,
 		Signer:        &stubSigner{priv: memberPriv},
 		MaxStaleness:  30 * 24 * time.Hour,
@@ -65,7 +65,7 @@ func TestMeshDoctor_PinnedUndeclaredBoundAgeIsAdvisoryNotForgery(t *testing.T) {
 		PinnedRootPub: rootPub,
 		NetworkID:     nid,
 		RegistryBytes: raw,
-		Slug:          "agent:mira",
+		Slug:          "mira",
 		Now:           now,
 		Signer:        &stubSigner{priv: memberPriv},
 	})
@@ -83,7 +83,7 @@ func TestMeshDoctor_UnpinnedValidSignatureIsNotReportedInconsistentBecauseItIsOl
 		KeyPath:       filepath.Join(t.TempDir(), "k.key"),
 		SocketPath:    filepath.Join(t.TempDir(), "missing.sock"),
 		RegistryBytes: raw,
-		Slug:          "agent:mira",
+		Slug:          "mira",
 		Now:           now,
 		Signer:        &stubSigner{priv: memberPriv},
 		MaxStaleness:  30 * 24 * time.Hour,
