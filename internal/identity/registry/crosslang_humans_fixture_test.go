@@ -184,6 +184,9 @@ func humansFixtureRejects(t *testing.T, rootPriv ed25519.PrivateKey, reg Registr
 			agents := obj["agents"].([]any)
 			agents[0].(map[string]any)["slug"] = "human:peiman"
 		}},
+		{name: "empty_slug", reason: "slug must not be empty", patch: func(obj map[string]any) {
+			humansFixtureHuman(obj, 1)["slug"] = ""
+		}},
 		{name: "two_live_human_keys", reason: "a slug may have at most one non-revoked binding (two live keys for one person)", patch: func(obj map[string]any) {
 			second := liveRotation(humansFixtureHuman(obj, 0))
 			delete(second, "roles")
@@ -380,6 +383,7 @@ func TestCrossLanguageHumansFixture_RejectsAreSchemaNotSignature(t *testing.T) {
 		{"god_extra_field", ErrMalformedRole, "peiman"},
 		{"human_missing_pubkey", ErrPubKeyBadLen, "peiman"},
 		{"slug_with_colon", ErrSlugColon, "human:peiman"},
+		{"empty_slug", ErrSlugEmpty, `""`},
 		{"two_live_human_keys", ErrDuplicateBinding, "peiman"},
 		{"two_live_agent_keys", ErrDuplicateBinding, "mira"},
 		{"god_kept_on_revoked_rotation", ErrMultipleGods, "peiman"},

@@ -39,6 +39,8 @@ const (
 	// it in a raw slug would let an agent slug like "human:peiman" be routed to
 	// the humans array and silently discarded.
 	ErrSlugColon = "registry: slug must not contain a colon"
+	// ErrSlugEmpty is returned when a binding has an empty slug.
+	ErrSlugEmpty = "registry: slug must not be empty"
 )
 
 // NormalizeCustody returns the in-memory custody of a binding. Empty and
@@ -89,11 +91,15 @@ func validateRegistryBindings(reg Registry) error {
 	return checkRolePlacement(reg)
 }
 
-// checkSlugNoColon rejects any binding whose slug contains a colon. A colon is
-// the class-qualifier separator used in principal ids (human:<slug>), so a slug
-// that embeds one would be silently mis-routed by envelopePrincipal.
+// checkSlugNoColon rejects any binding whose slug is empty or contains a colon.
+// An empty slug names no principal. A colon is the class-qualifier separator
+// used in principal ids (human:<slug>), so a slug that embeds one would be
+// silently mis-routed by envelopePrincipal.
 func checkSlugNoColon(bindings []AgentBinding) error {
 	for _, b := range bindings {
+		if b.Slug == "" {
+			return fmt.Errorf("%s: %q", ErrSlugEmpty, b.Slug)
+		}
 		if strings.Contains(b.Slug, ":") {
 			return fmt.Errorf("%s: %q", ErrSlugColon, b.Slug)
 		}

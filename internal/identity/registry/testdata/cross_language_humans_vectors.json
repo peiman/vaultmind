@@ -138,6 +138,16 @@
       }
     },
     {
+      "name": "empty_slug",
+      "reason": "slug must not be empty",
+      "expect": "reject",
+      "envelope": {
+        "registry": "eyJhZ2VudHMiOlt7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiTWlyYSIsImtleV9lcG9jaCI6MSwicHVia2V5IjoiUWVqOTRUS3RadzVUVE5peWRkTE5mdXgzY3p4bStOdElvY3JhZjZ2OFJWVT0iLCJyb2xlcyI6W3sia2luZCI6ImJyaWRnZSIsInZvdWNoZXNfZm9yIjpbImh1bWFuOnBlaW1hbiJdfV0sInNsdWciOiJtaXJhIiwidmFsaWRfZnJvbSI6MTk5MDAwMCwidmFsaWRfdW50aWwiOjMwMDAwMDB9LHsiYXV0aG9yaXplZF9vcmlnaW5fZGFlbW9ucyI6WyJkYWVtb24tMSJdLCJkaXNwbGF5X25hbWUiOiJBZGEiLCJrZXlfZXBvY2giOjEsInB1YmtleSI6InRIUUxwT0QzNEZkdkVlZ1VuYnV5VXB3aEloUGJaNWd4KzEwYkloNkVWUzA9Iiwic2x1ZyI6ImFkYSIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfV0sImVwb2NoIjoxMCwiaHVtYW5zIjpbeyJhdXRob3JpemVkX29yaWdpbl9kYWVtb25zIjpbImRhZW1vbi0xIl0sImN1c3RvZHkiOiJpc29sYXRlZCIsImRpc3BsYXlfbmFtZSI6IlBlaW1hbiIsImtleV9lcG9jaCI6MSwicHVia2V5IjoiN1RJMHNuYlV6dHBYMVp1dEZQdXZXbmM4RHpHTW1aM2pwZzFUeGFXelRBVT0iLCJyb2xlcyI6W3sia2luZCI6ImdvZCJ9XSwic2x1ZyI6InBlaW1hbiIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfSx7ImF1dGhvcml6ZWRfb3JpZ2luX2RhZW1vbnMiOlsiZGFlbW9uLTEiXSwiZGlzcGxheV9uYW1lIjoiU2lhdm91c2giLCJrZXlfZXBvY2giOjEsInB1YmtleSI6Im9SZ0VNMW5ueTBYcWk3SUI1OGk1US9FMFZzQ2swYkVkUTBPbmdvQ0orN289Iiwic2x1ZyI6IiIsInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfV0sInZhbGlkX2Zyb20iOjE5OTAwMDAsInZhbGlkX3VudGlsIjozMDAwMDAwfQ==",
+        "root_key_epoch": 0,
+        "root_sig": "jDa3+5QYHDihsF/mm/3+DwHFHYtWKjUrnebPNWyVrAQj7zjwBPVaYnVYsnZzXMuDLs2pemmQ2QknwcU5580nAg=="
+      }
+    },
+    {
       "name": "two_live_human_keys",
       "reason": "a slug may have at most one non-revoked binding (two live keys for one person)",
       "expect": "reject",
