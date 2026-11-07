@@ -97,7 +97,7 @@ func TestMeshWatchDetector_Behaviour(t *testing.T) {
 		out, rc := runDetector(t, detectorEnv(t, nil),
 			`{"messages":[{"from_agent":"agent:other","ts":100,"room":"mesh"}]}`)
 		require.Zero(t, rc)
-		require.Equal(t, "agent:other|100", out)
+		require.Equal(t, "agent:other|room|100", out)
 	})
 
 	t.Run("never wakes on self", func(t *testing.T) {
@@ -115,7 +115,7 @@ func TestMeshWatchDetector_Behaviour(t *testing.T) {
 		out, rc := runDetector(t, env,
 			`{"messages":[{"from_agent":"agent:other","ts":50,"room":"mesh"},{"from_agent":"agent:other","ts":60,"to_agent":"agent:me"}]}`)
 		require.Zero(t, rc)
-		require.Equal(t, "agent:other|60", out)
+		require.Equal(t, "agent:other|dm|60", out)
 	})
 
 	t.Run("filtered scope: keyword wakes, chatter does not", func(t *testing.T) {
@@ -128,7 +128,7 @@ func TestMeshWatchDetector_Behaviour(t *testing.T) {
 		out, rc = runDetector(t, env,
 			`{"messages":[{"from_agent":"agent:other","ts":11,"room":"mesh","body":"hey ME, look at this"}]}`)
 		require.Zero(t, rc)
-		require.Equal(t, "agent:other|11", out, "keyword match is case-insensitive")
+		require.Equal(t, "agent:other|room|11", out, "keyword match is case-insensitive")
 	})
 
 	t.Run("filtered scope: addressed messages wake with strict boundaries", func(t *testing.T) {
@@ -164,7 +164,7 @@ func TestMeshWatchDetector_Behaviour(t *testing.T) {
 				out, rc := runDetector(t, env, `{"messages":[{"from_agent":"agent:other","ts":`+strconv.Itoa(20+i)+`,"room":"mesh","body":`+strconv.Quote(tc.body)+`}]}`)
 				require.Zero(t, rc)
 				if tc.wake {
-					require.Equal(t, "agent:other|"+strconv.Itoa(20+i), out)
+					require.Equal(t, "agent:other|room|"+strconv.Itoa(20+i), out)
 				} else {
 					require.Empty(t, out)
 				}
@@ -183,7 +183,7 @@ func TestMeshWatchDetector_Behaviour(t *testing.T) {
 		require.Empty(t, out, "the dot in @c.m must not match any character")
 		out, rc = runDetector(t, env, `{"messages":[{"from_agent":"agent:other","ts":41,"room":"mesh","body":"@c.m hi"}]}`)
 		require.Zero(t, rc)
-		require.Equal(t, "agent:other|41", out)
+		require.Equal(t, "agent:other|room|41", out)
 	})
 
 	t.Run("filtered scope: slug addresses without keywords", func(t *testing.T) {
@@ -195,7 +195,7 @@ func TestMeshWatchDetector_Behaviour(t *testing.T) {
 		for i, body := range []string{"CM: hi", "@cm"} {
 			out, rc := runDetector(t, env, `{"messages":[{"from_agent":"agent:other","ts":`+strconv.Itoa(40+i)+`,"room":"mesh","body":`+strconv.Quote(body)+`}]}`)
 			require.Zero(t, rc)
-			require.Equal(t, "agent:other|"+strconv.Itoa(40+i), out)
+			require.Equal(t, "agent:other|room|"+strconv.Itoa(40+i), out)
 		}
 	})
 
@@ -204,7 +204,7 @@ func TestMeshWatchDetector_Behaviour(t *testing.T) {
 		out, rc := runDetector(t, env,
 			`{"messages":[{"from_agent":"agent:other","ts":50,"room":"mesh","body":"deployer started"}]}`)
 		require.Zero(t, rc)
-		require.Equal(t, "agent:other|50", out)
+		require.Equal(t, "agent:other|room|50", out)
 	})
 
 	t.Run("filtered scope: wake_from principal always wakes", func(t *testing.T) {
@@ -212,7 +212,7 @@ func TestMeshWatchDetector_Behaviour(t *testing.T) {
 		out, rc := runDetector(t, env,
 			`{"messages":[{"from_agent":"human:other","ts":12,"room":"mesh","body":"no keyword here"}]}`)
 		require.Zero(t, rc)
-		require.Equal(t, "human:other|12", out,
+		require.Equal(t, "human:other|room|12", out,
 			"wake_from is DATA — an ancestor hardcoded human:siavoush for exactly this case")
 	})
 
@@ -221,7 +221,7 @@ func TestMeshWatchDetector_Behaviour(t *testing.T) {
 		out, rc := runDetector(t, env,
 			`{"messages":[{"from_agent":"agent:other","ts":13,"to_agent":"agent:me","body":"direct"}]}`)
 		require.Zero(t, rc)
-		require.Equal(t, "agent:other|13", out,
+		require.Equal(t, "agent:other|dm|13", out,
 			"a message addressed to me must never be scope-filtered out")
 	})
 
@@ -239,7 +239,7 @@ func TestMeshWatchDetector_Behaviour(t *testing.T) {
 		out, rc = runDetector(t, env,
 			`{"messages":[{"from_agent":"human:op","ts":15,"room":"mesh"}]}`)
 		require.Zero(t, rc)
-		require.Equal(t, "human:op|15", out,
+		require.Equal(t, "human:op|room|15", out,
 			"without hard mode, the operator is heard even when listed in mute")
 	})
 

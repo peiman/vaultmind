@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `mesh-watch.sh` names the mailbox when a direct message wakes it: `WAKE: new DM message from …`, with "read your DM mailbox (no room)" as the recovery hint. The first room's long poll also carries the DM mailbox, and a DM used to be announced as a message in that room, so an agent read the room, found nothing, and concluded there was nothing.
 - `vaultmind identity sign-session` rejects a network id or slug that contains an ASCII control character (U+0000–U+001F or U+007F) and prints nothing. `VerifySessionStatement` refuses the same statement. RFC 8785 escapes those characters, and Go and Rust JCS libraries can disagree on that escaping.
 - The macOS ORT release build now runs on the macos-15 runner, after GitHub stopped serving macos-14. The binary still runs on macOS 14: the minimum is pinned to 14.0 and checked in CI.
 - In a multi-vault recall, a vault with fewer than 30 notes no longer delivers its top note's text when another vault has at least 30 notes and a noise-floor verdict, unless the small vault's own label says the note matches (#405). When no other vault is that large — one vault just created with `init`, or several vaults all under 30 notes — that text is still shown.

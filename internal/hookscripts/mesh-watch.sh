@@ -445,7 +445,9 @@ if CURSOR_FILE:
             os.unlink(name)
 if hits:
     m = hits[-1]
-    print(str(m.get("from_agent", "?")) + "|" + str(m.get("ts", "")))
+    # from|scope|ts. The scope travels with the hit: the first room poll also
+    # carries the DM mailbox, and the wake line must say which one it saw.
+    print(str(m.get("from_agent", "?")) + "|" + stream(m) + "|" + str(m.get("ts", "")))
 PY
 
 # ── Arm-time detector self-test — "armed" must mean the detector WORKS ───────
@@ -459,8 +461,8 @@ selftest="$(printf '{"messages":[{"from_agent":"agent:selftest","ts":42,"room":"
   printf 'mesh-watch: detector self-test FAILED (%s) — refusing to arm with a broken detector.\n' "$selftest" >&2
   exit 2
 }
-if [[ "$selftest" != "agent:selftest|42" ]]; then
-  printf 'mesh-watch: detector self-test returned %q, expected "agent:selftest|42" — refusing to arm.\n' "$selftest" >&2
+if [[ "$selftest" != "agent:selftest|room|42" ]]; then
+  printf 'mesh-watch: detector self-test returned %q, expected "agent:selftest|room|42" — refusing to arm.\n' "$selftest" >&2
   exit 2
 fi
 
@@ -693,14 +695,21 @@ PYINIT
       return 1
     fi
     if [[ -n "$hit" ]]; then
-      local ts="${hit##*|}" recover="${hit##*|}"
+      local ts="${hit##*|}" recover="${hit##*|}" from="${hit%%|*}" hit_scope
+      hit_scope="${hit#*|}"; hit_scope="${hit_scope%|*}"
       [[ "$ts" =~ ^[0-9]+$ ]] && recover="$(( ts - 1 ))"
-      printf '%s' "$hit" > "$VM_MESH_LASTWAKE" 2>/dev/null || true
+      printf '%s' "${from}|${ts}" > "$VM_MESH_LASTWAKE" 2>/dev/null || true
+      # A DM woken on the first room poll was once announced as a room
+      # message, so the agent read the room, found nothing, and stopped.
+      if [[ "$hit_scope" == dm ]]; then
+        echo "WAKE: new DM message from ${from} (ts ${ts}). Drain the chat (rooms + DMs), respond, then RE-ARM mesh-watch. IF THE DRAIN COMES BACK EMPTY do NOT conclude there is nothing — this message provably exists; re-subscribe and read your DM mailbox (no room) with since=${recover} to recover it.$(registry_countdown)" > "$sig"
+        return 1
+      fi
       # The empty-drain disambiguation must travel IN the wake line: only this
       # watcher has PROVEN a message exists, so an empty chat_drain after this
       # wake means the subscription is dead, not that nothing arrived.
       # (Observed live 2026-08-12: real wake, drain [], subscriber_count 0.)
-      echo "WAKE: new ${room} message from ${hit%%|*} (ts ${ts}). Drain the chat (rooms + DMs), respond, then RE-ARM mesh-watch. IF THE DRAIN COMES BACK EMPTY do NOT conclude there is nothing — this message provably exists; re-subscribe and read ${room} with since=${recover} to recover it.$(registry_countdown)" > "$sig"
+      echo "WAKE: new ${room} message from ${from} (ts ${ts}). Drain the chat (rooms + DMs), respond, then RE-ARM mesh-watch. IF THE DRAIN COMES BACK EMPTY do NOT conclude there is nothing — this message provably exists; re-subscribe and read ${room} with since=${recover} to recover it.$(registry_countdown)" > "$sig"
       return 1
     fi
 
