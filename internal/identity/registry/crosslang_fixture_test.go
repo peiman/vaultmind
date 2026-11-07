@@ -340,7 +340,8 @@ func genSmallOrderAgent(t *testing.T, rootPriv ed25519.PrivateKey, base Registry
 	t.Helper()
 	// Build the wire registry directly, inject the small-order pubkey, canonicalize,
 	// and sign with the real root key.
-	w := toWire(base)
+	w, err := toWire(base)
+	require.NoError(t, err)
 	w.Agents[0].PubKey = b64(smallPub)
 	raw, err := json.Marshal(w)
 	require.NoError(t, err)

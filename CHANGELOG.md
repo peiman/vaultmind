@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `identity sign-registry` can sign agent roles (`bridge`, `code_signing`) on a registry binding. A registry with no roles is unchanged, so registries already signed still verify. A verifier that predates roles rejects a registry that carries them, so do not sign roles until every verifier that must accept the registry parses them.
 - `vaultmind identity sign-session` signs a hub login proof for the agent enrolled on this machine, through the keyless signer, and prints one JSON line (`statement`, `sig`, `pubkey`). The slug and key epoch are that agent's own binding. An invalid challenge, a missing enrollment, or an unreachable signer prints nothing and exits non-zero.
 
 ### Changed

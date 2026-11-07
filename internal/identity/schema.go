@@ -241,3 +241,165 @@ func absInt64(v int64) int64 {
 	}
 	return v
 }
+
+// registrySchemaMaxDepth matches chat-core validate_registry_schema (MAX_DEPTH).
+// A registry is a few levels deep; the cap is the Rust limit, not ValidateSchema's 32.
+const registrySchemaMaxDepth = 16
+
+// ValidateRegistrySchema is the sign-path gate for a Contract B registry document.
+// It is the part of ValidateSchema that validate_registry_schema also enforces,
+// plus duplicate object keys:
+//
+//   - the top-level value is a JSON object
+//   - object keys are ASCII-only
+//   - every string value is Unicode NFC (checked, not rewritten)
+//   - duplicate object keys are rejected
+//   - nesting deeper than 16 is rejected
+//   - the document is valid UTF-8 and has no trailing data
+//
+// Numbers, booleans, and null are allowed. Epoch and key_epoch range checks stay
+// with the sign path's existing gate. ValidateSchema's blanket ±2^53 cap and its
+// rejection of integral tokens such as 1.0 and 1e3 are not applied: Rust accepts
+// any other i64 or u64, and there is no envelope key allowlist to reuse.
+//
+// Duplicate keys are intentional even though the Rust verifier merges them.
+// encoding/json keeps the last value, so an unsigned sign-registry input must
+// fail before decode. Do not use this on VerifyAndLoad: a signed body Rust
+// accepts after that merge must still load.
+func ValidateRegistrySchema(jsonBytes []byte) error {
+	if !utf8.Valid(jsonBytes) {
+		return fmt.Errorf("%s", errSchemaInvalidUTF8)
+	}
+	dec := json.NewDecoder(bytes.NewReader(jsonBytes))
+	dec.UseNumber()
+	tok, err := dec.Token()
+	if err != nil {
+		return fmt.Errorf("%s: %w", errSchemaInvalidJSON, err)
+	}
+	delim, ok := tok.(json.Delim)
+	if !ok || delim != '{' {
+		return fmt.Errorf("%s", ErrSchemaNotObject)
+	}
+	if err := walkRegistryObject(dec, 1); err != nil {
+		return err
+	}
+	if dec.More() {
+		return fmt.Errorf("%s", ErrSchemaTrailingInput)
+	}
+	return nil
+}
+
+func walkRegistryValue(dec *json.Decoder, depth int) error {
+	if depth > registrySchemaMaxDepth {
+		return fmt.Errorf("%s", errSchemaTooDeep)
+	}
+	tok, err := dec.Token()
+	if err != nil {
+		return fmt.Errorf("%s: %w", errSchemaInvalidJSON, err)
+	}
+	switch t := tok.(type) {
+	case json.Delim:
+		switch t {
+		case '{':
+			return walkRegistryObject(dec, depth+1)
+		case '[':
+			return walkRegistryArray(dec, depth+1)
+		default:
+			return fmt.Errorf("%s: unexpected %q", errSchemaInvalidJSON, t)
+		}
+	case string:
+		if !isNFC(t) {
+			return fmt.Errorf("%s: %q", ErrSchemaNotNFC, t)
+		}
+		return nil
+	case json.Number, bool, nil:
+		return nil
+	default:
+		return fmt.Errorf("%s: unexpected token %T", errSchemaInvalidJSON, tok)
+	}
+}
+
+func walkRegistryObject(dec *json.Decoder, depth int) error {
+	if depth > registrySchemaMaxDepth {
+		return fmt.Errorf("%s", errSchemaTooDeep)
+	}
+	seen := make(map[string]struct{})
+	for dec.More() {
+		keyTok, err := dec.Token()
+		if err != nil {
+			return fmt.Errorf("%s: %w", errSchemaInvalidJSON, err)
+		}
+		key, ok := keyTok.(string)
+		if !ok {
+			return fmt.Errorf("%s: object key not a string", errSchemaInvalidJSON)
+		}
+		if !isASCII(key) {
+			return fmt.Errorf("%s: %q", ErrSchemaNonASCIIKey, key)
+		}
+		if _, dup := seen[key]; dup {
+			return fmt.Errorf("%s: %q", ErrSchemaDuplicateKey, key)
+		}
+		seen[key] = struct{}{}
+		if err := walkRegistryValue(dec, depth); err != nil {
+			return err
+		}
+	}
+	if _, err := dec.Token(); err != nil {
+		return fmt.Errorf("%s: %w", errSchemaInvalidJSON, err)
+	}
+	return nil
+}
+
+// ValidateDocumentNFC rejects a JSON document that contains a string value
+// which is not Unicode NFC. encoding/json merges a duplicated key, the same
+// way serde_json::Value does, and this function does not reject duplicates.
+// The sign path uses ValidateRegistrySchema for that. Verify uses this so a
+// signed body Rust accepts after the merge still loads, while a non-NFC string
+// anywhere in the authenticated document is refused.
+func ValidateDocumentNFC(jsonBytes []byte) error {
+	var v any
+	if err := json.Unmarshal(jsonBytes, &v); err != nil {
+		return fmt.Errorf("%s: %w", errSchemaInvalidJSON, err)
+	}
+	return walkDocumentNFC(v, 0)
+}
+
+func walkDocumentNFC(v any, depth int) error {
+	if depth > registrySchemaMaxDepth {
+		return fmt.Errorf("%s", errSchemaTooDeep)
+	}
+	switch t := v.(type) {
+	case map[string]any:
+		for _, child := range t {
+			if err := walkDocumentNFC(child, depth+1); err != nil {
+				return err
+			}
+		}
+	case []any:
+		for _, child := range t {
+			if err := walkDocumentNFC(child, depth+1); err != nil {
+				return err
+			}
+		}
+	case string:
+		if !isNFC(t) {
+			return fmt.Errorf("%s: %q", ErrSchemaNotNFC, t)
+		}
+	}
+	return nil
+}
+
+func walkRegistryArray(dec *json.Decoder, depth int) error {
+	if depth > registrySchemaMaxDepth {
+		return fmt.Errorf("%s", errSchemaTooDeep)
+	}
+	for dec.More() {
+		if err := walkRegistryValue(dec, depth); err != nil {
+			return err
+		}
+	}
+	if _, err := dec.Token(); err != nil {
+		return fmt.Errorf("%s: %w", errSchemaInvalidJSON, err)
+	}
+	return nil
+}

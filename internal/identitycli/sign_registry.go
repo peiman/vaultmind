@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/peiman/vaultmind/internal/identity"
 	"github.com/peiman/vaultmind/internal/identity/registry"
 )
 
@@ -23,11 +24,16 @@ const (
 	// ErrRegistryRevokedAtNegative is returned when a binding's revoked_at is
 	// negative (a pre-epoch revocation timestamp is nonsensical — fail closed).
 	ErrRegistryRevokedAtNegative = "identitycli: binding revoked_at must not be negative"
+	// ErrRegistryMalformedRole is returned when a binding's roles value is not a
+	// list of bridge or code_signing roles. The schema is registry.ParseRoles:
+	// unknown kind, missing or extra field, or a roles value that is not an array.
+	ErrRegistryMalformedRole = "identitycli: malformed agent role"
 )
 
 // wireBinding is the JSON shape SignRegistry reads for one agent binding. Field
 // names match the registry package's canonical/distribution names (snake_case,
-// pubkey base64-std). revoked_at is a pointer so absent == live. The signed
+// pubkey base64-std). revoked_at is a pointer so absent == live. roles is the
+// raw JSON value, parsed by registry.ParseRoles; absent means no roles. The signed
 // integers (key_epoch, timestamps) decode as int64 and the epoch range gate runs
 // on the int64 value BEFORE any int64->int narrowing (see epochInRangeI64), so
 // the wire boundary is the single authority and a >2^31 value cannot truncate
@@ -35,14 +41,15 @@ const (
 // timestamps stay int64; revoked_at maps to *int (64-bit-target-safe; widening
 // tracked as hardening).
 type wireBinding struct {
-	AuthorizedOriginDaemons []string `json:"authorized_origin_daemons"`
-	DisplayName             string   `json:"display_name"`
-	KeyEpoch                int64    `json:"key_epoch"`
-	PubKey                  string   `json:"pubkey"`
-	RevokedAt               *int64   `json:"revoked_at,omitempty"`
-	Slug                    string   `json:"slug"`
-	ValidFrom               int64    `json:"valid_from"`
-	ValidUntil              int64    `json:"valid_until"`
+	AuthorizedOriginDaemons []string        `json:"authorized_origin_daemons"`
+	DisplayName             string          `json:"display_name"`
+	KeyEpoch                int64           `json:"key_epoch"`
+	PubKey                  string          `json:"pubkey"`
+	RevokedAt               *int64          `json:"revoked_at,omitempty"`
+	Roles                   json.RawMessage `json:"roles,omitempty"`
+	Slug                    string          `json:"slug"`
+	ValidFrom               int64           `json:"valid_from"`
+	ValidUntil              int64           `json:"valid_until"`
 }
 
 // wireRegistry is the JSON shape SignRegistry reads from stdin/--file: the
@@ -62,6 +69,12 @@ type wireRegistry struct {
 // pubkey, epoch-gate, signer, or marshal error returns non-nil and prints
 // nothing (never a partial/unsigned result).
 func SignRegistry(out io.Writer, client registry.RegistrySigner, registryJSON []byte) error {
+	// Before decode: encoding/json would keep the last duplicated key and the
+	// signer would then mint that meaning. The same walk rejects a non-NFC
+	// string anywhere in the unsigned input.
+	if err := identity.ValidateRegistrySchema(registryJSON); err != nil {
+		return err
+	}
 	w, err := decodeWireRegistry(registryJSON)
 	if err != nil {
 		return err
@@ -134,6 +147,10 @@ func buildBinding(b wireBinding) (registry.AgentBinding, error) {
 	if err != nil {
 		return registry.AgentBinding{}, err
 	}
+	roles, err := registry.ParseRoles(b.Roles)
+	if err != nil {
+		return registry.AgentBinding{}, fmt.Errorf("%s: %w", ErrRegistryMalformedRole, err)
+	}
 	return registry.AgentBinding{
 		Slug:                    b.Slug,
 		DisplayName:             b.DisplayName,
@@ -143,6 +160,7 @@ func buildBinding(b wireBinding) (registry.AgentBinding, error) {
 		ValidUntil:              b.ValidUntil,
 		AuthorizedOriginDaemons: b.AuthorizedOriginDaemons,
 		RevokedAt:               revokedAtPtr(b.RevokedAt),
+		Roles:                   roles,
 	}, nil
 }
 
