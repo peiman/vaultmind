@@ -217,6 +217,80 @@ func TestVerify_PlainAgent_BackwardCompat(t *testing.T) {
 	assert.True(t, ok)
 }
 
+// humanChat is a chat envelope spoken by a person (from_agent human:<slug>).
+func humanChat(slug, class string) Fields {
+	return Fields{
+		AlgVersion: AlgVersion,
+		Body:       "hello from peiman",
+		FromAgent:  "human:" + slug,
+		FromClass:  strptr(class),
+		KeyEpoch:   1,
+		Kind:       strptr(KindChat),
+		Nonce:      "n-human",
+		Room:       strptr("mesh"),
+		Seq:        1,
+		TS:         1_770_000_500,
+	}
+}
+
+// regPeople binds one agent and one human, each at key_epoch 1.
+func regPeople(t *testing.T, agentSlug string, agentPub ed25519.PublicKey, humanSlug string, humanPub ed25519.PublicKey) registry.Registry {
+	t.Helper()
+	agentPK, err := registry.NewPublicKey(agentPub)
+	require.NoError(t, err)
+	humanPK, err := registry.NewPublicKey(humanPub)
+	require.NoError(t, err)
+	window := int64(1 << 40)
+	return registry.Registry{
+		Epoch: 1, ValidFrom: 0, ValidUntil: window,
+		Agents: []registry.AgentBinding{{
+			Slug: agentSlug, DisplayName: "Mira", PubKey: agentPK, KeyEpoch: 1,
+			ValidFrom: 0, ValidUntil: window,
+		}},
+		Humans: []registry.AgentBinding{{
+			Slug: humanSlug, DisplayName: "Peiman", PubKey: humanPK, KeyEpoch: 1,
+			ValidFrom: 0, ValidUntil: window, Class: registry.ClassHuman,
+		}},
+	}
+}
+
+// TestVerify_HumanSignedChat proves a human:<slug> chat with from_class human
+// verifies against the humans[] binding, and that the three class mismatches
+// are refused: a human prefix claiming from_class agent, an agent slug claiming
+// from_class human, and an unknown human slug.
+func TestVerify_HumanSignedChat(t *testing.T) {
+	agentPub, agentPriv := fixedEd25519(t, 0x22)
+	humanPub, humanPriv := fixedEd25519(t, 0x31)
+	reg := regPeople(t, "agent:mira", agentPub, "peiman", humanPub)
+	now := time.Unix(1_770_000_500, 0)
+
+	f := humanChat("peiman", FromClassHuman)
+	ok, err := VerifyEnvelope(reg, f, signFrozen(t, humanPriv, f), now)
+	require.NoError(t, err)
+	assert.True(t, ok)
+	_, err = registry.Resolve(reg, f.FromAgent, now)
+	require.Error(t, err, "the raw human: principal must not resolve as an agent")
+
+	claimedAgent := humanChat("peiman", FromClassAgent)
+	ok, err = VerifyEnvelope(reg, claimedAgent, signFrozen(t, humanPriv, claimedAgent), now)
+	require.Error(t, err)
+	assert.False(t, ok)
+	assert.EqualError(t, err, ErrVerifyClassMismatch)
+
+	claimedHuman := humanChat("peiman", FromClassHuman)
+	claimedHuman.FromAgent = "agent:mira"
+	ok, err = VerifyEnvelope(reg, claimedHuman, signFrozen(t, agentPriv, claimedHuman), now)
+	require.Error(t, err)
+	assert.False(t, ok)
+	assert.EqualError(t, err, ErrVerifyClassMismatch)
+
+	unknown := humanChat("nobody", FromClassHuman)
+	ok, err = VerifyEnvelope(reg, unknown, signFrozen(t, humanPriv, unknown), now)
+	require.Error(t, err)
+	assert.False(t, ok)
+	assert.ErrorContains(t, err, registry.ErrUnknownSlug)
+}
+
 // TestEffectiveClass_DefaultsToAgent proves the empty-Class default semantics.
 func TestEffectiveClass_DefaultsToAgent(t *testing.T) {
 	assert.Equal(t, registry.ClassAgent, registry.AgentBinding{}.EffectiveClass())

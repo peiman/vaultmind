@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -383,9 +384,10 @@ func SignEnvelope(client SignerClient, fields Fields, fromPubKey ed25519.PublicK
 }
 
 // VerifyEnvelope re-runs every pre-sign gate over the received fields, rebuilds
-// the canonical signed bytes, then delegates the binding+signature check to
-// registry.VerifyMessage (resolve the live binding for (from_agent, key_epoch) ->
-// validated pubkey -> cofactorless strict verify). It authenticates the SIGNATURE + the
+// the canonical signed bytes, then checks the signature under the binding the
+// principal names. human:<slug> with from_class human uses VerifyHumanMessage;
+// every other from_agent uses VerifyMessage (a literal slug such as
+// "agent:bridge" is not stripped). It authenticates the SIGNATURE + the
 // registry BINDING only — anti-replay (seq high-water + nonce-unseen) is the
 // daemon's stateful job and is NOT performed here.
 //
@@ -406,10 +408,11 @@ func VerifyEnvelope(reg registry.Registry, fields Fields, sig []byte, now time.T
 	// narrowing at the registry boundary is lossless on this project's 64-bit
 	// targets. (The registry layer's own int width is tracked separately.)
 	keyEpoch := int(fields.KeyEpoch)
-	ok, err := registry.VerifyMessage(reg, fields.FromAgent, keyEpoch, canonical, sig, now)
+	ok, err := verifyEnvelopeSignature(reg, fields, keyEpoch, canonical, sig, now)
 	if err != nil || !ok {
 		// Preserve the contract: (false, error)=structural reject (unknown /
-		// revoked / expired / not-yet-valid / epoch-mismatch / small-order / gate),
+		// revoked / expired / not-yet-valid / epoch-mismatch / small-order / gate
+		// / class-qualified principal that does not match from_class),
 		// (false, nil)=honest signature non-match. Authority is only enforced once
 		// the signature + binding are authenticated.
 		return ok, err
@@ -419,14 +422,60 @@ func VerifyEnvelope(reg registry.Registry, fields Fields, sig []byte, now time.T
 	return enforceAuthority(reg, fields, keyEpoch, now)
 }
 
+// humanPrefix is the class qualifier on a human principal id (human:<slug>).
+const humanPrefix = "human:"
+
+// envelopePrincipal is the one place that reads a class-qualified from_agent.
+// human:<slug> requires from_class human and names the human binding.
+// from_class human on any other from_agent, including agent:<slug>, is refused.
+// Every other from_agent is the agent slug, unchanged, so a legacy slug and a
+// literal slug such as "agent:bridge" still resolve as agents.
+func envelopePrincipal(fields Fields) (class, slug string, err error) {
+	if strings.HasPrefix(fields.FromAgent, humanPrefix) {
+		if fields.FromClass == nil || *fields.FromClass != FromClassHuman {
+			return "", "", fmt.Errorf("%s", ErrVerifyClassMismatch)
+		}
+		slug = strings.TrimPrefix(fields.FromAgent, humanPrefix)
+		if slug == "" {
+			return "", "", fmt.Errorf("%s", ErrFromAgentEmpty)
+		}
+		return registry.ClassHuman, slug, nil
+	}
+	if fields.FromClass != nil && *fields.FromClass == FromClassHuman {
+		return "", "", fmt.Errorf("%s", ErrVerifyClassMismatch)
+	}
+	return registry.ClassAgent, fields.FromAgent, nil
+}
+
+// verifyEnvelopeSignature checks the signature under the binding the principal
+// names. Human principals use VerifyHumanMessage; everything else uses
+// VerifyMessage. Both share the registry's signature check.
+func verifyEnvelopeSignature(
+	reg registry.Registry,
+	fields Fields,
+	keyEpoch int,
+	canonical identity.CanonicalBytes,
+	sig []byte,
+	now time.Time,
+) (bool, error) {
+	class, slug, err := envelopePrincipal(fields)
+	if err != nil {
+		return false, err
+	}
+	if class == registry.ClassHuman {
+		return registry.VerifyHumanMessage(reg, slug, keyEpoch, canonical, sig, now)
+	}
+	return registry.VerifyMessage(reg, slug, keyEpoch, canonical, sig, now)
+}
+
 // enforceAuthority enforces the verify-side human-principal authority gate,
 // FAIL-CLOSED, AFTER VerifyMessage has authenticated the signature + binding:
 //
 //   - from_class ABSENT ⇒ legacy/agent path, no class check (unchanged behavior).
 //   - from_class PRESENT ⇒ the resolved binding's effective class
-//     (Class, ""→agent) MUST equal the claim, else ErrVerifyClassMismatch. Since
-//     no binding sets Class yet, ANY bridge/human claim is rejected until the
-//     registry GRANTS the class — fail closed.
+//     (Class, ""→agent) MUST equal the claim, else ErrVerifyClassMismatch.
+//     A human:<slug> principal resolves the humans[] binding. from_class human
+//     on any other from_agent is refused by envelopePrincipal.
 //   - from_class=bridge ⇒ vouches_for (gate-guaranteed present) MUST be in the
 //     binding's VouchAllowlist (empty allowlist ⇒ every vouch rejected), else
 //     ErrVerifyVouchNotAllowed.
@@ -434,10 +483,18 @@ func enforceAuthority(reg registry.Registry, fields Fields, keyEpoch int, now ti
 	if fields.FromClass == nil {
 		return true, nil
 	}
-	// VerifyMessage just succeeded for this exact tuple, so ResolveTuple resolves
-	// the SAME binding; an error here would be an internal inconsistency — fail
-	// closed regardless.
-	binding, err := registry.ResolveTuple(reg, fields.FromAgent, keyEpoch, now)
+	// The signature check just succeeded for this principal, so the same
+	// resolver returns the same binding. An error here is an inconsistency.
+	class, slug, err := envelopePrincipal(fields)
+	if err != nil {
+		return false, err
+	}
+	var binding registry.AgentBinding
+	if class == registry.ClassHuman {
+		binding, err = registry.ResolveHumanTuple(reg, slug, keyEpoch, now)
+	} else {
+		binding, err = registry.ResolveTuple(reg, slug, keyEpoch, now)
+	}
 	if err != nil {
 		return false, err
 	}
