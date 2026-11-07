@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `vaultmind identity sign-session` signs a hub login proof for the agent enrolled on this machine, through the keyless signer, and prints one JSON line (`statement`, `sig`, `pubkey`). The slug and key epoch are that agent's own binding. An invalid challenge, a missing enrollment, or an unreachable signer prints nothing and exits non-zero.
 
+### Changed
+
+- The ckeletin-go framework is updated from 0.2.4 to 0.2.10. This changes development checks only, not the `vaultmind` CLI: the license check uses this module's Go toolchain, `task check` refuses `mkdir` used as a lock, regenerated config key constants no longer need a framework changelog entry, and the framework update notice works on Windows.
+
 ### Fixed
 
 - `vaultmind identity sign-session` rejects a network id or slug that contains an ASCII control character (U+0000–U+001F or U+007F) and prints nothing. `VerifySessionStatement` refuses the same statement. RFC 8785 escapes those characters, and Go and Rust JCS libraries can disagree on that escaping.

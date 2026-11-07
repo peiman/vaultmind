@@ -13,10 +13,10 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/go-git/go-billy/v5 v5.9.2
 	github.com/go-git/go-git/v5 v5.19.3
-	github.com/gomlx/go-huggingface v0.4.15
+	github.com/gomlx/go-huggingface v0.4.17
 	github.com/gowebpki/jcs v1.0.2
 	github.com/klippa-app/go-pdfium v1.21.4
-	github.com/knights-analytics/hugot v0.8.3
+	github.com/knights-analytics/hugot v0.8.5
 	github.com/mattn/go-isatty v0.0.24
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/nlpodyssey/gopickle v0.3.0
@@ -71,12 +71,12 @@ require (
 	github.com/gofrs/flock v0.13.1 // indirect
 	github.com/gogs/chardet v0.0.0-20211120154057-b7413eaefb8f // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
-	github.com/gomlx/compute v0.1.14 // indirect
-	github.com/gomlx/compute-onnx v0.1.13 // indirect
+	github.com/gomlx/compute v0.1.16 // indirect
+	github.com/gomlx/compute-onnx v0.1.15 // indirect
 	github.com/gomlx/exceptions v0.0.3 // indirect
-	github.com/gomlx/go-xla v0.4.14 // indirect
-	github.com/gomlx/gomlx v0.28.17 // indirect
-	github.com/gomlx/onnx-gomlx v0.5.14 // indirect
+	github.com/gomlx/go-xla v0.4.16 // indirect
+	github.com/gomlx/gomlx v0.28.19 // indirect
+	github.com/gomlx/onnx-gomlx v0.5.16 // indirect
 	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
@@ -90,7 +90,7 @@ require (
 	github.com/mattn/go-localereader v0.0.1 // indirect
 	github.com/mattn/go-runewidth v0.0.24 // indirect
 	github.com/mfridman/interpolate v0.0.2 // indirect
-	github.com/microsoft/onnxruntime/go v0.0.0-20261014085412-9c87bdf2e667 // indirect
+	github.com/microsoft/onnxruntime/go v0.0.0-20261030073735-b5fe413d0b05 // indirect
 	github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/muesli/termenv v0.16.0 // indirect
@@ -113,7 +113,7 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/crypto v0.58.0 // indirect
-	golang.org/x/exp v0.0.0-20261013213113-2ab7f3cbc5fb // indirect
+	golang.org/x/exp v0.0.0-20261014143641-f0251eb4aa3e // indirect
 	golang.org/x/image v0.47.0 // indirect
 	golang.org/x/oauth2 v0.35.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
