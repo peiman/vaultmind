@@ -1,0 +1,181 @@
+{
+  "domain_tag": "vaultmind-hub-session-v1:",
+  "purpose": "hub-session",
+  "seed": "vaultmind-hub-session-v1-seed!!!",
+  "valid": {
+    "statement": {
+      "challenge": "ERERERERERERERERERERERERERERERERERERERERERE=",
+      "key_epoch": 3,
+      "network_id": "vmnet1:00112233445566778899aabbccddeeff",
+      "purpose": "hub-session",
+      "slug": "mira",
+      "ts": 1700000000
+    },
+    "canonical_json_hex": "7b226368616c6c656e6765223a22455245524552455245524552455245524552455245524552455245524552455245524552455245524552453d222c226b65795f65706f6368223a332c226e6574776f726b5f6964223a22766d6e6574313a3030313132323333343435353636373738383939616162626363646465656666222c22707572706f7365223a226875622d73657373696f6e222c22736c7567223a226d697261222c227473223a313730303030303030307d",
+    "tagged_bytes_hex": "7661756c746d696e642d6875622d73657373696f6e2d76313a7b226368616c6c656e6765223a22455245524552455245524552455245524552455245524552455245524552455245524552455245524552453d222c226b65795f65706f6368223a332c226e6574776f726b5f6964223a22766d6e6574313a3030313132323333343435353636373738383939616162626363646465656666222c22707572706f7365223a226875622d73657373696f6e222c22736c7567223a226d697261222c227473223a313730303030303030307d",
+    "sig": "hl6l9LOJLbft2ogJ5KSaPn8g0nugg0RjHcANh+GEteUjGPmSnUl/E+4IGPIosOg2BKrj/dFmQHMhHiTJ7rUdDQ==",
+    "pubkey": "stWdnOhyOzOUW9nhjDOtnzxlCi1BDupvuYAtqhM3HWA="
+  },
+  "reject": [
+    {
+      "name": "wrong_domain_envelope",
+      "reason": "correct signature over untagged JCS, which is the envelope domain; envelopes have no domain tag",
+      "expect": "reject",
+      "statement": {
+        "challenge": "ERERERERERERERERERERERERERERERERERERERERERE=",
+        "key_epoch": 3,
+        "network_id": "vmnet1:00112233445566778899aabbccddeeff",
+        "purpose": "hub-session",
+        "slug": "mira",
+        "ts": 1700000000
+      },
+      "signed_bytes_hex": "7b226368616c6c656e6765223a22455245524552455245524552455245524552455245524552455245524552455245524552455245524552453d222c226b65795f65706f6368223a332c226e6574776f726b5f6964223a22766d6e6574313a3030313132323333343435353636373738383939616162626363646465656666222c22707572706f7365223a226875622d73657373696f6e222c22736c7567223a226d697261222c227473223a313730303030303030307d",
+      "sig": "U+ttgunxO21ALrsAnGsjFtZjNKt54ZX9r9+mACd1eMLQnnWXfnwFgZtQfcrupSOuBBhji98Z7pusbs35cAF/DQ==",
+      "pubkey": "stWdnOhyOzOUW9nhjDOtnzxlCi1BDupvuYAtqhM3HWA="
+    },
+    {
+      "name": "wrong_domain_no_tag",
+      "reason": "correct signature over the canonical JSON with no tag; byte-identical to wrong_domain_envelope because the envelope domain is untagged JCS",
+      "expect": "reject",
+      "statement": {
+        "challenge": "ERERERERERERERERERERERERERERERERERERERERERE=",
+        "key_epoch": 3,
+        "network_id": "vmnet1:00112233445566778899aabbccddeeff",
+        "purpose": "hub-session",
+        "slug": "mira",
+        "ts": 1700000000
+      },
+      "signed_bytes_hex": "7b226368616c6c656e6765223a22455245524552455245524552455245524552455245524552455245524552455245524552455245524552453d222c226b65795f65706f6368223a332c226e6574776f726b5f6964223a22766d6e6574313a3030313132323333343435353636373738383939616162626363646465656666222c22707572706f7365223a226875622d73657373696f6e222c22736c7567223a226d697261222c227473223a313730303030303030307d",
+      "sig": "U+ttgunxO21ALrsAnGsjFtZjNKt54ZX9r9+mACd1eMLQnnWXfnwFgZtQfcrupSOuBBhji98Z7pusbs35cAF/DQ==",
+      "pubkey": "stWdnOhyOzOUW9nhjDOtnzxlCi1BDupvuYAtqhM3HWA="
+    },
+    {
+      "name": "wrong_domain_doctor_selfverify",
+      "reason": "correct signature over the doctor self-verify tag plus the same canonical JSON",
+      "expect": "reject",
+      "statement": {
+        "challenge": "ERERERERERERERERERERERERERERERERERERERERERE=",
+        "key_epoch": 3,
+        "network_id": "vmnet1:00112233445566778899aabbccddeeff",
+        "purpose": "hub-session",
+        "slug": "mira",
+        "ts": 1700000000
+      },
+      "signed_bytes_hex": "7661756c746d696e642d646f63746f722d73656c667665726966792d76313a7b226368616c6c656e6765223a22455245524552455245524552455245524552455245524552455245524552455245524552455245524552453d222c226b65795f65706f6368223a332c226e6574776f726b5f6964223a22766d6e6574313a3030313132323333343435353636373738383939616162626363646465656666222c22707572706f7365223a226875622d73657373696f6e222c22736c7567223a226d697261222c227473223a313730303030303030307d",
+      "sig": "TUqq4so50jSS/IKQhW5KdfavE89ohIncKWPNKbvNTocoxSoyC14/71X/8nVP5oGfPMCkmuurJFUdkxN+PZlECg==",
+      "pubkey": "stWdnOhyOzOUW9nhjDOtnzxlCi1BDupvuYAtqhM3HWA="
+    },
+    {
+      "name": "wrong_domain_envelope_shaped",
+      "reason": "correct signature over a JCS object shaped like an envelope (alg_version, body, from_agent, nonce, room, seq, ts), not a session statement",
+      "expect": "reject",
+      "statement": {
+        "challenge": "ERERERERERERERERERERERERERERERERERERERERERE=",
+        "key_epoch": 3,
+        "network_id": "vmnet1:00112233445566778899aabbccddeeff",
+        "purpose": "hub-session",
+        "slug": "mira",
+        "ts": 1700000000
+      },
+      "signed_bytes_hex": "7b22616c675f76657273696f6e223a312c22626f6479223a2268656c6c6f222c2266726f6d5f6167656e74223a226d697261222c226e6f6e6365223a2259574a6a5a47566d5a326870616d74736257357663413d3d222c22726f6f6d223a22646576222c22736571223a372c227473223a323030303030307d",
+      "sig": "yngBreY9Ddh7Gl1Zh8RCxR3O+5UDpBpz415WIYtytg/Q3HHj3GER1zTbrPBTyveWjZYFN5YtddC9WTlfX0uCDw==",
+      "pubkey": "stWdnOhyOzOUW9nhjDOtnzxlCi1BDupvuYAtqhM3HWA="
+    },
+    {
+      "name": "tampered_network_id",
+      "reason": "signature over the original statement; network_id changed after signing",
+      "expect": "reject",
+      "statement": {
+        "challenge": "ERERERERERERERERERERERERERERERERERERERERERE=",
+        "key_epoch": 3,
+        "network_id": "vmnet1:ffffffffffffffffffffffffffffffff",
+        "purpose": "hub-session",
+        "slug": "mira",
+        "ts": 1700000000
+      },
+      "signed_bytes_hex": "7661756c746d696e642d6875622d73657373696f6e2d76313a7b226368616c6c656e6765223a22455245524552455245524552455245524552455245524552455245524552455245524552455245524552453d222c226b65795f65706f6368223a332c226e6574776f726b5f6964223a22766d6e6574313a3030313132323333343435353636373738383939616162626363646465656666222c22707572706f7365223a226875622d73657373696f6e222c22736c7567223a226d697261222c227473223a313730303030303030307d",
+      "sig": "hl6l9LOJLbft2ogJ5KSaPn8g0nugg0RjHcANh+GEteUjGPmSnUl/E+4IGPIosOg2BKrj/dFmQHMhHiTJ7rUdDQ==",
+      "pubkey": "stWdnOhyOzOUW9nhjDOtnzxlCi1BDupvuYAtqhM3HWA="
+    },
+    {
+      "name": "tampered_challenge",
+      "reason": "signature over the original statement; challenge changed after signing",
+      "expect": "reject",
+      "statement": {
+        "challenge": "IiIiIiIiIiIiIiIiIiIiIg==",
+        "key_epoch": 3,
+        "network_id": "vmnet1:00112233445566778899aabbccddeeff",
+        "purpose": "hub-session",
+        "slug": "mira",
+        "ts": 1700000000
+      },
+      "signed_bytes_hex": "7661756c746d696e642d6875622d73657373696f6e2d76313a7b226368616c6c656e6765223a22455245524552455245524552455245524552455245524552455245524552455245524552455245524552453d222c226b65795f65706f6368223a332c226e6574776f726b5f6964223a22766d6e6574313a3030313132323333343435353636373738383939616162626363646465656666222c22707572706f7365223a226875622d73657373696f6e222c22736c7567223a226d697261222c227473223a313730303030303030307d",
+      "sig": "hl6l9LOJLbft2ogJ5KSaPn8g0nugg0RjHcANh+GEteUjGPmSnUl/E+4IGPIosOg2BKrj/dFmQHMhHiTJ7rUdDQ==",
+      "pubkey": "stWdnOhyOzOUW9nhjDOtnzxlCi1BDupvuYAtqhM3HWA="
+    },
+    {
+      "name": "tampered_ts",
+      "reason": "signature over the original statement; ts changed after signing",
+      "expect": "reject",
+      "statement": {
+        "challenge": "ERERERERERERERERERERERERERERERERERERERERERE=",
+        "key_epoch": 3,
+        "network_id": "vmnet1:00112233445566778899aabbccddeeff",
+        "purpose": "hub-session",
+        "slug": "mira",
+        "ts": 1700000001
+      },
+      "signed_bytes_hex": "7661756c746d696e642d6875622d73657373696f6e2d76313a7b226368616c6c656e6765223a22455245524552455245524552455245524552455245524552455245524552455245524552455245524552453d222c226b65795f65706f6368223a332c226e6574776f726b5f6964223a22766d6e6574313a3030313132323333343435353636373738383939616162626363646465656666222c22707572706f7365223a226875622d73657373696f6e222c22736c7567223a226d697261222c227473223a313730303030303030307d",
+      "sig": "hl6l9LOJLbft2ogJ5KSaPn8g0nugg0RjHcANh+GEteUjGPmSnUl/E+4IGPIosOg2BKrj/dFmQHMhHiTJ7rUdDQ==",
+      "pubkey": "stWdnOhyOzOUW9nhjDOtnzxlCi1BDupvuYAtqhM3HWA="
+    },
+    {
+      "name": "tampered_slug",
+      "reason": "signature over the original statement; slug changed after signing",
+      "expect": "reject",
+      "statement": {
+        "challenge": "ERERERERERERERERERERERERERERERERERERERERERE=",
+        "key_epoch": 3,
+        "network_id": "vmnet1:00112233445566778899aabbccddeeff",
+        "purpose": "hub-session",
+        "slug": "other",
+        "ts": 1700000000
+      },
+      "signed_bytes_hex": "7661756c746d696e642d6875622d73657373696f6e2d76313a7b226368616c6c656e6765223a22455245524552455245524552455245524552455245524552455245524552455245524552455245524552453d222c226b65795f65706f6368223a332c226e6574776f726b5f6964223a22766d6e6574313a3030313132323333343435353636373738383939616162626363646465656666222c22707572706f7365223a226875622d73657373696f6e222c22736c7567223a226d697261222c227473223a313730303030303030307d",
+      "sig": "hl6l9LOJLbft2ogJ5KSaPn8g0nugg0RjHcANh+GEteUjGPmSnUl/E+4IGPIosOg2BKrj/dFmQHMhHiTJ7rUdDQ==",
+      "pubkey": "stWdnOhyOzOUW9nhjDOtnzxlCi1BDupvuYAtqhM3HWA="
+    },
+    {
+      "name": "tampered_key_epoch",
+      "reason": "signature over the original statement; key_epoch changed after signing, still inside [1, 2^53]",
+      "expect": "reject",
+      "statement": {
+        "challenge": "ERERERERERERERERERERERERERERERERERERERERERE=",
+        "key_epoch": 4,
+        "network_id": "vmnet1:00112233445566778899aabbccddeeff",
+        "purpose": "hub-session",
+        "slug": "mira",
+        "ts": 1700000000
+      },
+      "signed_bytes_hex": "7661756c746d696e642d6875622d73657373696f6e2d76313a7b226368616c6c656e6765223a22455245524552455245524552455245524552455245524552455245524552455245524552455245524552453d222c226b65795f65706f6368223a332c226e6574776f726b5f6964223a22766d6e6574313a3030313132323333343435353636373738383939616162626363646465656666222c22707572706f7365223a226875622d73657373696f6e222c22736c7567223a226d697261222c227473223a313730303030303030307d",
+      "sig": "hl6l9LOJLbft2ogJ5KSaPn8g0nugg0RjHcANh+GEteUjGPmSnUl/E+4IGPIosOg2BKrj/dFmQHMhHiTJ7rUdDQ==",
+      "pubkey": "stWdnOhyOzOUW9nhjDOtnzxlCi1BDupvuYAtqhM3HWA="
+    },
+    {
+      "name": "tampered_purpose",
+      "reason": "signature over the original statement; purpose changed after signing, so the session gate rejects it",
+      "expect": "reject",
+      "statement": {
+        "challenge": "ERERERERERERERERERERERERERERERERERERERERERE=",
+        "key_epoch": 3,
+        "network_id": "vmnet1:00112233445566778899aabbccddeeff",
+        "purpose": "login",
+        "slug": "mira",
+        "ts": 1700000000
+      },
+      "signed_bytes_hex": "7661756c746d696e642d6875622d73657373696f6e2d76313a7b226368616c6c656e6765223a22455245524552455245524552455245524552455245524552455245524552455245524552455245524552453d222c226b65795f65706f6368223a332c226e6574776f726b5f6964223a22766d6e6574313a3030313132323333343435353636373738383939616162626363646465656666222c22707572706f7365223a226875622d73657373696f6e222c22736c7567223a226d697261222c227473223a313730303030303030307d",
+      "sig": "hl6l9LOJLbft2ogJ5KSaPn8g0nugg0RjHcANh+GEteUjGPmSnUl/E+4IGPIosOg2BKrj/dFmQHMhHiTJ7rUdDQ==",
+      "pubkey": "stWdnOhyOzOUW9nhjDOtnzxlCi1BDupvuYAtqhM3HWA="
+    }
+  ]
+}

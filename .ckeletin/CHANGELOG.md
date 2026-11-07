@@ -7,6 +7,10 @@ Only framework changes are tracked here — project-level changes belong in the 
 
 ## [Unreleased]
 
+### Added
+
+- Config key constants for `identity sign-session`: `app.identitysignsession.challenge`, `app.identitysignsession.network_id`, and `app.identitysignsession.signer_socket`.
+
 ## [0.2.10] - 2026-11-06
 
 ### Fixed
