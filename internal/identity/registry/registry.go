@@ -95,6 +95,14 @@ const (
 	// rejected at load too. Alternative: a round-trip re-canonicalization equality
 	// check in VerifyAndLoad (closes the whole JCS-normalized-field-smuggling class).
 	MaxSafeEpoch = 1 << 53
+
+	// MaxBindings is the inclusive upper bound for the total number of bindings
+	// in a registry (agents[] + humans[] together). It is a denial-of-service
+	// guard: a registry with 1025 bindings is refused at sign and load.
+	MaxBindings = 1024
+	// ErrTooManyBindings is returned by SignRegistry and VerifyAndLoad when the
+	// total number of agent and human bindings exceeds MaxBindings.
+	ErrTooManyBindings = "registry: too many bindings (max 1024)"
 )
 
 // epochInRange reports whether e is within the JCS-safe, anti-rollback-floored

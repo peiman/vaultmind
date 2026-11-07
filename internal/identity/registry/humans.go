@@ -62,6 +62,9 @@ func NormalizeCustody(slug, custody string) (string, error) {
 // bridge or code_signing on a human, a second binding that holds god, and a
 // registry that exceeds MaxBindings in total. Every refusal names the slug.
 func validateRegistryBindings(reg Registry) error {
+	if total := len(reg.Agents) + len(reg.Humans); total > MaxBindings {
+		return fmt.Errorf("%s: got %d", ErrTooManyBindings, total)
+	}
 	if err := checkBindingUniqueness(reg.Agents); err != nil {
 		return err
 	}

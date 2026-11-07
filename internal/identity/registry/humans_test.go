@@ -2,8 +2,10 @@ package registry
 
 import (
 	"crypto/ed25519"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -420,6 +422,89 @@ func TestGodBinding_LivenessRequired(t *testing.T) {
 	require.True(t, ok, "one live god should be found even when another binding for the same slug is revoked")
 	assert.Equal(t, "peiman", got.Slug)
 	assert.Nil(t, got.RevokedAt)
+}
+
+func TestSignRegistry_MaxBindings(t *testing.T) {
+	_, rootPriv := fixedEd25519(t, 0x11)
+
+	// indexedBinding returns a deterministic binding for slot i using a 2-byte
+	// counter embedded in the ed25519 seed, giving 65536 unique keys.
+	indexedBinding := func(t *testing.T, i int) AgentBinding {
+		t.Helper()
+		seed := make([]byte, ed25519.SeedSize)
+		binary.BigEndian.PutUint16(seed, uint16(i+1)) // keep seed != all-zeros
+		priv := ed25519.NewKeyFromSeed(seed)
+		pub := priv.Public().(ed25519.PublicKey)
+		pk, err := NewPublicKey(pub)
+		require.NoError(t, err)
+		return AgentBinding{
+			Slug: fmt.Sprintf("agent%d", i), DisplayName: fmt.Sprintf("Agent%d", i),
+			PubKey: pk, KeyEpoch: 1,
+			ValidFrom: 1_770_000_000, ValidUntil: 1_780_000_000,
+			AuthorizedOriginDaemons: []string{"d"},
+		}
+	}
+
+	// Exactly MaxBindings bindings: must be accepted.
+	regExact := Registry{Epoch: 5, ValidFrom: 1_770_000_000, ValidUntil: 1_780_000_000}
+	for i := range MaxBindings {
+		regExact.Agents = append(regExact.Agents, indexedBinding(t, i))
+	}
+	_, err := SignRegistry(rootPriv, regExact)
+	require.NoError(t, err, "exactly MaxBindings bindings must be accepted")
+
+	// MaxBindings+1 bindings: must be refused.
+	regOver := regExact
+	regOver.Agents = append(append([]AgentBinding(nil), regExact.Agents...), indexedBinding(t, MaxBindings))
+	_, err = SignRegistry(rootPriv, regOver)
+	require.ErrorContains(t, err, ErrTooManyBindings, "1025 bindings must be refused on sign")
+}
+
+func TestVerifyAndLoad_MaxBindings(t *testing.T) {
+	rootPub, rootPriv := fixedEd25519(t, 0x11)
+
+	// Build a registry at exactly MaxBindings by signing regExact from above,
+	// then verify it loads cleanly; then patch in a 1025th binding and verify
+	// VerifyAndLoad rejects it even with a valid root signature.
+	seed := make([]byte, ed25519.SeedSize)
+	binary.BigEndian.PutUint16(seed, uint16(MaxBindings+1))
+	extra := ed25519.NewKeyFromSeed(seed).Public().(ed25519.PublicKey)
+	extraPK, err := NewPublicKey(extra)
+	require.NoError(t, err)
+
+	reg := Registry{Epoch: 5, ValidFrom: 1_770_000_000, ValidUntil: 1_780_000_000}
+	for i := range MaxBindings {
+		seed := make([]byte, ed25519.SeedSize)
+		binary.BigEndian.PutUint16(seed, uint16(i+1))
+		priv := ed25519.NewKeyFromSeed(seed)
+		pub := priv.Public().(ed25519.PublicKey)
+		pk, err2 := NewPublicKey(pub)
+		require.NoError(t, err2)
+		reg.Agents = append(reg.Agents, AgentBinding{
+			Slug: fmt.Sprintf("agent%d", i), DisplayName: fmt.Sprintf("Agent%d", i),
+			PubKey: pk, KeyEpoch: 1,
+			ValidFrom: 1_770_000_000, ValidUntil: 1_780_000_000,
+			AuthorizedOriginDaemons: []string{"d"},
+		})
+	}
+	env, err := SignRegistry(rootPriv, reg)
+	require.NoError(t, err)
+	_, _, err = VerifyAndLoad(rootPub, env, 4, fixedNow, 365*24*time.Hour)
+	require.NoError(t, err, "exactly MaxBindings must load cleanly")
+
+	// Patch a 1025th binding directly into the signed bytes and re-sign.
+	env2 := signPatchedObject(t, rootPriv, reg, func(t *testing.T, obj map[string]any) {
+		agents := obj["agents"].([]any)
+		obj["agents"] = append(agents, map[string]any{
+			"slug": "extra", "display_name": "Extra",
+			"pubkey":     b64(extraPK.Bytes()),
+			"key_epoch":  float64(1),
+			"valid_from": float64(1_770_000_000), "valid_until": float64(1_780_000_000),
+			"authorized_origin_daemons": []any{"d"},
+		})
+	})
+	_, _, err = VerifyAndLoad(rootPub, env2, 4, fixedNow, 365*24*time.Hour)
+	require.ErrorContains(t, err, ErrTooManyBindings, "1025 bindings must be refused on load")
 }
 
 func TestVerifyHumanMessage_UsesTheHumanKey(t *testing.T) {
