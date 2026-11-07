@@ -41,7 +41,7 @@ func TestIdentityEnrollAddMetadata_FlagOverridesMapToOptions(t *testing.T) {
 // and default, covering every option entry.
 func TestIdentityEnrollAddOptions_ShapeAndDefaults(t *testing.T) {
 	opts := commands.IdentityEnrollAddOptions()
-	require.Len(t, opts, 6)
+	require.Len(t, opts, 9)
 
 	byKey := map[string]struct {
 		def any
@@ -62,6 +62,9 @@ func TestIdentityEnrollAddOptions_ShapeAndDefaults(t *testing.T) {
 		"app.identityenrolladd.network_id",
 		"app.identityenrolladd.validity_seconds",
 		"app.identityenrolladd.origin_daemon",
+		"app.identityenrolladd.class",
+		"app.identityenrolladd.role",
+		"app.identityenrolladd.custody",
 	}
 	for _, k := range wantStrings {
 		got, ok := byKey[k]

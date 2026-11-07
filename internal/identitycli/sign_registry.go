@@ -25,7 +25,7 @@ const (
 	// negative (a pre-epoch revocation timestamp is nonsensical — fail closed).
 	ErrRegistryRevokedAtNegative = "identitycli: binding revoked_at must not be negative"
 	// ErrRegistryMalformedRole is returned when a binding's roles value is not a
-	// list of bridge or code_signing roles. The schema is registry.ParseRoles:
+	// list of bridge, code_signing, or god roles. The schema is registry.ParseRoles:
 	// unknown kind, missing or extra field, or a roles value that is not an array.
 	ErrRegistryMalformedRole = "identitycli: malformed agent role"
 )
@@ -42,6 +42,7 @@ const (
 // tracked as hardening).
 type wireBinding struct {
 	AuthorizedOriginDaemons []string        `json:"authorized_origin_daemons"`
+	Custody                 string          `json:"custody,omitempty"`
 	DisplayName             string          `json:"display_name"`
 	KeyEpoch                int64           `json:"key_epoch"`
 	PubKey                  string          `json:"pubkey"`
@@ -58,6 +59,7 @@ type wireBinding struct {
 type wireRegistry struct {
 	Agents     []wireBinding `json:"agents"`
 	Epoch      int64         `json:"epoch"`
+	Humans     []wireBinding `json:"humans,omitempty"`
 	ValidFrom  int64         `json:"valid_from"`
 	ValidUntil int64         `json:"valid_until"`
 }
@@ -117,26 +119,44 @@ func buildRegistry(w wireRegistry) (registry.Registry, error) {
 	if !epochInRangeI64(w.Epoch) {
 		return registry.Registry{}, fmt.Errorf("%s", registry.ErrEpochRange)
 	}
-	agents := make([]registry.AgentBinding, len(w.Agents))
-	for i, b := range w.Agents {
-		ab, err := buildBinding(b)
-		if err != nil {
-			return registry.Registry{}, err
-		}
-		agents[i] = ab
+	agents, err := buildBindings(w.Agents, "")
+	if err != nil {
+		return registry.Registry{}, err
+	}
+	humans, err := buildBindings(w.Humans, registry.ClassHuman)
+	if err != nil {
+		return registry.Registry{}, err
 	}
 	return registry.Registry{
 		Epoch:      int(w.Epoch),
 		ValidFrom:  w.ValidFrom,
 		ValidUntil: w.ValidUntil,
 		Agents:     agents,
+		Humans:     humans,
 	}, nil
+}
+
+// buildBindings converts one wire array. class is registry.ClassHuman for
+// humans and empty for agents, because the array is the source of truth.
+func buildBindings(wire []wireBinding, class string) ([]registry.AgentBinding, error) {
+	if len(wire) == 0 {
+		return nil, nil
+	}
+	out := make([]registry.AgentBinding, len(wire))
+	for i, b := range wire {
+		ab, err := buildBinding(b, class)
+		if err != nil {
+			return nil, err
+		}
+		out[i] = ab
+	}
+	return out, nil
 }
 
 // buildBinding validates + converts one wire binding. The key_epoch range gate
 // runs on the int64 value BEFORE narrowing; the pubkey is base64-std-decoded +
 // validated; revoked_at is range-checked. Any failure fails closed.
-func buildBinding(b wireBinding) (registry.AgentBinding, error) {
+func buildBinding(b wireBinding, class string) (registry.AgentBinding, error) {
 	if !epochInRangeI64(b.KeyEpoch) {
 		return registry.AgentBinding{}, fmt.Errorf("%s", registry.ErrEpochRange)
 	}
@@ -151,6 +171,10 @@ func buildBinding(b wireBinding) (registry.AgentBinding, error) {
 	if err != nil {
 		return registry.AgentBinding{}, fmt.Errorf("%s: %w", ErrRegistryMalformedRole, err)
 	}
+	custody, err := registry.NormalizeCustody(b.Slug, b.Custody)
+	if err != nil {
+		return registry.AgentBinding{}, err
+	}
 	return registry.AgentBinding{
 		Slug:                    b.Slug,
 		DisplayName:             b.DisplayName,
@@ -161,6 +185,8 @@ func buildBinding(b wireBinding) (registry.AgentBinding, error) {
 		AuthorizedOriginDaemons: b.AuthorizedOriginDaemons,
 		RevokedAt:               revokedAtPtr(b.RevokedAt),
 		Roles:                   roles,
+		Custody:                 custody,
+		Class:                   class,
 	}, nil
 }
 

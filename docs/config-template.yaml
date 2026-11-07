@@ -518,6 +518,15 @@ app:
     # Comma-separated authorized origin daemon ids for the new binding (default none)
     origin_daemon: 
 
+    # Binding class: agent (default) or human. human appends the binding to humans[]
+    class: 
+
+    # Role to grant on the new binding: god, and only with --class human
+    role: 
+
+    # Key custody: shared (default, omitted on the wire) or isolated
+    custody: 
+
   identityfetchregistry:
     # Hub base URL (default: AGENT_CHAT_DAEMON_URL, else agents.yaml daemon_url)
     hub: 

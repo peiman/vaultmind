@@ -173,6 +173,9 @@ const (
 	KeyAppIdentityenrolladdNetworkId         = "app.identityenrolladd.network_id"         // Admin network id (vmnet1:…); alternative to --root-pubkey (>=1 required; bo...
 	KeyAppIdentityenrolladdValiditySeconds   = "app.identityenrolladd.validity_seconds"   // Registry+binding issuance window in seconds (default 31536000 = one year)
 	KeyAppIdentityenrolladdOriginDaemon      = "app.identityenrolladd.origin_daemon"      // Comma-separated authorized origin daemon ids for the new binding (default none)
+	KeyAppIdentityenrolladdClass             = "app.identityenrolladd.class"              // Binding class: agent (default) or human. human appends the binding to humans[]
+	KeyAppIdentityenrolladdRole              = "app.identityenrolladd.role"               // Role to grant on the new binding: god, and only with --class human
+	KeyAppIdentityenrolladdCustody           = "app.identityenrolladd.custody"            // Key custody: shared (default, omitted on the wire) or isolated
 	KeyAppIdentityenrollInvite               = "app.identityenroll.invite"                // Network invite: a vmenroll1: token or enroll URL (required)
 	KeyAppIdentityenrollDisplayName          = "app.identityenroll.display_name"          // Your display name in the network (required; Unicode NFC)
 	KeyAppIdentityenrollSlug                 = "app.identityenroll.slug"                  // Your short ASCII handle/slug (required)

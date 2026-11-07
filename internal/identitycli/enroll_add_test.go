@@ -843,3 +843,169 @@ func TestEnrollAddRejectsPrePoisonedRegistry(t *testing.T) {
 		t.Fatalf("reject must emit nothing, got %q", out.String())
 	}
 }
+
+func TestEnrollAddHumanGodIsolated(t *testing.T) {
+	rootPub, _ := fixedAgentKey(t, 0x01)
+	agentPub, _ := fixedAgentKey(t, 0x02)
+	humanPub, humanPriv := fixedAgentKey(t, 0x31)
+	net := networkOf(rootPub)
+	current := unsignedRegistryJSON("mira", base64.StdEncoding.EncodeToString(agentPub), 1, 5)
+	req := signedRequestFor(t, humanPub, humanPriv, "peiman", net, 1_700_000_000)
+
+	var out, errOut bytes.Buffer
+	cfg := EnrollAddConfig{
+		RootPubKeyB64:   base64.StdEncoding.EncodeToString(rootPub),
+		RegistryInput:   []byte(current),
+		ValiditySeconds: testValiditySeconds,
+		Class:           "human",
+		Role:            "god",
+		Custody:         "isolated",
+		Now:             fixedNow(1_770_000_500),
+	}
+	if err := EnrollAdd(&out, &errOut, bytes.NewReader(req), cfg); err != nil {
+		t.Fatalf("EnrollAdd: %v", err)
+	}
+	m := decodeEmitted(t, out.Bytes())
+	agents, _ := m["agents"].([]any)
+	if len(agents) != 1 || agents[0].(map[string]any)["slug"] != "mira" {
+		t.Fatalf("existing agent was not preserved: %v", m["agents"])
+	}
+	humans, _ := m["humans"].([]any)
+	if len(humans) != 1 {
+		t.Fatalf("humans = %v", m["humans"])
+	}
+	h0 := humans[0].(map[string]any)
+	if h0["slug"] != "peiman" || h0["custody"] != "isolated" {
+		t.Fatalf("human binding = %v", h0)
+	}
+	roles, _ := h0["roles"].([]any)
+	if len(roles) != 1 || roles[0].(map[string]any)["kind"] != "god" {
+		t.Fatalf("roles = %v", h0["roles"])
+	}
+	assertSignable(t, out.Bytes())
+}
+
+func TestEnrollAddSharedCustodyIsOmitted(t *testing.T) {
+	rootPub, _ := fixedAgentKey(t, 0x01)
+	humanPub, humanPriv := fixedAgentKey(t, 0x31)
+	req := signedRequestFor(t, humanPub, humanPriv, "siavoush", networkOf(rootPub), 1_700_000_000)
+	var out, errOut bytes.Buffer
+	cfg := EnrollAddConfig{
+		RootPubKeyB64: base64.StdEncoding.EncodeToString(rootPub),
+		Class:         "human",
+		Custody:       "shared",
+		Now:           fixedNow(1_770_000_500),
+	}
+	if err := EnrollAdd(&out, &errOut, bytes.NewReader(req), cfg); err != nil {
+		t.Fatalf("EnrollAdd: %v", err)
+	}
+	m := decodeEmitted(t, out.Bytes())
+	humans, _ := m["humans"].([]any)
+	if len(humans) != 1 {
+		t.Fatalf("humans = %v", m["humans"])
+	}
+	h0 := humans[0].(map[string]any)
+	if _, ok := h0["custody"]; ok {
+		t.Fatalf("shared custody must be omitted: %v", h0)
+	}
+	if _, ok := h0["roles"]; ok {
+		t.Fatalf("a human with no role must omit roles: %v", h0)
+	}
+}
+
+func TestEnrollAddRejectsPlacementFlags(t *testing.T) {
+	rootPub, _ := fixedAgentKey(t, 0x01)
+	humanPub, humanPriv := fixedAgentKey(t, 0x31)
+	req := signedRequestFor(t, humanPub, humanPriv, "peiman", networkOf(rootPub), 1_700_000_000)
+	cases := []struct {
+		name    string
+		class   string
+		role    string
+		custody string
+		want    string
+	}{
+		{name: "bad_class", class: "robot", want: ErrEnrollAddBadClass},
+		{name: "bad_role", class: "human", role: "bridge", want: ErrEnrollAddBadRole},
+		{name: "god_on_agent", role: "god", want: registry.ErrGodOnlyOnHuman},
+		{name: "bad_custody", class: "human", custody: "private", want: ErrEnrollAddBadCustody},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var out, errOut bytes.Buffer
+			cfg := EnrollAddConfig{
+				RootPubKeyB64: base64.StdEncoding.EncodeToString(rootPub),
+				Class:         tc.class,
+				Role:          tc.role,
+				Custody:       tc.custody,
+				Now:           fixedNow(1_770_000_500),
+			}
+			err := EnrollAdd(&out, &errOut, bytes.NewReader(req), cfg)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("got %v, want %q", err, tc.want)
+			}
+			if tc.want == registry.ErrGodOnlyOnHuman && !strings.Contains(err.Error(), "peiman") {
+				t.Fatalf("god on an agent must name the slug: %v", err)
+			}
+			if out.Len() != 0 {
+				t.Fatalf("reject must emit nothing, got %q", out.String())
+			}
+		})
+	}
+}
+
+func TestEnrollAddRejectsSlugAcrossClasses(t *testing.T) {
+	rootPub, _ := fixedAgentKey(t, 0x01)
+	agentPub, _ := fixedAgentKey(t, 0x02)
+	humanPub, humanPriv := fixedAgentKey(t, 0x31)
+	net := networkOf(rootPub)
+	current := unsignedRegistryJSON("peiman", base64.StdEncoding.EncodeToString(agentPub), 1, 5)
+	req := signedRequestFor(t, humanPub, humanPriv, "peiman", net, 1_700_000_000)
+	var out, errOut bytes.Buffer
+	cfg := EnrollAddConfig{
+		RootPubKeyB64: base64.StdEncoding.EncodeToString(rootPub),
+		RegistryInput: []byte(current),
+		Class:         "human",
+		Now:           fixedNow(1_770_000_500),
+	}
+	err := EnrollAdd(&out, &errOut, bytes.NewReader(req), cfg)
+	if err == nil || !strings.Contains(err.Error(), registry.ErrSlugAcrossClasses) || !strings.Contains(err.Error(), "peiman") {
+		t.Fatalf("got %v, want slug-across-classes for peiman", err)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("reject must emit nothing, got %q", out.String())
+	}
+}
+
+func TestEnrollAddPreservesHumansWhenAddingAgent(t *testing.T) {
+	rootPub, _ := fixedAgentKey(t, 0x01)
+	agentPub, _ := fixedAgentKey(t, 0x02)
+	humanPub, _ := fixedAgentKey(t, 0x31)
+	newPub, newPriv := fixedAgentKey(t, 0x33)
+	net := networkOf(rootPub)
+	current := `{"agents":[{"authorized_origin_daemons":["d"],"display_name":"Mira","key_epoch":1,` +
+		`"pubkey":"` + base64.StdEncoding.EncodeToString(agentPub) + `","slug":"mira",` +
+		`"valid_from":1770000000,"valid_until":1780000000}],"epoch":5,"humans":[` +
+		`{"authorized_origin_daemons":["d"],"custody":"isolated","display_name":"Peiman","key_epoch":1,` +
+		`"pubkey":"` + base64.StdEncoding.EncodeToString(humanPub) + `","roles":[{"kind":"god"}],"slug":"peiman",` +
+		`"valid_from":1770000000,"valid_until":1780000000}],"valid_from":1770000000,"valid_until":1780000000}`
+	req := signedRequestFor(t, newPub, newPriv, "ada", net, 1_700_000_000)
+	var out, errOut bytes.Buffer
+	cfg := EnrollAddConfig{
+		RootPubKeyB64:   base64.StdEncoding.EncodeToString(rootPub),
+		RegistryInput:   []byte(current),
+		ValiditySeconds: testValiditySeconds,
+		Now:             fixedNow(1_770_000_500),
+	}
+	if err := EnrollAdd(&out, &errOut, bytes.NewReader(req), cfg); err != nil {
+		t.Fatalf("EnrollAdd: %v", err)
+	}
+	m := decodeEmitted(t, out.Bytes())
+	agents, _ := m["agents"].([]any)
+	if len(agents) != 2 {
+		t.Fatalf("agents = %v", m["agents"])
+	}
+	humans, _ := m["humans"].([]any)
+	if len(humans) != 1 || humans[0].(map[string]any)["slug"] != "peiman" || humans[0].(map[string]any)["custody"] != "isolated" {
+		t.Fatalf("humans were not carried through: %v", m["humans"])
+	}
+}

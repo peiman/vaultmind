@@ -184,6 +184,9 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.identityenrolladd.network_id` | string | `` | `VAULTMIND_APP_IDENTITYENROLLADD_NETWORK_ID` | Admin network id (vmnet1:…); alternative to --root-pubkey (>=1 required; both must agree) |
 | `app.identityenrolladd.validity_seconds` | string | `` | `VAULTMIND_APP_IDENTITYENROLLADD_VALIDITY_SECONDS` | Registry+binding issuance window in seconds (default 31536000 = one year) |
 | `app.identityenrolladd.origin_daemon` | string | `` | `VAULTMIND_APP_IDENTITYENROLLADD_ORIGIN_DAEMON` | Comma-separated authorized origin daemon ids for the new binding (default none) |
+| `app.identityenrolladd.class` | string | `` | `VAULTMIND_APP_IDENTITYENROLLADD_CLASS` | Binding class: agent (default) or human. human appends the binding to humans[] |
+| `app.identityenrolladd.role` | string | `` | `VAULTMIND_APP_IDENTITYENROLLADD_ROLE` | Role to grant on the new binding: god, and only with --class human |
+| `app.identityenrolladd.custody` | string | `` | `VAULTMIND_APP_IDENTITYENROLLADD_CUSTODY` | Key custody: shared (default, omitted on the wire) or isolated |
 | `app.identityenroll.invite` | string | `` | `VAULTMIND_APP_IDENTITYENROLL_INVITE` | Network invite: a vmenroll1: token or enroll URL (required) |
 | `app.identityenroll.display_name` | string | `` | `VAULTMIND_APP_IDENTITYENROLL_DISPLAY_NAME` | Your display name in the network (required; Unicode NFC) |
 | `app.identityenroll.slug` | string | `` | `VAULTMIND_APP_IDENTITYENROLL_SLUG` | Your short ASCII handle/slug (required) |
@@ -883,6 +886,15 @@ app:
 
     # Comma-separated authorized origin daemon ids for the new binding (default none)
     origin_daemon: 
+
+    # Binding class: agent (default) or human. human appends the binding to humans[]
+    class: 
+
+    # Role to grant on the new binding: god, and only with --class human
+    role: 
+
+    # Key custody: shared (default, omitted on the wire) or isolated
+    custody: 
 
   identityfetchregistry:
     # Hub base URL (default: AGENT_CHAT_DAEMON_URL, else agents.yaml daemon_url)
@@ -1973,6 +1985,15 @@ export VAULTMIND_APP_IDENTITYENROLLADD_VALIDITY_SECONDS=
 
 # Comma-separated authorized origin daemon ids for the new binding (default none)
 export VAULTMIND_APP_IDENTITYENROLLADD_ORIGIN_DAEMON=
+
+# Binding class: agent (default) or human. human appends the binding to humans[]
+export VAULTMIND_APP_IDENTITYENROLLADD_CLASS=
+
+# Role to grant on the new binding: god, and only with --class human
+export VAULTMIND_APP_IDENTITYENROLLADD_ROLE=
+
+# Key custody: shared (default, omitted on the wire) or isolated
+export VAULTMIND_APP_IDENTITYENROLLADD_CUSTODY=
 
 # Network invite: a vmenroll1: token or enroll URL (required)
 export VAULTMIND_APP_IDENTITYENROLL_INVITE=
