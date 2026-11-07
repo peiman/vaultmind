@@ -107,14 +107,22 @@ func TestMeshWatch_CatchupBaselineFallback(t *testing.T) {
 
 func TestMeshWatch_CatchupCorruptIgnored(t *testing.T) {
 	t.Parallel()
+	// MESH_WATCH_MAX_WALL_SECS. Success returns on the wake, so an idle run
+	// does not spend this: it finishes in a few seconds, inside the old 8s.
+	// 120s is more than ten times that. Under load the watcher hit the 8s
+	// before the mesh poll was up. The message goes in only once that poll
+	// is up. An earlier poll is another room, and the mesh baseline then
+	// treats the message as history. 70s of the ceiling is the poll wait;
+	// the rest is the detector.
+	const wall = 120
 	for _, body := range []string{"garbage", `{"saved_at":1,"rooms":[]}`, `{"saved_at":9999999999,"rooms":{"mesh":{"ts":"bad","ids":[]}}}`} {
 		t.Run(body, func(t *testing.T) {
 			dir := writeCatchupState(t, 0, nil, nil)
 			require.NoError(t, os.WriteFile(filepath.Join(dir, "CURSOR"), []byte(body), 0o600))
 			d := catchupDaemon()
 			d.add(watchMsg("B", "agent:B", int(time.Now().Unix())-30, "mesh"))
-			out, _ := runWatchDaemon(t, d, 8, 20, func(_ string) {
-				waitForLongPoll(d)
+			out, _ := runWatchDaemon(t, d, wall, 20, func(_ string) {
+				requireStreamLongPoll(t, d, "mesh", 70*time.Second)
 				d.add(watchMsg("C", "agent:C", int(time.Now().Unix()), "mesh"))
 			}, "VM_TEST_ROOT="+dir)
 			require.Contains(t, out, "message from agent:C")

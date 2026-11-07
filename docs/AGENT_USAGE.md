@@ -504,7 +504,7 @@ markers; `task check` fails if it drifts from the catalog. Everything outside th
 hand-written and stays.
 
 <!-- VAULTMIND:GENERATED:commands:START -->
-<!-- checksum:e62f04b39c9b1f5d621a8361019ee5e3ec5d431dcb3d4f3aed15fcced91437af -->
+<!-- checksum:680e969401bccb1b9413c7410e60542a8e96da6881dd7c8483c4ce7b728382cc -->
 # VaultMind Commands
 
 Every user-facing command, grouped by intent, with its when-to-use trigger.
@@ -585,6 +585,7 @@ Generated from the command tree — do not edit by hand (run `task generate:docs
 | `vaultmind identity sign-envelope` | Sign a chat message envelope via the keyless signer (Contract-B slice 5) | you have a chat MESSAGE envelope to sign so a receiving daemon can verify the signature and the signer's registry binding. |
 | `vaultmind identity sign-keeper` | Sign a keeper control request, read grant, or revocation via the keyless signer | you own a keeper and need to sign a control request, a read grant, or a revocation for its watchdog. |
 | `vaultmind identity sign-registry` | Sign a trust-root registry via the keyless signer (Contract-B) | you have a trust-root registry to sign so consumers can verify the root signature, anti-rollback epoch, and freshness at load. |
+| `vaultmind identity sign-session` | Sign a hub session statement via the keyless signer | the hub challenged you and you must prove which agent is reading, with a signature that cannot be replayed as a chat message or a doctor check. |
 | `vaultmind identity signer` | Run the keyless custody signer daemon (Contract-B) | you need to RUN the keyless custody signer daemon so the sign-* commands have a process to connect to. |
 | `vaultmind identity signer install` | Run the signer under launchd: start at login, restart if it dies (macOS) | your signer must survive logouts, reboots, and crashes — without it a dead signer fails every signed send until someone notices. |
 | `vaultmind init` | Scaffold a fresh vault — a project knowledge base by default, or an agent's identity vault | you are starting fresh: a project knowledge base by default, or an agent's identity vault with --profile persona. |

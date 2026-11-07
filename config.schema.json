@@ -1173,6 +1173,26 @@
           },
           "type": "object"
         },
+        "identitysignsession": {
+          "properties": {
+            "challenge": {
+              "default": "",
+              "description": "Hub challenge, standard base64 of 16 to 64 bytes",
+              "type": "string"
+            },
+            "network_id": {
+              "default": "",
+              "description": "Network id the hub issued with the challenge",
+              "type": "string"
+            },
+            "signer_socket": {
+              "default": "",
+              "description": "Signer socket path (default: XDG state dir)",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
         "import": {
           "properties": {
             "crawl": {

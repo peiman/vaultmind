@@ -16,9 +16,15 @@ import (
 func TestMeshWatch_InPlaceRewriteDoesNotBreakARunningWatcher(t *testing.T) {
 	t.Parallel()
 	d := newWatchDaemon()
-	out, _ := runWatchDaemon(t, d, 30, 1, func(dir string) {
-		waitForArm(dir)
-		waitForLongPoll(d)
+	// MESH_WATCH_MAX_WALL_SECS. Idle, startup plus the one-second poll is a
+	// few seconds. A loaded task check instead reported the quiet heartbeat
+	// at the old 30s ceiling: the message was added on the first poll of
+	// either room, so the mesh baseline could record it as history and the
+	// watcher then sat out the ceiling. 120s is more than ten times that
+	// idle run. Rewrite only once the mesh poll is up — the script has been
+	// parsed by then — and the minute after the 60s poll wait is for the rewrite.
+	out, _ := runWatchDaemon(t, d, 120, 1, func(dir string) {
+		requireStreamLongPoll(t, d, "mesh", 60*time.Second)
 
 		path := filepath.Join(dir, "mesh-watch.sh")
 		before, err := os.Stat(path)
@@ -38,7 +44,9 @@ func TestMeshWatch_InPlaceRewriteDoesNotBreakARunningWatcher(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, os.SameFile(before, after), "rewrite must preserve the watcher inode")
 
-		d.add(watchMsg("rewrite", "agent:other", int(time.Now().Unix()), "mesh"))
+		// Stamp on receipt, strictly after the arm. The empty-baseline cursor is
+		// the arm second, and a same-second ts is history.
+		d.add(watchMsg("rewrite", "agent:other", int(time.Now().Unix())+1, "mesh"))
 	}, "MESH_VENDOR_PROBE_URL=off")
 
 	assert.Contains(t, out, "WAKE: new mesh message")
