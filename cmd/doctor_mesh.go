@@ -122,10 +122,10 @@ func resolveMeshInput(cmd *cobra.Command) (query.MeshDoctorInput, bool, error) {
 		Signer:        &signer.Client{SocketPath: sockPath},
 	}
 
-	rootFlag := getConfigValueWithFlags[string](cmd, "mesh-root-pubkey", config.KeyAppDoctorMeshRootPubkey)
+	rootPinIn := commandPin(cmd, strings.TrimPrefix(meshRootPubkeyFlag, "--"), config.KeyAppDoctorMeshRootPubkey)
 	registryFlag := getConfigValueWithFlags[string](cmd, "mesh-registry", config.KeyAppDoctorMeshRegistry)
 
-	anchorPresent, err := applyPinAndNetwork(&in, rootFlag)
+	anchorPresent, err := applyPinAndNetwork(&in, rootPinIn)
 	if err != nil {
 		return query.MeshDoctorInput{}, false, err
 	}
@@ -150,7 +150,7 @@ func resolveMeshInput(cmd *cobra.Command) (query.MeshDoctorInput, bool, error) {
 		keyPresent:      keyFileExists(keyPath),
 		anchorPresent:   anchorPresent,
 		registryPresent: registryPresent,
-		flagPassed: rootFlag != "" || registryFlag != "" || slugFlag != "" ||
+		flagPassed: rootPinIn.value != "" || registryFlag != "" || slugFlag != "" ||
 			cmd.Flags().Changed("mesh-heartbeat"),
 		daemonReachable: daemonReachable,
 		slug:            slug,
@@ -192,8 +192,8 @@ func meshSignalPresent(s meshSignals) bool {
 // disagree about which root this machine trusts (#151). It returns whether a
 // pin source was declared (a mesh signal). A malformed --mesh-root-pubkey or
 // config pin is a hard error (the operator asked for a specific pin).
-func applyPinAndNetwork(in *query.MeshDoctorInput, rootFlag string) (bool, error) {
-	pin, err := resolveRootPin(rootFlag, meshRootPubkeyFlag)
+func applyPinAndNetwork(in *query.MeshDoctorInput, explicit explicitPin) (bool, error) {
+	pin, err := resolveRootPinFrom(explicit)
 	if err != nil {
 		return false, fmt.Errorf("doctor: %w", err)
 	}

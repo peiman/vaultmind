@@ -29,27 +29,22 @@ func init() {
 	setupCommandConfig(identityFetchRegistryCmd)
 }
 
-// runIdentityFetchRegistry resolves the pin and names it (root and source)
-// before anything else, so a stale pin is visible on every run.
+// Sentinels for the config errors, so JSON mode can classify them.
+var (
+	errFetchRegistryNoRoot = errors.New(fetchRegistryErrNoRoot)
+	errFetchRegistryNoHub  = errors.New(fetchRegistryErrNoHub)
+	errFetchRegistryNoPath = errors.New(fetchRegistryErrNoPath)
+)
+
+// runIdentityFetchRegistry names the pinned root and its source on every text
+// run (stderr); JSON mode answers every outcome with one envelope shape.
 func runIdentityFetchRegistry(cmd *cobra.Command, _ []string) error {
-	// Only the flag itself is explicit here: the config pin is the shared
-	// resolver's second source, so doctor reads the very same one.
-	rootFlag, _ := cmd.Flags().GetString(fetchRegistryRootFlag)
-	pin, err := resolveRootPin(rootFlag, "--"+fetchRegistryRootFlag)
-	if err != nil {
-		return err
-	}
-	if pin.pub == nil {
-		return errors.New(fetchRegistryErrNoRoot)
-	}
-	rep := fetchRegistryReport{pin: pin, now: time.Now()}
+	rep := fetchRegistryReport{now: time.Now()}
 	if output.IsJSONMode() {
-		return writeFetchRegistryJSON(cmd.OutOrStdout(), rep, fetchRegistry(cmd, &rep))
+		err := fetchRegistry(cmd, &rep, io.Discard)
+		return writeFetchRegistryJSON(cmd.OutOrStdout(), &rep, err)
 	}
-	if _, err := fmt.Fprintln(cmd.ErrOrStderr(), pin.line()); err != nil {
-		return err
-	}
-	if err := fetchRegistry(cmd, &rep); err != nil {
+	if err := fetchRegistry(cmd, &rep, cmd.ErrOrStderr()); err != nil {
 		return err
 	}
 	return writeFetchRegistryResult(cmd.OutOrStdout(), rep.res, rep.path, rep.maxStaleness, rep.now)

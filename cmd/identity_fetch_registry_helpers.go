@@ -33,26 +33,43 @@ type fetchRegistryReport struct {
 	now          time.Time
 }
 
-// fetchRegistry resolves hub and path BEFORE touching the network, so a
-// misconfigured machine fails without fetching anything.
-func fetchRegistry(cmd *cobra.Command, rep *fetchRegistryReport) error {
+// fetchRegistry resolves the pin, names it on announce, and resolves hub and
+// path — all BEFORE touching the network, so a misconfigured machine fails
+// without fetching anything.
+func fetchRegistry(cmd *cobra.Command, rep *fetchRegistryReport, announce io.Writer) error {
+	// Only the flag itself is explicit here: the config pin is the shared
+	// resolver's second source, so doctor reads the very same one.
+	rootFlag, _ := cmd.Flags().GetString(fetchRegistryRootFlag)
+	pin, err := resolveRootPin(rootFlag, "--"+fetchRegistryRootFlag)
+	if err != nil {
+		return err
+	}
+	if pin.pub == nil {
+		return errFetchRegistryNoRoot
+	}
+	rep.pin = pin
+	if _, err := fmt.Fprintln(announce, pin.line()); err != nil {
+		return err
+	}
+
 	agents, project := registryPath(), projectPath()
 	hub := getConfigValueWithFlags[string](cmd, "hub", config.KeyAppIdentityfetchregistryHub)
 	if hub == "" {
 		hub = resolveDoctorDaemonURL(os.Getenv(envDaemonURL), agents, project)
 	}
 	if hub == "" {
-		return errors.New(fetchRegistryErrNoHub)
+		return errFetchRegistryNoHub
 	}
 	rep.path = getConfigValueWithFlags[string](cmd, "registry-file", config.KeyAppIdentityfetchregistryRegistryFile)
 	if rep.path == "" {
 		rep.path = registryFileFromAgentsYAML(agents, project)
 	}
 	if rep.path == "" {
-		return errors.New(fetchRegistryErrNoPath)
+		return errFetchRegistryNoPath
 	}
 
-	body, err := relayclient.FetchDirectory(cmd.Context(), nil, hub)
+	var body []byte
+	body, err = relayclient.FetchDirectory(cmd.Context(), nil, hub)
 	if err != nil {
 		return err
 	}
@@ -82,15 +99,19 @@ func explainUnverified(ctx context.Context, err error, rep *fetchRegistryReport,
 	case !ok:
 		lines = append(lines, "  hub root: unavailable ("+where+" holds no valid root key)")
 	case bytes.Equal(advPub, rep.pin.pub):
-		rep.hubRoot = adv.RootPubKey
-		lines = append(lines, "  hub root: "+shortRoot(adv.RootPubKey)+" (advertised at "+where+")",
+		// Re-encoded from the decoded key: the raw string may carry \r\n the
+		// decoder skipped, so it need not read as the key it names.
+		rep.hubRoot = base64.StdEncoding.EncodeToString(advPub)
+		lines = append(lines, "  hub root: "+shortRoot(rep.hubRoot)+" (advertised at "+where+")",
 			"  the hub advertises the pinned root, so the root did not change: the registry it serves is not signed by that root, or is past its valid_until")
 	default:
-		rep.hubRoot = adv.RootPubKey
-		lines = append(lines, "  hub root: "+shortRoot(adv.RootPubKey)+" (advertised at "+where+")",
+		rep.hubRoot = base64.StdEncoding.EncodeToString(advPub)
+		lines = append(lines, "  hub root: "+shortRoot(rep.hubRoot)+" (advertised at "+where+")",
 			"  "+repinHint(rep.pin))
+		// Conditional: the hub's word alone must not let us call a correct
+		// anchor wrong — a hostile hub can advertise any root.
 		if rep.pin.source == rootPinSourceAnchor {
-			lines = append(lines, "  the enrollment anchor is stale: only `identity enroll` writes it, and re-enrolling for a new root adds it after the old one, which stays first and stays pinned")
+			lines = append(lines, "  if the network's root changed, the enrollment anchor is stale: only `identity enroll` writes it, and re-enrolling for a new root adds it after the old one, which stays first and stays pinned")
 		}
 		lines = append(lines, "  the hub's root is shown for diagnosis only, never trusted: confirm a new root out of band before pinning it")
 	}
@@ -107,41 +128,54 @@ func repinHint(pin rootPin) string {
 }
 
 // fetchRegistryJSON is the --output-format json result: the pin and its source
-// always, the fetch outcome on success, the hub's root on a refusal.
+// (empty when no pin resolved), the fetch outcome on success, and on a refusal
+// the root the hub advertises — UNTRUSTED, shown only to explain the refusal.
 type fetchRegistryJSON struct {
-	PinnedRoot       string `json:"pinned_root"`
-	PinnedRootSource string `json:"pinned_root_source"`
-	PinnedRootOrigin string `json:"pinned_root_origin"`
-	HubRoot          string `json:"hub_root,omitempty"`
-	RegistryFile     string `json:"registry_file,omitempty"`
-	Epoch            int    `json:"epoch,omitempty"`
-	PreviousEpoch    int    `json:"previous_epoch,omitempty"`
-	Changed          bool   `json:"changed"`
-	ValidUntil       int64  `json:"valid_until,omitempty"`
+	PinnedRoot        string `json:"pinned_root"`
+	PinnedRootSource  string `json:"pinned_root_source"`
+	PinnedRootOrigin  string `json:"pinned_root_origin"`
+	HubAdvertisedRoot string `json:"hub_advertised_root,omitempty"`
+	RegistryFile      string `json:"registry_file,omitempty"`
+	Epoch             int    `json:"epoch,omitempty"`
+	PreviousEpoch     int    `json:"previous_epoch,omitempty"`
+	Changed           bool   `json:"changed"`
+	ValidUntil        int64  `json:"valid_until,omitempty"`
 }
 
-func writeFetchRegistryJSON(w io.Writer, rep fetchRegistryReport, runErr error) error {
+func writeFetchRegistryJSON(w io.Writer, rep *fetchRegistryReport, runErr error) error {
 	res := fetchRegistryJSON{
-		PinnedRoot:       base64.StdEncoding.EncodeToString(rep.pin.pub),
-		PinnedRootSource: rep.pin.source,
-		PinnedRootOrigin: rep.pin.origin,
-		HubRoot:          rep.hubRoot,
-		RegistryFile:     rep.path,
-		Epoch:            rep.res.Epoch,
-		PreviousEpoch:    rep.res.PreviousEpoch,
-		Changed:          rep.res.Changed,
-		ValidUntil:       rep.res.ValidUntil,
+		PinnedRootSource:  rep.pin.source,
+		PinnedRootOrigin:  rep.pin.origin,
+		HubAdvertisedRoot: rep.hubRoot,
+		RegistryFile:      rep.path,
+		Epoch:             rep.res.Epoch,
+		PreviousEpoch:     rep.res.PreviousEpoch,
+		Changed:           rep.res.Changed,
+		ValidUntil:        rep.res.ValidUntil,
+	}
+	if rep.pin.pub != nil {
+		res.PinnedRoot = base64.StdEncoding.EncodeToString(rep.pin.pub)
 	}
 	if runErr == nil {
 		return cmdutil.WriteJSON(w, fetchRegistryCommand, res, "", "")
 	}
-	code := "fetch_failed"
-	if errors.Is(runErr, registryfetch.ErrNotVerified) {
-		code = "not_verified"
-	}
-	env := envelope.Error(fetchRegistryCommand, code, runErr.Error(), "")
+	env := envelope.Error(fetchRegistryCommand, fetchRegistryErrCode(runErr), runErr.Error(), "")
 	env.Result = res
 	return envelope.WriteError(w, env)
+}
+
+// fetchRegistryErrCode classifies a failure for the JSON envelope.
+func fetchRegistryErrCode(err error) string {
+	var invalid rootPinInvalidError
+	switch {
+	case errors.Is(err, registryfetch.ErrNotVerified):
+		return "not_verified"
+	case errors.Is(err, errFetchRegistryNoRoot), errors.Is(err, errFetchRegistryNoHub), errors.Is(err, errFetchRegistryNoPath):
+		return "config_missing"
+	case errors.As(err, &invalid):
+		return "config_invalid"
+	}
+	return "fetch_failed"
 }
 
 // rootPinInvalidSuffix completes "<source> is not a valid …" for every pin source.
@@ -198,22 +232,43 @@ func shortRoot(b64 string) string {
 	return b64[:4] + "…" + b64[len(b64)-4:]
 }
 
-// rootPinEnvVar is the environment variable viper reads the config pin from.
-func rootPinEnvVar() string {
-	return EnvPrefix() + "_" + strings.ToUpper(strings.ReplaceAll(config.KeyAppIdentityfetchregistryRootPubkey, ".", "_"))
+// rootPinEnvVar is the environment variable viper reads config key from.
+func rootPinEnvVar(key string) string {
+	return EnvPrefix() + "_" + strings.ToUpper(strings.ReplaceAll(key, ".", "_"))
 }
 
-// configPinOrigin says where the config pin's value came from: the env var
-// when it holds that value, else the config file viper read, else the key.
-func configPinOrigin(value string) (source, origin string) {
-	if env := rootPinEnvVar(); os.Getenv(env) == value {
+// configPinOrigin says where config key's value came from: the env var when
+// it holds that value, else the config file viper read, else the key itself.
+func configPinOrigin(key, value string) (source, origin string) {
+	if env := rootPinEnvVar(key); os.Getenv(env) == value {
 		return rootPinSourceEnv, env
 	}
 	if configFileUsed != "" {
 		return rootPinSourceConfig, configFileUsed
 	}
-	return rootPinSourceConfig, config.KeyAppIdentityfetchregistryRootPubkey
+	return rootPinSourceConfig, key
 }
+
+// explicitPin is a command's own pin value, where it came from, and the name
+// a malformed value is reported under.
+type explicitPin struct{ value, source, origin, name string }
+
+// commandPin reads a command's own pin from its flag or the flag's config key.
+// It is a flag only when the flag was passed: a value from ./config.yaml or
+// the environment reported as "from flag" would blame a flag nobody typed.
+func commandPin(cmd *cobra.Command, flag, key string) explicitPin {
+	value := getConfigValueWithFlags[string](cmd, flag, key)
+	if cmd.Flags().Changed(flag) {
+		return explicitPin{value: value, source: rootPinSourceFlag, origin: "--" + flag, name: "--" + flag}
+	}
+	source, origin := configPinOrigin(key, value)
+	return explicitPin{value: value, source: source, origin: origin, name: key}
+}
+
+// rootPinInvalidError names the source of a pin that does not decode.
+type rootPinInvalidError struct{ name string }
+
+func (e rootPinInvalidError) Error() string { return e.name + rootPinInvalidSuffix }
 
 // resolveRootPin is the ONE answer to "which root does this machine trust?",
 // shared by doctor and fetch-registry. Two resolvers gave two answers on the
@@ -227,23 +282,28 @@ func configPinOrigin(value string) (source, origin string) {
 // falling through to a weaker source would hide the typo. A malformed anchor
 // is declared-but-unusable, as doctor has always treated it.
 func resolveRootPin(explicit, explicitName string) (rootPin, error) {
-	for i, src := range []struct{ value, name string }{
-		{explicit, explicitName},
-		{getKeyValue[string](config.KeyAppIdentityfetchregistryRootPubkey), config.KeyAppIdentityfetchregistryRootPubkey},
+	return resolveRootPinFrom(explicitPin{value: explicit, source: rootPinSourceFlag, origin: explicitName, name: explicitName})
+}
+
+// resolveRootPinFrom is resolveRootPin for an explicit pin whose source the
+// caller already knows (doctor's flag-or-config key; see commandPin).
+func resolveRootPinFrom(explicit explicitPin) (rootPin, error) {
+	shared := config.KeyAppIdentityfetchregistryRootPubkey
+	sharedValue := getKeyValue[string](shared)
+	sharedSource, sharedOrigin := configPinOrigin(shared, sharedValue)
+	for _, src := range []explicitPin{
+		explicit,
+		{value: sharedValue, source: sharedSource, origin: sharedOrigin, name: shared},
 	} {
 		if src.value == "" {
 			continue
 		}
 		pub, ok := decodeRootPin(src.value)
 		if !ok {
-			return rootPin{}, fmt.Errorf("%s%s", src.name, rootPinInvalidSuffix)
+			return rootPin{}, rootPinInvalidError{name: src.name}
 		}
-		pin := rootPin{pub: pub, networkID: registry.NetworkID(pub), declared: true,
-			source: rootPinSourceFlag, origin: src.name}
-		if i > 0 {
-			pin.source, pin.origin = configPinOrigin(src.value)
-		}
-		return pin, nil
+		return rootPin{pub: pub, networkID: registry.NetworkID(pub), declared: true,
+			source: src.source, origin: src.origin}, nil
 	}
 
 	anchorPath, err := defaultNetworkAnchorPath()

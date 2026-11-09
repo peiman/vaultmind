@@ -226,7 +226,7 @@ func oldRoot(t *testing.T) ed25519.PublicKey {
 func TestIdentityFetchRegistry_StaleConfigPinIsNamedWithTheHubRoot(t *testing.T) {
 	e := newFetchEnv(t)
 	viper.Set(config.KeyAppIdentityfetchregistryRootPubkey, nil) // let ./config.yaml speak
-	t.Setenv(rootPinEnvVar(), "")
+	t.Setenv(rootPinEnvVar(config.KeyAppIdentityfetchregistryRootPubkey), "")
 	old := oldRoot(t)
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
@@ -263,7 +263,10 @@ func TestIdentityFetchRegistry_StaleAnchorIsCalledStale(t *testing.T) {
 	assert.Contains(t, msg, "pinned root: "+shortRoot(b64(old))+" (from enrollment anchor "+anchorPath+")")
 	assert.Contains(t, msg, "hub root: "+shortRoot(e.rootB64()))
 	assert.Contains(t, msg, "update enrollment anchor "+anchorPath+" or pass --root-pubkey")
-	assert.Contains(t, msg, "the enrollment anchor is stale")
+	// Conditional: on the hub's word alone we may not assert that a correct
+	// anchor is wrong — a hostile hub could advertise any root.
+	assert.Contains(t, msg, "if the network's root changed, the enrollment anchor is stale")
+	assert.NotContains(t, msg, "  the enrollment anchor is stale")
 }
 
 func TestIdentityFetchRegistry_FlagPinHintSaysPassTheNewRoot(t *testing.T) {
@@ -317,16 +320,86 @@ func TestIdentityFetchRegistry_HubRootThatIsNoKeyIsUnavailable(t *testing.T) {
 	assert.NotContains(t, err.Error(), "different root")
 }
 
+// The hub's root is shown re-encoded from the decoded key, never as the raw
+// string it sent: the decoder skips embedded \r\n, so the raw text could
+// differ from the key it actually names.
+func TestIdentityFetchRegistry_HubRootIsShownReEncoded(t *testing.T) {
+	e := newFetchEnv(t)
+	body := e.signedRegistry(t)
+	raw := e.rootB64()
+	sneaky := raw[:2] + `\r\n` + raw[2:]
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == relayclient.WellKnownDirectoryPath {
+			_, _ = w.Write(body)
+			return
+		}
+		_, _ = w.Write([]byte(`{"root_pubkey":"` + sneaky + `"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	out, _, err := runRootCmd(t, "identity", "fetch-registry", "--output-format", "json", "--hub", srv.URL,
+		"--root-pubkey", b64(oldRoot(t)), "--registry-file", filepath.Join(t.TempDir(), "registry.json"))
+	require.Error(t, err)
+	var env fetchRegistryJSONEnvelope
+	require.NoError(t, json.Unmarshal(out.Bytes(), &env), out.String())
+	assert.Equal(t, raw, env.Result.HubAdvertisedRoot, "canonical encoding of the decoded key")
+	assert.Contains(t, env.Errors[0].Message, "hub root: "+shortRoot(raw)+" ")
+}
+
 type fetchRegistryJSONEnvelope struct {
 	Status string `json:"status"`
+	Errors []struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	} `json:"errors"`
 	Result struct {
-		PinnedRoot       string `json:"pinned_root"`
-		PinnedRootSource string `json:"pinned_root_source"`
-		PinnedRootOrigin string `json:"pinned_root_origin"`
-		HubRoot          string `json:"hub_root"`
-		Epoch            int    `json:"epoch"`
-		Changed          bool   `json:"changed"`
+		PinnedRoot        string `json:"pinned_root"`
+		PinnedRootSource  string `json:"pinned_root_source"`
+		PinnedRootOrigin  string `json:"pinned_root_origin"`
+		HubAdvertisedRoot string `json:"hub_advertised_root"`
+		Epoch             int    `json:"epoch"`
+		Changed           bool   `json:"changed"`
 	} `json:"result"`
+}
+
+// JSON mode has ONE envelope shape: a run that fails before or after the pin
+// resolves still answers with the fetch-registry envelope and a classifying code.
+func TestIdentityFetchRegistry_JSONErrorsShareOneShapeAndClassify(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args []string
+		code string
+		pin  bool
+	}{
+		{"no root", []string{"--hub", "http://127.0.0.1:1"}, "config_missing", false},
+		{"bad root", []string{"--root-pubkey", "not base64!!", "--hub", "http://127.0.0.1:1"}, "config_invalid", false},
+		{"no hub", []string{"--root-pubkey", "ROOT"}, "config_missing", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newFetchEnv(t)
+			args := []string{"identity", "fetch-registry", "--output-format", "json",
+				"--registry-file", filepath.Join(t.TempDir(), "registry.json")}
+			for _, a := range tc.args {
+				if a == "ROOT" {
+					a = e.rootB64()
+				}
+				args = append(args, a)
+			}
+			out, _, err := runRootCmd(t, args...)
+			require.Error(t, err)
+			var env fetchRegistryJSONEnvelope
+			require.NoError(t, json.Unmarshal(out.Bytes(), &env), out.String())
+			assert.Equal(t, "error", env.Status)
+			require.Len(t, env.Errors, 1)
+			assert.Equal(t, tc.code, env.Errors[0].Code)
+			if tc.pin {
+				assert.Equal(t, e.rootB64(), env.Result.PinnedRoot)
+			} else {
+				assert.Empty(t, env.Result.PinnedRoot)
+				assert.Empty(t, env.Result.PinnedRootSource)
+			}
+		})
+	}
 }
 
 func TestIdentityFetchRegistry_JSONCarriesThePinAndItsSource(t *testing.T) {
@@ -363,6 +436,8 @@ func TestIdentityFetchRegistry_JSONRefusalCarriesBothRoots(t *testing.T) {
 	assert.Equal(t, b64(old), env.Result.PinnedRoot)
 	assert.Equal(t, rootPinSourceFlag, env.Result.PinnedRootSource)
 	assert.Equal(t, "--root-pubkey", env.Result.PinnedRootOrigin)
-	assert.Equal(t, e.rootB64(), env.Result.HubRoot)
+	assert.Equal(t, e.rootB64(), env.Result.HubAdvertisedRoot)
+	require.Len(t, env.Errors, 1)
+	assert.Equal(t, "not_verified", env.Errors[0].Code)
 	assert.Contains(t, out.String(), "the hub serves a different root")
 }

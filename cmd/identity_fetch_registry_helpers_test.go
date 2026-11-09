@@ -147,13 +147,78 @@ func TestDoctor_MeshConfigPinIsAPin(t *testing.T) {
 	assert.Equal(t, config.KeyAppIdentityfetchregistryRootPubkey, je.Result.MeshIdentity.PinnedRootOrigin)
 }
 
+// doctorPinSource runs doctor offline and returns where it says the pin came
+// from. The caller supplies the pin through whichever source is under test.
+func doctorPinSource(t *testing.T, args ...string) (root, source, origin string) {
+	t.Helper()
+	rootPub, rootPriv, err := ed25519.GenerateKey(seedReader("doctor-cmd-offline-root-seed-pad!!"))
+	require.NoError(t, err)
+	regBytes, _ := buildCmdSignedRegistry(t, rootPub, rootPriv, "mira", pinKey(t, "doctor-cmd-offline-member-seed-pad"), time.Now())
+	regFile := filepath.Join(t.TempDir(), "registry.json")
+	require.NoError(t, os.WriteFile(regFile, regBytes, 0o644))
+	vault := buildCleanIndexedTestVault(t)
+	out, _, err := runRootCmd(t, append([]string{"doctor", "--vault", vault, "--json",
+		"--mesh-registry", regFile, "--mesh-slug", "agent:mira"}, args...)...)
+	require.NoError(t, err)
+	var je jsonMeshEnvelope
+	require.NoError(t, json.Unmarshal(out.Bytes(), &je))
+	require.NotNil(t, je.Result.MeshIdentity)
+	mi := je.Result.MeshIdentity
+	return mi.PinnedRoot, mi.PinnedRootSource, mi.PinnedRootOrigin
+}
+
+func doctorPinEnv(t *testing.T) string {
+	t.Helper()
+	cleanupCLIState(t)
+	chdirToTemp(t)
+	pinEnv(t)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("AGENT_CHAT_DAEMON_URL", "http://127.0.0.1:1")
+	t.Setenv(rootPinEnvVar(config.KeyAppDoctorMeshRootPubkey), "")
+	return b64(pinKey(t, "doctor-cmd-offline-root-seed-pad!!"))
+}
+
+// Doctor's own pin (app.doctor.mesh_root_pubkey) reached through ./config.yaml
+// or the environment used to be reported as "from flag --mesh-root-pubkey":
+// a stale config file would have been blamed on a flag nobody passed.
+func TestDoctor_MeshPinFromConfigFileNamesTheFile(t *testing.T) {
+	root := doctorPinEnv(t)
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+	cfg := filepath.Join(cwd, "config.yaml")
+	require.NoError(t, os.WriteFile(cfg, []byte("app:\n  doctor:\n    mesh_root_pubkey: "+root+"\n"), 0o600))
+
+	gotRoot, source, origin := doctorPinSource(t)
+	assert.Equal(t, root, gotRoot)
+	assert.Equal(t, rootPinSourceConfig, source)
+	assert.Equal(t, cfg, origin)
+}
+
+func TestDoctor_MeshPinFromEnvNamesTheVariable(t *testing.T) {
+	root := doctorPinEnv(t)
+	envVar := rootPinEnvVar(config.KeyAppDoctorMeshRootPubkey)
+	t.Setenv(envVar, root)
+
+	_, source, origin := doctorPinSource(t)
+	assert.Equal(t, rootPinSourceEnv, source)
+	assert.Equal(t, envVar, origin)
+}
+
+func TestDoctor_MeshPinFromFlagIsAFlag(t *testing.T) {
+	root := doctorPinEnv(t)
+	_, source, origin := doctorPinSource(t, "--mesh-root-pubkey", root)
+	assert.Equal(t, rootPinSourceFlag, source)
+	assert.Equal(t, "--mesh-root-pubkey", origin)
+}
+
 // After the 2026-11-08 root changeover two agents failed with the same opaque
 // "root signature does not verify": one pinned by a stale ./config.yaml, one by
 // a stale enroll anchor. Neither could see which. The pin now names its source.
 func TestResolveRootPin_NamesItsSource(t *testing.T) {
 	cleanupCLIState(t)
 	xdg := pinEnv(t)
-	envVar := rootPinEnvVar()
+	envVar := rootPinEnvVar(config.KeyAppIdentityfetchregistryRootPubkey)
 	t.Setenv(envVar, "")
 	anchorK := pinKey(t, "root-pin-anchor-seed-padding-xxxx")
 	cfgK := pinKey(t, "root-pin-config-seed-padding-xxxx")
