@@ -20,6 +20,12 @@ Trust comes only from the root signature, never from the connection:
   - it refuses an OLDER epoch than the local copy (a rollback);
   - the same epoch writes nothing; a newer one replaces the file atomically.
 
+Every run names the pinned root and where it came from (flag, env, the config
+file, or the enrollment anchor). A refusal also names the root the hub
+advertises at /.well-known/vaultmind-root (hub_advertised_root in JSON output).
+That root is UNTRUSTED: it is shown only to explain the refusal, never used to
+verify anything. Confirm a new root out of band before pinning it.
+
 The hub address and registry path come from --hub / --registry-file, else from
 agents.yaml (daemon_url, registry_path). Nothing is guessed: an undeclared
 address or path is an error.`,

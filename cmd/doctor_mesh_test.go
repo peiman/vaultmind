@@ -107,9 +107,12 @@ type jsonMeshEnvelope struct {
 	} `json:"warnings"`
 	Result struct {
 		MeshIdentity *struct {
-			Authenticated bool   `json:"authenticated"`
-			Status        string `json:"status"`
-			KeyPresent    bool   `json:"key_present"`
+			Authenticated    bool   `json:"authenticated"`
+			Status           string `json:"status"`
+			KeyPresent       bool   `json:"key_present"`
+			PinnedRoot       string `json:"pinned_root"`
+			PinnedRootSource string `json:"pinned_root_source"`
+			PinnedRootOrigin string `json:"pinned_root_origin"`
 		} `json:"mesh_identity"`
 	} `json:"result"`
 }
@@ -215,6 +218,23 @@ func TestWriteMeshIdentity_AuthenticatedGreen(t *testing.T) {
 	require.Contains(t, s, query.StatusMeshAuthenticated)
 	require.Contains(t, s, meshKeyPresentYes)
 	require.NotContains(t, s, meshKeyModeBad)
+}
+
+func TestWriteMeshIdentity_NamesThePinnedRootAndItsSource(t *testing.T) {
+	root := pinKey(t, "root-pin-anchor-seed-padding-xxxx")
+	var buf bytes.Buffer
+	mi := &query.DoctorMeshIdentity{
+		Status:           query.StatusMeshKeyMismatch,
+		PinnedRoot:       b64(root),
+		PinnedRootSource: rootPinSourceAnchor,
+		PinnedRootOrigin: "/d/network-roots.json",
+	}
+	require.NoError(t, writeMeshIdentity(&buf, mi, false))
+	require.Contains(t, buf.String(), "  pinned root: "+shortRoot(b64(root))+" (from enrollment anchor /d/network-roots.json)\n")
+
+	buf.Reset()
+	require.NoError(t, writeMeshIdentity(&buf, &query.DoctorMeshIdentity{Status: query.StatusMeshKeyMismatch}, false))
+	require.NotContains(t, buf.String(), "pinned root:", "unpinned: no line")
 }
 
 func TestWriteMeshIdentity_DaemonReachableAndHeartbeatFresh(t *testing.T) {

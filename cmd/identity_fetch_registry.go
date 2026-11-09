@@ -4,13 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"time"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
+	"github.com/peiman/vaultmind/.ckeletin/pkg/output"
 	"github.com/peiman/vaultmind/internal/config/commands"
 	"github.com/peiman/vaultmind/internal/identity/registryfetch"
-	"github.com/peiman/vaultmind/internal/identity/relayclient"
 	"github.com/spf13/cobra"
 )
 
@@ -20,6 +19,7 @@ const (
 	fetchRegistryErrBadRoot = "--" + fetchRegistryRootFlag + rootPinInvalidSuffix
 	fetchRegistryErrNoHub   = "no hub address: pass --hub, set " + envDaemonURL + ", or declare daemon_url in agents.yaml"
 	fetchRegistryErrNoPath  = "no registry path: pass --registry-file, or declare registry_path in agents.yaml"
+	fetchRegistryCommand    = "identity fetch-registry"
 )
 
 var identityFetchRegistryCmd = MustNewCommand(commands.IdentityFetchRegistryMetadata, runIdentityFetchRegistry)
@@ -29,46 +29,25 @@ func init() {
 	setupCommandConfig(identityFetchRegistryCmd)
 }
 
-// runIdentityFetchRegistry resolves pin, hub, and path BEFORE touching the
-// network, so a misconfigured machine fails without fetching anything.
-func runIdentityFetchRegistry(cmd *cobra.Command, _ []string) error {
-	// Only the flag itself is explicit here: the config pin is the shared
-	// resolver's second source, so doctor reads the very same one.
-	rootFlag, _ := cmd.Flags().GetString(fetchRegistryRootFlag)
-	pin, err := resolveRootPin(rootFlag, "--"+fetchRegistryRootFlag)
-	if err != nil {
-		return err
-	}
-	if pin.pub == nil {
-		return errors.New(fetchRegistryErrNoRoot)
-	}
-	root := pin.pub
-	agents, project := registryPath(), projectPath()
-	hub := getConfigValueWithFlags[string](cmd, "hub", config.KeyAppIdentityfetchregistryHub)
-	if hub == "" {
-		hub = resolveDoctorDaemonURL(os.Getenv(envDaemonURL), agents, project)
-	}
-	if hub == "" {
-		return errors.New(fetchRegistryErrNoHub)
-	}
-	path := getConfigValueWithFlags[string](cmd, "registry-file", config.KeyAppIdentityfetchregistryRegistryFile)
-	if path == "" {
-		path = registryFileFromAgentsYAML(agents, project)
-	}
-	if path == "" {
-		return errors.New(fetchRegistryErrNoPath)
-	}
+// Sentinels for the config errors, so JSON mode can classify them.
+var (
+	errFetchRegistryNoRoot = errors.New(fetchRegistryErrNoRoot)
+	errFetchRegistryNoHub  = errors.New(fetchRegistryErrNoHub)
+	errFetchRegistryNoPath = errors.New(fetchRegistryErrNoPath)
+)
 
-	body, err := relayclient.FetchDirectory(cmd.Context(), nil, hub)
-	if err != nil {
+// runIdentityFetchRegistry names the pinned root and its source on every text
+// run (stderr); JSON mode answers every outcome with one envelope shape.
+func runIdentityFetchRegistry(cmd *cobra.Command, _ []string) error {
+	rep := fetchRegistryReport{now: time.Now()}
+	if output.IsJSONMode() {
+		err := fetchRegistry(cmd, &rep, io.Discard)
+		return writeFetchRegistryJSON(cmd.OutOrStdout(), &rep, err)
+	}
+	if err := fetchRegistry(cmd, &rep, cmd.ErrOrStderr()); err != nil {
 		return err
 	}
-	now := time.Now()
-	res, err := registryfetch.Update(root, body, path, now)
-	if err != nil {
-		return err
-	}
-	return writeFetchRegistryResult(cmd.OutOrStdout(), res, path, registryMaxStalenessFromAgentsYAML(agents, project), now)
+	return writeFetchRegistryResult(cmd.OutOrStdout(), rep.res, rep.path, rep.maxStaleness, rep.now)
 }
 
 func writeFetchRegistryResult(w io.Writer, res registryfetch.Result, path string, maxStalenessSecs int64, now time.Time) error {
