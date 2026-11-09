@@ -94,9 +94,12 @@ const (
 
 // wireEnvelope is the JSON shape SignEnvelope reads from stdin/--file: the
 // SIGNED-SUBSET fields only. room/to_agent are POINTERS so absent-vs-present maps
-// onto envelope.Fields' exactly-one routing rule. Transport fields (id, sig,
-// from_pubkey, …) are NOT read here — they are not part of the signed subset and
-// are stamped by the caller after signing.
+// onto envelope.Fields' exactly-one routing rule. The optional human-principal
+// fields (from_class, kind, vouches_for, gate_ref) are pointers for the same
+// reason: absent stays out of the signed bytes, and the envelope gates decide
+// which combinations are valid. Transport fields (id, sig, from_pubkey, …) are
+// NOT read here — they are not part of the signed subset and are stamped by the
+// caller after signing.
 type wireEnvelope struct {
 	// alg_version/key_epoch/seq/ts decode as int64 so the envelope's [0, 2^53] gate
 	// is the single authority for range (and behaves identically on 32/64-bit). A
@@ -111,6 +114,10 @@ type wireEnvelope struct {
 	Seq        int64   `json:"seq"`
 	ToAgent    *string `json:"to_agent"`
 	TS         int64   `json:"ts"`
+	FromClass  *string `json:"from_class"`
+	Kind       *string `json:"kind"`
+	VouchesFor *string `json:"vouches_for"`
+	GateRef    *string `json:"gate_ref"`
 }
 
 // SignEnvelope reads a chat-message envelope (the signed-subset fields), enforces
@@ -150,6 +157,10 @@ func SignEnvelope(out io.Writer, client SignerClient, envelopeJSON []byte, fromP
 		ToAgent:    w.ToAgent,
 		Seq:        w.Seq,
 		TS:         w.TS,
+		FromClass:  w.FromClass,
+		Kind:       w.Kind,
+		VouchesFor: w.VouchesFor,
+		GateRef:    w.GateRef,
 	}, fromPub)
 	if err != nil {
 		return fmt.Errorf("signing envelope via signer: %w", err)
