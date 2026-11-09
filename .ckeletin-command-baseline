@@ -9,7 +9,6 @@ experiment_report runExperimentReport 60
 export runExport 61
 frontmatter_fix_core runFrontmatterFixCore 63
 hooks_record runHooksRecord 38
-identity_fetch_registry runIdentityFetchRegistry 39
 index runIndex 165
 memory_links runLinksBoth 40
 memory_neighbors runNeighborsWithKeys 41

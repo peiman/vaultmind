@@ -146,6 +146,32 @@ func TestMeshDoctor_Tier1_KeyPresentGoodModeAndSize(t *testing.T) {
 	require.False(t, mi.SignerReachable)
 }
 
+// The section names the pinned root and where it came from: a stale pin (an
+// old ./config.yaml, an old enroll anchor) is otherwise invisible.
+func TestMeshDoctor_CarriesThePinnedRootAndItsSource(t *testing.T) {
+	dir := t.TempDir()
+	root, _, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{
+		KeyPath:          filepath.Join(dir, "nope.key"),
+		SocketPath:       filepath.Join(dir, "missing.sock"),
+		PinnedRootPub:    root,
+		PinnedRootSource: "config",
+		PinnedRootOrigin: "/p/config.yaml",
+		Now:              time.Now(),
+	})
+	require.NoError(t, err)
+	require.Equal(t, base64.StdEncoding.EncodeToString(root), mi.PinnedRoot)
+	require.Equal(t, "config", mi.PinnedRootSource)
+	require.Equal(t, "/p/config.yaml", mi.PinnedRootOrigin)
+
+	mi, err = BuildMeshIdentity(context.Background(), MeshDoctorInput{
+		KeyPath: filepath.Join(dir, "nope.key"), SocketPath: filepath.Join(dir, "missing.sock"), Now: time.Now(),
+	})
+	require.NoError(t, err)
+	require.Empty(t, mi.PinnedRoot, "unpinned: no root to name")
+}
+
 func TestMeshDoctor_Tier1_KeyAbsent(t *testing.T) {
 	dir := t.TempDir()
 	mi, err := BuildMeshIdentity(context.Background(), MeshDoctorInput{

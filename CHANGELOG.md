@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `vaultmind identity fetch-registry` now says which root it pinned and where that root came from: the `--root-pubkey` flag, the environment, the config file (with its path), or the enrollment anchor (with its path). It prints `pinned root: FjAW…He8= (from config /path/config.yaml)` to stderr, and `--output-format json` reports `pinned_root`, `pinned_root_source` and `pinned_root_origin`. Before, a stale pin left only "root signature does not verify". After a root change, an old `./config.yaml`, or an enrollment anchor reached in native config mode, gave that same message with no clue which root was used. When the registry does not verify, the error now also shows the root the hub advertises at `/.well-known/vaultmind-root`. If that root differs from the pin, the error says which source to update. If the pin came from the enrollment anchor, it says the anchor is stale. The hub's root is shown only to explain the failure and is never trusted. `vaultmind doctor` shows the same pinned root and source in its mesh section.
+
 ## [0.10.25] - 2026-11-07
 
 ### Added

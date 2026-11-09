@@ -199,6 +199,7 @@ func applyPinAndNetwork(in *query.MeshDoctorInput, rootFlag string) (bool, error
 	}
 	if pin.pub != nil {
 		in.PinnedRootPub = pin.pub
+		in.PinnedRootSource, in.PinnedRootOrigin = pin.source, pin.origin
 		in.NetworkID = pin.networkID
 	}
 	return pin.declared, nil
@@ -531,8 +532,16 @@ func writeMeshCustody(w io.Writer, mi *query.DoctorMeshIdentity) error {
 
 // writeMeshAuth prints the tier-2 authentication verdict (the section Status,
 // reserving "authenticated" for the cryptographically-proven green state).
+// The pinned root and its source follow, so a stale pin is visible here too.
 func writeMeshAuth(w io.Writer, mi *query.DoctorMeshIdentity) error {
-	_, err := fmt.Fprintln(w, meshAuthLabel+mi.Status)
+	if _, err := fmt.Fprintln(w, meshAuthLabel+mi.Status); err != nil {
+		return err
+	}
+	if mi.PinnedRoot == "" {
+		return nil
+	}
+	src := rootPin{source: mi.PinnedRootSource, origin: mi.PinnedRootOrigin}.sourceLabel()
+	_, err := fmt.Fprintln(w, "  "+pinnedRootLine(mi.PinnedRoot, src))
 	return err
 }
 

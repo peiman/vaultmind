@@ -142,4 +142,60 @@ func TestDoctor_MeshConfigPinIsAPin(t *testing.T) {
 	require.NotNil(t, je.Result.MeshIdentity)
 	assert.Equal(t, query.StatusMeshKeyMismatch, je.Result.MeshIdentity.Status,
 		"a config-pinned machine is on the PINNED path, not self-consistent-unpinned")
+	assert.Equal(t, b64(rootPub), je.Result.MeshIdentity.PinnedRoot)
+	assert.Equal(t, rootPinSourceConfig, je.Result.MeshIdentity.PinnedRootSource)
+	assert.Equal(t, config.KeyAppIdentityfetchregistryRootPubkey, je.Result.MeshIdentity.PinnedRootOrigin)
+}
+
+// After the 2026-11-08 root changeover two agents failed with the same opaque
+// "root signature does not verify": one pinned by a stale ./config.yaml, one by
+// a stale enroll anchor. Neither could see which. The pin now names its source.
+func TestResolveRootPin_NamesItsSource(t *testing.T) {
+	cleanupCLIState(t)
+	xdg := pinEnv(t)
+	envVar := rootPinEnvVar()
+	t.Setenv(envVar, "")
+	anchorK := pinKey(t, "root-pin-anchor-seed-padding-xxxx")
+	cfgK := pinKey(t, "root-pin-config-seed-padding-xxxx")
+	writeAnchor(t, xdg, anchorK)
+	anchorPath := filepath.Join(xdg, "vaultmind", networkAnchorFilename)
+
+	pin, err := resolveRootPin("", "--flag")
+	require.NoError(t, err)
+	assert.Equal(t, rootPinSourceAnchor, pin.source)
+	assert.Equal(t, anchorPath, pin.origin)
+	assert.Equal(t, "enrollment anchor "+anchorPath, pin.sourceLabel())
+
+	viper.Set(config.KeyAppIdentityfetchregistryRootPubkey, b64(cfgK))
+	configFileUsed = "/etc/vm/config.yaml"
+	pin, err = resolveRootPin("", "--flag")
+	require.NoError(t, err)
+	assert.Equal(t, rootPinSourceConfig, pin.source)
+	assert.Equal(t, "config /etc/vm/config.yaml", pin.sourceLabel(), "the config FILE that pinned it")
+
+	configFileUsed = ""
+	pin, err = resolveRootPin("", "--flag")
+	require.NoError(t, err)
+	assert.Equal(t, "config "+config.KeyAppIdentityfetchregistryRootPubkey, pin.sourceLabel(),
+		"no config file: name the key")
+
+	t.Setenv(envVar, b64(cfgK))
+	pin, err = resolveRootPin("", "--flag")
+	require.NoError(t, err)
+	assert.Equal(t, rootPinSourceEnv, pin.source)
+	assert.Equal(t, "env "+envVar, pin.sourceLabel())
+
+	pin, err = resolveRootPin(b64(pinKey(t, "root-pin-flag-seed-padding-xxxxxx")), "--root-pubkey")
+	require.NoError(t, err)
+	assert.Equal(t, rootPinSourceFlag, pin.source)
+	assert.Equal(t, "flag --root-pubkey", pin.sourceLabel())
+}
+
+func TestPinnedRootLine_NamesRootAndSource(t *testing.T) {
+	k := pinKey(t, "root-pin-config-seed-padding-xxxx")
+	s := b64(k)
+	pin := rootPin{pub: k, source: rootPinSourceConfig, origin: "/p/config.yaml"}
+	assert.Equal(t, "pinned root: "+s[:4]+"…"+s[len(s)-4:]+" (from config /p/config.yaml)", pin.line())
+	assert.Equal(t, s[:4]+"…"+s[len(s)-4:], shortRoot(s))
+	assert.Equal(t, "abc", shortRoot("abc"), "too short to abbreviate")
 }

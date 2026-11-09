@@ -187,8 +187,13 @@ type MeshDoctorInput struct {
 
 	// Tier-2 authenticity.
 	PinnedRootPub ed25519.PublicKey // nil ⇒ UNPINNED path (never green)
-	NetworkID     string
-	RegistryBytes []byte // offline registry override (--mesh-registry); else fetched
+	// PinnedRootSource (flag/env/config/anchor) and PinnedRootOrigin (the flag,
+	// env var, config file or anchor file) say where the pin came from, so a
+	// stale pin can be traced to the file that holds it.
+	PinnedRootSource string
+	PinnedRootOrigin string
+	NetworkID        string
+	RegistryBytes    []byte // offline registry override (--mesh-registry); else fetched
 	// MaxStaleness is the DECLARED hub bound. Zero means undeclared, in which
 	// case doctor falls back to its conservative default and says so rather
 	// than asserting a refusal date it cannot know.
@@ -221,12 +226,15 @@ type DoctorMeshIdentity struct {
 	SignerReachable bool `json:"signer_reachable"` // INFO — signer is on-demand
 
 	// Tier 2 — binding resolves in the live mesh (authenticated).
-	Pinned          bool   `json:"pinned"`
-	Authenticated   bool   `json:"authenticated"` // M4 top-level boolean
-	NetworkID       string `json:"network_id,omitempty"`
-	BindingResolves bool   `json:"binding_resolves"`
-	HoldsBindingKey bool   `json:"holds_binding_key"` // selfVerify proof-of-possession
-	Status          string `json:"status"`
+	Pinned           bool   `json:"pinned"`
+	PinnedRoot       string `json:"pinned_root,omitempty"` // base64; empty when unpinned
+	PinnedRootSource string `json:"pinned_root_source,omitempty"`
+	PinnedRootOrigin string `json:"pinned_root_origin,omitempty"`
+	Authenticated    bool   `json:"authenticated"` // M4 top-level boolean
+	NetworkID        string `json:"network_id,omitempty"`
+	BindingResolves  bool   `json:"binding_resolves"`
+	HoldsBindingKey  bool   `json:"holds_binding_key"` // selfVerify proof-of-possession
+	Status           string `json:"status"`
 
 	// Tier 3 — chat reachability (honest labels).
 	DaemonReachable       bool   `json:"daemon_reachable"`
@@ -269,6 +277,10 @@ func BuildMeshIdentity(ctx context.Context, in MeshDoctorInput) (*DoctorMeshIden
 		DaemonMode:        DaemonModeUnknown,
 		NetworkID:         in.NetworkID,
 		EnforcementActive: false,
+	}
+	if len(in.PinnedRootPub) > 0 {
+		mi.PinnedRoot = base64.StdEncoding.EncodeToString(in.PinnedRootPub)
+		mi.PinnedRootSource, mi.PinnedRootOrigin = in.PinnedRootSource, in.PinnedRootOrigin
 	}
 
 	checkKeyCustody(mi, in.KeyPath)

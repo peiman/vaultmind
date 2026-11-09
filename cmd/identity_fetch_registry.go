@@ -4,13 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"time"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
+	"github.com/peiman/vaultmind/.ckeletin/pkg/output"
 	"github.com/peiman/vaultmind/internal/config/commands"
 	"github.com/peiman/vaultmind/internal/identity/registryfetch"
-	"github.com/peiman/vaultmind/internal/identity/relayclient"
 	"github.com/spf13/cobra"
 )
 
@@ -20,6 +19,7 @@ const (
 	fetchRegistryErrBadRoot = "--" + fetchRegistryRootFlag + rootPinInvalidSuffix
 	fetchRegistryErrNoHub   = "no hub address: pass --hub, set " + envDaemonURL + ", or declare daemon_url in agents.yaml"
 	fetchRegistryErrNoPath  = "no registry path: pass --registry-file, or declare registry_path in agents.yaml"
+	fetchRegistryCommand    = "identity fetch-registry"
 )
 
 var identityFetchRegistryCmd = MustNewCommand(commands.IdentityFetchRegistryMetadata, runIdentityFetchRegistry)
@@ -29,8 +29,8 @@ func init() {
 	setupCommandConfig(identityFetchRegistryCmd)
 }
 
-// runIdentityFetchRegistry resolves pin, hub, and path BEFORE touching the
-// network, so a misconfigured machine fails without fetching anything.
+// runIdentityFetchRegistry resolves the pin and names it (root and source)
+// before anything else, so a stale pin is visible on every run.
 func runIdentityFetchRegistry(cmd *cobra.Command, _ []string) error {
 	// Only the flag itself is explicit here: the config pin is the shared
 	// resolver's second source, so doctor reads the very same one.
@@ -42,33 +42,17 @@ func runIdentityFetchRegistry(cmd *cobra.Command, _ []string) error {
 	if pin.pub == nil {
 		return errors.New(fetchRegistryErrNoRoot)
 	}
-	root := pin.pub
-	agents, project := registryPath(), projectPath()
-	hub := getConfigValueWithFlags[string](cmd, "hub", config.KeyAppIdentityfetchregistryHub)
-	if hub == "" {
-		hub = resolveDoctorDaemonURL(os.Getenv(envDaemonURL), agents, project)
+	rep := fetchRegistryReport{pin: pin, now: time.Now()}
+	if output.IsJSONMode() {
+		return writeFetchRegistryJSON(cmd.OutOrStdout(), rep, fetchRegistry(cmd, &rep))
 	}
-	if hub == "" {
-		return errors.New(fetchRegistryErrNoHub)
-	}
-	path := getConfigValueWithFlags[string](cmd, "registry-file", config.KeyAppIdentityfetchregistryRegistryFile)
-	if path == "" {
-		path = registryFileFromAgentsYAML(agents, project)
-	}
-	if path == "" {
-		return errors.New(fetchRegistryErrNoPath)
-	}
-
-	body, err := relayclient.FetchDirectory(cmd.Context(), nil, hub)
-	if err != nil {
+	if _, err := fmt.Fprintln(cmd.ErrOrStderr(), pin.line()); err != nil {
 		return err
 	}
-	now := time.Now()
-	res, err := registryfetch.Update(root, body, path, now)
-	if err != nil {
+	if err := fetchRegistry(cmd, &rep); err != nil {
 		return err
 	}
-	return writeFetchRegistryResult(cmd.OutOrStdout(), res, path, registryMaxStalenessFromAgentsYAML(agents, project), now)
+	return writeFetchRegistryResult(cmd.OutOrStdout(), rep.res, rep.path, rep.maxStaleness, rep.now)
 }
 
 func writeFetchRegistryResult(w io.Writer, res registryfetch.Result, path string, maxStalenessSecs int64, now time.Time) error {
