@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -294,6 +296,173 @@ func TestSignEnvelopeRejectsUnknownField(t *testing.T) {
 	}
 	if out.Len() != 0 {
 		t.Fatalf("parse reject must print nothing, got %q", out.String())
+	}
+}
+
+// bridgeVouchedEnvelope is the exact shape agent-chat's chat-send pipes into
+// sign-envelope for a Discord-bridged human line: the four human-principal fields
+// sit in the signed subset alongside the plain ones.
+const bridgeVouchedEnvelope = `{"alg_version":1,"body":"hi from discord","from_agent":"discord-bridge","from_class":"bridge","key_epoch":1,"kind":"chat","nonce":"bm9uY2UtMQ==","room":"mesh","seq":3,"ts":2000000,"vouches_for":"human:peiman"}`
+
+// TestSignEnvelopeSignsBridgeVouchedEnvelope: a bridge line that vouches for a
+// human signs, the signer gets exactly those canonical bytes, and the signature
+// verifies under a bridge binding whose allowlist names the human.
+func TestSignEnvelopeSignsBridgeVouchedEnvelope(t *testing.T) {
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	fake := &fakeSignerClient{priv: priv}
+	var out bytes.Buffer
+	if err := SignEnvelope(&out, fake, []byte(bridgeVouchedEnvelope), ""); err != nil {
+		t.Fatalf("SignEnvelope: %v", err)
+	}
+	// The input is already JCS-canonical, so the signed bytes must equal it.
+	if string(fake.gotCanonical) != bridgeVouchedEnvelope {
+		t.Fatalf("signed bytes differ from input:\n got %s\nwant %s", fake.gotCanonical, bridgeVouchedEnvelope)
+	}
+	var res map[string]any
+	if err := json.Unmarshal(out.Bytes(), &res); err != nil {
+		t.Fatalf("output is not JSON: %v (%q)", err, out.String())
+	}
+	sig, err := base64.StdEncoding.DecodeString(res[envelope.FieldSig].(string))
+	if err != nil {
+		t.Fatalf("decode sig: %v", err)
+	}
+	pk, err := registry.NewPublicKey(pub)
+	if err != nil {
+		t.Fatalf("NewPublicKey: %v", err)
+	}
+	reg := registry.Registry{
+		Epoch: 1, ValidFrom: 0, ValidUntil: 1 << 40,
+		Agents: []registry.AgentBinding{{
+			Slug: "discord-bridge", DisplayName: "Discord bridge", PubKey: pk, KeyEpoch: 1,
+			ValidFrom: 0, ValidUntil: 1 << 40,
+			Class: envelope.FromClassBridge, VouchAllowlist: []string{"human:peiman"},
+		}},
+	}
+	room, class, kind, vouch := "mesh", "bridge", "chat", "human:peiman"
+	ok, verr := envelope.VerifyEnvelope(reg, envelope.Fields{
+		AlgVersion: 1, Body: "hi from discord", FromAgent: "discord-bridge", KeyEpoch: 1,
+		Nonce: "bm9uY2UtMQ==", Room: &room, Seq: 3, TS: 2000000,
+		FromClass: &class, Kind: &kind, VouchesFor: &vouch,
+	}, sig, mustTime(2000000))
+	if verr != nil || !ok {
+		t.Fatalf("emitted sig did not verify: ok=%v err=%v", ok, verr)
+	}
+}
+
+// TestSignEnvelopeCrossLangBridgeVector feeds the frozen bridge vector's
+// canonical bytes (what agent-chat's canonicalize_envelope emits and pins in its
+// own copy of the same file) through the CLI path. The signer must receive those
+// bytes unchanged, and the signature must verify over them.
+func TestSignEnvelopeCrossLangBridgeVector(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "identity", "envelope", "testdata", "human_principal_cross_language_vectors.json"))
+	if err != nil {
+		t.Fatalf("read cross-language fixture: %v", err)
+	}
+	var fx struct {
+		Vectors []struct {
+			Name      string `json:"name"`
+			Canonical string `json:"canonical"`
+			SHA256    string `json:"sha256"`
+		} `json:"vectors"`
+	}
+	if err := json.Unmarshal(raw, &fx); err != nil {
+		t.Fatalf("parse cross-language fixture: %v", err)
+	}
+	if len(fx.Vectors) == 0 || fx.Vectors[0].Name != "bridge_attested_chat" {
+		t.Fatalf("fixture missing bridge_attested_chat vector: %+v", fx.Vectors)
+	}
+	v := fx.Vectors[0]
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	fake := &fakeSignerClient{priv: priv}
+	var out bytes.Buffer
+	if err := SignEnvelope(&out, fake, []byte(v.Canonical), ""); err != nil {
+		t.Fatalf("SignEnvelope on the frozen bridge vector: %v", err)
+	}
+	if string(fake.gotCanonical) != v.Canonical {
+		t.Fatalf("CLI signed bytes drifted from the cross-language canonical:\n got %s\nwant %s", fake.gotCanonical, v.Canonical)
+	}
+	sum := sha256.Sum256(fake.gotCanonical)
+	if hex.EncodeToString(sum[:]) != v.SHA256 {
+		t.Fatalf("sha256 of signed bytes = %x, want %s", sum, v.SHA256)
+	}
+	var res map[string]any
+	if err := json.Unmarshal(out.Bytes(), &res); err != nil {
+		t.Fatalf("output is not JSON: %v (%q)", err, out.String())
+	}
+	sig, err := base64.StdEncoding.DecodeString(res[envelope.FieldSig].(string))
+	if err != nil {
+		t.Fatalf("decode sig: %v", err)
+	}
+	if !ed25519.Verify(pub, []byte(v.Canonical), sig) {
+		t.Fatal("signature does not verify over the cross-language canonical bytes")
+	}
+}
+
+// TestSignEnvelopeHumanPrincipalGates: the CLI passes the optional fields to the
+// envelope library and refuses exactly what the library refuses, without calling
+// the signer or printing anything. Absent fields stay out of the signed bytes.
+func TestSignEnvelopeHumanPrincipalGates(t *testing.T) {
+	const base = `"alg_version":1,"body":"hi","from_agent":"relay","key_epoch":1,"nonce":"n1","room":"mesh","seq":1,"ts":1`
+	cases := []struct {
+		name    string
+		extra   string
+		wantErr string
+	}{
+		{"vouch without bridge", `,"vouches_for":"human:peiman"`, envelope.ErrVouchNeedsBridge},
+		{"vouch with agent class", `,"from_class":"agent","vouches_for":"human:peiman"`, envelope.ErrVouchNeedsBridge},
+		{"bridge without vouch", `,"from_class":"bridge"`, envelope.ErrBridgeNeedsVouch},
+		{"bad class", `,"from_class":"root"`, envelope.ErrFromClassInvalid},
+		{"bad kind", `,"kind":"command"`, envelope.ErrKindInvalid},
+		{"approval without gate_ref", `,"kind":"approval"`, envelope.ErrApprovalNeedsGateRef},
+		{"gate_ref without approval", `,"gate_ref":"g1"`, envelope.ErrGateRefNeedsApproval},
+		// The vouch below ends in e + U+0301 (a combining acute), which is not NFC.
+		{"non-NFC vouch", `,"from_class":"bridge","vouches_for":"human:peé"`, envelope.ErrFieldNotNFC},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := &fakeSignerClient{}
+			var out bytes.Buffer
+			err := SignEnvelope(&out, fake, []byte("{"+base+tc.extra+"}"), "")
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("want error containing %q, got %v", tc.wantErr, err)
+			}
+			if fake.gotCanonical != nil {
+				t.Fatal("signer was called for a gate-violating envelope")
+			}
+			if out.Len() != 0 {
+				t.Fatalf("gate reject must print nothing, got %q", out.String())
+			}
+		})
+	}
+
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	// An approval carries gate_ref into the signed bytes.
+	approval := `{"alg_version":1,"body":"hi","from_agent":"relay","gate_ref":"g1","key_epoch":1,"kind":"approval","nonce":"n1","room":"mesh","seq":1,"ts":1}`
+	fake := &fakeSignerClient{priv: priv}
+	var out bytes.Buffer
+	if err := SignEnvelope(&out, fake, []byte(approval), ""); err != nil {
+		t.Fatalf("SignEnvelope approval: %v", err)
+	}
+	if string(fake.gotCanonical) != approval {
+		t.Fatalf("approval signed bytes:\n got %s\nwant %s", fake.gotCanonical, approval)
+	}
+	// A plain envelope gains no human-principal keys (absent stays absent).
+	fake = &fakeSignerClient{priv: priv}
+	out.Reset()
+	if err := SignEnvelope(&out, fake, []byte(testEnvelope), ""); err != nil {
+		t.Fatalf("SignEnvelope plain: %v", err)
+	}
+	if string(fake.gotCanonical) != testEnvelope {
+		t.Fatalf("plain signed bytes:\n got %s\nwant %s", fake.gotCanonical, testEnvelope)
 	}
 }
 

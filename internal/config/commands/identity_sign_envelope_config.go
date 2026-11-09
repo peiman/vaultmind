@@ -13,7 +13,10 @@ canonical bytes via the signer over its 0600 socket and print
 {sig, from_pubkey, key_epoch} as JSON.
 
 The signed subset is { alg_version, body, from_agent, key_epoch, nonce, room?,
-seq, to_agent? (exactly one), ts }. from_pubkey is DERIVED, not signed. The
+seq, to_agent? (exactly one), ts, from_class?, kind?, vouches_for?, gate_ref? }.
+The optional fields are omitted when absent; vouches_for needs from_class
+bridge (and bridge needs vouches_for), and gate_ref needs kind approval (and
+approval needs gate_ref). from_pubkey is DERIVED, not signed. The
 transport fields (id, sig, from_pubkey, receive_ts, ioguard_verdict,
 origin_daemon) are excluded from the signed bytes.
 
