@@ -49,6 +49,11 @@ func readFrame(conn net.Conn) ([]byte, error) {
 	}
 	buf := make([]byte, n)
 	if _, err := io.ReadFull(conn, buf); err != nil {
+		// A header arrived, so a missing payload is a truncated frame: never
+		// report it as the bare io.EOF that means "the peer sent nothing".
+		if errors.Is(err, io.EOF) {
+			err = io.ErrUnexpectedEOF
+		}
 		return nil, fmt.Errorf("signer: read frame payload: %w", err)
 	}
 	return buf, nil

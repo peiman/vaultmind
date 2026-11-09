@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `vaultmind identity signer --once` signs exactly one request, then removes its socket, prints `signed once: sha256=<hex> bytes=<n>` to stderr, and exits 0. Use it for a one-time signature made through a client you do not fully trust: a client could otherwise ask a running signer for two signatures, show you one and send the other. With `--once` only one signature can exist, so compare the printed hash with the sha256 of the bytes you checked. The hash is over exactly the bytes signed; the signer adds no prefix, so for `sign-envelope` these are the envelope's JCS canonical bytes. Requests that arrive during or after the first signature are refused. Failed requests (wrong uid, malformed frame, policy refusal) do not count, but after 3 of them the signer exits non-zero with nothing signed. A connection that sends nothing, such as the liveness probe `vaultmind doctor` makes, is not a failure. Without `--once` the signer is unchanged.
+
 ## [0.10.26] - 2026-11-09
 
 ### Fixed

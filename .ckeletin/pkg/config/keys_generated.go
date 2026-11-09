@@ -208,6 +208,7 @@ const (
 	KeyAppIdentitysignsessionSignerSocket    = "app.identitysignsession.signer_socket"    // Signer socket path (default: XDG state dir)
 	KeyAppIdentitysignerSignerKey            = "app.identitysigner.signer_key"            // Sealed signer key path (default: XDG data dir)
 	KeyAppIdentitysignerSignerSocket         = "app.identitysigner.signer_socket"         // Signer socket path (default: XDG state dir)
+	KeyAppIdentitysignerOnce                 = "app.identitysigner.once"                  // Sign exactly one request, print its sha256 to stderr, then exit
 	KeyAppIdentitysignerinstallSignerKey     = "app.identitysignerinstall.signer_key"     // Sealed signer key path (default: XDG data dir, per --config-path-mode)
 	KeyAppIdentitysignerinstallSignerSocket  = "app.identitysignerinstall.signer_socket"  // Signer socket path (default: XDG state dir, per --config-path-mode)
 	KeyAppIdentitysignerinstallName          = "app.identitysignerinstall.name"           // Job name suffix (default: the key file's name without extension)
