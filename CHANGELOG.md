@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.26] - 2026-11-09
+
 ### Fixed
 
 - `vaultmind identity sign-envelope` signs envelopes that carry `from_class`, `kind`, `vouches_for` or `gate_ref`. Before, it refused them with `parse envelope JSON: json: unknown field "from_class"`, so a bridge could not sign a line that vouches for a human (for example a Discord message relayed to the mesh). Each field is optional and left out of the signed bytes when absent, so plain envelopes sign exactly as before. The envelope rules still apply: `vouches_for` needs `from_class` `bridge` and the reverse, `gate_ref` needs `kind` `approval` and the reverse, and any other unknown field is still refused.
@@ -3247,7 +3249,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.25...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.26...HEAD
+[0.10.26]: https://github.com/peiman/vaultmind/compare/v0.10.25...v0.10.26
 [0.10.25]: https://github.com/peiman/vaultmind/compare/v0.10.24...v0.10.25
 [0.10.24]: https://github.com/peiman/vaultmind/compare/v0.10.23...v0.10.24
 [0.10.23]: https://github.com/peiman/vaultmind/compare/v0.10.22...v0.10.23

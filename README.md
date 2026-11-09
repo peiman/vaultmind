@@ -77,7 +77,7 @@ A pure-Go binary: full-text + MiniLM dense retrieval (2 lanes). Ideal for trying
 
 **Full 4-way hybrid — BGE-M3 (recommended for real use):**
 
-The ORT archives carry a `v` in the version. The two published for v0.10.25 are `vaultmind_v0.10.25_darwin_arm64_ort.tar.gz` and `vaultmind_v0.10.25_linux_amd64_ort.tar.gz` (`darwin_arm64` and `linux_amd64`) on the [releases page](https://github.com/peiman/vaultmind/releases). The binary and `libonnxruntime*` must stay in the same folder, and that folder goes on `PATH`. The official `libonnxruntime` is bundled, so there's nothing else to install — **no compiler required.** On an Apple Silicon Mac (on Linux, use `linux_amd64` and `~/.bashrc`):
+The ORT archives carry a `v` in the version. The two published for v0.10.26 are `vaultmind_v0.10.26_darwin_arm64_ort.tar.gz` and `vaultmind_v0.10.26_linux_amd64_ort.tar.gz` (`darwin_arm64` and `linux_amd64`) on the [releases page](https://github.com/peiman/vaultmind/releases). The binary and `libonnxruntime*` must stay in the same folder, and that folder goes on `PATH`. The official `libonnxruntime` is bundled, so there's nothing else to install — **no compiler required.** On an Apple Silicon Mac (on Linux, use `linux_amd64` and `~/.bashrc`):
 
 ```bash
 V=$(curl -fsSL https://api.github.com/repos/peiman/vaultmind/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
