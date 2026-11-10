@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `docs/mesh/contractb-registry-staging.md` names the current mesh root key (since 2026-11-08) and marks the old one as retired. Its sample registry is signed by the retired root, and the doc now says so.
+
 ## [0.10.26] - 2026-11-09
 
 ### Fixed
