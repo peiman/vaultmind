@@ -20,19 +20,19 @@ advisory-verify + the default-deny flip all wait for Peiman's explicit go.
 
 | What | base64-std (RFC 4648 §4, padded) |
 |------|-----------------------------------|
-| **ROOT pubkey — workhorse's daemon PINS this** | `SWKIlkQh+RWiXAZD8Y0fE/qIGFVoMRpGoaaUSHCvFJ0=` |
+| **ROOT pubkey — the hub PINS this** (since 2026-11-08, network `vmnet1:87012472f88905db9e587029fac2b155`) | `FjAWGzYU3Mp+8PAx63ubcUqdmA4AhZZzbyN6RBPIHe8=` |
+| Retired root (before 2026-11-08; no longer trusted by the hub) | `SWKIlkQh+RWiXAZD8Y0fE/qIGFVoMRpGoaaUSHCvFJ0=` |
 | **mira's Contract-B identity pubkey** (key_epoch=1) | `c2tx+bnhb4W/Xcl3sdQzpIyjDK3exYW3oe061c3URsg=` |
 
-Private keys live ONLY in dev-interim custody at
-`~/.config/vaultmind/contractb/{root,mira}.key` (0600) and are **never**
-committed.
+Private keys are **never** committed. The root key is held offline; agent keys
+stay with their own agents' signers.
 
 ## The staged sample registry
 
 `contractb-registry-staged.sample.json` is a real, root-signed distribution
 envelope (`{registry: base64(JCS bytes), root_sig, root_key_epoch}`) carrying
-**mira live @ key_epoch=1**. It is verifiable today under the ROOT pubkey above
-(loads → resolves mira). It is a **format-and-signing proof, not a deployable
+**mira live @ key_epoch=1**. It was signed by the **retired** root above and
+verifies only under that key (loads → resolves mira); the hub no longer accepts it. It is a **format-and-signing proof, not a deployable
 file**, because:
 
 1. **workhorse's binding is absent** (a TODO slot). Minting workhorse's identity
