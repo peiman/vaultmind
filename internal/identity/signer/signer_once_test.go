@@ -3,6 +3,7 @@ package signer
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -21,6 +22,23 @@ type onceRun struct {
 	s        *Signer
 	sockPath string
 	done     chan onceOutcome
+
+	mu    sync.Mutex
+	lines []string // lines passed to the report func, in order
+}
+
+// reported returns a copy of the lines reported so far.
+func (r *onceRun) reported() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]string(nil), r.lines...)
+}
+
+func (r *onceRun) report(line string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.lines = append(r.lines, line)
+	return nil
 }
 
 type onceOutcome struct {
@@ -28,8 +46,16 @@ type onceOutcome struct {
 	err error
 }
 
-// startOnceSigner boots a Signer and runs ServeOnce in a goroutine.
+// startOnceSigner boots a Signer and runs ServeOnce in a goroutine, recording
+// reported lines.
 func startOnceSigner(t *testing.T, keyPath string, allow []uint32) *onceRun {
+	t.Helper()
+	return startOnceSignerWithReport(t, keyPath, allow, nil)
+}
+
+// startOnceSignerWithReport is startOnceSigner with a custom report func; nil
+// records lines on the returned run.
+func startOnceSignerWithReport(t *testing.T, keyPath string, allow []uint32, report func(string) error) *onceRun {
 	t.Helper()
 	sockPath := shortSocketPath(t)
 	s, err := New(Config{KeyPath: keyPath, SocketPath: sockPath, AllowedUIDs: allow})
@@ -40,8 +66,11 @@ func startOnceSigner(t *testing.T, keyPath string, allow []uint32) *onceRun {
 		t.Fatalf("Listen: %v", err)
 	}
 	r := &onceRun{s: s, sockPath: sockPath, done: make(chan onceOutcome, 1)}
+	if report == nil {
+		report = r.report
+	}
 	go func() {
-		res, err := s.ServeOnce()
+		res, err := s.ServeOnce(report)
 		r.done <- onceOutcome{res: res, err: err}
 	}()
 	t.Cleanup(func() { _ = s.Close() })
@@ -179,6 +208,7 @@ func TestSignGuardAllowsOneSignatureUnderRace(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 	s.once = true
+	s.report = func(string) error { return nil }
 
 	const n = 32
 	var wg sync.WaitGroup
@@ -211,6 +241,7 @@ func TestSignGuardRefusesAfterClose(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 	s.once = true
+	s.report = func(string) error { return nil }
 	_ = s.Close()
 	if _, err := s.sign([]byte(`{"n":1}`)); err == nil || err.Error() != errOnceClosed {
 		t.Fatalf("sign after Close: err = %v, want %q", err, errOnceClosed)
@@ -356,7 +387,7 @@ func TestServeOnceRequiresListen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	if _, err := s.ServeOnce(); err == nil || err.Error() != errNotListening {
+	if _, err := s.ServeOnce(func(string) error { return nil }); err == nil || err.Error() != errNotListening {
 		t.Fatalf("ServeOnce before Listen: err = %v, want %q", err, errNotListening)
 	}
 }
@@ -368,5 +399,82 @@ func TestOnceResultSummaryHashesTheSignedBytes(t *testing.T) {
 	got := (&OnceResult{Message: msg}).Summary()
 	if got != want {
 		t.Fatalf("Summary() = %q, want %q", got, want)
+	}
+}
+
+// TestServeOnceReportsHashBeforeClientGetsSignature: the hash line must exist
+// before the signature leaves the signer, so killing the signer between the
+// two cannot leave a signature with no hash.
+func TestServeOnceReportsHashBeforeClientGetsSignature(t *testing.T) {
+	keyPath, _ := newKeyFile(t)
+	r := startOnceSigner(t, keyPath, currentUID())
+	cb := canonicalBytes(t)
+	if _, err := (&Client{SocketPath: r.sockPath}).Sign(cb.Bytes()); err != nil {
+		t.Fatalf("Sign: %v", err)
+	}
+	// Checked BEFORE waiting for ServeOnce: the line was reported in sign.
+	want := (&OnceResult{Message: cb.Bytes()}).Summary()
+	if got := r.reported(); len(got) != 1 || got[0] != want {
+		t.Fatalf("reported %q when the client got its signature, want [%q]", got, want)
+	}
+	r.wait(t)
+	if got := r.reported(); len(got) != 1 {
+		t.Fatalf("reported %d lines, want exactly 1", len(got))
+	}
+}
+
+// TestServeOnceReportFailureWithholdsSignature: if the hash cannot be
+// reported, the signature is not sent and the run ends with nothing signed.
+func TestServeOnceReportFailureWithholdsSignature(t *testing.T) {
+	keyPath, _ := newKeyFile(t)
+	r := startOnceSignerWithReport(t, keyPath, currentUID(), func(string) error { return errors.New("stderr closed") })
+	if _, err := (&Client{SocketPath: r.sockPath}).Sign(canonicalBytes(t).Bytes()); err == nil {
+		t.Fatal("signature was sent although its hash could not be reported")
+	}
+	o := r.wait(t)
+	if o.res != nil {
+		t.Fatal("a result was returned for a withheld signature")
+	}
+	if o.err == nil || !strings.Contains(o.err.Error(), errOnceReportFailed) {
+		t.Fatalf("ServeOnce err = %v, want %q", o.err, errOnceReportFailed)
+	}
+	if _, err := os.Lstat(r.sockPath); !os.IsNotExist(err) {
+		t.Fatalf("socket still present: lstat err = %v", err)
+	}
+	if _, err := r.s.sign([]byte(`{"n":2}`)); err == nil {
+		t.Fatal("signer signed again after a withheld signature")
+	}
+}
+
+func TestServeOnceRequiresReport(t *testing.T) {
+	keyPath, _ := newKeyFile(t)
+	s, err := New(Config{KeyPath: keyPath, SocketPath: shortSocketPath(t), AllowedUIDs: currentUID()})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := s.Listen(); err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	if _, err := s.ServeOnce(nil); err == nil || err.Error() != errOnceNoReport {
+		t.Fatalf("ServeOnce(nil): err = %v, want %q", err, errOnceNoReport)
+	}
+}
+
+// TestServeOnceClearsKeyAfterSigning: once mode needs the key for one
+// signature only, so it is zeroed right after.
+func TestServeOnceClearsKeyAfterSigning(t *testing.T) {
+	keyPath, _ := newKeyFile(t)
+	r := startOnceSigner(t, keyPath, currentUID())
+	if _, err := (&Client{SocketPath: r.sockPath}).Sign(canonicalBytes(t).Bytes()); err != nil {
+		t.Fatalf("Sign: %v", err)
+	}
+	r.wait(t)
+	r.s.signMu.Lock()
+	defer r.s.signMu.Unlock()
+	for _, b := range r.s.priv {
+		if b != 0 {
+			t.Fatal("private key still in memory after the one signature")
+		}
 	}
 }

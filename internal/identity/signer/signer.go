@@ -126,12 +126,16 @@ type Signer struct {
 
 	// signMu guards every signature. In once mode (set by ServeOnce) it makes
 	// the first signature the only one: the result is recorded under the same
-	// lock that signs, so racing requests cannot both sign, and once Close has
-	// run nothing more is signed.
+	// lock that signs, so racing requests cannot both sign. closed is set by
+	// Close and by the first once-mode signature; after it nothing is signed.
 	signMu sync.Mutex
 	once   bool
 	closed bool
 	signed *OnceResult
+	// report receives the hash line in once mode, under signMu, BEFORE the
+	// signature is returned; reportErr records a failed report (the run is over).
+	report    func(line string) error
+	reportErr error
 }
 
 // New loads the sealed private key and prepares a Signer. It does NOT yet bind
@@ -353,13 +357,29 @@ func (s *Signer) sign(msg []byte) ([]byte, error) {
 	if s.once && s.closed {
 		return nil, errors.New(errOnceClosed)
 	}
+	if s.once && s.report == nil {
+		return nil, errors.New(errOnceNoReport)
+	}
 	sig, err := identity.SignCanonical(s.priv, identity.CanonicalBytesFromTrusted(msg))
 	if err != nil {
 		return nil, fmt.Errorf("signer: sign: %w", err)
 	}
-	if s.once {
-		s.signed = &OnceResult{Message: msg, Sig: sig}
+	if !s.once {
+		return sig, nil
 	}
+	// Once mode: the key has done its one job, and nothing more is signed
+	// whatever happens next.
+	clear(s.priv)
+	s.closed = true
+	// Report the hash of these exact bytes BEFORE the signature can leave, so
+	// stopping the signer after this point cannot leave a signature without
+	// its hash. If the report fails, withhold the signature.
+	res := &OnceResult{Message: msg, Sig: sig}
+	if rerr := s.report(res.Summary()); rerr != nil {
+		s.reportErr = fmt.Errorf("%s: %w", errOnceReportFailed, rerr)
+		return nil, s.reportErr
+	}
+	s.signed = res
 	return sig, nil
 }
 
@@ -385,6 +405,7 @@ func loadPrivateKey(path string) (ed25519.PrivateKey, error) {
 	}
 	priv := make(ed25519.PrivateKey, ed25519.PrivateKeySize)
 	copy(priv, b)
+	clear(b)
 	return priv, nil
 }
 

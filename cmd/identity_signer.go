@@ -19,7 +19,9 @@ import (
 // command prints — never the key, never key bytes.
 const (
 	signerListeningMsg = "custody signer listening on %s (uid-gated, dev-interim)\n"
-	signerShutdownMsg  = "shutting down, removing socket %s\n"
+	// signerListeningOnceMsg is the startup line in --once mode.
+	signerListeningOnceMsg = "custody signer listening on %s (uid-gated, dev-interim) (once mode: will sign ONE request)\n"
+	signerShutdownMsg      = "shutting down, removing socket %s\n"
 
 	// errSignerEmptyAllowlist is the command-level fail-closed message when the
 	// computed uid allowlist is empty (defense-in-depth alongside signer.New's
@@ -90,7 +92,7 @@ func currentUserSignerConfig(keyPath, sockPath string) signer.Config {
 // allowlist, a missing/unreadable key, or a bind failure returns an error
 // having printed nothing sensitive.
 func serveIdentitySigner(ctx context.Context, out io.Writer, cfg signer.Config) error {
-	s, err := startIdentitySigner(out, cfg)
+	s, err := startIdentitySigner(out, signerListeningMsg, cfg)
 	if err != nil {
 		return err
 	}
@@ -119,7 +121,7 @@ func serveIdentitySigner(ctx context.Context, out io.Writer, cfg signer.Config) 
 
 // startIdentitySigner checks the allowlist, loads the key, binds the socket and
 // prints the startup line. It FAILS CLOSED and leaves no socket on any error.
-func startIdentitySigner(out io.Writer, cfg signer.Config) (*signer.Signer, error) {
+func startIdentitySigner(out io.Writer, listeningMsg string, cfg signer.Config) (*signer.Signer, error) {
 	if len(cfg.AllowedUIDs) == 0 {
 		return nil, fmt.Errorf("%s", errSignerEmptyAllowlist)
 	}
@@ -130,24 +132,29 @@ func startIdentitySigner(out io.Writer, cfg signer.Config) (*signer.Signer, erro
 	if err := s.Listen(); err != nil {
 		return nil, fmt.Errorf("signer: listen: %w", err)
 	}
-	if _, err := fmt.Fprintf(out, signerListeningMsg, cfg.SocketPath); err != nil {
+	if _, err := fmt.Fprintf(out, listeningMsg, cfg.SocketPath); err != nil {
 		return nil, errors.Join(fmt.Errorf("signer: write startup line: %w", err), s.Close())
 	}
 	return s, nil
 }
 
-// serveIdentitySignerOnce signs exactly one request, then prints the sha256 of
-// the signed bytes to errOut and returns. A signal stops the run; Close makes
-// the signer refuse any further signature, so a signature made before the stop
-// is still reported and none can be made after it.
+// serveIdentitySignerOnce signs exactly one request and returns. The signer
+// writes the sha256 line to errOut BEFORE the signature leaves it (and withholds
+// the signature if that write fails), so no signature exists without its hash
+// even if this process is killed right after. A signal stops the run; Close
+// makes the signer refuse any further signature.
 func serveIdentitySignerOnce(ctx context.Context, out, errOut io.Writer, cfg signer.Config) error {
-	s, err := startIdentitySigner(out, cfg)
+	s, err := startIdentitySigner(out, signerListeningOnceMsg, cfg)
 	if err != nil {
+		return err
+	}
+	report := func(line string) error {
+		_, err := fmt.Fprintln(errOut, line)
 		return err
 	}
 	serveErr := make(chan error, 1)
 	go func() {
-		_, err := s.ServeOnce()
+		_, err := s.ServeOnce(report)
 		serveErr <- err
 	}()
 	select {
@@ -159,9 +166,6 @@ func serveIdentitySignerOnce(ctx context.Context, out, errOut io.Writer, cfg sig
 		default:
 		}
 	case err = <-serveErr:
-	}
-	if res := s.Signed(); res != nil {
-		_, _ = fmt.Fprintln(errOut, res.Summary())
 	}
 	return err
 }

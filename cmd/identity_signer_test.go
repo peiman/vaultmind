@@ -390,3 +390,82 @@ func TestIdentitySignerCommandOnceFailsClosedOnMissingKey(t *testing.T) {
 		t.Fatal("expected fail-closed error for missing key, got nil")
 	}
 }
+
+// TestServeIdentitySignerOnceSignalAfterSignature: a signal right after the
+// signature must not lose the hash line, and the line appears exactly once.
+func TestServeIdentitySignerOnceSignalAfterSignature(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sockPath, _, errOut, done := startOnceSignerCmd(t, ctx)
+	msg := []byte(`{"agent":"mira","epoch":1}`)
+	if _, err := (&signer.Client{SocketPath: sockPath}).Sign(msg); err != nil {
+		t.Fatalf("client.Sign: %v", err)
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatalf("serveIdentitySignerOnce: %v", err)
+	}
+	sum := sha256.Sum256(msg)
+	want := fmt.Sprintf("signed once: sha256=%s bytes=%d\n", hex.EncodeToString(sum[:]), len(msg))
+	if errOut.String() != want {
+		t.Fatalf("stderr = %q, want exactly %q", errOut.String(), want)
+	}
+}
+
+// TestIdentitySignerCommandOnceReachesOnceMode drives `identity signer --once`
+// through RootCmd with a real key: the flag must select once mode, so the run
+// announces it, prints the hash, refuses a second request and exits 0.
+func TestIdentitySignerCommandOnceReachesOnceMode(t *testing.T) {
+	keyPath, pub := signerTestKey(t)
+	sockDir, err := os.MkdirTemp("", "vmsgrc")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(sockDir) })
+	sockPath := filepath.Join(sockDir, "s.sock")
+
+	type result struct {
+		out, errOut *bytes.Buffer
+		err         error
+	}
+	done := make(chan result, 1)
+	go func() {
+		out, errOut, err := runRootCmd(t, "identity", "signer", "--once",
+			"--signer-key", keyPath, "--signer-socket", sockPath)
+		done <- result{out, errOut, err}
+	}()
+	waitForSocket(t, sockPath)
+
+	canonical, err := identity.Canonicalize([]byte(`{"agent":"mira","epoch":1}`))
+	if err != nil {
+		t.Fatalf("Canonicalize: %v", err)
+	}
+	client := &signer.Client{SocketPath: sockPath}
+	sig, err := client.Sign(canonical.Bytes())
+	if err != nil {
+		t.Fatalf("client.Sign: %v", err)
+	}
+	var r result
+	select {
+	case r = <-done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("identity signer --once did not exit after its signature")
+	}
+	if r.err != nil {
+		t.Fatalf("identity signer --once: %v", r.err)
+	}
+	if !strings.Contains(r.out.String(), "(once mode: will sign ONE request)") {
+		t.Fatalf("startup line does not announce once mode: %q", r.out.String())
+	}
+	sum := sha256.Sum256(canonical.Bytes())
+	want := fmt.Sprintf("signed once: sha256=%s bytes=%d", hex.EncodeToString(sum[:]), len(canonical.Bytes()))
+	if !strings.Contains(r.errOut.String(), want) {
+		t.Fatalf("stderr %q does not contain %q", r.errOut.String(), want)
+	}
+	if ok, err := identity.VerifyCanonical(pub, canonical, sig); err != nil || !ok {
+		t.Fatalf("signature does not verify: ok=%v err=%v", ok, err)
+	}
+	if _, err := client.Sign([]byte(`{"agent":"evil","epoch":1}`)); err == nil {
+		t.Fatal("a second request was signed after identity signer --once")
+	}
+}
