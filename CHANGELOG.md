@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.27] - 2026-11-10
+
 ### Added
 
 - `vaultmind identity signer --once` signs exactly one request, prints `signed once: sha256=<hex> bytes=<n>` to stderr, removes its socket, and exits 0. Use it for a one-time signature made through a client you do not fully trust: a client could otherwise ask a running signer for two signatures, show you one and send the other. With `--once` only one signature can exist, so compare the printed hash with the sha256 of the bytes you checked. The line is written before the signature is sent, so killing the signer cannot leave a signature without its hash; if the line cannot be written, the signature is withheld. The hash is over exactly the bytes signed; the signer adds no prefix, so for `sign-envelope` these are the envelope's JCS canonical bytes. Requests that arrive during or after the first signature are refused, and the key is cleared from memory after the signature. Failed requests (wrong uid, malformed frame, policy refusal) do not count, but after 3 of them the signer exits non-zero with nothing signed. A connection that sends nothing, such as the liveness probe `vaultmind doctor` makes, is not a failure. Without `--once`, signing is unchanged, with two small differences in every mode: a connection that closes without sending anything gets no error reply, and a request header without its payload is reported as `unexpected EOF`.
@@ -3257,7 +3259,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.26...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.27...HEAD
+[0.10.27]: https://github.com/peiman/vaultmind/compare/v0.10.26...v0.10.27
 [0.10.26]: https://github.com/peiman/vaultmind/compare/v0.10.25...v0.10.26
 [0.10.25]: https://github.com/peiman/vaultmind/compare/v0.10.24...v0.10.25
 [0.10.24]: https://github.com/peiman/vaultmind/compare/v0.10.23...v0.10.24
