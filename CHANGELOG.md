@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `vaultmind identity signer --once` signs exactly one request, prints `signed once: sha256=<hex> bytes=<n>` to stderr, removes its socket, and exits 0. Use it for a one-time signature made through a client you do not fully trust: a client could otherwise ask a running signer for two signatures, show you one and send the other. With `--once` only one signature can exist, so compare the printed hash with the sha256 of the bytes you checked. The line is written before the signature is sent, so killing the signer cannot leave a signature without its hash; if the line cannot be written, the signature is withheld. The hash is over exactly the bytes signed; the signer adds no prefix, so for `sign-envelope` these are the envelope's JCS canonical bytes. Requests that arrive during or after the first signature are refused, and the key is cleared from memory after the signature. Failed requests (wrong uid, malformed frame, policy refusal) do not count, but after 3 of them the signer exits non-zero with nothing signed. A connection that sends nothing, such as the liveness probe `vaultmind doctor` makes, is not a failure. Without `--once`, signing is unchanged, with two small differences in every mode: a connection that closes without sending anything gets no error reply, and a request header without its payload is reported as `unexpected EOF`.
 
+### Changed
+
+- `docs/mesh/contractb-registry-staging.md` names the current mesh root key (since 2026-11-08) and marks the old one as retired. Its sample registry is signed by the retired root, and the doc now says so.
+
 ## [0.10.26] - 2026-11-09
 
 ### Fixed
