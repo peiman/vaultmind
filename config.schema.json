@@ -1115,6 +1115,11 @@
         },
         "identitysigner": {
           "properties": {
+            "once": {
+              "default": false,
+              "description": "Sign exactly one request, print its sha256 to stderr, then exit",
+              "type": "boolean"
+            },
             "signer_key": {
               "default": "",
               "description": "Sealed signer key path (default: XDG data dir)",
