@@ -20,6 +20,14 @@ approval needs gate_ref). from_pubkey is DERIVED, not signed. The
 transport fields (id, sig, from_pubkey, receive_ts, ioguard_verdict,
 origin_daemon) are excluded from the signed bytes.
 
+When agents.yaml names a registry file for this project and a root is pinned,
+the envelope is checked against that registry first: the sender (from_agent;
+human:<slug> with from_class human is read from the humans list) needs a live
+binding with the envelope's key_epoch, --from-pubkey must be the binding's
+key, and the signature must verify under it. Anything else is refused and
+nothing is printed. With no registry file or no pinned root it signs without
+the check. The hub is still the gate; the check only makes its refusal early.
+
 This CLI is KEYLESS: it NEVER opens the private-key file. If the signer is
 unreachable it FAILS CLOSED with an error (never a silent unsigned result).
 Anti-replay (seq high-water + nonce-unseen) is the receiving daemon's job.`,

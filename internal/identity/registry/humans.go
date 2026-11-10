@@ -94,7 +94,7 @@ func validateRegistryBindings(reg Registry) error {
 // checkSlugNoColon rejects any binding whose slug is empty or contains a colon.
 // An empty slug names no principal. A colon is the class-qualifier separator
 // used in principal ids (human:<slug>), so a slug that embeds one would be
-// silently mis-routed by envelopePrincipal.
+// silently mis-routed by envelope.Principal.
 func checkSlugNoColon(bindings []AgentBinding) error {
 	for _, b := range bindings {
 		if b.Slug == "" {
