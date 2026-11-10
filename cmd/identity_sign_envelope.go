@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
 	"github.com/peiman/vaultmind/internal/config/commands"
@@ -33,8 +34,16 @@ func runIdentitySignEnvelope(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	now := time.Now()
+	reg, ok, err := signEnvelopeRegistry(now)
+	if err != nil {
+		return err
+	}
 	client := &signer.Client{SocketPath: sockPath}
-	return identitycli.SignEnvelope(cmd.OutOrStdout(), client, envelopeJSON, fromPubKey)
+	if !ok {
+		return identitycli.SignEnvelope(cmd.OutOrStdout(), client, envelopeJSON, fromPubKey)
+	}
+	return identitycli.SignEnvelopeForBinding(cmd.OutOrStdout(), client, envelopeJSON, fromPubKey, reg, now)
 }
 
 // readEnvelopeJSON reads the envelope from --file when set, else from stdin.

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `vaultmind identity sign-envelope` checks the envelope against your registry binding before it signs. When agents.yaml names a registry file for this project and a root is pinned, it refuses an envelope whose sender has no live binding, or whose `key_epoch` is not the binding's: `envelope for "mira" has key_epoch 1, the binding has key_epoch 2`. Before, it signed whatever it was given and echoed the `key_epoch` back, and the hub then refused the message with an unclear error. It also refuses a `--from-pubkey` that is not the binding's key, and after signing it checks the signature against the binding's key; on a mismatch it prints nothing and names the key fingerprints. A `from_class` `human` envelope (`from_agent` `human:<slug>`) is checked against the humans list. A configured registry file that is missing or does not verify under the pin is an error naming the file. With no registry file or no pinned root, as in the root key ceremony, it signs exactly as before. The hub is still the gate; this check only makes its refusal clear and early.
+
 ## [0.10.27] - 2026-11-10
 
 ### Added
