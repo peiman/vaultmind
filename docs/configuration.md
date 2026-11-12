@@ -223,7 +223,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.identitysignerinstall.signer_key` | string | `` | `VAULTMIND_APP_IDENTITYSIGNERINSTALL_SIGNER_KEY` | Sealed signer key path (default: XDG data dir, per --config-path-mode) |
 | `app.identitysignerinstall.signer_socket` | string | `` | `VAULTMIND_APP_IDENTITYSIGNERINSTALL_SIGNER_SOCKET` | Signer socket path (default: XDG state dir, per --config-path-mode) |
 | `app.identitysignerinstall.name` | string | `` | `VAULTMIND_APP_IDENTITYSIGNERINSTALL_NAME` | Job name suffix (default: the key file's name without extension) |
-| `app.identitysignerinstall.print` | bool | `false` | `VAULTMIND_APP_IDENTITYSIGNERINSTALL_PRINT` | Print the LaunchAgent plist and exit without writing or loading anything |
+| `app.identitysignerinstall.print` | bool | `false` | `VAULTMIND_APP_IDENTITYSIGNERINSTALL_PRINT` | Print the launcher script and LaunchAgent plist without writing or loading anything |
 | `app.import.vault` | string | `.` | `VAULTMIND_APP_IMPORT_VAULT` | Path to vault root |
 | `app.import.dry_run` | bool | `false` | `VAULTMIND_APP_IMPORT_DRY_RUN` | Report what the import would do and write nothing |
 | `app.import.prune` | bool | `false` | `VAULTMIND_APP_IMPORT_PRUNE` | Remove imported notes whose doc is gone |
@@ -966,7 +966,7 @@ app:
     # Job name suffix (default: the key file's name without extension)
     name: 
 
-    # Print the LaunchAgent plist and exit without writing or loading anything
+    # Print the launcher script and LaunchAgent plist without writing or loading anything
     print: false
 
   identitysignkeeper:
@@ -2107,7 +2107,7 @@ export VAULTMIND_APP_IDENTITYSIGNERINSTALL_SIGNER_SOCKET=
 # Job name suffix (default: the key file's name without extension)
 export VAULTMIND_APP_IDENTITYSIGNERINSTALL_NAME=
 
-# Print the LaunchAgent plist and exit without writing or loading anything
+# Print the launcher script and LaunchAgent plist without writing or loading anything
 export VAULTMIND_APP_IDENTITYSIGNERINSTALL_PRINT=false
 
 # Path to vault root
