@@ -212,7 +212,7 @@ const (
 	KeyAppIdentitysignerinstallSignerKey     = "app.identitysignerinstall.signer_key"     // Sealed signer key path (default: XDG data dir, per --config-path-mode)
 	KeyAppIdentitysignerinstallSignerSocket  = "app.identitysignerinstall.signer_socket"  // Signer socket path (default: XDG state dir, per --config-path-mode)
 	KeyAppIdentitysignerinstallName          = "app.identitysignerinstall.name"           // Job name suffix (default: the key file's name without extension)
-	KeyAppIdentitysignerinstallPrint         = "app.identitysignerinstall.print"          // Print the LaunchAgent plist and exit without writing or loading anything
+	KeyAppIdentitysignerinstallPrint         = "app.identitysignerinstall.print"          // Print the launcher script and LaunchAgent plist without writing or loading an...
 	KeyAppImportVault                        = "app.import.vault"                         // Path to vault root
 	KeyAppImportDryRun                       = "app.import.dry_run"                       // Report what the import would do and write nothing
 	KeyAppImportPrune                        = "app.import.prune"                         // Remove imported notes whose doc is gone

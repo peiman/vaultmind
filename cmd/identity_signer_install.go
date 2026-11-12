@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -18,9 +19,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// signerInstallOS is the only platform with a supervisor this command speaks.
+// A variable so a test can run the install path (with a fake launchctl) on
+// the Linux CI runners too.
+var signerInstallOS = "darwin"
+
 const (
-	// signerInstallOS is the only platform with a supervisor this command speaks.
-	signerInstallOS = "darwin"
 	// launchctlBin is the only program runLaunchctl will execute.
 	launchctlBin = "launchctl"
 	// signerSocketDialTimeout bounds the "is a signer already serving?" probe.
@@ -28,10 +32,17 @@ const (
 
 	errSignerInstallUnsupported = "identity signer install: launchd is macOS-only (this is %s); " +
 		"run `vaultmind identity signer` under your OS supervisor (e.g. a systemd --user unit with Restart=always)"
-	signerInstalledMsg = "installed %s\n  job:   %s\n  logs:  %s\n" +
+	signerInstalledMsg = "installed %s\n  launcher: %s\n  job:      %s\n  logs:     %s\n" +
 		"  starts at login and restarts if it dies.\n" +
-		"  remove: launchctl bootout gui/%d/%s && rm %q\n"
+		"  Login Items shows: VaultMind Signer - %s\n" +
+		"  remove: launchctl bootout gui/%d/%s && rm %q %q\n"
 )
+
+// validSignerNameRE matches signer names that are safe to use as a filesystem
+// component: starts with alphanumeric, allows dots, hyphens and underscores,
+// max 64 characters. Rejects path traversal sequences (../), slashes, leading
+// dots (.hidden), and empty strings.
+var validSignerNameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 
 var identitySignerInstallCmd = MustNewCommand(commands.IdentitySignerInstallMetadata, runIdentitySignerInstall)
 
@@ -47,27 +58,48 @@ func runIdentitySignerInstall(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	if getConfigValueWithFlags[bool](cmd, "print", config.KeyAppIdentitysignerinstallPrint) {
-		body, err := signerservice.RenderPlist(spec)
-		if err != nil {
-			return err
-		}
-		_, err = cmd.OutOrStdout().Write(body)
-		return err
-	}
-	if runtime.GOOS != signerInstallOS {
-		return fmt.Errorf(errSignerInstallUnsupported, runtime.GOOS)
-	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("identity signer install: resolving home: %w", err)
+	}
+	launcherPath := signerservice.LauncherAbsPath(home, spec.Name)
+	if getConfigValueWithFlags[bool](cmd, "print", config.KeyAppIdentitysignerinstallPrint) {
+		return printSignerJob(cmd, spec, launcherPath)
+	}
+	if runtime.GOOS != signerInstallOS {
+		return fmt.Errorf(errSignerInstallUnsupported, runtime.GOOS)
 	}
 	in := signerservice.Installer{Home: home, UID: os.Getuid(), Run: runLaunchctl, SocketLive: signerSocketLive}
 	path, err := in.Install(cmd.Context(), spec)
 	if err != nil {
 		return err
 	}
-	return writeSignerInstalled(cmd.OutOrStdout(), spec, in.UID, path)
+	return writeSignerInstalled(cmd.OutOrStdout(), spec, in.UID, path, launcherPath)
+}
+
+// printSignerJob writes both the launcher script and the LaunchAgent plist to
+// w, clearly labelled, without touching the filesystem or loading anything.
+func printSignerJob(cmd *cobra.Command, spec signerservice.Spec, launcherPath string) error {
+	script, err := signerservice.RenderScript(spec)
+	if err != nil {
+		return err
+	}
+	plist, err := signerservice.RenderPlist(spec, launcherPath)
+	if err != nil {
+		return err
+	}
+	w := cmd.OutOrStdout()
+	if _, err := fmt.Fprintf(w, "=== Launcher: %s ===\n", launcherPath); err != nil {
+		return err
+	}
+	if _, err := w.Write(script); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "\n=== LaunchAgent plist: %s ===\n", signerservice.Label(spec.Name)+".plist"); err != nil {
+		return err
+	}
+	_, err = w.Write(plist)
+	return err
 }
 
 // resolveSignerServiceSpec pins every path NOW, as absolute paths, so the job
@@ -101,6 +133,11 @@ func resolveSignerServiceSpec(cmd *cobra.Command) (signerservice.Spec, error) {
 	name := getConfigValueWithFlags[string](cmd, "name", config.KeyAppIdentitysignerinstallName)
 	if name == "" {
 		name = signerservice.NameFromKeyPath(keyPath)
+	}
+	if !validSignerNameRE.MatchString(name) {
+		return signerservice.Spec{}, fmt.Errorf(
+			"signer name %q is not valid: use --name to pass a name matching ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
+			name)
 	}
 	return signerservice.Spec{
 		Name:       name,
@@ -144,9 +181,9 @@ func runLaunchctl(ctx context.Context, name string, args ...string) error {
 	return nil
 }
 
-func writeSignerInstalled(w io.Writer, s signerservice.Spec, uid int, path string) error {
+func writeSignerInstalled(w io.Writer, s signerservice.Spec, uid int, plistPath, launcherPath string) error {
 	label := signerservice.Label(s.Name)
 	logs := filepath.Join(s.LogDir, "vaultmind-signer-"+s.Name+".{out,err}.log")
-	_, err := fmt.Fprintf(w, signerInstalledMsg, label, path, logs, uid, label, path)
+	_, err := fmt.Fprintf(w, signerInstalledMsg, label, launcherPath, plistPath, logs, s.Name, uid, label, plistPath, launcherPath)
 	return err
 }
