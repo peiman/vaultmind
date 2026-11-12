@@ -235,6 +235,11 @@ tasks:
       # to replace. 1.2s.
       - task: check:validate-test
       - task: check:test-staged
+      # Same rule for the generated docs: #453 changed a flag description, the
+      # PR's check:fast passed, and main's full check went red on stale
+      # docs/configuration.md, config-template.yaml and config.schema.json
+      # (fixed by #454). ~6s.
+      - task: check:docs-drift
 
   check:deps:
     desc: Run all dependency checks
