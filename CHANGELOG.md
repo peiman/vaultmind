@@ -7,8 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `vaultmind identity sign-envelope` checks the envelope against your registry binding before it signs. When agents.yaml names a registry file for this project and a root is pinned, it refuses an envelope whose sender has no live binding, or whose `key_epoch` is not the binding's: `envelope for "mira" has key_epoch 1, the binding has key_epoch 2`. Before, it signed whatever it was given and echoed the `key_epoch` back, and the hub then refused the message with an unclear error. It also refuses a `--from-pubkey` that is not the binding's key, and after signing it checks the signature against the binding's key; on a mismatch it prints nothing and names the key fingerprints. A `from_class` `human` envelope (`from_agent` `human:<slug>`) is checked against the humans list. A configured registry file that is missing or does not verify under the pin is an error naming the file. With no registry file or no pinned root, as in the root key ceremony, it signs exactly as before. The hub is still the gate; this check only makes its refusal clear and early.
+
+## [0.10.27] - 2026-11-10
+
+### Added
+
+- `vaultmind identity signer --once` signs exactly one request, prints `signed once: sha256=<hex> bytes=<n>` to stderr, removes its socket, and exits 0. Use it for a one-time signature made through a client you do not fully trust: a client could otherwise ask a running signer for two signatures, show you one and send the other. With `--once` only one signature can exist, so compare the printed hash with the sha256 of the bytes you checked. The line is written before the signature is sent, so killing the signer cannot leave a signature without its hash; if the line cannot be written, the signature is withheld. The hash is over exactly the bytes signed; the signer adds no prefix, so for `sign-envelope` these are the envelope's JCS canonical bytes. Requests that arrive during or after the first signature are refused, and the key is cleared from memory after the signature. Failed requests (wrong uid, malformed frame, policy refusal) do not count, but after 3 of them the signer exits non-zero with nothing signed. A connection that sends nothing, such as the liveness probe `vaultmind doctor` makes, is not a failure. Without `--once`, signing is unchanged, with two small differences in every mode: a connection that closes without sending anything gets no error reply, and a request header without its payload is reported as `unexpected EOF`.
+
+### Changed
+
+- `docs/mesh/contractb-registry-staging.md` names the current mesh root key (since 2026-11-08) and marks the old one as retired. Its sample registry is signed by the retired root, and the doc now says so.
+
+## [0.10.26] - 2026-11-09
+
 ### Fixed
 
+- `vaultmind identity sign-envelope` signs envelopes that carry `from_class`, `kind`, `vouches_for` or `gate_ref`. Before, it refused them with `parse envelope JSON: json: unknown field "from_class"`, so a bridge could not sign a line that vouches for a human (for example a Discord message relayed to the mesh). Each field is optional and left out of the signed bytes when absent, so plain envelopes sign exactly as before. The envelope rules still apply: `vouches_for` needs `from_class` `bridge` and the reverse, `gate_ref` needs `kind` `approval` and the reverse, and any other unknown field is still refused.
 - `vaultmind identity fetch-registry` now says which root it pinned and where that root came from: the `--root-pubkey` flag, the environment, the config file (with its path), or the enrollment anchor (with its path). It prints `pinned root: FjAW…He8= (from config /path/config.yaml)` to stderr, and `--output-format json` reports `pinned_root`, `pinned_root_source` and `pinned_root_origin`. Before, a stale pin left only "root signature does not verify". After a root change, an old `./config.yaml`, or an enrollment anchor reached in native config mode, gave that same message with no clue which root was used. When the registry does not verify, the error now also shows the root the hub advertises at `/.well-known/vaultmind-root` (`hub_advertised_root` in JSON). If that root differs from the pin, the error says which source to update. If the pin came from the enrollment anchor, it says the anchor is stale if the network's root changed. The hub's root is shown only to explain the failure and is never trusted. In JSON mode every failure, including a missing or malformed pin, now uses the same envelope, with error code `config_missing`, `config_invalid`, `not_verified` or `fetch_failed`. `vaultmind doctor` shows the same pinned root and source in its mesh section; a `mesh_root_pubkey` set in a config file or the environment is reported as coming from there, not from the `--mesh-root-pubkey` flag.
 
 ## [0.10.25] - 2026-11-07
@@ -3246,7 +3263,9 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.25...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.27...HEAD
+[0.10.27]: https://github.com/peiman/vaultmind/compare/v0.10.26...v0.10.27
+[0.10.26]: https://github.com/peiman/vaultmind/compare/v0.10.25...v0.10.26
 [0.10.25]: https://github.com/peiman/vaultmind/compare/v0.10.24...v0.10.25
 [0.10.24]: https://github.com/peiman/vaultmind/compare/v0.10.23...v0.10.24
 [0.10.23]: https://github.com/peiman/vaultmind/compare/v0.10.22...v0.10.23
