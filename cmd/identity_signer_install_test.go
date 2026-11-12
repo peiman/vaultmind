@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"testing"
 
@@ -127,6 +128,10 @@ func TestIdentitySignerInstall_InstallsTheJob(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	keyPath := filepath.Join(t.TempDir(), "mira.key")
 	fakeLaunchctl(t, "ok", 0)
+	// launchctl is faked, so the install path runs on any OS; CI is Linux.
+	prevOS := signerInstallOS
+	signerInstallOS = runtime.GOOS
+	t.Cleanup(func() { signerInstallOS = prevOS })
 
 	buf, _, err := runRootCmd(t, "identity", "signer", "install",
 		"--signer-key", keyPath, "--signer-socket", "/tmp/vm-s.sock")

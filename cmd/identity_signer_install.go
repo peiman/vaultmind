@@ -19,9 +19,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// signerInstallOS is the only platform with a supervisor this command speaks.
+// A variable so a test can run the install path (with a fake launchctl) on
+// the Linux CI runners too.
+var signerInstallOS = "darwin"
+
 const (
-	// signerInstallOS is the only platform with a supervisor this command speaks.
-	signerInstallOS = "darwin"
 	// launchctlBin is the only program runLaunchctl will execute.
 	launchctlBin = "launchctl"
 	// signerSocketDialTimeout bounds the "is a signer already serving?" probe.
