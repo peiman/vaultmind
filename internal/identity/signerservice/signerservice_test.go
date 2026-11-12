@@ -339,3 +339,99 @@ func TestNameFromKeyPath(t *testing.T) {
 	assert.Equal(t, "mira", NameFromKeyPath("/a/b/mira.key"))
 	assert.Equal(t, "identity-signer", NameFromKeyPath("/a/identity-signer.key"))
 }
+
+// TestInstall_RejectsSymlinkedLauncherDir verifies that a symlink at the
+// launcher directory is refused — the installer must not silently follow it.
+func TestInstall_RejectsSymlinkedLauncherDir(t *testing.T) {
+	r := &recorder{}
+	in := installer(t, r, false)
+
+	// Plant a symlink where the launcher directory should live.
+	launcherDir := filepath.Dir(in.LauncherPath("mira"))
+	require.NoError(t, os.MkdirAll(filepath.Dir(launcherDir), 0o700))
+	require.NoError(t, os.Symlink("/tmp", launcherDir))
+
+	_, err := in.Install(context.Background(), spec(t))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "symlink")
+	assert.Contains(t, err.Error(), "dir")
+}
+
+// TestInstall_PropagatesRenderScriptError verifies that a spec with a relative
+// binary path is rejected by RenderScript and the error is propagated.
+func TestInstall_PropagatesRenderScriptError(t *testing.T) {
+	r := &recorder{}
+	in := installer(t, r, false)
+
+	s := spec(t)
+	s.Binary = "relative-binary" // not absolute — RenderScript rejects this
+
+	_, err := in.Install(context.Background(), s)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "absolute")
+}
+
+// TestInstall_PropagatesRenderPlistError verifies that a spec with a relative
+// log dir is rejected by RenderPlist and the error is propagated.
+func TestInstall_PropagatesRenderPlistError(t *testing.T) {
+	r := &recorder{}
+	in := installer(t, r, false)
+
+	s := spec(t)
+	s.LogDir = "relative-logs" // not absolute — RenderPlist rejects this
+
+	_, err := in.Install(context.Background(), s)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "absolute")
+}
+
+// TestInstall_WriteAtomicFails verifies that an error from writeAtomicIfChanged
+// (caused by an unwritable launcher dir) is propagated correctly.
+func TestInstall_WriteAtomicFails(t *testing.T) {
+	r := &recorder{}
+	in := installer(t, r, false)
+
+	// Create the launcher dir and then remove write permission so os.CreateTemp
+	// inside writeAtomicIfChanged fails.
+	launcherDir := filepath.Dir(in.LauncherPath("mira"))
+	require.NoError(t, os.MkdirAll(launcherDir, 0o700))
+	require.NoError(t, os.Chmod(launcherDir, 0o500))
+	t.Cleanup(func() { _ = os.Chmod(launcherDir, 0o700) })
+
+	_, err := in.Install(context.Background(), spec(t))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "writing launcher")
+}
+
+// TestInstall_PlistDirCreationFails verifies that placing a regular file at the
+// LaunchAgents path causes the dir-creation step to fail and the error propagates.
+func TestInstall_PlistDirCreationFails(t *testing.T) {
+	r := &recorder{}
+	in := installer(t, r, false)
+
+	// A file at the LaunchAgents path blocks os.MkdirAll.
+	agentsDir := filepath.Join(in.Home, launchAgentDir)
+	require.NoError(t, os.MkdirAll(filepath.Dir(agentsDir), 0o755))
+	require.NoError(t, os.WriteFile(agentsDir, []byte("block"), 0o600))
+
+	_, err := in.Install(context.Background(), spec(t))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "creating")
+}
+
+// TestInstall_PlistWriteFails verifies that an unwritable LaunchAgents directory
+// causes the plist write to fail and the error propagates.
+func TestInstall_PlistWriteFails(t *testing.T) {
+	r := &recorder{}
+	in := installer(t, r, false)
+
+	// Create the LaunchAgents dir and then remove write permission.
+	agentsDir := filepath.Join(in.Home, launchAgentDir)
+	require.NoError(t, os.MkdirAll(agentsDir, 0o755))
+	require.NoError(t, os.Chmod(agentsDir, 0o555))
+	t.Cleanup(func() { _ = os.Chmod(agentsDir, 0o755) })
+
+	_, err := in.Install(context.Background(), spec(t))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "writing")
+}

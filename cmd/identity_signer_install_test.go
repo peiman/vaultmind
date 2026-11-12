@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/identity/signerservice"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -114,6 +115,49 @@ func TestRunLaunchctl_RefusesAnyOtherProgram(t *testing.T) {
 	err := runLaunchctl(context.Background(), "sh", "-c", "true")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "refusing")
+}
+
+// TestIdentitySignerInstall_InstallsTheJob exercises the full install path
+// (without --print) using a fake launchctl so the test never touches real
+// LaunchAgents and never starts a real signer.
+func TestIdentitySignerInstall_InstallsTheJob(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	keyPath := filepath.Join(t.TempDir(), "mira.key")
+	fakeLaunchctl(t, "ok", 0)
+
+	buf, _, err := runRootCmd(t, "identity", "signer", "install",
+		"--signer-key", keyPath, "--signer-socket", "/tmp/vm-s.sock")
+	require.NoError(t, err)
+	out := buf.String()
+
+	// Installed message contains the job label and Login Items hint.
+	assert.Contains(t, out, "com.vaultmind.signer.mira")
+	assert.Contains(t, out, "VaultMind Signer - mira")
+
+	// The launcher script was written.
+	launcherPath := filepath.Join(home, "Library", "Application Support",
+		"vaultmind", "launchers", "VaultMind Signer - mira")
+	_, statErr := os.Stat(launcherPath)
+	assert.NoError(t, statErr, "launcher script must exist after install")
+}
+
+// TestPrintSignerJob_PropagatesRenderError verifies that printSignerJob returns
+// an error when the spec contains a relative binary path (rejected by RenderScript).
+func TestPrintSignerJob_PropagatesRenderError(t *testing.T) {
+	cmd := &cobra.Command{}
+	spec := signerservice.Spec{
+		Name:       "mira",
+		Binary:     "relative-binary", // not absolute — RenderScript rejects this
+		KeyPath:    "/abs/key.key",
+		SocketPath: "/abs/sock",
+		LogDir:     "/abs/logs",
+	}
+	err := printSignerJob(cmd, spec, "/abs/launchers/VaultMind Signer - mira")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "absolute")
 }
 
 func TestWriteSignerInstalled_SaysHowToRemoveIt(t *testing.T) {
