@@ -11,22 +11,27 @@ import "github.com/peiman/vaultmind/.ckeletin/pkg/config"
 var IdentitySignerInstallMetadata = config.CommandMetadata{
 	Use:   "install",
 	Short: "Run the signer under launchd: start at login, restart if it dies (macOS)",
-	Long: "Write a LaunchAgent for the custody signer and load it, so the signer starts at " +
-		"login and is restarted whenever it exits. Without this the signer is a foreground " +
-		"process nothing restarts: when it dies, every signed send fails \"signer unreachable\" " +
-		"until someone notices.\n\n" +
-		"The job launches exactly the signer you would start by hand. The binary and the " +
-		"key/socket paths are resolved NOW, with your flags and --config-path-mode, and written " +
-		"into the job as absolute paths — launchd runs with its own environment, and a default " +
-		"resolved there is not the one your shell resolves.\n\n" +
+	Long: "Write a launcher script and a LaunchAgent for the custody signer and load it, so " +
+		"the signer starts at login and is restarted whenever it exits. Without this the signer " +
+		"is a foreground process nothing restarts: when it dies, every signed send fails " +
+		"\"signer unreachable\" until someone notices.\n\n" +
+		"A per-signer launcher script is written to " +
+		"~/Library/Application Support/vaultmind/launchers/VaultMind Signer - <name>. " +
+		"The LaunchAgent plist points at this script, so macOS System Settings > Login Items " +
+		"shows \"VaultMind Signer - <name>\" instead of a row of identical \"vaultmind\" entries. " +
+		"The script execs the same signer you would start by hand.\n\n" +
+		"The binary and the key/socket paths are resolved NOW, with your flags and " +
+		"--config-path-mode, and written into the launcher as absolute paths — launchd runs " +
+		"with its own environment, and a default resolved there is not the one your shell resolves.\n\n" +
 		"Refuses while another signer is already serving the socket: the launchd copy would fail " +
 		"to bind and KeepAlive would turn that into a restart loop that looks like a running " +
 		"service. Stop the hand-started signer first.\n\n" +
 		"Rerunning replaces the job. One job per signer name (default: the key file's name), so " +
-		"two signers on one machine get two jobs.\n\n" +
+		"two signers on one machine get two jobs. Byte-identical files are not rewritten.\n\n" +
 		"EXAMPLES\n\n" +
 		"  vaultmind identity signer install --print\n" +
-		"      Show the job without installing anything — for review before it touches a machine.\n\n" +
+		"      Show the launcher script and job without installing anything — for review before\n" +
+		"      it touches a machine.\n\n" +
 		"  vaultmind identity signer install --config-path-mode native\n" +
 		"      Install for a signer whose key lives under the native (Application Support) paths.\n\n" +
 		"  vaultmind identity signer install --signer-key ~/.config/vaultmind/contractb/mira.key\n" +
@@ -46,7 +51,7 @@ func IdentitySignerInstallOptions() []config.ConfigOption {
 		{Key: "app.identitysignerinstall.signer_key", DefaultValue: "", Description: "Sealed signer key path (default: XDG data dir, per --config-path-mode)", Type: "string"},
 		{Key: "app.identitysignerinstall.signer_socket", DefaultValue: "", Description: "Signer socket path (default: XDG state dir, per --config-path-mode)", Type: "string"},
 		{Key: "app.identitysignerinstall.name", DefaultValue: "", Description: "Job name suffix (default: the key file's name without extension)", Type: "string"},
-		{Key: "app.identitysignerinstall.print", DefaultValue: false, Description: "Print the LaunchAgent plist and exit without writing or loading anything", Type: "bool"},
+		{Key: "app.identitysignerinstall.print", DefaultValue: false, Description: "Print the launcher script and LaunchAgent plist without writing or loading anything", Type: "bool"},
 	}
 }
 

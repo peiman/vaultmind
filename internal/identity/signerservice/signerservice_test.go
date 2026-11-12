@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,51 +30,84 @@ func spec(t *testing.T) Spec {
 	}
 }
 
-// The job must launch exactly the signer the operator would start by hand:
-// absolute binary, and the key/socket passed EXPLICITLY. Relying on defaults
-// inside launchd would resolve them under launchd's environment, not the
-// operator's — which is how a native-path-mode signer would quietly come up on
-// the XDG paths, serving a socket nobody dials.
-func TestRenderPlist_LaunchesTheExactSignerWithExplicitPaths(t *testing.T) {
-	out, err := RenderPlist(spec(t))
-	require.NoError(t, err)
-	p := string(out)
+// launcherPath returns the expected launcher path for the spec helper's "mira"
+// signer inside a given home directory.
+func launcherPathFor(home string) string {
+	return LauncherAbsPath(home, "mira")
+}
 
-	for _, want := range []string{
-		"<string>" + Label("mira") + "</string>",
-		"<string>/Users/x/go/bin/vaultmind</string>",
-		"<string>identity</string>", "<string>signer</string>",
-		"<string>--signer-key</string>",
-		"<string>/Users/x/Library/Application Support/vaultmind/identity-signer.key</string>",
-		"<string>--signer-socket</string>",
-		"<string>/Users/x/Library/Application Support/vaultmind/identity-signer.sock</string>",
+// TestLauncherAbsPath_PathFormation verifies the launcher lives in the expected
+// Application Support subdirectory and is named after the signer.
+func TestLauncherAbsPath_PathFormation(t *testing.T) {
+	p := LauncherAbsPath("/Users/x", "daana-mira")
+	assert.Equal(t, "/Users/x/Library/Application Support/vaultmind/launchers/VaultMind Signer - daana-mira", p)
+}
+
+// TestRenderScript_ValidSyntaxForPaths verifies that a path with an embedded
+// space and one with an embedded single quote each produce a syntactically
+// valid shell script (sh -n parses it cleanly).
+func TestRenderScript_ValidSyntaxForPaths(t *testing.T) {
+	for name, mutate := range map[string]func(*Spec){
+		"space in key":  func(s *Spec) { s.KeyPath = "/Users/x/Application Support/key.key" },
+		"quote in key":  func(s *Spec) { s.KeyPath = "/Users/x/it's/key.key" },
+		"space in sock": func(s *Spec) { s.SocketPath = "/Users/x/Application Support/s.sock" },
 	} {
-		assert.Contains(t, p, want)
+		t.Run(name, func(t *testing.T) {
+			s := spec(t)
+			mutate(&s)
+			script, err := RenderScript(s)
+			require.NoError(t, err)
+
+			f := filepath.Join(t.TempDir(), "launcher.sh")
+			require.NoError(t, os.WriteFile(f, script, 0o755))
+			out, err := exec.Command("sh", "-n", f).CombinedOutput()
+			require.NoError(t, err, "sh -n: %s", out)
+		})
 	}
 }
 
-// Restart-on-death is the entire point. Without KeepAlive a crash is the same
-// outage the reset was.
-func TestRenderPlist_StartsAtLoginAndRestartsOnDeath(t *testing.T) {
-	out, err := RenderPlist(spec(t))
+// TestRenderScript_ExecArgvRoundTrips verifies that POSIX-quoted exec lines
+// reproduce the original paths in argv when the script is run. Uses a fake
+// binary that prints each argument on its own line.
+func TestRenderScript_ExecArgvRoundTrips(t *testing.T) {
+	dir := t.TempDir()
+	fakeBin := filepath.Join(dir, "print-args")
+	require.NoError(t, os.WriteFile(fakeBin, []byte("#!/bin/sh\nfor a in \"$@\"; do printf '%s\\n' \"$a\"; done\n"), 0o755))
+
+	// key path with an embedded space AND an embedded single quote — both in one run.
+	keyPath := "/Users/x/Application Support/key's vault/key.key"
+	sockPath := "/tmp/vaultmind.sock"
+
+	s := Spec{
+		Name:       "test",
+		Binary:     fakeBin,
+		KeyPath:    keyPath,
+		SocketPath: sockPath,
+		LogDir:     "/tmp",
+	}
+	script, err := RenderScript(s)
 	require.NoError(t, err)
-	p := string(out)
-	assert.Contains(t, p, "<key>RunAtLoad</key><true/>")
-	assert.Contains(t, p, "<key>KeepAlive</key><true/>")
+
+	scriptPath := filepath.Join(dir, "launcher.sh")
+	require.NoError(t, os.WriteFile(scriptPath, script, 0o755))
+
+	// Syntax check first.
+	syntaxOut, syntaxErr := exec.Command("sh", "-n", scriptPath).CombinedOutput()
+	require.NoError(t, syntaxErr, "sh -n: %s", syntaxOut)
+
+	// Run the script; exec replaces the shell with fakeBin.
+	out, err := exec.Command("sh", scriptPath).Output()
+	require.NoError(t, err)
+
+	got := strings.Split(strings.TrimRight(string(out), "\n"), "\n")
+	want := []string{"identity", "signer", "--signer-key", keyPath, "--signer-socket", sockPath}
+	require.Equal(t, want, got, "exec argv must round-trip through POSIX quoting")
 }
 
-// A path is data, not markup. An ampersand in a home directory must not
-// produce a plist launchd rejects — or one that means something else.
-func TestRenderPlist_EscapesPaths(t *testing.T) {
-	s := spec(t)
-	s.KeyPath = "/Users/a&b/<k>.key"
-	out, err := RenderPlist(s)
-	require.NoError(t, err)
-	assert.Contains(t, string(out), "/Users/a&amp;b/&lt;k&gt;.key")
-	assert.NotContains(t, string(out), "a&b/<k>")
-}
-
-func TestRenderPlist_RejectsRelativePaths(t *testing.T) {
+// TestRenderScript_RejectsRelativePaths verifies that relative binary/key/socket
+// paths are rejected: launchd runs with its own environment and would resolve
+// them wrongly.
+func TestRenderScript_RejectsRelativePaths(t *testing.T) {
 	for name, mutate := range map[string]func(*Spec){
 		"binary": func(s *Spec) { s.Binary = "vaultmind" },
 		"key":    func(s *Spec) { s.KeyPath = "k.key" },
@@ -81,7 +116,69 @@ func TestRenderPlist_RejectsRelativePaths(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			s := spec(t)
 			mutate(&s)
-			_, err := RenderPlist(s)
+			_, err := RenderScript(s)
+			require.Error(t, err, "launchd has no working directory worth trusting")
+		})
+	}
+}
+
+// TestRenderPlist_ArgvIsLauncherPath verifies that the plist's ProgramArguments
+// has exactly one element — the launcher path — so macOS Login Items shows the
+// launcher's name instead of "vaultmind".
+func TestRenderPlist_ArgvIsLauncherPath(t *testing.T) {
+	launcher := "/Users/x/Library/Application Support/vaultmind/launchers/VaultMind Signer - mira"
+	out, err := RenderPlist(spec(t), launcher)
+	require.NoError(t, err)
+	p := string(out)
+
+	// ProgramArguments has exactly one element: the launcher path.
+	assert.Contains(t, p, "    <string>"+launcher+"</string>")
+
+	// The binary and original sub-command args are NOT in the plist; they live
+	// in the launcher script so the plist stays readable as a job description.
+	assert.NotContains(t, p, "<string>"+spec(t).Binary+"</string>")
+	assert.NotContains(t, p, "<string>--signer-key</string>")
+	assert.NotContains(t, p, "<string>--signer-socket</string>")
+
+	// Every other plist key is still present.
+	assert.Contains(t, p, "<string>"+Label("mira")+"</string>")
+	assert.Contains(t, p, "<key>KeepAlive</key><true/>")
+	assert.Contains(t, p, "<key>RunAtLoad</key><true/>")
+}
+
+// Restart-on-death is the entire point. Without KeepAlive a crash is the same
+// outage the reset was.
+func TestRenderPlist_StartsAtLoginAndRestartsOnDeath(t *testing.T) {
+	launcher := launcherPathFor("/Users/x")
+	out, err := RenderPlist(spec(t), launcher)
+	require.NoError(t, err)
+	p := string(out)
+	assert.Contains(t, p, "<key>RunAtLoad</key><true/>")
+	assert.Contains(t, p, "<key>KeepAlive</key><true/>")
+}
+
+// A path is data, not markup. An ampersand in the launcher path must not
+// produce a plist launchd rejects — or one that means something else.
+func TestRenderPlist_EscapesPaths(t *testing.T) {
+	launcher := "/Users/a&b/launchers/<VaultMind Signer - mira>"
+	out, err := RenderPlist(spec(t), launcher)
+	require.NoError(t, err)
+	assert.Contains(t, string(out), "/Users/a&amp;b/launchers/&lt;VaultMind Signer - mira&gt;")
+	assert.NotContains(t, string(out), "a&b/")
+}
+
+// TestRenderPlist_RejectsRelativePaths verifies that a relative launcher path
+// or log dir is rejected.
+func TestRenderPlist_RejectsRelativePaths(t *testing.T) {
+	for name, mutate := range map[string]func(*Spec, *string){
+		"launcher": func(_ *Spec, lp *string) { *lp = "launchers/VaultMind Signer - mira" },
+		"log dir":  func(s *Spec, _ *string) { s.LogDir = "Library/Logs" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			s := spec(t)
+			launcher := "/abs/launchers/VaultMind Signer - mira"
+			mutate(&s, &launcher)
+			_, err := RenderPlist(s, launcher)
 			require.Error(t, err, "launchd has no working directory worth trusting")
 		})
 	}
@@ -125,6 +222,78 @@ func TestInstall_WritesThePlistAndBootstrapsIt(t *testing.T) {
 	require.NotEmpty(t, r.calls)
 	last := r.calls[len(r.calls)-1]
 	assert.Equal(t, []string{"launchctl", "bootstrap", "gui/501", path}, last)
+
+	// Launcher is also written at the correct path with the correct permissions.
+	launcherInfo, err := os.Stat(in.LauncherPath("mira"))
+	require.NoError(t, err, "launcher script must be written alongside the plist")
+	assert.Equal(t, os.FileMode(0o755), launcherInfo.Mode().Perm())
+}
+
+// TestInstall_WritesLauncherScript verifies that the launcher script contains
+// the binary, signer sub-command and key/socket paths.
+func TestInstall_WritesLauncherScript(t *testing.T) {
+	r := &recorder{}
+	in := installer(t, r, false)
+
+	_, err := in.Install(context.Background(), spec(t))
+	require.NoError(t, err)
+
+	content, err := os.ReadFile(in.LauncherPath("mira"))
+	require.NoError(t, err)
+	body := string(content)
+	assert.Contains(t, body, "#!/bin/sh")
+	assert.Contains(t, body, spec(t).Binary)
+	assert.Contains(t, body, spec(t).KeyPath)
+	assert.Contains(t, body, spec(t).SocketPath)
+}
+
+// TestInstall_SymlinkAtLauncherPathRefused verifies that a symlink at the
+// target launcher path is refused — the installer must not silently follow it.
+func TestInstall_SymlinkAtLauncherPathRefused(t *testing.T) {
+	r := &recorder{}
+	in := installer(t, r, false)
+
+	// Pre-create the launcher dir and plant a symlink at the launcher path.
+	launcherPath := in.LauncherPath("mira")
+	require.NoError(t, os.MkdirAll(filepath.Dir(launcherPath), 0o700))
+	require.NoError(t, os.Symlink("/dev/null", launcherPath))
+
+	_, err := in.Install(context.Background(), spec(t))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "symlink")
+}
+
+// TestInstall_SecondInstallIsNoopOnIdenticalFiles verifies that a re-run with
+// the same spec does not rewrite byte-identical files; the job reload still
+// happens (behaviour unchanged from before the launcher feature).
+func TestInstall_SecondInstallIsNoopOnIdenticalFiles(t *testing.T) {
+	r := &recorder{}
+	in := installer(t, r, false)
+
+	_, err := in.Install(context.Background(), spec(t))
+	require.NoError(t, err)
+
+	launcherPath := in.LauncherPath("mira")
+	plistPath := in.PlistPath("mira")
+
+	launcherMtime := fileMtime(t, launcherPath)
+	plistMtime := fileMtime(t, plistPath)
+
+	// Brief pause so a rewrite would produce a newer mtime.
+	time.Sleep(5 * time.Millisecond)
+
+	_, err = in.Install(context.Background(), spec(t))
+	require.NoError(t, err)
+
+	assert.Equal(t, launcherMtime, fileMtime(t, launcherPath), "launcher must not be rewritten when byte-identical")
+	assert.Equal(t, plistMtime, fileMtime(t, plistPath), "plist must not be rewritten when byte-identical")
+}
+
+func fileMtime(t *testing.T, path string) time.Time {
+	t.Helper()
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+	return info.ModTime()
 }
 
 // Re-running install must replace a loaded job, not fail with "already loaded".

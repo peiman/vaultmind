@@ -15,36 +15,52 @@ import (
 )
 
 // --print is the review path: an operator installing onto someone else's
-// machine shows the job first. It must write NOTHING and load NOTHING.
+// machine shows both the launcher script and the plist before anything touches
+// the filesystem. It must write NOTHING and load NOTHING.
 func TestIdentitySignerInstall_PrintShowsTheJobAndTouchesNothing(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	keyPath := filepath.Join(t.TempDir(), "dabir.key")
 
 	buf, _, err := runRootCmd(t, "identity", "signer", "install", "--print",
 		"--signer-key", keyPath, "--signer-socket", "/tmp/vm-s.sock")
 	require.NoError(t, err)
 	out := buf.String()
+
+	// Launcher section: clearly labelled, contains the script.
+	assert.Contains(t, out, "=== Launcher", "output must include a labelled launcher section")
+	assert.Contains(t, out, "#!/bin/sh", "output must include the launcher script")
+	assert.Contains(t, out, keyPath, "key path appears in the launcher script")
+
+	// Plist section: clearly labelled, contains the job definition.
+	assert.Contains(t, out, "=== LaunchAgent", "output must include a labelled plist section")
 	assert.Contains(t, out, "<string>com.vaultmind.signer.dabir</string>",
 		"the job is named after the key so two signers get two jobs")
-	assert.Contains(t, out, "<string>"+keyPath+"</string>")
-	assert.Contains(t, out, "<string>/tmp/vm-s.sock</string>")
 	assert.Contains(t, out, "<key>KeepAlive</key><true/>")
 
+	// Nothing related to the signer job may be written.
 	_, err = os.Stat(filepath.Join(home, "Library", "LaunchAgents"))
-	assert.True(t, os.IsNotExist(err), "--print must not write a job")
+	assert.True(t, os.IsNotExist(err), "--print must not write a plist")
+	_, err = os.Stat(filepath.Join(home, "Library", "Application Support", "vaultmind", "launchers"))
+	assert.True(t, os.IsNotExist(err), "--print must not write a launcher")
 }
 
 // Relative paths are pinned to absolute at install time: launchd would resolve
 // them against its own working directory.
 func TestResolveSignerServiceSpec_PinsAbsolutePaths(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Chdir(t.TempDir())
 	buf, _, err := runRootCmd(t, "identity", "signer", "install", "--print",
 		"--signer-key", "rel.key", "--signer-socket", "rel.sock")
 	require.NoError(t, err)
 	wd, err := os.Getwd()
 	require.NoError(t, err)
-	assert.Contains(t, buf.String(), "<string>"+filepath.Join(wd, "rel.key")+"</string>")
+	// The absolute path appears in the launcher script.
+	assert.Contains(t, buf.String(), filepath.Join(wd, "rel.key"))
+	// The bare relative form does not appear in the plist.
 	assert.NotContains(t, buf.String(), "<string>rel.key</string>")
 }
 
@@ -103,7 +119,9 @@ func TestRunLaunchctl_RefusesAnyOtherProgram(t *testing.T) {
 func TestWriteSignerInstalled_SaysHowToRemoveIt(t *testing.T) {
 	buf := new(bytes.Buffer)
 	s := signerservice.Spec{Name: "mira", LogDir: "/L"}
-	require.NoError(t, writeSignerInstalled(buf, s, 501, "/H/job.plist"))
+	launcherPath := "/H/launchers/VaultMind Signer - mira"
+	require.NoError(t, writeSignerInstalled(buf, s, 501, "/H/job.plist", launcherPath))
 	assert.Contains(t, buf.String(), "launchctl bootout gui/501/com.vaultmind.signer.mira")
 	assert.Contains(t, buf.String(), "restarts if it dies")
+	assert.Contains(t, buf.String(), launcherPath, "remove instructions include the launcher path")
 }
