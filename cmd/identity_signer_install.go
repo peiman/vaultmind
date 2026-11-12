@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -33,6 +34,12 @@ const (
 		"  Login Items shows: VaultMind Signer - %s\n" +
 		"  remove: launchctl bootout gui/%d/%s && rm %q %q\n"
 )
+
+// validSignerNameRE matches signer names that are safe to use as a filesystem
+// component: starts with alphanumeric, allows dots, hyphens and underscores,
+// max 64 characters. Rejects path traversal sequences (../), slashes, leading
+// dots (.hidden), and empty strings.
+var validSignerNameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 
 var identitySignerInstallCmd = MustNewCommand(commands.IdentitySignerInstallMetadata, runIdentitySignerInstall)
 
@@ -123,6 +130,11 @@ func resolveSignerServiceSpec(cmd *cobra.Command) (signerservice.Spec, error) {
 	name := getConfigValueWithFlags[string](cmd, "name", config.KeyAppIdentitysignerinstallName)
 	if name == "" {
 		name = signerservice.NameFromKeyPath(keyPath)
+	}
+	if !validSignerNameRE.MatchString(name) {
+		return signerservice.Spec{}, fmt.Errorf(
+			"signer name %q is not valid: use --name to pass a name matching ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
+			name)
 	}
 	return signerservice.Spec{
 		Name:       name,

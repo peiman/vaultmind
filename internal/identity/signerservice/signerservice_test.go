@@ -331,6 +331,47 @@ func TestInstall_ABootstrapFailureIsReported(t *testing.T) {
 	assert.True(t, strings.Contains(err.Error(), "bootstrap"))
 }
 
+// TestWriteFileIfChanged_FixesModeWhenBytesMatch verifies that writeFileIfChanged
+// corrects a wrong file mode even when the content is byte-identical. Without
+// this fix, a file with correct bytes but wrong mode (e.g. 0600 instead of
+// 0644) would be silently left with the wrong permissions.
+func TestWriteFileIfChanged_FixesModeWhenBytesMatch(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.plist")
+	content := []byte("content")
+
+	// Write with wrong mode first.
+	require.NoError(t, os.WriteFile(path, content, 0o600))
+
+	// writeFileIfChanged with correct mode: bytes match, but mode must be fixed.
+	require.NoError(t, writeFileIfChanged(path, content, 0o644))
+
+	fi, err := os.Stat(path)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o644), fi.Mode().Perm(),
+		"mode must be corrected even when bytes are identical")
+}
+
+// TestWriteAtomicIfChanged_FixesModeWhenBytesMatch verifies that
+// writeAtomicIfChanged corrects a wrong file mode even when the content is
+// byte-identical.
+func TestWriteAtomicIfChanged_FixesModeWhenBytesMatch(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "launcher")
+	content := []byte("content")
+
+	// Write with wrong mode first.
+	require.NoError(t, os.WriteFile(path, content, 0o600))
+
+	// writeAtomicIfChanged with correct mode: bytes match, but mode must be fixed.
+	require.NoError(t, writeAtomicIfChanged(dir, path, content, 0o755))
+
+	fi, err := os.Stat(path)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o755), fi.Mode().Perm(),
+		"mode must be corrected even when bytes are identical")
+}
+
 func TestLabel_IsStableAndNamespaced(t *testing.T) {
 	assert.Equal(t, "com.vaultmind.signer.mira", Label("mira"))
 }
@@ -417,6 +458,25 @@ func TestInstall_PlistDirCreationFails(t *testing.T) {
 	_, err := in.Install(context.Background(), spec(t))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "creating")
+}
+
+// TestInstall_RefusesUnsafeLauncherDirPerms verifies that a pre-existing launcher
+// directory with group- or other-writable bits (0777) is refused: an attacker
+// who can write there could replace the launcher before launchd runs it.
+func TestInstall_RefusesUnsafeLauncherDirPerms(t *testing.T) {
+	r := &recorder{}
+	in := installer(t, r, false)
+
+	launcherDir := filepath.Dir(in.LauncherPath("mira"))
+	require.NoError(t, os.MkdirAll(launcherDir, 0o700))
+	// Explicitly set group/other-writable bits; MkdirAll alone is masked by umask.
+	require.NoError(t, os.Chmod(launcherDir, 0o777))
+	t.Cleanup(func() { _ = os.Chmod(launcherDir, 0o700) })
+
+	_, err := in.Install(context.Background(), spec(t))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "permissions",
+		"error must mention permissions so the operator knows what to fix")
 }
 
 // TestInstall_PlistWriteFails verifies that an unwritable LaunchAgents directory

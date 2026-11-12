@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 const (
@@ -165,6 +166,12 @@ func (i Installer) Install(ctx context.Context, s Spec) (string, error) {
 	if err := os.MkdirAll(launcherDir, launcherDirPerm); err != nil {
 		return "", fmt.Errorf("signer service: creating launcher dir %s: %w", launcherDir, err)
 	}
+	// Refuse a launcher dir we don't own or that group/others can write: an
+	// attacker with write access there could replace the launcher before launchd
+	// runs it. MkdirAll does not fix an existing dir's permissions.
+	if err := checkLauncherDir(launcherDir); err != nil {
+		return "", err
+	}
 	if isSymlink(launcherPath) {
 		return "", fmt.Errorf("signer service: launcher path %q is a symlink — refusing to follow it", launcherPath)
 	}
@@ -208,8 +215,13 @@ func isSymlink(path string) bool {
 // writeAtomicIfChanged writes content to path via a temp file in dir only when
 // the existing content differs. The temp file is renamed into place so readers
 // never see a partial write, and it is cleaned up on any error before the rename.
+// When the bytes are already identical it still checks and corrects the mode.
 func writeAtomicIfChanged(dir, path string, content []byte, perm os.FileMode) error {
-	if existing, err := os.ReadFile(path); err == nil && bytes.Equal(existing, content) { //nolint:gosec // G304: path is under the caller-controlled Home directory
+	if existing, err := os.ReadFile(path); err == nil && bytes.Equal(existing, content) { //nolint:gosec // G304: path is under the caller-controlled Home directory // nosemgrep: go-path-traversal
+		// bytes match — but perm might be wrong; fix it without rewriting
+		if fi, statErr := os.Stat(path); statErr == nil && fi.Mode().Perm() != perm {
+			return os.Chmod(path, perm)
+		}
 		return nil
 	}
 	tmp, err := os.CreateTemp(dir, ".launcher-*")
@@ -231,9 +243,33 @@ func writeAtomicIfChanged(dir, path string, content []byte, perm os.FileMode) er
 	return os.Rename(tmpPath, path)
 }
 
+// checkLauncherDir returns an error if launcherDir is not owned by the current
+// user or has group/other write bits set. Called after MkdirAll because that
+// call does not change the permissions of an already-existing directory.
+func checkLauncherDir(launcherDir string) error {
+	fi, err := os.Lstat(launcherDir)
+	if err != nil {
+		return fmt.Errorf("signer service: checking launcher dir %q: %w", launcherDir, err)
+	}
+	if st, ok := fi.Sys().(*syscall.Stat_t); ok && st.Uid != uint32(os.Getuid()) { //nolint:gosec // G115: uid is non-negative; uint32 conversion is intentional
+		return fmt.Errorf("signer service: launcher dir %q is owned by uid %d, not the current user (%d) — refusing",
+			launcherDir, st.Uid, os.Getuid())
+	}
+	if fi.Mode()&0o022 != 0 {
+		return fmt.Errorf("signer service: launcher dir %q has unsafe permissions %04o — group/others must not be writable",
+			launcherDir, fi.Mode().Perm())
+	}
+	return nil
+}
+
 // writeFileIfChanged writes content to path only when the existing content differs.
+// When the bytes are already identical it still checks and corrects the mode.
 func writeFileIfChanged(path string, content []byte, perm os.FileMode) error {
-	if existing, err := os.ReadFile(path); err == nil && bytes.Equal(existing, content) { //nolint:gosec // G304: path is under the caller-controlled Home directory
+	if existing, err := os.ReadFile(path); err == nil && bytes.Equal(existing, content) { //nolint:gosec // G304: path is under the caller-controlled Home directory // nosemgrep: go-path-traversal
+		// bytes match — but perm might be wrong; fix it without rewriting
+		if fi, statErr := os.Stat(path); statErr == nil && fi.Mode().Perm() != perm {
+			return os.Chmod(path, perm)
+		}
 		return nil
 	}
 	if err := os.WriteFile(path, content, perm); err != nil {

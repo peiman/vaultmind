@@ -60,7 +60,6 @@ rules:
         - internal/index/indexer.go  # Reads vault files during indexing (user-provided vault path)
         - internal/mutation/mutator.go  # Reads/writes vault note files during mutation (user-provided vault path)
         - internal/marker/render.go  # Reads/writes vault note files and section templates (user-provided vault path)
-        - internal/identity/signerservice/signerservice.go  # Reads existing launcher/plist for idempotency check; paths are under the caller-controlled Home directory
         - internal/plan/executor.go  # Reads vault note files for backup/rollback (user-provided vault path, validated by safePath)
         - internal/fix/fix.go  # Reads vault note files during frontmatter fix walk (paths from filepath.WalkDir under user-provided vault)
         - internal/testvault/  # Test-only helper; paths are controlled by test code (t.TempDir)

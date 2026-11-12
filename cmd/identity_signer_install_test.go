@@ -160,6 +160,58 @@ func TestPrintSignerJob_PropagatesRenderError(t *testing.T) {
 	assert.Contains(t, err.Error(), "absolute")
 }
 
+// TestResolveSignerServiceSpec_RejectsInvalidName verifies that names containing
+// path separators or other unsafe characters are refused before any filesystem
+// operation: today --name ../../x escapes the launchers dir through filepath.Join.
+func TestResolveSignerServiceSpec_RejectsInvalidName(t *testing.T) {
+	cases := []struct {
+		desc    string
+		flag    string // non-empty: pass as --name; empty: derive from keyPath
+		keyPath string // non-empty basename: use as the key filename
+	}{
+		{desc: "path traversal", flag: "../x"},
+		{desc: "slash in name", flag: "a/b"},
+		{desc: "leading dot", flag: ".hidden"},
+		// ".key" → NameFromKeyPath → "" (strip the only extension, leaving empty)
+		{desc: "empty derived name", keyPath: ".key"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			t.Setenv("XDG_DATA_HOME", t.TempDir())
+			t.Setenv("XDG_STATE_HOME", t.TempDir())
+			dir := t.TempDir()
+			base := "k.key"
+			if tc.keyPath != "" {
+				base = tc.keyPath
+			}
+			kp := filepath.Join(dir, base)
+			args := []string{
+				"identity", "signer", "install", "--print",
+				"--signer-key", kp, "--signer-socket", "/tmp/vm-s.sock",
+			}
+			if tc.flag != "" {
+				args = append(args, "--name", tc.flag)
+			}
+			_, _, err := runRootCmd(t, args...)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "--name",
+				"error must name the --name flag so the operator knows how to fix it")
+		})
+	}
+}
+
+// TestResolveSignerServiceSpec_AcceptsValidName verifies that a name matching
+// the allowed pattern is not rejected.
+func TestResolveSignerServiceSpec_AcceptsValidName(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	keyPath := filepath.Join(t.TempDir(), "k.key")
+	_, _, err := runRootCmd(t, "identity", "signer", "install", "--print",
+		"--name", "daana-mira",
+		"--signer-key", keyPath, "--signer-socket", "/tmp/vm-s.sock")
+	require.NoError(t, err)
+}
+
 func TestWriteSignerInstalled_SaysHowToRemoveIt(t *testing.T) {
 	buf := new(bytes.Buffer)
 	s := signerservice.Spec{Name: "mira", LogDir: "/L"}
