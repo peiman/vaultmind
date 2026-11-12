@@ -1142,7 +1142,7 @@
             },
             "print": {
               "default": false,
-              "description": "Print the LaunchAgent plist and exit without writing or loading anything",
+              "description": "Print the launcher script and LaunchAgent plist without writing or loading anything",
               "type": "boolean"
             },
             "signer_key": {

@@ -2,18 +2,18 @@ module github.com/peiman/vaultmind
 
 go 1.27.0
 
-toolchain go1.27.3
+toolchain go1.27.4
 
 require (
 	codeberg.org/readeck/go-readability/v2 v2.1.3
 	filippo.io/edwards25519 v1.2.0
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.2
-	github.com/bep/imagemeta v1.1.0
+	github.com/bep/imagemeta v1.1.1
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/go-git/go-billy/v5 v5.9.2
 	github.com/go-git/go-git/v5 v5.19.3
-	github.com/gomlx/go-huggingface v0.4.17
+	github.com/gomlx/go-huggingface v0.4.26
 	github.com/gowebpki/jcs v1.0.2
 	github.com/klippa-app/go-pdfium v1.21.4
 	github.com/knights-analytics/hugot v0.8.5
@@ -28,7 +28,7 @@ require (
 	github.com/sergi/go-diff v1.4.0
 	github.com/spf13/cast v1.10.0
 	github.com/spf13/cobra v1.10.2
-	github.com/spf13/pflag v1.0.10
+	github.com/spf13/pflag v1.1.0
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.12.1
 	github.com/temoto/robotstxt v1.1.2
@@ -71,12 +71,12 @@ require (
 	github.com/gofrs/flock v0.13.1 // indirect
 	github.com/gogs/chardet v0.0.0-20211120154057-b7413eaefb8f // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
-	github.com/gomlx/compute v0.1.16 // indirect
-	github.com/gomlx/compute-onnx v0.1.15 // indirect
+	github.com/gomlx/compute v0.1.24 // indirect
+	github.com/gomlx/compute-onnx v0.1.23 // indirect
 	github.com/gomlx/exceptions v0.0.3 // indirect
-	github.com/gomlx/go-xla v0.4.16 // indirect
-	github.com/gomlx/gomlx v0.28.19 // indirect
-	github.com/gomlx/onnx-gomlx v0.5.16 // indirect
+	github.com/gomlx/go-xla v0.4.24 // indirect
+	github.com/gomlx/gomlx v0.28.28 // indirect
+	github.com/gomlx/onnx-gomlx v0.5.21 // indirect
 	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect

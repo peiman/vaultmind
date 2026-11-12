@@ -596,7 +596,7 @@ app:
     # Job name suffix (default: the key file's name without extension)
     name: 
 
-    # Print the LaunchAgent plist and exit without writing or loading anything
+    # Print the launcher script and LaunchAgent plist without writing or loading anything
     print: false
 
   identitysignkeeper:
