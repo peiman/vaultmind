@@ -51,20 +51,31 @@ func loadOwnSessionRegistry(root ed25519.PublicKey, now time.Time) (registry.Reg
 	if path == "" {
 		return registry.Registry{}, fmt.Errorf("%s", identitycli.ErrSessionNoRegistry)
 	}
+	reg, err := readOwnRegistry(path, root, now)
+	if err != nil {
+		return registry.Registry{}, fmt.Errorf("%s: %w", identitycli.ErrSessionRegistry, err)
+	}
+	return reg, nil
+}
+
+// readOwnRegistry reads the registry file agents.yaml names for this project,
+// then parses and verifies it under root with this project's staleness bound.
+// sign-session and sign-envelope both load their registry through it.
+func readOwnRegistry(path string, root ed25519.PublicKey, now time.Time) (registry.Registry, error) {
 	// path comes from the operator's agents.yaml, the same file doctor reads.
 	// #nosec G304 G703
 	// nosemgrep: go-path-traversal
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return registry.Registry{}, fmt.Errorf("%s: %w", identitycli.ErrSessionRegistry, err)
+		return registry.Registry{}, err
 	}
 	env, err := registry.ParseDistribution(raw)
 	if err != nil {
-		return registry.Registry{}, fmt.Errorf("%s: %w", identitycli.ErrSessionRegistry, err)
+		return registry.Registry{}, err
 	}
 	reg, _, err := registry.VerifyAndLoad(root, env, 0, now, ownSessionMaxStaleness())
 	if err != nil {
-		return registry.Registry{}, fmt.Errorf("%s: %w", identitycli.ErrSessionRegistry, err)
+		return registry.Registry{}, err
 	}
 	return reg, nil
 }

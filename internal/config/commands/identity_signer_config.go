@@ -20,6 +20,25 @@ restarts on exit). It FAILS CLOSED: a missing/unreadable key, a bind failure, or
 empty uid allowlist refuses to start with a non-zero exit and prints nothing
 sensitive.
 
+ONE SIGNATURE ONLY (--once): sign exactly one request, print to stderr
+
+    signed once: sha256=<lowercase hex> bytes=<n>
+
+then close the socket and exit 0. The line is written BEFORE the signature is
+sent, so a signature never exists without its hash; if the line cannot be
+written, the signature is withheld and the signer exits non-zero. The hash is
+over exactly the bytes that were signed. The signer signs with pure Ed25519
+and adds no prefix or domain separation, so these are the bytes the client
+sent: for sign-envelope, the envelope's JCS canonical bytes. A verifier
+recomputes sha256 over those canonical bytes and compares. Because only one
+signature can exist, a matching hash proves the signature made is over the
+bytes you checked. Requests that arrive while the first is being signed, or
+after it, are refused. Failed requests (wrong uid, malformed frame, policy
+refusal) produce no signature and do not count, but after 3 of them the signer
+gives up, signs nothing, and exits non-zero. A connection that closes without
+sending anything (doctor's liveness probe) is not a failure. Stopped by
+SIGINT/SIGTERM before a signature, it exits 0 and prints no hash.
+
 DEV-INTERIM: the signer runs as the SAME uid as the CLI today. This is the
 custody ARCHITECTURE, not real isolation — that needs a dedicated service uid +
 launchd + sandbox + Secure-Enclave key wrap (deferred).`,
@@ -27,6 +46,7 @@ launchd + sandbox + Secure-Enclave key wrap (deferred).`,
 	FlagOverrides: map[string]string{
 		"app.identitysigner.signer_key":    "signer-key",
 		"app.identitysigner.signer_socket": "signer-socket",
+		"app.identitysigner.once":          "once",
 	},
 }
 
@@ -35,6 +55,7 @@ func IdentitySignerOptions() []config.ConfigOption {
 	return []config.ConfigOption{
 		{Key: "app.identitysigner.signer_key", DefaultValue: "", Description: "Sealed signer key path (default: XDG data dir)", Type: "string"},
 		{Key: "app.identitysigner.signer_socket", DefaultValue: "", Description: "Signer socket path (default: XDG state dir)", Type: "string"},
+		{Key: "app.identitysigner.once", DefaultValue: false, Description: "Sign exactly one request, print its sha256 to stderr, then exit", Type: "bool"},
 	}
 }
 

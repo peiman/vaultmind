@@ -583,6 +583,9 @@ app:
     # Signer socket path (default: XDG state dir)
     signer_socket: 
 
+    # Sign exactly one request, print its sha256 to stderr, then exit
+    once: false
+
   identitysignerinstall:
     # Sealed signer key path (default: XDG data dir, per --config-path-mode)
     signer_key: 
