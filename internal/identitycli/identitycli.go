@@ -94,9 +94,12 @@ const (
 
 // wireEnvelope is the JSON shape SignEnvelope reads from stdin/--file: the
 // SIGNED-SUBSET fields only. room/to_agent are POINTERS so absent-vs-present maps
-// onto envelope.Fields' exactly-one routing rule. Transport fields (id, sig,
-// from_pubkey, …) are NOT read here — they are not part of the signed subset and
-// are stamped by the caller after signing.
+// onto envelope.Fields' exactly-one routing rule. The optional human-principal
+// fields (from_class, kind, vouches_for, gate_ref) are pointers for the same
+// reason: absent stays out of the signed bytes, and the envelope gates decide
+// which combinations are valid. Transport fields (id, sig, from_pubkey, …) are
+// NOT read here — they are not part of the signed subset and are stamped by the
+// caller after signing.
 type wireEnvelope struct {
 	// alg_version/key_epoch/seq/ts decode as int64 so the envelope's [0, 2^53] gate
 	// is the single authority for range (and behaves identically on 32/64-bit). A
@@ -111,6 +114,10 @@ type wireEnvelope struct {
 	Seq        int64   `json:"seq"`
 	ToAgent    *string `json:"to_agent"`
 	TS         int64   `json:"ts"`
+	FromClass  *string `json:"from_class"`
+	Kind       *string `json:"kind"`
+	VouchesFor *string `json:"vouches_for"`
+	GateRef    *string `json:"gate_ref"`
 }
 
 // SignEnvelope reads a chat-message envelope (the signed-subset fields), enforces
@@ -121,26 +128,40 @@ type wireEnvelope struct {
 // signed, and the verifier ignores it. It is KEYLESS and FAILS CLOSED: any parse,
 // gate, canonicalize, or signer error returns non-nil and prints nothing.
 func SignEnvelope(out io.Writer, client SignerClient, envelopeJSON []byte, fromPubKeyB64 string) error {
+	fields, fromPub, err := parseEnvelopeInput(envelopeJSON, fromPubKeyB64)
+	if err != nil {
+		return err
+	}
+	res, err := envelope.SignEnvelope(client, fields, fromPub)
+	if err != nil {
+		return fmt.Errorf("signing envelope via signer: %w", err)
+	}
+	return writeEnvelopeResult(out, res)
+}
+
+// parseEnvelopeInput strictly decodes the envelope JSON and the optional
+// from_pubkey hint.
+func parseEnvelopeInput(envelopeJSON []byte, fromPubKeyB64 string) (envelope.Fields, ed25519.PublicKey, error) {
 	dec := json.NewDecoder(bytes.NewReader(envelopeJSON))
 	dec.DisallowUnknownFields()
 	var w wireEnvelope
 	if err := dec.Decode(&w); err != nil {
-		return fmt.Errorf("%s: %w", ErrEnvelopeParse, err)
+		return envelope.Fields{}, nil, fmt.Errorf("%s: %w", ErrEnvelopeParse, err)
 	}
 	if dec.More() {
-		return fmt.Errorf("%s: trailing data after JSON object", ErrEnvelopeParse)
+		return envelope.Fields{}, nil, fmt.Errorf("%s: trailing data after JSON object", ErrEnvelopeParse)
 	}
 
 	var fromPub ed25519.PublicKey
 	if fromPubKeyB64 != "" {
 		raw, err := base64.StdEncoding.DecodeString(fromPubKeyB64)
 		if err != nil || len(raw) != ed25519.PublicKeySize {
-			return fmt.Errorf("%s", ErrEnvelopeBadFromPubKey)
+			return envelope.Fields{}, nil, fmt.Errorf("%s", ErrEnvelopeBadFromPubKey)
 		}
 		fromPub = raw
 	}
 
-	res, err := envelope.SignEnvelope(client, envelope.Fields{
+	return envelope.Fields{
 		AlgVersion: w.AlgVersion,
 		Body:       w.Body,
 		FromAgent:  w.FromAgent,
@@ -150,11 +171,15 @@ func SignEnvelope(out io.Writer, client SignerClient, envelopeJSON []byte, fromP
 		ToAgent:    w.ToAgent,
 		Seq:        w.Seq,
 		TS:         w.TS,
-	}, fromPub)
-	if err != nil {
-		return fmt.Errorf("signing envelope via signer: %w", err)
-	}
+		FromClass:  w.FromClass,
+		Kind:       w.Kind,
+		VouchesFor: w.VouchesFor,
+		GateRef:    w.GateRef,
+	}, fromPub, nil
+}
 
+// writeEnvelopeResult prints the {sig, from_pubkey, key_epoch} JSON line.
+func writeEnvelopeResult(out io.Writer, res envelope.SignResult) error {
 	outJSON, err := json.Marshal(map[string]any{
 		envelope.FieldSig:        res.Sig,
 		envelope.FieldFromPubKey: res.FromPubKey,

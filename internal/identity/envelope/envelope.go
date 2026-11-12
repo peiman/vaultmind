@@ -425,12 +425,13 @@ func VerifyEnvelope(reg registry.Registry, fields Fields, sig []byte, now time.T
 // humanPrefix is the class qualifier on a human principal id (human:<slug>).
 const humanPrefix = "human:"
 
-// envelopePrincipal is the one place that reads a class-qualified from_agent.
+// Principal is the one place that reads a class-qualified from_agent, for the
+// verifier and for the signer's pre-sign binding check alike.
 // human:<slug> requires from_class human and names the human binding.
 // from_class human on any other from_agent, including agent:<slug>, is refused.
 // Every other from_agent is the agent slug, unchanged, so a legacy slug and a
 // literal slug such as "agent:bridge" still resolve as agents.
-func envelopePrincipal(fields Fields) (class, slug string, err error) {
+func Principal(fields Fields) (class, slug string, err error) {
 	if strings.HasPrefix(fields.FromAgent, humanPrefix) {
 		if fields.FromClass == nil || *fields.FromClass != FromClassHuman {
 			return "", "", fmt.Errorf("%s", ErrVerifyClassMismatch)
@@ -458,7 +459,7 @@ func verifyEnvelopeSignature(
 	sig []byte,
 	now time.Time,
 ) (bool, error) {
-	class, slug, err := envelopePrincipal(fields)
+	class, slug, err := Principal(fields)
 	if err != nil {
 		return false, err
 	}
@@ -475,7 +476,7 @@ func verifyEnvelopeSignature(
 //   - from_class PRESENT ⇒ the resolved binding's effective class
 //     (Class, ""→agent) MUST equal the claim, else ErrVerifyClassMismatch.
 //     A human:<slug> principal resolves the humans[] binding. from_class human
-//     on any other from_agent is refused by envelopePrincipal.
+//     on any other from_agent is refused by Principal.
 //   - from_class=bridge ⇒ vouches_for (gate-guaranteed present) MUST be in the
 //     binding's VouchAllowlist (empty allowlist ⇒ every vouch rejected), else
 //     ErrVerifyVouchNotAllowed.
@@ -485,7 +486,7 @@ func enforceAuthority(reg registry.Registry, fields Fields, keyEpoch int, now ti
 	}
 	// The signature check just succeeded for this principal, so the same
 	// resolver returns the same binding. An error here is an inconsistency.
-	class, slug, err := envelopePrincipal(fields)
+	class, slug, err := Principal(fields)
 	if err != nil {
 		return false, err
 	}

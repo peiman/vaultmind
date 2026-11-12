@@ -24,6 +24,7 @@ import (
 	"crypto/ed25519"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"sync"
@@ -122,6 +123,19 @@ type Signer struct {
 
 	mu sync.Mutex
 	ln *net.UnixListener
+
+	// signMu guards every signature. In once mode (set by ServeOnce) it makes
+	// the first signature the only one: the result is recorded under the same
+	// lock that signs, so racing requests cannot both sign. closed is set by
+	// Close and by the first once-mode signature; after it nothing is signed.
+	signMu sync.Mutex
+	once   bool
+	closed bool
+	signed *OnceResult
+	// report receives the hash line in once mode, under signMu, BEFORE the
+	// signature is returned; reportErr records a failed report (the run is over).
+	report    func(line string) error
+	reportErr error
 }
 
 // New loads the sealed private key and prepares a Signer. It does NOT yet bind
@@ -239,10 +253,26 @@ func (s *Signer) Serve() error {
 	}
 }
 
+// outcome is what handle did with one connection.
+type outcome int
+
+const (
+	// outcomeFailed: a request was refused or malformed; nothing was signed.
+	outcomeFailed outcome = iota
+	// outcomeProbe: the peer closed without sending a byte (a liveness probe,
+	// as doctor and Listen's stale-socket check make); nothing was signed.
+	outcomeProbe
+	// outcomeSigned: a signature was produced.
+	outcomeSigned
+)
+
 // Close stops the listener and removes the socket file. The in-memory key is
 // dropped when the process exits; Close does not attempt to scrub it (Go's GC
 // gives no guarantee, and the dedicated-uid hardening is the real mitigation).
 func (s *Signer) Close() error {
+	s.signMu.Lock()
+	s.closed = true
+	s.signMu.Unlock()
 	s.mu.Lock()
 	ln := s.ln
 	s.ln = nil
@@ -258,35 +288,41 @@ func (s *Signer) Close() error {
 
 // handle services one connection: authenticate the peer UID, read the request,
 // run policy, sign, and write the response. Errors are reported to the caller
-// as a respErr frame, never as a leaked key or a silent success.
+// as a respErr frame, never as a leaked key or a silent success. It reports
+// outcomeSigned whenever a signature was produced, even if writing it back then
+// failed.
 //
 // TODO(contract-b hardening): handle has no panic recovery — a panicking
 // Policy hook would crash the signer process. Add a recover() at the top of
 // this function in the hardening slice so a misbehaving hook is converted to
 // an error response rather than a process crash.
-func (s *Signer) handle(conn *net.UnixConn) {
+func (s *Signer) handle(conn *net.UnixConn) outcome {
 	defer func() { _ = conn.Close() }()
 
 	uid, err := peerUID(conn)
 	if err != nil {
 		writeErr(conn, fmt.Sprintf("signer: peer uid: %v", err))
-		return
+		return outcomeFailed
 	}
-	if _, ok := s.allowed[uid]; !ok {
+	if _, allowed := s.allowed[uid]; !allowed {
 		writeErr(conn, errUIDNotAllowed)
-		return
+		return outcomeFailed
 	}
 
 	req, err := readFrame(conn)
+	if errors.Is(err, io.EOF) {
+		// io.ReadFull reports io.EOF only when no byte arrived: a probe.
+		return outcomeProbe
+	}
 	if err != nil {
 		writeErr(conn, fmt.Sprintf("signer: read request: %v", err))
-		return
+		return outcomeFailed
 	}
 
 	if s.cfg.Policy != nil {
 		if perr := s.cfg.Policy(req); perr != nil {
 			writeErr(conn, fmt.Sprintf("%s: %v", errPolicyRefused, perr))
-			return
+			return outcomeFailed
 		}
 	}
 
@@ -300,12 +336,51 @@ func (s *Signer) handle(conn *net.UnixConn) {
 	// server-side before signing, or the Policy hook must enforce it.
 	//
 	// Sign over the received bytes. The key never leaves here.
-	sig, err := identity.SignCanonical(s.priv, identity.CanonicalBytesFromTrusted(req))
+	sig, err := s.sign(req)
 	if err != nil {
-		writeErr(conn, fmt.Sprintf("signer: sign: %v", err))
-		return
+		writeErr(conn, err.Error())
+		return outcomeFailed
 	}
 	writeOK(conn, sig)
+	return outcomeSigned
+}
+
+// sign signs msg exactly as given (pure Ed25519, no prefix). In once mode only
+// the first call succeeds and is recorded; every later or racing call, and any
+// call after Close, is refused.
+func (s *Signer) sign(msg []byte) ([]byte, error) {
+	s.signMu.Lock()
+	defer s.signMu.Unlock()
+	if s.once && s.signed != nil {
+		return nil, errors.New(errOnceAlreadySigned)
+	}
+	if s.once && s.closed {
+		return nil, errors.New(errOnceClosed)
+	}
+	if s.once && s.report == nil {
+		return nil, errors.New(errOnceNoReport)
+	}
+	sig, err := identity.SignCanonical(s.priv, identity.CanonicalBytesFromTrusted(msg))
+	if err != nil {
+		return nil, fmt.Errorf("signer: sign: %w", err)
+	}
+	if !s.once {
+		return sig, nil
+	}
+	// Once mode: the key has done its one job, and nothing more is signed
+	// whatever happens next.
+	clear(s.priv)
+	s.closed = true
+	// Report the hash of these exact bytes BEFORE the signature can leave, so
+	// stopping the signer after this point cannot leave a signature without
+	// its hash. If the report fails, withhold the signature.
+	res := &OnceResult{Message: msg, Sig: sig}
+	if rerr := s.report(res.Summary()); rerr != nil {
+		s.reportErr = fmt.Errorf("%s: %w", errOnceReportFailed, rerr)
+		return nil, s.reportErr
+	}
+	s.signed = res
+	return sig, nil
 }
 
 // loadPrivateKey reads the sealed key file and returns the ed25519 private key.
@@ -330,6 +405,7 @@ func loadPrivateKey(path string) (ed25519.PrivateKey, error) {
 	}
 	priv := make(ed25519.PrivateKey, ed25519.PrivateKeySize)
 	copy(priv, b)
+	clear(b)
 	return priv, nil
 }
 

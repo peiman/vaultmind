@@ -13,9 +13,20 @@ canonical bytes via the signer over its 0600 socket and print
 {sig, from_pubkey, key_epoch} as JSON.
 
 The signed subset is { alg_version, body, from_agent, key_epoch, nonce, room?,
-seq, to_agent? (exactly one), ts }. from_pubkey is DERIVED, not signed. The
+seq, to_agent? (exactly one), ts, from_class?, kind?, vouches_for?, gate_ref? }.
+The optional fields are omitted when absent; vouches_for needs from_class
+bridge (and bridge needs vouches_for), and gate_ref needs kind approval (and
+approval needs gate_ref). from_pubkey is DERIVED, not signed. The
 transport fields (id, sig, from_pubkey, receive_ts, ioguard_verdict,
 origin_daemon) are excluded from the signed bytes.
+
+When agents.yaml names a registry file for this project and a root is pinned,
+the envelope is checked against that registry first: the sender (from_agent;
+human:<slug> with from_class human is read from the humans list) needs a live
+binding with the envelope's key_epoch, --from-pubkey must be the binding's
+key, and the signature must verify under it. Anything else is refused and
+nothing is printed. With no registry file or no pinned root it signs without
+the check. The hub is still the gate; the check only makes its refusal early.
 
 This CLI is KEYLESS: it NEVER opens the private-key file. If the signer is
 unreachable it FAILS CLOSED with an error (never a silent unsigned result).

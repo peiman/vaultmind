@@ -219,6 +219,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.identitysignsession.signer_socket` | string | `` | `VAULTMIND_APP_IDENTITYSIGNSESSION_SIGNER_SOCKET` | Signer socket path (default: XDG state dir) |
 | `app.identitysigner.signer_key` | string | `` | `VAULTMIND_APP_IDENTITYSIGNER_SIGNER_KEY` | Sealed signer key path (default: XDG data dir) |
 | `app.identitysigner.signer_socket` | string | `` | `VAULTMIND_APP_IDENTITYSIGNER_SIGNER_SOCKET` | Signer socket path (default: XDG state dir) |
+| `app.identitysigner.once` | bool | `false` | `VAULTMIND_APP_IDENTITYSIGNER_ONCE` | Sign exactly one request, print its sha256 to stderr, then exit |
 | `app.identitysignerinstall.signer_key` | string | `` | `VAULTMIND_APP_IDENTITYSIGNERINSTALL_SIGNER_KEY` | Sealed signer key path (default: XDG data dir, per --config-path-mode) |
 | `app.identitysignerinstall.signer_socket` | string | `` | `VAULTMIND_APP_IDENTITYSIGNERINSTALL_SIGNER_SOCKET` | Signer socket path (default: XDG state dir, per --config-path-mode) |
 | `app.identitysignerinstall.name` | string | `` | `VAULTMIND_APP_IDENTITYSIGNERINSTALL_NAME` | Job name suffix (default: the key file's name without extension) |
@@ -951,6 +952,9 @@ app:
 
     # Signer socket path (default: XDG state dir)
     signer_socket: 
+
+    # Sign exactly one request, print its sha256 to stderr, then exit
+    once: false
 
   identitysignerinstall:
     # Sealed signer key path (default: XDG data dir, per --config-path-mode)
@@ -2090,6 +2094,9 @@ export VAULTMIND_APP_IDENTITYSIGNER_SIGNER_KEY=
 
 # Signer socket path (default: XDG state dir)
 export VAULTMIND_APP_IDENTITYSIGNER_SIGNER_SOCKET=
+
+# Sign exactly one request, print its sha256 to stderr, then exit
+export VAULTMIND_APP_IDENTITYSIGNER_ONCE=false
 
 # Sealed signer key path (default: XDG data dir, per --config-path-mode)
 export VAULTMIND_APP_IDENTITYSIGNERINSTALL_SIGNER_KEY=
