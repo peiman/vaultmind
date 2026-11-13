@@ -111,7 +111,7 @@ func explainUnverified(ctx context.Context, err error, rep *fetchRegistryReport,
 		// Conditional: the hub's word alone must not let us call a correct
 		// anchor wrong — a hostile hub can advertise any root.
 		if rep.pin.source == rootPinSourceAnchor {
-			lines = append(lines, "  if the network's root changed, the enrollment anchor is stale: only `identity enroll` writes it, and re-enrolling for a new root adds it after the old one, which stays first and stays pinned")
+			lines = append(lines, "  if the network's root changed, the enrollment anchor is stale: run `identity enroll` for the new root, which makes the new anchor the pinned one")
 		}
 		lines = append(lines, "  the hub's root is shown for diagnosis only, never trusted: confirm a new root out of band before pinning it")
 	}
