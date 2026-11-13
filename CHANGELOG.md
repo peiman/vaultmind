@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- `vaultmind identity enroll` now makes the newly enrolled root the default pin. `identity enroll` calls `anchor.Upsert`, which previously appended a new network's anchor after all existing ones, leaving the first-ever anchor at index 0. `identity fetch-registry` and `doctor` pin `anchors[0]`, so after a root change a re-enrollment left the old root pinned and every fetch failed with "root signature does not verify". The anchor store now keeps entries in most-recently-confirmed-first order: `Upsert` places the new anchor at index 0 (prepend for a new network ID; replace-and-move-to-front for an existing one). No anchors are deleted; the full history is retained for multi-network lookup. (#439)
+- `vaultmind identity enroll` makes the root you just confirmed the pinned one. Before, enrolling for a new root added it after the old one, and the old one stayed pinned, so after a root change every `identity fetch-registry` failed with "root signature does not verify" until you passed `--root-pubkey` by hand. Now the most recently enrolled root comes first in `network-roots.json` and is the default for `fetch-registry`, `doctor`, `sign-session` and `sign-envelope`. No stored root is removed, and a `--root-pubkey` flag or a config pin still wins. If one machine is enrolled in two networks, the one enrolled last is now the default, so pin the root in config for an agent that must stay on the other. (#439)
 
 ## [0.10.27] - 2026-11-10
 
