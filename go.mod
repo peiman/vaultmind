@@ -22,7 +22,7 @@ require (
 	github.com/nlpodyssey/gopickle v0.3.0
 	github.com/peiman/ckeletin-go v0.12.0
 	github.com/pelletier/go-toml/v2 v2.4.3
-	github.com/pressly/goose/v3 v3.30.1
+	github.com/pressly/goose/v3 v3.29.0
 	github.com/rs/zerolog v1.35.1
 	github.com/sebdah/goldie/v2 v2.8.0
 	github.com/sergi/go-diff v1.4.0
@@ -39,7 +39,7 @@ require (
 	golang.org/x/text v0.44.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
-	modernc.org/sqlite v1.62.0
+	modernc.org/sqlite v1.60.1
 )
 
 require (
@@ -89,7 +89,7 @@ require (
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect
 	github.com/mattn/go-runewidth v0.0.24 // indirect
-	github.com/mfridman/interpolate v0.2.0 // indirect
+	github.com/mfridman/interpolate v0.0.2 // indirect
 	github.com/microsoft/onnxruntime/go v0.0.0-20261111070922-6cc3c09506ec // indirect
 	github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
@@ -120,7 +120,7 @@ require (
 	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
-	modernc.org/libc v1.80.2 // indirect
+	modernc.org/libc v1.78.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
 )

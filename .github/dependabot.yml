@@ -44,12 +44,17 @@ updates:
         update-types:
           - "minor"
           - "patch"
-    # modernc.org/sqlite v1.60+ carries BSD-3-Clause-Clear and
+    # modernc.org/sqlite v1.62.0 carries BSD-3-Clause-Clear and
     # BSD-3-Clause-Attribution files, which the binary license check does not
     # allow (docs/licenses.md). Hold sqlite and its paired libc at the last
-    # compliant versions until that policy is decided.
+    # compliant versions (v1.60.1, libc v1.78.0) until that policy is decided.
+    # goose v3.30+ requires sqlite v1.62.0, so a goose bump pulls sqlite in as
+    # its dependency and gets past the sqlite rule; that is how #457 turned main
+    # red. Hold goose too.
     ignore:
       - dependency-name: "modernc.org/sqlite"
-        versions: [">= 1.60.0"]
+        versions: [">= 1.61.0"]
       - dependency-name: "modernc.org/libc"
-        versions: [">= 1.76.0"]
+        versions: [">= 1.79.0"]
+      - dependency-name: "github.com/pressly/goose/v3"
+        versions: [">= 3.30.0"]
