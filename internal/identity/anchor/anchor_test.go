@@ -83,9 +83,10 @@ func TestUpsertWritesFileMode0600(t *testing.T) {
 	assert.Equal(t, os.FileMode(0600), info.Mode().Perm())
 }
 
-// TestUpsertNewAppends proves upserting a SECOND distinct network appends rather
-// than replacing the first (multi-network forward-compatible).
-func TestUpsertNewAppends(t *testing.T) {
+// TestUpsertNewPrependsToFront proves upserting a SECOND distinct network places
+// the new anchor at index 0 (the most recently confirmed anchor is the default
+// pin), with the earlier anchor after it. The slice still holds both anchors.
+func TestUpsertNewPrependsToFront(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "network-roots.json")
 	a1 := anchorFor(t, 0xA1)
 	a2 := anchorFor(t, 0xB2)
@@ -95,8 +96,8 @@ func TestUpsertNewAppends(t *testing.T) {
 	got, err := anchor.Load(path)
 	require.NoError(t, err)
 	require.Len(t, got, 2)
-	assert.Equal(t, a1, got[0])
-	assert.Equal(t, a2, got[1])
+	assert.Equal(t, a2, got[0], "the most recently upserted anchor must be first (default pin)")
+	assert.Equal(t, a1, got[1])
 }
 
 // TestUpsertExistingReplaces proves re-upserting the SAME network replaces the
@@ -117,9 +118,10 @@ func TestUpsertExistingReplaces(t *testing.T) {
 	assert.Equal(t, updated, got[0])
 }
 
-// TestUpsertReplacesPreservesOrder proves replacing a middle entry keeps the
-// other entries in place.
-func TestUpsertReplacesPreservesOrder(t *testing.T) {
+// TestUpsertExistingMovesToFront proves re-upserting an existing network moves
+// the entry to index 0 (the most recently confirmed anchor is the default pin)
+// and updates its value, while the other entries keep their relative order.
+func TestUpsertExistingMovesToFront(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "network-roots.json")
 	a1, a2, a3 := anchorFor(t, 0xA1), anchorFor(t, 0xB2), anchorFor(t, 0xC3)
 	require.NoError(t, anchor.Upsert(path, a1))
@@ -133,9 +135,11 @@ func TestUpsertReplacesPreservesOrder(t *testing.T) {
 	got, err := anchor.Load(path)
 	require.NoError(t, err)
 	require.Len(t, got, 3)
-	assert.Equal(t, a1, got[0])
-	assert.Equal(t, updated, got[1])
-	assert.Equal(t, a3, got[2])
+	// After upserting a1, a2, a3 (each prepends), the store is [a3, a2, a1].
+	// Re-upserting a2 (updated) moves it to front: [updated, a3, a1].
+	assert.Equal(t, updated, got[0], "re-upserted entry must move to front (default pin)")
+	assert.Equal(t, a3, got[1], "entries after the front keep their relative order")
+	assert.Equal(t, a1, got[2])
 }
 
 // TestUpsertNoTempLeftBehind proves the atomic write leaves no temp file beside

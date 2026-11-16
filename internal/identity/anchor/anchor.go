@@ -5,6 +5,11 @@
 // network_id = vmnet1:hex(SHA-256(root_pubkey)[:16]) — the 128-bit fingerprint
 // the member already confirmed OOB at enroll.
 //
+// The store keeps anchors in most-recently-confirmed-first order: the entry at
+// index 0 is always the anchor the member confirmed last and is the default pin
+// for `identity fetch-registry` and `doctor`. Earlier anchors are retained so a
+// member enrolled in multiple networks can find any of them by NetworkID.
+//
 // Every stored anchor is INTERNALLY CONSISTENT: Upsert refuses any anchor whose
 // network_id does not derive from its own root_pubkey (a stored anchor that lies
 // about which root it pins is corrupt or hostile). Writes are ATOMIC (temp file
@@ -79,6 +84,7 @@ type NetworkAnchor struct {
 
 // store is the on-disk envelope: a top-level "networks" array, multi-network
 // forward-compatible so a member can be enrolled in more than one network.
+// The first entry is the most recently confirmed anchor and is the default pin.
 type store struct {
 	Networks []NetworkAnchor `json:"networks"`
 }
@@ -108,12 +114,14 @@ func Load(path string) ([]NetworkAnchor, error) {
 	return s.Networks, nil
 }
 
-// Upsert validates a, then replaces the existing anchor whose NetworkID matches
-// (or appends a new one) and writes the store back ATOMICALLY. The anchor is
-// rejected unless it is internally consistent — vmnet1: prefix, a valid
-// (small-order-rejected) 32-byte ed25519 root pubkey, AND
-// NetworkID == NetworkID(root_pubkey) — so a corrupt or hostile anchor never
-// reaches disk. An absent parent dir is created (0700).
+// Upsert validates a, then places it at index 0 of the store (most recently
+// confirmed first) and writes the store back ATOMICALLY. If an entry with the
+// same NetworkID already exists it is replaced and moved to the front; if no
+// match exists the new entry is prepended. The anchor is rejected unless it is
+// internally consistent — vmnet1: prefix, a valid (small-order-rejected)
+// 32-byte ed25519 root pubkey, AND NetworkID == NetworkID(root_pubkey) — so a
+// corrupt or hostile anchor never reaches disk. An absent parent dir is created
+// (0700). After Upsert, anchors[0] is the default pin for fetch-registry.
 func Upsert(path string, a NetworkAnchor) error {
 	if err := validate(a); err != nil {
 		return err
@@ -138,16 +146,21 @@ func Find(anchors []NetworkAnchor, networkID string) (NetworkAnchor, bool) {
 	return NetworkAnchor{}, false
 }
 
-// upsertInto replaces the matching-NetworkID entry in anchors (preserving order)
-// or appends a when none matches. It returns the updated slice.
+// upsertInto places a at index 0 of anchors (most recently confirmed first).
+// If an entry with the same NetworkID exists it is replaced and moved to the
+// front; the remaining entries keep their relative order after it. If no match
+// exists, a is prepended and all existing entries follow in their original order.
+// anchors[0] is therefore always the most recently confirmed anchor and the
+// default pin for fetch-registry.
 func upsertInto(anchors []NetworkAnchor, a NetworkAnchor) []NetworkAnchor {
-	for i := range anchors {
-		if anchors[i].NetworkID == a.NetworkID {
-			anchors[i] = a
-			return anchors
+	out := make([]NetworkAnchor, 1, len(anchors)+1)
+	out[0] = a
+	for _, existing := range anchors {
+		if existing.NetworkID != a.NetworkID {
+			out = append(out, existing)
 		}
 	}
-	return append(anchors, a)
+	return out
 }
 
 // validate enforces the anchor's internal consistency: non-empty vmnet1: id, a

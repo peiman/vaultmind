@@ -265,7 +265,7 @@ func TestIdentityFetchRegistry_StaleAnchorIsCalledStale(t *testing.T) {
 	assert.Contains(t, msg, "update enrollment anchor "+anchorPath+" or pass --root-pubkey")
 	// Conditional: on the hub's word alone we may not assert that a correct
 	// anchor is wrong — a hostile hub could advertise any root.
-	assert.Contains(t, msg, "if the network's root changed, the enrollment anchor is stale")
+	assert.Contains(t, msg, "if the network's root changed, the enrollment anchor is stale: run `identity enroll` for the new root, which makes the new anchor the pinned one")
 	assert.NotContains(t, msg, "  the enrollment anchor is stale")
 }
 

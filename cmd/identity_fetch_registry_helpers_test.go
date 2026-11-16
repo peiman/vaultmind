@@ -264,3 +264,26 @@ func TestPinnedRootLine_NamesRootAndSource(t *testing.T) {
 	assert.Equal(t, s[:4]+"…"+s[len(s)-4:], shortRoot(s))
 	assert.Equal(t, "abc", shortRoot("abc"), "too short to abbreviate")
 }
+
+// TestResolveRootPin_ReEnrollPinsNewAnchor proves that after a root change, a
+// second `identity enroll` makes the NEW anchor the default pin. It upserts
+// anchor A (old root) then anchor B (new root) and asserts resolveRootPinFrom
+// returns B's root with source=anchor. Old and new behaviour give DIFFERENT
+// answers here: before the fix, A stays at index 0 and pins the old root.
+func TestResolveRootPin_ReEnrollPinsNewAnchor(t *testing.T) {
+	xdg := pinEnv(t)
+	oldK := pinKey(t, "re-enroll-old-root-seed-padding-x")
+	newK := pinKey(t, "re-enroll-new-root-seed-padding-x")
+
+	// Enroll with the old root first, then with the new root (simulates a root
+	// change followed by re-enrollment).
+	writeAnchor(t, xdg, oldK)
+	writeAnchor(t, xdg, newK)
+
+	pin, err := resolveRootPin("", "--flag")
+	require.NoError(t, err)
+	assert.Equal(t, newK, pin.pub,
+		"the most recently enrolled root must be the pinned one after re-enrollment")
+	assert.Equal(t, registry.NetworkID(newK), pin.networkID)
+	assert.Equal(t, rootPinSourceAnchor, pin.source)
+}
