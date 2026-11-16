@@ -325,8 +325,13 @@ func TestPluginWrapperConcurrentFirstUse(t *testing.T) {
 	assert.NoFileExists(t, filepath.Join(data, pluginVersion(t)+".lock"), "the lock is released")
 }
 
-// A release PR may leave the marketplace on the immediately previous release
-// until the new tag's archives and checksums exist. No older ref is allowed.
+// unpublishedReleases are tags whose release build failed, so no archives exist
+// and the marketplace cannot point at them. v0.10.28 failed on Windows
+// (syscall.Stat_t); v0.10.29 shipped its changes.
+var unpublishedReleases = map[string]bool{"0.10.28": true}
+
+// A release PR may leave the marketplace on the immediately previous published
+// release until the new tag's archives and checksums exist. No older ref is allowed.
 func TestPluginMarketplaceReleasePin(t *testing.T) {
 	raw, err := os.ReadFile("../../.claude-plugin/marketplace.json")
 	require.NoError(t, err)
@@ -348,7 +353,7 @@ func TestPluginMarketplaceReleasePin(t *testing.T) {
 	for _, line := range strings.Split(string(raw), "\n") {
 		if strings.HasPrefix(line, "## [") && !strings.HasPrefix(line, "## [Unreleased]") {
 			v, _, _ := strings.Cut(strings.TrimPrefix(line, "## ["), "]")
-			if v != pluginVersion(t) {
+			if v != pluginVersion(t) && !unpublishedReleases[v] {
 				previous = "v" + v
 				break
 			}

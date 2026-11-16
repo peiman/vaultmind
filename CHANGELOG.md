@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.29] - 2026-11-16
+
+The first published release with v0.10.28's changes: v0.10.28 was tagged, but its release build failed on Windows.
+
 ### Fixed
 
 - The Windows build failed because the launcher-folder ownership check used a Unix-only type. The check now runs only on macOS and Linux, where the launcher exists.
@@ -3281,7 +3285,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.28...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.29...HEAD
+[0.10.29]: https://github.com/peiman/vaultmind/compare/v0.10.28...v0.10.29
 [0.10.28]: https://github.com/peiman/vaultmind/compare/v0.10.27...v0.10.28
 [0.10.27]: https://github.com/peiman/vaultmind/compare/v0.10.26...v0.10.27
 [0.10.26]: https://github.com/peiman/vaultmind/compare/v0.10.25...v0.10.26
