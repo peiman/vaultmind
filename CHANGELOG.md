@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The Windows build failed because the launcher-folder ownership check used a Unix-only type. The check now runs only on macOS and Linux, where the launcher exists.
+
 ## [0.10.28] - 2026-11-16
 
 ### Security

@@ -15,7 +15,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 )
 
 const (
@@ -251,9 +250,9 @@ func checkLauncherDir(launcherDir string) error {
 	if err != nil {
 		return fmt.Errorf("signer service: checking launcher dir %q: %w", launcherDir, err)
 	}
-	if st, ok := fi.Sys().(*syscall.Stat_t); ok && st.Uid != uint32(os.Getuid()) { //nolint:gosec // G115: uid is non-negative; uint32 conversion is intentional
+	if uid, ok := launcherDirOwnerUID(fi); ok && uid != currentUID() {
 		return fmt.Errorf("signer service: launcher dir %q is owned by uid %d, not the current user (%d) — refusing",
-			launcherDir, st.Uid, os.Getuid())
+			launcherDir, uid, os.Getuid())
 	}
 	if fi.Mode()&0o022 != 0 {
 		return fmt.Errorf("signer service: launcher dir %q has unsafe permissions %04o — group/others must not be writable",
