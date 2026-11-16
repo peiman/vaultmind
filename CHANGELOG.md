@@ -7,11 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.28] - 2026-11-16
+
 ### Security
 
 - Build with Go 1.27.4 to include the `net/http` security fix (GO-2026-6859); CI follows the `.go-version` pin.
 
 ### Changed
+
+- Dependency updates: hugot 0.8.6, go-huggingface 0.4.32, golang.org/x/sync 0.25.0, x/sys 0.50.0, x/text 0.44.0. modernc.org/sqlite stays at v1.60.1 and goose at v3.29.0, because newer sqlite releases include files under licenses the release policy does not allow.
 
 - `vaultmind identity signer install` now writes a per-signer launcher script at `~/Library/Application Support/vaultmind/launchers/VaultMind Signer - <name>` and points the LaunchAgent plist at that script as its single `ProgramArguments` entry. macOS System Settings > Login Items lists a job under the filename of its first argument, so each signer now shows a readable name ("VaultMind Signer - daana-mira") instead of a row of identical "vaultmind" entries. The script is written atomically and owned by the user (0755); the launchers directory is created with mode 0700. A re-run with the same inputs leaves byte-identical files untouched. `--print` shows both the launcher script and the plist, clearly labelled, and still writes nothing. Existing jobs must be reinstalled (`signer install`) to get the named launcher; re-running does not undo a hand-placed launcher if the content differs.
 
@@ -3273,7 +3277,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.27...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.28...HEAD
+[0.10.28]: https://github.com/peiman/vaultmind/compare/v0.10.27...v0.10.28
 [0.10.27]: https://github.com/peiman/vaultmind/compare/v0.10.26...v0.10.27
 [0.10.26]: https://github.com/peiman/vaultmind/compare/v0.10.25...v0.10.26
 [0.10.25]: https://github.com/peiman/vaultmind/compare/v0.10.24...v0.10.25
