@@ -218,6 +218,15 @@ tasks:
     cmds:
       - bash .claude/scripts/test-test-staged.sh
 
+  check:cross-build:
+    desc: Build every release OS so a platform-only symbol fails on the PR
+    env:
+      CGO_ENABLED: "0"
+    cmds:
+      - GOOS=windows GOARCH=amd64 go build ./...
+      - GOOS=linux GOARCH=amd64 go build ./...
+      - GOOS=darwin GOARCH=arm64 go build ./...
+
   check:fast:
     desc: Run fast quality checks (XDG_DATA_HOME isolated — issue #17)
     cmds:
@@ -244,6 +253,10 @@ tasks:
       # check failed license-binary on modernc.org/sqlite v1.62.0, which the
       # goose bump pulled in. ~7s.
       - task: check:license:binary
+      # And for platforms: v0.10.28's release failed on syscall.Stat_t in
+      # signerservice (windows), after PR CI and main's full check had both
+      # passed.
+      - task: check:cross-build
 
   check:deps:
     desc: Run all dependency checks
