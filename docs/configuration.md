@@ -209,6 +209,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.identitysignenvelope.file` | string | `` | `VAULTMIND_APP_IDENTITYSIGNENVELOPE_FILE` | Read envelope JSON from this file instead of stdin |
 | `app.identitysignenvelope.signer_socket` | string | `` | `VAULTMIND_APP_IDENTITYSIGNENVELOPE_SIGNER_SOCKET` | Signer socket path (default: XDG state dir) |
 | `app.identitysignenvelope.from_pubkey` | string | `` | `VAULTMIND_APP_IDENTITYSIGNENVELOPE_FROM_PUBKEY` | Signer public key (base64) stamped as the from_pubkey hint; not signed |
+| `app.identitysignhealth.max_age` | string | `0` | `VAULTMIND_APP_IDENTITYSIGNHEALTH_MAX_AGE` | Ignore records older than this duration (default: off) |
 | `app.identitysignkeeper.file` | string | `` | `VAULTMIND_APP_IDENTITYSIGNKEEPER_FILE` | Read keeper document JSON from this file instead of stdin |
 | `app.identitysignkeeper.signer_socket` | string | `` | `VAULTMIND_APP_IDENTITYSIGNKEEPER_SIGNER_SOCKET` | Signer socket path (default: XDG state dir) |
 | `app.identitysignkeeper.stamp` | bool | `false` | `VAULTMIND_APP_IDENTITYSIGNKEEPER_STAMP` | Fill absent issued_at and, for control or revocation, nonce |
@@ -968,6 +969,10 @@ app:
 
     # Print the launcher script and LaunchAgent plist without writing or loading anything
     print: false
+
+  identitysignhealth:
+    # Ignore records older than this duration (default: off)
+    max_age: 0
 
   identitysignkeeper:
     # Read keeper document JSON from this file instead of stdin
@@ -2064,6 +2069,9 @@ export VAULTMIND_APP_IDENTITYSIGNENVELOPE_SIGNER_SOCKET=
 
 # Signer public key (base64) stamped as the from_pubkey hint; not signed
 export VAULTMIND_APP_IDENTITYSIGNENVELOPE_FROM_PUBKEY=
+
+# Ignore records older than this duration (default: off)
+export VAULTMIND_APP_IDENTITYSIGNHEALTH_MAX_AGE=0
 
 # Read keeper document JSON from this file instead of stdin
 export VAULTMIND_APP_IDENTITYSIGNKEEPER_FILE=

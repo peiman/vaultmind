@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `identity sign-envelope` records each known sender's latest signing outcome in an atomic per-agent state file.
+- `identity sign-health` reports agents whose latest signing attempt failed, is stale, or cannot be read.
+
 ## [0.10.29] - 2026-11-16
 
 The first published release with v0.10.28's changes: v0.10.28 was tagged, but its release build failed on Windows.
