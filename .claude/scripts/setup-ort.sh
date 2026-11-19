@@ -126,7 +126,7 @@ done
 if [ -z "$ORT_LIB_DIR" ]; then
   echo "$FAIL $DYLIB not found on this system"
   echo "    install with: brew install onnxruntime  (macOS)"
-  echo "    or download from https://github.com/microsoft/onnxruntime/releases"
+  echo "    or take the native library from the Microsoft.ML.OnnxRuntime package on nuget.org"
   FAILED=1
 else
   echo "$PASS $ORT_LIB_DIR/$DYLIB"
@@ -140,7 +140,7 @@ else
   elif version_lt "$ORT_FOUND_VERSION" "$ORT_MIN_VERSION"; then
     echo "$FAIL libonnxruntime $ORT_FOUND_VERSION is too old — needs >= $ORT_MIN_VERSION"
     echo "    upgrade with: brew upgrade onnxruntime  (macOS)"
-    echo "    or download from https://github.com/microsoft/onnxruntime/releases"
+    echo "    or take the native library from the Microsoft.ML.OnnxRuntime package on nuget.org"
     FAILED=1
   else
     echo "$PASS libonnxruntime $ORT_FOUND_VERSION (>= $ORT_MIN_VERSION)"

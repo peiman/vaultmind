@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The ORT release archives now bundle ONNX Runtime 1.30.0 from Microsoft's NuGet package, pinned by version and sha256; the GitHub release they came from is no longer available, so v0.10.30 shipped without them.
+
 ## [0.10.30] - 2026-11-19
 
 An agent that can no longer sign is now noticed. On 2026-11-16 one agent's config still pinned a retired root key, so every message it signed was refused, and nothing reported it for three days.
