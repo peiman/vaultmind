@@ -198,6 +198,7 @@ const (
 	KeyAppIdentitysignenvelopeFile           = "app.identitysignenvelope.file"            // Read envelope JSON from this file instead of stdin
 	KeyAppIdentitysignenvelopeSignerSocket   = "app.identitysignenvelope.signer_socket"   // Signer socket path (default: XDG state dir)
 	KeyAppIdentitysignenvelopeFromPubkey     = "app.identitysignenvelope.from_pubkey"     // Signer public key (base64) stamped as the from_pubkey hint; not signed
+	KeyAppIdentitysignhealthMaxAge           = "app.identitysignhealth.max_age"           // Ignore records older than this duration (default: off)
 	KeyAppIdentitysignkeeperFile             = "app.identitysignkeeper.file"              // Read keeper document JSON from this file instead of stdin
 	KeyAppIdentitysignkeeperSignerSocket     = "app.identitysignkeeper.signer_socket"     // Signer socket path (default: XDG state dir)
 	KeyAppIdentitysignkeeperStamp            = "app.identitysignkeeper.stamp"             // Fill absent issued_at and, for control or revocation, nonce

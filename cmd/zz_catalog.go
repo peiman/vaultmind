@@ -333,6 +333,11 @@ var commandCatalog = map[string]catalogEntry{
 		when:  "you have a chat MESSAGE envelope to sign so a receiving daemon can verify the signature and the signer's registry binding.",
 		short: "Sign a chat message envelope via the keyless signer (Contract-B slice 5)",
 	},
+	"vaultmind identity sign-health": {
+		group: groupLifecycle,
+		when:  "you need to know which agents' latest sign-envelope attempts failed or went stale.",
+		short: "Report the latest sign-envelope outcome for every agent",
+	},
 	"vaultmind identity sign-keeper": {
 		group: groupLifecycle,
 		when:  "you own a keeper and need to sign a control request, a read grant, or a revocation for its watchdog.",

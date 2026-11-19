@@ -1158,6 +1158,16 @@
           },
           "type": "object"
         },
+        "identitysignhealth": {
+          "properties": {
+            "max_age": {
+              "default": "0",
+              "description": "Ignore records older than this duration (default: off)",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
         "identitysignkeeper": {
           "properties": {
             "file": {

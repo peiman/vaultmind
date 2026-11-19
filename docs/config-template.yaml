@@ -599,6 +599,10 @@ app:
     # Print the launcher script and LaunchAgent plist without writing or loading anything
     print: false
 
+  identitysignhealth:
+    # Ignore records older than this duration (default: off)
+    max_age: 0
+
   identitysignkeeper:
     # Read keeper document JSON from this file instead of stdin
     file: 

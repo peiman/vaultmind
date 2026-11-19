@@ -147,6 +147,9 @@ components:
       - internal/release/**
       # VaultMind path globs (pure: the `paths:` glob language — path.Match segments, ** for any depth; shared by the code-map hook and import --crawl's --include/--exclude):
       - internal/pathglob/**
+      # Sign-envelope outcome state is a shared XDG infrastructure service;
+      # the command layer only supplies outcomes and renders its report.
+      - internal/signhealth/**
 
   # -------------------------------------------------------------------------
   # PROJECT-MANAGED: Business Logic Layer

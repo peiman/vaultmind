@@ -10,6 +10,7 @@ import (
 	"github.com/peiman/vaultmind/internal/config/commands"
 	"github.com/peiman/vaultmind/internal/identity/signer"
 	"github.com/peiman/vaultmind/internal/identitycli"
+	"github.com/peiman/vaultmind/internal/signhealth"
 	"github.com/spf13/cobra"
 )
 
@@ -33,6 +34,14 @@ func runIdentitySignEnvelope(cmd *cobra.Command, _ []string) error {
 	envelopeJSON, err := readEnvelopeJSON(cmd)
 	if err != nil {
 		return err
+	}
+	sender, senderKnown := signhealth.ParseSender(envelopeJSON)
+	return runIdentitySignEnvelopeAttempt(cmd, sockPath, fromPubKey, envelopeJSON, sender, senderKnown)
+}
+
+func runIdentitySignEnvelopeAttempt(cmd *cobra.Command, sockPath, fromPubKey string, envelopeJSON []byte, sender string, record bool) (err error) {
+	if record {
+		defer func() { _ = signhealth.Record(sender, Version, err) }()
 	}
 	now := time.Now()
 	reg, ok, err := signEnvelopeRegistry(now)
