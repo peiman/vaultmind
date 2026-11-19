@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/peiman/vaultmind/internal/xdg"
 	"github.com/stretchr/testify/assert"
@@ -172,4 +173,11 @@ func TestRead_UnlistableDirIsAnError(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
 	_, err := Read(time.Now(), 0)
 	assert.Error(t, err)
+}
+
+func TestTruncateBytes_NeverSplitsARune(t *testing.T) {
+	value := strings.Repeat("a", 499) + "é" // é is 2 bytes: 499..500
+	got := truncateBytes(value, 500)
+	assert.Equal(t, strings.Repeat("a", 499), got)
+	assert.True(t, utf8.ValidString(got))
 }

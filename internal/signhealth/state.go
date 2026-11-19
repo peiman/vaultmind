@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/peiman/vaultmind/internal/xdg"
 )
@@ -158,11 +159,16 @@ func isSafeASCII(r rune) bool {
 	return r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-'
 }
 
+// truncateBytes keeps at most limit bytes without splitting a UTF-8 character.
 func truncateBytes(value string, limit int) string {
 	if len(value) <= limit {
 		return value
 	}
-	return value[:limit]
+	cut := limit
+	for cut > 0 && !utf8.RuneStart(value[cut]) {
+		cut--
+	}
+	return value[:cut]
 }
 
 func entrySortKey(entry Entry) string {

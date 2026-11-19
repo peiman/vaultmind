@@ -85,17 +85,25 @@ func signHealthStatus(entry signhealth.Entry) string {
 	}
 }
 
+// signHealthJSON is one agent in the JSON report. Stale is reported so a
+// script can tell an old failure (exit 0) from a current one.
+type signHealthJSON struct {
+	signhealth.State
+	Stale      bool `json:"stale,omitempty"`
+	Unreadable bool `json:"unreadable,omitempty"`
+}
+
 func writeSignHealthJSON(w io.Writer, entries []signhealth.Entry) error {
-	agents := make([]signhealth.State, 0, len(entries))
+	agents := make([]signHealthJSON, 0, len(entries))
 	for _, entry := range entries {
 		if entry.Unreadable {
-			agents = append(agents, signhealth.State{Agent: "UNREADABLE " + entry.File, Error: entry.Err})
+			agents = append(agents, signHealthJSON{State: signhealth.State{Agent: "UNREADABLE " + entry.File, Error: entry.Err}, Unreadable: true})
 			continue
 		}
-		agents = append(agents, entry.Record)
+		agents = append(agents, signHealthJSON{State: entry.Record, Stale: entry.Stale})
 	}
 	return json.NewEncoder(w).Encode(struct {
-		Agents []signhealth.State `json:"agents"`
+		Agents []signHealthJSON `json:"agents"`
 	}{Agents: agents})
 }
 

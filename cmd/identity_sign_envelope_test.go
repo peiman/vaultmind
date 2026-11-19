@@ -240,3 +240,18 @@ func TestIdentitySignEnvelope_StateWriteFailureLeavesResultUnchanged(t *testing.
 	require.ErrorContains(t, err, identitycli.ErrEnvelopeRegistry)
 	assert.Empty(t, out.String())
 }
+
+func TestIdentitySignEnvelope_StateWriteFailureLeavesSuccessUnchanged(t *testing.T) {
+	isolateSignHealth(t)
+	pub, priv := signEnvelopeKey(t, miraSeed)
+	unpinMesh(t)
+	want, err := runSignEnvelope(t, startCmdSignerWithKey(t, priv), signEnvelopeEpoch4, pub)
+	require.NoError(t, err)
+
+	stateBlocker := filepath.Join(t.TempDir(), "state-blocker")
+	require.NoError(t, os.WriteFile(stateBlocker, []byte("not a directory"), 0o600))
+	t.Setenv("XDG_STATE_HOME", stateBlocker)
+	got, err := runSignEnvelope(t, startCmdSignerWithKey(t, priv), signEnvelopeEpoch4, pub)
+	require.NoError(t, err)
+	assert.Equal(t, want.String(), got.String())
+}

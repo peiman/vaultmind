@@ -113,3 +113,17 @@ func TestIdentitySignHealth_UnlistableStateDirIsAnError(t *testing.T) {
 	_, _, err = runRootCmd(t, "identity", "sign-health")
 	assert.Error(t, err)
 }
+
+func TestIdentitySignHealth_JSONMarksStaleEntries(t *testing.T) {
+	isolateSignHealth(t)
+	old := time.Now().UTC().Add(-2 * time.Hour).Format(time.RFC3339)
+	writeSignHealthRecord(t, "agent:cm", `{"agent":"agent:cm","ok":false,"ts":"`+old+`","error":"old"}`)
+	out, _, err := runRootCmd(t, "identity", "sign-health", "--max-age", "1h", "--output-format", "json")
+	require.NoError(t, err)
+	var got struct {
+		Agents []map[string]any `json:"agents"`
+	}
+	require.NoError(t, json.Unmarshal(out.Bytes(), &got))
+	require.Len(t, got.Agents, 1)
+	assert.Equal(t, true, got.Agents[0]["stale"])
+}
