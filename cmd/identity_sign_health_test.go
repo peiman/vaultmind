@@ -64,3 +64,52 @@ func TestIdentitySignHealth_JSONReportsAgents(t *testing.T) {
 	assert.Equal(t, "agent:mira", got.Agents[0]["agent"])
 	assert.Equal(t, true, got.Agents[0]["ok"])
 }
+
+func TestIdentitySignHealth_NoRecordsSaysSoAndPasses(t *testing.T) {
+	isolateSignHealth(t)
+	out, _, err := runRootCmd(t, "identity", "sign-health")
+	require.NoError(t, err)
+	assert.Equal(t, "no sign attempts recorded\n", out.String())
+}
+
+func TestIdentitySignHealth_OKAgentPasses(t *testing.T) {
+	isolateSignHealth(t)
+	writeSignHealthRecord(t, "agent:mira", `{"agent":"agent:mira","ok":true,"ts":"2026-11-19T15:32:47Z"}`)
+	out, _, err := runRootCmd(t, "identity", "sign-health")
+	require.NoError(t, err)
+	assert.Equal(t, "agent:mira  ok  2026-11-19T15:32:47Z\n", out.String())
+}
+
+func TestIdentitySignHealth_RejectsBadMaxAge(t *testing.T) {
+	for _, arg := range []string{"soon", "-1h"} {
+		t.Run(arg, func(t *testing.T) {
+			isolateSignHealth(t)
+			_, _, err := runRootCmd(t, "identity", "sign-health", "--max-age", arg)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "invalid --max-age")
+		})
+	}
+}
+
+func TestIdentitySignHealth_JSONFailureExitsNonZero(t *testing.T) {
+	isolateSignHealth(t)
+	path := writeSignHealthRecord(t, "agent:cm", "not json")
+	out, _, err := runRootCmd(t, "identity", "sign-health", "--output-format", "json")
+	require.Error(t, err)
+	var got struct {
+		Agents []map[string]any `json:"agents"`
+	}
+	require.NoError(t, json.Unmarshal(out.Bytes(), &got))
+	require.Len(t, got.Agents, 1)
+	assert.Equal(t, "UNREADABLE "+path, got.Agents[0]["agent"])
+}
+
+func TestIdentitySignHealth_UnlistableStateDirIsAnError(t *testing.T) {
+	isolateSignHealth(t)
+	dir, err := xdg.StateFile("sign-health")
+	require.NoError(t, err)
+	require.NoError(t, os.MkdirAll(dir, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	_, _, err = runRootCmd(t, "identity", "sign-health")
+	assert.Error(t, err)
+}

@@ -51,36 +51,38 @@ func renderSignHealth(cmd interface {
 }
 
 func writeSignHealthText(w io.Writer, entries []signhealth.Entry) error {
+	_, err := io.WriteString(w, signHealthText(entries))
+	return err
+}
+
+func signHealthText(entries []signhealth.Entry) string {
 	if len(entries) == 0 {
-		_, err := fmt.Fprintln(w, "no sign attempts recorded")
-		return err
+		return "no sign attempts recorded\n"
 	}
+	var b strings.Builder
 	for _, entry := range entries {
 		if entry.Unreadable {
-			if _, err := fmt.Fprintf(w, "UNREADABLE %s: %s\n", entry.File, entry.Err); err != nil {
-				return err
-			}
+			_, _ = fmt.Fprintf(&b, "UNREADABLE %s: %s\n", entry.File, entry.Err)
 			continue
 		}
-		status := "ok"
-		if entry.Stale {
-			status = "stale"
-		} else if !entry.Record.OK {
-			status = "FAIL"
-		}
-		if _, err := fmt.Fprintf(w, "%s  %s  %s", entry.Record.Agent, status, entry.Record.TS); err != nil {
-			return err
-		}
+		_, _ = fmt.Fprintf(&b, "%s  %s  %s", entry.Record.Agent, signHealthStatus(entry), entry.Record.TS)
 		if entry.Record.Error != "" {
-			if _, err := fmt.Fprintf(w, "  %s", entry.Record.Error); err != nil {
-				return err
-			}
+			_, _ = fmt.Fprintf(&b, "  %s", entry.Record.Error)
 		}
-		if _, err := fmt.Fprintln(w); err != nil {
-			return err
-		}
+		b.WriteByte('\n')
 	}
-	return nil
+	return b.String()
+}
+
+func signHealthStatus(entry signhealth.Entry) string {
+	switch {
+	case entry.Stale:
+		return "stale"
+	case !entry.Record.OK:
+		return "FAIL"
+	default:
+		return "ok"
+	}
 }
 
 func writeSignHealthJSON(w io.Writer, entries []signhealth.Entry) error {

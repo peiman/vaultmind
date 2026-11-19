@@ -100,3 +100,76 @@ func TestRead_SortsAndMarksStale(t *testing.T) {
 	assert.Equal(t, "agent:mira", entries[1].Record.Agent)
 	assert.False(t, entries[1].Stale)
 }
+
+func stateDir(t *testing.T) string {
+	t.Helper()
+	dir, err := xdg.StateFile("sign-health")
+	require.NoError(t, err)
+	require.NoError(t, os.MkdirAll(dir, 0o700))
+	return dir
+}
+
+func TestRecord_EmptyAgentWritesNothing(t *testing.T) {
+	isolateState(t)
+	require.NoError(t, Record("", "v1", errors.New("x")))
+	entries, err := Read(time.Now(), 0)
+	require.NoError(t, err)
+	assert.Empty(t, entries)
+}
+
+func TestRecord_TruncatesLongErrorsTo500Bytes(t *testing.T) {
+	isolateState(t)
+	require.NoError(t, Record("agent:cm", "v1", errors.New(strings.Repeat("e", 900))))
+	entries, err := Read(time.Now(), 0)
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	assert.Len(t, entries[0].Record.Error, 500)
+}
+
+func TestRecord_ReportsAnUnwritableStateDir(t *testing.T) {
+	isolateState(t)
+	dir := stateDir(t)
+	require.NoError(t, os.Chmod(dir, 0o500))
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	assert.Error(t, Record("agent:cm", "v1", nil))
+}
+
+func TestRead_SkipsDirsAndNonJSONAndFlagsBadRecords(t *testing.T) {
+	isolateState(t)
+	dir := stateDir(t)
+	require.NoError(t, os.Mkdir(filepath.Join(dir, "sub.json"), 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("x"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.json"), []byte(`{"ts":"2026-11-19T15:32:47Z"}`), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "b.json"), []byte(`{"agent":"agent:b","ok":true,"ts":"yesterday"}`), 0o600))
+	require.NoError(t, Record("agent:ok", "v1", nil))
+
+	entries, err := Read(time.Now(), 0)
+	require.NoError(t, err)
+	require.Len(t, entries, 3)
+	assert.Equal(t, "agent:ok", entries[0].Record.Agent, "readable entries sort before unreadable ones")
+	assert.True(t, entries[1].Unreadable)
+	assert.Contains(t, entries[1].Err, "missing agent or timestamp")
+	assert.True(t, entries[2].Unreadable)
+	assert.Contains(t, entries[2].Err, "parsing time")
+}
+
+func TestRead_UnreadableFileIsAnEntryNotAnError(t *testing.T) {
+	isolateState(t)
+	dir := stateDir(t)
+	path := filepath.Join(dir, "agent_cm.json")
+	require.NoError(t, os.WriteFile(path, []byte(`{}`), 0o000))
+	entries, err := Read(time.Now(), 0)
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	assert.True(t, entries[0].Unreadable)
+	assert.Equal(t, path, entries[0].File)
+}
+
+func TestRead_UnlistableDirIsAnError(t *testing.T) {
+	isolateState(t)
+	dir := stateDir(t)
+	require.NoError(t, os.Chmod(dir, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+	_, err := Read(time.Now(), 0)
+	assert.Error(t, err)
+}
