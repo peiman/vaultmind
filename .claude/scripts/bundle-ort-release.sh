@@ -95,7 +95,7 @@ The binary finds the bundled libonnxruntime automatically (it checks its own
 directory). If you move the binary, keep the libonnxruntime file beside it, or
 set ORT_LIB_DIR to the directory that holds it.
 
-ONNX Runtime is MIT-licensed by Microsoft (https://github.com/microsoft/onnxruntime).
+ONNX Runtime is MIT-licensed by Microsoft (https://www.nuget.org/packages/Microsoft.ML.OnnxRuntime).
 vaultmind's license is in LICENSE.
 EOF
 
