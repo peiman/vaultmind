@@ -610,7 +610,8 @@ jobs:
       id-token: write # keyless cosign signing via OIDC
       attestations: write # SLSA build provenance for the ORT archive built here
     env:
-      ORT_VERSION: '1.29.1' # official Microsoft ONNX Runtime to bundle (dlopen'd at runtime). >= 1.29: microsoft/onnxruntime/go (via hugot 0.8.1) requests ORT API 29 (#148)
+      ORT_VERSION: '1.30.0' # Microsoft.ML.OnnxRuntime NuGet package to bundle; the microsoft/onnxruntime GitHub repo went 404 on 2026-11-19 and NuGet packages are immutable. >= 1.29: microsoft/onnxruntime/go (via hugot 0.8.1) requests ORT API 29 (#148)
+      ORT_NUPKG_SHA256: '30df119bd9164eaa187666d93147448fdd4a9a1a3caf83f1505daf7af2d1c5d2'
     strategy:
       fail-fast: false # one platform failing must not block the other
       matrix:
@@ -622,12 +623,12 @@ jobs:
           - os: macos-15
             goos: darwin
             goarch: arm64
-            ort_asset: onnxruntime-osx-arm64-1.29.1.tgz
+            ort_rid: osx-arm64
             macosx_deployment_target: '14.0'
           - os: ubuntu-latest
             goos: linux
             goarch: amd64
-            ort_asset: onnxruntime-linux-x64-1.29.1.tgz
+            ort_rid: linux-x64
     steps:
       - name: Resolve the target tag
         id: target
@@ -681,11 +682,42 @@ jobs:
 
       - name: Download official ONNX Runtime (self-contained lib to bundle)
         id: ort
+        env:
+          ORT_RID: ${{ matrix.ort_rid }}
         run: |
           set -euo pipefail
-          curl -fsSL -o ort.tgz "https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VERSION}/${{ matrix.ort_asset }}"
-          mkdir -p ort && tar xzf ort.tgz -C ort
-          LIBDIR="$(find "$PWD/ort" -type d -name lib | head -1)"
+          curl -fsSL -o ort.nupkg "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/${ORT_VERSION}/microsoft.ml.onnxruntime.${ORT_VERSION}.nupkg"
+          echo "${ORT_NUPKG_SHA256}  ort.nupkg" | shasum -a 256 -c -
+          unzip -q ort.nupkg "runtimes/${ORT_RID}/native/*" -d ort-nupkg
+          NATIVE_DIR="$PWD/ort-nupkg/runtimes/${ORT_RID}/native"
+          LIBDIR="$PWD/ort/lib"
+          mkdir -p "$LIBDIR"
+          case "$ORT_RID" in
+            osx-arm64)
+              [ -f "$NATIVE_DIR/libonnxruntime.dylib" ] || {
+                echo "::error::missing libonnxruntime.dylib in NuGet package for $ORT_RID"
+                exit 1
+              }
+              cp -a "$NATIVE_DIR/libonnxruntime.dylib" "$LIBDIR/libonnxruntime.${ORT_VERSION}.dylib"
+              ln -s "libonnxruntime.${ORT_VERSION}.dylib" "$LIBDIR/libonnxruntime.dylib"
+              ;;
+            linux-x64)
+              for name in libonnxruntime.so libonnxruntime_providers_shared.so; do
+                [ -f "$NATIVE_DIR/$name" ] || {
+                  echo "::error::missing $name in NuGet package for $ORT_RID"
+                  exit 1
+                }
+              done
+              cp -a "$NATIVE_DIR/libonnxruntime.so" "$LIBDIR/libonnxruntime.so.${ORT_VERSION}"
+              ln -s "libonnxruntime.so.${ORT_VERSION}" "$LIBDIR/libonnxruntime.so.1"
+              ln -s "libonnxruntime.so.${ORT_VERSION}" "$LIBDIR/libonnxruntime.so"
+              cp -a "$NATIVE_DIR/libonnxruntime_providers_shared.so" "$LIBDIR/"
+              ;;
+            *)
+              echo "::error::unsupported NuGet runtime identifier: $ORT_RID"
+              exit 1
+              ;;
+          esac
           echo "libdir=$LIBDIR" >> "$GITHUB_OUTPUT"
           # setup-ort.sh verifies a SYSTEM libonnxruntime. Place the official
           # lib where it looks (the build
