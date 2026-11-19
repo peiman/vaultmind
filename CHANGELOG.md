@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.30] - 2026-11-19
+
+An agent that can no longer sign is now noticed. On 2026-11-16 one agent's config still pinned a retired root key, so every message it signed was refused, and nothing reported it for three days.
+
 ### Added
 
 - `identity sign-envelope` records each known sender's latest signing outcome in an atomic per-agent state file.
@@ -3290,7 +3294,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.29...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.30...HEAD
+[0.10.30]: https://github.com/peiman/vaultmind/compare/v0.10.29...v0.10.30
 [0.10.29]: https://github.com/peiman/vaultmind/compare/v0.10.28...v0.10.29
 [0.10.28]: https://github.com/peiman/vaultmind/compare/v0.10.27...v0.10.28
 [0.10.27]: https://github.com/peiman/vaultmind/compare/v0.10.26...v0.10.27
