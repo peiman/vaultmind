@@ -1,65 +1,74 @@
 package hookscripts_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-// relevanceGateStub reproduces the identity query's weak-hit behavior: the
-// menu is present without an explicit read, but the note body is withheld.
-const relevanceGateStub = `#!/bin/bash
-case "$1" in
-  ask)
-    if [ "$2" = "who am I" ]; then
-      for arg in "$@"; do
-        if [ "$arg" = "1" ]; then
-          echo 'Search: "who am I" (5 hits)'
-          echo 'WHO-I-AM-BODY-TEXT'
-          exit 0
-        fi
-      done
-      echo 'Search: "who am I" (5 hits) [relevance: weak — body suppressed]'
-      echo 'Context from: identity-who-i-am — 9 notes, 0 delivered'
-    else
-      echo 'CURRENT-CONTEXT-POINTERS'
-    fi
-    ;;
-  arc) echo 'ARCS'
-    ;;
-  self) echo 'SELF'
-    ;;
-esac
+// identityAskStub models the two identity asks. The gate-modelling distinction
+// is the presence of --read itself: the value is deliberately irrelevant.
+func identityAskStub(mode string) string {
+	return fmt.Sprintf(`#!/bin/bash
+has_read=0
+for arg in "$@"; do
+  [ "$arg" = "--read" ] && has_read=1
+done
+fill() { head -c "$1" /dev/zero | tr '\0' "$2"; echo; }
+if [ "$1" = "ask" ] && [ "$2" = "who am I" ]; then
+  if [ "$has_read" = "1" ]; then
+    echo 'Search: "who am I" (5 hits)'
+    if [ "%s" = size ]; then fill 7000 B; fi
+    echo 'WHO-I-AM-BODY-TEXT'
+  elif [ "%s" = weak ]; then
+    echo 'Search: "who am I" (5 hits) [relevance: weak — body suppressed]'
+    echo 'Context from: identity-who-i-am — 9 notes, 0 delivered'
+  else
+    echo 'Search: "who am I" (5 hits)'
+    echo 'Context from: identity-who-i-am — 9 notes, 9 delivered as excerpts (558 tok)'
+    if [ "%s" = size ]; then fill 3000 P; fi
+    echo 'PACK-EXCERPT-TEXT'
+  fi
+elif [ "$1" = ask ] || [ "$1" = self ] || [ "$1" = arc ]; then
+  :
+fi
 exit 0
-`
-
-func TestPersonaHook_DeliversIdentityBodyThroughWeakRelevanceGate(t *testing.T) {
-	project, env := installPersonaHook(t, relevanceGateStub)
-	env = append(env, "VAULTMIND_PERSONA_MODE=served")
-
-	out := runPersonaHookSession(t, project, env, "s-identity-body")
-
-	assert.Contains(t, out, "WHO-I-AM-BODY-TEXT")
-	rec := lastSidecar(t, env)
-	assert.Equal(t, false, rec["identity_body_withheld"])
+`, mode, mode, mode)
 }
 
-func TestPersonaHook_SidecarRecordsWithheldIdentityBody(t *testing.T) {
-	project, env := installPersonaHook(t, `#!/bin/bash
-if [ "$1" = "ask" ] && [ "$2" = "who am I" ]; then
-  echo 'Search: "who am I" [body suppressed]'
-elif [ "$1" = "ask" ]; then
-  echo 'CURRENT-CONTEXT-POINTERS'
-elif [ "$1" = "arc" ]; then
-  echo 'ARCS'
-elif [ "$1" = "self" ]; then
-  echo 'SELF'
-fi
-`)
+func runIdentityCase(t *testing.T, mode string) (string, map[string]any) {
+	t.Helper()
+	project, env := installPersonaHook(t, identityAskStub(mode))
 	env = append(env, "VAULTMIND_PERSONA_MODE=served")
+	return runPersonaHookSession(t, project, env, "s-identity-"+mode), lastSidecar(t, env)
+}
 
-	runPersonaHookSession(t, project, env, "s-identity-withheld")
+func TestPersonaHook_WeakIdentityAlwaysDeliversBodyAndDropsPack(t *testing.T) {
+	out, rec := runIdentityCase(t, "weak")
 
-	rec := lastSidecar(t, env)
+	assert.Contains(t, out, "WHO-I-AM-BODY-TEXT")
+	assert.NotContains(t, out, "Context from:")
 	assert.Equal(t, true, rec["identity_body_withheld"])
+	assert.Equal(t, false, rec["identity_pack_kept"])
+}
+
+func TestPersonaHook_StrongIdentityDeliversBodyAndPack(t *testing.T) {
+	out, rec := runIdentityCase(t, "strong")
+
+	assert.Contains(t, out, "WHO-I-AM-BODY-TEXT")
+	assert.Contains(t, out, "PACK-EXCERPT-TEXT")
+	assert.Equal(t, false, rec["identity_body_withheld"])
+	assert.Equal(t, true, rec["identity_pack_kept"])
+}
+
+func TestPersonaHook_IdentityBodyWinsWhenBodyAndPackExceedCap(t *testing.T) {
+	out, rec := runIdentityCase(t, "size")
+
+	assert.Contains(t, out, "WHO-I-AM-BODY-TEXT")
+	assert.NotContains(t, out, "PACK-EXCERPT-TEXT")
+	assert.Contains(t, out, "Left out to stay under the hook delivery limit:")
+	assert.Contains(t, out, "the identity context pack")
+	assert.LessOrEqual(t, len(out), deliveryCap, "hook output cap is measured in bytes")
+	assert.Equal(t, false, rec["identity_pack_kept"])
 }

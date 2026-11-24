@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- The persona hook now delivers the identity note's text at session start and after compaction; before, a weak relevance score on "who am I" withheld it, so agents got only its title.
+- The persona hook now always delivers the identity note's full text at session start and after compaction, alongside the context excerpts when they fit; before, a weak relevance score withheld it and agents got only its title, and on stronger scores they got excerpts but never the full note.
 - The ORT release archives now bundle ONNX Runtime 1.30.0 from Microsoft's NuGet package, pinned by version and sha256; the GitHub release they came from is no longer available, so v0.10.30 shipped without them.
 
 ## [0.10.30] - 2026-11-19

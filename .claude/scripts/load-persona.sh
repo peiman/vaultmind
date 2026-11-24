@@ -319,15 +319,28 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
   # beat 3 whole arcs plus 5 titles for reconstruction. That trade is worth
   # revisiting if the budget is ever wanted for depth instead of breadth.
   #
-  # The "what matters most right now" query below deliberately KEEPS
-  # --pointers-only — see the preload-trap reasoning above. That one is a design
-  # choice about forcing an explicit read, not an oversight.
+  # Identity uses two asks. The first is an explicit --read of the top hit, so
+  # the identity anchor's full body is always delivered, even when relevance
+  # would otherwise suppress it. The second keeps the ordinary context pack:
+  # its excerpts are useful when they fit, but its menu is omitted because the
+  # first ask already printed it. The pack is best-effort and never replaces
+  # the anchor body.
   IDENTITY=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" ask "who am I" --vault "$VAULT_PATH" --max-items 8 --budget 6000 --excerpt 300 --read 1 2>"$ASK_ERR")
   IDENTITY_STATUS=$?
   IDENTITY_BODY_WITHHELD=false
-  case "$IDENTITY" in
+  PACK_OUT=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" ask "who am I" --vault "$VAULT_PATH" --max-items 8 --budget 6000 --excerpt 300 2>>"$ASK_ERR" || true)
+  PACK=""
+  if printf '%s\n' "$PACK_OUT" | grep -q '^Context from:'; then
+    PACK=$(printf '%s\n' "$PACK_OUT" | awk '/^Context from:/{started=1} started{print}')
+    if printf '%s\n' "$PACK" | grep -Eiq '0 delivered|pointers only'; then
+      PACK=""
+    fi
+  fi
+  case "$PACK_OUT" in
     *"body suppressed"*) IDENTITY_BODY_WITHHELD=true ;;
   esac
+  IDENTITY_PACK_KEPT=false
+  [ -n "$PACK" ] && IDENTITY_PACK_KEPT=true
 
   # THE ARC LAYER, ENUMERATED — not retrieved (issue #47).
   #
@@ -377,14 +390,17 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
   # characters served, cut at 16 of 45 compactions in one long session). When
   # load-arcs.sh carries the arc layer, this hook leaves it out. When it does
   # not (an older install), the arc layer (the decision rules, #47) gets the room
-  # the identity and current context leave (~6 characters per budget token);
-  # the memory-state lists are worth less, so they are the first whole sections
-  # to go when the total overshoots, each named with the command that reads it.
+  # the identity, context pack and current context leave (~6 characters per
+  # budget token). The memory-state lists are worth less, so they are the first
+  # whole sections to go when the total overshoots, followed by the context
+  # pack, then arcs; every dropped section is named with the command that reads
+  # it. The pack length is included here so arc budgeting reflects what will
+  # actually be rendered when the pack fits.
   ARCS=""
   OMITTED=""
   ARC_BUDGET=0
   if [ -n "$IDENTITY" ] && [ "$PERSONA_PART" = all ]; then
-    ARC_BUDGET=$(( (OUTPUT_CAP - ${#IDENTITY} - ${#CONTEXT} - 700) / 6 ))
+    ARC_BUDGET=$(( (OUTPUT_CAP - ${#IDENTITY} - ${#PACK} - ${#CONTEXT} - 700) / 6 ))
     [ "$ARC_BUDGET" -le "${VAULTMIND_ARC_BUDGET:-3000}" ] || ARC_BUDGET="${VAULTMIND_ARC_BUDGET:-3000}"
     if [ "$ARC_BUDGET" -ge 100 ]; then
       ARCS=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" arc recite --vault "$VAULT_PATH" --budget "$ARC_BUDGET" --excerpt "${VAULTMIND_ARC_EXCERPT:-120}" 2>>"$ASK_ERR")
@@ -407,6 +423,10 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
     echo ""
     echo "$IDENTITY"
     echo ""
+    if [ -n "$PACK" ]; then
+      echo "$PACK"
+      echo ""
+    fi
     if [ -n "$ARCS" ]; then
       echo "$ARCS"
       echo ""
@@ -446,6 +466,9 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
     if [ "$(bytes_of "$OUT")" -ge "$OUTPUT_CAP" ] && [ -n "$SELF_IDENTITY" ]; then
       SELF_IDENTITY=""; OMITTED="${OMITTED:+$OMITTED, }the identity vault's memory state"; OUT=$(render_persona)
     fi
+    if [ "$(bytes_of "$OUT")" -ge "$OUTPUT_CAP" ] && [ -n "$PACK" ]; then
+      PACK=""; IDENTITY_PACK_KEPT=false; OMITTED="${OMITTED:+$OMITTED, }the identity context pack"; OUT=$(render_persona)
+    fi
     if [ "$(bytes_of "$OUT")" -ge "$OUTPUT_CAP" ] && [ -n "$ARCS" ]; then
       ARCS=""; OMITTED="${OMITTED:+$OMITTED, }the arcs"; OUT=$(render_persona)
     fi
@@ -461,8 +484,8 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
     printf '%s\n' "$OUT"
 
     # Sidecar log — write injection manifest (agent never sees this)
-    printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","persona_mode":"%s","persona_part":"%s","vault_path":"%s","identity_length":%d,"context_length":%d,"self_identity_length":%d,"self_research_length":%d,"output_bytes":%d,"arc_budget":%d,"capped":"%s","identity_body_withheld":%s,"injection_success":true}\n' \
-      "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$PERSONA_MODE" "$PERSONA_PART" "$VAULT_PATH" "${#IDENTITY}" "${#CONTEXT}" "${#SELF_IDENTITY}" "${#SELF_RESEARCH}" "$(( $(bytes_of "$OUT") + 1 ))" "$ARC_BUDGET" "$OMITTED" "$IDENTITY_BODY_WITHHELD" \
+    printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","persona_mode":"%s","persona_part":"%s","vault_path":"%s","identity_length":%d,"context_length":%d,"self_identity_length":%d,"self_research_length":%d,"output_bytes":%d,"arc_budget":%d,"capped":"%s","identity_body_withheld":%s,"identity_pack_kept":%s,"injection_success":true}\n' \
+      "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$PERSONA_MODE" "$PERSONA_PART" "$VAULT_PATH" "${#IDENTITY}" "${#CONTEXT}" "${#SELF_IDENTITY}" "${#SELF_RESEARCH}" "$(( $(bytes_of "$OUT") + 1 ))" "$ARC_BUDGET" "$OMITTED" "$IDENTITY_BODY_WITHHELD" "$IDENTITY_PACK_KEPT" \
       > "$SIDECAR_FILE" 2>/dev/null
   else
     # The load failed (#356). Say so where the agent reads, not only on stderr:
