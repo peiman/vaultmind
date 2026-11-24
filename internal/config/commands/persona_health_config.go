@@ -16,7 +16,11 @@ With --keepers, pass a YAML list of {name, transcripts, vault, anchor?} entries.
 Without it, pass exactly one --transcripts/--vault pair. The automatic identity
 anchor is a note of type identity with id identity-who-i-am or identity-who-am-i.
 The single-keeper label defaults to the basename of --transcripts, preserving
-any leading path-derived prefix literally; --name overrides it.`,
+any leading path-derived prefix literally; --name overrides it.
+
+When --transcripts names a project directory, the newest *.jsonl by modification
+time is used. A subagent transcript in the same project directory could be
+selected, so point --transcripts at the keeper's own project directory.`,
 	ConfigPrefix: "app.persona.health",
 	FlagOverrides: map[string]string{
 		"app.persona.health.name":             "name",

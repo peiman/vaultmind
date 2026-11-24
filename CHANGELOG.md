@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `persona health` measures identity and complete arc-body byte coverage (including per-arc exchange delivery), arc Principle delivery, reloads after compaction, and auto-memory truncation for one keeper or a YAML list of keepers. Text mode emits one short line per keeper; per-arc body entries remain JSON-only. Single-keeper runs accept `--name` and otherwise use the literal basename of `--transcripts`. `--min-arc-coverage` is an optional WARN-only threshold.
+- `persona health` now ignores pre-boundary and quoted chat memory notices, skips malformed JSONL around valid records, and documents that directory inputs select the newest transcript by modification time.
 
 ### Fixed
 

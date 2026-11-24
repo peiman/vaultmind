@@ -1,0 +1,4 @@
+{"type":"system","subtype":"compact_boundary","timestamp":"2026-11-24T10:00:00Z"}
+{"type":"attachment","timestamp":"2026-11-24T10:00:01Z","attachment":{"type":"hook_success","hookEvent":"SessionStart","content":"IDENTITY CONTEXT:\nI am the keeper. I protect the boundary.\nYOUR ARCS\n\u2500\u2500 arc-boundary \u2014 Boundary\nProtect the boundary. Ask before changing it."}}
+{"type":"assistant","timestamp":"2026-11-24T10:00:02Z","message":{"role":"assistant","content":[{"type":"text","text":"The report says only 46 of 246 lines loaded."}]}}
+{"type":"user","timestamp":"2026-11-24T10:00:03Z","message":{"role":"user","content":[{"type":"tool_result","content":[{"type":"text","text":"The report says only 46 of 246 lines loaded."}]}]}}

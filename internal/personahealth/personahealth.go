@@ -103,7 +103,9 @@ func ValidateMinArcCoverage(value float64) error {
 }
 
 // memoryTruncationPattern is from the 2026-11-24 transcript evidence:
-// "only 46 of 246 lines loaded".
+// "only 46 of 246 lines loaded". The real notice's record type is
+// unconfirmed: this wording comes from a keeper's report and has only been
+// seen quoted in transcripts, so system and attachment records are scanned.
 var memoryTruncationPattern = regexp.MustCompile(`(?i)\bonly\s+([0-9]+)\s+of\s+([0-9]+)\s+lines\s+loaded\b`)
 
 type transcriptEvidence struct {
@@ -292,24 +294,33 @@ func readTranscriptFile(path string) (transcriptEvidence, error) {
 	var result transcriptEvidence
 	seenPoint := false
 	compactSeen := false
+	validRecords := 0
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 64*1024), 64*1024*1024)
 	for scanner.Scan() {
 		line := scanner.Bytes()
-		if match := directMemoryNotice(line); match != nil {
-			result.Memory = MemoryReport{Truncated: true, LoadedLines: match.LoadedLines, TotalLines: match.TotalLines, Notice: match.Text}
+		var object map[string]json.RawMessage
+		if err := json.Unmarshal(line, &object); err != nil || object == nil {
+			continue
 		}
 		var record transcriptRecord
 		if err := json.Unmarshal(line, &record); err != nil {
-			return transcriptEvidence{}, fmt.Errorf("transcript %q: invalid JSON: %w", path, err)
+			continue
 		}
+		validRecords++
 		if record.Type == "system" && record.Subtype == "compact_boundary" {
 			compactSeen = true
 			seenPoint = true
 			result.AfterCompact = formatPoint(record.Timestamp)
 			result.PointPrefix = "after compaction"
 			result.Texts = nil
+			result.Memory = MemoryReport{}
 			continue
+		}
+		if compactSeen && (record.Type == "system" || record.Type == "attachment") {
+			if match := directMemoryNotice(line); match != nil {
+				result.Memory = MemoryReport{Truncated: true, LoadedLines: match.LoadedLines, TotalLines: match.TotalLines, Notice: match.Text}
+			}
 		}
 		if !seenPoint {
 			seenPoint = true
@@ -323,6 +334,9 @@ func readTranscriptFile(path string) (transcriptEvidence, error) {
 	}
 	if err := scanner.Err(); err != nil {
 		return transcriptEvidence{}, fmt.Errorf("transcript %q: reading: %w", path, err)
+	}
+	if validRecords == 0 {
+		return transcriptEvidence{}, fmt.Errorf("transcript %q contains no valid records", path)
 	}
 	if !compactSeen && result.AfterCompact == "" {
 		result.AfterCompact = formatPoint("")
@@ -339,12 +353,6 @@ type memoryNotice struct {
 
 func directMemoryNotice(line []byte) *memoryNotice {
 	for _, indexes := range memoryTruncationPattern.FindAllSubmatchIndex(line, -1) {
-		// A quoted report in a chat message is not the runtime notice. In JSONL
-		// it is preceded by the escaped quote sequence \\"; a direct notice is
-		// preceded by ordinary JSON string content such as `:` or a space.
-		if indexes[0] >= 2 && line[indexes[0]-2] == '\\' && line[indexes[0]-1] == '"' {
-			continue
-		}
 		loaded, _ := strconv.Atoi(string(line[indexes[2]:indexes[3]]))
 		total, _ := strconv.Atoi(string(line[indexes[4]:indexes[5]]))
 		return &memoryNotice{Text: string(line[indexes[0]:indexes[1]]), LoadedLines: loaded, TotalLines: total}

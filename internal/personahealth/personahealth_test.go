@@ -108,6 +108,30 @@ func TestCheck_NoReloadAfterCompactionFails(t *testing.T) {
 	assert.Equal(t, "2026-11-24 10:00Z", report.AfterCompact)
 }
 
+func TestCheck_CompactionResetsEarlierSessionStartText(t *testing.T) {
+	report := CheckKeeper(Keeper{
+		Name:        "stale",
+		Transcripts: fixturePath("transcripts/precompact-full-postcompact-title.jsonl"),
+		Vault:       fixturePath("vault-title"),
+	}, 0.9)
+
+	assert.Equal(t, "fail", report.Status)
+	assert.Zero(t, report.Identity.Coverage)
+	assert.Zero(t, report.Identity.CoveredBytes)
+}
+
+func TestCheck_OnlySessionStartHookSuccessCountsAfterCompaction(t *testing.T) {
+	report := CheckKeeper(Keeper{
+		Name:        "wrong-records",
+		Transcripts: fixturePath("transcripts/wrong-session-start-records.jsonl"),
+		Vault:       fixturePath("vault-title"),
+	}, 0.9)
+
+	assert.Equal(t, "fail", report.Status)
+	assert.Zero(t, report.Identity.Coverage)
+	assert.Zero(t, report.Identity.CoveredBytes)
+}
+
 func TestCheck_MemoryTruncationFailsAndReportsCounts(t *testing.T) {
 	report := CheckKeeper(Keeper{
 		Name:        "memory",
@@ -120,6 +144,59 @@ func TestCheck_MemoryTruncationFailsAndReportsCounts(t *testing.T) {
 	assert.Equal(t, 46, report.Memory.LoadedLines)
 	assert.Equal(t, 246, report.Memory.TotalLines)
 	assert.Contains(t, report.Error, "memory truncated")
+}
+
+func TestCheck_MemoryTruncationBeforeLastCompactionIsIgnored(t *testing.T) {
+	report := CheckKeeper(Keeper{
+		Name:        "memory-reset",
+		Transcripts: fixturePath("transcripts/memory-before-last-compaction.jsonl"),
+		Vault:       fixturePath("vault-full"),
+	}, 0.9)
+
+	assert.Equal(t, "ok", report.Status)
+	assert.False(t, report.Memory.Truncated)
+	assert.Empty(t, report.Error)
+}
+
+func TestCheck_MemoryNoticeInAssistantAndToolResultIsIgnored(t *testing.T) {
+	report := CheckKeeper(Keeper{
+		Name:        "quoted-memory",
+		Transcripts: fixturePath("transcripts/memory-notice-quoted.jsonl"),
+		Vault:       fixturePath("vault-full"),
+	}, 0.9)
+
+	assert.Equal(t, "ok", report.Status)
+	assert.False(t, report.Memory.Truncated)
+}
+
+func TestCheck_EmptySessionStartContentDoesNotReload(t *testing.T) {
+	report := CheckKeeper(Keeper{
+		Name:        "empty-reload",
+		Transcripts: fixturePath("transcripts/empty-session-start.jsonl"),
+		Vault:       fixturePath("vault-title"),
+	}, 0.9)
+
+	assert.Equal(t, "fail", report.Status)
+	assert.Zero(t, report.Identity.Coverage)
+	assert.Contains(t, report.Error, "NO RELOAD")
+}
+
+func TestCheck_SkipsMalformedJSONLAmongValidRecords(t *testing.T) {
+	report := CheckKeeper(Keeper{
+		Name:        "malformed-between",
+		Transcripts: fixturePath("transcripts/malformed-between-valid.jsonl"),
+		Vault:       fixturePath("vault-title"),
+	}, 0.9)
+
+	assert.Equal(t, "warn", report.Status)
+	assert.Equal(t, 1.0, report.Identity.Coverage)
+}
+
+func TestReadTranscriptRejectsFileWithoutValidRecords(t *testing.T) {
+	_, err := readTranscript(fixturePath("transcripts/unreadable.jsonl"))
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no valid records")
 }
 
 func TestCheck_UnreadableTranscriptFailsPerKeeper(t *testing.T) {
