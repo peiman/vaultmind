@@ -21,6 +21,15 @@ func TestAsk_ReadByRankRendersChosenBody(t *testing.T) {
 	assert.Contains(t, text, "Alpha", "chosen note's title must surface")
 }
 
+// An explicit read must render the chosen body even when the normal ask path
+// would treat the ranking as too weak to deliver context automatically.
+func TestAsk_ReadByRankRendersBaselineBody(t *testing.T) {
+	vault := indexedBaselineVault(t)
+	out, _, err := runRootCmd(t, "ask", "pagerank", "--vault", vault, "--read", "1")
+	require.NoError(t, err)
+	assert.Contains(t, out.String(), "PageRank models the importance of a node")
+}
+
 // --read by id resolves an exact id from the returned hits. Mirrors the
 // agent workflow: see the menu, pick by id, get the body — no copy-paste.
 func TestAsk_ReadByIDRendersChosenBody(t *testing.T) {

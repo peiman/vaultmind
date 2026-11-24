@@ -287,7 +287,10 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
   # can separate hook-triggered loads from deliberate queries.
   #
   # The two queries serve different purposes:
-  #  - "who am I" loads the IDENTITY anchor with full bodies. Priming.
+  #  - "who am I" loads the IDENTITY anchor with full bodies. The relevance
+  #    gate withholds bodies when the top hit is weak; the persona load must
+  #    not depend on that score. Measured z=+0.93, 0 delivered, so --read 1
+  #    is the deliberate documented override. Priming is a deliberate load.
   #    Cross-session continuity depends on the agent showing up as
   #    already-someone (the "Hey <name>" greeting pattern). Stripping
   #    this to pointers would defeat that.
@@ -319,8 +322,12 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
   # The "what matters most right now" query below deliberately KEEPS
   # --pointers-only — see the preload-trap reasoning above. That one is a design
   # choice about forcing an explicit read, not an oversight.
-  IDENTITY=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" ask "who am I" --vault "$VAULT_PATH" --max-items 8 --budget 6000 --excerpt 300 2>"$ASK_ERR")
+  IDENTITY=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" ask "who am I" --vault "$VAULT_PATH" --max-items 8 --budget 6000 --excerpt 300 --read 1 2>"$ASK_ERR")
   IDENTITY_STATUS=$?
+  IDENTITY_BODY_WITHHELD=false
+  case "$IDENTITY" in
+    *"body suppressed"*) IDENTITY_BODY_WITHHELD=true ;;
+  esac
 
   # THE ARC LAYER, ENUMERATED — not retrieved (issue #47).
   #
@@ -454,8 +461,8 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
     printf '%s\n' "$OUT"
 
     # Sidecar log — write injection manifest (agent never sees this)
-    printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","persona_mode":"%s","persona_part":"%s","vault_path":"%s","identity_length":%d,"context_length":%d,"self_identity_length":%d,"self_research_length":%d,"output_bytes":%d,"arc_budget":%d,"capped":"%s","injection_success":true}\n' \
-      "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$PERSONA_MODE" "$PERSONA_PART" "$VAULT_PATH" "${#IDENTITY}" "${#CONTEXT}" "${#SELF_IDENTITY}" "${#SELF_RESEARCH}" "$(( $(bytes_of "$OUT") + 1 ))" "$ARC_BUDGET" "$OMITTED" \
+    printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","persona_mode":"%s","persona_part":"%s","vault_path":"%s","identity_length":%d,"context_length":%d,"self_identity_length":%d,"self_research_length":%d,"output_bytes":%d,"arc_budget":%d,"capped":"%s","identity_body_withheld":%s,"injection_success":true}\n' \
+      "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$PERSONA_MODE" "$PERSONA_PART" "$VAULT_PATH" "${#IDENTITY}" "${#CONTEXT}" "${#SELF_IDENTITY}" "${#SELF_RESEARCH}" "$(( $(bytes_of "$OUT") + 1 ))" "$ARC_BUDGET" "$OMITTED" "$IDENTITY_BODY_WITHHELD" \
       > "$SIDECAR_FILE" 2>/dev/null
   else
     # The load failed (#356). Say so where the agent reads, not only on stderr:
