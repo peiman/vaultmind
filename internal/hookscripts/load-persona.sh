@@ -325,7 +325,29 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
   # its excerpts are useful when they fit, but its menu is omitted because the
   # first ask already printed it. The pack is best-effort and never replaces
   # the anchor body.
-  IDENTITY=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" ask "who am I" --vault "$VAULT_PATH" --max-items 8 --budget 6000 --excerpt 300 --read 1 2>"$ASK_ERR")
+  #
+  # The anchor is read by its TYPE, not by its rank: rank 1 is whatever the
+  # ranking says today, and a reranking would silently deliver an arc as the
+  # "identity". Anchor ids also differ between vaults (identity-who-i-am,
+  # identity-who-am-i). VAULTMIND_IDENTITY_ANCHOR names it explicitly. A keyword
+  # search filtered to type identity is fast (no model load). With no note of
+  # that type, the top hit is delivered and the output says so.
+  ANCHOR_ID="${VAULTMIND_IDENTITY_ANCHOR:-}"
+  if [ -z "$ANCHOR_ID" ]; then
+    ANCHOR_ID=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" search "who am I" --type identity --vault "$VAULT_PATH" --json --limit 1 2>/dev/null \
+      | python3 -c 'import json,sys
+try:
+    hits = json.load(sys.stdin)["result"]["hits"]
+    print(hits[0]["id"] if hits else "")
+except Exception:
+    print("")' 2>/dev/null)
+  fi
+  ANCHOR_WARNING=""
+  if [ -z "$ANCHOR_ID" ]; then
+    ANCHOR_ID=1
+    ANCHOR_WARNING="(This vault has no note of type identity, so the text above is the top hit for \"who am I\", which may not be your identity note. Give your identity note type: identity, or set VAULTMIND_IDENTITY_ANCHOR.)"
+  fi
+  IDENTITY=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" ask "who am I" --vault "$VAULT_PATH" --max-items 8 --budget 6000 --excerpt 300 --read "$ANCHOR_ID" 2>"$ASK_ERR")
   IDENTITY_STATUS=$?
   IDENTITY_BODY_WITHHELD=false
   PACK_OUT=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" ask "who am I" --vault "$VAULT_PATH" --max-items 8 --budget 6000 --excerpt 300 2>>"$ASK_ERR" || true)
@@ -423,6 +445,10 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
     echo ""
     echo "$IDENTITY"
     echo ""
+    if [ -n "$ANCHOR_WARNING" ]; then
+      echo "$ANCHOR_WARNING"
+      echo ""
+    fi
     if [ -n "$PACK" ]; then
       echo "$PACK"
       echo ""
