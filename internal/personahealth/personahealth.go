@@ -64,14 +64,15 @@ type MemoryReport struct {
 
 // Report is the stable per-keeper health result.
 type Report struct {
-	Name         string         `json:"name"`
-	Status       string         `json:"status"`
-	Identity     IdentityReport `json:"identity"`
-	Arcs         ArcReport      `json:"arcs"`
-	Memory       MemoryReport   `json:"memory"`
-	AfterCompact string         `json:"after_compact,omitempty"`
-	Error        string         `json:"error,omitempty"`
-	Warning      string         `json:"warning,omitempty"`
+	Name            string         `json:"name"`
+	Status          string         `json:"status"`
+	Identity        IdentityReport `json:"identity"`
+	Arcs            ArcReport      `json:"arcs"`
+	Memory          MemoryReport   `json:"memory"`
+	UnreadableLines int            `json:"unreadable_lines"`
+	AfterCompact    string         `json:"after_compact,omitempty"`
+	Error           string         `json:"error,omitempty"`
+	Warning         string         `json:"warning,omitempty"`
 }
 
 // Result is the multi-keeper JSON result.
@@ -109,10 +110,11 @@ func ValidateMinArcCoverage(value float64) error {
 var memoryTruncationPattern = regexp.MustCompile(`(?i)\bonly\s+([0-9]+)\s+of\s+([0-9]+)\s+lines\s+loaded\b`)
 
 type transcriptEvidence struct {
-	Texts        []string
-	AfterCompact string
-	PointPrefix  string
-	Memory       MemoryReport
+	Texts           []string
+	AfterCompact    string
+	PointPrefix     string
+	Memory          MemoryReport
+	UnreadableLines int
 }
 
 type transcriptRecord struct {
@@ -141,6 +143,7 @@ func checkKeeper(keeper Keeper, minCoverage, minArcCoverage float64) Report {
 	}
 	report.AfterCompact = evidence.AfterCompact
 	report.Memory = evidence.Memory
+	report.UnreadableLines = evidence.UnreadableLines
 
 	anchorBody, arcs, err := readVault(keeper.Vault, keeper.Anchor)
 	if err != nil {
@@ -213,6 +216,13 @@ func Text(result Result) string {
 		}
 		fmt.Fprintf(&b, "%s  %-4s  identity %.0f%% (%s of %s bytes)  arcs %d full / %d partial / %d missing  arcs body %s of %s bytes, %d%%  memory %s  after compact %s",
 			report.Name, status, report.Identity.Coverage*100, formatNumber(report.Identity.CoveredBytes), formatNumber(report.Identity.TotalBytes), report.Arcs.Full, report.Arcs.Partial, report.Arcs.Missing, formatNumber(report.Arcs.ArrivedBytes), formatNumber(report.Arcs.BodyBytes), arcCoveragePercentTotal(report.Arcs), memory, report.AfterCompact)
+		if report.UnreadableLines > 0 {
+			lineWord := "line"
+			if report.UnreadableLines != 1 {
+				lineWord += "s"
+			}
+			fmt.Fprintf(&b, "  %d unreadable %s", report.UnreadableLines, lineWord)
+		}
 		if report.Error != "" {
 			b.WriteString("  ")
 			b.WriteString(report.Error)
@@ -295,29 +305,40 @@ func readTranscriptFile(path string) (transcriptEvidence, error) {
 	seenPoint := false
 	compactSeen := false
 	validRecords := 0
+	resetBoundary := func(timestamp string) {
+		compactSeen = true
+		seenPoint = true
+		result.AfterCompact = formatPoint(timestamp)
+		result.PointPrefix = "after compaction"
+		result.Texts = nil
+		result.Memory = MemoryReport{}
+	}
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 64*1024), 64*1024*1024)
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		var object map[string]json.RawMessage
 		if err := json.Unmarshal(line, &object); err != nil || object == nil {
+			result.UnreadableLines++
+			if strings.Contains(string(line), "compact_boundary") {
+				resetBoundary("")
+			}
 			continue
 		}
 		var record transcriptRecord
 		if err := json.Unmarshal(line, &record); err != nil {
+			result.UnreadableLines++
+			if strings.Contains(string(line), "compact_boundary") {
+				resetBoundary("")
+			}
 			continue
 		}
 		validRecords++
 		if record.Type == "system" && record.Subtype == "compact_boundary" {
-			compactSeen = true
-			seenPoint = true
-			result.AfterCompact = formatPoint(record.Timestamp)
-			result.PointPrefix = "after compaction"
-			result.Texts = nil
-			result.Memory = MemoryReport{}
+			resetBoundary(record.Timestamp)
 			continue
 		}
-		if compactSeen && (record.Type == "system" || record.Type == "attachment") {
+		if record.Type == "system" || record.Type == "attachment" {
 			if match := directMemoryNotice(line); match != nil {
 				result.Memory = MemoryReport{Truncated: true, LoadedLines: match.LoadedLines, TotalLines: match.TotalLines, Notice: match.Text}
 			}

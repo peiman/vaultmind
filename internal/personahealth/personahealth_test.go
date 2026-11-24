@@ -1,6 +1,7 @@
 package personahealth
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -120,6 +121,27 @@ func TestCheck_CompactionResetsEarlierSessionStartText(t *testing.T) {
 	assert.Zero(t, report.Identity.CoveredBytes)
 }
 
+func TestCheck_TruncatedCompactBoundaryClearsEarlierIdentity(t *testing.T) {
+	report := CheckKeeper(Keeper{
+		Name:        "truncated-boundary",
+		Transcripts: fixturePath("transcripts/truncated-compact-boundary.jsonl"),
+		Vault:       fixturePath("vault-full"),
+	}, 0.9)
+
+	data, err := json.Marshal(report)
+	require.NoError(t, err)
+	var got struct {
+		UnreadableLines int `json:"unreadable_lines"`
+	}
+	require.NoError(t, json.Unmarshal(data, &got))
+	assert.Equal(t, "fail", report.Status)
+	assert.Zero(t, report.Identity.CoveredBytes)
+	assert.Equal(t, 1, report.UnreadableLines)
+	assert.Equal(t, 1, got.UnreadableLines)
+	assert.Contains(t, Text(Result{Keepers: []Report{report}}), "1 unreadable line")
+	assert.Equal(t, "unknown", report.AfterCompact)
+}
+
 func TestCheck_OnlySessionStartHookSuccessCountsAfterCompaction(t *testing.T) {
 	report := CheckKeeper(Keeper{
 		Name:        "wrong-records",
@@ -144,6 +166,19 @@ func TestCheck_MemoryTruncationFailsAndReportsCounts(t *testing.T) {
 	assert.Equal(t, 46, report.Memory.LoadedLines)
 	assert.Equal(t, 246, report.Memory.TotalLines)
 	assert.Contains(t, report.Error, "memory truncated")
+}
+
+func TestCheck_MemoryTruncationWithoutCompactionFails(t *testing.T) {
+	report := CheckKeeper(Keeper{
+		Name:        "memory-without-compaction",
+		Transcripts: fixturePath("transcripts/memory-truncated-without-compaction.jsonl"),
+		Vault:       fixturePath("vault-memory"),
+	}, 0.9)
+
+	assert.Equal(t, "fail", report.Status)
+	assert.True(t, report.Memory.Truncated)
+	assert.Equal(t, 46, report.Memory.LoadedLines)
+	assert.Equal(t, 246, report.Memory.TotalLines)
 }
 
 func TestCheck_MemoryTruncationBeforeLastCompactionIsIgnored(t *testing.T) {
