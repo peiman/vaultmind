@@ -24,6 +24,10 @@ if [ "$1" = "ask" ] && [ "$2" = "who am I" ]; then
   elif [ "%s" = weak ]; then
     echo 'Search: "who am I" (5 hits) [relevance: weak — body suppressed]'
     echo 'Context from: identity-who-i-am — 9 notes, 0 delivered'
+  elif [ "%s" = ten ]; then
+    echo 'Search: "who am I" (12 hits)'
+    echo 'Context from: identity-who-i-am — 12 notes, 10 delivered as excerpts (900 tok)'
+    echo 'PACK-EXCERPT-TEXT'
   else
     echo 'Search: "who am I" (5 hits)'
     echo 'Context from: identity-who-i-am — 9 notes, 9 delivered as excerpts (558 tok)'
@@ -34,7 +38,7 @@ elif [ "$1" = ask ] || [ "$1" = self ] || [ "$1" = arc ]; then
   :
 fi
 exit 0
-`, mode, mode, mode)
+`, mode, mode, mode, mode)
 }
 
 func runIdentityCase(t *testing.T, mode string) (string, map[string]any) {
@@ -71,4 +75,14 @@ func TestPersonaHook_IdentityBodyWinsWhenBodyAndPackExceedCap(t *testing.T) {
 	assert.Contains(t, out, "the identity context pack")
 	assert.LessOrEqual(t, len(out), deliveryCap, "hook output cap is measured in bytes")
 	assert.Equal(t, false, rec["identity_pack_kept"])
+}
+
+// "10 delivered" must not read as "0 delivered": a pack that delivered ten or
+// more items is kept, like any other pack that delivered something.
+func TestPersonaHook_PackWithTenDeliveredIsKept(t *testing.T) {
+	out, rec := runIdentityCase(t, "ten")
+
+	assert.Contains(t, out, "WHO-I-AM-BODY-TEXT")
+	assert.Contains(t, out, "PACK-EXCERPT-TEXT")
+	assert.Equal(t, true, rec["identity_pack_kept"])
 }

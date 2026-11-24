@@ -332,7 +332,7 @@ if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
   PACK=""
   if printf '%s\n' "$PACK_OUT" | grep -q '^Context from:'; then
     PACK=$(printf '%s\n' "$PACK_OUT" | awk '/^Context from:/{started=1} started{print}')
-    if printf '%s\n' "$PACK" | grep -Eiq '0 delivered|pointers only'; then
+    if printf '%s\n' "$PACK" | grep -Eiq '(^|[^0-9])0 delivered|pointers only'; then
       PACK=""
     fi
   fi
