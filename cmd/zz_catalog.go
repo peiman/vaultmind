@@ -66,6 +66,16 @@ type catalogEntry struct {
 // test (catalog_test.go) guarantees every non-hidden command has an entry here.
 var commandCatalog = map[string]catalogEntry{
 	// ── Retrieval & memory ───────────────────────────────────────────────
+	"vaultmind persona": {
+		group: groupLifecycle,
+		when:  "you want to measure whether a keeper reconstructed its persona after a context boundary.",
+		short: "Measure persona reconstruction",
+	},
+	"vaultmind persona health": {
+		group: groupLifecycle,
+		when:  "you need body-byte identity and arc coverage, Principle delivery, reload, and memory-truncation evidence for one or more keepers; use --name to label a single keeper.",
+		short: "Report whether keeper identity reached the current context",
+	},
 	"vaultmind ask": {
 		group: groupRetrieval,
 		when:  "you want to answer \"what do I know about X?\" — search plus packed context in one step; add --vaults a,b,c when your memory spans several vaults.",

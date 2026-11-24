@@ -13,6 +13,35 @@ vaultmind note accept <id>
 
 `propose` retrieves the way `ask` does. A close match (the strong relevance band, by default) becomes a proposal draft next to that note. Anything less close becomes a new draft, expanded through the note template. After the draft is written, propose re-runs the original question through the same ranking `ask` uses and reports whether that question would find the draft. The ranks are stored on the draft as `rank_before`, `rank_after`, and `rank_checked_at`. `0` means not in the hit window. The check does not record an access. `accept` flips a new draft to the schema's published status, or appends a proposal onto its target and removes the proposal file. `--json` returns the v1 envelope, including `rank_check`.
 
+## `persona health`
+
+Measure whether a keeper's identity text actually reached the current context after the newest compaction boundary:
+
+```bash
+vaultmind persona health \
+  --transcripts /path/to/mira-transcripts \
+  --vault ~/.vaultmind/persona \
+  --name mira \
+  --min-coverage 0.9
+```
+
+The automatic identity anchor is the first note found with `type: identity` and id `identity-who-i-am` or `identity-who-am-i`; `--anchor` overrides that choice. Identity coverage counts normalized body bytes, excluding frontmatter. Arc coverage keeps the `Principle` full/partial/missing counts and also measures each arc's complete body, including its exchanges, with the same verbatim-sentence method. JSON places the per-arc entries in `result.keepers[].arcs.items` with `id`, `body_bytes`, and `arrived_bytes`, alongside the total `body_bytes`, `arrived_bytes`, and `coverage`. A missing reload, low identity coverage, unreadable input, or auto-memory notice fails; partial or missing Principles warn.
+
+Text mode emits one short line per keeper with the name, verdict, identity coverage, Principle counts, total arc-body coverage, memory status, after-compact timestamp, and failure/warning reasons. Per-arc body entries are JSON-only. In the single-keeper form, `--name` is optional; when omitted, the label is the literal basename of `--transcripts` (including any leading path-derived prefix). The YAML `--keepers` form supplies names itself.
+
+`--min-arc-coverage` defaults to `0`, which reports arc-body coverage without applying a threshold. A positive value below the total arc-body coverage produces WARN, never FAIL by itself; hooks may intentionally excerpt arcs to stay within their context budget.
+
+For several keepers, pass a YAML list:
+
+```yaml
+- name: mira
+  transcripts: /path/to/project-transcripts
+  vault: /path/to/identity-vault
+  anchor: identity-who-i-am
+```
+
+`--json` emits the standard `v1` envelope with a `result.keepers` array. Exit status is 1 when any keeper fails.
+
 `--gap <id>` links the draft to an open gap (`closes_gap`). When `--question` is omitted, the question stored on the gap is used. Accepting that draft closes the gap. `closed_by` is the new note, or the note a patch lands on.
 
 ## VaultMind `note gap`

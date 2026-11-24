@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `persona health` measures identity and complete arc-body byte coverage (including per-arc exchange delivery), arc Principle delivery, reloads after compaction, and auto-memory truncation for one keeper or a YAML list of keepers. Text mode emits one short line per keeper; per-arc body entries remain JSON-only. Single-keeper runs accept `--name` and otherwise use the literal basename of `--transcripts`. `--min-arc-coverage` is an optional WARN-only threshold.
+
 ### Fixed
 
 - The ORT release archives now bundle ONNX Runtime 1.30.0 from Microsoft's NuGet package, pinned by version and sha256; the GitHub release they came from is no longer available, so v0.10.30 shipped without them.
