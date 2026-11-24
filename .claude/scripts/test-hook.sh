@@ -48,7 +48,11 @@ IDENTITY_SECTION=$(awk '
   in_identity && (/^CURRENT CONTEXT:/ || /^YOUR ARCS/ || /^ARCS/) { exit }
   in_identity { print }
 ' "$TMP_STDOUT")
-if printf '%s\n' "$IDENTITY_SECTION" | grep -Eiq 'body suppressed|0 delivered'; then
+# Match the pack's own "Context from: ... N delivered" line, not the Search
+# header: a --read ask can print "body suppressed; use --read N" in its header
+# and still deliver the body. "[^0-9]0" keeps "10 delivered" from matching (a
+# "(^|[^0-9])" group after ".*" matches mid-line in BSD grep, so don't use it).
+if printf '%s\n' "$IDENTITY_SECTION" | grep -Eiq '^Context from:.*[^0-9]0 delivered'; then
   echo "FAIL: identity context contains withheld bodies" >&2
   printf '%s\n' "$IDENTITY_SECTION" >&2
   exit 1
