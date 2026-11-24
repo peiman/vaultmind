@@ -1994,6 +1994,56 @@
           ],
           "type": "string"
         },
+        "persona": {
+          "properties": {
+            "health": {
+              "properties": {
+                "anchor": {
+                  "default": "",
+                  "description": "Identity anchor note id",
+                  "type": "string"
+                },
+                "json": {
+                  "default": false,
+                  "description": "Output JSON",
+                  "type": "boolean"
+                },
+                "keepers": {
+                  "default": "",
+                  "description": "YAML file containing keeper definitions",
+                  "type": "string"
+                },
+                "min_arc_coverage": {
+                  "default": 0,
+                  "description": "Minimum total arc-body coverage fraction (WARN only)",
+                  "type": "number"
+                },
+                "min_coverage": {
+                  "default": 0.9,
+                  "description": "Minimum identity coverage fraction",
+                  "type": "number"
+                },
+                "name": {
+                  "default": "",
+                  "description": "Single-keeper label (default: basename of --transcripts)",
+                  "type": "string"
+                },
+                "transcripts": {
+                  "default": "",
+                  "description": "Transcript project directory",
+                  "type": "string"
+                },
+                "vault": {
+                  "default": "",
+                  "description": "Identity vault path",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "type": "object"
+        },
         "ping": {
           "properties": {
             "output_color": {

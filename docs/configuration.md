@@ -331,6 +331,14 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.notepropose.close_band` | string | `strong` | `VAULTMIND_APP_NOTEPROPOSE_CLOSE_BAND` | Weakest relevance band that is close enough to patch. A stronger band is also close. The band ask already reports for that hit. Default is the strong band. |
 | `app.notepropose.drafts_dir` | string | `notes` | `VAULTMIND_APP_NOTEPROPOSE_DRAFTS_DIR` | Folder for a draft that must not sit in the import folder. Default is notes. "." is the vault root. A folder under the import folder falls back to notes. |
 | `app.notepropose.gap` | string | `` | `VAULTMIND_APP_NOTEPROPOSE_GAP` | Open gap this finding answers. The draft stores closes_gap. When the question is omitted, the gap's question is used. |
+| `app.persona.health.name` | string | `` | `VAULTMIND_APP_PERSONA_HEALTH_NAME` | Single-keeper label (default: basename of --transcripts) |
+| `app.persona.health.transcripts` | string | `` | `VAULTMIND_APP_PERSONA_HEALTH_TRANSCRIPTS` | Transcript project directory |
+| `app.persona.health.vault` | string | `` | `VAULTMIND_APP_PERSONA_HEALTH_VAULT` | Identity vault path |
+| `app.persona.health.anchor` | string | `` | `VAULTMIND_APP_PERSONA_HEALTH_ANCHOR` | Identity anchor note id |
+| `app.persona.health.keepers` | string | `` | `VAULTMIND_APP_PERSONA_HEALTH_KEEPERS` | YAML file containing keeper definitions |
+| `app.persona.health.json` | bool | `false` | `VAULTMIND_APP_PERSONA_HEALTH_JSON` | Output JSON |
+| `app.persona.health.min_coverage` | float | `0.9` | `VAULTMIND_APP_PERSONA_HEALTH_MIN_COVERAGE` | Minimum identity coverage fraction |
+| `app.persona.health.min_arc_coverage` | float | `0` | `VAULTMIND_APP_PERSONA_HEALTH_MIN_ARC_COVERAGE` | Minimum total arc-body coverage fraction (WARN only) |
 | `app.ping.output_message` | string | `Pong` | `VAULTMIND_APP_PING_OUTPUT_MESSAGE` | Default message to display for the ping command |
 | `app.ping.output_color` | string | `white` | `VAULTMIND_APP_PING_OUTPUT_COLOR` | Text color for ping command output (white, red, green, blue, cyan, yellow, magenta) |
 | `app.ping.ui` | bool | `false` | `VAULTMIND_APP_PING_UI` | Enable interactive UI for the ping command |
@@ -1375,6 +1383,31 @@ app:
 
     # Open gap this finding answers. The draft stores closes_gap. When the question is omitted, the gap's question is used.
     gap: 
+
+  persona:
+    # Single-keeper label (default: basename of --transcripts)
+    health.name: 
+
+    # Transcript project directory
+    health.transcripts: 
+
+    # Identity vault path
+    health.vault: 
+
+    # Identity anchor note id
+    health.anchor: 
+
+    # YAML file containing keeper definitions
+    health.keepers: 
+
+    # Output JSON
+    health.json: false
+
+    # Minimum identity coverage fraction
+    health.min_coverage: 0.9
+
+    # Minimum total arc-body coverage fraction (WARN only)
+    health.min_arc_coverage: 0
 
   ping:
     # Default message to display for the ping command
@@ -2435,6 +2468,30 @@ export VAULTMIND_APP_NOTEPROPOSE_DRAFTS_DIR=notes
 
 # Open gap this finding answers. The draft stores closes_gap. When the question is omitted, the gap's question is used.
 export VAULTMIND_APP_NOTEPROPOSE_GAP=
+
+# Single-keeper label (default: basename of --transcripts)
+export VAULTMIND_APP_PERSONA_HEALTH_NAME=
+
+# Transcript project directory
+export VAULTMIND_APP_PERSONA_HEALTH_TRANSCRIPTS=
+
+# Identity vault path
+export VAULTMIND_APP_PERSONA_HEALTH_VAULT=
+
+# Identity anchor note id
+export VAULTMIND_APP_PERSONA_HEALTH_ANCHOR=
+
+# YAML file containing keeper definitions
+export VAULTMIND_APP_PERSONA_HEALTH_KEEPERS=
+
+# Output JSON
+export VAULTMIND_APP_PERSONA_HEALTH_JSON=false
+
+# Minimum identity coverage fraction
+export VAULTMIND_APP_PERSONA_HEALTH_MIN_COVERAGE=0.9
+
+# Minimum total arc-body coverage fraction (WARN only)
+export VAULTMIND_APP_PERSONA_HEALTH_MIN_ARC_COVERAGE=0
 
 # Default message to display for the ping command
 export VAULTMIND_APP_PING_OUTPUT_MESSAGE=Hello World!
