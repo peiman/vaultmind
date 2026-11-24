@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.31] - 2026-11-24
+
+Agents now come back as themselves. Since 19 October, a weak relevance score on the persona hook's "who am I" query withheld the identity note's text at every session start and compaction, so agents received only its title while the hook reported success. The hook now reads the identity note by its type and always delivers its full text.
+
 ### Fixed
 
 - The persona hook now always delivers the identity note's full text at session start and after compaction, alongside the context excerpts when they fit; before, a weak relevance score withheld it and agents got only its title, and on stronger scores they got excerpts but never the full note.
@@ -3299,7 +3303,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.30...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.31...HEAD
+[0.10.31]: https://github.com/peiman/vaultmind/compare/v0.10.30...v0.10.31
 [0.10.30]: https://github.com/peiman/vaultmind/compare/v0.10.29...v0.10.30
 [0.10.29]: https://github.com/peiman/vaultmind/compare/v0.10.28...v0.10.29
 [0.10.28]: https://github.com/peiman/vaultmind/compare/v0.10.27...v0.10.28
