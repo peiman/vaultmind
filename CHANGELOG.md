@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `persona health` now ignores memory-truncation wording quoted by queued-command, hook-context, system, and other non-memory records, and reports loaded AutoMem files from the latest instructions attachment with their newline-separated line counts.
+- `persona health` now recognizes Claude Code's `> WARNING:` memory notice inside AutoMem file content, reports cut and loaded line counts (or unknown numbers for the KB-only variant), and treats an absent notice as `memory ok` once the notice location is proven.
 
 ## [0.10.31] - 2026-11-24
 

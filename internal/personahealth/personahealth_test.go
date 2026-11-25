@@ -163,9 +163,11 @@ func TestCheck_MemoryTruncationFailsAndReportsCounts(t *testing.T) {
 
 	assert.Equal(t, "fail", report.Status)
 	assert.True(t, report.Memory.Truncated)
-	assert.Equal(t, 46, report.Memory.LoadedLines)
-	assert.Equal(t, 246, report.Memory.TotalLines)
+	assert.Equal(t, 200, report.Memory.LoadedLines)
+	assert.Equal(t, 202, report.Memory.TotalLines)
+	assert.Equal(t, 2, report.Memory.CutLines)
 	assert.Contains(t, report.Error, "memory truncated")
+	assert.Contains(t, Text(Result{Keepers: []Report{report}}), "truncated (loaded 200 of 202 lines, 2 cut off)")
 }
 
 func TestCheck_MemoryTruncationWithoutCompactionFails(t *testing.T) {
@@ -177,8 +179,10 @@ func TestCheck_MemoryTruncationWithoutCompactionFails(t *testing.T) {
 
 	assert.Equal(t, "fail", report.Status)
 	assert.True(t, report.Memory.Truncated)
-	assert.Equal(t, 46, report.Memory.LoadedLines)
-	assert.Equal(t, 246, report.Memory.TotalLines)
+	assert.Zero(t, report.Memory.LoadedLines)
+	assert.Zero(t, report.Memory.TotalLines)
+	assert.Zero(t, report.Memory.CutLines)
+	assert.Contains(t, Text(Result{Keepers: []Report{report}}), "truncated (numbers unknown)")
 }
 
 func TestCheck_MemoryTruncationBeforeLastCompactionIsIgnored(t *testing.T) {
@@ -226,6 +230,39 @@ func TestCheck_HookAdditionalContextAttachmentQuotingMemoryNoticeIsIgnored(t *te
 	assert.False(t, report.Memory.Truncated)
 }
 
+func TestCheck_RenderedAttachmentMemoryNoticeIsIgnored(t *testing.T) {
+	report := CheckKeeper(Keeper{
+		Name:        "rendered-memory",
+		Transcripts: fixturePath("transcripts/memory-notice-rendered.jsonl"),
+		Vault:       fixturePath("vault-full"),
+	}, 0.9)
+
+	assert.Equal(t, "ok", report.Status)
+	assert.False(t, report.Memory.Truncated)
+}
+
+func TestCheck_APIRequestBlobMemoryNoticeIsIgnored(t *testing.T) {
+	report := CheckKeeper(Keeper{
+		Name:        "api-request-blob-memory",
+		Transcripts: fixturePath("transcripts/memory-notice-api-request-blob.jsonl"),
+		Vault:       fixturePath("vault-full"),
+	}, 0.9)
+
+	assert.Equal(t, "ok", report.Status)
+	assert.False(t, report.Memory.Truncated)
+}
+
+func TestCheck_OldMemoryNoticeParaphraseIsIgnored(t *testing.T) {
+	report := CheckKeeper(Keeper{
+		Name:        "old-memory-notice",
+		Transcripts: fixturePath("transcripts/memory-old-paraphrase.jsonl"),
+		Vault:       fixturePath("vault-full"),
+	}, 0.9)
+
+	assert.Equal(t, "ok", report.Status)
+	assert.False(t, report.Memory.Truncated)
+}
+
 func TestCheck_AutoMemInstructionsContainingNoticeFailsMemory(t *testing.T) {
 	report := CheckKeeper(Keeper{
 		Name:        "memory",
@@ -235,12 +272,13 @@ func TestCheck_AutoMemInstructionsContainingNoticeFailsMemory(t *testing.T) {
 
 	assert.Equal(t, "fail", report.Status)
 	assert.True(t, report.Memory.Truncated)
-	assert.Equal(t, 46, report.Memory.LoadedLines)
-	assert.Equal(t, 246, report.Memory.TotalLines)
+	assert.Equal(t, 200, report.Memory.LoadedLines)
+	assert.Equal(t, 202, report.Memory.TotalLines)
+	assert.Equal(t, 2, report.Memory.CutLines)
 	assert.Equal(t, []MemoryFileReport{{
 		Path:  "/fictional/.claude/projects/demo/memory.md",
 		Type:  "AutoMem",
-		Lines: 1,
+		Lines: 4,
 	}}, report.Memory.Files)
 	data, err := json.Marshal(report)
 	require.NoError(t, err)
@@ -438,10 +476,7 @@ func TestCheckReportsMissingVaultAndMissingTranscript(t *testing.T) {
 	assert.Contains(t, vaultReport.Error, "vault")
 }
 
-// Where Claude Code writes its memory truncation notice is not yet confirmed
-// against a real record. Until it is, a run that finds no notice must not read
-// as "memory ok": it says the check is unproven, and JSON says so too.
-func TestText_MemoryWithoutNoticeSaysTheCheckIsUnproven(t *testing.T) {
+func TestText_MemoryWithoutNoticeSaysMemoryIsOK(t *testing.T) {
 	report := CheckKeeper(Keeper{
 		Name:        "clean-memory",
 		Transcripts: fixturePath("transcripts/memory-clean.jsonl"),
@@ -449,8 +484,8 @@ func TestText_MemoryWithoutNoticeSaysTheCheckIsUnproven(t *testing.T) {
 	}, 0.9)
 
 	require.False(t, report.Memory.Truncated)
-	assert.False(t, report.Memory.NoticeProven)
+	assert.True(t, report.Memory.NoticeProven)
 	text := Text(Result{Keepers: []Report{report}})
-	assert.Contains(t, text, "memory not proven")
-	assert.NotContains(t, text, "memory ok")
+	assert.Contains(t, text, "memory ok")
+	assert.NotContains(t, text, "not proven")
 }

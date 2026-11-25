@@ -65,9 +65,9 @@ type MemoryFileReport struct {
 // latest instructions attachment's loaded AutoMem files.
 type MemoryReport struct {
 	Truncated bool `json:"truncated"`
+	CutLines  int  `json:"cut_lines,omitempty"`
 	// NoticeProven says whether the truncation check has been confirmed against
-	// a real Claude Code record. While it is false, "not truncated" means only
-	// that no notice was found, not that the memory file arrived whole.
+	// a real Claude Code record. It remains present for JSON compatibility.
 	NoticeProven bool               `json:"notice_proven"`
 	LoadedLines  int                `json:"loaded_lines,omitempty"`
 	TotalLines   int                `json:"total_lines,omitempty"`
@@ -116,17 +116,14 @@ func ValidateMinArcCoverage(value float64) error {
 	return nil
 }
 
-// memoryTruncationPattern is from the 2026-11-24 transcript evidence:
-// "only 46 of 246 lines loaded". The notice wording and location remain
-// unconfirmed because this wording has only been seen quoted in transcripts;
-// AutoMem file content is scanned as the likeliest location.
-var memoryTruncationPattern = regexp.MustCompile(`(?i)\bonly\s+([0-9]+)\s+of\s+([0-9]+)\s+lines\s+loaded\b`)
+// memoryTruncationPattern is from a real transcript record verified on
+// 2026-11-25. Only a blockquote warning line containing "Only part of it was
+// loaded:" is a notice; the optional captures are cut lines and total lines.
+var memoryTruncationPattern = regexp.MustCompile(`(?im)^> WARNING:[^\r\n]*Only part of it was loaded:(?:[^\r\n]*?\b([0-9]+)\s+of\s+([0-9]+)\s+lines\s+were\s+cut\s+off\b)?[^\r\n]*$`)
 
-// memoryNoticeProven becomes true once the notice's wording and location are
-// confirmed against a real Claude Code record. Until then the report says the
-// memory check is unproven instead of "ok", so "no notice found" never reads as
-// "the memory file arrived whole".
-const memoryNoticeProven = false
+// memoryNoticeProven records that the notice's wording and location are
+// confirmed against a real Claude Code record.
+const memoryNoticeProven = true
 
 // memoryFileTypes records file types observed in Claude Code's
 // instructions attachments; AutoMem is the currently observed memory type.
@@ -193,7 +190,7 @@ func checkKeeper(keeper Keeper, minCoverage, minArcCoverage float64) Report {
 		reasons = append(reasons, fmt.Sprintf("identity coverage %.0f%% below %.0f%%", report.Identity.Coverage*100, minCoverage*100))
 	}
 	if report.Memory.Truncated {
-		reasons = append(reasons, fmt.Sprintf("memory truncated (%d of %d lines loaded)", report.Memory.LoadedLines, report.Memory.TotalLines))
+		reasons = append(reasons, memoryTruncationReason(report.Memory))
 	}
 	if minArcCoverage > 0 && report.Arcs.Coverage < minArcCoverage {
 		report.Warning = fmt.Sprintf("arc body coverage %d%% below %.0f%%", arcCoveragePercentTotal(report.Arcs), minArcCoverage*100)
@@ -243,11 +240,12 @@ func Text(result Result) string {
 	for _, report := range result.Keepers {
 		status := strings.ToUpper(report.Status)
 		memory := "ok"
-		if !report.Memory.NoticeProven {
-			memory = "not proven (no truncation notice found; where Claude Code writes it is unconfirmed)"
-		}
 		if report.Memory.Truncated {
-			memory = fmt.Sprintf("truncated (%d of %d lines)", report.Memory.LoadedLines, report.Memory.TotalLines)
+			if report.Memory.TotalLines == 0 {
+				memory = "truncated (numbers unknown)"
+			} else {
+				memory = fmt.Sprintf("truncated (loaded %d of %d lines, %d cut off)", report.Memory.LoadedLines, report.Memory.TotalLines, report.Memory.CutLines)
+			}
 		}
 		fmt.Fprintf(&b, "%s  %-4s  identity %.0f%% (%s of %s bytes)  arcs %d full / %d partial / %d missing  arcs body %s of %s bytes, %d%%  memory %s  after compact %s",
 			report.Name, status, report.Identity.Coverage*100, formatNumber(report.Identity.CoveredBytes), formatNumber(report.Identity.TotalBytes), report.Arcs.Full, report.Arcs.Partial, report.Arcs.Missing, formatNumber(report.Arcs.ArrivedBytes), formatNumber(report.Arcs.BodyBytes), arcCoveragePercentTotal(report.Arcs), memory, report.AfterCompact)
@@ -403,6 +401,7 @@ type memoryNotice struct {
 	Text        string
 	LoadedLines int
 	TotalLines  int
+	CutLines    int
 }
 
 func emptyMemoryReport() MemoryReport {
@@ -420,6 +419,7 @@ func memoryReportFromFiles(files []transcriptFile) MemoryReport {
 			result.Truncated = true
 			result.LoadedLines = match.LoadedLines
 			result.TotalLines = match.TotalLines
+			result.CutLines = match.CutLines
 			result.Notice = match.Text
 		}
 	}
@@ -445,9 +445,19 @@ func memoryNoticeInContent(content string) *memoryNotice {
 	if match == nil {
 		return nil
 	}
-	loaded, _ := strconv.Atoi(match[1])
+	if match[1] == "" || match[2] == "" {
+		return &memoryNotice{Text: match[0]}
+	}
+	cut, _ := strconv.Atoi(match[1])
 	total, _ := strconv.Atoi(match[2])
-	return &memoryNotice{Text: match[0], LoadedLines: loaded, TotalLines: total}
+	return &memoryNotice{Text: match[0], LoadedLines: total - cut, TotalLines: total, CutLines: cut}
+}
+
+func memoryTruncationReason(report MemoryReport) string {
+	if report.TotalLines == 0 {
+		return "memory truncated (numbers unknown)"
+	}
+	return fmt.Sprintf("memory truncated (loaded %d of %d lines, %d cut off)", report.LoadedLines, report.TotalLines, report.CutLines)
 }
 
 func attachmentContent(attachment *transcriptAttachment) string {
