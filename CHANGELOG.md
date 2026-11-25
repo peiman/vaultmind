@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- vaultmind is built on ckeletin-go framework 0.2.18 (from 0.2.10). That framework version turns on an audit log file at `./logs/<app>.log` by default; vaultmind keeps it off, so no command writes a `logs/` folder into the project or vault it runs in. Turn it on with `app.log.file_enabled` when troubleshooting.
+
 ## [0.10.31] - 2026-11-24
 
 Agents now come back as themselves. Since 19 October, a weak relevance score on the persona hook's "who am I" query withheld the identity note's text at every session start and compaction, so agents received only its title while the hook reported success. The hook now reads the identity note by its type and always delivers its full text.
