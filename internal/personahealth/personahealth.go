@@ -119,7 +119,7 @@ func ValidateMinArcCoverage(value float64) error {
 // memoryTruncationPattern is from a real transcript record verified on
 // 2026-11-25. Only a blockquote warning line containing "Only part of it was
 // loaded:" is a notice; the optional captures are cut lines and total lines.
-var memoryTruncationPattern = regexp.MustCompile(`(?im)^> WARNING:[^\r\n]*Only part of it was loaded:(?:[^\r\n]*?\b([0-9]+)\s+of\s+([0-9]+)\s+lines\s+were\s+cut\s+off\b)?[^\r\n]*$`)
+var memoryTruncationPattern = regexp.MustCompile(`(?im)^> WARNING:[^\r\n]*Only part of it was loaded[:.](?:[^\r\n]*?\b([0-9]+)\s+of\s+([0-9]+)\s+lines\s+were\s+cut\s+off\b)?[^\r\n]*$`)
 
 // memoryNoticeProven records that the notice's wording and location are
 // confirmed against a real Claude Code record.

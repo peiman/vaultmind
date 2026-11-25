@@ -170,6 +170,44 @@ func TestCheck_MemoryTruncationFailsAndReportsCounts(t *testing.T) {
 	assert.Contains(t, Text(Result{Keepers: []Report{report}}), "truncated (loaded 200 of 202 lines, 2 cut off)")
 }
 
+func TestCheck_MemoryTruncationLinesAndKBVariantFails(t *testing.T) {
+	report := CheckKeeper(Keeper{
+		Name:        "memory-lines-and-kb",
+		Transcripts: fixturePath("transcripts/memory-truncated-lines-and-kb.jsonl"),
+		Vault:       fixturePath("vault-memory"),
+	}, 0.9)
+
+	assert.Equal(t, "fail", report.Status)
+	assert.True(t, report.Memory.Truncated)
+	assert.Equal(t, 249, report.Memory.TotalLines)
+	assert.Equal(t, 49, report.Memory.CutLines)
+	assert.Equal(t, 200, report.Memory.LoadedLines)
+	assert.Contains(t, Text(Result{Keepers: []Report{report}}), "truncated (loaded 200 of 249 lines, 49 cut off)")
+}
+
+func TestCheck_MemoryTruncationWithoutLineNumbersFailsWithUnknownCounts(t *testing.T) {
+	report := CheckKeeper(Keeper{
+		Name:        "memory-kb-only",
+		Transcripts: fixturePath("transcripts/memory-truncated-kb-only.jsonl"),
+		Vault:       fixturePath("vault-memory"),
+	}, 0.9)
+
+	assert.Equal(t, "fail", report.Status)
+	assert.True(t, report.Memory.Truncated)
+	assert.Zero(t, report.Memory.TotalLines)
+	assert.Zero(t, report.Memory.CutLines)
+	assert.Zero(t, report.Memory.LoadedLines)
+	assert.Contains(t, Text(Result{Keepers: []Report{report}}), "truncated (numbers unknown)")
+
+	data, err := json.Marshal(report.Memory)
+	require.NoError(t, err)
+	var encoded map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(data, &encoded))
+	assert.NotContains(t, encoded, "loaded_lines")
+	assert.NotContains(t, encoded, "total_lines")
+	assert.NotContains(t, encoded, "cut_lines")
+}
+
 func TestCheck_MemoryTruncationWithoutCompactionFails(t *testing.T) {
 	report := CheckKeeper(Keeper{
 		Name:        "memory-without-compaction",

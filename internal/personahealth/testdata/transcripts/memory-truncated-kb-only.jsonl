@@ -1,0 +1,3 @@
+{"type":"system","subtype":"compact_boundary","timestamp":"2026-11-24T10:00:00Z"}
+{"type":"attachment","timestamp":"2026-11-24T10:00:01Z","attachment":{"type":"hook_success","hookEvent":"SessionStart","content":"IDENTITY CONTEXT:\nI am the fictional keeper. I protect the imaginary boundary.\nYOUR ARCS\nProtect the fictional boundary. Ask before changing it."}}
+{"type":"attachment","timestamp":"2026-11-24T10:00:02Z","attachment":{"type":"instructions","files":[{"path":"/fictional/.claude/projects/demo/memory.md","type":"AutoMem","content":"fictional memory entry\n\n> WARNING: MEMORY.md is 30.1KB (limit: 25KB). Only part of it was loaded."}]}}
