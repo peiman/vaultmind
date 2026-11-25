@@ -437,3 +437,20 @@ func TestCheckReportsMissingVaultAndMissingTranscript(t *testing.T) {
 	assert.Equal(t, "fail", vaultReport.Status)
 	assert.Contains(t, vaultReport.Error, "vault")
 }
+
+// Where Claude Code writes its memory truncation notice is not yet confirmed
+// against a real record. Until it is, a run that finds no notice must not read
+// as "memory ok": it says the check is unproven, and JSON says so too.
+func TestText_MemoryWithoutNoticeSaysTheCheckIsUnproven(t *testing.T) {
+	report := CheckKeeper(Keeper{
+		Name:        "clean-memory",
+		Transcripts: fixturePath("transcripts/memory-clean.jsonl"),
+		Vault:       fixturePath("vault-memory"),
+	}, 0.9)
+
+	require.False(t, report.Memory.Truncated)
+	assert.False(t, report.Memory.NoticeProven)
+	text := Text(Result{Keepers: []Report{report}})
+	assert.Contains(t, text, "memory not proven")
+	assert.NotContains(t, text, "memory ok")
+}

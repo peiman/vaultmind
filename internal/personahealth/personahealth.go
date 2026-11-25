@@ -64,11 +64,15 @@ type MemoryFileReport struct {
 // MemoryReport records the auto-memory line-count notice when present and the
 // latest instructions attachment's loaded AutoMem files.
 type MemoryReport struct {
-	Truncated   bool               `json:"truncated"`
-	LoadedLines int                `json:"loaded_lines,omitempty"`
-	TotalLines  int                `json:"total_lines,omitempty"`
-	Notice      string             `json:"notice,omitempty"`
-	Files       []MemoryFileReport `json:"files"`
+	Truncated bool `json:"truncated"`
+	// NoticeProven says whether the truncation check has been confirmed against
+	// a real Claude Code record. While it is false, "not truncated" means only
+	// that no notice was found, not that the memory file arrived whole.
+	NoticeProven bool               `json:"notice_proven"`
+	LoadedLines  int                `json:"loaded_lines,omitempty"`
+	TotalLines   int                `json:"total_lines,omitempty"`
+	Notice       string             `json:"notice,omitempty"`
+	Files        []MemoryFileReport `json:"files"`
 }
 
 // Report is the stable per-keeper health result.
@@ -117,6 +121,12 @@ func ValidateMinArcCoverage(value float64) error {
 // unconfirmed because this wording has only been seen quoted in transcripts;
 // AutoMem file content is scanned as the likeliest location.
 var memoryTruncationPattern = regexp.MustCompile(`(?i)\bonly\s+([0-9]+)\s+of\s+([0-9]+)\s+lines\s+loaded\b`)
+
+// memoryNoticeProven becomes true once the notice's wording and location are
+// confirmed against a real Claude Code record. Until then the report says the
+// memory check is unproven instead of "ok", so "no notice found" never reads as
+// "the memory file arrived whole".
+const memoryNoticeProven = false
 
 // memoryFileTypes records file types observed in Claude Code's
 // instructions attachments; AutoMem is the currently observed memory type.
@@ -233,6 +243,9 @@ func Text(result Result) string {
 	for _, report := range result.Keepers {
 		status := strings.ToUpper(report.Status)
 		memory := "ok"
+		if !report.Memory.NoticeProven {
+			memory = "not proven (no truncation notice found; where Claude Code writes it is unconfirmed)"
+		}
 		if report.Memory.Truncated {
 			memory = fmt.Sprintf("truncated (%d of %d lines)", report.Memory.LoadedLines, report.Memory.TotalLines)
 		}
@@ -393,7 +406,7 @@ type memoryNotice struct {
 }
 
 func emptyMemoryReport() MemoryReport {
-	return MemoryReport{Files: make([]MemoryFileReport, 0)}
+	return MemoryReport{NoticeProven: memoryNoticeProven, Files: make([]MemoryFileReport, 0)}
 }
 
 func memoryReportFromFiles(files []transcriptFile) MemoryReport {
