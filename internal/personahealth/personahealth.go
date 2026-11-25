@@ -54,12 +54,21 @@ type ArcReport struct {
 	Items        []ArcBodyReport `json:"items"`
 }
 
-// MemoryReport records the auto-memory line-count notice when present.
+// MemoryFileReport records one loaded memory file from an instructions attachment.
+type MemoryFileReport struct {
+	Path  string `json:"path"`
+	Type  string `json:"type"`
+	Lines int    `json:"lines"`
+}
+
+// MemoryReport records the auto-memory line-count notice when present and the
+// latest instructions attachment's loaded AutoMem files.
 type MemoryReport struct {
-	Truncated   bool   `json:"truncated"`
-	LoadedLines int    `json:"loaded_lines,omitempty"`
-	TotalLines  int    `json:"total_lines,omitempty"`
-	Notice      string `json:"notice,omitempty"`
+	Truncated   bool               `json:"truncated"`
+	LoadedLines int                `json:"loaded_lines,omitempty"`
+	TotalLines  int                `json:"total_lines,omitempty"`
+	Notice      string             `json:"notice,omitempty"`
+	Files       []MemoryFileReport `json:"files"`
 }
 
 // Report is the stable per-keeper health result.
@@ -104,10 +113,14 @@ func ValidateMinArcCoverage(value float64) error {
 }
 
 // memoryTruncationPattern is from the 2026-11-24 transcript evidence:
-// "only 46 of 246 lines loaded". The real notice's record type is
-// unconfirmed: this wording comes from a keeper's report and has only been
-// seen quoted in transcripts, so system and attachment records are scanned.
+// "only 46 of 246 lines loaded". The notice wording and location remain
+// unconfirmed because this wording has only been seen quoted in transcripts;
+// AutoMem file content is scanned as the likeliest location.
 var memoryTruncationPattern = regexp.MustCompile(`(?i)\bonly\s+([0-9]+)\s+of\s+([0-9]+)\s+lines\s+loaded\b`)
+
+// memoryFileTypes records file types observed in Claude Code's
+// instructions attachments; AutoMem is the currently observed memory type.
+var memoryFileTypes = [...]string{"AutoMem"}
 
 type transcriptEvidence struct {
 	Texts           []string
@@ -117,15 +130,24 @@ type transcriptEvidence struct {
 	UnreadableLines int
 }
 
+type transcriptFile struct {
+	Path    string `json:"path"`
+	Type    string `json:"type"`
+	Content string `json:"content"`
+}
+
+type transcriptAttachment struct {
+	Type      string           `json:"type"`
+	HookEvent string           `json:"hookEvent"`
+	Content   json.RawMessage  `json:"content"`
+	Files     []transcriptFile `json:"files"`
+}
+
 type transcriptRecord struct {
-	Type       string `json:"type"`
-	Subtype    string `json:"subtype"`
-	Timestamp  string `json:"timestamp"`
-	Attachment *struct {
-		Type      string          `json:"type"`
-		HookEvent string          `json:"hookEvent"`
-		Content   json.RawMessage `json:"content"`
-	} `json:"attachment"`
+	Type       string                `json:"type"`
+	Subtype    string                `json:"subtype"`
+	Timestamp  string                `json:"timestamp"`
+	Attachment *transcriptAttachment `json:"attachment"`
 }
 
 // CheckKeeper reads only the newest transcript and returns a per-keeper
@@ -301,7 +323,7 @@ func readTranscriptFile(path string) (transcriptEvidence, error) {
 	}
 	defer func() { _ = file.Close() }()
 
-	var result transcriptEvidence
+	var result = transcriptEvidence{Memory: emptyMemoryReport()}
 	seenPoint := false
 	compactSeen := false
 	validRecords := 0
@@ -311,7 +333,7 @@ func readTranscriptFile(path string) (transcriptEvidence, error) {
 		result.AfterCompact = formatPoint(timestamp)
 		result.PointPrefix = "after compaction"
 		result.Texts = nil
-		result.Memory = MemoryReport{}
+		result.Memory = emptyMemoryReport()
 	}
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 64*1024), 64*1024*1024)
@@ -338,10 +360,8 @@ func readTranscriptFile(path string) (transcriptEvidence, error) {
 			resetBoundary(record.Timestamp)
 			continue
 		}
-		if record.Type == "system" || record.Type == "attachment" {
-			if match := directMemoryNotice(line); match != nil {
-				result.Memory = MemoryReport{Truncated: true, LoadedLines: match.LoadedLines, TotalLines: match.TotalLines, Notice: match.Text}
-			}
+		if record.Type == "attachment" && record.Attachment != nil && record.Attachment.Type == "instructions" {
+			result.Memory = memoryReportFromFiles(record.Attachment.Files)
 		}
 		if !seenPoint {
 			seenPoint = true
@@ -372,20 +392,52 @@ type memoryNotice struct {
 	TotalLines  int
 }
 
-func directMemoryNotice(line []byte) *memoryNotice {
-	for _, indexes := range memoryTruncationPattern.FindAllSubmatchIndex(line, -1) {
-		loaded, _ := strconv.Atoi(string(line[indexes[2]:indexes[3]]))
-		total, _ := strconv.Atoi(string(line[indexes[4]:indexes[5]]))
-		return &memoryNotice{Text: string(line[indexes[0]:indexes[1]]), LoadedLines: loaded, TotalLines: total}
-	}
-	return nil
+func emptyMemoryReport() MemoryReport {
+	return MemoryReport{Files: make([]MemoryFileReport, 0)}
 }
 
-func attachmentContent(attachment *struct {
-	Type      string          `json:"type"`
-	HookEvent string          `json:"hookEvent"`
-	Content   json.RawMessage `json:"content"`
-}) string {
+func memoryReportFromFiles(files []transcriptFile) MemoryReport {
+	result := emptyMemoryReport()
+	for _, file := range files {
+		if !isMemoryFileType(file.Type) {
+			continue
+		}
+		result.Files = append(result.Files, MemoryFileReport{Path: file.Path, Type: file.Type, Lines: lineCount(file.Content)})
+		if match := memoryNoticeInContent(file.Content); match != nil {
+			result.Truncated = true
+			result.LoadedLines = match.LoadedLines
+			result.TotalLines = match.TotalLines
+			result.Notice = match.Text
+		}
+	}
+	return result
+}
+
+func isMemoryFileType(fileType string) bool {
+	for _, memoryFileType := range memoryFileTypes {
+		if fileType == memoryFileType {
+			return true
+		}
+	}
+	return false
+}
+
+// lineCount counts newline-separated segments without trimming content, so an
+// empty file is one segment and a trailing newline contributes an empty final
+// segment.
+func lineCount(content string) int { return len(strings.Split(content, "\n")) }
+
+func memoryNoticeInContent(content string) *memoryNotice {
+	match := memoryTruncationPattern.FindStringSubmatch(content)
+	if match == nil {
+		return nil
+	}
+	loaded, _ := strconv.Atoi(match[1])
+	total, _ := strconv.Atoi(match[2])
+	return &memoryNotice{Text: match[0], LoadedLines: loaded, TotalLines: total}
+}
+
+func attachmentContent(attachment *transcriptAttachment) string {
 	if attachment == nil || len(attachment.Content) == 0 || string(attachment.Content) == "null" {
 		return ""
 	}

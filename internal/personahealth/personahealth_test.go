@@ -204,6 +204,83 @@ func TestCheck_MemoryNoticeInAssistantAndToolResultIsIgnored(t *testing.T) {
 	assert.False(t, report.Memory.Truncated)
 }
 
+func TestCheck_QueuedCommandAttachmentQuotingMemoryNoticeIsIgnored(t *testing.T) {
+	report := CheckKeeper(Keeper{
+		Name:        "queued-command-quoted-memory",
+		Transcripts: fixturePath("transcripts/memory-queued-command-quoted.jsonl"),
+		Vault:       fixturePath("vault-full"),
+	}, 0.9)
+
+	assert.Equal(t, "ok", report.Status)
+	assert.False(t, report.Memory.Truncated)
+}
+
+func TestCheck_HookAdditionalContextAttachmentQuotingMemoryNoticeIsIgnored(t *testing.T) {
+	report := CheckKeeper(Keeper{
+		Name:        "hook-context-quoted-memory",
+		Transcripts: fixturePath("transcripts/memory-hook-additional-context-quoted.jsonl"),
+		Vault:       fixturePath("vault-full"),
+	}, 0.9)
+
+	assert.Equal(t, "ok", report.Status)
+	assert.False(t, report.Memory.Truncated)
+}
+
+func TestCheck_AutoMemInstructionsContainingNoticeFailsMemory(t *testing.T) {
+	report := CheckKeeper(Keeper{
+		Name:        "memory",
+		Transcripts: fixturePath("transcripts/memory-truncated.jsonl"),
+		Vault:       fixturePath("vault-memory"),
+	}, 0.9)
+
+	assert.Equal(t, "fail", report.Status)
+	assert.True(t, report.Memory.Truncated)
+	assert.Equal(t, 46, report.Memory.LoadedLines)
+	assert.Equal(t, 246, report.Memory.TotalLines)
+	assert.Equal(t, []MemoryFileReport{{
+		Path:  "/fictional/.claude/projects/demo/memory.md",
+		Type:  "AutoMem",
+		Lines: 1,
+	}}, report.Memory.Files)
+	data, err := json.Marshal(report)
+	require.NoError(t, err)
+	var decoded struct {
+		Memory struct {
+			Files []MemoryFileReport `json:"files"`
+		} `json:"memory"`
+	}
+	require.NoError(t, json.Unmarshal(data, &decoded))
+	assert.Equal(t, report.Memory.Files, decoded.Memory.Files)
+}
+
+func TestCheck_UserAndProjectFilesContainingNoticeDoNotCount(t *testing.T) {
+	report := CheckKeeper(Keeper{
+		Name:        "non-memory-files",
+		Transcripts: fixturePath("transcripts/memory-user-project-notice.jsonl"),
+		Vault:       fixturePath("vault-full"),
+	}, 0.9)
+
+	assert.Equal(t, "ok", report.Status)
+	assert.False(t, report.Memory.Truncated)
+	assert.Empty(t, report.Memory.Files)
+}
+
+func TestCheck_CleanAutoMemFileReportsLineCount(t *testing.T) {
+	report := CheckKeeper(Keeper{
+		Name:        "clean-memory",
+		Transcripts: fixturePath("transcripts/memory-clean.jsonl"),
+		Vault:       fixturePath("vault-full"),
+	}, 0.9)
+
+	assert.Equal(t, "ok", report.Status)
+	assert.False(t, report.Memory.Truncated)
+	assert.Equal(t, []MemoryFileReport{{
+		Path:  "/fictional/.claude/projects/demo/memory.md",
+		Type:  "AutoMem",
+		Lines: 2,
+	}}, report.Memory.Files)
+}
+
 func TestCheck_EmptySessionStartContentDoesNotReload(t *testing.T) {
 	report := CheckKeeper(Keeper{
 		Name:        "empty-reload",

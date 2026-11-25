@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `persona health` reports whether each keeper's identity actually reached its context window. It reads the keeper's Claude Code transcript, finds the last startup or compaction, and measures how many bytes of the identity note and of each arc the persona hooks delivered after it. It also reports whether anything reloaded at all and whether the memory file was cut off. A cut-off transcript line that holds a compaction marker still counts as a compaction, and unreadable lines are counted and shown.
 
+### Fixed
+
+- `persona health` now ignores memory-truncation wording quoted by queued-command, hook-context, system, and other non-memory records, and reports loaded AutoMem files from the latest instructions attachment with their newline-separated line counts.
+
 ## [0.10.31] - 2026-11-24
 
 Agents now come back as themselves. Since 19 October, a weak relevance score on the persona hook's "who am I" query withheld the identity note's text at every session start and compaction, so agents received only its title while the hook reported success. The hook now reads the identity note by its type and always delivers its full text.
