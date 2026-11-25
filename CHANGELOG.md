@@ -9,12 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `persona health` measures identity and complete arc-body byte coverage (including per-arc exchange delivery), arc Principle delivery, reloads after compaction, and auto-memory truncation for one keeper or a YAML list of keepers. Text mode emits one short line per keeper; per-arc body entries remain JSON-only. Single-keeper runs accept `--name` and otherwise use the literal basename of `--transcripts`. `--min-arc-coverage` is an optional WARN-only threshold.
-- `persona health` now ignores pre-boundary and quoted chat memory notices, skips malformed JSONL around valid records, and documents that directory inputs select the newest transcript by modification time.
-- `persona health` now counts skipped malformed JSONL lines, treats truncated `compact_boundary` lines as boundaries, and detects memory-truncation notices before the first compaction boundary.
+- `persona health` reports whether each keeper's identity actually reached its context window. It reads the keeper's Claude Code transcript, finds the last startup or compaction, and measures how many bytes of the identity note and of each arc the persona hooks delivered after it. It also reports whether anything reloaded at all and whether the memory file was cut off. A cut-off transcript line that holds a compaction marker still counts as a compaction, and unreadable lines are counted and shown.
+
+## [0.10.31] - 2026-11-24
+
+Agents now come back as themselves. Since 19 October, a weak relevance score on the persona hook's "who am I" query withheld the identity note's text at every session start and compaction, so agents received only its title while the hook reported success. The hook now reads the identity note by its type and always delivers its full text.
 
 ### Fixed
 
+- The persona hook now always delivers the identity note's full text at session start and after compaction, alongside the context excerpts when they fit; before, a weak relevance score withheld it and agents got only its title, and on stronger scores they got excerpts but never the full note.
 - The ORT release archives now bundle ONNX Runtime 1.30.0 from Microsoft's NuGet package, pinned by version and sha256; the GitHub release they came from is no longer available, so v0.10.30 shipped without them.
 
 ## [0.10.30] - 2026-11-19
@@ -3304,7 +3307,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.30...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.31...HEAD
+[0.10.31]: https://github.com/peiman/vaultmind/compare/v0.10.30...v0.10.31
 [0.10.30]: https://github.com/peiman/vaultmind/compare/v0.10.29...v0.10.30
 [0.10.29]: https://github.com/peiman/vaultmind/compare/v0.10.28...v0.10.29
 [0.10.28]: https://github.com/peiman/vaultmind/compare/v0.10.27...v0.10.28
