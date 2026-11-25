@@ -91,6 +91,7 @@ components:
       - .ckeletin/pkg/logger/**
       - .ckeletin/pkg/testutil/**
       - .ckeletin/pkg/catalog/**
+      - .ckeletin/pkg/progress/**
       - internal/config/commands/**
       - internal/projectdefaults/**
       - internal/xdg/**
@@ -211,9 +212,26 @@ vendors:
   cobra:
     in: github.com/spf13/cobra
 
+  pflag:
+    in: github.com/spf13/pflag
+
   # Viper configuration library
   viper:
     in: github.com/spf13/viper
+
+  # Logging (base package + sub-packages like zerolog/log)
+  zerolog:
+    in:
+      - github.com/rs/zerolog
+      - github.com/rs/zerolog/**
+
+  # UI and terminal
+  lipgloss:
+    in: github.com/charmbracelet/lipgloss
+  bubbletea:
+    in: github.com/charmbracelet/bubbletea
+  isatty:
+    in: github.com/mattn/go-isatty
 
 # Common components available to all layers
 commonComponents:
