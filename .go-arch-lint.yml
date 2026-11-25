@@ -89,12 +89,10 @@ components:
     in:
       - .ckeletin/pkg/config/**
       - .ckeletin/pkg/logger/**
-      - .ckeletin/pkg/output/**
       - .ckeletin/pkg/testutil/**
       - .ckeletin/pkg/catalog/**
       - internal/config/commands/**
       - internal/projectdefaults/**
-      - internal/ui/**
       - internal/xdg/**
       # meshpaths: the SSOT for mesh wake-watcher state paths. Pure path
       # derivation over internal/xdg — same layer, no business logic.
@@ -162,13 +160,22 @@ components:
   # ⚠️  ADD YOUR BUSINESS LOGIC PACKAGES HERE
   # When adding new commands, add their internal/ packages to this list.
   # Example: Adding 'internal/baseline/**' for a new baseline command
+  # Output writers. Not a common component, so business logic cannot import them.
+  output:
+    in:
+      - .ckeletin/pkg/output/**
+
+  presentation:
+    in:
+      - internal/ui/**
+      - internal/check/**
+      - internal/docs/**
+
   business:
     in:
       - internal/ping/**
-      - internal/docs/**
       - internal/dev/**
       - internal/progress/**
-      - internal/check/**
       # VaultMind business logic:
       - internal/query/**
       - internal/cmdutil/**
@@ -228,6 +235,8 @@ deps:
   # Can also use Cobra and Viper (CLI framework)
   commands:
     mayDependOn:
+      - presentation
+      - output
       - business
       - infrastructure
       - commandcatalog
@@ -254,6 +263,27 @@ deps:
   # Infrastructure is the foundation
   # Cannot depend on upper layers (commands, business)
   # Can use Viper for configuration
+  output:
+    mayDependOn:
+      - infrastructure
+    canUse:
+      - cobra
+      - pflag
+      - zerolog
+      - viper
+      - isatty
+
+  presentation:
+    mayDependOn:
+      - infrastructure
+      - output
+    canUse:
+      - zerolog
+      - viper
+      - isatty
+      - lipgloss
+      - bubbletea
+
   infrastructure:
     mayDependOn: []  # Empty - depends on nothing
     canUse:
