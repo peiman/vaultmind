@@ -7,3 +7,10 @@
 # command prints just its result (stdout), not info lines on stderr. Raise it
 # with app.log_level or app.log.console_level when troubleshooting.
 "app.log_level" = "warn"
+# No audit log file by default. ckeletin 0.2.13 turned the file log on at
+# ./logs/vaultmind.log, at debug level. vaultmind runs from hooks inside every
+# project and vault, some of them public repositories, so that default would
+# leave a logs/ folder holding query and note text wherever it ran, ready for a
+# commit to pick up. Turn it on with app.log.file_enabled (and point
+# app.log.file_path somewhere private) when troubleshooting.
+"app.log.file_enabled" = false

@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `persona health` reports whether each keeper's identity actually reached its context window. It reads the keeper's Claude Code transcript, finds the last startup or compaction, and measures how many bytes of the identity note and of each arc the persona hooks delivered after it. It also reports whether anything reloaded at all, whether memory was seen after the reload point (otherwise `memory not seen`), and whether the memory file was cut off. A cut-off transcript line that holds a compaction marker still counts as a compaction, and unreadable lines are counted and shown.
 
+### Changed
+
+- vaultmind is built on ckeletin-go framework 0.2.18 (from 0.2.10). That framework version turns on an audit log file at `./logs/<app>.log` by default; vaultmind keeps it off, so no command writes a `logs/` folder into the project or vault it runs in. Turn it on with `app.log.file_enabled` when troubleshooting.
+
 ### Fixed
 
 - `persona health` now ignores memory-truncation wording quoted by queued-command, hook-context, system, and other non-memory records, and reports loaded AutoMem files from the latest instructions attachment with their newline-separated line counts.

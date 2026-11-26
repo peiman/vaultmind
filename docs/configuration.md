@@ -16,12 +16,13 @@ Configuration can be provided in multiple ways, in order of precedence:
 
 | Key | Type | Default | Environment Variable | Description |
 |-----|------|---------|---------------------|-------------|
-| `app.log_level` | string | `warn` | `VAULTMIND_APP_LOG_LEVEL` | Logging level for the application (trace, debug, info, warn, error, fatal, panic). Used as console level if app.log.console_level is not set. |
-| `app.log.console_level` | string | `` | `VAULTMIND_APP_LOG_CONSOLE_LEVEL` | Console log level (trace, debug, info, warn, error, fatal, panic). If empty, uses app.log_level. |
-| `app.log.file_enabled` | bool | `false` | `VAULTMIND_APP_LOG_FILE_ENABLED` | Enable file logging to capture detailed logs |
+| `app.log_level` | string | `warn` | `VAULTMIND_APP_LOG_LEVEL` | Logging level for the application (trace, debug, info, warn, error, fatal, panic). Console level when app.log.console_level is empty. It does not change the file level. Flag: --log-level. |
+| `app.log.console_level` | string | `` | `VAULTMIND_APP_LOG_CONSOLE_LEVEL` | Console log level (trace, debug, info, warn, error, fatal, panic). If empty, uses app.log_level. Flag: --log-level-console. |
+| `app.log.file_enabled` | bool | `false` | `VAULTMIND_APP_LOG_FILE_ENABLED` | Enable file logging to capture detailed logs. Set false to turn the audit log off. |
 | `app.log.file_path` | string | `./logs/vaultmind.log` | `VAULTMIND_APP_LOG_FILE_PATH` | Path to the log file (created with secure 0600 permissions) |
-| `app.log.file_level` | string | `debug` | `VAULTMIND_APP_LOG_FILE_LEVEL` | File log level (trace, debug, info, warn, error, fatal, panic) |
+| `app.log.file_level` | string | `debug` | `VAULTMIND_APP_LOG_FILE_LEVEL` | File log level (trace, debug, info, warn, error, fatal, panic). Independent of app.log_level. Empty or invalid uses debug. Flag: --log-level-file. |
 | `app.log.color_enabled` | string | `auto` | `VAULTMIND_APP_LOG_COLOR_ENABLED` | Enable colored console output (auto, true, false). Auto detects TTY. |
+| `app.log.console_time_format` | string | `2006-01-02T15:04:05Z07:00` | `VAULTMIND_APP_LOG_CONSOLE_TIME_FORMAT` | Go time layout for console log lines. Default is RFC3339. Empty omits the console timestamp. (config file or environment only) |
 | `app.log.file_max_size` | int | `100` | `VAULTMIND_APP_LOG_FILE_MAX_SIZE` | Maximum size in megabytes before log file is rotated |
 | `app.log.file_max_backups` | int | `3` | `VAULTMIND_APP_LOG_FILE_MAX_BACKUPS` | Maximum number of old log files to retain |
 | `app.log.file_max_age` | int | `28` | `VAULTMIND_APP_LOG_FILE_MAX_AGE` | Maximum number of days to retain old log files |
@@ -381,7 +382,7 @@ Configuration can be provided in multiple ways, in order of precedence:
   experiments: map[]
 
 app:
-  # Logging level for the application (trace, debug, info, warn, error, fatal, panic). Used as console level if app.log.console_level is not set.
+  # Logging level for the application (trace, debug, info, warn, error, fatal, panic). Console level when app.log.console_level is empty. It does not change the file level. Flag: --log-level.
   log_level: debug
 
   # Output format: text (human-readable) or json (machine-readable)
@@ -1142,20 +1143,23 @@ app:
     fix: false
 
   log:
-    # Console log level (trace, debug, info, warn, error, fatal, panic). If empty, uses app.log_level.
+    # Console log level (trace, debug, info, warn, error, fatal, panic). If empty, uses app.log_level. Flag: --log-level-console.
     console_level: info
 
-    # Enable file logging to capture detailed logs
+    # Enable file logging to capture detailed logs. Set false to turn the audit log off.
     file_enabled: true
 
     # Path to the log file (created with secure 0600 permissions)
     file_path: /var/log/vaultmind/app.log
 
-    # File log level (trace, debug, info, warn, error, fatal, panic)
+    # File log level (trace, debug, info, warn, error, fatal, panic). Independent of app.log_level. Empty or invalid uses debug. Flag: --log-level-file.
     file_level: debug
 
     # Enable colored console output (auto, true, false). Auto detects TTY.
     color_enabled: true
+
+    # Go time layout for console log lines. Default is RFC3339. Empty omits the console timestamp. (config file or environment only)
+    console_time_format: 15:04:05
 
     # Maximum size in megabytes before log file is rotated
     file_max_size: 100
@@ -1524,23 +1528,26 @@ experiments:
 ### Environment Variables
 
 ```bash
-# Logging level for the application (trace, debug, info, warn, error, fatal, panic). Used as console level if app.log.console_level is not set.
+# Logging level for the application (trace, debug, info, warn, error, fatal, panic). Console level when app.log.console_level is empty. It does not change the file level. Flag: --log-level.
 export VAULTMIND_APP_LOG_LEVEL=debug
 
-# Console log level (trace, debug, info, warn, error, fatal, panic). If empty, uses app.log_level.
+# Console log level (trace, debug, info, warn, error, fatal, panic). If empty, uses app.log_level. Flag: --log-level-console.
 export VAULTMIND_APP_LOG_CONSOLE_LEVEL=info
 
-# Enable file logging to capture detailed logs
+# Enable file logging to capture detailed logs. Set false to turn the audit log off.
 export VAULTMIND_APP_LOG_FILE_ENABLED=true
 
 # Path to the log file (created with secure 0600 permissions)
 export VAULTMIND_APP_LOG_FILE_PATH=/var/log/vaultmind/app.log
 
-# File log level (trace, debug, info, warn, error, fatal, panic)
+# File log level (trace, debug, info, warn, error, fatal, panic). Independent of app.log_level. Empty or invalid uses debug. Flag: --log-level-file.
 export VAULTMIND_APP_LOG_FILE_LEVEL=debug
 
 # Enable colored console output (auto, true, false). Auto detects TTY.
 export VAULTMIND_APP_LOG_COLOR_ENABLED=true
+
+# Go time layout for console log lines. Default is RFC3339. Empty omits the console timestamp. (config file or environment only)
+export VAULTMIND_APP_LOG_CONSOLE_TIME_FORMAT=15:04:05
 
 # Maximum size in megabytes before log file is rotated
 export VAULTMIND_APP_LOG_FILE_MAX_SIZE=100
