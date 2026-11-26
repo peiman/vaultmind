@@ -109,6 +109,47 @@ func TestCheck_NoReloadAfterCompactionFails(t *testing.T) {
 	assert.Equal(t, "2026-11-24 10:00Z", report.AfterCompact)
 }
 
+func TestCheck_MemoryNotSeenAfterCompactionWarns(t *testing.T) {
+	report := CheckKeeper(Keeper{
+		Name:        "memory-not-seen",
+		Transcripts: fixturePath("transcripts/memory-not-seen-after-reload.jsonl"),
+		Vault:       fixturePath("vault-full"),
+	}, 0.9)
+
+	assert.Equal(t, "warn", report.Status)
+	assert.False(t, report.Memory.Seen)
+	assert.Contains(t, Text(Result{Keepers: []Report{report}}), "memory not seen")
+	assert.Contains(t, report.Warning, "memory file not seen after compaction at 2026-11-24 10:00Z")
+	assert.Empty(t, report.Error)
+
+	data, err := json.Marshal(report)
+	require.NoError(t, err)
+	var decoded struct {
+		Memory struct {
+			Seen bool `json:"seen"`
+		} `json:"memory"`
+	}
+	require.NoError(t, json.Unmarshal(data, &decoded))
+	assert.False(t, decoded.Memory.Seen)
+}
+
+func TestCheck_LaterNonMemoryInstructionsPreserveTruncation(t *testing.T) {
+	report := CheckKeeper(Keeper{
+		Name:        "memory-preserved",
+		Transcripts: fixturePath("transcripts/memory-truncated-then-project.jsonl"),
+		Vault:       fixturePath("vault-memory"),
+	}, 0.9)
+
+	assert.Equal(t, "fail", report.Status)
+	assert.True(t, report.Memory.Seen)
+	assert.True(t, report.Memory.Truncated)
+	assert.Equal(t, 200, report.Memory.LoadedLines)
+	assert.Equal(t, 202, report.Memory.TotalLines)
+	assert.Equal(t, 2, report.Memory.CutLines)
+	assert.Contains(t, report.Memory.Notice, "Only part of it was loaded")
+	assert.Contains(t, report.Error, "memory truncated")
+}
+
 func TestCheck_CompactionResetsEarlierSessionStartText(t *testing.T) {
 	report := CheckKeeper(Keeper{
 		Name:        "stale",
@@ -230,7 +271,7 @@ func TestCheck_MemoryTruncationBeforeLastCompactionIsIgnored(t *testing.T) {
 		Vault:       fixturePath("vault-full"),
 	}, 0.9)
 
-	assert.Equal(t, "ok", report.Status)
+	assert.Equal(t, "warn", report.Status)
 	assert.False(t, report.Memory.Truncated)
 	assert.Empty(t, report.Error)
 }
@@ -338,7 +379,9 @@ func TestCheck_UserAndProjectFilesContainingNoticeDoNotCount(t *testing.T) {
 
 	assert.Equal(t, "ok", report.Status)
 	assert.False(t, report.Memory.Truncated)
-	assert.Empty(t, report.Memory.Files)
+	assert.True(t, report.Memory.Seen)
+	assert.Len(t, report.Memory.Files, 1)
+	assert.Equal(t, "AutoMem", report.Memory.Files[0].Type)
 }
 
 func TestCheck_CleanAutoMemFileReportsLineCount(t *testing.T) {

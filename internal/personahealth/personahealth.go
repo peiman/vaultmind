@@ -61,9 +61,10 @@ type MemoryFileReport struct {
 	Lines int    `json:"lines"`
 }
 
-// MemoryReport records the auto-memory line-count notice when present and the
-// latest instructions attachment's loaded AutoMem files.
+// MemoryReport records whether an AutoMem file was seen after the current
+// reload point, its line-count notice when present, and the loaded files.
 type MemoryReport struct {
+	Seen      bool `json:"seen"`
 	Truncated bool `json:"truncated"`
 	CutLines  int  `json:"cut_lines,omitempty"`
 	// NoticeProven says whether the truncation check has been confirmed against
@@ -192,9 +193,14 @@ func checkKeeper(keeper Keeper, minCoverage, minArcCoverage float64) Report {
 	if report.Memory.Truncated {
 		reasons = append(reasons, memoryTruncationReason(report.Memory))
 	}
+	var warnings []string
 	if minArcCoverage > 0 && report.Arcs.Coverage < minArcCoverage {
-		report.Warning = fmt.Sprintf("arc body coverage %d%% below %.0f%%", arcCoveragePercentTotal(report.Arcs), minArcCoverage*100)
+		warnings = append(warnings, fmt.Sprintf("arc body coverage %d%% below %.0f%%", arcCoveragePercentTotal(report.Arcs), minArcCoverage*100))
 	}
+	if !report.Memory.Seen {
+		warnings = append(warnings, fmt.Sprintf("memory file not seen %s at %s", evidence.PointPrefix, evidence.AfterCompact))
+	}
+	report.Warning = strings.Join(warnings, "; ")
 	report.Error = strings.Join(reasons, "; ")
 	switch {
 	case len(reasons) > 0:
@@ -239,13 +245,15 @@ func Text(result Result) string {
 	var b strings.Builder
 	for _, report := range result.Keepers {
 		status := strings.ToUpper(report.Status)
-		memory := "ok"
-		if report.Memory.Truncated {
+		memory := "not seen"
+		if report.Memory.Seen && report.Memory.Truncated {
 			if report.Memory.TotalLines == 0 {
 				memory = "truncated (numbers unknown)"
 			} else {
 				memory = fmt.Sprintf("truncated (loaded %d of %d lines, %d cut off)", report.Memory.LoadedLines, report.Memory.TotalLines, report.Memory.CutLines)
 			}
+		} else if report.Memory.Seen {
+			memory = "ok"
 		}
 		fmt.Fprintf(&b, "%s  %-4s  identity %.0f%% (%s of %s bytes)  arcs %d full / %d partial / %d missing  arcs body %s of %s bytes, %d%%  memory %s  after compact %s",
 			report.Name, status, report.Identity.Coverage*100, formatNumber(report.Identity.CoveredBytes), formatNumber(report.Identity.TotalBytes), report.Arcs.Full, report.Arcs.Partial, report.Arcs.Missing, formatNumber(report.Arcs.ArrivedBytes), formatNumber(report.Arcs.BodyBytes), arcCoveragePercentTotal(report.Arcs), memory, report.AfterCompact)
@@ -372,7 +380,10 @@ func readTranscriptFile(path string) (transcriptEvidence, error) {
 			continue
 		}
 		if record.Type == "attachment" && record.Attachment != nil && record.Attachment.Type == "instructions" {
-			result.Memory = memoryReportFromFiles(record.Attachment.Files)
+			memory := memoryReportFromFiles(record.Attachment.Files)
+			if memory.Seen {
+				result.Memory = memory
+			}
 		}
 		if !seenPoint {
 			seenPoint = true
@@ -414,6 +425,7 @@ func memoryReportFromFiles(files []transcriptFile) MemoryReport {
 		if !isMemoryFileType(file.Type) {
 			continue
 		}
+		result.Seen = true
 		result.Files = append(result.Files, MemoryFileReport{Path: file.Path, Type: file.Type, Lines: lineCount(file.Content)})
 		if match := memoryNoticeInContent(file.Content); match != nil {
 			result.Truncated = true

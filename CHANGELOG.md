@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `persona health` reports whether each keeper's identity actually reached its context window. It reads the keeper's Claude Code transcript, finds the last startup or compaction, and measures how many bytes of the identity note and of each arc the persona hooks delivered after it. It also reports whether anything reloaded at all and whether the memory file was cut off. A cut-off transcript line that holds a compaction marker still counts as a compaction, and unreadable lines are counted and shown.
+- `persona health` reports whether each keeper's identity actually reached its context window. It reads the keeper's Claude Code transcript, finds the last startup or compaction, and measures how many bytes of the identity note and of each arc the persona hooks delivered after it. It also reports whether anything reloaded at all, whether memory was seen after the reload point (otherwise `memory not seen`), and whether the memory file was cut off. A cut-off transcript line that holds a compaction marker still counts as a compaction, and unreadable lines are counted and shown.
 
 ### Fixed
 
