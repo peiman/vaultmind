@@ -1,0 +1,7 @@
+{"type":"system","subtype":"compact_boundary","timestamp":"2026-11-24T10:00:00Z"}
+{"type":"attachment","timestamp":"2026-11-24T10:00:01Z","attachment":{"type":"hook_success","hookEvent":"Stop","content":"I am the keeper. I protect the boundary."}}
+{"type":"attachment","timestamp":"2026-11-24T10:00:02Z","attachment":{"type":"hook_success","hookEvent":"UserPromptSubmit","content":"I am the keeper. I protect the boundary."}}
+{"type":"attachment","timestamp":"2026-11-24T10:00:03Z","attachment":{"type":"file","content":"I am the keeper. I protect the boundary."}}
+{"type":"assistant","timestamp":"2026-11-24T10:00:04Z","message":{"role":"assistant","content":[{"type":"text","text":"I am the keeper. I protect the boundary."}]}}
+{"type":"user","timestamp":"2026-11-24T10:00:05Z","message":{"role":"user","content":[{"type":"tool_result","content":[{"type":"text","text":"I am the keeper. I protect the boundary."}]}]}}
+{"type":"attachment","timestamp":"2026-11-24T10:00:03Z","attachment":{"type":"hook_non_blocking_error","hookEvent":"SessionStart","content":"I am the keeper. I protect the boundary."}}

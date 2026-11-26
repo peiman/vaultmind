@@ -1005,6 +1005,31 @@ app:
     # Open gap this finding answers. The draft stores closes_gap. When the question is omitted, the gap's question is used.
     gap: 
 
+  persona:
+    # Single-keeper label (default: basename of --transcripts)
+    health.name: 
+
+    # Transcript project directory
+    health.transcripts: 
+
+    # Identity vault path
+    health.vault: 
+
+    # Identity anchor note id
+    health.anchor: 
+
+    # YAML file containing keeper definitions
+    health.keepers: 
+
+    # Output JSON
+    health.json: false
+
+    # Minimum identity coverage fraction
+    health.min_coverage: 0.9
+
+    # Minimum total arc-body coverage fraction (WARN only)
+    health.min_arc_coverage: 0
+
   ping:
     # Default message to display for the ping command
     output_message: Hello World!

@@ -194,6 +194,8 @@ components:
       - internal/propose/**
       # VaultMind gaps (vaultmind note gap): an unanswered question recorded as a note, and the hint log of weak asks.
       - internal/gap/**
+      # VaultMind persona health (vaultmind persona health): did each keeper's identity reach its context window; streams session transcripts, reads the identity vault:
+      - internal/personahealth/**
 
   # pkg/ was cleaned by task init (checkmate is now an external dependency).
   # Re-add this section if you create new public packages in pkg/.
