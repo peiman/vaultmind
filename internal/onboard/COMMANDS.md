@@ -84,6 +84,8 @@ Generated from the command tree — do not edit by hand (run `task generate:docs
 | `vaultmind identity signer install` | Run the signer under launchd: start at login, restart if it dies (macOS) | your signer must survive logouts, reboots, and crashes — without it a dead signer fails every signed send until someone notices. |
 | `vaultmind init` | Scaffold a fresh vault — a project knowledge base by default, or an agent's identity vault | you are starting fresh: a project knowledge base by default, or an agent's identity vault with --profile persona. |
 | `vaultmind mcp` | Serve the vault to MCP clients (Claude Desktop, Cursor, any agent) over stdio | an agent without a shell (Claude Desktop, any MCP client) should use the vault — add it as an MCP server. |
+| `vaultmind persona` | Measure persona reconstruction | you want to measure whether a keeper reconstructed its persona after a context boundary. |
+| `vaultmind persona health` | Report whether keeper identity reached the current context | you need body-byte identity and arc coverage, Principle delivery, reload, and memory-truncation evidence for one or more keepers; use --name to label a single keeper. |
 
 ## Setup & introspection:
 

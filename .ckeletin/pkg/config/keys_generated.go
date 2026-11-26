@@ -321,6 +321,14 @@ const (
 	KeyAppNoteproposeCloseBand               = "app.notepropose.close_band"               // Weakest relevance band that is close enough to patch. A stronger band is also...
 	KeyAppNoteproposeDraftsDir               = "app.notepropose.drafts_dir"               // Folder for a draft that must not sit in the import folder. Default is notes. ...
 	KeyAppNoteproposeGap                     = "app.notepropose.gap"                      // Open gap this finding answers. The draft stores closes_gap. When the question...
+	KeyAppPersonaHealthName                  = "app.persona.health.name"                  // Single-keeper label (default: basename of --transcripts)
+	KeyAppPersonaHealthTranscripts           = "app.persona.health.transcripts"           // Transcript project directory
+	KeyAppPersonaHealthVault                 = "app.persona.health.vault"                 // Identity vault path
+	KeyAppPersonaHealthAnchor                = "app.persona.health.anchor"                // Identity anchor note id
+	KeyAppPersonaHealthKeepers               = "app.persona.health.keepers"               // YAML file containing keeper definitions
+	KeyAppPersonaHealthJson                  = "app.persona.health.json"                  // Output JSON
+	KeyAppPersonaHealthMinCoverage           = "app.persona.health.min_coverage"          // Minimum identity coverage fraction
+	KeyAppPersonaHealthMinArcCoverage        = "app.persona.health.min_arc_coverage"      // Minimum total arc-body coverage fraction (WARN only)
 	KeyAppPingOutputMessage                  = "app.ping.output_message"                  // Default message to display for the ping command
 	KeyAppPingOutputColor                    = "app.ping.output_color"                    // Text color for ping command output (white, red, green, blue, cyan, yellow, ma...
 	KeyAppPingUi                             = "app.ping.ui"                              // Enable interactive UI for the ping command
