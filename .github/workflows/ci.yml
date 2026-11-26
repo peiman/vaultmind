@@ -236,7 +236,9 @@ jobs:
     name: Test Dev/Prod Build Separation
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Runs two full test passes (~11 min warm). A tool-cache miss adds ~3 min,
+    # and a cancelled run never saves the cache, so 15 left no headroom (0c22218).
+    timeout-minutes: 25
     permissions:
       contents: read
 
