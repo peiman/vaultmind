@@ -85,11 +85,50 @@ func TestCheck_ArcMomentCoverageReportsPresentSections(t *testing.T) {
 	assert.Equal(t, "principle", sections[1].Name)
 	assert.Greater(t, sections[1].Bytes, 0)
 	assert.Greater(t, sections[1].ArrivedBytes, 0)
-	assert.NotContains(t, []string{"push"}, sections[0].Name)
+	assert.Equal(t, "trigger", sections[0].Name)
 	assert.Equal(t, report.Arcs.MomentBytes, sections[0].Bytes+sections[1].Bytes)
 	assert.Equal(t, report.Arcs.MomentArrivedBytes, sections[0].ArrivedBytes+sections[1].ArrivedBytes)
 	assert.Greater(t, report.Arcs.MomentCoverage, 0.0)
 	assert.Less(t, report.Arcs.MomentCoverage, 1.0)
+}
+
+func TestCheck_ArcMomentCoverageRequiresTheArcHookBlock(t *testing.T) {
+	report := CheckKeeper(Keeper{
+		Name: "moment", Transcripts: fixturePath("transcripts/moment-identity-only.jsonl"), Vault: fixturePath("vault-moment"),
+	}, 0.0)
+
+	alpha := report.Arcs.Items[0]
+	for _, section := range alpha.Sections {
+		assert.Zero(t, section.ArrivedBytes, section.Name)
+	}
+}
+
+func TestCheck_ArcMomentCoverageJoinsConsecutiveShardBlocks(t *testing.T) {
+	report := CheckKeeper(Keeper{
+		Name: "moment", Transcripts: fixturePath("transcripts/moment-split-shards.jsonl"), Vault: fixturePath("vault-moment"),
+	}, 0.0)
+
+	alpha := report.Arcs.Items[0]
+	assert.Equal(t, 1.0, alpha.Sections[0].Coverage)
+}
+
+func TestCheck_ArcMomentCoverageDoesNotBorrowAnotherArcOrShortUnits(t *testing.T) {
+	for _, transcript := range []string{"moment-other-arc.jsonl", "moment-short-unit.jsonl"} {
+		report := CheckKeeper(Keeper{
+			Name: "moment", Transcripts: fixturePath("transcripts/" + transcript), Vault: fixturePath("vault-moment"),
+		}, 0.0)
+		alpha := report.Arcs.Items[0]
+		assert.Zero(t, alpha.Sections[0].ArrivedBytes, transcript)
+	}
+}
+
+func TestCheck_ArcMomentCoverageDoesNotCountTheRecitationBannerAsPrinciple(t *testing.T) {
+	report := CheckKeeper(Keeper{
+		Name: "moment", Transcripts: fixturePath("transcripts/moment-banner-only.jsonl"), Vault: fixturePath("vault-banner"),
+	}, 0.0)
+
+	require.Len(t, report.Arcs.Items, 1)
+	assert.Zero(t, report.Arcs.Items[0].Sections[0].ArrivedBytes)
 }
 
 func TestCheck_ArcMomentThresholdWarnsButNeverFails(t *testing.T) {
@@ -125,7 +164,9 @@ func TestCheck_ArcMomentCoverageReportsEveryMomentSectionInOrder(t *testing.T) {
 	assert.Equal(t, alpha.Sections[0].Bytes+alpha.Sections[1].Bytes+alpha.Sections[2].Bytes, report.Arcs.MomentBytes)
 	assert.Equal(t, alpha.Sections[0].ArrivedBytes+alpha.Sections[1].ArrivedBytes+alpha.Sections[2].ArrivedBytes, report.Arcs.MomentArrivedBytes)
 	assert.Equal(t, float64(report.Arcs.MomentArrivedBytes)/float64(report.Arcs.MomentBytes), report.Arcs.MomentCoverage)
-	assert.NotContains(t, alpha.Sections, ArcSectionReport{Name: "deeper-sight"})
+	for _, section := range alpha.Sections {
+		assert.NotEqual(t, "deeper-sight", section.Name)
+	}
 
 	data, err := json.Marshal(Result{Keepers: []Report{report}})
 	require.NoError(t, err)

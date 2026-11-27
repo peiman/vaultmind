@@ -72,7 +72,7 @@ func ArcReciteOptions() []config.ConfigOption {
 		{Key: "app.arc.recite.type", DefaultValue: "arc", Description: "Note type to recite. Defaults to arc; set to another always-load layer (e.g. principle) to give it the same unranked treatment", Type: "string"},
 		{Key: "app.arc.recite.sections", DefaultValue: "", Example: `""`, Description: "Full arc sections to deliver, comma-separated: all, trigger, push, principle, deeper-sight. all delivers the whole body and cannot be combined; empty preserves excerpt behavior", Type: "string"},
 		{Key: "app.arc.recite.shard", DefaultValue: "", Example: `""`, Description: "Deterministic contiguous arc shard in i/n form", Type: "string"},
-		{Key: "app.arc.recite.max_bytes", DefaultValue: 0, Description: "Maximum rendered output bytes; 0 = unbounded. Overflow arc ids are reported", Type: "int"},
+		{Key: "app.arc.recite.max_bytes", DefaultValue: 0, Description: "Maximum rendered text output bytes; 0 = unbounded. Overflow arc ids are reported; JSON output keeps the full overflow_ids list", Type: "int"},
 	}
 }
 

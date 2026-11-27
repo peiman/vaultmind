@@ -40,7 +40,9 @@ func ValidateShard(index, count int) error {
 
 // PlanArcShards partitions sorted arc indexes into contiguous, deterministic
 // shards. Boundaries are chosen nearest each shard's byte target while keeping
-// every shard non-empty when there are at least as many arcs as shards.
+// every shard non-empty when there are at least as many arcs as shards. When
+// there are fewer arcs than shards, empty shards are part of the plan rather
+// than an error: a caller can still render every requested part deterministically.
 func PlanArcShards(weights []int, count int) ([][]int, error) {
 	if count <= 0 {
 		return nil, fmt.Errorf("shard count must be positive")
@@ -62,9 +64,6 @@ func PlanArcShards(weights []int, count int) ([][]int, error) {
 		minCut, maxCut := boundary, len(weights)-remaining
 		if len(weights) >= count && minCut < boundary+1 {
 			minCut = boundary + 1
-		}
-		if minCut > maxCut {
-			minCut = maxCut
 		}
 		target := float64(total) * float64(shard) / float64(count)
 		best := minCut

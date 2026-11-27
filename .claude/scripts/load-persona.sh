@@ -243,11 +243,11 @@ else
   fi
 fi
 
-# THE ARC LAYER, in its own hook (#357). Every arc at a shorter excerpt beats
-# fewer arcs at full length: measured on a 30-arc vault, --excerpt 120 is 10.5k
-# (over the cap) and 70 is 8.6k (all thirty). So the excerpt steps down until
-# the whole layer fits; if none does, the budget shrinks to the cap and
-# `arc recite` names what it left out. A layer it cannot deliver is said so.
+# THE ARC LAYER, in its own hook (#357). The unset-options path preserves the
+# original excerpt ladder and last-resort budget retry. The moment path adds
+# section/shard arguments and lets recite report bounded overflow. In both
+# paths, a non-empty report is delivered; only a still-over-cap result is an
+# actual hook delivery failure.
 if [ "$PERSONA_PART" = arcs ]; then
   ARCS=""
   ARC_EXCERPT=0
@@ -257,28 +257,38 @@ if [ "$PERSONA_PART" = arcs ]; then
   if [ "$OUTPUT_CAP" -gt 256 ]; then ARC_MAX_BYTES=$(( OUTPUT_CAP - 256 )); fi
   if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
     ARC_ERR_FILE=$(mktemp -t vaultmind-arcs-err.XXXXXX)
-    recite_arcs() {
-      local excerpt="$1"
-      local args=(arc recite --vault "$VAULT_PATH" --budget "${VAULTMIND_ARC_BUDGET:-3000}" --excerpt "$excerpt")
-      if [ -n "$ARC_SECTIONS" ]; then
-        args+=(--sections "$ARC_SECTIONS" --max-bytes "$ARC_MAX_BYTES")
-      fi
-      if [ -n "$ARC_SHARD" ]; then args+=(--shard "$ARC_SHARD"); fi
-      VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" "${args[@]}" 2>"$ARC_ERR_FILE"
-    }
-    # Any named selection, including `all`, is one direct bounded recite call:
-    # do not step the excerpt down, and let --max-bytes account for overflow.
-    if [ -n "$ARC_SECTIONS" ]; then
-      ARC_EXCERPT="${VAULTMIND_ARC_EXCERPT:-120}"
-      ARCS=$(recite_arcs "$ARC_EXCERPT")
-    else
+    if [ -z "$ARC_SECTIONS" ] && [ -z "$ARC_SHARD" ]; then
       for ARC_EXCERPT in "${VAULTMIND_ARC_EXCERPT:-120}" 90 70 50; do
-        ARCS=$(recite_arcs "$ARC_EXCERPT")
+        ARCS=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" arc recite --vault "$VAULT_PATH" --budget "${VAULTMIND_ARC_BUDGET:-3000}" --excerpt "$ARC_EXCERPT" 2>"$ARC_ERR_FILE")
         [ -n "$ARCS" ] && [ "$(bytes_of "$ARCS")" -ge "$OUTPUT_CAP" ] || break
       done
-    fi
-    if [ -n "$ARCS" ] && [ "$(bytes_of "$ARCS")" -ge "$OUTPUT_CAP" ]; then
-      ARCS=$(recite_arcs "$ARC_EXCERPT")
+      if [ -n "$ARCS" ] && [ "$(bytes_of "$ARCS")" -ge "$OUTPUT_CAP" ]; then
+        ARCS=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" arc recite --vault "$VAULT_PATH" --budget $(( OUTPUT_CAP / 6 )) --excerpt "$ARC_EXCERPT" 2>"$ARC_ERR_FILE")
+      fi
+    else
+      recite_arcs() {
+        local excerpt="$1"
+        local args=(arc recite --vault "$VAULT_PATH" --budget "${VAULTMIND_ARC_BUDGET:-3000}" --excerpt "$excerpt")
+        if [ -n "$ARC_SECTIONS" ]; then
+          args+=(--sections "$ARC_SECTIONS" --max-bytes "$ARC_MAX_BYTES")
+        fi
+        if [ -n "$ARC_SHARD" ]; then args+=(--shard "$ARC_SHARD"); fi
+        VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" "${args[@]}" 2>"$ARC_ERR_FILE"
+      }
+      # Any named selection, including `all`, is one direct bounded recite call:
+      # do not step the excerpt down, and let --max-bytes account for overflow.
+      if [ -n "$ARC_SECTIONS" ]; then
+        ARC_EXCERPT="${VAULTMIND_ARC_EXCERPT:-120}"
+        ARCS=$(recite_arcs "$ARC_EXCERPT")
+      else
+        for ARC_EXCERPT in "${VAULTMIND_ARC_EXCERPT:-120}" 90 70 50; do
+          ARCS=$(recite_arcs "$ARC_EXCERPT")
+          [ -n "$ARCS" ] && [ "$(bytes_of "$ARCS")" -ge "$OUTPUT_CAP" ] || break
+        done
+      fi
+      if [ -n "$ARCS" ] && [ "$(bytes_of "$ARCS")" -ge "$OUTPUT_CAP" ]; then
+        ARCS=$(recite_arcs "$ARC_EXCERPT")
+      fi
     fi
     if [ -n "$ARCS" ] && [ "$(bytes_of "$ARCS")" -ge "$OUTPUT_CAP" ]; then
       ARCS=""

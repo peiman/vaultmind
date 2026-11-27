@@ -1,6 +1,8 @@
 package memory_test
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/memory"
@@ -85,10 +87,49 @@ func TestRecite_BudgetTruncationIsReportedWithTheOmittedIDs(t *testing.T) {
 func TestRecite_MaxBytesReportsOverflowIDsInAscendingOrder(t *testing.T) {
 	db := buildTestDB(t)
 
-	got, err := memory.Recite(db, memory.ReciteConfig{Type: "concept", MaxBytes: 1})
+	full, err := memory.Recite(db, memory.ReciteConfig{Type: "concept"})
+	require.NoError(t, err)
+	cap := len(memory.RenderRecitation(full)) / 2
+	got, err := memory.Recite(db, memory.ReciteConfig{Type: "concept", MaxBytes: cap})
 	require.NoError(t, err)
 	require.Greater(t, got.Overflow, 1, "need multiple overflow notes to verify report ordering")
+	assert.LessOrEqual(t, len(memory.RenderRecitation(got)), cap)
 	assert.IsIncreasing(t, got.OverflowIDs, "overflow IDs must retain ascending shard/id order")
+	accounted := make(map[string]int)
+	for _, item := range got.Items {
+		accounted[item.ID]++
+	}
+	for _, id := range got.OmittedIDs {
+		accounted[id]++
+	}
+	for _, id := range got.OverflowIDs {
+		accounted[id]++
+	}
+	assert.Len(t, accounted, full.Total)
+	for id, count := range accounted {
+		assert.Equal(t, 1, count, id)
+	}
+}
+
+func TestRenderRecitation_HardCapsLongOverflowReportsAndJSONKeepsAllIDs(t *testing.T) {
+	ids := make([]string, 30)
+	for i := range ids {
+		ids[i] = "arc-" + strings.Repeat("x", 20) + string(rune('a'+i))
+	}
+	for _, cap := range []int{40, 200} {
+		r := &memory.ReciteResult{Type: "arc", Total: len(ids), MaxBytes: cap, Overflow: len(ids), OverflowIDs: ids}
+		text := memory.RenderRecitation(r)
+		assert.LessOrEqual(t, len(text), cap)
+		assert.Contains(t, text, "+", "a bounded overflow list must report its remaining count")
+		if cap == 40 {
+			assert.Contains(t, text, "+30 more arcs")
+		}
+	}
+	raw, err := json.Marshal(&memory.ReciteResult{Type: "arc", Total: len(ids), MaxBytes: 40, Overflow: len(ids), OverflowIDs: ids})
+	require.NoError(t, err)
+	for _, id := range ids {
+		assert.Contains(t, string(raw), id)
+	}
 }
 
 // Excerpting must not change WHICH notes arrive — only how much of each.

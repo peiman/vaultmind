@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/peiman/vaultmind/internal/index"
 	"github.com/peiman/vaultmind/internal/parser"
@@ -259,13 +260,66 @@ func renderReciteItem(item ReciteItem) string {
 // RenderRecitation is the text contract shared by the CLI and byte-cap logic.
 func RenderRecitation(r *ReciteResult) string {
 	out := renderRecitation(r, false)
-	if r.MaxBytes > 0 && len(out) > r.MaxBytes && len(r.Items) == 0 {
-		return renderRecitation(r, true)
+	if r.MaxBytes > 0 && len(out) > r.MaxBytes {
+		return compactRecitationWithinCap(r)
 	}
 	return out
 }
 
+func compactRecitationWithinCap(r *ReciteResult) string {
+	var b strings.Builder
+	if r.Shard == nil {
+		fmt.Fprintf(&b, "%s layer\n", strings.ToUpper(r.Type))
+	} else {
+		fmt.Fprintf(&b, "%s layer, arcs part %d of %d\n", strings.ToUpper(r.Type), r.Shard.Index, r.Shard.Count)
+	}
+	appendBoundedIDs(&b, "omitted ids", r.Type, r.OmittedIDs, r.MaxBytes)
+	appendBoundedIDs(&b, "overflow ids", r.Type, r.OverflowIDs, r.MaxBytes)
+	return fitBytes(b.String(), r.MaxBytes)
+}
+
+func appendBoundedIDs(b *strings.Builder, label, noteType string, ids []string, maxBytes int) {
+	if len(ids) == 0 {
+		return
+	}
+	base := label + ":"
+	best := ""
+	for i := range ids {
+		line := base + " " + strings.Join(ids[:i+1], ", ")
+		remaining := len(ids) - i - 1
+		if remaining > 0 {
+			line += fmt.Sprintf(", +%d more %ss", remaining, noteType)
+		}
+		candidate := b.String() + line + "\n"
+		if len(candidate) > maxBytes {
+			break
+		}
+		best = line
+	}
+	if best == "" {
+		best = base + fmt.Sprintf(" +%d more %ss", len(ids), noteType)
+	}
+	if len(b.String()+best+"\n") <= maxBytes {
+		b.WriteString(best)
+		b.WriteByte('\n')
+	}
+}
+
+func fitBytes(value string, maxBytes int) string {
+	if maxBytes <= 0 || len(value) <= maxBytes {
+		return value
+	}
+	value = value[:maxBytes]
+	for len(value) > 0 && !utf8.ValidString(value) {
+		value = value[:len(value)-1]
+	}
+	return value
+}
+
 func renderRecitation(r *ReciteResult, compact bool) string {
+	if !compact && r.Type == "arc" && r.Shard != nil && len(r.Items) == 0 && r.Omitted == 0 && r.Overflow == 0 {
+		return fmt.Sprintf("arcs part %d of %d — no arcs in this part\n", r.Shard.Index, r.Shard.Count)
+	}
 	if r.Total == 0 {
 		return fmt.Sprintf("No %s notes in this vault yet.\n", r.Type)
 	}
@@ -315,7 +369,7 @@ func trimToMaxBytes(result *ReciteResult) {
 	if result.MaxBytes <= 0 {
 		return
 	}
-	for len(RenderRecitation(result)) > result.MaxBytes && len(result.Items) > 0 {
+	for len(renderRecitation(result, false)) > result.MaxBytes && len(result.Items) > 0 {
 		last := len(result.Items) - 1
 		result.OverflowIDs = append(result.OverflowIDs, result.Items[last].ID)
 		result.Overflow++

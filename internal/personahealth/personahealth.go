@@ -152,8 +152,11 @@ const memoryNoticeProven = true
 // instructions attachments; AutoMem is the currently observed memory type.
 var memoryFileTypes = [...]string{"AutoMem"}
 
+var arcBlockHeader = regexp.MustCompile(`^── ([^—\r\n]+?)(?: \(part [0-9]+ of [0-9]+\))? — .*$`)
+
 type transcriptEvidence struct {
 	Texts           []string
+	ArcBlocks       map[string][]string
 	AfterCompact    string
 	PointPrefix     string
 	Memory          MemoryReport
@@ -203,7 +206,7 @@ func checkKeeper(keeper Keeper, minCoverage, minArcCoverage, minMomentCoverage f
 		return report
 	}
 	report.Identity = coverage(anchorBody, evidence.Texts)
-	report.Arcs = arcCoverage(arcs, evidence.Texts)
+	report.Arcs = arcCoverage(arcs, evidence.Texts, evidence.ArcBlocks)
 
 	var reasons []string
 	if len(evidence.Texts) == 0 {
@@ -367,7 +370,7 @@ func readTranscriptFile(path string) (transcriptEvidence, error) {
 	}
 	defer func() { _ = file.Close() }()
 
-	var result = transcriptEvidence{Memory: emptyMemoryReport()}
+	var result = transcriptEvidence{ArcBlocks: make(map[string][]string), Memory: emptyMemoryReport()}
 	seenPoint := false
 	compactSeen := false
 	validRecords := 0
@@ -377,6 +380,7 @@ func readTranscriptFile(path string) (transcriptEvidence, error) {
 		result.AfterCompact = formatPoint(timestamp)
 		result.PointPrefix = "after compaction"
 		result.Texts = nil
+		result.ArcBlocks = make(map[string][]string)
 		result.Memory = emptyMemoryReport()
 	}
 	scanner := bufio.NewScanner(file)
@@ -418,6 +422,9 @@ func readTranscriptFile(path string) (transcriptEvidence, error) {
 		content := attachmentContent(record.Attachment)
 		if record.Attachment != nil && record.Attachment.Type == "hook_success" && record.Attachment.HookEvent == "SessionStart" && content != "" {
 			result.Texts = append(result.Texts, content)
+			for id, blocks := range arcBlocks(content) {
+				result.ArcBlocks[id] = append(result.ArcBlocks[id], blocks...)
+			}
 		}
 	}
 	if err := scanner.Err(); err != nil {
@@ -601,7 +608,7 @@ func coverage(body string, texts []string) IdentityReport {
 	return result
 }
 
-func arcCoverage(arcs []vaultArc, texts []string) ArcReport {
+func arcCoverage(arcs []vaultArc, texts []string, arcBlocks map[string][]string) ArcReport {
 	result := ArcReport{Items: make([]ArcBodyReport, 0, len(arcs))}
 	for _, arc := range arcs {
 		body := coverage(arc.Body, texts)
@@ -610,7 +617,7 @@ func arcCoverage(arcs []vaultArc, texts []string) ArcReport {
 			if section.Name != "trigger" && section.Name != "push" && section.Name != "principle" {
 				continue
 			}
-			sectionCoverage := coverage(section.Text, texts)
+			sectionCoverage := momentCoverage(section.Text, arcBlocks[arc.ID])
 			item.Sections = append(item.Sections, ArcSectionReport{Name: section.Name, Bytes: sectionCoverage.TotalBytes, ArrivedBytes: sectionCoverage.CoveredBytes, Coverage: sectionCoverage.Coverage})
 			result.MomentBytes += sectionCoverage.TotalBytes
 			result.MomentArrivedBytes += sectionCoverage.CoveredBytes
@@ -632,8 +639,8 @@ func arcCoverage(arcs []vaultArc, texts []string) ArcReport {
 			continue
 		}
 		partial := false
-		for _, unit := range textUnits(arc.Principle) {
-			if len(unit) >= 12 && containsNormalized(texts, unit) {
+		for _, unit := range longTextUnits(arc.Principle) {
+			if containsNormalized(texts, unit) {
 				partial = true
 				break
 			}
@@ -643,7 +650,7 @@ func arcCoverage(arcs []vaultArc, texts []string) ArcReport {
 			if len(prefix) > 24 {
 				prefix = prefix[:24]
 			}
-			partial = len(prefix) >= 12 && containsNormalized(texts, prefix)
+			partial = len(prefix) >= minimumCoverageUnitLength && containsNormalized(texts, prefix)
 		}
 		if partial {
 			result.Partial++
@@ -697,6 +704,56 @@ func textUnits(text string) []string {
 		}
 	}
 	return units
+}
+
+const minimumCoverageUnitLength = 12
+
+func longTextUnits(text string) []string {
+	var units []string
+	for _, unit := range textUnits(text) {
+		if len(unit) >= minimumCoverageUnitLength {
+			units = append(units, unit)
+		}
+	}
+	return units
+}
+
+func momentCoverage(section string, blocks []string) IdentityReport {
+	result := IdentityReport{}
+	for _, unit := range longTextUnits(section) {
+		if strings.EqualFold(unit, "Read them as yours before you respond.") {
+			continue
+		}
+		result.TotalBytes += len(unit)
+		if containsNormalized(blocks, unit) {
+			result.CoveredBytes += len(unit)
+		}
+	}
+	if result.TotalBytes > 0 {
+		result.Coverage = float64(result.CoveredBytes) / float64(result.TotalBytes)
+	}
+	return result
+}
+
+func arcBlocks(text string) map[string][]string {
+	lines := strings.Split(text, "\n")
+	result := make(map[string][]string)
+	for i, line := range lines {
+		match := arcBlockHeader.FindStringSubmatch(strings.TrimRight(line, "\r"))
+		if match == nil {
+			continue
+		}
+		end := len(lines)
+		for j := i + 1; j < len(lines); j++ {
+			if strings.HasPrefix(strings.TrimRight(lines[j], "\r"), "── ") {
+				end = j
+				break
+			}
+		}
+		id := strings.TrimSpace(match[1])
+		result[id] = append(result[id], strings.Join(lines[i:end], "\n"))
+	}
+	return result
 }
 
 func containsNormalized(texts []string, needle string) bool {

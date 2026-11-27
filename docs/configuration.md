@@ -48,7 +48,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.arc.recite.type` | string | `arc` | `VAULTMIND_APP_ARC_RECITE_TYPE` | Note type to recite. Defaults to arc; set to another always-load layer (e.g. principle) to give it the same unranked treatment |
 | `app.arc.recite.sections` | string | `` | `VAULTMIND_APP_ARC_RECITE_SECTIONS` | Full arc sections to deliver, comma-separated: all, trigger, push, principle, deeper-sight. all delivers the whole body and cannot be combined; empty preserves excerpt behavior |
 | `app.arc.recite.shard` | string | `` | `VAULTMIND_APP_ARC_RECITE_SHARD` | Deterministic contiguous arc shard in i/n form |
-| `app.arc.recite.max_bytes` | int | `0` | `VAULTMIND_APP_ARC_RECITE_MAX_BYTES` | Maximum rendered output bytes; 0 = unbounded. Overflow arc ids are reported |
+| `app.arc.recite.max_bytes` | int | `0` | `VAULTMIND_APP_ARC_RECITE_MAX_BYTES` | Maximum rendered text output bytes; 0 = unbounded. Overflow arc ids are reported; JSON output keeps the full overflow_ids list |
 | `app.arc.review.vault` | string | `.` | `VAULTMIND_APP_ARC_REVIEW_VAULT` | Path to vault root (its episodes/ folder is reviewed) |
 | `app.arc.review.json` | bool | `false` | `VAULTMIND_APP_ARC_REVIEW_JSON` | Output in JSON format |
 | `app.arc.review.episode` | string | `` | `VAULTMIND_APP_ARC_REVIEW_EPISODE` | The episode id(s) to review, comma-separated (default: the oldest session awaiting review) |
@@ -445,7 +445,7 @@ app:
     # Deterministic contiguous arc shard in i/n form
     recite.shard: ""
 
-    # Maximum rendered output bytes; 0 = unbounded. Overflow arc ids are reported
+    # Maximum rendered text output bytes; 0 = unbounded. Overflow arc ids are reported; JSON output keeps the full overflow_ids list
     recite.max_bytes: 0
 
     # Path to vault root (its episodes/ folder is reviewed)
@@ -1640,7 +1640,7 @@ export VAULTMIND_APP_ARC_RECITE_SECTIONS=""
 # Deterministic contiguous arc shard in i/n form
 export VAULTMIND_APP_ARC_RECITE_SHARD=""
 
-# Maximum rendered output bytes; 0 = unbounded. Overflow arc ids are reported
+# Maximum rendered text output bytes; 0 = unbounded. Overflow arc ids are reported; JSON output keeps the full overflow_ids list
 export VAULTMIND_APP_ARC_RECITE_MAX_BYTES=0
 
 # Path to vault root (its episodes/ folder is reviewed)

@@ -75,7 +75,7 @@
                 },
                 "max_bytes": {
                   "default": 0,
-                  "description": "Maximum rendered output bytes; 0 = unbounded. Overflow arc ids are reported",
+                  "description": "Maximum rendered text output bytes; 0 = unbounded. Overflow arc ids are reported; JSON output keeps the full overflow_ids list",
                   "type": "integer"
                 },
                 "sections": {

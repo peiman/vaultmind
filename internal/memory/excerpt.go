@@ -57,19 +57,25 @@ func ExtractArcSections(body string) []ArcSection {
 	lines := strings.Split(body, "\n")
 	var out []ArcSection
 	seen := make(map[string]bool)
+	var fenceChar byte
+	fenceLength := 0
 	for i, line := range lines {
+		if fenceChar != 0 {
+			if isClosingFence(line, fenceChar, fenceLength) {
+				fenceChar, fenceLength = 0, 0
+			}
+			continue
+		}
+		if char, length, ok := fenceMarker(line); ok {
+			fenceChar, fenceLength = char, length
+			continue
+		}
 		name, ok := canonicalArcSectionName(line)
 		if !ok || seen[name] {
 			continue
 		}
 		seen[name] = true
-		end := len(lines)
-		for j := i + 1; j < len(lines); j++ {
-			if isAnySectionHeading(lines[j]) {
-				end = j
-				break
-			}
-		}
+		end := nextExtractSectionBoundary(lines, i+1)
 		text := strings.TrimSpace(strings.Join(lines[i+1:end], "\n"))
 		if text != "" {
 			out = append(out, ArcSection{Name: name, Heading: line, Text: text})
@@ -114,7 +120,7 @@ func ParseArcSectionSelection(value string) ([]string, error) {
 
 func canonicalArcSectionName(line string) (string, bool) {
 	for name, heading := range namedArcSections {
-		if isSectionHeading(line, heading) {
+		if isExtractSectionHeading(line, heading) {
 			return name, true
 		}
 	}
@@ -334,9 +340,6 @@ func isCitation(text string) bool {
 // Markdown "#" markers — `note get` renders headings bare, files carry the "#".
 func isSectionHeading(line, name string) bool {
 	trimmed := strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(line), "#"))
-	if strings.HasPrefix(strings.ToLower(trimmed), "the ") {
-		trimmed = strings.TrimSpace(trimmed[4:])
-	}
 	return strings.EqualFold(trimmed, name)
 }
 
@@ -347,6 +350,77 @@ func isAnySectionHeading(line string) bool {
 		}
 	}
 	return false
+}
+
+func isExtractSectionHeading(line, name string) bool {
+	trimmed := strings.TrimSpace(line)
+	if !strings.HasPrefix(trimmed, "#") {
+		return false
+	}
+	trimmed = strings.TrimSpace(strings.TrimLeft(trimmed, "#"))
+	if strings.HasPrefix(strings.ToLower(trimmed), "the ") {
+		trimmed = strings.TrimSpace(trimmed[4:])
+	}
+	return strings.EqualFold(trimmed, name)
+}
+
+func isAnyExtractSectionHeading(line string) bool {
+	for _, section := range arcSections {
+		if isExtractSectionHeading(line, section) {
+			return true
+		}
+	}
+	return false
+}
+
+func nextExtractSectionBoundary(lines []string, start int) int {
+	var fenceChar byte
+	fenceLength := 0
+	for i := start; i < len(lines); i++ {
+		line := lines[i]
+		if fenceChar != 0 {
+			if isClosingFence(line, fenceChar, fenceLength) {
+				fenceChar, fenceLength = 0, 0
+			}
+			continue
+		}
+		if char, length, ok := fenceMarker(line); ok {
+			fenceChar, fenceLength = char, length
+			continue
+		}
+		if isAnyExtractSectionHeading(line) {
+			return i
+		}
+	}
+	return len(lines)
+}
+
+func fenceMarker(line string) (byte, int, bool) {
+	trimmed := strings.TrimSpace(line)
+	if len(trimmed) < 3 || (trimmed[0] != '`' && trimmed[0] != '~') {
+		return 0, 0, false
+	}
+	char := trimmed[0]
+	length := 0
+	for length < len(trimmed) && trimmed[length] == char {
+		length++
+	}
+	if length < 3 {
+		return 0, 0, false
+	}
+	return char, length, true
+}
+
+func isClosingFence(line string, char byte, length int) bool {
+	trimmed := strings.TrimSpace(line)
+	if len(trimmed) < length || trimmed[0] != char {
+		return false
+	}
+	count := 0
+	for count < len(trimmed) && trimmed[count] == char {
+		count++
+	}
+	return count >= length && strings.TrimSpace(trimmed[count:]) == ""
 }
 
 // truncateToTokens keeps whole sentences while they fit, so an excerpt ends

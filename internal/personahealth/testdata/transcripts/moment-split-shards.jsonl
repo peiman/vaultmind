@@ -1,0 +1,3 @@
+{"type":"system","subtype":"compact_boundary","timestamp":"2026-11-24T10:00:00Z"}
+{"type":"attachment","timestamp":"2026-11-24T10:00:01Z","attachment":{"type":"hook_success","hookEvent":"SessionStart","content":"YOUR ARCS\n── arc-alpha (part 1 of 2) — Alpha\nA sudden outage exposed the fragile handoff."}}
+{"type":"attachment","timestamp":"2026-11-24T10:00:02Z","attachment":{"type":"hook_success","hookEvent":"SessionStart","content":"YOUR ARCS\n── arc-alpha (part 2 of 2) — Alpha\nThe team needed a clearer signal."}}
