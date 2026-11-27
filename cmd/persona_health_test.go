@@ -119,6 +119,39 @@ func TestPersonaHealth_JSONIncludesArcBodyItemsAndTotals(t *testing.T) {
 	assert.Equal(t, 0, arcs.Items[1].ArrivedBytes)
 }
 
+func TestPersonaHealth_JSONIncludesArcMomentSectionsAndTotal(t *testing.T) {
+	isolatePersonaHealth(t)
+	out, _, err := runRootCmd(t, "persona", "health",
+		"--transcripts", personaHealthFixture(t, "transcripts/full.jsonl"),
+		"--vault", personaHealthFixture(t, "vault-full"), "--json")
+	require.NoError(t, err)
+	var got struct {
+		Result struct {
+			Keepers []struct {
+				Arcs struct {
+					MomentCoverage float64 `json:"moment_coverage"`
+					MomentBytes    int     `json:"moment_bytes"`
+					Items          []struct {
+						Sections []struct {
+							Name         string  `json:"name"`
+							Bytes        int     `json:"bytes"`
+							ArrivedBytes int     `json:"arrived_bytes"`
+							Coverage     float64 `json:"coverage"`
+						} `json:"sections"`
+					} `json:"items"`
+				} `json:"arcs"`
+			} `json:"keepers"`
+		} `json:"result"`
+	}
+	require.NoError(t, json.Unmarshal(out.Bytes(), &got))
+	require.Len(t, got.Result.Keepers, 1)
+	arcs := got.Result.Keepers[0].Arcs
+	assert.Greater(t, arcs.MomentBytes, 0)
+	assert.Greater(t, arcs.MomentCoverage, 0.0)
+	require.Len(t, arcs.Items, 1)
+	assert.Len(t, arcs.Items[0].Sections, 2)
+}
+
 func TestPersonaHealth_RejectsBadMinimumAndMixedForms(t *testing.T) {
 	isolatePersonaHealth(t)
 	_, _, err := runRootCmd(t, "persona", "health",
@@ -130,6 +163,11 @@ func TestPersonaHealth_RejectsBadMinimumAndMixedForms(t *testing.T) {
 		"--transcripts", personaHealthFixture(t, "transcripts/full.jsonl"),
 		"--vault", personaHealthFixture(t, "vault-full"), "--min-arc-coverage", "1.1")
 	assert.EqualError(t, err, "--min-arc-coverage must be between 0 and 1")
+
+	_, _, err = runRootCmd(t, "persona", "health",
+		"--transcripts", personaHealthFixture(t, "transcripts/full.jsonl"),
+		"--vault", personaHealthFixture(t, "vault-full"), "--min-moment-coverage", "1.1")
+	assert.EqualError(t, err, "--min-moment-coverage must be between 0 and 1")
 
 	_, _, err = runRootCmd(t, "persona", "health",
 		"--transcripts", personaHealthFixture(t, "transcripts/full.jsonl"),

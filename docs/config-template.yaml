@@ -55,6 +55,15 @@ app:
     # Note type to recite. Defaults to arc; set to another always-load layer (e.g. principle) to give it the same unranked treatment
     recite.type: arc
 
+    # Full arc sections to deliver, comma-separated: trigger, push, principle, deeper-sight. Empty preserves excerpt behavior
+    recite.sections: ""
+
+    # Deterministic contiguous arc shard in i/n form
+    recite.shard: ""
+
+    # Maximum rendered output bytes; 0 = unbounded. Overflow arc ids are reported
+    recite.max_bytes: 0
+
     # Path to vault root (its episodes/ folder is reviewed)
     review.vault: .
 
@@ -1032,6 +1041,9 @@ app:
 
     # Minimum total arc-body coverage fraction (WARN only)
     health.min_arc_coverage: 0
+
+    # Minimum Trigger/Push/Principle moment coverage fraction (WARN only)
+    health.min_moment_coverage: 0
 
   ping:
     # Default message to display for the ping command

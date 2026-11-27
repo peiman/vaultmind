@@ -3,6 +3,7 @@ package memory
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/peiman/vaultmind/internal/index"
 )
@@ -23,10 +24,25 @@ import (
 
 // ReciteItem is one note rendered for recitation.
 type ReciteItem struct {
-	ID      string `json:"id"`
-	Title   string `json:"title"`
-	Excerpt string `json:"excerpt"`
-	Tokens  int    `json:"tokens"`
+	ID       string          `json:"id"`
+	Title    string          `json:"title"`
+	Excerpt  string          `json:"excerpt"`
+	Tokens   int             `json:"tokens"`
+	Sections []ReciteSection `json:"sections,omitempty"`
+	Fallback bool            `json:"fallback,omitempty"`
+}
+
+// ReciteSection is a full selected section, including its verbatim heading.
+type ReciteSection struct {
+	Name    string `json:"name"`
+	Heading string `json:"heading"`
+	Text    string `json:"text"`
+}
+
+// ReciteShard identifies the requested deterministic shard.
+type ReciteShard struct {
+	Index int `json:"index"`
+	Count int `json:"count"`
 }
 
 // ReciteResult is the whole layer, plus an explicit account of what did not fit.
@@ -36,17 +52,22 @@ type ReciteItem struct {
 // caller cannot tell "you have 27 arcs and here they are" from "you have 27
 // arcs and here are 9". Whoever reads this must be able to see the difference.
 type ReciteResult struct {
-	Type       string       `json:"type"`
-	Total      int          `json:"total"`
-	Items      []ReciteItem `json:"items"`
-	Omitted    int          `json:"omitted"`
-	OmittedIDs []string     `json:"omitted_ids,omitempty"`
-	Tokens     int          `json:"tokens"`
-	Budget     int          `json:"budget"`
+	Type        string       `json:"type"`
+	Total       int          `json:"total"`
+	Items       []ReciteItem `json:"items"`
+	Omitted     int          `json:"omitted"`
+	OmittedIDs  []string     `json:"omitted_ids,omitempty"`
+	Overflow    int          `json:"overflow,omitempty"`
+	OverflowIDs []string     `json:"overflow_ids,omitempty"`
+	Tokens      int          `json:"tokens"`
+	Budget      int          `json:"budget"`
+	Shard       *ReciteShard `json:"shard,omitempty"`
+	MaxBytes    int          `json:"max_bytes,omitempty"`
 }
 
 // Truncated reports whether the budget forced anything out.
-func (r *ReciteResult) Truncated() bool { return r.Omitted > 0 }
+// It also reports notes removed to satisfy the byte cap.
+func (r *ReciteResult) Truncated() bool { return r.Omitted > 0 || r.Overflow > 0 }
 
 // ReciteConfig selects the layer and bounds it.
 type ReciteConfig struct {
@@ -59,6 +80,31 @@ type ReciteConfig struct {
 	// IncludeDrafts recites a status:draft note. Off by default: a draft arc
 	// is a proposal, not identity, until its status changes.
 	IncludeDrafts bool
+	// Sections selects full arc-discipline sections. Empty preserves the
+	// historical body/excerpt behavior.
+	Sections []string
+	// ShardIndex and ShardCount select one deterministic contiguous shard.
+	ShardIndex int
+	ShardCount int
+	// MaxBytes caps rendered output. Zero means unbounded.
+	MaxBytes int
+}
+
+// ParseReciteConfig validates the CLI-shaped recitation options in the memory
+// layer so the command remains wiring-only.
+func ParseReciteConfig(noteType string, budget, excerpt int, includeDrafts bool, sectionsValue, shardValue string, maxBytes int) (ReciteConfig, error) {
+	sections, err := ParseArcSectionSelection(sectionsValue)
+	if err != nil {
+		return ReciteConfig{}, err
+	}
+	shardIndex, shardCount, err := ParseShardSelection(shardValue)
+	if err != nil {
+		return ReciteConfig{}, err
+	}
+	if maxBytes < 0 {
+		return ReciteConfig{}, fmt.Errorf("max bytes must not be negative")
+	}
+	return ReciteConfig{Type: noteType, Budget: budget, ExcerptTokens: excerpt, IncludeDrafts: includeDrafts, Sections: sections, ShardIndex: shardIndex, ShardCount: shardCount, MaxBytes: maxBytes}, nil
 }
 
 // Recite returns every note of cfg.Type, ordered by id, excerpted and bounded.
@@ -69,6 +115,9 @@ type ReciteConfig struct {
 func Recite(db *index.DB, cfg ReciteConfig) (*ReciteResult, error) {
 	if cfg.Type == "" {
 		return nil, fmt.Errorf("recite: no note type given")
+	}
+	if cfg.MaxBytes < 0 {
+		return nil, fmt.Errorf("max bytes must not be negative")
 	}
 	ids, err := noteIDsOfType(db, cfg.Type)
 	if err != nil {
@@ -85,17 +134,25 @@ func Recite(db *index.DB, cfg ReciteConfig) (*ReciteResult, error) {
 			kept = append(kept, id)
 		}
 	}
+	sort.Strings(kept)
 	ids = kept
-	sort.Strings(ids)
-
-	result := &ReciteResult{
-		Type:   cfg.Type,
-		Total:  len(ids),
-		Items:  []ReciteItem{},
-		Budget: cfg.Budget,
+	result := &ReciteResult{Type: cfg.Type, Total: len(ids), Items: []ReciteItem{}, Budget: cfg.Budget, MaxBytes: cfg.MaxBytes}
+	if cfg.ShardCount > 0 {
+		if err := ValidateShard(cfg.ShardIndex, cfg.ShardCount); err != nil {
+			return nil, err
+		}
+		result.Shard = &ReciteShard{Index: cfg.ShardIndex, Count: cfg.ShardCount}
 	}
 
-	for _, id := range ids {
+	type candidate struct {
+		id   string
+		item ReciteItem
+		cost int
+		ok   bool
+	}
+	candidates := make([]candidate, len(ids))
+	weights := make([]int, len(ids))
+	for i, id := range ids {
 		note, err := db.QueryFullNote(id)
 		if err != nil {
 			return nil, fmt.Errorf("recite: loading %q: %w", id, err)
@@ -103,28 +160,165 @@ func Recite(db *index.DB, cfg ReciteConfig) (*ReciteResult, error) {
 		if note == nil {
 			// Indexed but unreadable. Count it as omitted rather than skipping
 			// quietly — a missing arc must be visible as missing.
-			result.Omitted++
-			result.OmittedIDs = append(result.OmittedIDs, id)
+			candidates[i] = candidate{id: id}
 			continue
 		}
+		text, sections, fallback := reciteText(note.Body, cfg)
+		item := ReciteItem{ID: id, Title: note.Title, Excerpt: text, Sections: sections, Fallback: fallback}
+		item.Tokens = EstimateTokens(text)
+		candidates[i] = candidate{id: id, item: item, cost: item.Tokens, ok: true}
+		weights[i] = len(renderReciteItem(item))
+	}
 
+	indexes := make([]int, len(ids))
+	for i := range indexes {
+		indexes[i] = i
+	}
+	if result.Shard != nil {
+		shards, err := PlanArcShards(weights, result.Shard.Count)
+		if err != nil {
+			return nil, err
+		}
+		indexes = shards[result.Shard.Index-1]
+	}
+	for _, index := range indexes {
+		candidate := candidates[index]
+		if !candidate.ok {
+			result.Omitted++
+			result.OmittedIDs = append(result.OmittedIDs, candidate.id)
+			continue
+		}
 		// Budget check BEFORE appending. Every remaining note is then recorded
 		// as omitted — the loop does not break, because the caller is owed the
 		// full list of what it did not get, not just the count. The fit itself
 		// is excerptForBudget, shared with pinned notes.
-		text, cost, keep := excerptForBudget(note.Body, cfg.ExcerptTokens, result.Tokens, cfg.Budget, Excerpt)
-		if !keep {
+		// Full selected sections are bounded by their complete rendered text.
+		if cfg.Budget > 0 && result.Tokens+candidate.cost > cfg.Budget {
 			result.Omitted++
-			result.OmittedIDs = append(result.OmittedIDs, id)
+			result.OmittedIDs = append(result.OmittedIDs, candidate.id)
 			continue
 		}
-
-		result.Items = append(result.Items, ReciteItem{
-			ID: id, Title: note.Title, Excerpt: text, Tokens: cost,
-		})
-		result.Tokens += cost
+		result.Items = append(result.Items, candidate.item)
+		result.Tokens += candidate.cost
 	}
+	trimToMaxBytes(result)
 	return result, nil
+}
+
+func reciteText(body string, cfg ReciteConfig) (string, []ReciteSection, bool) {
+	if len(cfg.Sections) == 0 {
+		text, _, _ := excerptForBudget(body, cfg.ExcerptTokens, 0, 0, Excerpt)
+		return text, nil, false
+	}
+	wanted := make(map[string]bool, len(cfg.Sections))
+	for _, name := range cfg.Sections {
+		wanted[name] = true
+	}
+	var sections []ReciteSection
+	for _, section := range ExtractArcSections(body) {
+		if wanted[section.Name] {
+			sections = append(sections, ReciteSection(section))
+		}
+	}
+	if len(sections) == 0 {
+		text, _, _ := excerptForBudget(body, cfg.ExcerptTokens, 0, 0, Excerpt)
+		return text, nil, true
+	}
+	var b strings.Builder
+	for i, section := range sections {
+		if i > 0 {
+			b.WriteString("\n\n")
+		}
+		b.WriteString(section.Heading)
+		b.WriteString("\n\n")
+		b.WriteString(section.Text)
+	}
+	return b.String(), sections, false
+}
+
+func renderReciteItem(item ReciteItem) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "── %s — %s\n", item.ID, item.Title)
+	if item.Excerpt == "" {
+		b.WriteString("   (no body)\n\n")
+		return b.String()
+	}
+	b.WriteString(item.Excerpt)
+	b.WriteString("\n")
+	if item.Fallback {
+		b.WriteString("(no trigger/push/principle section — excerpt)\n")
+	}
+	b.WriteString("\n")
+	return b.String()
+}
+
+// RenderRecitation is the text contract shared by the CLI and byte-cap logic.
+func RenderRecitation(r *ReciteResult) string {
+	out := renderRecitation(r, false)
+	if r.MaxBytes > 0 && len(out) > r.MaxBytes && len(r.Items) == 0 {
+		return renderRecitation(r, true)
+	}
+	return out
+}
+
+func renderRecitation(r *ReciteResult, compact bool) string {
+	if r.Total == 0 {
+		return fmt.Sprintf("No %s notes in this vault yet.\n", r.Type)
+	}
+	var b strings.Builder
+	if compact {
+		if r.Shard == nil {
+			fmt.Fprintf(&b, "%s layer\n", strings.ToUpper(r.Type))
+		} else {
+			fmt.Fprintf(&b, "%s layer, arcs part %d of %d\n", strings.ToUpper(r.Type), r.Shard.Index, r.Shard.Count)
+		}
+		if r.Omitted > 0 {
+			fmt.Fprintf(&b, "omitted ids: %s\n", strings.Join(r.OmittedIDs, ", "))
+		}
+		if r.Overflow > 0 {
+			fmt.Fprintf(&b, "overflow ids: %s\n", strings.Join(r.OverflowIDs, ", "))
+		}
+		return b.String()
+	}
+	if r.Shard == nil {
+		fmt.Fprintf(&b, "YOUR %sS — %d of %d, the moments that made you who you are.\n", strings.ToUpper(r.Type), len(r.Items), r.Total)
+	} else {
+		fmt.Fprintf(&b, "YOUR %sS — arcs part %d of %d — %d of %d, the moments that made you who you are.\n", strings.ToUpper(r.Type), r.Shard.Index, r.Shard.Count, len(r.Items), r.Total)
+	}
+	b.WriteString("Read them as yours before you respond.\n\n")
+	for _, item := range r.Items {
+		b.WriteString(renderReciteItem(item))
+	}
+	// Never a silent tail. A caller that cannot see what is missing will read a
+	// partial layer as the whole self.
+	if r.Omitted > 0 {
+		fmt.Fprintf(&b, "── %d %s(s) DID NOT FIT the %d-token budget and are NOT above:\n", r.Omitted, r.Type, r.Budget)
+		for _, id := range r.OmittedIDs {
+			fmt.Fprintf(&b, "   %s\n", id)
+		}
+		b.WriteString("   Raise --budget, or lower --excerpt to fit more of them.\n")
+	}
+	if r.Overflow > 0 {
+		fmt.Fprintf(&b, "── %d %s(s) DID NOT FIT the %d-byte hook cap and are NOT above:\n", r.Overflow, r.Type, r.MaxBytes)
+		for _, id := range r.OverflowIDs {
+			fmt.Fprintf(&b, "   %s\n", id)
+		}
+	}
+	return b.String()
+}
+
+func trimToMaxBytes(result *ReciteResult) {
+	if result.MaxBytes <= 0 {
+		return
+	}
+	for len(RenderRecitation(result)) > result.MaxBytes && len(result.Items) > 0 {
+		last := len(result.Items) - 1
+		result.OverflowIDs = append(result.OverflowIDs, result.Items[last].ID)
+		result.Overflow++
+		result.Tokens -= result.Items[last].Tokens
+		result.Items = result.Items[:last]
+	}
+	sort.Strings(result.OverflowIDs)
 }
 
 // noteIDsOfType lists every note id of a type, including notes with no body.
@@ -134,7 +328,6 @@ func noteIDsOfType(db *index.DB, noteType string) ([]string, error) {
 		return nil, fmt.Errorf("recite: listing %q notes: %w", noteType, err)
 	}
 	defer func() { _ = rows.Close() }()
-
 	var ids []string
 	for rows.Next() {
 		var id string

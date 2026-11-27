@@ -2,6 +2,7 @@ package personahealth
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -69,6 +70,102 @@ func TestCheck_ArcCoverageThresholdWarnsButNeverFails(t *testing.T) {
 	assert.Contains(t, report.Warning, "arc body coverage")
 	assert.Empty(t, report.Error)
 
+}
+
+func TestCheck_ArcMomentCoverageReportsPresentSections(t *testing.T) {
+	report := Check(Config{Keepers: []Keeper{{
+		Name: "moment", Transcripts: fixturePath("transcripts/full.jsonl"), Vault: fixturePath("vault-full"),
+	}}, MinCoverage: 0.9}).Keepers[0]
+
+	require.Len(t, report.Arcs.Items, 1)
+	sections := report.Arcs.Items[0].Sections
+	require.Len(t, sections, 2)
+	assert.Equal(t, "trigger", sections[0].Name)
+	assert.Zero(t, sections[0].ArrivedBytes)
+	assert.Equal(t, "principle", sections[1].Name)
+	assert.Greater(t, sections[1].Bytes, 0)
+	assert.Greater(t, sections[1].ArrivedBytes, 0)
+	assert.NotContains(t, []string{"push"}, sections[0].Name)
+	assert.Equal(t, report.Arcs.MomentBytes, sections[0].Bytes+sections[1].Bytes)
+	assert.Equal(t, report.Arcs.MomentArrivedBytes, sections[0].ArrivedBytes+sections[1].ArrivedBytes)
+	assert.Greater(t, report.Arcs.MomentCoverage, 0.0)
+	assert.Less(t, report.Arcs.MomentCoverage, 1.0)
+}
+
+func TestCheck_ArcMomentThresholdWarnsButNeverFails(t *testing.T) {
+	report := Check(Config{Keepers: []Keeper{{
+		Name: "moment", Transcripts: fixturePath("transcripts/full.jsonl"), Vault: fixturePath("vault-full"),
+	}}, MinCoverage: 0.9, MinMomentCoverage: 1}).Keepers[0]
+
+	assert.Equal(t, "warn", report.Status)
+	assert.Contains(t, report.Warning, "arc moment coverage")
+	assert.Empty(t, report.Error)
+	assert.Contains(t, Text(Result{Keepers: []Report{report}}), "arcs moment ")
+}
+
+func TestCheck_ArcMomentCoverageReportsEveryMomentSectionInOrder(t *testing.T) {
+	report := Check(Config{Keepers: []Keeper{{
+		Name: "moment", Transcripts: fixturePath("transcripts/moment-partial.jsonl"), Vault: fixturePath("vault-moment"),
+	}}, MinCoverage: 0.9}).Keepers[0]
+
+	require.Len(t, report.Arcs.Items, 2)
+	alpha := report.Arcs.Items[0]
+	assert.Equal(t, "arc-alpha", alpha.ID)
+	require.Len(t, alpha.Sections, 3)
+	assert.Equal(t, []string{"trigger", "push", "principle"}, []string{alpha.Sections[0].Name, alpha.Sections[1].Name, alpha.Sections[2].Name})
+	assert.Equal(t, 1.0, alpha.Sections[0].Coverage)
+	assert.Zero(t, alpha.Sections[1].ArrivedBytes)
+	assert.Zero(t, alpha.Sections[1].Coverage)
+	assert.Equal(t, 1.0, alpha.Sections[2].Coverage)
+
+	beta := report.Arcs.Items[1]
+	assert.Equal(t, "arc-beta", beta.ID)
+	assert.NotNil(t, beta.Sections)
+	assert.Empty(t, beta.Sections)
+	assert.Equal(t, alpha.Sections[0].Bytes+alpha.Sections[1].Bytes+alpha.Sections[2].Bytes, report.Arcs.MomentBytes)
+	assert.Equal(t, alpha.Sections[0].ArrivedBytes+alpha.Sections[1].ArrivedBytes+alpha.Sections[2].ArrivedBytes, report.Arcs.MomentArrivedBytes)
+	assert.Equal(t, float64(report.Arcs.MomentArrivedBytes)/float64(report.Arcs.MomentBytes), report.Arcs.MomentCoverage)
+	assert.NotContains(t, alpha.Sections, ArcSectionReport{Name: "deeper-sight"})
+
+	data, err := json.Marshal(Result{Keepers: []Report{report}})
+	require.NoError(t, err)
+	var decoded struct {
+		Keepers []struct {
+			Arcs struct {
+				Items          []map[string]json.RawMessage `json:"items"`
+				MomentCoverage json.RawMessage              `json:"moment_coverage"`
+			} `json:"arcs"`
+		} `json:"keepers"`
+	}
+	require.NoError(t, json.Unmarshal(data, &decoded))
+	require.Len(t, decoded.Keepers, 1)
+	require.Len(t, decoded.Keepers[0].Arcs.Items, 2)
+	for _, item := range decoded.Keepers[0].Arcs.Items {
+		sections, ok := item["sections"]
+		require.True(t, ok)
+		assert.NotNil(t, sections)
+	}
+	assert.JSONEq(t, `[]`, string(decoded.Keepers[0].Arcs.Items[1]["sections"]))
+	assert.NotNil(t, decoded.Keepers[0].Arcs.MomentCoverage)
+}
+
+func TestCheck_ArcMomentCoverageThresholdOnlyWarnsAboveMeasuredFraction(t *testing.T) {
+	keeper := Keeper{Name: "moment", Transcripts: fixturePath("transcripts/moment-partial.jsonl"), Vault: fixturePath("vault-moment")}
+	baseline := Check(Config{Keepers: []Keeper{keeper}, MinCoverage: 0.9}).Keepers[0]
+	coverage := baseline.Arcs.MomentCoverage
+
+	above := Check(Config{Keepers: []Keeper{keeper}, MinCoverage: 0.9, MinMomentCoverage: coverage + 0.0001}).Keepers[0]
+	assert.Equal(t, "warn", above.Status)
+	assert.Contains(t, above.Warning, "arc moment coverage")
+	assert.Empty(t, above.Error)
+
+	for _, threshold := range []float64{coverage, coverage - 0.0001} {
+		atOrBelow := Check(Config{Keepers: []Keeper{keeper}, MinCoverage: 0.9, MinMomentCoverage: threshold}).Keepers[0]
+		assert.NotContains(t, atOrBelow.Warning, "arc moment coverage")
+	}
+
+	wantPercent := int(float64(baseline.Arcs.MomentArrivedBytes) * 100 / float64(baseline.Arcs.MomentBytes))
+	assert.Contains(t, Text(Result{Keepers: []Report{baseline}}), fmt.Sprintf("arcs moment %d%%", wantPercent))
 }
 
 func TestCheck_TitleOnlyIdentityFailsCoverage(t *testing.T) {

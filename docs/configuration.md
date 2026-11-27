@@ -46,6 +46,9 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.arc.recite.budget` | int | `0` | `VAULTMIND_APP_ARC_RECITE_BUDGET` | Total token ceiling for the pack. 0 = unbounded. Arcs that do not fit are reported by id, never dropped silently |
 | `app.arc.recite.excerpt` | int | `0` | `VAULTMIND_APP_ARC_RECITE_EXCERPT` | Cap each arc at N tokens, preferring its Principle section (the rule it carries) over its opening lines (story setup). 0 = whole bodies |
 | `app.arc.recite.type` | string | `arc` | `VAULTMIND_APP_ARC_RECITE_TYPE` | Note type to recite. Defaults to arc; set to another always-load layer (e.g. principle) to give it the same unranked treatment |
+| `app.arc.recite.sections` | string | `` | `VAULTMIND_APP_ARC_RECITE_SECTIONS` | Full arc sections to deliver, comma-separated: trigger, push, principle, deeper-sight. Empty preserves excerpt behavior |
+| `app.arc.recite.shard` | string | `` | `VAULTMIND_APP_ARC_RECITE_SHARD` | Deterministic contiguous arc shard in i/n form |
+| `app.arc.recite.max_bytes` | int | `0` | `VAULTMIND_APP_ARC_RECITE_MAX_BYTES` | Maximum rendered output bytes; 0 = unbounded. Overflow arc ids are reported |
 | `app.arc.review.vault` | string | `.` | `VAULTMIND_APP_ARC_REVIEW_VAULT` | Path to vault root (its episodes/ folder is reviewed) |
 | `app.arc.review.json` | bool | `false` | `VAULTMIND_APP_ARC_REVIEW_JSON` | Output in JSON format |
 | `app.arc.review.episode` | string | `` | `VAULTMIND_APP_ARC_REVIEW_EPISODE` | The episode id(s) to review, comma-separated (default: the oldest session awaiting review) |
@@ -340,6 +343,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.persona.health.json` | bool | `false` | `VAULTMIND_APP_PERSONA_HEALTH_JSON` | Output JSON |
 | `app.persona.health.min_coverage` | float | `0.9` | `VAULTMIND_APP_PERSONA_HEALTH_MIN_COVERAGE` | Minimum identity coverage fraction |
 | `app.persona.health.min_arc_coverage` | float | `0` | `VAULTMIND_APP_PERSONA_HEALTH_MIN_ARC_COVERAGE` | Minimum total arc-body coverage fraction (WARN only) |
+| `app.persona.health.min_moment_coverage` | float | `0` | `VAULTMIND_APP_PERSONA_HEALTH_MIN_MOMENT_COVERAGE` | Minimum Trigger/Push/Principle moment coverage fraction (WARN only) |
 | `app.ping.output_message` | string | `Pong` | `VAULTMIND_APP_PING_OUTPUT_MESSAGE` | Default message to display for the ping command |
 | `app.ping.output_color` | string | `white` | `VAULTMIND_APP_PING_OUTPUT_COLOR` | Text color for ping command output (white, red, green, blue, cyan, yellow, magenta) |
 | `app.ping.ui` | bool | `false` | `VAULTMIND_APP_PING_UI` | Enable interactive UI for the ping command |
@@ -434,6 +438,15 @@ app:
 
     # Note type to recite. Defaults to arc; set to another always-load layer (e.g. principle) to give it the same unranked treatment
     recite.type: arc
+
+    # Full arc sections to deliver, comma-separated: trigger, push, principle, deeper-sight. Empty preserves excerpt behavior
+    recite.sections: ""
+
+    # Deterministic contiguous arc shard in i/n form
+    recite.shard: ""
+
+    # Maximum rendered output bytes; 0 = unbounded. Overflow arc ids are reported
+    recite.max_bytes: 0
 
     # Path to vault root (its episodes/ folder is reviewed)
     review.vault: .
@@ -1413,6 +1426,9 @@ app:
     # Minimum total arc-body coverage fraction (WARN only)
     health.min_arc_coverage: 0
 
+    # Minimum Trigger/Push/Principle moment coverage fraction (WARN only)
+    health.min_moment_coverage: 0
+
   ping:
     # Default message to display for the ping command
     output_message: Hello World!
@@ -1617,6 +1633,15 @@ export VAULTMIND_APP_ARC_RECITE_EXCERPT=0
 
 # Note type to recite. Defaults to arc; set to another always-load layer (e.g. principle) to give it the same unranked treatment
 export VAULTMIND_APP_ARC_RECITE_TYPE=arc
+
+# Full arc sections to deliver, comma-separated: trigger, push, principle, deeper-sight. Empty preserves excerpt behavior
+export VAULTMIND_APP_ARC_RECITE_SECTIONS=""
+
+# Deterministic contiguous arc shard in i/n form
+export VAULTMIND_APP_ARC_RECITE_SHARD=""
+
+# Maximum rendered output bytes; 0 = unbounded. Overflow arc ids are reported
+export VAULTMIND_APP_ARC_RECITE_MAX_BYTES=0
 
 # Path to vault root (its episodes/ folder is reviewed)
 export VAULTMIND_APP_ARC_REVIEW_VAULT=.
@@ -2499,6 +2524,9 @@ export VAULTMIND_APP_PERSONA_HEALTH_MIN_COVERAGE=0.9
 
 # Minimum total arc-body coverage fraction (WARN only)
 export VAULTMIND_APP_PERSONA_HEALTH_MIN_ARC_COVERAGE=0
+
+# Minimum Trigger/Push/Principle moment coverage fraction (WARN only)
+export VAULTMIND_APP_PERSONA_HEALTH_MIN_MOMENT_COVERAGE=0
 
 # Default message to display for the ping command
 export VAULTMIND_APP_PING_OUTPUT_MESSAGE=Hello World!

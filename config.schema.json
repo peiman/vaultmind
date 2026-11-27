@@ -73,6 +73,27 @@
                   "description": "Output in JSON format",
                   "type": "boolean"
                 },
+                "max_bytes": {
+                  "default": 0,
+                  "description": "Maximum rendered output bytes; 0 = unbounded. Overflow arc ids are reported",
+                  "type": "integer"
+                },
+                "sections": {
+                  "default": "",
+                  "description": "Full arc sections to deliver, comma-separated: trigger, push, principle, deeper-sight. Empty preserves excerpt behavior",
+                  "examples": [
+                    "\"\""
+                  ],
+                  "type": "string"
+                },
+                "shard": {
+                  "default": "",
+                  "description": "Deterministic contiguous arc shard in i/n form",
+                  "examples": [
+                    "\"\""
+                  ],
+                  "type": "string"
+                },
                 "type": {
                   "default": "arc",
                   "description": "Note type to recite. Defaults to arc; set to another always-load layer (e.g. principle) to give it the same unranked treatment",
@@ -2029,6 +2050,11 @@
                 "min_coverage": {
                   "default": 0.9,
                   "description": "Minimum identity coverage fraction",
+                  "type": "number"
+                },
+                "min_moment_coverage": {
+                  "default": 0,
+                  "description": "Minimum Trigger/Push/Principle moment coverage fraction (WARN only)",
                   "type": "number"
                 },
                 "name": {

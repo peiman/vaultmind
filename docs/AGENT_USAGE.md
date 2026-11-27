@@ -476,6 +476,43 @@ See `.claude/scripts/load-persona.sh` in this repo for the reference implementat
 3. Capture stderr; surface build + runtime errors instead of producing empty persona silently
 4. Emit the `IDENTITY CONTEXT:` block on stdout so it becomes a system-reminder
 
+### Delivering full arc moments across several SessionStart hooks
+
+The default hook remains the short Principle-preferred excerpt. To deliver each
+arc's Trigger, Push, and Principle in full after compaction, install several
+copies of the arcs hook and give each copy a deterministic shard. For example,
+with five shards in `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {"matcher":"startup|clear|compact","hooks":[{"type":"command","command":"VAULTMIND_ARC_SECTIONS=trigger,push,principle VAULTMIND_ARC_SHARD=1/5 bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/load-arcs.sh"}]},
+      {"matcher":"startup|clear|compact","hooks":[{"type":"command","command":"VAULTMIND_ARC_SECTIONS=trigger,push,principle VAULTMIND_ARC_SHARD=2/5 bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/load-arcs.sh"}]},
+      {"matcher":"startup|clear|compact","hooks":[{"type":"command","command":"VAULTMIND_ARC_SECTIONS=trigger,push,principle VAULTMIND_ARC_SHARD=3/5 bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/load-arcs.sh"}]},
+      {"matcher":"startup|clear|compact","hooks":[{"type":"command","command":"VAULTMIND_ARC_SECTIONS=trigger,push,principle VAULTMIND_ARC_SHARD=4/5 bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/load-arcs.sh"}]},
+      {"matcher":"startup|clear|compact","hooks":[{"type":"command","command":"VAULTMIND_ARC_SECTIONS=trigger,push,principle VAULTMIND_ARC_SHARD=5/5 bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/load-arcs.sh"}]}
+    ]
+  }
+}
+```
+
+`arcs_hook_wired` detects any `load-arcs.sh` entry, so the identity hook leaves
+the arcs out once the arcs hook is live; the shared marker is idempotent across
+the shards. Each shard logs its section selection and shard in a distinct
+sidecar. Arcs without any requested section use the normal excerpt fallback.
+For direct use, the equivalent command flags are
+`--sections trigger,push,principle --shard i/n --max-bytes N`.
+
+### Measuring arc moment delivery
+
+`vaultmind persona health` reports the existing arc-body coverage plus
+`arcs moment N%`. JSON adds `arcs.items[].sections` with bytes and arrived bytes
+for each present Trigger, Push, or Principle, and `moment_bytes`,
+`moment_arrived_bytes`, and `moment_coverage` totals. Use
+`--min-moment-coverage 0.9` for a WARN-only threshold; arcs with none of those
+sections contribute nothing to the moment denominator.
+
 ### Non-Claude-Code agents
 
 Any agent that can run shell commands can use VaultMind. The pattern:

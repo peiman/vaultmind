@@ -32,6 +32,10 @@ func runPersonaHealth(cmd *cobra.Command, _ []string) error {
 	if err := personahealth.ValidateMinArcCoverage(minArcCoverage); err != nil {
 		return err
 	}
-	result := personahealth.Check(personahealth.Config{Keepers: keepers, MinCoverage: minCoverage, MinArcCoverage: minArcCoverage})
+	minMomentCoverage := getConfigValueWithFlags[float64](cmd, "min-moment-coverage", config.KeyAppPersonaHealthMinMomentCoverage)
+	if err := personahealth.ValidateMinMomentCoverage(minMomentCoverage); err != nil {
+		return err
+	}
+	result := personahealth.Check(personahealth.Config{Keepers: keepers, MinCoverage: minCoverage, MinArcCoverage: minArcCoverage, MinMomentCoverage: minMomentCoverage})
 	return renderPersonaHealth(cmd, result, getConfigValueWithFlags[bool](cmd, "json", config.KeyAppPersonaHealthJson))
 }

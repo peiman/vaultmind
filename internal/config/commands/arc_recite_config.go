@@ -35,6 +35,11 @@ var ArcReciteMetadata = config.CommandMetadata{
 		"  --excerpt caps each arc's contribution, preferring its Principle section (the rule) " +
 		"over its opening lines (the story setup). Excerpting reduces DEPTH per arc, never " +
 		"COVERAGE of the layer.\n\n" +
+		"MOMENT SHARDS\n\n" +
+		"  --sections trigger,push,principle delivers those full sections in each arc's own " +
+		"heading order. An arc without any requested section falls back to the normal excerpt " +
+		"and says so. --shard i/n selects a deterministic contiguous byte-balanced shard; " +
+		"--max-bytes bounds the rendered output and reports overflow ids.\n\n" +
 		"EXAMPLES\n\n" +
 		"  vaultmind arc recite --vault ~/.vaultmind/persona\n" +
 		"      Every arc, whole bodies. Use when you want the full layer and have the room.\n\n" +
@@ -44,11 +49,14 @@ var ArcReciteMetadata = config.CommandMetadata{
 		"      The same treatment for another always-load layer.",
 	ConfigPrefix: "app.arc.recite",
 	FlagOverrides: map[string]string{
-		"app.arc.recite.vault":   "vault",
-		"app.arc.recite.json":    "json",
-		"app.arc.recite.budget":  "budget",
-		"app.arc.recite.excerpt": "excerpt",
-		"app.arc.recite.type":    "type",
+		"app.arc.recite.vault":     "vault",
+		"app.arc.recite.json":      "json",
+		"app.arc.recite.budget":    "budget",
+		"app.arc.recite.excerpt":   "excerpt",
+		"app.arc.recite.type":      "type",
+		"app.arc.recite.sections":  "sections",
+		"app.arc.recite.shard":     "shard",
+		"app.arc.recite.max_bytes": "max-bytes",
 	},
 }
 
@@ -60,6 +68,9 @@ func ArcReciteOptions() []config.ConfigOption {
 		{Key: "app.arc.recite.budget", DefaultValue: 0, Description: "Total token ceiling for the pack. 0 = unbounded. Arcs that do not fit are reported by id, never dropped silently", Type: "int"},
 		{Key: "app.arc.recite.excerpt", DefaultValue: 0, Description: "Cap each arc at N tokens, preferring its Principle section (the rule it carries) over its opening lines (story setup). 0 = whole bodies", Type: "int"},
 		{Key: "app.arc.recite.type", DefaultValue: "arc", Description: "Note type to recite. Defaults to arc; set to another always-load layer (e.g. principle) to give it the same unranked treatment", Type: "string"},
+		{Key: "app.arc.recite.sections", DefaultValue: "", Example: `""`, Description: "Full arc sections to deliver, comma-separated: trigger, push, principle, deeper-sight. Empty preserves excerpt behavior", Type: "string"},
+		{Key: "app.arc.recite.shard", DefaultValue: "", Example: `""`, Description: "Deterministic contiguous arc shard in i/n form", Type: "string"},
+		{Key: "app.arc.recite.max_bytes", DefaultValue: 0, Description: "Maximum rendered output bytes; 0 = unbounded. Overflow arc ids are reported", Type: "int"},
 	}
 }
 

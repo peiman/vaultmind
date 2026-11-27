@@ -82,6 +82,15 @@ func TestRecite_BudgetTruncationIsReportedWithTheOmittedIDs(t *testing.T) {
 	assert.LessOrEqual(t, got.Tokens, tight, "the budget must actually bound the output")
 }
 
+func TestRecite_MaxBytesReportsOverflowIDsInAscendingOrder(t *testing.T) {
+	db := buildTestDB(t)
+
+	got, err := memory.Recite(db, memory.ReciteConfig{Type: "concept", MaxBytes: 1})
+	require.NoError(t, err)
+	require.Greater(t, got.Overflow, 1, "need multiple overflow notes to verify report ordering")
+	assert.IsIncreasing(t, got.OverflowIDs, "overflow IDs must retain ascending shard/id order")
+}
+
 // Excerpting must not change WHICH notes arrive — only how much of each.
 // Coverage of the layer and depth per note are separate decisions.
 func TestRecite_ExcerptingShrinksContentNotCoverage(t *testing.T) {

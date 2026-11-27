@@ -13,6 +13,10 @@ vaultmind note accept <id>
 
 `propose` retrieves the way `ask` does. A close match (the strong relevance band, by default) becomes a proposal draft next to that note. Anything less close becomes a new draft, expanded through the note template. After the draft is written, propose re-runs the original question through the same ranking `ask` uses and reports whether that question would find the draft. The ranks are stored on the draft as `rank_before`, `rank_after`, and `rank_checked_at`. `0` means not in the hit window. The check does not record an access. `accept` flips a new draft to the schema's published status, or appends a proposal onto its target and removes the proposal file. `--json` returns the v1 envelope, including `rank_check`.
 
+## `arc recite` moment delivery
+
+`vaultmind arc recite --sections trigger,push,principle` emits the selected full sections in each arc's own order. `--shard i/n` selects a deterministic contiguous byte-balanced shard, and `--max-bytes N` caps the rendered result while reporting overflow ids instead of silently dropping arcs. The default command remains the excerpted, unsharded behavior.
+
 ## `persona health`
 
 Measure whether a keeper's identity text actually reached the current context after the newest compaction boundary:
@@ -31,7 +35,7 @@ When `--transcripts` names a project directory, the newest `*.jsonl` by modifica
 
 Text mode emits one short line per keeper with the name, verdict, identity coverage, Principle counts, total arc-body coverage, memory status, after-compact timestamp, and failure/warning reasons. Per-arc body entries are JSON-only. In the single-keeper form, `--name` is optional; when omitted, the label is the literal basename of `--transcripts` (including any leading path-derived prefix). The YAML `--keepers` form supplies names itself.
 
-`--min-arc-coverage` defaults to `0`, which reports arc-body coverage without applying a threshold. A positive value below the total arc-body coverage produces WARN, never FAIL by itself; hooks may intentionally excerpt arcs to stay within their context budget.
+`--min-arc-coverage` defaults to `0`, which reports arc-body coverage without applying a threshold. A positive value below the total arc-body coverage produces WARN, never FAIL by itself; hooks may intentionally excerpt arcs to stay within their context budget. `--min-moment-coverage` is the equivalent WARN-only threshold for present Trigger, Push, and Principle sections. JSON also reports each section and the additive `moment_bytes`, `moment_arrived_bytes`, and `moment_coverage` totals.
 
 For several keepers, pass a YAML list:
 

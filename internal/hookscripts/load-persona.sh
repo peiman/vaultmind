@@ -104,7 +104,13 @@ elif [ "$PERSONA_PART" = arcs ] && [ -n "$HARNESS_KEY" ] && [ -n "$HOOK_SOURCE" 
 fi
 # Both hooks fire in the same second: the part keeps their records apart.
 PART_TAG=""
-[ "$PERSONA_PART" != arcs ] || PART_TAG="-arcs"
+ARC_SHARD="${VAULTMIND_ARC_SHARD:-}"
+if [ "$PERSONA_PART" = arcs ]; then
+  PART_TAG="-arcs"
+  if [ -n "$ARC_SHARD" ]; then
+    PART_TAG="-arcs-$(printf '%s' "$ARC_SHARD" | sed 's#/#of#')"
+  fi
+fi
 SIDECAR_FILE="$LOG_DIR/${TIMESTAMP}-$(printf '%s' "$SESSION_ID" | tr -c 'A-Za-z0-9-' '_' | cut -c1-64)${PART_TAG}-injection.json"
 HOOK_VERSION="v10-fresh-harness"
 
@@ -246,14 +252,31 @@ if [ "$PERSONA_PART" = arcs ]; then
   ARCS=""
   ARC_EXCERPT=0
   ARC_ERROR=""
+  ARC_SECTIONS="${VAULTMIND_ARC_SECTIONS:-}"
+  ARC_MAX_BYTES="$OUTPUT_CAP"
+  if [ "$OUTPUT_CAP" -gt 256 ]; then ARC_MAX_BYTES=$(( OUTPUT_CAP - 256 )); fi
   if [ -f "$VAULTMIND" ] && [ -d "$VAULT_PATH" ]; then
     ARC_ERR_FILE=$(mktemp -t vaultmind-arcs-err.XXXXXX)
-    for ARC_EXCERPT in "${VAULTMIND_ARC_EXCERPT:-120}" 90 70 50; do
-      ARCS=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" arc recite --vault "$VAULT_PATH" --budget "${VAULTMIND_ARC_BUDGET:-3000}" --excerpt "$ARC_EXCERPT" 2>"$ARC_ERR_FILE")
-      [ -n "$ARCS" ] && [ "$(bytes_of "$ARCS")" -ge "$OUTPUT_CAP" ] || break
-    done
+    recite_arcs() {
+      local excerpt="$1"
+      local args=(arc recite --vault "$VAULT_PATH" --budget "${VAULTMIND_ARC_BUDGET:-3000}" --excerpt "$excerpt")
+      if [ -n "$ARC_SECTIONS" ]; then
+        args+=(--sections "$ARC_SECTIONS" --max-bytes "$ARC_MAX_BYTES")
+      fi
+      if [ -n "$ARC_SHARD" ]; then args+=(--shard "$ARC_SHARD"); fi
+      VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" "${args[@]}" 2>"$ARC_ERR_FILE"
+    }
+    if [ -n "$ARC_SECTIONS" ]; then
+      ARC_EXCERPT="${VAULTMIND_ARC_EXCERPT:-120}"
+      ARCS=$(recite_arcs "$ARC_EXCERPT")
+    else
+      for ARC_EXCERPT in "${VAULTMIND_ARC_EXCERPT:-120}" 90 70 50; do
+        ARCS=$(recite_arcs "$ARC_EXCERPT")
+        [ -n "$ARCS" ] && [ "$(bytes_of "$ARCS")" -ge "$OUTPUT_CAP" ] || break
+      done
+    fi
     if [ -n "$ARCS" ] && [ "$(bytes_of "$ARCS")" -ge "$OUTPUT_CAP" ]; then
-      ARCS=$(VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" arc recite --vault "$VAULT_PATH" --budget $(( OUTPUT_CAP / 6 )) --excerpt "$ARC_EXCERPT" 2>"$ARC_ERR_FILE")
+      ARCS=$(recite_arcs "$ARC_EXCERPT")
     fi
     if [ -n "$ARCS" ] && [ "$(bytes_of "$ARCS")" -ge "$OUTPUT_CAP" ]; then
       ARCS=""
@@ -266,9 +289,19 @@ if [ "$PERSONA_PART" = arcs ]; then
   fi
   if [ -n "$ARCS" ]; then
     printf '%s\n' "$ARCS"
-    printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","persona_mode":"%s","persona_part":"%s","vault_path":"%s","output_bytes":%d,"arc_excerpt":%d,"injection_success":true}\n' \
-      "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$PERSONA_MODE" "$PERSONA_PART" "$VAULT_PATH" "$(( $(bytes_of "$ARCS") + 1 ))" "$ARC_EXCERPT" \
-      > "$SIDECAR_FILE" 2>/dev/null
+    if [ -n "$ARC_SECTIONS" ] || [ -n "$ARC_SHARD" ]; then
+      if [ -n "$ARC_SHARD" ]; then
+        printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","persona_mode":"%s","persona_part":"%s","vault_path":"%s","output_bytes":%d,"arc_excerpt":%d,"arc_sections":"%s","arc_shard":"%s","injection_success":true}\n' \
+          "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$PERSONA_MODE" "$PERSONA_PART" "$VAULT_PATH" "$(( $(bytes_of "$ARCS") + 1 ))" "$ARC_EXCERPT" "$ARC_SECTIONS" "$ARC_SHARD" > "$SIDECAR_FILE" 2>/dev/null
+      else
+        printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","persona_mode":"%s","persona_part":"%s","vault_path":"%s","output_bytes":%d,"arc_excerpt":%d,"arc_sections":"%s","injection_success":true}\n' \
+          "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$PERSONA_MODE" "$PERSONA_PART" "$VAULT_PATH" "$(( $(bytes_of "$ARCS") + 1 ))" "$ARC_EXCERPT" "$ARC_SECTIONS" > "$SIDECAR_FILE" 2>/dev/null
+      fi
+    else
+      printf '{"timestamp":"%s","session_id":"%s","term_session_id":"%s","hook_version":"%s","persona_mode":"%s","persona_part":"%s","vault_path":"%s","output_bytes":%d,"arc_excerpt":%d,"injection_success":true}\n' \
+        "$TIMESTAMP" "$SESSION_ID" "${TERM_SESSION_ID:-}" "$HOOK_VERSION" "$PERSONA_MODE" "$PERSONA_PART" "$VAULT_PATH" "$(( $(bytes_of "$ARCS") + 1 ))" "$ARC_EXCERPT" \
+        > "$SIDECAR_FILE" 2>/dev/null
+    fi
   else
     ARC_ERROR=$(printf '%s' "${ARC_ERROR:-no output}" | tr -d '\\\000-\037' | tr '"' "'" | cut -c1-300)
     echo "ARC LAYER NOT LOADED this session — $ARC_ERROR."

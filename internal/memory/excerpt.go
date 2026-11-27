@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"fmt"
 	"strings"
 	"unicode"
 
@@ -28,6 +29,82 @@ var arcSections = []string{
 // sentence that changes what an agent does. It is what Excerpt delivers when it
 // is present.
 const principleHeading = "Principle"
+
+// ArcSection is one of the named sections in an arc. Heading preserves the
+// source line so a full-section recitation does not rewrite the author's
+// heading style.
+type ArcSection struct {
+	Name    string
+	Heading string
+	Text    string
+}
+
+var namedArcSections = map[string]string{
+	"trigger":      "Trigger",
+	"push":         "Push",
+	"principle":    "Principle",
+	"deeper-sight": "Deeper sight",
+}
+
+// ExtractArcSections returns the requested arc-discipline sections in the
+// order they appear in the note. Frontmatter and HTML control comments are
+// removed before headings are located. A repeated named heading is ignored;
+// the first section is the canonical one, matching PrincipleSection.
+func ExtractArcSections(body string) []ArcSection {
+	body = parser.StripHTMLComments(stripFrontmatter(body))
+	lines := strings.Split(body, "\n")
+	var out []ArcSection
+	seen := make(map[string]bool)
+	for i, line := range lines {
+		name, ok := canonicalArcSectionName(line)
+		if !ok || seen[name] {
+			continue
+		}
+		seen[name] = true
+		end := len(lines)
+		for j := i + 1; j < len(lines); j++ {
+			if isAnySectionHeading(lines[j]) {
+				end = j
+				break
+			}
+		}
+		text := strings.TrimSpace(strings.Join(lines[i+1:end], "\n"))
+		if text != "" {
+			out = append(out, ArcSection{Name: name, Heading: line, Text: text})
+		}
+	}
+	return out
+}
+
+// ParseArcSectionSelection validates the comma-separated --sections value.
+// Empty input means the legacy excerpt behavior.
+func ParseArcSectionSelection(value string) ([]string, error) {
+	if strings.TrimSpace(value) == "" {
+		return nil, nil
+	}
+	var out []string
+	seen := make(map[string]bool)
+	for _, raw := range strings.Split(value, ",") {
+		name := strings.ToLower(strings.TrimSpace(raw))
+		if _, ok := namedArcSections[name]; !ok {
+			return nil, fmt.Errorf("unknown arc section %q (want trigger, push, principle, or deeper-sight)", name)
+		}
+		if !seen[name] {
+			out = append(out, name)
+			seen[name] = true
+		}
+	}
+	return out, nil
+}
+
+func canonicalArcSectionName(line string) (string, bool) {
+	for name, heading := range namedArcSections {
+		if isSectionHeading(line, heading) {
+			return name, true
+		}
+	}
+	return "", false
+}
 
 // ellipsis marks an excerpt cut inside a sentence, so a truncated line reads as
 // deliberately shortened rather than as a note that simply stops.
@@ -242,6 +319,9 @@ func isCitation(text string) bool {
 // Markdown "#" markers — `note get` renders headings bare, files carry the "#".
 func isSectionHeading(line, name string) bool {
 	trimmed := strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(line), "#"))
+	if strings.HasPrefix(strings.ToLower(trimmed), "the ") {
+		trimmed = strings.TrimSpace(trimmed[4:])
+	}
 	return strings.EqualFold(trimmed, name)
 }
 
