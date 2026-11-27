@@ -30,6 +30,8 @@ const (
 	KeyAppArcCandidatesVault                 = "app.arc.candidates.vault"                 // Path to vault root
 	KeyAppArcCandidatesJson                  = "app.arc.candidates.json"                  // Output in JSON format
 	KeyAppArcCandidatesArcsVault             = "app.arc.candidates.arcs_vault"            // Vault holding the existing arcs to compare proposals against (default: the sc...
+	KeyAppArcGateVault                       = "app.arc.gate.vault"                       // Path to the vault root
+	KeyAppArcGateEvent                       = "app.arc.gate.event"                       // Hook event: pretooluse or stop
 	KeyAppArcReciteVault                     = "app.arc.recite.vault"                     // Path to vault root
 	KeyAppArcReciteJson                      = "app.arc.recite.json"                      // Output in JSON format
 	KeyAppArcReciteBudget                    = "app.arc.recite.budget"                    // Total token ceiling for the pack. 0 = unbounded. Arcs that do not fit are rep...

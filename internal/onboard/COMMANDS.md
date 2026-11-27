@@ -57,6 +57,7 @@ Generated from the command tree — do not edit by hand (run `task generate:docs
 |---------|------|-------------|
 | `vaultmind arc` | Surface arc-distillation candidates from episodes (propose-only) | you want to surface arc-distillation candidate moments from episodes (propose-only). |
 | `vaultmind arc candidates` | Surface candidate transformation moments for arc distillation | you want phrase-matched candidate moments and unfinished desk entries to consider for arcs. |
+| `vaultmind arc gate` | Deliver one matching arc at the moment of action | you want an arc delivered at the moment of the matching action, as a once-per-session block; this is an opt-in hook helper. |
 | `vaultmind arc guide` | Print the arc-writing discipline — how to find and write your own arcs | you want to learn how to find and write your own arcs — the shapes, the bar, and the self-check. |
 | `vaultmind arc review` | Review captured sessions for turning points, oldest first | sessions await review — judge which of the person's messages were turning points, then mark each session reviewed. |
 | `vaultmind episode` | Capture Claude Code sessions as episodic-memory artifacts | you want to capture Claude Code sessions as episodic-memory artifacts. |
