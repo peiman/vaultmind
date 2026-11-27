@@ -325,6 +325,26 @@ func TestArcsHook_SectionsAndShardReachReciteAndHaveDistinctSidecars(t *testing.
 	assert.NotEmpty(t, markers, "all shard hooks share one idempotent harness marker")
 }
 
+func TestPersonaHook_AllSectionsReachReciteAndSidecar(t *testing.T) {
+	argsFile := filepath.Join(t.TempDir(), "args")
+	stub := "#!/bin/bash\n" +
+		"if [ \"$1\" = arc ] && [ \"$2\" = recite ]; then printf '%s\\n' \"$@\" > \"$VAULTMIND_TEST_ARGS_FILE\"; echo 'ALL-ARC'; exit 0; fi\n" +
+		"if [ \"$1\" = ask ]; then echo 'identity'; fi\n" +
+		"exit 0\n"
+	project, env := installPersonaHook(t, stub)
+	installArcsHook(t, project)
+	env = append(env, "VAULTMIND_PERSONA_MODE=served", "VAULTMIND_ARC_SECTIONS=all", "VAULTMIND_TEST_ARGS_FILE="+argsFile)
+
+	out := runSessionStartScript(t, project, env, "load-arcs.sh", "s-all")
+	assert.Contains(t, out, "ALL-ARC")
+	raw, err := os.ReadFile(argsFile)
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), "--sections\nall")
+	assert.Contains(t, string(raw), "--max-bytes")
+	rec := lastSidecar(t, env)
+	assert.Equal(t, "all", rec["arc_sections"])
+}
+
 func TestPersonaHook_SeveralLiveArcShardsStillLeaveArcsOutOfIdentity(t *testing.T) {
 	project, env := installPersonaHook(t, arcLayerStub)
 	installArcsHook(t, project)

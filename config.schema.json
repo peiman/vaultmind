@@ -80,7 +80,7 @@
                 },
                 "sections": {
                   "default": "",
-                  "description": "Full arc sections to deliver, comma-separated: trigger, push, principle, deeper-sight. Empty preserves excerpt behavior",
+                  "description": "Full arc sections to deliver, comma-separated: all, trigger, push, principle, deeper-sight. all delivers the whole body and cannot be combined; empty preserves excerpt behavior",
                   "examples": [
                     "\"\""
                   ],

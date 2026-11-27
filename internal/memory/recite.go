@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/peiman/vaultmind/internal/index"
+	"github.com/peiman/vaultmind/internal/parser"
 )
 
 // Recite — load EVERY note of a type as bodies, unconditionally.
@@ -209,6 +210,9 @@ func reciteText(body string, cfg ReciteConfig) (string, []ReciteSection, bool) {
 	if len(cfg.Sections) == 0 {
 		text, _, _ := excerptForBudget(body, cfg.ExcerptTokens, 0, 0, Excerpt)
 		return text, nil, false
+	}
+	if len(cfg.Sections) == 1 && cfg.Sections[0] == allArcSections {
+		return strings.TrimSpace(parser.StripHTMLComments(stripFrontmatter(body))), nil, false
 	}
 	wanted := make(map[string]bool, len(cfg.Sections))
 	for _, name := range cfg.Sections {

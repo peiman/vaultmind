@@ -55,7 +55,7 @@ app:
     # Note type to recite. Defaults to arc; set to another always-load layer (e.g. principle) to give it the same unranked treatment
     recite.type: arc
 
-    # Full arc sections to deliver, comma-separated: trigger, push, principle, deeper-sight. Empty preserves excerpt behavior
+    # Full arc sections to deliver, comma-separated: all, trigger, push, principle, deeper-sight. all delivers the whole body and cannot be combined; empty preserves excerpt behavior
     recite.sections: ""
 
     # Deterministic contiguous arc shard in i/n form

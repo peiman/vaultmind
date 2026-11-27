@@ -502,7 +502,10 @@ the arcs out once the arcs hook is live; the shared marker is idempotent across
 the shards. Each shard logs its section selection and shard in a distinct
 sidecar. Arcs without any requested section use the normal excerpt fallback.
 For direct use, the equivalent command flags are
-`--sections trigger,push,principle --shard i/n --max-bytes N`.
+`--sections trigger,push,principle --shard i/n --max-bytes N`. Use
+`--sections all` to deliver each whole arc body with frontmatter and HTML comments
+stripped; `all` cannot be combined with another section name. The hook passes
+`VAULTMIND_ARC_SECTIONS=all` through as `--sections all` and records `arc_sections=all`.
 
 ### Measuring arc moment delivery
 

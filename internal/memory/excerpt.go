@@ -46,6 +46,8 @@ var namedArcSections = map[string]string{
 	"deeper-sight": "Deeper sight",
 }
 
+const allArcSections = "all"
+
 // ExtractArcSections returns the requested arc-discipline sections in the
 // order they appear in the note. Frontmatter and HTML control comments are
 // removed before headings are located. A repeated named heading is ignored;
@@ -86,8 +88,21 @@ func ParseArcSectionSelection(value string) ([]string, error) {
 	seen := make(map[string]bool)
 	for _, raw := range strings.Split(value, ",") {
 		name := strings.ToLower(strings.TrimSpace(raw))
+		if name == allArcSections {
+			if len(out) > 0 && (len(out) != 1 || out[0] != allArcSections) {
+				return nil, fmt.Errorf("arc section %q cannot be combined with other sections", allArcSections)
+			}
+			if !seen[name] {
+				out = append(out, name)
+				seen[name] = true
+			}
+			continue
+		}
+		if len(out) > 0 && out[0] == allArcSections {
+			return nil, fmt.Errorf("arc section %q cannot be combined with other sections", allArcSections)
+		}
 		if _, ok := namedArcSections[name]; !ok {
-			return nil, fmt.Errorf("unknown arc section %q (want trigger, push, principle, or deeper-sight)", name)
+			return nil, fmt.Errorf("unknown arc section %q (want all, trigger, push, principle, or deeper-sight)", name)
 		}
 		if !seen[name] {
 			out = append(out, name)

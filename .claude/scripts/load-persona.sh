@@ -266,6 +266,8 @@ if [ "$PERSONA_PART" = arcs ]; then
       if [ -n "$ARC_SHARD" ]; then args+=(--shard "$ARC_SHARD"); fi
       VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" "${args[@]}" 2>"$ARC_ERR_FILE"
     }
+    # Any named selection, including `all`, is one direct bounded recite call:
+    # do not step the excerpt down, and let --max-bytes account for overflow.
     if [ -n "$ARC_SECTIONS" ]; then
       ARC_EXCERPT="${VAULTMIND_ARC_EXCERPT:-120}"
       ARCS=$(recite_arcs "$ARC_EXCERPT")

@@ -46,7 +46,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.arc.recite.budget` | int | `0` | `VAULTMIND_APP_ARC_RECITE_BUDGET` | Total token ceiling for the pack. 0 = unbounded. Arcs that do not fit are reported by id, never dropped silently |
 | `app.arc.recite.excerpt` | int | `0` | `VAULTMIND_APP_ARC_RECITE_EXCERPT` | Cap each arc at N tokens, preferring its Principle section (the rule it carries) over its opening lines (story setup). 0 = whole bodies |
 | `app.arc.recite.type` | string | `arc` | `VAULTMIND_APP_ARC_RECITE_TYPE` | Note type to recite. Defaults to arc; set to another always-load layer (e.g. principle) to give it the same unranked treatment |
-| `app.arc.recite.sections` | string | `` | `VAULTMIND_APP_ARC_RECITE_SECTIONS` | Full arc sections to deliver, comma-separated: trigger, push, principle, deeper-sight. Empty preserves excerpt behavior |
+| `app.arc.recite.sections` | string | `` | `VAULTMIND_APP_ARC_RECITE_SECTIONS` | Full arc sections to deliver, comma-separated: all, trigger, push, principle, deeper-sight. all delivers the whole body and cannot be combined; empty preserves excerpt behavior |
 | `app.arc.recite.shard` | string | `` | `VAULTMIND_APP_ARC_RECITE_SHARD` | Deterministic contiguous arc shard in i/n form |
 | `app.arc.recite.max_bytes` | int | `0` | `VAULTMIND_APP_ARC_RECITE_MAX_BYTES` | Maximum rendered output bytes; 0 = unbounded. Overflow arc ids are reported |
 | `app.arc.review.vault` | string | `.` | `VAULTMIND_APP_ARC_REVIEW_VAULT` | Path to vault root (its episodes/ folder is reviewed) |
@@ -439,7 +439,7 @@ app:
     # Note type to recite. Defaults to arc; set to another always-load layer (e.g. principle) to give it the same unranked treatment
     recite.type: arc
 
-    # Full arc sections to deliver, comma-separated: trigger, push, principle, deeper-sight. Empty preserves excerpt behavior
+    # Full arc sections to deliver, comma-separated: all, trigger, push, principle, deeper-sight. all delivers the whole body and cannot be combined; empty preserves excerpt behavior
     recite.sections: ""
 
     # Deterministic contiguous arc shard in i/n form
@@ -1634,7 +1634,7 @@ export VAULTMIND_APP_ARC_RECITE_EXCERPT=0
 # Note type to recite. Defaults to arc; set to another always-load layer (e.g. principle) to give it the same unranked treatment
 export VAULTMIND_APP_ARC_RECITE_TYPE=arc
 
-# Full arc sections to deliver, comma-separated: trigger, push, principle, deeper-sight. Empty preserves excerpt behavior
+# Full arc sections to deliver, comma-separated: all, trigger, push, principle, deeper-sight. all delivers the whole body and cannot be combined; empty preserves excerpt behavior
 export VAULTMIND_APP_ARC_RECITE_SECTIONS=""
 
 # Deterministic contiguous arc shard in i/n form

@@ -1,6 +1,7 @@
 package memory_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/peiman/vaultmind/internal/memory"
@@ -67,7 +68,16 @@ func TestParseArcSectionSelection_RejectsUnknownNames(t *testing.T) {
 	assert.Equal(t, []string{"trigger", "deeper-sight", "principle"}, got)
 
 	_, err = memory.ParseArcSectionSelection("trigger,unknown")
-	assert.EqualError(t, err, `unknown arc section "unknown" (want trigger, push, principle, or deeper-sight)`)
+	assert.EqualError(t, err, `unknown arc section "unknown" (want all, trigger, push, principle, or deeper-sight)`)
+}
+
+func TestParseArcSectionSelection_AllCannotBeCombined(t *testing.T) {
+	got, err := memory.ParseArcSectionSelection("all")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"all"}, got)
+
+	_, err = memory.ParseArcSectionSelection("all,push")
+	assert.EqualError(t, err, `arc section "all" cannot be combined with other sections`)
 }
 
 func TestPlanArcShards_IsDeterministicByteBalancedAndComplete(t *testing.T) {
@@ -102,6 +112,49 @@ func TestRecite_SectionsUseFullSelectedTextAndFallbackForOtherNotes(t *testing.T
 	assert.True(t, got.Items[0].Fallback)
 	assert.Empty(t, got.Items[0].Sections)
 	assert.Contains(t, got.Items[0].Excerpt, "#")
+}
+
+func TestRecite_AllDeliversWholeBodyWithoutFallbackOrSections(t *testing.T) {
+	db := buildTestDB(t)
+	got, err := memory.Recite(db, memory.ReciteConfig{Type: "concept", Sections: []string{"all"}})
+	require.NoError(t, err)
+	require.NotEmpty(t, got.Items)
+	item := got.Items[0]
+	note, err := db.QueryFullNote(item.ID)
+	require.NoError(t, err)
+	assert.Equal(t, strings.TrimSpace(note.Body), item.Excerpt)
+	assert.Empty(t, item.Sections)
+	assert.False(t, item.Fallback)
+}
+
+func TestRecite_AllShardsAreDeterministicAndComplete(t *testing.T) {
+	db := buildTestDB(t)
+	seen := make(map[string]int)
+	for shard := 1; shard <= 3; shard++ {
+		cfg := memory.ReciteConfig{Type: "concept", Sections: []string{"all"}, ShardIndex: shard, ShardCount: 3}
+		first, err := memory.Recite(db, cfg)
+		require.NoError(t, err)
+		second, err := memory.Recite(db, cfg)
+		require.NoError(t, err)
+		require.Equal(t, first.Items, second.Items)
+		for _, item := range first.Items {
+			seen[item.ID]++
+		}
+	}
+	full, err := memory.Recite(db, memory.ReciteConfig{Type: "concept", Sections: []string{"all"}})
+	require.NoError(t, err)
+	assert.Len(t, seen, full.Total)
+	for _, item := range full.Items {
+		assert.Equal(t, 1, seen[item.ID], item.ID)
+	}
+}
+
+func TestRecite_AllMaxBytesReportsOverflowIDs(t *testing.T) {
+	db := buildTestDB(t)
+	got, err := memory.Recite(db, memory.ReciteConfig{Type: "concept", Sections: []string{"all"}, MaxBytes: 1})
+	require.NoError(t, err)
+	assert.Greater(t, got.Overflow, 0)
+	assert.IsIncreasing(t, got.OverflowIDs)
 }
 
 func TestRenderRecitation_SectionsAndShardHeaderStayWithinMaxBytes(t *testing.T) {
