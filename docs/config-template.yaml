@@ -40,6 +40,12 @@ app:
     # Vault holding the existing arcs to compare proposals against (default: the scanned vault). Set this when the desk and the arcs live in different vaults
     candidates.arcs_vault: 
 
+    # Path to the vault root
+    gate.vault: .
+
+    # Hook event: pretooluse or stop
+    gate.event: 
+
     # Path to vault root
     recite.vault: .
 
