@@ -40,8 +40,9 @@ var ArcReciteMetadata = config.CommandMetadata{
 		"heading order. --sections all delivers each whole arc body with frontmatter and HTML " +
 		"comments stripped; it cannot be combined with another section name. An arc without " +
 		"any requested named section falls back to the normal excerpt and says so. --shard i/n " +
-		"selects a deterministic contiguous byte-balanced shard; --max-bytes bounds the rendered " +
-		"output and reports overflow ids.\n\n" +
+		"selects a deterministic contiguous byte-balanced shard; an arc larger than --max-bytes " +
+		"is split at section, paragraph, line, or UTF-8 rune boundaries into ordered parts; " +
+		"--max-bytes bounds each rendered shard and reports overflow ids only when a part cannot fit.\n\n" +
 		"EXAMPLES\n\n" +
 		"  vaultmind arc recite --vault ~/.vaultmind/persona\n" +
 		"      Every arc, whole bodies. Use when you want the full layer and have the room.\n\n" +
@@ -72,7 +73,7 @@ func ArcReciteOptions() []config.ConfigOption {
 		{Key: "app.arc.recite.type", DefaultValue: "arc", Description: "Note type to recite. Defaults to arc; set to another always-load layer (e.g. principle) to give it the same unranked treatment", Type: "string"},
 		{Key: "app.arc.recite.sections", DefaultValue: "", Example: `""`, Description: "Full arc sections to deliver, comma-separated: all, trigger, push, principle, deeper-sight. all delivers the whole body and cannot be combined; empty preserves excerpt behavior", Type: "string"},
 		{Key: "app.arc.recite.shard", DefaultValue: "", Example: `""`, Description: "Deterministic contiguous arc shard in i/n form", Type: "string"},
-		{Key: "app.arc.recite.max_bytes", DefaultValue: 0, Description: "Maximum rendered text output bytes; 0 = unbounded. Overflow arc ids are reported; JSON output keeps the full overflow_ids list", Type: "int"},
+		{Key: "app.arc.recite.max_bytes", DefaultValue: 0, Description: "Maximum rendered text output bytes; 0 = unbounded. Oversized arcs split into ordered parts at section, paragraph, line, or UTF-8 rune boundaries; JSON output keeps overflow_ids for parts that cannot fit", Type: "int"},
 	}
 }
 

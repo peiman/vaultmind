@@ -9,12 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `arc recite` can deliver full `trigger`, `push`, `principle`, and `deeper-sight` sections with `--sections`; `--sections all` delivers each whole arc body with frontmatter and HTML comments stripped. It can split deterministic arc output with `--shard i/n`, cap rendered output with `--max-bytes` while reporting overflow ids, and the persona hooks accept `VAULTMIND_ARC_SECTIONS` and `VAULTMIND_ARC_SHARD` for multi-hook delivery with shard-specific sidecars.
+- `arc recite` can deliver full `trigger`, `push`, `principle`, and `deeper-sight` sections with `--sections`; `--sections all` delivers each whole arc body with frontmatter and HTML comments stripped. It can split deterministic arc output with `--shard i/n`, split an arc larger than `--max-bytes` into ordered section/paragraph/line/rune parts, cap each rendered shard while reporting only unfit overflow ids, and the persona hooks accept `VAULTMIND_ARC_SECTIONS` and `VAULTMIND_ARC_SHARD` for multi-hook delivery with shard-specific sidecars.
 - `persona health` reports per-section arc moment coverage and the additive `moment_bytes`, `moment_arrived_bytes`, and `moment_coverage` totals, with the WARN-only `--min-moment-coverage` threshold.
 
 ### Fixed
 
-- Arc recitation now supports empty deterministic shards, keeps the legacy hook retry sequence when moment options are unset, attributes moment coverage to matching arc-hook blocks, ignores fenced section headings, and enforces `--max-bytes` on overflow reports.
+- Arc recitation now supports empty deterministic shards, keeps the legacy hook retry sequence when moment options are unset, attributes moment coverage to matching arc-hook blocks, ignores fenced section headings, splits oversized bounded arcs without losing their text, and enforces `--max-bytes` on overflow reports.
 
 ## [0.10.32] - 2026-11-27
 

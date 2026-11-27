@@ -97,7 +97,9 @@ func TestCheck_ArcMomentCoverageRequiresTheArcHookBlock(t *testing.T) {
 		Name: "moment", Transcripts: fixturePath("transcripts/moment-identity-only.jsonl"), Vault: fixturePath("vault-moment"),
 	}, 0.0)
 
+	require.Len(t, report.Arcs.Items, 2)
 	alpha := report.Arcs.Items[0]
+	require.Len(t, alpha.Sections, 3)
 	for _, section := range alpha.Sections {
 		assert.Zero(t, section.ArrivedBytes, section.Name)
 	}
@@ -110,6 +112,19 @@ func TestCheck_ArcMomentCoverageJoinsConsecutiveShardBlocks(t *testing.T) {
 
 	alpha := report.Arcs.Items[0]
 	assert.Equal(t, 1.0, alpha.Sections[0].Coverage)
+}
+
+func TestCheck_ArcMomentCoverageCountsSectionsAcrossPartBlocks(t *testing.T) {
+	report := CheckKeeper(Keeper{
+		Name: "moment", Transcripts: fixturePath("transcripts/moment-split-sections.jsonl"), Vault: fixturePath("vault-moment"),
+	}, 0.0)
+
+	alpha := report.Arcs.Items[0]
+	require.Len(t, alpha.Sections, 3)
+	for _, section := range alpha.Sections {
+		assert.Equal(t, 1.0, section.Coverage, section.Name)
+	}
+	assert.Equal(t, 1.0, report.Arcs.MomentCoverage)
 }
 
 func TestCheck_ArcMomentCoverageDoesNotBorrowAnotherArcOrShortUnits(t *testing.T) {

@@ -32,6 +32,8 @@ type ReciteItem struct {
 	Tokens   int             `json:"tokens"`
 	Sections []ReciteSection `json:"sections,omitempty"`
 	Fallback bool            `json:"fallback,omitempty"`
+	Part     int             `json:"part,omitempty"`
+	Parts    int             `json:"parts,omitempty"`
 }
 
 // ReciteSection is a full selected section, including its verbatim heading.
@@ -147,13 +149,13 @@ func Recite(db *index.DB, cfg ReciteConfig) (*ReciteResult, error) {
 	}
 
 	type candidate struct {
-		id   string
-		item ReciteItem
-		cost int
-		ok   bool
+		id    string
+		item  ReciteItem
+		cost  int
+		units []ReciteItem
+		ok    bool
 	}
 	candidates := make([]candidate, len(ids))
-	weights := make([]int, len(ids))
 	for i, id := range ids {
 		note, err := db.QueryFullNote(id)
 		if err != nil {
@@ -169,39 +171,74 @@ func Recite(db *index.DB, cfg ReciteConfig) (*ReciteResult, error) {
 		item := ReciteItem{ID: id, Title: note.Title, Excerpt: text, Sections: sections, Fallback: fallback}
 		item.Tokens = EstimateTokens(text)
 		candidates[i] = candidate{id: id, item: item, cost: item.Tokens, ok: true}
-		weights[i] = len(renderReciteItem(item))
 	}
 
-	indexes := make([]int, len(ids))
-	for i := range indexes {
-		indexes[i] = i
-	}
-	if result.Shard != nil {
-		shards, err := PlanArcShards(weights, result.Shard.Count)
-		if err != nil {
-			return nil, err
-		}
-		indexes = shards[result.Shard.Index-1]
-	}
-	for _, index := range indexes {
-		candidate := candidates[index]
+	// Split and plan the complete layer before applying the token budget. A
+	// shard is a byte-balanced view of the layer; its boundaries must not move
+	// because a caller chose a different token budget.
+	var units []ReciteItem
+	var unitOwners []int
+	for i := range candidates {
+		candidate := &candidates[i]
 		if !candidate.ok {
 			result.Omitted++
 			result.OmittedIDs = append(result.OmittedIDs, candidate.id)
 			continue
 		}
-		// Budget check BEFORE appending. Every remaining note is then recorded
-		// as omitted — the loop does not break, because the caller is owed the
-		// full list of what it did not get, not just the count. The fit itself
-		// is excerptForBudget, shared with pinned notes.
-		// Full selected sections are bounded by their complete rendered text.
-		if cfg.Budget > 0 && result.Tokens+candidate.cost > cfg.Budget {
+		candidate.units, _ = splitReciteItem(candidate.item, cfg, result)
+		if len(candidate.units) == 0 {
+			result.Overflow++
+			result.OverflowIDs = append(result.OverflowIDs, candidate.id)
+			continue
+		}
+		for _, unit := range candidate.units {
+			units = append(units, unit)
+			unitOwners = append(unitOwners, i)
+		}
+	}
+
+	weights := make([]int, len(units))
+	for i, unit := range units {
+		weights[i] = len(renderReciteItem(unit))
+	}
+	indexes := indexes(0, len(units))
+	if result.Shard != nil {
+		shards, err := PlanArcShardsWithinCap(weights, result.Shard.Count, reciteUnitCapacity(result))
+		if err != nil {
+			return nil, err
+		}
+		indexes = shards[result.Shard.Index-1]
+	}
+
+	// Keep all parts of one arc together for budget admission and name an
+	// omitted arc once. A split arc can span a byte-planned boundary, so only
+	// the units belonging to this selected shard are considered here.
+	selected := make(map[int][]ReciteItem)
+	selectedOrder := make([]int, 0, len(indexes))
+	for _, index := range indexes {
+		owner := unitOwners[index]
+		if _, seen := selected[owner]; !seen {
+			selectedOrder = append(selectedOrder, owner)
+		}
+		selected[owner] = append(selected[owner], units[index])
+	}
+	budgetTokens := 0
+	for _, owner := range selectedOrder {
+		candidate := candidates[owner]
+		cost := 0
+		for _, unit := range selected[owner] {
+			cost += unit.Tokens
+		}
+		if cfg.Budget > 0 && budgetTokens+cost > cfg.Budget {
 			result.Omitted++
 			result.OmittedIDs = append(result.OmittedIDs, candidate.id)
 			continue
 		}
-		result.Items = append(result.Items, candidate.item)
-		result.Tokens += candidate.cost
+		budgetTokens += cost
+		for _, unit := range selected[owner] {
+			result.Items = append(result.Items, unit)
+			result.Tokens += unit.Tokens
+		}
 	}
 	trimToMaxBytes(result)
 	return result, nil
@@ -241,9 +278,245 @@ func reciteText(body string, cfg ReciteConfig) (string, []ReciteSection, bool) {
 	return b.String(), sections, false
 }
 
+// splitReciteItem turns one admitted arc into contiguous delivery units. The
+// fixed recitation banner and overflow footer are reserved once per shard;
+// every part then has to fit in the remaining unit capacity.
+func splitReciteItem(item ReciteItem, cfg ReciteConfig, result *ReciteResult) ([]ReciteItem, bool) {
+	if cfg.MaxBytes <= 0 || cfg.Type != "arc" {
+		return []ReciteItem{item}, true
+	}
+	unitCapacity := reciteUnitCapacity(result)
+	if unitCapacity <= 0 {
+		return nil, false
+	}
+	if len(renderReciteItem(item)) <= unitCapacity {
+		return []ReciteItem{item}, true
+	}
+
+	units := reciteSplitUnits(item, cfg)
+	if len(units) == 0 {
+		return nil, false
+	}
+	assumedParts := 2
+	for attempt := 0; attempt < len(item.Excerpt)+3; attempt++ {
+		textCapacity := recitePartTextCapacity(item, unitCapacity, assumedParts)
+		if textCapacity <= 0 {
+			return nil, false
+		}
+		texts := packReciteUnits(units, textCapacity)
+		if len(texts) < 2 {
+			return nil, false
+		}
+		if len(texts) != assumedParts {
+			assumedParts = len(texts)
+			continue
+		}
+		parts := make([]ReciteItem, len(texts))
+		for i, text := range texts {
+			parts[i] = item
+			parts[i].Excerpt = text
+			parts[i].Tokens = EstimateTokens(text)
+			parts[i].Part = i + 1
+			parts[i].Parts = len(texts)
+			if len(renderReciteItem(parts[i])) > unitCapacity {
+				return nil, false
+			}
+		}
+		return parts, true
+	}
+	return nil, false
+}
+
+func reciteSplitUnits(item ReciteItem, cfg ReciteConfig) []string {
+	if len(cfg.Sections) == 1 && cfg.Sections[0] == allArcSections {
+		return splitAtArcHeadings(item.Excerpt)
+	}
+	if len(item.Sections) > 0 {
+		blocks := make([]string, len(item.Sections))
+		for i, section := range item.Sections {
+			blocks[i] = section.Heading + "\n\n" + section.Text
+		}
+		return splitAtBlocks(blocks)
+	}
+	return []string{item.Excerpt}
+}
+
+func splitAtBlocks(blocks []string) []string {
+	if len(blocks) == 0 {
+		return nil
+	}
+	text := strings.Join(blocks, "\n\n")
+	return splitAtOffsets(text, blockOffsets(blocks))
+}
+
+func blockOffsets(blocks []string) []int {
+	offsets := make([]int, 0, len(blocks))
+	offset := 0
+	for i, block := range blocks {
+		if i > 0 {
+			offset += 2
+		}
+		offsets = append(offsets, offset)
+		offset += len(block)
+	}
+	return offsets
+}
+
+func splitAtArcHeadings(text string) []string {
+	starts := arcHeadingStarts(text)
+	if len(starts) == 0 || starts[0] == 0 {
+		if len(starts) <= 1 {
+			return []string{text}
+		}
+		return splitAtOffsets(text, starts)
+	}
+	return splitAtOffsets(text, append([]int{0}, starts...))
+}
+
+func splitAtOffsets(text string, starts []int) []string {
+	if len(starts) == 0 {
+		return []string{text}
+	}
+	parts := make([]string, 0, len(starts))
+	for i, start := range starts {
+		end := len(text)
+		if i+1 < len(starts) {
+			end = starts[i+1]
+		}
+		if start < end {
+			parts = append(parts, text[start:end])
+		}
+	}
+	return parts
+}
+
+func packReciteUnits(units []string, capacity int) []string {
+	var atoms []string
+	for _, unit := range units {
+		if len(unit) <= capacity {
+			atoms = append(atoms, unit)
+			continue
+		}
+		parts := splitOversizedText(unit, capacity)
+		if len(parts) == 0 {
+			return nil
+		}
+		atoms = append(atoms, parts...)
+	}
+	var packed []string
+	current := ""
+	for _, atom := range atoms {
+		if len(atom) > capacity {
+			return nil
+		}
+		if current != "" && len(current)+len(atom) > capacity {
+			packed = append(packed, current)
+			current = ""
+		}
+		current += atom
+	}
+	if current != "" {
+		packed = append(packed, current)
+	}
+	return packed
+}
+
+func splitOversizedText(text string, capacity int) []string {
+	if capacity <= 0 {
+		return nil
+	}
+	paragraphs := strings.SplitAfter(text, "\n\n")
+	if len(paragraphs) == 1 || anyLongerThan(paragraphs, capacity) {
+		var lines []string
+		for _, paragraph := range paragraphs {
+			if len(paragraph) <= capacity {
+				lines = append(lines, paragraph)
+				continue
+			}
+			lines = append(lines, strings.SplitAfter(paragraph, "\n")...)
+		}
+		paragraphs = lines
+	}
+	if anyLongerThan(paragraphs, capacity) {
+		var runes []string
+		for _, line := range paragraphs {
+			if len(line) <= capacity {
+				runes = append(runes, line)
+				continue
+			}
+			runes = append(runes, splitUTF8(line, capacity)...)
+		}
+		paragraphs = runes
+	}
+	if anyLongerThan(paragraphs, capacity) {
+		return nil
+	}
+	return packReciteUnits(paragraphs, capacity)
+}
+
+func anyLongerThan(values []string, capacity int) bool {
+	for _, value := range values {
+		if len(value) > capacity {
+			return true
+		}
+	}
+	return false
+}
+
+func splitUTF8(text string, capacity int) []string {
+	var parts []string
+	for start := 0; start < len(text); {
+		end := start
+		for end < len(text) {
+			_, size := utf8.DecodeRuneInString(text[end:])
+			if end+size-start > capacity {
+				break
+			}
+			end += size
+		}
+		if end == start {
+			return nil
+		}
+		parts = append(parts, text[start:end])
+		start = end
+	}
+	return parts
+}
+
+func recitePartTextCapacity(item ReciteItem, unitCapacity, parts int) int {
+	maxOverhead := 0
+	for part := 1; part <= parts; part++ {
+		probe := item
+		probe.Excerpt = "x"
+		probe.Part = part
+		probe.Parts = parts
+		overhead := len(renderReciteItem(probe)) - 1
+		if overhead > maxOverhead {
+			maxOverhead = overhead
+		}
+	}
+	return unitCapacity - maxOverhead
+}
+
+// reciteUnitCapacity is the one byte-cap derivation used for both splitting
+// and shard planning. Reserve the fixed banner, preamble, and one-line
+// overflow footer so a part cannot consume the room needed to explain a
+// bounded delivery.
+func reciteUnitCapacity(result *ReciteResult) int {
+	if result.MaxBytes <= 0 {
+		return 0
+	}
+	overflowFooter := fmt.Sprintf("── 1 %s(s) DID NOT FIT the %d-byte hook cap and are NOT above:\n   x\n", result.Type, result.MaxBytes)
+	return result.MaxBytes - len(recitationBannerForCount(result, result.Total)) - len("Read them as yours before you respond.\n\n") - len(overflowFooter)
+}
+
 func renderReciteItem(item ReciteItem) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "── %s — %s\n", item.ID, item.Title)
+	if item.Parts > 1 {
+		fmt.Fprintf(&b, "── %s (part %d of %d) — %s\n", item.ID, item.Part, item.Parts, item.Title)
+	} else {
+		fmt.Fprintf(&b, "── %s — %s\n", item.ID, item.Title)
+	}
 	if item.Excerpt == "" {
 		b.WriteString("   (no body)\n\n")
 		return b.String()
@@ -338,11 +611,7 @@ func renderRecitation(r *ReciteResult, compact bool) string {
 		}
 		return b.String()
 	}
-	if r.Shard == nil {
-		fmt.Fprintf(&b, "YOUR %sS — %d of %d, the moments that made you who you are.\n", strings.ToUpper(r.Type), len(r.Items), r.Total)
-	} else {
-		fmt.Fprintf(&b, "YOUR %sS — arcs part %d of %d — %d of %d, the moments that made you who you are.\n", strings.ToUpper(r.Type), r.Shard.Index, r.Shard.Count, len(r.Items), r.Total)
-	}
+	b.WriteString(recitationBanner(r))
 	b.WriteString("Read them as yours before you respond.\n\n")
 	for _, item := range r.Items {
 		b.WriteString(renderReciteItem(item))
@@ -365,16 +634,42 @@ func renderRecitation(r *ReciteResult, compact bool) string {
 	return b.String()
 }
 
+func recitationBanner(r *ReciteResult) string {
+	return recitationBannerForCount(r, deliveredReciteCount(r.Items))
+}
+
+func recitationBannerForCount(r *ReciteResult, count int) string {
+	if r.Shard == nil {
+		return fmt.Sprintf("YOUR %sS — %d of %d, the moments that made you who you are.\n", strings.ToUpper(r.Type), count, r.Total)
+	}
+	return fmt.Sprintf("YOUR %sS — arcs part %d of %d — %d of %d, the moments that made you who you are.\n", strings.ToUpper(r.Type), r.Shard.Index, r.Shard.Count, count, r.Total)
+}
+
+func deliveredReciteCount(items []ReciteItem) int {
+	seen := make(map[string]struct{}, len(items))
+	for _, item := range items {
+		seen[item.ID] = struct{}{}
+	}
+	return len(seen)
+}
+
 func trimToMaxBytes(result *ReciteResult) {
 	if result.MaxBytes <= 0 {
 		return
 	}
 	for len(renderRecitation(result, false)) > result.MaxBytes && len(result.Items) > 0 {
-		last := len(result.Items) - 1
-		result.OverflowIDs = append(result.OverflowIDs, result.Items[last].ID)
-		result.Overflow++
-		result.Tokens -= result.Items[last].Tokens
-		result.Items = result.Items[:last]
+		lastID := result.Items[len(result.Items)-1].ID
+		removed := false
+		for len(result.Items) > 0 && result.Items[len(result.Items)-1].ID == lastID {
+			last := len(result.Items) - 1
+			result.Tokens -= result.Items[last].Tokens
+			result.Items = result.Items[:last]
+			removed = true
+		}
+		if removed {
+			result.OverflowIDs = append(result.OverflowIDs, lastID)
+			result.Overflow++
+		}
 	}
 	sort.Strings(result.OverflowIDs)
 }

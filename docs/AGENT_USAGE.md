@@ -504,7 +504,10 @@ sidecar. Arcs without any requested section use the normal excerpt fallback.
 For direct use, the equivalent command flags are
 `--sections trigger,push,principle --shard i/n --max-bytes N`. Use
 `--sections all` to deliver each whole arc body with frontmatter and HTML comments
-stripped; `all` cannot be combined with another section name. The hook passes
+stripped; `all` cannot be combined with another section name. When a selected arc
+exceeds the byte cap, recite emits ordered part blocks split at fence-aware
+section, paragraph, line, or UTF-8 rune boundaries; JSON includes `part` and
+`parts`. The hook passes
 `VAULTMIND_ARC_SECTIONS=all` through as `--sections all` and records `arc_sections=all`.
 
 ### Measuring arc moment delivery

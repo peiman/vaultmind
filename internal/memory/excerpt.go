@@ -374,10 +374,22 @@ func isAnyExtractSectionHeading(line string) bool {
 }
 
 func nextExtractSectionBoundary(lines []string, start int) int {
+	for _, index := range arcHeadingLines(lines, isAnyExtractSectionHeading) {
+		if index >= start {
+			return index
+		}
+	}
+	return len(lines)
+}
+
+// arcHeadingLines is the shared fence-aware heading scanner used by named
+// section extraction and byte-cap splitting. A heading-looking line inside a
+// backtick or tilde fence is content, not a delivery boundary.
+func arcHeadingLines(lines []string, matcher func(string) bool) []int {
+	var out []int
 	var fenceChar byte
 	fenceLength := 0
-	for i := start; i < len(lines); i++ {
-		line := lines[i]
+	for i, line := range lines {
 		if fenceChar != 0 {
 			if isClosingFence(line, fenceChar, fenceLength) {
 				fenceChar, fenceLength = 0, 0
@@ -388,11 +400,32 @@ func nextExtractSectionBoundary(lines []string, start int) int {
 			fenceChar, fenceLength = char, length
 			continue
 		}
-		if isAnyExtractSectionHeading(line) {
-			return i
+		if matcher(line) {
+			out = append(out, i)
 		}
 	}
-	return len(lines)
+	return out
+}
+
+func arcHeadingStarts(text string) []int {
+	lines := strings.Split(text, "\n")
+	indexes := arcHeadingLines(lines, func(line string) bool {
+		trimmed := strings.TrimSpace(line)
+		return strings.HasPrefix(trimmed, "## ")
+	})
+	starts := make([]int, 0, len(indexes))
+	offset := 0
+	for i, line := range lines {
+		if len(indexes) > 0 && i == indexes[0] {
+			starts = append(starts, offset)
+			indexes = indexes[1:]
+		}
+		offset += len(line)
+		if i < len(lines)-1 {
+			offset++
+		}
+	}
+	return starts
 }
 
 func fenceMarker(line string) (byte, int, bool) {

@@ -81,6 +81,36 @@ func PlanArcShards(weights []int, count int) ([][]int, error) {
 	return shards, nil
 }
 
+// PlanArcShardsWithinCap keeps consecutive rendered units below the remaining
+// byte capacity. It is used only when recite has a hard output cap; the legacy
+// byte-balanced planner remains the default for unbounded output.
+func PlanArcShardsWithinCap(weights []int, count, capacity int) ([][]int, error) {
+	if count <= 0 {
+		return nil, fmt.Errorf("shard count must be positive")
+	}
+	if capacity <= 0 {
+		return PlanArcShards(weights, count)
+	}
+	shards := make([][]int, count)
+	shard := 0
+	used := 0
+	for i, weight := range weights {
+		if weight < 0 {
+			return nil, fmt.Errorf("arc weight must not be negative")
+		}
+		if weight > capacity {
+			return PlanArcShards(weights, count)
+		}
+		if used > 0 && used+weight > capacity && shard < count-1 {
+			shard++
+			used = 0
+		}
+		shards[shard] = append(shards[shard], i)
+		used += weight
+	}
+	return shards, nil
+}
+
 func prefixWeight(weights []int, end int) int {
 	total := 0
 	for _, weight := range weights[:end] {

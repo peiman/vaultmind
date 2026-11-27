@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -39,6 +40,26 @@ Fixture source.
 
 I changed the delivery contract.
 `)
+	rebuildVault(t, vault)
+	return vault
+}
+
+func budgetShardReciteVault(t *testing.T) string {
+	t.Helper()
+	vault := t.TempDir()
+	for i := 0; i < 6; i++ {
+		id := fmt.Sprintf("arc-budget-%d", i)
+		body := fmt.Sprintf(`---
+id: %s
+type: arc
+title: Budget Arc
+created: 2026-04-03
+---
+## Trigger
+
+%s`, id, strings.Repeat("payload-"+id+" ", 100))
+		writeRawNote(t, vault, "arcs/"+id+".md", body)
+	}
 	rebuildVault(t, vault)
 	return vault
 }
@@ -170,6 +191,38 @@ func TestArcRecite_AllShardsAreDeterministicAndComplete(t *testing.T) {
 	assert.Equal(t, map[string]int{"arc-kept-self": 1, "arc-moment": 1}, seen)
 }
 
+func TestArcRecite_BudgetAppliesPerShardThroughCommand(t *testing.T) {
+	isolateXDG(t)
+	vault := budgetShardReciteVault(t)
+	seen := make(map[string]int)
+	for shard := 1; shard <= 3; shard++ {
+		out, errOut, err := runRootCmd(t, "arc", "recite", "--vault", vault,
+			"--sections", "all", "--shard", fmt.Sprintf("%d/3", shard), "--budget", "1200", "--json")
+		require.NoError(t, err, errOut.String())
+		var env struct {
+			Result struct {
+				Items []struct {
+					ID string `json:"id"`
+				} `json:"items"`
+				Omitted int `json:"omitted"`
+				Tokens  int `json:"tokens"`
+			} `json:"result"`
+		}
+		require.NoError(t, json.Unmarshal(out.Bytes(), &env))
+		assert.Zero(t, env.Result.Omitted, "shard %d must not inherit omissions from other shards", shard)
+		assert.Len(t, env.Result.Items, 2)
+		assert.LessOrEqual(t, env.Result.Tokens, 1200)
+		for _, item := range env.Result.Items {
+			seen[item.ID]++
+		}
+	}
+
+	assert.Len(t, seen, 6)
+	for id, count := range seen {
+		assert.Equal(t, 1, count, id)
+	}
+}
+
 func TestArcRecite_AllMaxBytesReportsOverflowID(t *testing.T) {
 	isolateXDG(t)
 	vault := momentReciteVault(t)
@@ -212,6 +265,63 @@ func TestArcRecite_ShardAndMaxBytesReportOverflow(t *testing.T) {
 	require.NoError(t, err, errOut.String())
 	assert.LessOrEqual(t, len(out.Bytes()), 120, "compact overflow report must stay below a tight cap")
 	assert.Contains(t, out.String(), "arc-kept-self")
+}
+
+func TestArcRecite_MaxBytesJSONCarriesPartMetadataForSplitArc(t *testing.T) {
+	isolateXDG(t)
+	vault := momentReciteVault(t)
+	writeRawNote(t, vault, "arcs/large.md", `---
+id: arc-large
+type: arc
+title: Large Arc
+created: 2026-04-03
+---
+## Trigger
+
+trigger words. trigger words. trigger words. trigger words. trigger words. trigger words. trigger words. trigger words. trigger words. trigger words. trigger words. trigger words. trigger words. trigger words. trigger words. trigger words.
+
+## Push
+
+push words. push words. push words. push words. push words. push words. push words. push words. push words. push words. push words. push words. push words. push words. push words. push words. push words.
+
+## Principle
+
+principle words. principle words. principle words. principle words. principle words. principle words. principle words. principle words. principle words. principle words. principle words. principle words. principle words. principle words. principle words. principle words.
+`)
+	rebuildVault(t, vault)
+
+	var parts []struct {
+		ID    string `json:"id"`
+		Part  int    `json:"part"`
+		Parts int    `json:"parts"`
+	}
+	for shard := 1; shard <= 3; shard++ {
+		out, errOut, err := runRootCmd(t, "arc", "recite", "--vault", vault, "--sections", "all", "--max-bytes", "700", "--shard", fmt.Sprintf("%d/3", shard), "--json")
+		require.NoError(t, err, errOut.String())
+		var env struct {
+			Result struct {
+				Items []struct {
+					ID    string `json:"id"`
+					Part  int    `json:"part"`
+					Parts int    `json:"parts"`
+				} `json:"items"`
+			} `json:"result"`
+		}
+		require.NoError(t, json.Unmarshal(out.Bytes(), &env))
+		for _, item := range env.Result.Items {
+			if item.ID == "arc-large" {
+				parts = append(parts, item)
+			}
+		}
+	}
+
+	require.Len(t, parts, 3)
+	assert.Equal(t, 1, parts[0].Part)
+	assert.Equal(t, 3, parts[0].Parts)
+	assert.Equal(t, 2, parts[1].Part)
+	assert.Equal(t, 3, parts[1].Parts)
+	assert.Equal(t, 3, parts[2].Part)
+	assert.Equal(t, 3, parts[2].Parts)
 }
 
 func TestArcRecite_RejectsUnknownSectionAndInvalidShard(t *testing.T) {
