@@ -64,7 +64,11 @@ type ArcReport struct {
 	MomentBytes        int             `json:"moment_bytes"`
 	MomentArrivedBytes int             `json:"moment_arrived_bytes"`
 	MomentCoverage     float64         `json:"moment_coverage"`
+	KeyBytes           int             `json:"key_bytes"`
+	KeyArrivedBytes    int             `json:"key_arrived_bytes"`
+	KeyCoverage        float64         `json:"key_coverage"`
 	Items              []ArcBodyReport `json:"items"`
+	keyRequested       bool
 }
 
 // MemoryFileReport records one loaded memory file from an instructions attachment.
@@ -113,6 +117,8 @@ type Config struct {
 	MinCoverage       float64
 	MinArcCoverage    float64
 	MinMomentCoverage float64
+	Full              string
+	MinKeyCoverage    float64
 }
 
 // ValidateMinCoverage rejects a threshold that cannot be a fraction.
@@ -139,6 +145,14 @@ func ValidateMinMomentCoverage(value float64) error {
 	return nil
 }
 
+// ValidateMinKeyCoverage rejects a threshold that cannot be a fraction.
+func ValidateMinKeyCoverage(value float64) error {
+	if value < 0 || value > 1 {
+		return fmt.Errorf("--min-key-coverage must be between 0 and 1")
+	}
+	return nil
+}
+
 // memoryTruncationPattern is from a real transcript record verified on
 // 2026-11-25. Only a blockquote warning line containing "Only part of it was
 // loaded:" is a notice; the optional captures are cut lines and total lines.
@@ -157,6 +171,7 @@ var arcBlockHeader = regexp.MustCompile(`^── ([^—\r\n]+?)(?: \(part [0-9]+
 type transcriptEvidence struct {
 	Texts           []string
 	ArcBlocks       map[string][]string
+	KeyArcBlocks    map[string][]string
 	AfterCompact    string
 	PointPrefix     string
 	Memory          MemoryReport
@@ -186,10 +201,10 @@ type transcriptRecord struct {
 // CheckKeeper reads only the newest transcript and returns a per-keeper
 // failure instead of hiding unreadable inputs behind a process error.
 func CheckKeeper(keeper Keeper, minCoverage float64) Report {
-	return checkKeeper(keeper, minCoverage, 0, 0)
+	return checkKeeper(keeper, minCoverage, 0, 0, "", 0)
 }
 
-func checkKeeper(keeper Keeper, minCoverage, minArcCoverage, minMomentCoverage float64) Report {
+func checkKeeper(keeper Keeper, minCoverage, minArcCoverage, minMomentCoverage float64, fullValue string, minKeyCoverage float64) Report {
 	report := Report{Name: keeper.Name, Status: "fail"}
 	evidence, err := readTranscript(keeper.Transcripts)
 	if err != nil {
@@ -206,7 +221,21 @@ func checkKeeper(keeper Keeper, minCoverage, minArcCoverage, minMomentCoverage f
 		return report
 	}
 	report.Identity = coverage(anchorBody, evidence.Texts)
-	report.Arcs = arcCoverage(arcs, evidence.Texts, evidence.ArcBlocks)
+	fullIDs := parseArcIDs(fullValue)
+	for _, id := range fullIDs {
+		found := false
+		for _, arc := range arcs {
+			if arc.ID == id {
+				found = true
+				break
+			}
+		}
+		if !found {
+			report.Error = fmt.Sprintf("unknown arc id in --full: %s", id)
+			return report
+		}
+	}
+	report.Arcs = arcCoverage(arcs, evidence.Texts, evidence.ArcBlocks, evidence.KeyArcBlocks, fullIDs)
 
 	var reasons []string
 	if len(evidence.Texts) == 0 {
@@ -224,6 +253,9 @@ func checkKeeper(keeper Keeper, minCoverage, minArcCoverage, minMomentCoverage f
 	}
 	if minMomentCoverage > 0 && report.Arcs.MomentCoverage < minMomentCoverage {
 		warnings = append(warnings, fmt.Sprintf("arc moment coverage %d%% below %.0f%%", arcMomentCoveragePercentTotal(report.Arcs), minMomentCoverage*100))
+	}
+	if len(fullIDs) > 0 && minKeyCoverage > 0 && report.Arcs.KeyCoverage < minKeyCoverage {
+		warnings = append(warnings, fmt.Sprintf("arc key coverage %d%% below %.0f%%", arcKeyCoveragePercentTotal(report.Arcs), minKeyCoverage*100))
 	}
 	if !report.Memory.Seen {
 		warnings = append(warnings, fmt.Sprintf("memory file not seen %s at %s", evidence.PointPrefix, evidence.AfterCompact))
@@ -245,7 +277,7 @@ func checkKeeper(keeper Keeper, minCoverage, minArcCoverage, minMomentCoverage f
 func Check(cfg Config) Result {
 	result := Result{Keepers: make([]Report, 0, len(cfg.Keepers))}
 	for _, keeper := range cfg.Keepers {
-		result.Keepers = append(result.Keepers, checkKeeper(keeper, cfg.MinCoverage, cfg.MinArcCoverage, cfg.MinMomentCoverage))
+		result.Keepers = append(result.Keepers, checkKeeper(keeper, cfg.MinCoverage, cfg.MinArcCoverage, cfg.MinMomentCoverage, cfg.Full, cfg.MinKeyCoverage))
 	}
 	return result
 }
@@ -283,8 +315,12 @@ func Text(result Result) string {
 		} else if report.Memory.Seen {
 			memory = "ok"
 		}
-		fmt.Fprintf(&b, "%s  %-4s  identity %.0f%% (%s of %s bytes)  arcs %d full / %d partial / %d missing  arcs body %s of %s bytes, %d%%  arcs moment %d%%  memory %s  after compact %s",
-			report.Name, status, report.Identity.Coverage*100, formatNumber(report.Identity.CoveredBytes), formatNumber(report.Identity.TotalBytes), report.Arcs.Full, report.Arcs.Partial, report.Arcs.Missing, formatNumber(report.Arcs.ArrivedBytes), formatNumber(report.Arcs.BodyBytes), arcCoveragePercentTotal(report.Arcs), arcMomentCoveragePercentTotal(report.Arcs), memory, report.AfterCompact)
+		fmt.Fprintf(&b, "%s  %-4s  identity %.0f%% (%s of %s bytes)  arcs %d full / %d partial / %d missing  arcs body %s of %s bytes, %d%%  arcs moment %d%%",
+			report.Name, status, report.Identity.Coverage*100, formatNumber(report.Identity.CoveredBytes), formatNumber(report.Identity.TotalBytes), report.Arcs.Full, report.Arcs.Partial, report.Arcs.Missing, formatNumber(report.Arcs.ArrivedBytes), formatNumber(report.Arcs.BodyBytes), arcCoveragePercentTotal(report.Arcs), arcMomentCoveragePercentTotal(report.Arcs))
+		if report.Arcs.keyRequested {
+			fmt.Fprintf(&b, "  arcs key %d%%", arcKeyCoveragePercentTotal(report.Arcs))
+		}
+		fmt.Fprintf(&b, "  memory %s  after compact %s", memory, report.AfterCompact)
 		if report.UnreadableLines > 0 {
 			lineWord := "line"
 			if report.UnreadableLines != 1 {
@@ -370,7 +406,7 @@ func readTranscriptFile(path string) (transcriptEvidence, error) {
 	}
 	defer func() { _ = file.Close() }()
 
-	var result = transcriptEvidence{ArcBlocks: make(map[string][]string), Memory: emptyMemoryReport()}
+	var result = transcriptEvidence{ArcBlocks: make(map[string][]string), KeyArcBlocks: make(map[string][]string), Memory: emptyMemoryReport()}
 	seenPoint := false
 	compactSeen := false
 	validRecords := 0
@@ -381,6 +417,7 @@ func readTranscriptFile(path string) (transcriptEvidence, error) {
 		result.PointPrefix = "after compaction"
 		result.Texts = nil
 		result.ArcBlocks = make(map[string][]string)
+		result.KeyArcBlocks = make(map[string][]string)
 		result.Memory = emptyMemoryReport()
 	}
 	scanner := bufio.NewScanner(file)
@@ -424,6 +461,9 @@ func readTranscriptFile(path string) (transcriptEvidence, error) {
 			result.Texts = append(result.Texts, content)
 			for id, blocks := range arcBlocks(content) {
 				result.ArcBlocks[id] = append(result.ArcBlocks[id], blocks...)
+			}
+			for id, blocks := range arcHookBlocks(content) {
+				result.KeyArcBlocks[id] = append(result.KeyArcBlocks[id], blocks...)
 			}
 		}
 	}
@@ -608,8 +648,12 @@ func coverage(body string, texts []string) IdentityReport {
 	return result
 }
 
-func arcCoverage(arcs []vaultArc, texts []string, arcBlocks map[string][]string) ArcReport {
-	result := ArcReport{Items: make([]ArcBodyReport, 0, len(arcs))}
+func arcCoverage(arcs []vaultArc, texts []string, arcBlocks, keyArcBlocks map[string][]string, fullIDs []string) ArcReport {
+	keySet := make(map[string]bool, len(fullIDs))
+	for _, id := range fullIDs {
+		keySet[id] = true
+	}
+	result := ArcReport{Items: make([]ArcBodyReport, 0, len(arcs)), keyRequested: len(fullIDs) > 0}
 	for _, arc := range arcs {
 		body := coverage(arc.Body, texts)
 		item := ArcBodyReport{ID: arc.ID, BodyBytes: body.TotalBytes, ArrivedBytes: body.CoveredBytes, Sections: make([]ArcSectionReport, 0)}
@@ -625,6 +669,11 @@ func arcCoverage(arcs []vaultArc, texts []string, arcBlocks map[string][]string)
 		result.Items = append(result.Items, item)
 		result.BodyBytes += body.TotalBytes
 		result.ArrivedBytes += body.CoveredBytes
+		if keySet[arc.ID] {
+			key := momentCoverage(arc.Body, keyArcBlocks[arc.ID])
+			result.KeyBytes += key.TotalBytes
+			result.KeyArrivedBytes += key.CoveredBytes
+		}
 		principle := normalize(arc.Principle)
 		if principle == "" {
 			if containsNormalized(texts, arc.Fallback) {
@@ -664,6 +713,9 @@ func arcCoverage(arcs []vaultArc, texts []string, arcBlocks map[string][]string)
 	if result.MomentBytes > 0 {
 		result.MomentCoverage = float64(result.MomentArrivedBytes) / float64(result.MomentBytes)
 	}
+	if result.KeyBytes > 0 {
+		result.KeyCoverage = float64(result.KeyArrivedBytes) / float64(result.KeyBytes)
+	}
 	return result
 }
 
@@ -679,6 +731,30 @@ func arcMomentCoveragePercentTotal(arcs ArcReport) int {
 		return 0
 	}
 	return int(float64(arcs.MomentArrivedBytes) * 100 / float64(arcs.MomentBytes))
+}
+
+func arcKeyCoveragePercentTotal(arcs ArcReport) int {
+	if arcs.KeyBytes == 0 {
+		return 0
+	}
+	return int(float64(arcs.KeyArrivedBytes) * 100 / float64(arcs.KeyBytes))
+}
+
+func parseArcIDs(value string) []string {
+	if strings.TrimSpace(value) == "" {
+		value = os.Getenv("VAULTMIND_ARC_FULL")
+	}
+	var ids []string
+	seen := make(map[string]bool)
+	for _, raw := range strings.Split(value, ",") {
+		id := strings.TrimSpace(raw)
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		ids = append(ids, id)
+	}
+	return ids
 }
 
 func textUnits(text string) []string {
@@ -754,6 +830,13 @@ func arcBlocks(text string) map[string][]string {
 		result[id] = append(result[id], strings.Join(lines[i:end], "\n"))
 	}
 	return result
+}
+
+func arcHookBlocks(text string) map[string][]string {
+	if !strings.HasPrefix(strings.TrimSpace(text), "YOUR ARCS") {
+		return nil
+	}
+	return arcBlocks(text)
 }
 
 func containsNormalized(texts []string, needle string) bool {

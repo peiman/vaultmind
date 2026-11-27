@@ -510,6 +510,12 @@ section, paragraph, line, or UTF-8 rune boundaries; JSON includes `part` and
 `parts`. The hook passes
 `VAULTMIND_ARC_SECTIONS=all` through as `--sections all` and records `arc_sections=all`.
 
+For a key-arcs trial, set `VAULTMIND_ARC_FULL=id,id` or pass `--full id,id` to
+`arc recite`. The named arcs arrive as whole bodies, while every other arc keeps
+the normal Principle-preferred excerpt; the hook passes `--excerpt`, `--max-bytes`,
+and any shard unchanged. `--full` and `--sections` are mutually exclusive. The
+hook sidecar records `arc_full`, and an unknown id names the failing arc.
+
 ### Measuring arc moment delivery
 
 `vaultmind persona health` reports the existing arc-body coverage plus
@@ -518,6 +524,13 @@ for each present Trigger, Push, or Principle, and `moment_bytes`,
 `moment_arrived_bytes`, and `moment_coverage` totals. Use
 `--min-moment-coverage 0.9` for a WARN-only threshold; arcs with none of those
 sections contribute nothing to the moment denominator.
+
+Use `vaultmind persona health --full id,id` (or leave the flag empty and set
+`VAULTMIND_ARC_FULL`) to measure the listed key arcs. JSON adds `key_bytes`,
+`key_arrived_bytes`, and `key_coverage`; the measurement uses only `── <arc id> —`
+blocks from the arcs hook, joins split parts, and does not count identity-hook
+text. Text adds `arcs key N%` only when a list is active. `--min-key-coverage`
+is a WARN-only threshold, defaulting to 0.
 
 ### Non-Claude-Code agents
 

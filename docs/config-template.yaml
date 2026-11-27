@@ -58,6 +58,9 @@ app:
     # Full arc sections to deliver, comma-separated: all, trigger, push, principle, deeper-sight. all delivers the whole body and cannot be combined; empty preserves excerpt behavior
     recite.sections: ""
 
+    # Comma-separated arc ids to deliver as whole bodies; other arcs use the normal excerpt
+    recite.full: ""
+
     # Deterministic contiguous arc shard in i/n form
     recite.shard: ""
 
@@ -1044,6 +1047,12 @@ app:
 
     # Minimum Trigger/Push/Principle moment coverage fraction (WARN only)
     health.min_moment_coverage: 0
+
+    # Comma-separated arc ids whose key-body coverage is measured; empty falls back to VAULTMIND_ARC_FULL
+    health.full: 
+
+    # Minimum listed-arc key coverage fraction (WARN only)
+    health.min_key_coverage: 0
 
   ping:
     # Default message to display for the ping command

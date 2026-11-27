@@ -202,6 +202,114 @@ func TestRecite_AllDeliversWholeBodyWithoutFallbackOrSections(t *testing.T) {
 	assert.False(t, item.Fallback)
 }
 
+func TestParseReciteConfig_FullNormalizesAndRejectsSections(t *testing.T) {
+	cfg, err := memory.ParseReciteConfig("arc", 0, 120, false, "", " arc-z, arc-a, arc-z, , ", "", 0)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"arc-z", "arc-a"}, cfg.Full)
+
+	_, err = memory.ParseReciteConfig("arc", 0, 120, false, "principle", "arc-a", "", 0)
+	assert.EqualError(t, err, "--full cannot be combined with --sections")
+}
+
+func TestRecite_FullMixesWholeBodiesWithExcerptsAndKeepsIDOrder(t *testing.T) {
+	db := emptyArcDB(t, 0)
+	insertArcNote(t, db, "arc-z", "Zed", "---\nid: arc-z\ntype: arc\n---\n<!-- hidden -->\n## Trigger\n\nZ trigger.\n\n## Principle\n\nZ principle.\n\n## Source\n\nZ source.")
+	insertArcNote(t, db, "arc-a", "Alpha", "---\nid: arc-a\ntype: arc\n---\n## Trigger\n\nA trigger.\n\n## Principle\n\nA principle.\n\n## Source\n\nA source.")
+	insertArcNote(t, db, "arc-m", "Middle", "---\nid: arc-m\ntype: arc\n---\n## Trigger\n\nM trigger.\n\n## Principle\n\nM principle.\n\n## Source\n\nM source.")
+
+	got, err := memory.Recite(db, memory.ReciteConfig{Type: "arc", ExcerptTokens: 4, Full: []string{"arc-z", "arc-a", "arc-z"}})
+	require.NoError(t, err)
+	require.Len(t, got.Items, 3)
+	assert.Equal(t, []string{"arc-a", "arc-m", "arc-z"}, []string{got.Items[0].ID, got.Items[1].ID, got.Items[2].ID})
+	assert.True(t, got.Items[0].Full)
+	assert.False(t, got.Items[1].Full)
+	assert.True(t, got.Items[2].Full)
+	assert.Contains(t, got.Items[0].Excerpt, "A source.")
+	assert.Contains(t, got.Items[2].Excerpt, "Z source.")
+	assert.NotContains(t, got.Items[1].Excerpt, "M source.")
+	assert.NotContains(t, got.Items[1].Excerpt, "no trigger/push/principle section")
+	assert.NotContains(t, got.Items[0].Excerpt, "hidden")
+}
+
+func TestRecite_FullMixedShardPlanIsDeterministicAndComplete(t *testing.T) {
+	db := emptyArcDB(t, 0)
+	for _, id := range []string{"arc-a", "arc-b", "arc-c", "arc-d"} {
+		insertArcNote(t, db, id, id, "## Principle\n\n"+strings.Repeat("decision-"+id+" ", 12))
+	}
+
+	seen := make(map[string]int)
+	for shard := 1; shard <= 2; shard++ {
+		cfg := memory.ReciteConfig{Type: "arc", Full: []string{"arc-b"}, ExcerptTokens: 5, ShardIndex: shard, ShardCount: 2}
+		first, err := memory.Recite(db, cfg)
+		require.NoError(t, err)
+		second, err := memory.Recite(db, cfg)
+		require.NoError(t, err)
+		assert.Equal(t, first.Items, second.Items, "mixed shard %d must be deterministic", shard)
+		for _, item := range first.Items {
+			seen[item.ID]++
+		}
+	}
+
+	assert.Equal(t, map[string]int{"arc-a": 1, "arc-b": 1, "arc-c": 1, "arc-d": 1}, seen)
+}
+
+func TestRecite_FullUnknownIDIsRejectedAfterDraftFiltering(t *testing.T) {
+	db := emptyArcDB(t, 0)
+	insertArcNote(t, db, "arc-known", "Known", "Known body.")
+
+	_, err := memory.Recite(db, memory.ReciteConfig{Type: "arc", Full: []string{"arc-missing"}})
+	assert.EqualError(t, err, "unknown arc id in --full: arc-missing")
+}
+
+func TestRecite_FullListedArcSplitsLikeAllAndHardCapsMixedShards(t *testing.T) {
+	db := emptyArcDB(t, 0)
+	body := "## Trigger\n\n" + strings.Repeat("trigger words. ", 8) +
+		"\n## Push\n\n" + strings.Repeat("push words. ", 8) +
+		"\n## Principle\n\n" + strings.Repeat("principle words. ", 8) +
+		"\n## Source\n\n" + strings.Repeat("source words. ", 8)
+	insertArcNote(t, db, "arc-full", "Full", body)
+	insertArcNote(t, db, "arc-excerpt", "Excerpt", "## Principle\n\nA short decision rule.\n\n## Source\n\nDo not deliver this.")
+
+	whole, err := memory.Recite(db, memory.ReciteConfig{Type: "arc", Full: []string{"arc-full"}})
+	require.NoError(t, err)
+	var wholeText string
+	for _, item := range whole.Items {
+		if item.ID == "arc-full" {
+			wholeText = item.Excerpt
+			break
+		}
+	}
+	require.NotEmpty(t, wholeText)
+	var parts []memory.ReciteItem
+	for shard := 1; shard <= 3; shard++ {
+		got, reciteErr := memory.Recite(db, memory.ReciteConfig{
+			Type: "arc", Full: []string{"arc-full"}, ExcerptTokens: 3,
+			MaxBytes: 500, ShardIndex: shard, ShardCount: 3,
+		})
+		require.NoError(t, reciteErr)
+		assert.LessOrEqual(t, len(memory.RenderRecitation(got)), 500)
+		for _, item := range got.Items {
+			if item.ID == "arc-full" {
+				assert.True(t, item.Full)
+				parts = append(parts, item)
+			}
+		}
+	}
+	require.Greater(t, len(parts), 1)
+	partText := make([]string, len(parts))
+	for i, part := range parts {
+		partText[i] = part.Excerpt
+	}
+	assert.Equal(t, wholeText, strings.Join(partText, ""))
+	assert.Contains(t, wholeText, "## Source")
+
+	emptyDB := emptyArcDB(t, 0)
+	empty, err := memory.Recite(emptyDB, memory.ReciteConfig{Type: "arc", ShardIndex: 5, ShardCount: 5})
+	require.NoError(t, err)
+	assert.Empty(t, empty.Items)
+	assert.Equal(t, "arcs part 5 of 5 — no arcs in this part\n", memory.RenderRecitation(empty))
+}
+
 func TestRecite_AllShardsAreDeterministicAndComplete(t *testing.T) {
 	db := buildTestDB(t)
 	seen := make(map[string]int)

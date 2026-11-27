@@ -32,6 +32,7 @@ type ReciteItem struct {
 	Tokens   int             `json:"tokens"`
 	Sections []ReciteSection `json:"sections,omitempty"`
 	Fallback bool            `json:"fallback,omitempty"`
+	Full     bool            `json:"full"`
 	Part     int             `json:"part,omitempty"`
 	Parts    int             `json:"parts,omitempty"`
 }
@@ -87,6 +88,9 @@ type ReciteConfig struct {
 	// Sections selects full arc-discipline sections. Empty preserves the
 	// historical body/excerpt behavior.
 	Sections []string
+	// Full selects specific ids for whole-body delivery. Empty preserves the
+	// historical excerpt behavior for every id.
+	Full []string
 	// ShardIndex and ShardCount select one deterministic contiguous shard.
 	ShardIndex int
 	ShardCount int
@@ -96,10 +100,14 @@ type ReciteConfig struct {
 
 // ParseReciteConfig validates the CLI-shaped recitation options in the memory
 // layer so the command remains wiring-only.
-func ParseReciteConfig(noteType string, budget, excerpt int, includeDrafts bool, sectionsValue, shardValue string, maxBytes int) (ReciteConfig, error) {
+func ParseReciteConfig(noteType string, budget, excerpt int, includeDrafts bool, sectionsValue, fullValue, shardValue string, maxBytes int) (ReciteConfig, error) {
 	sections, err := ParseArcSectionSelection(sectionsValue)
 	if err != nil {
 		return ReciteConfig{}, err
+	}
+	full := parseFullIDs(fullValue)
+	if len(full) > 0 && len(sections) > 0 {
+		return ReciteConfig{}, fmt.Errorf("--full cannot be combined with --sections")
 	}
 	shardIndex, shardCount, err := ParseShardSelection(shardValue)
 	if err != nil {
@@ -108,7 +116,30 @@ func ParseReciteConfig(noteType string, budget, excerpt int, includeDrafts bool,
 	if maxBytes < 0 {
 		return ReciteConfig{}, fmt.Errorf("max bytes must not be negative")
 	}
-	return ReciteConfig{Type: noteType, Budget: budget, ExcerptTokens: excerpt, IncludeDrafts: includeDrafts, Sections: sections, ShardIndex: shardIndex, ShardCount: shardCount, MaxBytes: maxBytes}, nil
+	return ReciteConfig{Type: noteType, Budget: budget, ExcerptTokens: excerpt, IncludeDrafts: includeDrafts, Sections: sections, Full: full, ShardIndex: shardIndex, ShardCount: shardCount, MaxBytes: maxBytes}, nil
+}
+
+func parseFullIDs(value string) []string {
+	var out []string
+	seen := make(map[string]bool)
+	for _, raw := range strings.Split(value, ",") {
+		id := strings.TrimSpace(raw)
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	return out
+}
+
+func containsString(values []string, wanted string) bool {
+	for _, value := range values {
+		if value == wanted {
+			return true
+		}
+	}
+	return false
 }
 
 // Recite returns every note of cfg.Type, ordered by id, excerpted and bounded.
@@ -140,6 +171,16 @@ func Recite(db *index.DB, cfg ReciteConfig) (*ReciteResult, error) {
 	}
 	sort.Strings(kept)
 	ids = kept
+	fullIDs := parseFullIDs(strings.Join(cfg.Full, ","))
+	for _, fullID := range fullIDs {
+		if !containsString(ids, fullID) {
+			return nil, fmt.Errorf("unknown arc id in --full: %s", fullID)
+		}
+	}
+	fullSet := make(map[string]bool, len(fullIDs))
+	for _, fullID := range fullIDs {
+		fullSet[fullID] = true
+	}
 	result := &ReciteResult{Type: cfg.Type, Total: len(ids), Items: []ReciteItem{}, Budget: cfg.Budget, MaxBytes: cfg.MaxBytes}
 	if cfg.ShardCount > 0 {
 		if err := ValidateShard(cfg.ShardIndex, cfg.ShardCount); err != nil {
@@ -167,8 +208,8 @@ func Recite(db *index.DB, cfg ReciteConfig) (*ReciteResult, error) {
 			candidates[i] = candidate{id: id}
 			continue
 		}
-		text, sections, fallback := reciteText(note.Body, cfg)
-		item := ReciteItem{ID: id, Title: note.Title, Excerpt: text, Sections: sections, Fallback: fallback}
+		text, sections, fallback := reciteText(note.Body, cfg, fullSet[id])
+		item := ReciteItem{ID: id, Title: note.Title, Excerpt: text, Sections: sections, Fallback: fallback, Full: fullSet[id]}
 		item.Tokens = EstimateTokens(text)
 		candidates[i] = candidate{id: id, item: item, cost: item.Tokens, ok: true}
 	}
@@ -244,7 +285,11 @@ func Recite(db *index.DB, cfg ReciteConfig) (*ReciteResult, error) {
 	return result, nil
 }
 
-func reciteText(body string, cfg ReciteConfig) (string, []ReciteSection, bool) {
+func reciteText(body string, cfg ReciteConfig, full bool) (string, []ReciteSection, bool) {
+	if full {
+		cfg.Sections = []string{allArcSections}
+		return reciteText(body, cfg, false)
+	}
 	if len(cfg.Sections) == 0 {
 		text, _, _ := excerptForBudget(body, cfg.ExcerptTokens, 0, 0, Excerpt)
 		return text, nil, false
@@ -328,7 +373,7 @@ func splitReciteItem(item ReciteItem, cfg ReciteConfig, result *ReciteResult) ([
 }
 
 func reciteSplitUnits(item ReciteItem, cfg ReciteConfig) []string {
-	if len(cfg.Sections) == 1 && cfg.Sections[0] == allArcSections {
+	if item.Full || (len(cfg.Sections) == 1 && cfg.Sections[0] == allArcSections) {
 		return splitAtArcHeadings(item.Excerpt)
 	}
 	if len(item.Sections) > 0 {

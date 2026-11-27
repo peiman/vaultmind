@@ -47,6 +47,7 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.arc.recite.excerpt` | int | `0` | `VAULTMIND_APP_ARC_RECITE_EXCERPT` | Cap each arc at N tokens, preferring its Principle section (the rule it carries) over its opening lines (story setup). 0 = whole bodies |
 | `app.arc.recite.type` | string | `arc` | `VAULTMIND_APP_ARC_RECITE_TYPE` | Note type to recite. Defaults to arc; set to another always-load layer (e.g. principle) to give it the same unranked treatment |
 | `app.arc.recite.sections` | string | `` | `VAULTMIND_APP_ARC_RECITE_SECTIONS` | Full arc sections to deliver, comma-separated: all, trigger, push, principle, deeper-sight. all delivers the whole body and cannot be combined; empty preserves excerpt behavior |
+| `app.arc.recite.full` | string | `` | `VAULTMIND_APP_ARC_RECITE_FULL` | Comma-separated arc ids to deliver as whole bodies; other arcs use the normal excerpt |
 | `app.arc.recite.shard` | string | `` | `VAULTMIND_APP_ARC_RECITE_SHARD` | Deterministic contiguous arc shard in i/n form |
 | `app.arc.recite.max_bytes` | int | `0` | `VAULTMIND_APP_ARC_RECITE_MAX_BYTES` | Maximum rendered text output bytes; 0 = unbounded. Oversized arcs split into ordered parts at section, paragraph, line, or UTF-8 rune boundaries; JSON output keeps overflow_ids for parts that cannot fit |
 | `app.arc.review.vault` | string | `.` | `VAULTMIND_APP_ARC_REVIEW_VAULT` | Path to vault root (its episodes/ folder is reviewed) |
@@ -344,6 +345,8 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.persona.health.min_coverage` | float | `0.9` | `VAULTMIND_APP_PERSONA_HEALTH_MIN_COVERAGE` | Minimum identity coverage fraction |
 | `app.persona.health.min_arc_coverage` | float | `0` | `VAULTMIND_APP_PERSONA_HEALTH_MIN_ARC_COVERAGE` | Minimum total arc-body coverage fraction (WARN only) |
 | `app.persona.health.min_moment_coverage` | float | `0` | `VAULTMIND_APP_PERSONA_HEALTH_MIN_MOMENT_COVERAGE` | Minimum Trigger/Push/Principle moment coverage fraction (WARN only) |
+| `app.persona.health.full` | string | `` | `VAULTMIND_APP_PERSONA_HEALTH_FULL` | Comma-separated arc ids whose key-body coverage is measured; empty falls back to VAULTMIND_ARC_FULL |
+| `app.persona.health.min_key_coverage` | float | `0` | `VAULTMIND_APP_PERSONA_HEALTH_MIN_KEY_COVERAGE` | Minimum listed-arc key coverage fraction (WARN only) |
 | `app.ping.output_message` | string | `Pong` | `VAULTMIND_APP_PING_OUTPUT_MESSAGE` | Default message to display for the ping command |
 | `app.ping.output_color` | string | `white` | `VAULTMIND_APP_PING_OUTPUT_COLOR` | Text color for ping command output (white, red, green, blue, cyan, yellow, magenta) |
 | `app.ping.ui` | bool | `false` | `VAULTMIND_APP_PING_UI` | Enable interactive UI for the ping command |
@@ -441,6 +444,9 @@ app:
 
     # Full arc sections to deliver, comma-separated: all, trigger, push, principle, deeper-sight. all delivers the whole body and cannot be combined; empty preserves excerpt behavior
     recite.sections: ""
+
+    # Comma-separated arc ids to deliver as whole bodies; other arcs use the normal excerpt
+    recite.full: ""
 
     # Deterministic contiguous arc shard in i/n form
     recite.shard: ""
@@ -1429,6 +1435,12 @@ app:
     # Minimum Trigger/Push/Principle moment coverage fraction (WARN only)
     health.min_moment_coverage: 0
 
+    # Comma-separated arc ids whose key-body coverage is measured; empty falls back to VAULTMIND_ARC_FULL
+    health.full: 
+
+    # Minimum listed-arc key coverage fraction (WARN only)
+    health.min_key_coverage: 0
+
   ping:
     # Default message to display for the ping command
     output_message: Hello World!
@@ -1636,6 +1648,9 @@ export VAULTMIND_APP_ARC_RECITE_TYPE=arc
 
 # Full arc sections to deliver, comma-separated: all, trigger, push, principle, deeper-sight. all delivers the whole body and cannot be combined; empty preserves excerpt behavior
 export VAULTMIND_APP_ARC_RECITE_SECTIONS=""
+
+# Comma-separated arc ids to deliver as whole bodies; other arcs use the normal excerpt
+export VAULTMIND_APP_ARC_RECITE_FULL=""
 
 # Deterministic contiguous arc shard in i/n form
 export VAULTMIND_APP_ARC_RECITE_SHARD=""
@@ -2527,6 +2542,12 @@ export VAULTMIND_APP_PERSONA_HEALTH_MIN_ARC_COVERAGE=0
 
 # Minimum Trigger/Push/Principle moment coverage fraction (WARN only)
 export VAULTMIND_APP_PERSONA_HEALTH_MIN_MOMENT_COVERAGE=0
+
+# Comma-separated arc ids whose key-body coverage is measured; empty falls back to VAULTMIND_ARC_FULL
+export VAULTMIND_APP_PERSONA_HEALTH_FULL=
+
+# Minimum listed-arc key coverage fraction (WARN only)
+export VAULTMIND_APP_PERSONA_HEALTH_MIN_KEY_COVERAGE=0
 
 # Default message to display for the ping command
 export VAULTMIND_APP_PING_OUTPUT_MESSAGE=Hello World!

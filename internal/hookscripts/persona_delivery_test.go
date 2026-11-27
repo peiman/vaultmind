@@ -420,6 +420,24 @@ func TestArcsHook_MomentOptionsReachReciteWithFullArgv(t *testing.T) {
 	assert.Equal(t, strings.Join([]string{"arc", "recite", "--vault", filepath.Join(project, "vaultmind-identity"), "--budget", "3000", "--excerpt", "120", "--sections", "trigger,push,principle", "--max-bytes", "8744", "--shard", "4/5", "__CALL__", ""}, "\n"), string(raw))
 }
 
+func TestArcsHook_FullOptionReachesReciteAndSidecar(t *testing.T) {
+	argsFile := filepath.Join(t.TempDir(), "args")
+	stub := "#!/bin/bash\n" +
+		"if [ \"$1\" = arc ] && [ \"$2\" = recite ]; then for arg in \"$@\"; do printf '%s\\n' \"$arg\" >> \"$VAULTMIND_TEST_ARGS_FILE\"; done; printf '%s\\n' __CALL__ >> \"$VAULTMIND_TEST_ARGS_FILE\"; echo FULL-ARC; exit 0; fi\n" +
+		"exit 0\n"
+	project, env := installPersonaHook(t, stub)
+	installArcsHook(t, project)
+	env = append(env, "VAULTMIND_PERSONA_MODE=served", "VAULTMIND_ARC_FULL=arc-alpha, arc-beta", "VAULTMIND_ARC_SHARD=2/3", "VAULTMIND_TEST_ARGS_FILE="+argsFile)
+
+	out := runSessionStartScript(t, project, env, "load-arcs.sh", "s-full-option")
+	assert.Contains(t, out, "FULL-ARC")
+	raw, err := os.ReadFile(argsFile)
+	require.NoError(t, err)
+	assert.Equal(t, strings.Join([]string{"arc", "recite", "--vault", filepath.Join(project, "vaultmind-identity"), "--budget", "3000", "--excerpt", "120", "--full", "arc-alpha, arc-beta", "--max-bytes", "8744", "--shard", "2/3", "__CALL__", ""}, "\n"), string(raw))
+	rec := lastSidecar(t, env)
+	assert.Equal(t, "arc-alpha, arc-beta", rec["arc_full"])
+}
+
 func TestArcsHook_DeliversAnEmptyShardAsSuccess(t *testing.T) {
 	stub := "#!/bin/bash\n" +
 		"if [ \"$1\" = arc ] && [ \"$2\" = recite ]; then echo 'arcs part 4 of 5 — no arcs in this part'; exit 0; fi\n" +

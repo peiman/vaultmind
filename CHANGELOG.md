@@ -9,8 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `arc recite` can deliver full `trigger`, `push`, `principle`, and `deeper-sight` sections with `--sections`; `--sections all` delivers each whole arc body with frontmatter and HTML comments stripped. It can split deterministic arc output with `--shard i/n`, split an arc larger than `--max-bytes` into ordered section/paragraph/line/rune parts, cap each rendered shard while reporting only unfit overflow ids, and the persona hooks accept `VAULTMIND_ARC_SECTIONS` and `VAULTMIND_ARC_SHARD` for multi-hook delivery with shard-specific sidecars.
-- `persona health` reports per-section arc moment coverage and the additive `moment_bytes`, `moment_arrived_bytes`, and `moment_coverage` totals, with the WARN-only `--min-moment-coverage` threshold.
+- `arc recite` can deliver full `trigger`, `push`, `principle`, and `deeper-sight` sections with `--sections`; `--sections all` delivers each whole arc body with frontmatter and HTML comments stripped. It can split an arc larger than `--max-bytes` into ordered section/paragraph/line/rune parts, and `--full id,id` mixes whole bodies for the named arcs with the normal Principle-preferred excerpt for every other arc. Deterministic `--shard i/n` plans use those mixed rendered weights, cap each shard while reporting only unfit overflow ids, and the persona hooks accept `VAULTMIND_ARC_SECTIONS`, `VAULTMIND_ARC_FULL`, and `VAULTMIND_ARC_SHARD` with shard-specific sidecars.
+- `persona health` reports per-section arc moment coverage and the additive `moment_bytes`, `moment_arrived_bytes`, and `moment_coverage` totals. `--full id,id` (or `VAULTMIND_ARC_FULL`) adds key-body `key_bytes`, `key_arrived_bytes`, and `key_coverage` measured only from arcs-hook blocks, with the WARN-only `--min-moment-coverage` and `--min-key-coverage` thresholds.
 
 ### Fixed
 

@@ -22,6 +22,7 @@ func arcReciteConfig(cmd *cobra.Command) (memory.ReciteConfig, error) {
 		getConfigValueWithFlags[int](cmd, "excerpt", config.KeyAppArcReciteExcerpt),
 		retrievalIncludeDrafts(cmd),
 		getConfigValueWithFlags[string](cmd, "sections", config.KeyAppArcReciteSections),
+		getConfigValueWithFlags[string](cmd, "full", config.KeyAppArcReciteFull),
 		getConfigValueWithFlags[string](cmd, "shard", config.KeyAppArcReciteShard),
 		getConfigValueWithFlags[int](cmd, "max-bytes", config.KeyAppArcReciteMaxBytes),
 	)

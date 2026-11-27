@@ -15,7 +15,7 @@ vaultmind note accept <id>
 
 ## `arc recite` moment delivery
 
-`vaultmind arc recite --sections trigger,push,principle` emits the selected full sections in each arc's own order. `--sections all` emits each whole arc body with frontmatter and HTML comments stripped; it cannot be combined with another section name. `--shard i/n` selects a deterministic contiguous byte-balanced shard, and `--max-bytes N` hard-caps each rendered shard: an oversized arc is split into ordered parts at fence-aware section, paragraph, line, or UTF-8 rune boundaries, with `part` and `parts` added to JSON items. Overflow ids name only arcs with a part that cannot fit. The default command remains the excerpted, unsharded behavior.
+`vaultmind arc recite --sections trigger,push,principle` emits the selected full sections in each arc's own order. `--sections all` emits each whole arc body with frontmatter and HTML comments stripped. `--full id,id` mixes whole bodies for the named arcs with the default Principle-preferred excerpt for all others; ids are trimmed, deduplicated, and unknown ids are errors. `--full` cannot be combined with `--sections`. `--shard i/n` selects a deterministic contiguous byte-balanced shard over the mixed rendered weights, and `--max-bytes N` hard-caps each rendered shard: an oversized whole arc is split into ordered parts at fence-aware section, paragraph, line, or UTF-8 rune boundaries, with `part` and `parts` added to JSON items. Overflow ids name only arcs with a part that cannot fit. The default command remains the excerpted, unsharded behavior.
 
 ## `persona health`
 

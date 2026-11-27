@@ -68,6 +68,14 @@
                   "description": "Cap each arc at N tokens, preferring its Principle section (the rule it carries) over its opening lines (story setup). 0 = whole bodies",
                   "type": "integer"
                 },
+                "full": {
+                  "default": "",
+                  "description": "Comma-separated arc ids to deliver as whole bodies; other arcs use the normal excerpt",
+                  "examples": [
+                    "\"\""
+                  ],
+                  "type": "string"
+                },
                 "json": {
                   "default": false,
                   "description": "Output in JSON format",
@@ -2032,6 +2040,11 @@
                   "description": "Identity anchor note id",
                   "type": "string"
                 },
+                "full": {
+                  "default": "",
+                  "description": "Comma-separated arc ids whose key-body coverage is measured; empty falls back to VAULTMIND_ARC_FULL",
+                  "type": "string"
+                },
                 "json": {
                   "default": false,
                   "description": "Output JSON",
@@ -2050,6 +2063,11 @@
                 "min_coverage": {
                   "default": 0.9,
                   "description": "Minimum identity coverage fraction",
+                  "type": "number"
+                },
+                "min_key_coverage": {
+                  "default": 0,
+                  "description": "Minimum listed-arc key coverage fraction (WARN only)",
                   "type": "number"
                 },
                 "min_moment_coverage": {

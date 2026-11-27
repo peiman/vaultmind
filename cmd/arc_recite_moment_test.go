@@ -335,3 +335,60 @@ func TestArcRecite_RejectsUnknownSectionAndInvalidShard(t *testing.T) {
 	_, _, err = runRootCmd(t, "arc", "recite", "--vault", vault, "--shard", "3/2")
 	assert.EqualError(t, err, "shard index must be between 1 and 2")
 }
+
+func TestArcRecite_FullFlagDeliversMixedTextAndJSON(t *testing.T) {
+	isolateXDG(t)
+	vault := momentReciteVault(t)
+
+	out, errOut, err := runRootCmd(t, "arc", "recite", "--vault", vault, "--full", "arc-moment", "--excerpt", "1")
+	require.NoError(t, err, errOut.String())
+	assert.Contains(t, out.String(), "Fixture source.")
+	assert.Contains(t, out.String(), "The request arrived.")
+	assert.NotContains(t, out.String(), "(no trigger/push/principle section — excerpt)")
+
+	out, errOut, err = runRootCmd(t, "arc", "recite", "--vault", vault, "--full", "arc-moment", "--excerpt", "1", "--json")
+	require.NoError(t, err, errOut.String())
+	var env struct {
+		Result struct {
+			Items []struct {
+				ID      string `json:"id"`
+				Excerpt string `json:"excerpt"`
+				Full    bool   `json:"full"`
+			} `json:"items"`
+		} `json:"result"`
+	}
+	require.NoError(t, json.Unmarshal(out.Bytes(), &env))
+	require.NotEmpty(t, env.Result.Items)
+	var fullItem *struct {
+		ID      string `json:"id"`
+		Excerpt string `json:"excerpt"`
+		Full    bool   `json:"full"`
+	}
+	for i := range env.Result.Items {
+		if env.Result.Items[i].ID == "arc-moment" {
+			fullItem = &env.Result.Items[i]
+			break
+		}
+	}
+	require.NotNil(t, fullItem)
+	assert.True(t, fullItem.Full)
+	assert.Contains(t, fullItem.Excerpt, "Fixture source.")
+	sawNonFull := false
+	for _, item := range env.Result.Items {
+		if item.ID == "arc-kept-self" {
+			sawNonFull = true
+			assert.False(t, item.Full)
+		}
+	}
+	assert.True(t, sawNonFull, "the fixture must include an unlisted arc")
+}
+
+func TestArcRecite_FullRejectsUnknownIDAndSections(t *testing.T) {
+	isolateXDG(t)
+	vault := momentReciteVault(t)
+
+	_, _, err := runRootCmd(t, "arc", "recite", "--vault", vault, "--full", "arc-nope")
+	assert.EqualError(t, err, "unknown arc id in --full: arc-nope")
+	_, _, err = runRootCmd(t, "arc", "recite", "--vault", vault, "--full", "arc-moment", "--sections", "all")
+	assert.EqualError(t, err, "--full cannot be combined with --sections")
+}

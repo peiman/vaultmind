@@ -157,6 +157,58 @@ func TestCheck_ArcMomentThresholdWarnsButNeverFails(t *testing.T) {
 	assert.Contains(t, Text(Result{Keepers: []Report{report}}), "arcs moment ")
 }
 
+func TestCheck_ArcKeyCoverageUsesOnlyTheArcsHookAndListedArcs(t *testing.T) {
+	full := Check(Config{Keepers: []Keeper{{
+		Name: "key", Transcripts: fixturePath("transcripts/key-full.jsonl"), Vault: fixturePath("vault-moment"),
+	}}, MinCoverage: 0, Full: "arc-alpha"}).Keepers[0]
+	assert.Equal(t, 1.0, full.Arcs.KeyCoverage)
+	assert.Greater(t, full.Arcs.KeyBytes, 0)
+	assert.Equal(t, full.Arcs.KeyBytes, full.Arcs.KeyArrivedBytes)
+
+	identityOnly := Check(Config{Keepers: []Keeper{{
+		Name: "key", Transcripts: fixturePath("transcripts/key-identity-only.jsonl"), Vault: fixturePath("vault-moment"),
+	}}, MinCoverage: 0, Full: "arc-alpha"}).Keepers[0]
+	assert.Equal(t, 0, identityOnly.Arcs.KeyArrivedBytes)
+	assert.Equal(t, 0.0, identityOnly.Arcs.KeyCoverage)
+
+	split := Check(Config{Keepers: []Keeper{{
+		Name: "key", Transcripts: fixturePath("transcripts/key-split-shards.jsonl"), Vault: fixturePath("vault-moment"),
+	}}, MinCoverage: 0, Full: "arc-alpha"}).Keepers[0]
+	assert.Equal(t, 1.0, split.Arcs.KeyCoverage)
+
+	unlisted := Check(Config{Keepers: []Keeper{{
+		Name: "key", Transcripts: fixturePath("transcripts/moment-other-arc.jsonl"), Vault: fixturePath("vault-moment"),
+	}}, MinCoverage: 0, Full: "arc-alpha"}).Keepers[0]
+	assert.Greater(t, unlisted.Arcs.KeyBytes, 0)
+	assert.Equal(t, 0, unlisted.Arcs.KeyArrivedBytes)
+}
+
+func TestCheck_ArcKeyCoverageUnknownIDAndThresholdWarn(t *testing.T) {
+	unknown := Check(Config{Keepers: []Keeper{{
+		Name: "keeper-name", Transcripts: fixturePath("transcripts/key-full.jsonl"), Vault: fixturePath("vault-moment"),
+	}}, MinCoverage: 0, Full: "arc-missing"}).Keepers[0]
+	assert.Equal(t, "fail", unknown.Status)
+	assert.Contains(t, unknown.Error, "arc-missing")
+
+	warn := Check(Config{Keepers: []Keeper{{
+		Name: "key", Transcripts: fixturePath("transcripts/key-identity-only.jsonl"), Vault: fixturePath("vault-moment"),
+	}}, MinCoverage: 0, Full: "arc-alpha", MinKeyCoverage: 1}).Keepers[0]
+	assert.Equal(t, "warn", warn.Status)
+	assert.Contains(t, warn.Warning, "arc key coverage")
+	assert.Contains(t, Text(Result{Keepers: []Report{warn}}), "arcs key 0%")
+
+	withNoList := Text(Result{Keepers: []Report{{Name: "key", Status: "ok", Arcs: ArcReport{MomentBytes: 1, MomentArrivedBytes: 1, MomentCoverage: 1}}}})
+	assert.NotContains(t, withNoList, "arcs key")
+}
+
+func TestCheck_ArcKeyCoverageFallsBackToEnvironment(t *testing.T) {
+	t.Setenv("VAULTMIND_ARC_FULL", "arc-alpha")
+	report := Check(Config{Keepers: []Keeper{{
+		Name: "key", Transcripts: fixturePath("transcripts/key-full.jsonl"), Vault: fixturePath("vault-moment"),
+	}}, MinCoverage: 0}).Keepers[0]
+	assert.Equal(t, 1.0, report.Arcs.KeyCoverage)
+}
+
 func TestCheck_ArcMomentCoverageReportsEveryMomentSectionInOrder(t *testing.T) {
 	report := Check(Config{Keepers: []Keeper{{
 		Name: "moment", Transcripts: fixturePath("transcripts/moment-partial.jsonl"), Vault: fixturePath("vault-moment"),
@@ -645,6 +697,9 @@ func TestKeepersFromFlagsEnforcesExactlyOneForm(t *testing.T) {
 	assert.Error(t, ValidateMinArcCoverage(-0.1))
 	assert.Error(t, ValidateMinArcCoverage(1.1))
 	assert.NoError(t, ValidateMinArcCoverage(0.9))
+	assert.Error(t, ValidateMinKeyCoverage(-0.1))
+	assert.Error(t, ValidateMinKeyCoverage(1.1))
+	assert.NoError(t, ValidateMinKeyCoverage(0.9))
 }
 
 func TestKeepersFromFlagsDefaultsNameToTranscriptDirectoryBase(t *testing.T) {
