@@ -403,6 +403,24 @@ func TestArcsHook_UnsetMomentOptionsKeepLegacyRetryArgvAndReportOverflow(t *test
 	assert.Equal(t, false, rec["injection_success"])
 }
 
+func TestArcsHook_ShardOnlyUsesOneBoundedReciteCall(t *testing.T) {
+	argsFile := filepath.Join(t.TempDir(), "args")
+	stub := "#!/bin/bash\n" +
+		"if [ \"$1\" = arc ] && [ \"$2\" = recite ]; then for arg in \"$@\"; do printf '%s\\n' \"$arg\" >> \"$VAULTMIND_TEST_ARGS_FILE\"; done; printf '%s\\n' __CALL__ >> \"$VAULTMIND_TEST_ARGS_FILE\"; echo SHARD-ARC; exit 0; fi\n" +
+		"exit 0\n"
+	project, env := installPersonaHook(t, stub)
+	installArcsHook(t, project)
+	env = append(env, "VAULTMIND_PERSONA_MODE=served", "VAULTMIND_ARC_SHARD=2/3", "VAULTMIND_TEST_ARGS_FILE="+argsFile)
+
+	out := runSessionStartScriptFrom(t, project, env, "load-arcs.sh", "s-shard-only", "startup")
+	assert.Contains(t, out, "SHARD-ARC")
+	raw, err := os.ReadFile(argsFile)
+	require.NoError(t, err)
+	assert.Equal(t, strings.Join([]string{"arc", "recite", "--vault", filepath.Join(project, "vaultmind-identity"), "--budget", "3000", "--excerpt", "120", "--max-bytes", "8744", "--shard", "2/3", "__CALL__", ""}, "\n"), string(raw))
+	rec := lastSidecar(t, env)
+	assert.Equal(t, "2/3", rec["arc_shard"])
+}
+
 func TestArcsHook_MomentOptionsReachReciteWithFullArgv(t *testing.T) {
 	argsFile := filepath.Join(t.TempDir(), "args")
 	stub := "#!/bin/bash\n" +

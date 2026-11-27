@@ -500,7 +500,11 @@ with five shards in `.claude/settings.json`:
 `arcs_hook_wired` detects any `load-arcs.sh` entry, so the identity hook leaves
 the arcs out once the arcs hook is live; the shared marker is idempotent across
 the shards. Each shard logs its section selection and shard in a distinct
-sidecar. Arcs without any requested section use the normal excerpt fallback.
+sidecar. Arcs without any requested section use the normal excerpt fallback;
+when only `VAULTMIND_ARC_SHARD` is set, the hook still passes `--max-bytes` and
+the configured excerpt in one bounded recite call. Overflow text names the
+exact unsplit arc or split part (`<id> part k of m`), and a part is either
+delivered or named, never both.
 For direct use, the equivalent command flags are
 `--sections trigger,push,principle --shard i/n --max-bytes N`. Use
 `--sections all` to deliver each whole arc body with frontmatter and HTML comments

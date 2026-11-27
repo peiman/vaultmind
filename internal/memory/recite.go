@@ -242,13 +242,9 @@ func Recite(db *index.DB, cfg ReciteConfig) (*ReciteResult, error) {
 	for i, unit := range units {
 		weights[i] = len(renderReciteItem(unit))
 	}
-	indexes := indexes(0, len(units))
-	if result.Shard != nil {
-		shards, err := PlanArcShardsWithinCap(weights, result.Shard.Count, reciteUnitCapacity(result))
-		if err != nil {
-			return nil, err
-		}
-		indexes = shards[result.Shard.Index-1]
+	indexes, err := reciteUnitIndexes(result, units, weights)
+	if err != nil {
+		return nil, err
 	}
 
 	// Keep all parts of one arc together for budget admission and name an
@@ -283,6 +279,32 @@ func Recite(db *index.DB, cfg ReciteConfig) (*ReciteResult, error) {
 	}
 	trimToMaxBytes(result)
 	return result, nil
+}
+
+func reciteUnitIndexes(result *ReciteResult, units []ReciteItem, weights []int) ([]int, error) {
+	if result.Shard == nil {
+		return indexes(0, len(units)), nil
+	}
+	shards, err := PlanArcShardsWithinCap(weights, result.Shard.Count, reciteUnitCapacity(result))
+	if err != nil {
+		return nil, err
+	}
+	assigned := make(map[int]bool, len(units))
+	for _, shardIndexes := range shards {
+		for _, unitIndex := range shardIndexes {
+			assigned[unitIndex] = true
+		}
+	}
+	// A part that fits in no shard is named once, on the final shard,
+	// rather than being stuffed past its capacity or silently dropped.
+	if result.Shard.Index == result.Shard.Count {
+		for unitIndex := range units {
+			if !assigned[unitIndex] {
+				appendOverflowID(result, units[unitIndex])
+			}
+		}
+	}
+	return shards[result.Shard.Index-1], nil
 }
 
 func reciteText(body string, cfg ReciteConfig, full bool) (string, []ReciteSection, bool) {
@@ -703,20 +725,27 @@ func trimToMaxBytes(result *ReciteResult) {
 		return
 	}
 	for len(renderRecitation(result, false)) > result.MaxBytes && len(result.Items) > 0 {
-		lastID := result.Items[len(result.Items)-1].ID
-		removed := false
-		for len(result.Items) > 0 && result.Items[len(result.Items)-1].ID == lastID {
-			last := len(result.Items) - 1
-			result.Tokens -= result.Items[last].Tokens
-			result.Items = result.Items[:last]
-			removed = true
-		}
-		if removed {
-			result.OverflowIDs = append(result.OverflowIDs, lastID)
-			result.Overflow++
-		}
+		last := len(result.Items) - 1
+		item := result.Items[last]
+		result.Tokens -= item.Tokens
+		result.Items = result.Items[:last]
+		appendOverflowID(result, item)
 	}
 	sort.Strings(result.OverflowIDs)
+}
+
+func appendOverflowID(result *ReciteResult, item ReciteItem) {
+	label := item.ID
+	if item.Parts > 1 {
+		label = fmt.Sprintf("%s part %d of %d", item.ID, item.Part, item.Parts)
+	}
+	for _, existing := range result.OverflowIDs {
+		if existing == label {
+			return
+		}
+	}
+	result.OverflowIDs = append(result.OverflowIDs, label)
+	result.Overflow++
 }
 
 // noteIDsOfType lists every note id of a type, including notes with no body.

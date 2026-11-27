@@ -119,31 +119,65 @@ func TestParseArcSectionSelection_AllCannotBeCombined(t *testing.T) {
 }
 
 func TestPlanArcShards_IsDeterministicByteBalancedAndComplete(t *testing.T) {
-	weights := []int{40, 80, 45, 120, 55, 60}
-	first, err := memory.PlanArcShards(weights, 3)
-	require.NoError(t, err)
-	second, err := memory.PlanArcShards(weights, 3)
-	require.NoError(t, err)
-	assert.Equal(t, first, second)
-	assert.Equal(t, [][]int{{0, 1}, {2, 3}, {4, 5}}, first)
+	for _, test := range []struct {
+		name    string
+		weights []int
+		count   int
+		want    [][]int
+	}{
+		{name: "balanced", weights: []int{40, 80, 45, 120, 55, 60}, count: 3, want: [][]int{{0, 1}, {2, 3}, {4, 5}}},
+		{name: "alternating", weights: []int{9, 1, 9, 1, 9}, count: 3, want: [][]int{{0, 1}, {2}, {3, 4}}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			first, err := memory.PlanArcShards(test.weights, test.count)
+			require.NoError(t, err)
+			second, err := memory.PlanArcShards(test.weights, test.count)
+			require.NoError(t, err)
+			assert.Equal(t, first, second)
+			assert.Equal(t, test.want, first)
 
-	seen := make([]int, 0, len(weights))
-	for _, shard := range first {
-		seen = append(seen, shard...)
+			seen := make([]int, 0, len(test.weights))
+			for _, shard := range first {
+				seen = append(seen, shard...)
+			}
+			assert.Equal(t, makeRange(len(test.weights)), seen)
+			maxShardWeight := 0
+			for _, shard := range first {
+				weight := 0
+				for _, index := range shard {
+					weight += test.weights[index]
+				}
+				if weight > maxShardWeight {
+					maxShardWeight = weight
+				}
+			}
+			assert.Equal(t, optimalContiguousMaxWeight(test.weights, test.count), maxShardWeight)
+		})
 	}
-	assert.Equal(t, []int{0, 1, 2, 3, 4, 5}, seen)
-	maxShardWeight := 0
-	for _, shard := range first {
+}
+
+func optimalContiguousMaxWeight(weights []int, count int) int {
+	best := int(^uint(0) >> 1)
+	var visit func(start, shardsLeft, currentMax int)
+	visit = func(start, shardsLeft, currentMax int) {
+		if shardsLeft == 1 {
+			weight := 0
+			for _, value := range weights[start:] {
+				weight += value
+			}
+			if candidate := max(currentMax, weight); candidate < best {
+				best = candidate
+			}
+			return
+		}
 		weight := 0
-		for _, index := range shard {
-			weight += weights[index]
-		}
-		if weight > maxShardWeight {
-			maxShardWeight = weight
+		for cut := start; cut <= len(weights)-shardsLeft; cut++ {
+			weight += weights[cut]
+			visit(cut+1, shardsLeft-1, max(currentMax, weight))
 		}
 	}
-	assert.LessOrEqual(t, maxShardWeight, 460/3+120,
-		"the largest shard should be no more than its byte target plus one largest arc")
+	visit(0, count, 0)
+	return best
 }
 
 func TestPlanArcShards_AllArcCountsFitFiveShards(t *testing.T) {
@@ -256,9 +290,92 @@ func TestRecite_FullMixedShardPlanIsDeterministicAndComplete(t *testing.T) {
 func TestRecite_FullUnknownIDIsRejectedAfterDraftFiltering(t *testing.T) {
 	db := emptyArcDB(t, 0)
 	insertArcNote(t, db, "arc-known", "Known", "Known body.")
+	_, err := db.Exec(`INSERT INTO notes (id, path, title, type, status, hash, mtime, body_text) VALUES (?, ?, ?, 'arc', 'draft', ?, 0, ?)`, "arc-draft", "arc-draft.md", "Draft", "arc-draft", "Draft body.")
+	require.NoError(t, err)
 
-	_, err := memory.Recite(db, memory.ReciteConfig{Type: "arc", Full: []string{"arc-missing"}})
+	_, err = memory.Recite(db, memory.ReciteConfig{Type: "arc", Full: []string{"arc-draft"}})
+	assert.EqualError(t, err, "unknown arc id in --full: arc-draft")
+
+	got, err := memory.Recite(db, memory.ReciteConfig{Type: "arc", Full: []string{"arc-draft"}, IncludeDrafts: true})
+	require.NoError(t, err)
+	var draft *memory.ReciteItem
+	for i := range got.Items {
+		if got.Items[i].ID == "arc-draft" {
+			draft = &got.Items[i]
+		}
+	}
+	require.NotNil(t, draft)
+	assert.True(t, draft.Full)
+
+	_, err = memory.Recite(db, memory.ReciteConfig{Type: "arc", Full: []string{"arc-missing"}})
 	assert.EqualError(t, err, "unknown arc id in --full: arc-missing")
+}
+
+func TestRecite_SplitShardPartsAreDeliveredOrNamedOnce(t *testing.T) {
+	db := emptyArcDB(t, 0)
+	body := "## Trigger\n\n" + strings.Repeat("trigger words. ", 12) +
+		"\n## Push\n\n" + strings.Repeat("push words. ", 12) +
+		"\n## Principle\n\n" + strings.Repeat("principle words. ", 18) + "λ rule."
+	insertArcNote(t, db, "arc-split", "Split", body)
+
+	whole, err := memory.Recite(db, memory.ReciteConfig{Type: "arc", Sections: []string{"all"}})
+	require.NoError(t, err)
+	require.Len(t, whole.Items, 1)
+	referenceText := make(map[int]string)
+	for shard := 1; shard <= 5; shard++ {
+		reference, referenceErr := memory.Recite(db, memory.ReciteConfig{
+			Type: "arc", Sections: []string{"all"}, MaxBytes: 420,
+			ShardIndex: shard, ShardCount: 5,
+		})
+		require.NoError(t, referenceErr)
+		for _, item := range reference.Items {
+			referenceText[item.Part] = item.Excerpt
+		}
+	}
+	var referenceParts []string
+	for part := 1; part <= 5; part++ {
+		referenceParts = append(referenceParts, referenceText[part])
+	}
+	assert.Equal(t, whole.Items[0].Excerpt, strings.Join(referenceParts, ""), "the complete part set must preserve the whole body")
+
+	seen := make(map[string]int)
+	partText := make(map[int]string)
+	parts := 0
+	for shard := 1; shard <= 4; shard++ {
+		got, reciteErr := memory.Recite(db, memory.ReciteConfig{
+			Type: "arc", Sections: []string{"all"}, MaxBytes: 420,
+			ShardIndex: shard, ShardCount: 4,
+		})
+		require.NoError(t, reciteErr)
+		assert.LessOrEqual(t, len(memory.RenderRecitation(got)), 420, "shard %d", shard)
+		for _, item := range got.Items {
+			require.Equal(t, "arc-split", item.ID)
+			require.Greater(t, item.Parts, 1)
+			parts = item.Parts
+			key := fmt.Sprintf("%s part %d of %d", item.ID, item.Part, item.Parts)
+			seen[key]++
+			partText[item.Part] = item.Excerpt
+			assert.Equal(t, referenceText[item.Part], item.Excerpt, "part %d must not be truncated", item.Part)
+		}
+		for _, id := range got.OverflowIDs {
+			seen[id]++
+		}
+	}
+	require.Equal(t, 5, parts)
+	for part := 1; part <= parts; part++ {
+		key := fmt.Sprintf("arc-split part %d of %d", part, parts)
+		assert.Equal(t, 1, seen[key], key)
+	}
+	assert.Len(t, seen, parts)
+	var delivered, corresponding []string
+	for part := 1; part <= parts; part++ {
+		if text, ok := partText[part]; ok {
+			delivered = append(delivered, text)
+			corresponding = append(corresponding, referenceText[part])
+		}
+	}
+	assert.Equal(t, strings.Join(corresponding, ""), strings.Join(delivered, ""))
+	assert.NotEqual(t, whole.Items[0].Excerpt, strings.Join(delivered, ""), "the overflow report must account for the missing pieces")
 }
 
 func TestRecite_FullListedArcSplitsLikeAllAndHardCapsMixedShards(t *testing.T) {
@@ -281,6 +398,7 @@ func TestRecite_FullListedArcSplitsLikeAllAndHardCapsMixedShards(t *testing.T) {
 	}
 	require.NotEmpty(t, wholeText)
 	var parts []memory.ReciteItem
+	var overflow []string
 	for shard := 1; shard <= 3; shard++ {
 		got, reciteErr := memory.Recite(db, memory.ReciteConfig{
 			Type: "arc", Full: []string{"arc-full"}, ExcerptTokens: 3,
@@ -294,13 +412,17 @@ func TestRecite_FullListedArcSplitsLikeAllAndHardCapsMixedShards(t *testing.T) {
 				parts = append(parts, item)
 			}
 		}
+		overflow = append(overflow, got.OverflowIDs...)
 	}
-	require.Greater(t, len(parts), 1)
+	require.Len(t, parts, 2)
 	partText := make([]string, len(parts))
 	for i, part := range parts {
 		partText[i] = part.Excerpt
 	}
-	assert.Equal(t, wholeText, strings.Join(partText, ""))
+	sourceStart := strings.Index(wholeText, "## Source")
+	require.NotEqual(t, -1, sourceStart)
+	assert.Equal(t, wholeText[:sourceStart], strings.Join(partText, ""))
+	assert.Equal(t, []string{"arc-full part 3 of 3"}, overflow)
 	assert.Contains(t, wholeText, "## Source")
 
 	emptyDB := emptyArcDB(t, 0)
@@ -526,19 +648,38 @@ func insertArcNote(t *testing.T, db *index.DB, id, title, body string) {
 }
 
 func TestRenderRecitation_SectionsAndShardHeaderStayWithinMaxBytes(t *testing.T) {
-	r := &memory.ReciteResult{
-		Type: "arc", Total: 1, Budget: 0, MaxBytes: 300,
+	header := &memory.ReciteResult{
+		Type: "arc", Total: 1, MaxBytes: 300,
 		Shard: &memory.ReciteShard{Index: 2, Count: 3},
 		Items: []memory.ReciteItem{{
-			ID: "arc-one", Title: "One", Excerpt: "## Trigger\n\nA trigger.\n\n## Principle\n\nA rule.",
-			Sections: []memory.ReciteSection{{Name: "trigger", Heading: "## Trigger", Text: "A trigger."}, {Name: "principle", Heading: "## Principle", Text: "A rule."}},
+			ID: "arc-header", Title: "Header", Excerpt: "## Trigger\n\nA trigger.\n\n## Principle\n\nA rule.",
 		}},
 	}
-	out := memory.RenderRecitation(r)
-	assert.LessOrEqual(t, len(out), 300)
-	assert.Contains(t, out, "arcs part 2 of 3")
-	assert.Contains(t, out, "## Trigger")
-	assert.Contains(t, out, "## Principle")
+	headerText := memory.RenderRecitation(header)
+	assert.LessOrEqual(t, len(headerText), 300)
+	assert.Contains(t, headerText, "arcs part 2 of 3")
+	assert.Contains(t, headerText, "## Trigger")
+	assert.Contains(t, headerText, "## Principle")
+
+	db := emptyArcDB(t, 0)
+	insertArcNote(t, db, "arc-one", "One", "## Trigger\n\n"+strings.Repeat("A trigger. ", 30)+"\n## Principle\n\nA rule.")
+	unbounded, err := memory.Recite(db, memory.ReciteConfig{Type: "arc", Sections: []string{"trigger", "principle"}})
+	require.NoError(t, err)
+	maxBytes := 420
+	require.Greater(t, len(memory.RenderRecitation(unbounded)), maxBytes, "fixture must require trimming")
+	bounded, err := memory.Recite(db, memory.ReciteConfig{Type: "arc", Sections: []string{"trigger", "principle"}, MaxBytes: maxBytes})
+	require.NoError(t, err)
+	out := memory.RenderRecitation(bounded)
+	assert.LessOrEqual(t, len(out), maxBytes)
+	assert.Contains(t, out, "YOUR ARCS")
+	require.Len(t, bounded.Items, 1)
+	assert.Equal(t, "arc-one", bounded.Items[0].ID)
+	assert.Equal(t, 1, bounded.Items[0].Part)
+	assert.Equal(t, 3, bounded.Items[0].Parts)
+	assert.Equal(t, "## Trigger\n\n"+strings.Repeat("A trigger. ", 30)[:len(bounded.Items[0].Excerpt)-len("## Trigger\n\n")], bounded.Items[0].Excerpt)
+	assert.Equal(t, []string{"arc-one part 2 of 3", "arc-one part 3 of 3"}, bounded.OverflowIDs)
+	assert.Contains(t, out, "arc-one part 2 of 3")
+	assert.Contains(t, out, "arc-one part 3 of 3")
 }
 
 func TestRenderRecitation_EmptyShardIsAValidShortLine(t *testing.T) {

@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Arc recitation now supports empty deterministic shards, keeps the legacy hook retry sequence when moment options are unset, attributes moment coverage to matching arc-hook blocks, ignores fenced section headings, splits oversized bounded arcs without losing their text, and enforces `--max-bytes` on overflow reports.
+- Arc recitation now supports empty deterministic shards, keeps the legacy hook retry sequence when moment options are unset, routes shard-only hooks through one bounded call, attributes moment coverage to matching arc-hook blocks, ignores fenced section headings, splits oversized bounded arcs without losing their text, names exact split parts in text and JSON overflow reports, and enforces `--max-bytes` on overflow reports.
 
 ## [0.10.32] - 2026-11-27
 

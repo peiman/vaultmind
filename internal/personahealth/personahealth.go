@@ -459,10 +459,11 @@ func readTranscriptFile(path string) (transcriptEvidence, error) {
 		content := attachmentContent(record.Attachment)
 		if record.Attachment != nil && record.Attachment.Type == "hook_success" && record.Attachment.HookEvent == "SessionStart" && content != "" {
 			result.Texts = append(result.Texts, content)
-			for id, blocks := range arcBlocks(content) {
+			hookBlocks := arcHookBlocks(content)
+			for id, blocks := range hookBlocks {
 				result.ArcBlocks[id] = append(result.ArcBlocks[id], blocks...)
 			}
-			for id, blocks := range arcHookBlocks(content) {
+			for id, blocks := range hookBlocks {
 				result.KeyArcBlocks[id] = append(result.KeyArcBlocks[id], blocks...)
 			}
 		}

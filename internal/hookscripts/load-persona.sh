@@ -272,16 +272,17 @@ if [ "$PERSONA_PART" = arcs ]; then
         local args=(arc recite --vault "$VAULT_PATH" --budget "${VAULTMIND_ARC_BUDGET:-3000}" --excerpt "$excerpt")
         if [ -n "$ARC_SECTIONS" ]; then
           args+=(--sections "$ARC_SECTIONS" --max-bytes "$ARC_MAX_BYTES")
-        fi
-        if [ -n "$ARC_FULL" ]; then
+        elif [ -n "$ARC_FULL" ]; then
           args+=(--full "$ARC_FULL" --max-bytes "$ARC_MAX_BYTES")
+        elif [ -n "$ARC_SHARD" ]; then
+          args+=(--max-bytes "$ARC_MAX_BYTES")
         fi
         if [ -n "$ARC_SHARD" ]; then args+=(--shard "$ARC_SHARD"); fi
         VAULTMIND_USER_SESSION_ID="$HOOK_SESSION_ID" VAULTMIND_CALLER=vaultmind-persona-hook "$VAULTMIND" "${args[@]}" 2>"$ARC_ERR_FILE"
       }
       # Any named selection, including `all`, is one direct bounded recite call:
       # do not step the excerpt down, and let --max-bytes account for overflow.
-      if [ -n "$ARC_SECTIONS" ] || [ -n "$ARC_FULL" ]; then
+      if [ -n "$ARC_SECTIONS" ] || [ -n "$ARC_SHARD" ] || [ -n "$ARC_FULL" ]; then
         ARC_EXCERPT="${VAULTMIND_ARC_EXCERPT:-120}"
         ARCS=$(recite_arcs "$ARC_EXCERPT")
       else

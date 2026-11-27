@@ -168,6 +168,8 @@ func TestCheck_ArcKeyCoverageUsesOnlyTheArcsHookAndListedArcs(t *testing.T) {
 	identityOnly := Check(Config{Keepers: []Keeper{{
 		Name: "key", Transcripts: fixturePath("transcripts/key-identity-only.jsonl"), Vault: fixturePath("vault-moment"),
 	}}, MinCoverage: 0, Full: "arc-alpha"}).Keepers[0]
+	assert.Equal(t, 0, identityOnly.Arcs.MomentArrivedBytes)
+	assert.Equal(t, 0.0, identityOnly.Arcs.MomentCoverage)
 	assert.Equal(t, 0, identityOnly.Arcs.KeyArrivedBytes)
 	assert.Equal(t, 0.0, identityOnly.Arcs.KeyCoverage)
 
@@ -181,6 +183,21 @@ func TestCheck_ArcKeyCoverageUsesOnlyTheArcsHookAndListedArcs(t *testing.T) {
 	}}, MinCoverage: 0, Full: "arc-alpha"}).Keepers[0]
 	assert.Greater(t, unlisted.Arcs.KeyBytes, 0)
 	assert.Equal(t, 0, unlisted.Arcs.KeyArrivedBytes)
+}
+
+func TestCheck_ArcPinnedSessionStartCannotAnchorMomentOrKey(t *testing.T) {
+	report := Check(Config{Keepers: []Keeper{{
+		Name: "pinned", Transcripts: fixturePath("transcripts/key-pinned-only.jsonl"), Vault: fixturePath("vault-moment"),
+	}}, MinCoverage: 0, Full: "arc-alpha"}).Keepers[0]
+
+	assert.Equal(t, 0, report.Arcs.MomentArrivedBytes)
+	assert.Equal(t, 0.0, report.Arcs.MomentCoverage)
+	assert.Equal(t, 0, report.Arcs.KeyArrivedBytes)
+	assert.Equal(t, 0.0, report.Arcs.KeyCoverage)
+	// Body coverage is deliberately whole-text and non-anchored. A pinned
+	// record containing an exact body sentence therefore remains body evidence;
+	// only block-based moment/key evidence is gated to the arcs hook.
+	assert.Greater(t, report.Arcs.ArrivedBytes, 0)
 }
 
 func TestCheck_ArcKeyCoverageUnknownIDAndThresholdWarn(t *testing.T) {

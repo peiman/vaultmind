@@ -93,20 +93,25 @@ func PlanArcShardsWithinCap(weights []int, count, capacity int) ([][]int, error)
 	}
 	shards := make([][]int, count)
 	shard := 0
-	used := 0
+	used := make([]int, count)
 	for i, weight := range weights {
 		if weight < 0 {
 			return nil, fmt.Errorf("arc weight must not be negative")
 		}
+		// A unit that cannot fit in an empty shard is accounted for by the
+		// caller as overflow. Falling back to the unbounded planner would
+		// silently stuff it into the last shard and violate the hard cap.
 		if weight > capacity {
-			return PlanArcShards(weights, count)
+			continue
 		}
-		if used > 0 && used+weight > capacity && shard < count-1 {
+		for shard < count && used[shard]+weight > capacity {
 			shard++
-			used = 0
+		}
+		if shard == count {
+			continue
 		}
 		shards[shard] = append(shards[shard], i)
-		used += weight
+		used[shard] += weight
 	}
 	return shards, nil
 }
