@@ -35,6 +35,16 @@ func TestArcsHook_WiredRightAfterThePersonaLoader(t *testing.T) {
 	assert.Contains(t, stanza, "load-arcs.sh")
 }
 
+func TestArcsHook_DefaultInstallStillEmitsExactlyOneArcsEntry(t *testing.T) {
+	count := 0
+	for _, ch := range canonicalHooks("") {
+		if ch.Event == "SessionStart" && ch.Script == hookArcsScript {
+			count++
+		}
+	}
+	assert.Equal(t, 1, count, "default hooks install remains one unspecialized arcs hook")
+}
+
 func TestArcsHook_InThePersonaAndFullProfilesOnly(t *testing.T) {
 	assert.Contains(t, ScriptsForProfile(ProfilePersona), hookArcsScript)
 	assert.Contains(t, ScriptsForProfile(ProfileFull), hookArcsScript)

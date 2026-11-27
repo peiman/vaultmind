@@ -9,7 +9,9 @@ var PersonaHealthMetadata = config.CommandMetadata{
 	Long: `Measure the note text that arrived after the newest transcript
 compaction boundary. Identity and arc-body coverage are measured in normalized
 body bytes, excluding frontmatter. Principle counts remain a separate signal;
-an optional arc-body threshold produces WARN only. A failed keeper makes the
+arc moment coverage measures present Trigger, Push, and Principle sections, and
+--full measures the whole-body key coverage of the listed arcs from the arcs hook
+alone. Optional arc-body, moment, or key thresholds produce WARN only. A failed keeper makes the
 command exit non-zero.
 
 With --keepers, pass a YAML list of {name, transcripts, vault, anchor?} entries.
@@ -23,14 +25,17 @@ time is used. A subagent transcript in the same project directory could be
 selected, so point --transcripts at the keeper's own project directory.`,
 	ConfigPrefix: "app.persona.health",
 	FlagOverrides: map[string]string{
-		"app.persona.health.name":             "name",
-		"app.persona.health.transcripts":      "transcripts",
-		"app.persona.health.vault":            "vault",
-		"app.persona.health.anchor":           "anchor",
-		"app.persona.health.keepers":          "keepers",
-		"app.persona.health.json":             "json",
-		"app.persona.health.min_coverage":     "min-coverage",
-		"app.persona.health.min_arc_coverage": "min-arc-coverage",
+		"app.persona.health.name":                "name",
+		"app.persona.health.transcripts":         "transcripts",
+		"app.persona.health.vault":               "vault",
+		"app.persona.health.anchor":              "anchor",
+		"app.persona.health.keepers":             "keepers",
+		"app.persona.health.json":                "json",
+		"app.persona.health.min_coverage":        "min-coverage",
+		"app.persona.health.min_arc_coverage":    "min-arc-coverage",
+		"app.persona.health.min_moment_coverage": "min-moment-coverage",
+		"app.persona.health.full":                "full",
+		"app.persona.health.min_key_coverage":    "min-key-coverage",
 	},
 }
 
@@ -45,6 +50,9 @@ func PersonaHealthOptions() []config.ConfigOption {
 		{Key: "app.persona.health.json", DefaultValue: false, Description: "Output JSON", Type: "bool"},
 		{Key: "app.persona.health.min_coverage", DefaultValue: 0.9, Description: "Minimum identity coverage fraction", Type: "float"},
 		{Key: "app.persona.health.min_arc_coverage", DefaultValue: 0.0, Description: "Minimum total arc-body coverage fraction (WARN only)", Type: "float"},
+		{Key: "app.persona.health.min_moment_coverage", DefaultValue: 0.0, Description: "Minimum Trigger/Push/Principle moment coverage fraction (WARN only)", Type: "float"},
+		{Key: "app.persona.health.full", DefaultValue: "", Description: "Comma-separated arc ids whose key-body coverage is measured; empty falls back to VAULTMIND_ARC_FULL", Type: "string"},
+		{Key: "app.persona.health.min_key_coverage", DefaultValue: 0.0, Description: "Minimum listed-arc key coverage fraction (WARN only)", Type: "float"},
 	}
 }
 

@@ -476,6 +476,66 @@ See `.claude/scripts/load-persona.sh` in this repo for the reference implementat
 3. Capture stderr; surface build + runtime errors instead of producing empty persona silently
 4. Emit the `IDENTITY CONTEXT:` block on stdout so it becomes a system-reminder
 
+### Delivering full arc moments across several SessionStart hooks
+
+The default hook remains the short Principle-preferred excerpt. To deliver each
+arc's Trigger, Push, and Principle in full after compaction, install several
+copies of the arcs hook and give each copy a deterministic shard. For example,
+with five shards in `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {"matcher":"startup|clear|compact","hooks":[{"type":"command","command":"VAULTMIND_ARC_SECTIONS=trigger,push,principle VAULTMIND_ARC_SHARD=1/5 bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/load-arcs.sh"}]},
+      {"matcher":"startup|clear|compact","hooks":[{"type":"command","command":"VAULTMIND_ARC_SECTIONS=trigger,push,principle VAULTMIND_ARC_SHARD=2/5 bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/load-arcs.sh"}]},
+      {"matcher":"startup|clear|compact","hooks":[{"type":"command","command":"VAULTMIND_ARC_SECTIONS=trigger,push,principle VAULTMIND_ARC_SHARD=3/5 bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/load-arcs.sh"}]},
+      {"matcher":"startup|clear|compact","hooks":[{"type":"command","command":"VAULTMIND_ARC_SECTIONS=trigger,push,principle VAULTMIND_ARC_SHARD=4/5 bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/load-arcs.sh"}]},
+      {"matcher":"startup|clear|compact","hooks":[{"type":"command","command":"VAULTMIND_ARC_SECTIONS=trigger,push,principle VAULTMIND_ARC_SHARD=5/5 bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/load-arcs.sh"}]}
+    ]
+  }
+}
+```
+
+`arcs_hook_wired` detects any `load-arcs.sh` entry, so the identity hook leaves
+the arcs out once the arcs hook is live; the shared marker is idempotent across
+the shards. Each shard logs its section selection and shard in a distinct
+sidecar. Arcs without any requested section use the normal excerpt fallback;
+when only `VAULTMIND_ARC_SHARD` is set, the hook still passes `--max-bytes` and
+the configured excerpt in one bounded recite call. Overflow text names the
+exact unsplit arc or split part (`<id> part k of m`), and a part is either
+delivered or named, never both.
+For direct use, the equivalent command flags are
+`--sections trigger,push,principle --shard i/n --max-bytes N`. Use
+`--sections all` to deliver each whole arc body with frontmatter and HTML comments
+stripped; `all` cannot be combined with another section name. When a selected arc
+exceeds the byte cap, recite emits ordered part blocks split at fence-aware
+section, paragraph, line, or UTF-8 rune boundaries; JSON includes `part` and
+`parts`. The hook passes
+`VAULTMIND_ARC_SECTIONS=all` through as `--sections all` and records `arc_sections=all`.
+
+For a key-arcs trial, set `VAULTMIND_ARC_FULL=id,id` or pass `--full id,id` to
+`arc recite`. The named arcs arrive as whole bodies, while every other arc keeps
+the normal Principle-preferred excerpt; the hook passes `--excerpt`, `--max-bytes`,
+and any shard unchanged. `--full` and `--sections` are mutually exclusive. The
+hook sidecar records `arc_full`, and an unknown id names the failing arc.
+
+### Measuring arc moment delivery
+
+`vaultmind persona health` reports the existing arc-body coverage plus
+`arcs moment N%`. JSON adds `arcs.items[].sections` with bytes and arrived bytes
+for each present Trigger, Push, or Principle, and `moment_bytes`,
+`moment_arrived_bytes`, and `moment_coverage` totals. Use
+`--min-moment-coverage 0.9` for a WARN-only threshold; arcs with none of those
+sections contribute nothing to the moment denominator.
+
+Use `vaultmind persona health --full id,id` (or leave the flag empty and set
+`VAULTMIND_ARC_FULL`) to measure the listed key arcs. JSON adds `key_bytes`,
+`key_arrived_bytes`, and `key_coverage`; the measurement uses only `── <arc id> —`
+blocks from the arcs hook, joins split parts, and does not count identity-hook
+text. Text adds `arcs key N%` only when a list is active. `--min-key-coverage`
+is a WARN-only threshold, defaulting to 0.
+
 ### Non-Claude-Code agents
 
 Any agent that can run shell commands can use VaultMind. The pattern:

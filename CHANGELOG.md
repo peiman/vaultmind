@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `arc recite` can deliver full `trigger`, `push`, `principle`, and `deeper-sight` sections with `--sections`; `--sections all` delivers each whole arc body with frontmatter and HTML comments stripped. It can split an arc larger than `--max-bytes` into ordered section/paragraph/line/rune parts, and `--full id,id` mixes whole bodies for the named arcs with the normal Principle-preferred excerpt for every other arc. Deterministic `--shard i/n` plans use those mixed rendered weights, cap each shard while reporting only unfit overflow ids, and the persona hooks accept `VAULTMIND_ARC_SECTIONS`, `VAULTMIND_ARC_FULL`, and `VAULTMIND_ARC_SHARD` with shard-specific sidecars.
+- `persona health` reports per-section arc moment coverage and the additive `moment_bytes`, `moment_arrived_bytes`, and `moment_coverage` totals. `--full id,id` (or `VAULTMIND_ARC_FULL`) adds key-body `key_bytes`, `key_arrived_bytes`, and `key_coverage` measured only from arcs-hook blocks, with the WARN-only `--min-moment-coverage` and `--min-key-coverage` thresholds.
+
+### Fixed
+
+- Arc recitation now supports empty deterministic shards, keeps the legacy hook retry sequence when moment options are unset, routes shard-only hooks through one bounded call, attributes moment coverage to matching arc-hook blocks, ignores fenced section headings, splits oversized bounded arcs without losing their text, names exact split parts in text and JSON overflow reports, and enforces `--max-bytes` on overflow reports.
+
 ## [0.10.32] - 2026-11-27
 
 You can now check whether each keeper's identity actually reached its context window. `vaultmind persona health` reads the keeper's transcript and reports how much of the identity note and each arc arrived after the last compaction, and whether its memory file was loaded or cut.

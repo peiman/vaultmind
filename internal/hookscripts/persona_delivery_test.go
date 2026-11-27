@@ -288,3 +288,186 @@ func TestArcsHook_KeepsItsOwnSidecarRecord(t *testing.T) {
 	}
 	assert.ElementsMatch(t, []string{"identity", "arcs"}, parts)
 }
+
+func TestArcsHook_SectionsAndShardReachReciteAndHaveDistinctSidecars(t *testing.T) {
+	argsFile := filepath.Join(t.TempDir(), "args")
+	stub := "#!/bin/bash\n" +
+		"if [ \"$1\" = arc ] && [ \"$2\" = recite ]; then printf '%s\\n' \"$@\" > \"$VAULTMIND_TEST_ARGS_FILE\"; echo 'SECTION-ARC'; exit 0; fi\n" +
+		"if [ \"$1\" = ask ]; then echo 'identity'; fi\n" +
+		"exit 0\n"
+	project, env := installPersonaHook(t, stub)
+	installArcsHook(t, project)
+	env = append(env, "VAULTMIND_PERSONA_MODE=served", "VAULTMIND_ARC_SECTIONS=trigger,push,principle", "VAULTMIND_TEST_ARGS_FILE="+argsFile)
+
+	for _, shard := range []string{"1/3", "2/3"} {
+		runSessionStartScriptFrom(t, project, append(env, "VAULTMIND_ARC_SHARD="+shard), "load-arcs.sh", "s-shards", "startup")
+	}
+	raw, err := os.ReadFile(argsFile)
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), "--sections\ntrigger,push,principle")
+	assert.Contains(t, string(raw), "--shard\n2/3")
+
+	files, err := filepath.Glob(filepath.Join(envValue(env, "HOME"), ".vaultmind", "persona-eval", "*-injection.json"))
+	require.NoError(t, err)
+	require.Len(t, files, 2)
+	assert.Contains(t, files[0], "-arcs-1of3-injection.json")
+	assert.Contains(t, files[1], "-arcs-2of3-injection.json")
+	for _, file := range files {
+		raw, readErr := os.ReadFile(file)
+		require.NoError(t, readErr)
+		var record map[string]any
+		require.NoError(t, json.Unmarshal(raw, &record))
+		assert.Equal(t, "trigger,push,principle", record["arc_sections"])
+		assert.NotEmpty(t, record["arc_shard"])
+	}
+	markers, err := filepath.Glob(filepath.Join(envValue(env, "HOME"), ".vaultmind", "hook-state", "arcs-live", "*"))
+	require.NoError(t, err)
+	assert.NotEmpty(t, markers, "all shard hooks share one idempotent harness marker")
+}
+
+func TestPersonaHook_AllSectionsReachReciteAndSidecar(t *testing.T) {
+	argsFile := filepath.Join(t.TempDir(), "args")
+	stub := "#!/bin/bash\n" +
+		"if [ \"$1\" = arc ] && [ \"$2\" = recite ]; then printf '%s\\n' \"$@\" > \"$VAULTMIND_TEST_ARGS_FILE\"; echo 'ALL-ARC'; exit 0; fi\n" +
+		"if [ \"$1\" = ask ]; then echo 'identity'; fi\n" +
+		"exit 0\n"
+	project, env := installPersonaHook(t, stub)
+	installArcsHook(t, project)
+	env = append(env, "VAULTMIND_PERSONA_MODE=served", "VAULTMIND_ARC_SECTIONS=all", "VAULTMIND_TEST_ARGS_FILE="+argsFile)
+
+	out := runSessionStartScript(t, project, env, "load-arcs.sh", "s-all")
+	assert.Contains(t, out, "ALL-ARC")
+	raw, err := os.ReadFile(argsFile)
+	require.NoError(t, err)
+	assert.Contains(t, string(raw), "--sections\nall")
+	assert.Contains(t, string(raw), "--max-bytes")
+	rec := lastSidecar(t, env)
+	assert.Equal(t, "all", rec["arc_sections"])
+}
+
+func TestPersonaHook_SeveralLiveArcShardsStillLeaveArcsOutOfIdentity(t *testing.T) {
+	project, env := installPersonaHook(t, arcLayerStub)
+	installArcsHook(t, project)
+	env = append(env, "VAULTMIND_PERSONA_MODE=served", oldHarness)
+	for _, shard := range []string{"1/3", "2/3", "3/3"} {
+		runSessionStartScriptFrom(t, project, append(env, "VAULTMIND_ARC_SHARD="+shard), "load-arcs.sh", "s-many-shards", "startup")
+	}
+	out := runSessionStartScriptFrom(t, project, env, "load-persona.sh", "s-many-shards", "compact")
+	assert.NotContains(t, out, "aaaa", "the identity hook must not deliver arcs a second time")
+	assert.Contains(t, out, "IDENTITY CONTEXT:")
+}
+
+func TestArcsHook_OverflowReportIsDeliveredWithoutNotLoaded(t *testing.T) {
+	stub := "#!/bin/bash\n" +
+		"if [ \"$1\" = arc ] && [ \"$2\" = recite ]; then echo 'YOUR ARCS — arcs part 1 of 2'; echo 'DID NOT FIT the 8500-byte hook cap: arc-too-large'; exit 0; fi\n" +
+		"if [ \"$1\" = ask ]; then echo 'identity'; fi\n" +
+		"exit 0\n"
+	project, env := installPersonaHook(t, stub)
+	installArcsHook(t, project)
+	env = append(env, "VAULTMIND_PERSONA_MODE=served", "VAULTMIND_ARC_SECTIONS=trigger,push,principle", "VAULTMIND_ARC_SHARD=1/2")
+
+	out := runSessionStartScript(t, project, env, "load-arcs.sh", "s-overflow")
+	assert.Contains(t, out, "DID NOT FIT")
+	assert.Contains(t, out, "arc-too-large")
+	assert.NotContains(t, out, "ARC LAYER NOT LOADED")
+}
+
+func TestArcsHook_UnsetMomentOptionsKeepLegacyRetryArgvAndReportOverflow(t *testing.T) {
+	argsFile := filepath.Join(t.TempDir(), "args")
+	stub := "#!/bin/bash\n" +
+		"if [ \"$1\" = arc ] && [ \"$2\" = recite ]; then for arg in \"$@\"; do printf '%s\\n' \"$arg\" >> \"$VAULTMIND_TEST_ARGS_FILE\"; done; printf '%s\\n' __CALL__ >> \"$VAULTMIND_TEST_ARGS_FILE\"; printf 'xxxxxxxxxxxxxxxxxxxxxxxxx\\n'; exit 0; fi\n" +
+		"if [ \"$1\" = ask ]; then echo identity; fi\n" +
+		"exit 0\n"
+	project, env := installPersonaHook(t, stub)
+	installArcsHook(t, project)
+	env = append(env, "VAULTMIND_PERSONA_MODE=served", "VAULTMIND_HOOK_OUTPUT_CAP=20", "VAULTMIND_TEST_ARGS_FILE="+argsFile)
+
+	out := runSessionStartScript(t, project, env, "load-arcs.sh", "s-legacy-argv")
+	raw, err := os.ReadFile(argsFile)
+	require.NoError(t, err)
+	var actual []string
+	for _, line := range strings.Split(strings.TrimSpace(string(raw)), "\n") {
+		if line != "__CALL__" {
+			actual = append(actual, line)
+		}
+	}
+	want := []string{}
+	for _, excerpt := range []string{"120", "90", "70", "50"} {
+		want = append(want, "arc", "recite", "--vault", filepath.Join(project, "vaultmind-identity"), "--budget", "3000", "--excerpt", excerpt)
+	}
+	want = append(want, "arc", "recite", "--vault", filepath.Join(project, "vaultmind-identity"), "--budget", "3", "--excerpt", "50")
+	assert.Equal(t, want, actual)
+	assert.Contains(t, out, "over the hook delivery limit")
+	assert.Contains(t, out, "ARC LAYER NOT LOADED")
+	rec := lastSidecar(t, env)
+	assert.Equal(t, false, rec["injection_success"])
+}
+
+func TestArcsHook_ShardOnlyUsesOneBoundedReciteCall(t *testing.T) {
+	argsFile := filepath.Join(t.TempDir(), "args")
+	stub := "#!/bin/bash\n" +
+		"if [ \"$1\" = arc ] && [ \"$2\" = recite ]; then for arg in \"$@\"; do printf '%s\\n' \"$arg\" >> \"$VAULTMIND_TEST_ARGS_FILE\"; done; printf '%s\\n' __CALL__ >> \"$VAULTMIND_TEST_ARGS_FILE\"; echo SHARD-ARC; exit 0; fi\n" +
+		"exit 0\n"
+	project, env := installPersonaHook(t, stub)
+	installArcsHook(t, project)
+	env = append(env, "VAULTMIND_PERSONA_MODE=served", "VAULTMIND_ARC_SHARD=2/3", "VAULTMIND_TEST_ARGS_FILE="+argsFile)
+
+	out := runSessionStartScriptFrom(t, project, env, "load-arcs.sh", "s-shard-only", "startup")
+	assert.Contains(t, out, "SHARD-ARC")
+	raw, err := os.ReadFile(argsFile)
+	require.NoError(t, err)
+	assert.Equal(t, strings.Join([]string{"arc", "recite", "--vault", filepath.Join(project, "vaultmind-identity"), "--budget", "3000", "--excerpt", "120", "--max-bytes", "8744", "--shard", "2/3", "__CALL__", ""}, "\n"), string(raw))
+	rec := lastSidecar(t, env)
+	assert.Equal(t, "2/3", rec["arc_shard"])
+}
+
+func TestArcsHook_MomentOptionsReachReciteWithFullArgv(t *testing.T) {
+	argsFile := filepath.Join(t.TempDir(), "args")
+	stub := "#!/bin/bash\n" +
+		"if [ \"$1\" = arc ] && [ \"$2\" = recite ]; then for arg in \"$@\"; do printf '%s\\n' \"$arg\" >> \"$VAULTMIND_TEST_ARGS_FILE\"; done; printf '%s\\n' __CALL__ >> \"$VAULTMIND_TEST_ARGS_FILE\"; echo empty-shard; exit 0; fi\n" +
+		"if [ \"$1\" = ask ]; then echo identity; fi\n" +
+		"exit 0\n"
+	project, env := installPersonaHook(t, stub)
+	installArcsHook(t, project)
+	env = append(env, "VAULTMIND_PERSONA_MODE=served", "VAULTMIND_ARC_SECTIONS=trigger,push,principle", "VAULTMIND_ARC_SHARD=4/5", "VAULTMIND_TEST_ARGS_FILE="+argsFile)
+
+	out := runSessionStartScript(t, project, env, "load-arcs.sh", "s-full-argv")
+	assert.Contains(t, out, "empty-shard")
+	raw, err := os.ReadFile(argsFile)
+	require.NoError(t, err)
+	assert.Equal(t, strings.Join([]string{"arc", "recite", "--vault", filepath.Join(project, "vaultmind-identity"), "--budget", "3000", "--excerpt", "120", "--sections", "trigger,push,principle", "--max-bytes", "8744", "--shard", "4/5", "__CALL__", ""}, "\n"), string(raw))
+}
+
+func TestArcsHook_FullOptionReachesReciteAndSidecar(t *testing.T) {
+	argsFile := filepath.Join(t.TempDir(), "args")
+	stub := "#!/bin/bash\n" +
+		"if [ \"$1\" = arc ] && [ \"$2\" = recite ]; then for arg in \"$@\"; do printf '%s\\n' \"$arg\" >> \"$VAULTMIND_TEST_ARGS_FILE\"; done; printf '%s\\n' __CALL__ >> \"$VAULTMIND_TEST_ARGS_FILE\"; echo FULL-ARC; exit 0; fi\n" +
+		"exit 0\n"
+	project, env := installPersonaHook(t, stub)
+	installArcsHook(t, project)
+	env = append(env, "VAULTMIND_PERSONA_MODE=served", "VAULTMIND_ARC_FULL=arc-alpha, arc-beta", "VAULTMIND_ARC_SHARD=2/3", "VAULTMIND_TEST_ARGS_FILE="+argsFile)
+
+	out := runSessionStartScript(t, project, env, "load-arcs.sh", "s-full-option")
+	assert.Contains(t, out, "FULL-ARC")
+	raw, err := os.ReadFile(argsFile)
+	require.NoError(t, err)
+	assert.Equal(t, strings.Join([]string{"arc", "recite", "--vault", filepath.Join(project, "vaultmind-identity"), "--budget", "3000", "--excerpt", "120", "--full", "arc-alpha, arc-beta", "--max-bytes", "8744", "--shard", "2/3", "__CALL__", ""}, "\n"), string(raw))
+	rec := lastSidecar(t, env)
+	assert.Equal(t, "arc-alpha, arc-beta", rec["arc_full"])
+}
+
+func TestArcsHook_DeliversAnEmptyShardAsSuccess(t *testing.T) {
+	stub := "#!/bin/bash\n" +
+		"if [ \"$1\" = arc ] && [ \"$2\" = recite ]; then echo 'arcs part 4 of 5 — no arcs in this part'; exit 0; fi\n" +
+		"if [ \"$1\" = ask ]; then echo identity; fi\n" +
+		"exit 0\n"
+	project, env := installPersonaHook(t, stub)
+	installArcsHook(t, project)
+	env = append(env, "VAULTMIND_PERSONA_MODE=served", "VAULTMIND_ARC_SECTIONS=all", "VAULTMIND_ARC_SHARD=4/5")
+
+	out := runSessionStartScript(t, project, env, "load-arcs.sh", "s-empty-shard")
+	assert.Contains(t, out, "arcs part 4 of 5 — no arcs in this part")
+	assert.NotContains(t, out, "ARC LAYER NOT LOADED")
+	rec := lastSidecar(t, env)
+	assert.Equal(t, true, rec["injection_success"])
+}

@@ -68,10 +68,39 @@
                   "description": "Cap each arc at N tokens, preferring its Principle section (the rule it carries) over its opening lines (story setup). 0 = whole bodies",
                   "type": "integer"
                 },
+                "full": {
+                  "default": "",
+                  "description": "Comma-separated arc ids to deliver as whole bodies; other arcs use the normal excerpt",
+                  "examples": [
+                    "\"\""
+                  ],
+                  "type": "string"
+                },
                 "json": {
                   "default": false,
                   "description": "Output in JSON format",
                   "type": "boolean"
+                },
+                "max_bytes": {
+                  "default": 0,
+                  "description": "Maximum rendered text output bytes; 0 = unbounded. Oversized arcs split into ordered parts at section, paragraph, line, or UTF-8 rune boundaries; JSON output keeps overflow_ids for parts that cannot fit",
+                  "type": "integer"
+                },
+                "sections": {
+                  "default": "",
+                  "description": "Full arc sections to deliver, comma-separated: all, trigger, push, principle, deeper-sight. all delivers the whole body and cannot be combined; empty preserves excerpt behavior",
+                  "examples": [
+                    "\"\""
+                  ],
+                  "type": "string"
+                },
+                "shard": {
+                  "default": "",
+                  "description": "Deterministic contiguous arc shard in i/n form",
+                  "examples": [
+                    "\"\""
+                  ],
+                  "type": "string"
                 },
                 "type": {
                   "default": "arc",
@@ -2011,6 +2040,11 @@
                   "description": "Identity anchor note id",
                   "type": "string"
                 },
+                "full": {
+                  "default": "",
+                  "description": "Comma-separated arc ids whose key-body coverage is measured; empty falls back to VAULTMIND_ARC_FULL",
+                  "type": "string"
+                },
                 "json": {
                   "default": false,
                   "description": "Output JSON",
@@ -2029,6 +2063,16 @@
                 "min_coverage": {
                   "default": 0.9,
                   "description": "Minimum identity coverage fraction",
+                  "type": "number"
+                },
+                "min_key_coverage": {
+                  "default": 0,
+                  "description": "Minimum listed-arc key coverage fraction (WARN only)",
+                  "type": "number"
+                },
+                "min_moment_coverage": {
+                  "default": 0,
+                  "description": "Minimum Trigger/Push/Principle moment coverage fraction (WARN only)",
                   "type": "number"
                 },
                 "name": {

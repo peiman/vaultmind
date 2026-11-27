@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"fmt"
 	"strings"
 	"unicode"
 
@@ -28,6 +29,103 @@ var arcSections = []string{
 // sentence that changes what an agent does. It is what Excerpt delivers when it
 // is present.
 const principleHeading = "Principle"
+
+// ArcSection is one of the named sections in an arc. Heading preserves the
+// source line so a full-section recitation does not rewrite the author's
+// heading style.
+type ArcSection struct {
+	Name    string
+	Heading string
+	Text    string
+}
+
+var namedArcSections = map[string]string{
+	"trigger":      "Trigger",
+	"push":         "Push",
+	"principle":    "Principle",
+	"deeper-sight": "Deeper sight",
+}
+
+const allArcSections = "all"
+
+// ExtractArcSections returns the requested arc-discipline sections in the
+// order they appear in the note. Frontmatter and HTML control comments are
+// removed before headings are located. A repeated named heading is ignored;
+// the first section is the canonical one, matching PrincipleSection.
+func ExtractArcSections(body string) []ArcSection {
+	body = parser.StripHTMLComments(stripFrontmatter(body))
+	lines := strings.Split(body, "\n")
+	var out []ArcSection
+	seen := make(map[string]bool)
+	var fenceChar byte
+	fenceLength := 0
+	for i, line := range lines {
+		if fenceChar != 0 {
+			if isClosingFence(line, fenceChar, fenceLength) {
+				fenceChar, fenceLength = 0, 0
+			}
+			continue
+		}
+		if char, length, ok := fenceMarker(line); ok {
+			fenceChar, fenceLength = char, length
+			continue
+		}
+		name, ok := canonicalArcSectionName(line)
+		if !ok || seen[name] {
+			continue
+		}
+		seen[name] = true
+		end := nextExtractSectionBoundary(lines, i+1)
+		text := strings.TrimSpace(strings.Join(lines[i+1:end], "\n"))
+		if text != "" {
+			out = append(out, ArcSection{Name: name, Heading: line, Text: text})
+		}
+	}
+	return out
+}
+
+// ParseArcSectionSelection validates the comma-separated --sections value.
+// Empty input means the legacy excerpt behavior.
+func ParseArcSectionSelection(value string) ([]string, error) {
+	if strings.TrimSpace(value) == "" {
+		return nil, nil
+	}
+	var out []string
+	seen := make(map[string]bool)
+	for _, raw := range strings.Split(value, ",") {
+		name := strings.ToLower(strings.TrimSpace(raw))
+		if name == allArcSections {
+			if len(out) > 0 && (len(out) != 1 || out[0] != allArcSections) {
+				return nil, fmt.Errorf("arc section %q cannot be combined with other sections", allArcSections)
+			}
+			if !seen[name] {
+				out = append(out, name)
+				seen[name] = true
+			}
+			continue
+		}
+		if len(out) > 0 && out[0] == allArcSections {
+			return nil, fmt.Errorf("arc section %q cannot be combined with other sections", allArcSections)
+		}
+		if _, ok := namedArcSections[name]; !ok {
+			return nil, fmt.Errorf("unknown arc section %q (want all, trigger, push, principle, or deeper-sight)", name)
+		}
+		if !seen[name] {
+			out = append(out, name)
+			seen[name] = true
+		}
+	}
+	return out, nil
+}
+
+func canonicalArcSectionName(line string) (string, bool) {
+	for name, heading := range namedArcSections {
+		if isExtractSectionHeading(line, heading) {
+			return name, true
+		}
+	}
+	return "", false
+}
 
 // ellipsis marks an excerpt cut inside a sentence, so a truncated line reads as
 // deliberately shortened rather than as a note that simply stops.
@@ -252,6 +350,110 @@ func isAnySectionHeading(line string) bool {
 		}
 	}
 	return false
+}
+
+func isExtractSectionHeading(line, name string) bool {
+	trimmed := strings.TrimSpace(line)
+	if !strings.HasPrefix(trimmed, "#") {
+		return false
+	}
+	trimmed = strings.TrimSpace(strings.TrimLeft(trimmed, "#"))
+	if strings.HasPrefix(strings.ToLower(trimmed), "the ") {
+		trimmed = strings.TrimSpace(trimmed[4:])
+	}
+	return strings.EqualFold(trimmed, name)
+}
+
+func isAnyExtractSectionHeading(line string) bool {
+	for _, section := range arcSections {
+		if isExtractSectionHeading(line, section) {
+			return true
+		}
+	}
+	return false
+}
+
+func nextExtractSectionBoundary(lines []string, start int) int {
+	for _, index := range arcHeadingLines(lines, isAnyExtractSectionHeading) {
+		if index >= start {
+			return index
+		}
+	}
+	return len(lines)
+}
+
+// arcHeadingLines is the shared fence-aware heading scanner used by named
+// section extraction and byte-cap splitting. A heading-looking line inside a
+// backtick or tilde fence is content, not a delivery boundary.
+func arcHeadingLines(lines []string, matcher func(string) bool) []int {
+	var out []int
+	var fenceChar byte
+	fenceLength := 0
+	for i, line := range lines {
+		if fenceChar != 0 {
+			if isClosingFence(line, fenceChar, fenceLength) {
+				fenceChar, fenceLength = 0, 0
+			}
+			continue
+		}
+		if char, length, ok := fenceMarker(line); ok {
+			fenceChar, fenceLength = char, length
+			continue
+		}
+		if matcher(line) {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+func arcHeadingStarts(text string) []int {
+	lines := strings.Split(text, "\n")
+	indexes := arcHeadingLines(lines, func(line string) bool {
+		trimmed := strings.TrimSpace(line)
+		return strings.HasPrefix(trimmed, "## ")
+	})
+	starts := make([]int, 0, len(indexes))
+	offset := 0
+	for i, line := range lines {
+		if len(indexes) > 0 && i == indexes[0] {
+			starts = append(starts, offset)
+			indexes = indexes[1:]
+		}
+		offset += len(line)
+		if i < len(lines)-1 {
+			offset++
+		}
+	}
+	return starts
+}
+
+func fenceMarker(line string) (byte, int, bool) {
+	trimmed := strings.TrimSpace(line)
+	if len(trimmed) < 3 || (trimmed[0] != '`' && trimmed[0] != '~') {
+		return 0, 0, false
+	}
+	char := trimmed[0]
+	length := 0
+	for length < len(trimmed) && trimmed[length] == char {
+		length++
+	}
+	if length < 3 {
+		return 0, 0, false
+	}
+	return char, length, true
+}
+
+func isClosingFence(line string, char byte, length int) bool {
+	trimmed := strings.TrimSpace(line)
+	if len(trimmed) < length || trimmed[0] != char {
+		return false
+	}
+	count := 0
+	for count < len(trimmed) && trimmed[count] == char {
+		count++
+	}
+	return count >= length && strings.TrimSpace(trimmed[count:]) == ""
 }
 
 // truncateToTokens keeps whole sentences while they fit, so an excerpt ends
