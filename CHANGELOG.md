@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.10.32] - 2026-11-26
+## [0.10.32] - 2026-11-27
 
 You can now check whether each keeper's identity actually reached its context window. `vaultmind persona health` reads the keeper's transcript and reports how much of the identity note and each arc arrived after the last compaction, and whether its memory file was loaded or cut.
 
