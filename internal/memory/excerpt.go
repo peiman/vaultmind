@@ -110,7 +110,7 @@ func principleSection(body string) string {
 	lines := strings.Split(body, "\n")
 	start := -1
 	for i, line := range lines {
-		if isSectionHeading(line, principleHeading) {
+		if isPrincipleHeading(line) {
 			start = i + 1
 			break
 		}
@@ -126,6 +126,12 @@ func principleSection(body string) string {
 		out = append(out, line)
 	}
 	return strings.TrimSpace(strings.Join(out, "\n"))
+}
+
+func isPrincipleHeading(line string) bool {
+	trimmed := strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(line), "#"))
+	return strings.EqualFold(trimmed, principleHeading) ||
+		strings.EqualFold(trimmed, "The "+principleHeading)
 }
 
 // leadParagraph returns the note's first block of actual prose.
