@@ -58,6 +58,11 @@
             },
             "gate": {
               "properties": {
+                "arm": {
+                  "default": false,
+                  "description": "Arm this session after compaction",
+                  "type": "boolean"
+                },
                 "event": {
                   "default": "",
                   "description": "Hook event: pretooluse or stop",

@@ -51,13 +51,17 @@ func runArcGateScript(t *testing.T, event, stub, path string, withBinary bool) (
 }
 
 func TestArcGateScript_ForwardsBothEventsAndInput(t *testing.T) {
-	for _, event := range []string{"pretooluse", "stop"} {
+	for _, event := range []string{"pretooluse", "stop", "arm"} {
 		t.Run(event, func(t *testing.T) {
 			out, errOut, exit, args, forwarded := runArcGateScript(t, event, "printf 'canned-reply\\n'", "", true)
 			assert.Equal(t, 0, exit)
 			assert.Empty(t, errOut)
 			assert.Equal(t, "canned-reply\n", out)
-			assert.Equal(t, "arc gate --vault /tmp/arc-gate-vault --event "+event, args)
+			wantArgs := "arc gate --vault /tmp/arc-gate-vault --event " + event
+			if event == "arm" {
+				wantArgs = "arc gate --vault /tmp/arc-gate-vault --arm"
+			}
+			assert.Equal(t, wantArgs, args)
 			assert.Equal(t, `{"session_id":"s"}`, forwarded)
 		})
 	}

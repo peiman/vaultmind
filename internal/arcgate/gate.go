@@ -52,11 +52,32 @@ type hookPayload struct {
 // a diagnostic string; callers should write the diagnostic to stderr and still
 // exit successfully.
 func Gate(input []byte, vault, event, triggersPath, stateDir, logDir string, now time.Time) (string, string) {
-	out, err := gate(input, vault, event, triggersPath, stateDir, logDir, now)
+	return GateWithArmRequirement(input, vault, event, triggersPath, stateDir, armedDirFor(stateDir), logDir, now, false)
+}
+
+// GateWithArmRequirement evaluates a hook payload, optionally requiring the
+// session to have been armed by the compact-session hook first.
+func GateWithArmRequirement(input []byte, vault, event, triggersPath, stateDir, armedDir, logDir string, now time.Time, requireArm bool) (string, string) {
+	out, err := gate(input, vault, event, triggersPath, stateDir, armedDir, logDir, now, requireArm)
 	if err != nil {
 		return "", "arc gate: " + err.Error()
 	}
 	return out, ""
+}
+
+// Arm records that a session has crossed a compaction boundary. It returns a
+// diagnostic so the command layer can report the failure without breaking a
+// hook session.
+func Arm(input []byte, armedDir string) error {
+	var payload hookPayload
+	if err := json.Unmarshal(input, &payload); err != nil {
+		return fmt.Errorf("invalid hook JSON: %w", err)
+	}
+	session := sanitizeSession(payload.SessionID)
+	if session == "" {
+		return fmt.Errorf("missing session_id")
+	}
+	return writeMarker(armedDir, session)
 }
 
 type gateContext struct {
@@ -69,8 +90,8 @@ type gateContext struct {
 	active   bool
 }
 
-func gate(input []byte, vault, event, triggersPath, stateDir, logDir string, now time.Time) (string, error) {
-	ctx, err := prepareGate(input, vault, event, triggersPath, stateDir)
+func gate(input []byte, vault, event, triggersPath, stateDir, armedDir, logDir string, now time.Time, requireArm bool) (string, error) {
+	ctx, err := prepareGate(input, vault, event, triggersPath, stateDir, armedDir, requireArm)
 	if err != nil || ctx.active {
 		return "", err
 	}
@@ -103,7 +124,7 @@ func gate(input []byte, vault, event, triggersPath, stateDir, logDir string, now
 	return "", nil
 }
 
-func prepareGate(input []byte, vault, event, triggersPath, stateDir string) (gateContext, error) {
+func prepareGate(input []byte, vault, event, triggersPath, stateDir, armedDir string, requireArm bool) (gateContext, error) {
 	if event != eventPreToolUse && event != eventStop {
 		return gateContext{}, fmt.Errorf("unknown event %q", event)
 	}
@@ -117,6 +138,15 @@ func prepareGate(input []byte, vault, event, triggersPath, stateDir string) (gat
 	session := sanitizeSession(payload.SessionID)
 	if session == "" {
 		return gateContext{}, fmt.Errorf("missing session_id")
+	}
+	if requireArm {
+		armed, err := readMarker(armedDir, session)
+		if err != nil {
+			return gateContext{}, err
+		}
+		if !armed {
+			return gateContext{active: true}, nil
+		}
 	}
 	info, err := os.Stat(vault)
 	if err != nil || !info.IsDir() {
@@ -396,6 +426,53 @@ func sanitizeSession(session string) string {
 		}
 	}
 	return b.String()
+}
+
+func armedDirFor(stateDir string) string {
+	if stateDir == "" {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(stateDir), "arc-gate-armed")
+}
+
+func readMarker(dir, session string) (bool, error) {
+	if dir == "" {
+		return false, fmt.Errorf("armed marker directory is unavailable")
+	}
+	info, err := os.Stat(filepath.Join(dir, session)) // #nosec G304 -- session is sanitized and dir is explicit state storage
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("cannot read armed marker: %w", err)
+	}
+	if info.IsDir() {
+		return false, fmt.Errorf("armed marker is a directory")
+	}
+	return true, nil
+}
+
+func writeMarker(dir, session string) error {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("cannot create armed marker directory: %w", err)
+	}
+	tmp, err := os.CreateTemp(dir, "."+session+".tmp-*")
+	if err != nil {
+		return fmt.Errorf("cannot create armed marker temporary file: %w", err)
+	}
+	tmpName := tmp.Name()
+	defer func() { _ = os.Remove(tmpName) }()
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("cannot set armed marker permissions: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("cannot close armed marker: %w", err)
+	}
+	if err := os.Rename(tmpName, filepath.Join(dir, session)); err != nil {
+		return fmt.Errorf("cannot install armed marker: %w", err)
+	}
+	return nil
 }
 
 func readState(dir, session string) (map[string]bool, error) {

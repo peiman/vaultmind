@@ -1,11 +1,11 @@
 #!/bin/bash
 # Opt-in action-time arc gate. This helper is embedded and installable, but is
 # deliberately absent from the canonical/default hook wiring. Adopters opt in
-# by adding the PreToolUse and Stop entries described in docs/AGENT_USAGE.md.
+# by adding the SessionStart, PreToolUse, and Stop entries described in docs/AGENT_USAGE.md.
 
 event="${1:-}"
 case "$event" in
-  pretooluse|stop) ;;
+  pretooluse|stop|arm) ;;
   *) exit 0 ;;
 esac
 
@@ -23,5 +23,9 @@ fi
 
 # Hooks are advisory plumbing: a missing or failing binary must never break the
 # agent session. The command itself applies the same allow-on-failure rule.
-"$bin" arc gate --vault "$vault" --event "$event" < "$payload_file" || true
+if [ "$event" = "arm" ]; then
+  "$bin" arc gate --vault "$vault" --arm < "$payload_file" || true
+else
+  "$bin" arc gate --vault "$vault" --event "$event" < "$payload_file" || true
+fi
 exit 0

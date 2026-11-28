@@ -450,20 +450,30 @@ To wire it by hand in `.claude/settings.json`:
 ```json
 {
   "hooks": {
+    "SessionStart": [{
+      "matcher": "compact",
+      "hooks": [{"type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/arc-gate.sh arm"}]
+    }],
     "PreToolUse": [{
       "matcher": "Write|Edit|MultiEdit|Bash",
-      "hooks": [{"type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/arc-gate.sh pretooluse"}]
+      "hooks": [{"type": "command", "command": "VAULTMIND_ARC_GATE_REQUIRE_ARM=1 bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/arc-gate.sh pretooluse"}]
     }],
     "Stop": [{
-      "hooks": [{"type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/arc-gate.sh stop"}]
+      "hooks": [{"type": "command", "command": "VAULTMIND_ARC_GATE_REQUIRE_ARM=1 bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/arc-gate.sh stop"}]
     }]
   }
 }
 ```
 
+The `SessionStart` entry arms the session after a compaction. Without
+`VAULTMIND_ARC_GATE_REQUIRE_ARM=1`, the gate is live from session start; with it,
+the gate stays silent until the first compaction arms the session. Set that
+variable in the PreToolUse and Stop hook commands as shown when you want this
+arming requirement.
+
 The embedded `arc-gate.sh` helper reads stdin once, locates the vault from
 `ARC_GATE_VAULT`, `VAULTMIND_VAULT`, or the project default, and always exits
-zero. Install the full profile if you want the helper copied, then add the two
+zero. Install the full profile if you want the helper copied, then add the three
 settings entries yourself; the normal install stanza intentionally leaves it
 unwired.
 

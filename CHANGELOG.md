@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `vaultmind arc gate` delivers a matching arc at the moment of a PreToolUse or Stop action, with once-per-session state, an opt-in plain-words check, and a best-effort evaluation sidecar log. The helper is embedded for installation but is not registered by the default hook wiring.
+- `vaultmind arc gate --arm` records post-compaction sessions, and `VAULTMIND_ARC_GATE_REQUIRE_ARM=1` can keep the gate silent until that first compaction arm.
 
 ### Fixed
 

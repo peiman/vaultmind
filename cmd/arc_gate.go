@@ -28,19 +28,38 @@ func runArcGate(cmd *cobra.Command, _ []string) error {
 	}
 	vault := getConfigValueWithFlags[string](cmd, "vault", config.KeyAppArcGateVault)
 	event := getConfigValueWithFlags[string](cmd, "event", config.KeyAppArcGateEvent)
+	arm := getConfigValueWithFlags[bool](cmd, "arm", config.KeyAppArcGateArm)
 	home := os.Getenv("HOME")
-	stateDir, logDir := "", ""
-	if dir, err := xdg.StateDir(); err == nil {
-		stateDir = filepath.Join(dir, "arc-gate")
+	stateDir, armedDir := arcGateStateDirs()
+	logDir := ""
+	if arm {
+		runArcGateArm(cmd, input, armedDir)
+		return nil
 	}
 	if home != "" {
 		logDir = filepath.Join(home, ".vaultmind", "persona-eval")
 	}
-	stdout, stderr := arcgate.Gate(input, vault, event, os.Getenv("VAULTMIND_ARC_TRIGGERS"), stateDir, logDir, time.Now().UTC())
+	requireArm := os.Getenv("VAULTMIND_ARC_GATE_REQUIRE_ARM") == "1"
+	stdout, stderr := arcgate.GateWithArmRequirement(input, vault, event, os.Getenv("VAULTMIND_ARC_TRIGGERS"), stateDir, armedDir, logDir, time.Now().UTC(), requireArm)
 	if stderr != "" {
 		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), stderr)
 		return nil
 	}
 	_, _ = io.WriteString(cmd.OutOrStdout(), stdout)
 	return nil
+}
+
+func arcGateStateDirs() (stateDir, armedDir string) {
+	dir, err := xdg.StateDir()
+	if err != nil {
+		return "", ""
+	}
+	stateDir = filepath.Join(dir, "arc-gate")
+	return stateDir, filepath.Join(filepath.Dir(stateDir), "arc-gate-armed")
+}
+
+func runArcGateArm(cmd *cobra.Command, input []byte, armedDir string) {
+	if err := arcgate.Arm(input, armedDir); err != nil {
+		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "arc gate: "+err.Error())
+	}
 }

@@ -93,13 +93,48 @@ func TestGate_StopPlainWordsAndActiveAllows(t *testing.T) {
 	vault, triggers := writeArcFixture(t)
 	writeTriggers(t, triggers, "- arc: arc-plain\n  on: stop\n  check: plain-words\n")
 	state, logs := t.TempDir(), t.TempDir()
-	out, errText := Gate(stopInput(t, "s", "The change is small. It is easy to review.", false), vault, "stop", triggers, state, logs, time.Now())
+	message := "The change is small. It is easy to review. " + strings.Repeat("plain ", 72)
+	out, errText := Gate(stopInput(t, "s", message, false), vault, "stop", triggers, state, logs, time.Now())
 	assert.Empty(t, errText)
 	assert.Contains(t, out, "\"decision\":\"block\"")
 	assert.Contains(t, out, "What tripped it: no decision in the first two sentences.")
-	out, errText = Gate(stopInput(t, "s", "The change is small. It is easy to review.", true), vault, "stop", triggers, state, logs, time.Now())
+	out, errText = Gate(stopInput(t, "s", message, true), vault, "stop", triggers, state, logs, time.Now())
 	assert.Empty(t, errText)
 	assert.Empty(t, out)
+}
+
+func TestGate_RequireArmAllowsUntilArmedWithoutConsumingState(t *testing.T) {
+	vault, triggers := writeArcFixture(t)
+	writeTriggers(t, triggers, "- arc: arc-half-check\n  on: pretooluse\n  tools: [Write]\n  match: check\n")
+	state, armed, logs := t.TempDir(), t.TempDir(), t.TempDir()
+	out, errText := GateWithArmRequirement(pretoolInput(t, "unarmed", "Write", map[string]any{"text": "check"}), vault, "pretooluse", triggers, state, armed, logs, time.Now(), true)
+	assert.Empty(t, errText)
+	assert.Empty(t, out)
+	_, err := os.Stat(filepath.Join(state, "unarmed"))
+	assert.ErrorIs(t, err, os.ErrNotExist)
+	_, err = os.Stat(filepath.Join(logs, "arc-gate.jsonl"))
+	assert.ErrorIs(t, err, os.ErrNotExist)
+}
+
+func TestGate_RequireArmBlocksAfterArm(t *testing.T) {
+	vault, triggers := writeArcFixture(t)
+	writeTriggers(t, triggers, "- arc: arc-half-check\n  on: pretooluse\n  tools: [Write]\n  match: check\n")
+	state, armed, logs := t.TempDir(), t.TempDir(), t.TempDir()
+	require.NoError(t, Arm(pretoolInput(t, "armed", "Write", map[string]any{"text": "check"}), armed))
+	out, errText := GateWithArmRequirement(pretoolInput(t, "armed", "Write", map[string]any{"text": "check"}), vault, "pretooluse", triggers, state, armed, logs, time.Now(), true)
+	assert.Empty(t, errText)
+	assert.Contains(t, out, "\"permissionDecision\":\"deny\"")
+}
+
+func TestArm_WritesSanitizedMarkerAndRejectsBadInput(t *testing.T) {
+	armed := t.TempDir()
+	require.NoError(t, Arm([]byte(`{"session_id":"unsafe/session"}`), armed))
+	_, err := os.Stat(filepath.Join(armed, "unsafe_session"))
+	require.NoError(t, err)
+	entries, err := os.ReadDir(armed)
+	require.NoError(t, err)
+	assert.Len(t, entries, 1)
+	assert.Error(t, Arm([]byte("{"), armed))
 }
 
 func TestGate_StopUsesTranscriptFallback(t *testing.T) {

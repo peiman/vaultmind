@@ -46,6 +46,9 @@ app:
     # Hook event: pretooluse or stop
     gate.event: 
 
+    # Arm this session after compaction
+    gate.arm: false
+
     # Path to vault root
     recite.vault: .
 

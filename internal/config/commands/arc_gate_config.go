@@ -13,6 +13,7 @@ var ArcGateMetadata = config.CommandMetadata{
 	FlagOverrides: map[string]string{
 		"app.arc.gate.vault": "vault",
 		"app.arc.gate.event": "event",
+		"app.arc.gate.arm":   "arm",
 	},
 }
 
@@ -21,6 +22,7 @@ func ArcGateOptions() []config.ConfigOption {
 	return []config.ConfigOption{
 		{Key: "app.arc.gate.vault", DefaultValue: ".", Description: "Path to the vault root", Type: "string"},
 		{Key: "app.arc.gate.event", DefaultValue: "", Description: "Hook event: pretooluse or stop", Type: "string"},
+		{Key: "app.arc.gate.arm", DefaultValue: false, Description: "Arm this session after compaction", Type: "bool"},
 	}
 }
 
