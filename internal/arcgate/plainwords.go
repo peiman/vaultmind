@@ -28,7 +28,7 @@ func CheckPlainWords(msg string) []string {
 	if len(tokens) > 250 {
 		flags = append(flags, fmt.Sprintf("%d words, over 250", len(tokens)))
 	}
-	if !hasDecisionCue(firstTwoUnits(msg)) {
+	if len(tokens) > 80 && !hasDecisionCue(firstTwoUnits(msg)) {
 		flags = append(flags, "no decision in the first two sentences")
 	}
 	codeLike := 0

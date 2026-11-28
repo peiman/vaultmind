@@ -16,7 +16,7 @@ func TestCheckPlainWords_OneRuleAtATime(t *testing.T) {
 		want []string
 	}{
 		{name: "word count", msg: "I recommend this change. " + strings.Repeat("word ", 251), want: []string{"255 words, over 250"}},
-		{name: "decision cue", msg: "The change is small. It is easy to review.", want: []string{"no decision in the first two sentences"}},
+		{name: "decision cue", msg: "The change is small. It is easy to review. " + strings.Repeat("plain ", 72), want: []string{"no decision in the first two sentences"}},
 		{name: "jargon", msg: "I recommend parseConfig and HookRunner now. It keeps the decision clear.", want: []string{"18% of words are code-like, over 8%"}},
 	}
 	for _, tc := range tests {
@@ -36,6 +36,30 @@ func TestCheckPlainWords_WordCountBoundary(t *testing.T) {
 				assert.NotContains(t, flags, "250 words, over 250")
 			} else {
 				assert.Contains(t, flags, "251 words, over 250")
+			}
+		})
+	}
+}
+
+func TestCheckPlainWords_DecisionBoundary(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		msg  string
+		want bool
+	}{
+		{name: "80 words", msg: strings.Repeat("plain ", 80), want: false},
+		{name: "81 words", msg: strings.Repeat("plain ", 81), want: true},
+		{name: "short status", msg: "Done, tests pass.", want: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			flags := CheckPlainWords(tc.msg)
+			if tc.want {
+				assert.Contains(t, flags, "no decision in the first two sentences")
+				return
+			}
+			assert.NotContains(t, flags, "no decision in the first two sentences")
+			if tc.name == "short status" {
+				assert.Empty(t, flags)
 			}
 		})
 	}
