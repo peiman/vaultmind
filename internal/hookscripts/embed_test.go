@@ -38,6 +38,7 @@ func TestAll_EmbedsAllCanonicalHookScripts(t *testing.T) {
 		"auto-rag-guard.sh",
 		"auto-rag-evaluate.sh",
 		"shell-strip.sh",
+		"arc-gate.sh",
 	} {
 		body, ok := scripts[name]
 		assert.True(t, ok, "embed must include %q", name)

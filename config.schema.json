@@ -56,6 +56,26 @@
               },
               "type": "object"
             },
+            "gate": {
+              "properties": {
+                "arm": {
+                  "default": false,
+                  "description": "Arm this session after compaction",
+                  "type": "boolean"
+                },
+                "event": {
+                  "default": "",
+                  "description": "Hook event: pretooluse or stop",
+                  "type": "string"
+                },
+                "vault": {
+                  "default": ".",
+                  "description": "Path to the vault root",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
             "recite": {
               "properties": {
                 "budget": {

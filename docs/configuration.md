@@ -41,6 +41,9 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.arc.candidates.vault` | string | `.` | `VAULTMIND_APP_ARC_CANDIDATES_VAULT` | Path to vault root |
 | `app.arc.candidates.json` | bool | `false` | `VAULTMIND_APP_ARC_CANDIDATES_JSON` | Output in JSON format |
 | `app.arc.candidates.arcs_vault` | string | `` | `VAULTMIND_APP_ARC_CANDIDATES_ARCS_VAULT` | Vault holding the existing arcs to compare proposals against (default: the scanned vault). Set this when the desk and the arcs live in different vaults |
+| `app.arc.gate.vault` | string | `.` | `VAULTMIND_APP_ARC_GATE_VAULT` | Path to the vault root |
+| `app.arc.gate.event` | string | `` | `VAULTMIND_APP_ARC_GATE_EVENT` | Hook event: pretooluse or stop |
+| `app.arc.gate.arm` | bool | `false` | `VAULTMIND_APP_ARC_GATE_ARM` | Arm this session after compaction |
 | `app.arc.recite.vault` | string | `.` | `VAULTMIND_APP_ARC_RECITE_VAULT` | Path to vault root |
 | `app.arc.recite.json` | bool | `false` | `VAULTMIND_APP_ARC_RECITE_JSON` | Output in JSON format |
 | `app.arc.recite.budget` | int | `0` | `VAULTMIND_APP_ARC_RECITE_BUDGET` | Total token ceiling for the pack. 0 = unbounded. Arcs that do not fit are reported by id, never dropped silently |
@@ -419,6 +422,15 @@ app:
 
     # Vault holding the existing arcs to compare proposals against (default: the scanned vault). Set this when the desk and the arcs live in different vaults
     candidates.arcs_vault: 
+
+    # Path to the vault root
+    gate.vault: .
+
+    # Hook event: pretooluse or stop
+    gate.event: 
+
+    # Arm this session after compaction
+    gate.arm: false
 
     # Path to vault root
     recite.vault: .
@@ -1602,6 +1614,15 @@ export VAULTMIND_APP_ARC_CANDIDATES_JSON=false
 
 # Vault holding the existing arcs to compare proposals against (default: the scanned vault). Set this when the desk and the arcs live in different vaults
 export VAULTMIND_APP_ARC_CANDIDATES_ARCS_VAULT=
+
+# Path to the vault root
+export VAULTMIND_APP_ARC_GATE_VAULT=.
+
+# Hook event: pretooluse or stop
+export VAULTMIND_APP_ARC_GATE_EVENT=
+
+# Arm this session after compaction
+export VAULTMIND_APP_ARC_GATE_ARM=false
 
 # Path to vault root
 export VAULTMIND_APP_ARC_RECITE_VAULT=.

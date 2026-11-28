@@ -84,6 +84,10 @@ var commandCatalog = map[string]catalogEntry{
 		group: groupRetrieval,
 		when:  "you want your WHOLE arc layer as bodies — every arc, unranked and ungated; the counterpart to ask, which ranks.",
 	},
+	"vaultmind arc gate": {
+		group: groupLifecycle,
+		when:  "you want an arc delivered at the moment of the matching action, as a once-per-session block; this is an opt-in hook helper.",
+	},
 	"vaultmind tree": {
 		group: groupRetrieval,
 		when:  "you need to see what a vault holds before you know what to ask — folders, counts, one line per note.",

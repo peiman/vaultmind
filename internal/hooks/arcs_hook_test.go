@@ -41,6 +41,11 @@ func TestArcsHook_InThePersonaAndFullProfilesOnly(t *testing.T) {
 	assert.NotContains(t, ScriptsForProfile(ProfileKnowledge), hookArcsScript, "a knowledge vault has no identity to recite")
 }
 
+func TestArcGateHelper_IsCopiedByFullProfileButNotCanonicalWiring(t *testing.T) {
+	assert.Contains(t, ScriptsForProfile(ProfileFull), "arc-gate.sh")
+	assert.NotContains(t, CanonicalEventScripts(), EventScript{Event: "PreToolUse", Script: "arc-gate.sh"})
+}
+
 func TestArcsHook_WiredForEveryAgentThatLoadsThePersona(t *testing.T) {
 	assert.Equal(t, codexScripts[hookSessionStartScript], codexScripts[hookArcsScript], "Codex")
 	assert.Equal(t, cursorWiring[hookSessionStartScript], cursorWiring[hookArcsScript], "Cursor")

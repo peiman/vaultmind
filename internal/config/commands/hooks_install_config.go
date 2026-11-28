@@ -122,6 +122,7 @@ WHAT GETS INSTALLED
     auto-rag-guard.sh     PreToolUse drift gate (opt-in — see auto-RAG)
     auto-rag-evaluate.sh  scores auto-RAG guard decisions
     shell-strip.sh        shared helper sourced by the auto-RAG scripts
+	  arc-gate.sh           opt-in arc action gate (PreToolUse/Stop; not wired)
     mesh-watch.sh         the agent-mesh watcher, run by hand
 
 After writing the scripts, this command prints the .claude/settings.json

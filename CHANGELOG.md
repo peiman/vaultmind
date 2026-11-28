@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `vaultmind arc gate` delivers a matching arc at the moment of a PreToolUse or Stop action, with once-per-session state, an opt-in plain-words check, and a best-effort evaluation sidecar log. The helper is embedded for installation but is not registered by the default hook wiring.
+- `vaultmind arc gate --arm` records post-compaction sessions, and `VAULTMIND_ARC_GATE_REQUIRE_ARM=1` can keep the gate silent until that first compaction arm.
+
+### Fixed
+
+- Arcs headed "The Principle" now deliver their principle instead of their opening story in arc recite --excerpt and ask excerpts.
+
 ## [0.10.32] - 2026-11-27
 
 You can now check whether each keeper's identity actually reached its context window. `vaultmind persona health` reads the keeper's transcript and reports how much of the identity note and each arc arrived after the last compaction, and whether its memory file was loaded or cut.

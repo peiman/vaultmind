@@ -31,7 +31,7 @@ WHAT GETS REMOVED
 
   Any hook entry whose command invokes one of VaultMind's scripts
   (load-persona.sh, load-arcs.sh, vault-recall.sh, vault-track-read.sh,
-  capture-episode.sh, and the auto-RAG helpers). An event array left
+  capture-episode.sh, the auto-RAG helpers, and a manually wired arc-gate.sh). An event array left
   empty is dropped, and the "hooks" object is dropped if it becomes
   empty. Entries that merely have a similar name are NOT matched —
   removal is anchored to the exact script path, so a project's own

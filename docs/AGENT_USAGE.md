@@ -412,6 +412,71 @@ from the hook payload. Codex user hooks need `/hooks` approval, again after
 changes; user status checks those approvals. The existing per-agent capability
 limits still apply. `hooks uninstall` currently remains project-scoped.
 
+### Action-time arc gate (opt-in)
+
+`vaultmind arc gate` delivers an arc at the moment an action matches it. It is
+an opt-in hook helper: the default install does not register or wire it, and
+`hooks status` does not count it as a missing canonical hook. The gate reads
+Claude Code hook JSON from stdin and allows every failure path, so a missing
+vault, malformed trigger file, unreadable note, or failed state write cannot
+break the session.
+
+Create `<vault>/.vaultmind/arc-triggers.yaml`, or set
+`VAULTMIND_ARC_TRIGGERS` to another path:
+
+```yaml
+- arc: arc-the-half-i-thought-to-check
+  on: pretooluse
+  tools: [Write, Edit, MultiEdit, Bash]
+  match: '(?i)(guard|verify|check|validat|assert)'
+- arc: arc-asking-permission-i-already-have
+  on: stop
+  match: '(?i)(shall i|should i|do you want me to|want me to|let me know if|before i (push|merge|ship))'
+- arc: arc-plain-words-are-for-his-decision
+  on: stop
+  check: plain-words
+```
+
+Each `arc` must resolve to a non-draft note with `type: arc`. A `pretooluse`
+match sees compact JSON for `tool_input`; a `stop` match sees the last
+assistant message, falling back to the transcript. The first matching arc is
+denied or blocked once per session; later matches of that arc are allowed, and
+later triggers can still fire. A plain-words block reports its flags in the
+block reason. Firings and repeat matches are best-effort recorded in
+`$HOME/.vaultmind/persona-eval/arc-gate.jsonl`.
+
+To wire it by hand in `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [{
+      "matcher": "compact",
+      "hooks": [{"type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/arc-gate.sh arm"}]
+    }],
+    "PreToolUse": [{
+      "matcher": "Write|Edit|MultiEdit|Bash",
+      "hooks": [{"type": "command", "command": "VAULTMIND_ARC_GATE_REQUIRE_ARM=1 bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/arc-gate.sh pretooluse"}]
+    }],
+    "Stop": [{
+      "hooks": [{"type": "command", "command": "VAULTMIND_ARC_GATE_REQUIRE_ARM=1 bash \"$CLAUDE_PROJECT_DIR\"/.claude/scripts/arc-gate.sh stop"}]
+    }]
+  }
+}
+```
+
+The `SessionStart` entry arms the session after a compaction. Without
+`VAULTMIND_ARC_GATE_REQUIRE_ARM=1`, the gate is live from session start; with it,
+the gate stays silent until the first compaction arms the session. Set that
+variable in the PreToolUse and Stop hook commands as shown when you want this
+arming requirement.
+
+The embedded `arc-gate.sh` helper reads stdin once, locates the vault from
+`ARC_GATE_VAULT`, `VAULTMIND_VAULT`, or the project default, and always exits
+zero. Install the full profile if you want the helper copied, then add the three
+settings entries yourself; the normal install stanza intentionally leaves it
+unwired.
+
 ### Recording that a prompting hook fired
 
 Most hooks *query* — they leave a row in the usage log by doing their job. Some hooks
@@ -504,7 +569,7 @@ markers; `task check` fails if it drifts from the catalog. Everything outside th
 hand-written and stays.
 
 <!-- VAULTMIND:GENERATED:commands:START -->
-<!-- checksum:5c3c09f031ce3173f87644dacc1d1d1f7c551d9611bc08695dcd6c3fee2ddefe -->
+<!-- checksum:3d3ed0e7347aed97a72d242fb4f59a29722cb63f9b6308c6b5df47a90741a9d9 -->
 # VaultMind Commands
 
 Every user-facing command, grouped by intent, with its when-to-use trigger.
@@ -564,6 +629,7 @@ Generated from the command tree — do not edit by hand (run `task generate:docs
 |---------|------|-------------|
 | `vaultmind arc` | Surface arc-distillation candidates from episodes (propose-only) | you want to surface arc-distillation candidate moments from episodes (propose-only). |
 | `vaultmind arc candidates` | Surface candidate transformation moments for arc distillation | you want phrase-matched candidate moments and unfinished desk entries to consider for arcs. |
+| `vaultmind arc gate` | Deliver one matching arc at the moment of action | you want an arc delivered at the moment of the matching action, as a once-per-session block; this is an opt-in hook helper. |
 | `vaultmind arc guide` | Print the arc-writing discipline — how to find and write your own arcs | you want to learn how to find and write your own arcs — the shapes, the bar, and the self-check. |
 | `vaultmind arc review` | Review captured sessions for turning points, oldest first | sessions await review — judge which of the person's messages were turning points, then mark each session reviewed. |
 | `vaultmind episode` | Capture Claude Code sessions as episodic-memory artifacts | you want to capture Claude Code sessions as episodic-memory artifacts. |
