@@ -55,6 +55,33 @@ func TestExcerpt_PrefersPrincipleOverLead(t *testing.T) {
 		"the Trigger is story setup; delivering it instead of the Principle is why pointer blocks read as noise")
 }
 
+func TestPrincipleSection_RecognizesThePrincipleHeadingForms(t *testing.T) {
+	const rule = "Use the verified constraint before choosing the next action."
+
+	for _, heading := range []string{"## Principle", "## The Principle", "## the principle"} {
+		t.Run(heading, func(t *testing.T) {
+			body := "The opening story should not be recited.\n\n" + heading + "\n\n" + rule + "\n\n## Source\n\ntranscript"
+
+			assert.Equal(t, rule, memory.PrincipleSection(body))
+			assert.Contains(t, memory.Excerpt(body, 120), rule)
+			assert.NotContains(t, memory.Excerpt(body, 120), "The opening story")
+		})
+	}
+}
+
+func TestPrincipleSection_DoesNotRecognizePrinciplePrefixes(t *testing.T) {
+	const lead = "The opening story is the fallback passage."
+
+	for _, heading := range []string{"## Principles of X", "## The Principled Way"} {
+		t.Run(heading, func(t *testing.T) {
+			body := lead + "\n\n" + heading + "\n\nThis is not a principle section.\n\n## Source\n\ntranscript"
+
+			assert.Empty(t, memory.PrincipleSection(body))
+			assert.Contains(t, memory.Excerpt(body, 120), lead)
+		})
+	}
+}
+
 // Without a Principle section (references, concepts, sources), the opening
 // paragraph IS the substance, so fall back to it.
 func TestExcerpt_FallsBackToLeadWhenNoPrinciple(t *testing.T) {
