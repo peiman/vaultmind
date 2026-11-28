@@ -2,7 +2,7 @@
   experiments: map[]
 
 app:
-  # Logging level for the application (trace, debug, info, warn, error, fatal, panic). Used as console level if app.log.console_level is not set.
+  # Logging level for the application (trace, debug, info, warn, error, fatal, panic). Console level when app.log.console_level is empty. It does not change the file level. Flag: --log-level.
   log_level: debug
 
   # Output format: text (human-readable) or json (machine-readable)
@@ -763,20 +763,23 @@ app:
     fix: false
 
   log:
-    # Console log level (trace, debug, info, warn, error, fatal, panic). If empty, uses app.log_level.
+    # Console log level (trace, debug, info, warn, error, fatal, panic). If empty, uses app.log_level. Flag: --log-level-console.
     console_level: info
 
-    # Enable file logging to capture detailed logs
+    # Enable file logging to capture detailed logs. Set false to turn the audit log off.
     file_enabled: true
 
     # Path to the log file (created with secure 0600 permissions)
     file_path: /var/log/vaultmind/app.log
 
-    # File log level (trace, debug, info, warn, error, fatal, panic)
+    # File log level (trace, debug, info, warn, error, fatal, panic). Independent of app.log_level. Empty or invalid uses debug. Flag: --log-level-file.
     file_level: debug
 
     # Enable colored console output (auto, true, false). Auto detects TTY.
     color_enabled: true
+
+    # Go time layout for console log lines. Default is RFC3339. Empty omits the console timestamp. (config file or environment only)
+    console_time_format: 15:04:05
 
     # Maximum size in megabytes before log file is rotated
     file_max_size: 100
@@ -1004,6 +1007,31 @@ app:
 
     # Open gap this finding answers. The draft stores closes_gap. When the question is omitted, the gap's question is used.
     gap: 
+
+  persona:
+    # Single-keeper label (default: basename of --transcripts)
+    health.name: 
+
+    # Transcript project directory
+    health.transcripts: 
+
+    # Identity vault path
+    health.vault: 
+
+    # Identity anchor note id
+    health.anchor: 
+
+    # YAML file containing keeper definitions
+    health.keepers: 
+
+    # Output JSON
+    health.json: false
+
+    # Minimum identity coverage fraction
+    health.min_coverage: 0.9
+
+    # Minimum total arc-body coverage fraction (WARN only)
+    health.min_arc_coverage: 0
 
   ping:
     # Default message to display for the ping command

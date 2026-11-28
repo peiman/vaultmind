@@ -16,12 +16,13 @@ Configuration can be provided in multiple ways, in order of precedence:
 
 | Key | Type | Default | Environment Variable | Description |
 |-----|------|---------|---------------------|-------------|
-| `app.log_level` | string | `warn` | `VAULTMIND_APP_LOG_LEVEL` | Logging level for the application (trace, debug, info, warn, error, fatal, panic). Used as console level if app.log.console_level is not set. |
-| `app.log.console_level` | string | `` | `VAULTMIND_APP_LOG_CONSOLE_LEVEL` | Console log level (trace, debug, info, warn, error, fatal, panic). If empty, uses app.log_level. |
-| `app.log.file_enabled` | bool | `false` | `VAULTMIND_APP_LOG_FILE_ENABLED` | Enable file logging to capture detailed logs |
+| `app.log_level` | string | `warn` | `VAULTMIND_APP_LOG_LEVEL` | Logging level for the application (trace, debug, info, warn, error, fatal, panic). Console level when app.log.console_level is empty. It does not change the file level. Flag: --log-level. |
+| `app.log.console_level` | string | `` | `VAULTMIND_APP_LOG_CONSOLE_LEVEL` | Console log level (trace, debug, info, warn, error, fatal, panic). If empty, uses app.log_level. Flag: --log-level-console. |
+| `app.log.file_enabled` | bool | `false` | `VAULTMIND_APP_LOG_FILE_ENABLED` | Enable file logging to capture detailed logs. Set false to turn the audit log off. |
 | `app.log.file_path` | string | `./logs/vaultmind.log` | `VAULTMIND_APP_LOG_FILE_PATH` | Path to the log file (created with secure 0600 permissions) |
-| `app.log.file_level` | string | `debug` | `VAULTMIND_APP_LOG_FILE_LEVEL` | File log level (trace, debug, info, warn, error, fatal, panic) |
+| `app.log.file_level` | string | `debug` | `VAULTMIND_APP_LOG_FILE_LEVEL` | File log level (trace, debug, info, warn, error, fatal, panic). Independent of app.log_level. Empty or invalid uses debug. Flag: --log-level-file. |
 | `app.log.color_enabled` | string | `auto` | `VAULTMIND_APP_LOG_COLOR_ENABLED` | Enable colored console output (auto, true, false). Auto detects TTY. |
+| `app.log.console_time_format` | string | `2006-01-02T15:04:05Z07:00` | `VAULTMIND_APP_LOG_CONSOLE_TIME_FORMAT` | Go time layout for console log lines. Default is RFC3339. Empty omits the console timestamp. (config file or environment only) |
 | `app.log.file_max_size` | int | `100` | `VAULTMIND_APP_LOG_FILE_MAX_SIZE` | Maximum size in megabytes before log file is rotated |
 | `app.log.file_max_backups` | int | `3` | `VAULTMIND_APP_LOG_FILE_MAX_BACKUPS` | Maximum number of old log files to retain |
 | `app.log.file_max_age` | int | `28` | `VAULTMIND_APP_LOG_FILE_MAX_AGE` | Maximum number of days to retain old log files |
@@ -331,6 +332,14 @@ Configuration can be provided in multiple ways, in order of precedence:
 | `app.notepropose.close_band` | string | `strong` | `VAULTMIND_APP_NOTEPROPOSE_CLOSE_BAND` | Weakest relevance band that is close enough to patch. A stronger band is also close. The band ask already reports for that hit. Default is the strong band. |
 | `app.notepropose.drafts_dir` | string | `notes` | `VAULTMIND_APP_NOTEPROPOSE_DRAFTS_DIR` | Folder for a draft that must not sit in the import folder. Default is notes. "." is the vault root. A folder under the import folder falls back to notes. |
 | `app.notepropose.gap` | string | `` | `VAULTMIND_APP_NOTEPROPOSE_GAP` | Open gap this finding answers. The draft stores closes_gap. When the question is omitted, the gap's question is used. |
+| `app.persona.health.name` | string | `` | `VAULTMIND_APP_PERSONA_HEALTH_NAME` | Single-keeper label (default: basename of --transcripts) |
+| `app.persona.health.transcripts` | string | `` | `VAULTMIND_APP_PERSONA_HEALTH_TRANSCRIPTS` | Transcript project directory |
+| `app.persona.health.vault` | string | `` | `VAULTMIND_APP_PERSONA_HEALTH_VAULT` | Identity vault path |
+| `app.persona.health.anchor` | string | `` | `VAULTMIND_APP_PERSONA_HEALTH_ANCHOR` | Identity anchor note id |
+| `app.persona.health.keepers` | string | `` | `VAULTMIND_APP_PERSONA_HEALTH_KEEPERS` | YAML file containing keeper definitions |
+| `app.persona.health.json` | bool | `false` | `VAULTMIND_APP_PERSONA_HEALTH_JSON` | Output JSON |
+| `app.persona.health.min_coverage` | float | `0.9` | `VAULTMIND_APP_PERSONA_HEALTH_MIN_COVERAGE` | Minimum identity coverage fraction |
+| `app.persona.health.min_arc_coverage` | float | `0` | `VAULTMIND_APP_PERSONA_HEALTH_MIN_ARC_COVERAGE` | Minimum total arc-body coverage fraction (WARN only) |
 | `app.ping.output_message` | string | `Pong` | `VAULTMIND_APP_PING_OUTPUT_MESSAGE` | Default message to display for the ping command |
 | `app.ping.output_color` | string | `white` | `VAULTMIND_APP_PING_OUTPUT_COLOR` | Text color for ping command output (white, red, green, blue, cyan, yellow, magenta) |
 | `app.ping.ui` | bool | `false` | `VAULTMIND_APP_PING_UI` | Enable interactive UI for the ping command |
@@ -373,7 +382,7 @@ Configuration can be provided in multiple ways, in order of precedence:
   experiments: map[]
 
 app:
-  # Logging level for the application (trace, debug, info, warn, error, fatal, panic). Used as console level if app.log.console_level is not set.
+  # Logging level for the application (trace, debug, info, warn, error, fatal, panic). Console level when app.log.console_level is empty. It does not change the file level. Flag: --log-level.
   log_level: debug
 
   # Output format: text (human-readable) or json (machine-readable)
@@ -1134,20 +1143,23 @@ app:
     fix: false
 
   log:
-    # Console log level (trace, debug, info, warn, error, fatal, panic). If empty, uses app.log_level.
+    # Console log level (trace, debug, info, warn, error, fatal, panic). If empty, uses app.log_level. Flag: --log-level-console.
     console_level: info
 
-    # Enable file logging to capture detailed logs
+    # Enable file logging to capture detailed logs. Set false to turn the audit log off.
     file_enabled: true
 
     # Path to the log file (created with secure 0600 permissions)
     file_path: /var/log/vaultmind/app.log
 
-    # File log level (trace, debug, info, warn, error, fatal, panic)
+    # File log level (trace, debug, info, warn, error, fatal, panic). Independent of app.log_level. Empty or invalid uses debug. Flag: --log-level-file.
     file_level: debug
 
     # Enable colored console output (auto, true, false). Auto detects TTY.
     color_enabled: true
+
+    # Go time layout for console log lines. Default is RFC3339. Empty omits the console timestamp. (config file or environment only)
+    console_time_format: 15:04:05
 
     # Maximum size in megabytes before log file is rotated
     file_max_size: 100
@@ -1376,6 +1388,31 @@ app:
     # Open gap this finding answers. The draft stores closes_gap. When the question is omitted, the gap's question is used.
     gap: 
 
+  persona:
+    # Single-keeper label (default: basename of --transcripts)
+    health.name: 
+
+    # Transcript project directory
+    health.transcripts: 
+
+    # Identity vault path
+    health.vault: 
+
+    # Identity anchor note id
+    health.anchor: 
+
+    # YAML file containing keeper definitions
+    health.keepers: 
+
+    # Output JSON
+    health.json: false
+
+    # Minimum identity coverage fraction
+    health.min_coverage: 0.9
+
+    # Minimum total arc-body coverage fraction (WARN only)
+    health.min_arc_coverage: 0
+
   ping:
     # Default message to display for the ping command
     output_message: Hello World!
@@ -1491,23 +1528,26 @@ experiments:
 ### Environment Variables
 
 ```bash
-# Logging level for the application (trace, debug, info, warn, error, fatal, panic). Used as console level if app.log.console_level is not set.
+# Logging level for the application (trace, debug, info, warn, error, fatal, panic). Console level when app.log.console_level is empty. It does not change the file level. Flag: --log-level.
 export VAULTMIND_APP_LOG_LEVEL=debug
 
-# Console log level (trace, debug, info, warn, error, fatal, panic). If empty, uses app.log_level.
+# Console log level (trace, debug, info, warn, error, fatal, panic). If empty, uses app.log_level. Flag: --log-level-console.
 export VAULTMIND_APP_LOG_CONSOLE_LEVEL=info
 
-# Enable file logging to capture detailed logs
+# Enable file logging to capture detailed logs. Set false to turn the audit log off.
 export VAULTMIND_APP_LOG_FILE_ENABLED=true
 
 # Path to the log file (created with secure 0600 permissions)
 export VAULTMIND_APP_LOG_FILE_PATH=/var/log/vaultmind/app.log
 
-# File log level (trace, debug, info, warn, error, fatal, panic)
+# File log level (trace, debug, info, warn, error, fatal, panic). Independent of app.log_level. Empty or invalid uses debug. Flag: --log-level-file.
 export VAULTMIND_APP_LOG_FILE_LEVEL=debug
 
 # Enable colored console output (auto, true, false). Auto detects TTY.
 export VAULTMIND_APP_LOG_COLOR_ENABLED=true
+
+# Go time layout for console log lines. Default is RFC3339. Empty omits the console timestamp. (config file or environment only)
+export VAULTMIND_APP_LOG_CONSOLE_TIME_FORMAT=15:04:05
 
 # Maximum size in megabytes before log file is rotated
 export VAULTMIND_APP_LOG_FILE_MAX_SIZE=100
@@ -2435,6 +2475,30 @@ export VAULTMIND_APP_NOTEPROPOSE_DRAFTS_DIR=notes
 
 # Open gap this finding answers. The draft stores closes_gap. When the question is omitted, the gap's question is used.
 export VAULTMIND_APP_NOTEPROPOSE_GAP=
+
+# Single-keeper label (default: basename of --transcripts)
+export VAULTMIND_APP_PERSONA_HEALTH_NAME=
+
+# Transcript project directory
+export VAULTMIND_APP_PERSONA_HEALTH_TRANSCRIPTS=
+
+# Identity vault path
+export VAULTMIND_APP_PERSONA_HEALTH_VAULT=
+
+# Identity anchor note id
+export VAULTMIND_APP_PERSONA_HEALTH_ANCHOR=
+
+# YAML file containing keeper definitions
+export VAULTMIND_APP_PERSONA_HEALTH_KEEPERS=
+
+# Output JSON
+export VAULTMIND_APP_PERSONA_HEALTH_JSON=false
+
+# Minimum identity coverage fraction
+export VAULTMIND_APP_PERSONA_HEALTH_MIN_COVERAGE=0.9
+
+# Minimum total arc-body coverage fraction (WARN only)
+export VAULTMIND_APP_PERSONA_HEALTH_MIN_ARC_COVERAGE=0
 
 # Default message to display for the ping command
 export VAULTMIND_APP_PING_OUTPUT_MESSAGE=Hello World!

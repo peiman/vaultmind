@@ -89,12 +89,11 @@ components:
     in:
       - .ckeletin/pkg/config/**
       - .ckeletin/pkg/logger/**
-      - .ckeletin/pkg/output/**
       - .ckeletin/pkg/testutil/**
       - .ckeletin/pkg/catalog/**
+      - .ckeletin/pkg/progress/**
       - internal/config/commands/**
       - internal/projectdefaults/**
-      - internal/ui/**
       - internal/xdg/**
       # meshpaths: the SSOT for mesh wake-watcher state paths. Pure path
       # derivation over internal/xdg — same layer, no business logic.
@@ -162,13 +161,22 @@ components:
   # ⚠️  ADD YOUR BUSINESS LOGIC PACKAGES HERE
   # When adding new commands, add their internal/ packages to this list.
   # Example: Adding 'internal/baseline/**' for a new baseline command
+  # Output writers. Not a common component, so business logic cannot import them.
+  output:
+    in:
+      - .ckeletin/pkg/output/**
+
+  presentation:
+    in:
+      - internal/ui/**
+      - internal/check/**
+      - internal/docs/**
+
   business:
     in:
       - internal/ping/**
-      - internal/docs/**
       - internal/dev/**
       - internal/progress/**
-      - internal/check/**
       # VaultMind business logic:
       - internal/query/**
       - internal/cmdutil/**
@@ -194,6 +202,8 @@ components:
       - internal/propose/**
       # VaultMind gaps (vaultmind note gap): an unanswered question recorded as a note, and the hint log of weak asks.
       - internal/gap/**
+      # VaultMind persona health (vaultmind persona health): did each keeper's identity reach its context window; streams session transcripts, reads the identity vault:
+      - internal/personahealth/**
 
   # pkg/ was cleaned by task init (checkmate is now an external dependency).
   # Re-add this section if you create new public packages in pkg/.
@@ -204,9 +214,26 @@ vendors:
   cobra:
     in: github.com/spf13/cobra
 
+  pflag:
+    in: github.com/spf13/pflag
+
   # Viper configuration library
   viper:
     in: github.com/spf13/viper
+
+  # Logging (base package + sub-packages like zerolog/log)
+  zerolog:
+    in:
+      - github.com/rs/zerolog
+      - github.com/rs/zerolog/**
+
+  # UI and terminal
+  lipgloss:
+    in: github.com/charmbracelet/lipgloss
+  bubbletea:
+    in: github.com/charmbracelet/bubbletea
+  isatty:
+    in: github.com/mattn/go-isatty
 
 # Common components available to all layers
 commonComponents:
@@ -228,6 +255,8 @@ deps:
   # Can also use Cobra and Viper (CLI framework)
   commands:
     mayDependOn:
+      - presentation
+      - output
       - business
       - infrastructure
       - commandcatalog
@@ -254,6 +283,27 @@ deps:
   # Infrastructure is the foundation
   # Cannot depend on upper layers (commands, business)
   # Can use Viper for configuration
+  output:
+    mayDependOn:
+      - infrastructure
+    canUse:
+      - cobra
+      - pflag
+      - zerolog
+      - viper
+      - isatty
+
+  presentation:
+    mayDependOn:
+      - infrastructure
+      - output
+    canUse:
+      - zerolog
+      - viper
+      - isatty
+      - lipgloss
+      - bubbletea
+
   infrastructure:
     mayDependOn: []  # Empty - depends on nothing
     canUse:

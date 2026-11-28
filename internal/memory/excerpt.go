@@ -53,18 +53,31 @@ func Excerpt(body string, maxTokens int) string {
 	if strings.TrimSpace(body) == "" || maxTokens <= 0 {
 		return ""
 	}
+	return truncateToTokens(RecitePassage(body), maxTokens)
+}
+
+// RecitePassage returns the unbounded passage selected by arc recite before its
+// token cap is applied: Principle when present, otherwise the lead prose.
+func RecitePassage(body string) string {
 	body = parser.StripHTMLComments(stripFrontmatter(body))
 	text := principleSection(body)
 	if text == "" {
 		text = leadParagraph(body)
 	}
-	return truncateToTokens(text, maxTokens)
+	return text
 }
 
 // HasPrincipleSection reports whether Excerpt prefers a non-empty Principle
 // section. Query-aware ask excerpts preserve this same recognition rule.
 func HasPrincipleSection(body string) bool {
 	return principleSection(stripFrontmatter(body)) != ""
+}
+
+// PrincipleSection returns the same decision-rule section that Excerpt uses
+// for an arc. Keeping this reader beside Excerpt prevents health checks and
+// delivery paths from disagreeing about where an arc's principle starts.
+func PrincipleSection(body string) string {
+	return principleSection(parser.StripHTMLComments(stripFrontmatter(body)))
 }
 
 // frontmatterFence delimits a note's YAML frontmatter block.

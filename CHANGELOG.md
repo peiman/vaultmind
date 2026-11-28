@@ -7,8 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.32] - 2026-11-27
+
+You can now check whether each keeper's identity actually reached its context window. `vaultmind persona health` reads the keeper's transcript and reports how much of the identity note and each arc arrived after the last compaction, and whether its memory file was loaded or cut.
+
+### Added
+
+- `persona health` reports whether each keeper's identity actually reached its context window. It reads the keeper's Claude Code transcript, finds the last startup or compaction, and measures how many bytes of the identity note and of each arc the persona hooks delivered after it. It also reports whether anything reloaded at all, whether memory was seen after the reload point (otherwise `memory not seen`), and whether the memory file was cut off. It recognizes Claude Code's `> WARNING:` memory notice inside the memory file, reports cut and loaded line counts, and says `memory ok` when no notice appears; it ignores truncation wording quoted by other kinds of records. A cut-off transcript line that holds a compaction marker still counts as a compaction, and unreadable lines are counted and shown.
+
+### Changed
+
+- vaultmind is built on ckeletin-go framework 0.2.18 (from 0.2.10). That framework version turns on an audit log file at `./logs/<app>.log` by default; vaultmind keeps it off, so no command writes a `logs/` folder into the project or vault it runs in. Turn it on with `app.log.file_enabled` when troubleshooting.
+
+## [0.10.31] - 2026-11-24
+
+Agents now come back as themselves. Since 19 October, a weak relevance score on the persona hook's "who am I" query withheld the identity note's text at every session start and compaction, so agents received only its title while the hook reported success. The hook now reads the identity note by its type and always delivers its full text.
+
 ### Fixed
 
+- The persona hook now always delivers the identity note's full text at session start and after compaction, alongside the context excerpts when they fit; before, a weak relevance score withheld it and agents got only its title, and on stronger scores they got excerpts but never the full note.
 - The ORT release archives now bundle ONNX Runtime 1.30.0 from Microsoft's NuGet package, pinned by version and sha256; the GitHub release they came from is no longer available, so v0.10.30 shipped without them.
 
 ## [0.10.30] - 2026-11-19
@@ -3298,7 +3315,9 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.30...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.32...HEAD
+[0.10.32]: https://github.com/peiman/vaultmind/compare/v0.10.31...v0.10.32
+[0.10.31]: https://github.com/peiman/vaultmind/compare/v0.10.30...v0.10.31
 [0.10.30]: https://github.com/peiman/vaultmind/compare/v0.10.29...v0.10.30
 [0.10.29]: https://github.com/peiman/vaultmind/compare/v0.10.28...v0.10.29
 [0.10.28]: https://github.com/peiman/vaultmind/compare/v0.10.27...v0.10.28

@@ -13,6 +13,37 @@ vaultmind note accept <id>
 
 `propose` retrieves the way `ask` does. A close match (the strong relevance band, by default) becomes a proposal draft next to that note. Anything less close becomes a new draft, expanded through the note template. After the draft is written, propose re-runs the original question through the same ranking `ask` uses and reports whether that question would find the draft. The ranks are stored on the draft as `rank_before`, `rank_after`, and `rank_checked_at`. `0` means not in the hit window. The check does not record an access. `accept` flips a new draft to the schema's published status, or appends a proposal onto its target and removes the proposal file. `--json` returns the v1 envelope, including `rank_check`.
 
+## `persona health`
+
+Measure whether a keeper's identity text actually reached the current context after the newest compaction boundary:
+
+```bash
+vaultmind persona health \
+  --transcripts /path/to/mira-transcripts \
+  --vault ~/.vaultmind/persona \
+  --name mira \
+  --min-coverage 0.9
+```
+
+The automatic identity anchor is the first note found with `type: identity` and id `identity-who-i-am` or `identity-who-am-i`; `--anchor` overrides that choice. Identity coverage counts normalized body bytes, excluding frontmatter. Arc coverage keeps the `Principle` full/partial/missing counts and also measures each arc's complete body, including its exchanges, with the same verbatim-sentence method. JSON places the per-arc entries in `result.keepers[].arcs.items` with `id`, `body_bytes`, and `arrived_bytes`, alongside the total `body_bytes`, `arrived_bytes`, and `coverage`. A missing reload, low identity coverage, unreadable input, or auto-memory notice fails; memory not seen after the reload point, partial or missing Principles warn.
+
+When `--transcripts` names a project directory, the newest `*.jsonl` by modification time is used. A subagent transcript in the same project directory could therefore be selected; point `--transcripts` at the keeper's own project directory. Malformed JSONL lines are skipped and counted as `unreadable_lines` in JSON (and shown in text mode), while a file with no valid records (or a scanner error) is unreadable and fails the keeper. A malformed line containing `compact_boundary` still resets earlier evidence and starts a new post-compaction window with an unknown timestamp. Memory notices are scanned only in the `content` of AutoMem files inside instructions attachments after that boundary. `memory.seen` is true when an instructions attachment contains at least one AutoMem file; a later instructions attachment containing only other file types does not erase the last AutoMem report. If no AutoMem file is seen, text reports `memory not seen` and the keeper warns. The matched notice is a line beginning `> WARNING:` that contains `Only part of it was loaded:`; when it also says `N of M lines were cut off`, JSON reports `loaded_lines: M-N`, `total_lines: M`, and `cut_lines: N`. A notice without those numbers is still truncation, with the numbers reported as unknown. JSON reports those files as `memory.files` with `path`, `type`, and newline-separated `lines` counts; other record and file types never count. `memory.notice_proven` remains in the JSON contract and is `true`.
+
+Text mode emits one short line per keeper with the name, verdict, identity coverage, Principle counts, total arc-body coverage, memory status, after-compact timestamp, and failure/warning reasons. Per-arc body entries are JSON-only. In the single-keeper form, `--name` is optional; when omitted, the label is the literal basename of `--transcripts` (including any leading path-derived prefix). The YAML `--keepers` form supplies names itself.
+
+`--min-arc-coverage` defaults to `0`, which reports arc-body coverage without applying a threshold. A positive value below the total arc-body coverage produces WARN, never FAIL by itself; hooks may intentionally excerpt arcs to stay within their context budget.
+
+For several keepers, pass a YAML list:
+
+```yaml
+- name: mira
+  transcripts: /path/to/project-transcripts
+  vault: /path/to/identity-vault
+  anchor: identity-who-i-am
+```
+
+`--json` emits the standard `v1` envelope with a `result.keepers` array. Exit status is 1 when any keeper fails.
+
 `--gap <id>` links the draft to an open gap (`closes_gap`). When `--question` is omitted, the question stored on the gap is used. Accepting that draft closes the gap. `closed_by` is the new note, or the note a patch lands on.
 
 ## VaultMind `note gap`

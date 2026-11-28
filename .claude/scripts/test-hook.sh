@@ -41,6 +41,23 @@ if ! grep -q "IDENTITY CONTEXT" "$TMP_STDOUT"; then
   exit 1
 fi
 
+# CURRENT CONTEXT may legitimately report withheld bodies. Only the identity
+# section is a startup invariant: it must contain the identity note's text.
+IDENTITY_SECTION=$(awk '
+  /^IDENTITY CONTEXT:/ { in_identity=1; next }
+  in_identity && (/^CURRENT CONTEXT:/ || /^YOUR ARCS/ || /^ARCS/) { exit }
+  in_identity { print }
+' "$TMP_STDOUT")
+# Match the pack's own "Context from: ... N delivered" line, not the Search
+# header: a --read ask can print "body suppressed; use --read N" in its header
+# and still deliver the body. "[^0-9]0" keeps "10 delivered" from matching (a
+# "(^|[^0-9])" group after ".*" matches mid-line in BSD grep, so don't use it).
+if printf '%s\n' "$IDENTITY_SECTION" | grep -Eiq '^Context from:.*[^0-9]0 delivered'; then
+  echo "FAIL: identity context contains withheld bodies" >&2
+  printf '%s\n' "$IDENTITY_SECTION" >&2
+  exit 1
+fi
+
 # Non-empty stderr is a signal — either build-error surface, runtime-error
 # surface, or the ask_err leak. Warn but don't fail (some debug output is OK).
 if [ -s "$TMP_STDERR" ]; then

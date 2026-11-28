@@ -6,12 +6,12 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/mattn/go-isatty"
 	"github.com/peiman/vaultmind/.ckeletin/pkg/config"
-	"github.com/peiman/vaultmind/.ckeletin/pkg/output"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
@@ -34,20 +34,34 @@ var (
 	currentFileWriter io.WriteCloser
 	// currentColorEnabled stores whether colors are enabled
 	currentColorEnabled bool
+	// currentConsoleTimeFormat is the console timestamp layout captured by Init.
+	// rebuildLogger reuses it so a runtime level change does not pick up a later edit.
+	// Empty means the console line has no timestamp. The file writer is separate.
+	currentConsoleTimeFormat string
+	// loggerReady is true after Init and false after Cleanup. Component uses
+	// it to tell a live logger from a sink Init has not installed yet.
+	loggerReady bool
 )
+
+// UserOutputMessage is the audit message for a line the user already saw on
+// stdout or stderr. The console writer drops it so --log-level debug does not
+// print that line a second time. The file writer keeps it. Debug is the
+// default file level, so a quieter level would drop the line from the file.
+const UserOutputMessage = "user output"
 
 // Init initializes the logger with options from Viper.
 // Supports dual logging: console (user-friendly) + file (detailed JSON).
 // Call this once in rootCmd's PersistentPreRunE or main initialization.
 //
 // Configuration:
-//   - app.log_level or app.log.console_level: Console log level (default: info)
-//   - app.log.file_enabled: Enable file logging (default: false)
+//   - app.log_level or app.log.console_level: Console log level (default: warn)
+//   - app.log.file_enabled: Enable file logging (default: true; false opts out)
 //   - app.log.file_path: Log file path (default: ./logs/vaultmind.log)
 //   - app.log.file_level: File log level (default: debug)
 //   - app.log.color_enabled: Color output (auto/true/false, default: auto)
+//   - app.log.console_time_format: Console timestamp layout (default: RFC3339; empty omits it)
 //
-// When JSON output mode is active (output.IsJSONMode), the console writer is
+// When the resolved output mode is json, the console writer is
 // disabled entirely; only the file (audit) writer receives entries.
 //
 // Init fails closed when file logging is explicitly enabled but the log file
@@ -73,7 +87,7 @@ func Init(out io.Writer) error {
 
 	// Get console log level (with backward compatibility)
 	consoleLevel := getConsoleLogLevel()
-	if output.IsJSONMode() {
+	if jsonMode() {
 		// JSON mode contract (CKSPEC-OUT-004): stdout carries exactly one
 		// JSON envelope and stderr stays silent, so the console writer is
 		// fully disabled. The file (audit) writer below is unaffected and
@@ -87,20 +101,27 @@ func Init(out io.Writer) error {
 	// Determine if color should be enabled
 	colorEnabled := isColorEnabled(out)
 	currentColorEnabled = colorEnabled
+	currentConsoleTimeFormat = loadConsoleTimeFormat()
 
 	// Console writer with filtering
-	consoleWriter := zerolog.ConsoleWriter{
-		Out:        out,
-		TimeFormat: time.RFC3339,
-		NoColor:    !colorEnabled,
-	}
+	consoleWriter := newConsoleWriter(out)
 
 	filteredConsole := FilteredWriter{
-		Writer:   consoleWriter,
-		MinLevel: consoleLevel,
+		Writer:       consoleWriter,
+		MinLevel:     consoleLevel,
+		DropMessages: []string{UserOutputMessage},
 	}
 
 	writers = append(writers, filteredConsole)
+
+	// A second Init must not leave the previous audit file open. Windows
+	// cannot delete that path while any handle remains, and only the latest
+	// handle is stored in logFile.
+	if logFile != nil {
+		_ = logFile.Close()
+		logFile = nil
+		currentFileWriter = nil
+	}
 
 	// File writer (if enabled)
 	if viper.GetBool(config.KeyAppLogFileEnabled) {
@@ -136,24 +157,8 @@ func Init(out io.Writer) error {
 		writers = append(writers, filteredFile)
 	}
 
-	// Create multi-writer
-	multi := zerolog.MultiLevelWriter(writers...)
-
-	// Create logger with timestamp
-	logger := zerolog.New(multi).With().Timestamp().Logger()
-
-	// Apply sampling if enabled
-	if viper.GetBool(config.KeyAppLogSamplingEnabled) {
-		initial := viper.GetInt(config.KeyAppLogSamplingInitial)
-		thereafter := viper.GetInt(config.KeyAppLogSamplingThereafter)
-		logger = logger.Sample(&zerolog.BurstSampler{
-			Burst:       clampSamplingValue(initial),
-			Period:      time.Second,
-			NextSampler: &zerolog.BasicSampler{N: clampSamplingValue(thereafter)},
-		})
-	}
-
-	log.Logger = logger
+	log.Logger = newLogger(zerolog.MultiLevelWriter(writers...))
+	loggerReady = true
 
 	// Set global log level to the most verbose level
 	// This allows both writers to filter independently
@@ -173,7 +178,7 @@ func Init(out io.Writer) error {
 	if viper.GetBool(config.KeyAppLogFileEnabled) && logFile != nil {
 		filePath := viper.GetString(config.KeyAppLogFilePath)
 		fileLevel := getFileLogLevel()
-		log.Info().
+		log.Debug().
 			Str("path", SanitizePath(filePath)).
 			Str("file_level", fileLevel.String()).
 			Msg("File logging enabled")
@@ -187,8 +192,9 @@ func Init(out io.Writer) error {
 func Cleanup() {
 	loggerMu.Lock()
 	defer loggerMu.Unlock()
+	loggerReady = false
 	if logFile != nil {
-		if err := logFile.Close(); err != nil && !output.IsJSONMode() {
+		if err := logFile.Close(); err != nil && !jsonMode() {
 			// Can't use logger here as it might be cleaning up. In JSON mode
 			// stderr must stay silent (CKSPEC-OUT-004), so the warning is
 			// suppressed — the close failure cannot reach the audit file
@@ -197,6 +203,15 @@ func Cleanup() {
 		}
 		logFile = nil
 	}
+}
+
+// jsonMode reports the resolved output mode without importing the output
+// package. output.UseOutputMode writes that mode into app.output_format,
+// including when an alias flag or an environment variable decided it.
+// The logger stays free of the output package so business logic can log
+// without depending on rendering.
+func jsonMode() bool {
+	return strings.EqualFold(strings.TrimSpace(viper.GetString(config.KeyAppOutputFormat)), "json")
 }
 
 // getConsoleLogLevel determines the console log level from configuration.
@@ -210,28 +225,36 @@ func getConsoleLogLevel() zerolog.Level {
 	}
 
 	level, err := zerolog.ParseLevel(consoleLevelStr)
-	if err != nil {
-		level = zerolog.InfoLevel
-		log.Warn().
-			Err(err).
-			Str("provided_level", consoleLevelStr).
-			Msg("Invalid console log level, defaulting to 'info'")
+	if err != nil || consoleLevelStr == "" {
+		level = zerolog.WarnLevel
+		if consoleLevelStr != "" {
+			log.Warn().
+				Err(err).
+				Str("provided_level", consoleLevelStr).
+				Msg("Invalid console log level, defaulting to 'warn'")
+		}
 	}
 
 	return level
 }
 
 // getFileLogLevel determines the file log level from configuration.
+// app.log.file_level does not follow app.log_level. An empty value is the
+// documented default. zerolog.ParseLevel treats "" as NoLevel with a nil
+// error, which would drop debug lines, so empty is handled before parsing.
 func getFileLogLevel() zerolog.Level {
-	fileLevelStr := viper.GetString(config.KeyAppLogFileLevel)
+	fileLevelStr := strings.TrimSpace(viper.GetString(config.KeyAppLogFileLevel))
+	if fileLevelStr == "" {
+		return zerolog.DebugLevel
+	}
 
 	level, err := zerolog.ParseLevel(fileLevelStr)
 	if err != nil {
-		level = zerolog.DebugLevel
 		log.Warn().
 			Err(err).
 			Str("provided_level", fileLevelStr).
 			Msg("Invalid file log level, defaulting to 'debug'")
+		return zerolog.DebugLevel
 	}
 
 	return level
@@ -270,6 +293,53 @@ func clampSamplingValue(n int) uint32 {
 		return math.MaxUint32
 	}
 	return uint32(v)
+}
+
+// loadConsoleTimeFormat reads app.log.console_time_format.
+// Unset (no default installed) stays RFC3339, which is what Init hardcoded before
+// the key existed. A configured empty string, including a project default, drops
+// the console timestamp. The file writer does not use this value.
+//
+// Viper ignores an empty environment variable unless AllowEmptyEnv is on.
+// An empty APP_LOG_CONSOLE_TIME_FORMAT, with or without a prefix, still
+// clears the timestamp and wins over the config file.
+func loadConsoleTimeFormat() string {
+	if value, ok := consoleTimeFromEnv(); ok {
+		return value
+	}
+	if !viper.IsSet(config.KeyAppLogConsoleTimeFormat) {
+		return time.RFC3339
+	}
+	return viper.GetString(config.KeyAppLogConsoleTimeFormat)
+}
+
+func consoleTimeFromEnv() (string, bool) {
+	const suffix = "APP_LOG_CONSOLE_TIME_FORMAT"
+	for _, entry := range os.Environ() {
+		key, value, ok := strings.Cut(entry, "=")
+		if !ok {
+			continue
+		}
+		if key == suffix || strings.HasSuffix(key, "_"+suffix) {
+			return value, true
+		}
+	}
+	return "", false
+}
+
+// newConsoleWriter builds the console writer from the format and color captured
+// by Init. An empty layout removes the timestamp part. Zerolog would otherwise
+// treat an empty TimeFormat as time.Kitchen.
+func newConsoleWriter(out io.Writer) zerolog.ConsoleWriter {
+	w := zerolog.ConsoleWriter{
+		Out:        out,
+		TimeFormat: currentConsoleTimeFormat,
+		NoColor:    !currentColorEnabled,
+	}
+	if currentConsoleTimeFormat == "" {
+		w.PartsExclude = []string{zerolog.TimestampFieldName}
+	}
+	return w
 }
 
 // isColorEnabled determines if colored output should be enabled.
@@ -316,21 +386,113 @@ func openLogFileWithRotation(path string) (io.WriteCloser, error) {
 	return logger, nil
 }
 
+// sharedSink is the one console and file destination. Component loggers hold
+// this pointer, so a level change reaches loggers created before it.
+var sharedSink = &levelSink{}
+
+// defaultFields are copied onto every logger built after they are set.
+var defaultFields = map[string]string{}
+
+type levelSink struct {
+	mu sync.Mutex
+	w  zerolog.LevelWriter
+}
+
+func (s *levelSink) set(w zerolog.LevelWriter) {
+	s.mu.Lock()
+	s.w = w
+	s.mu.Unlock()
+}
+
+func (s *levelSink) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	w := s.w
+	s.mu.Unlock()
+	if w == nil {
+		return len(p), nil
+	}
+	return w.Write(p)
+}
+
+func (s *levelSink) WriteLevel(level zerolog.Level, p []byte) (int, error) {
+	s.mu.Lock()
+	w := s.w
+	s.mu.Unlock()
+	if w == nil {
+		return len(p), nil
+	}
+	return w.WriteLevel(level, p)
+}
+
+func newLogger(w zerolog.LevelWriter) zerolog.Logger {
+	sharedSink.set(w)
+	ctx := zerolog.New(sharedSink).With().Timestamp()
+	for key, value := range defaultFields {
+		ctx = ctx.Str(key, value)
+	}
+	logger := ctx.Logger()
+	if viper.GetBool(config.KeyAppLogSamplingEnabled) {
+		initial := viper.GetInt(config.KeyAppLogSamplingInitial)
+		thereafter := viper.GetInt(config.KeyAppLogSamplingThereafter)
+		logger = logger.Sample(&zerolog.BurstSampler{
+			Burst:       clampSamplingValue(initial),
+			Period:      time.Second,
+			NextSampler: &zerolog.BasicSampler{N: clampSamplingValue(thereafter)},
+		})
+	}
+	return logger
+}
+
+// SetDefaultFields puts fields on every later line from the global logger and
+// from component loggers created after this call. A field on the event with
+// the same key wins.
+func SetDefaultFields(fields map[string]string) {
+	loggerMu.Lock()
+	defer loggerMu.Unlock()
+	defaultFields = make(map[string]string, len(fields))
+	for key, value := range fields {
+		defaultFields[key] = value
+	}
+	if currentConsoleWriter != nil {
+		rebuildLogger()
+	}
+}
+
+// Component returns a logger for one part of the program. It writes to the
+// same console and file as the global logger, with component set to name.
+// It does not open a file. SetConsoleLevel and SetFileLevel apply to a
+// component logger created before or after the change.
+//
+// A call before Init still shares those sinks. The logger writes through the
+// sink Init installs, instead of keeping the default stderr logger from
+// before Init ran.
+func Component(name string) zerolog.Logger {
+	loggerMu.Lock()
+	defer loggerMu.Unlock()
+	if !loggerReady {
+		// Init has not installed the sink yet. Hold sharedSink, not the
+		// default stderr logger, so the line follows Init's writers.
+		ctx := zerolog.New(sharedSink).With().Timestamp()
+		for key, value := range defaultFields {
+			ctx = ctx.Str(key, value)
+		}
+		return ctx.Str("component", name).Logger()
+	}
+	return log.Logger.With().Str("component", name).Logger()
+}
+
 // rebuildLogger recreates the logger with current level settings.
 // This is called when runtime log level adjustments are made.
 func rebuildLogger() {
 	var writers []io.Writer
 
-	// Recreate console writer with current level
-	consoleWriter := zerolog.ConsoleWriter{
-		Out:        currentConsoleWriter,
-		TimeFormat: time.RFC3339,
-		NoColor:    !currentColorEnabled,
-	}
+	// Recreate console writer with the format captured at Init.
+	consoleWriter := newConsoleWriter(currentConsoleWriter)
 
 	filteredConsole := FilteredWriter{
-		Writer:   consoleWriter,
-		MinLevel: currentConsoleLevel,
+		Writer:       consoleWriter,
+		MinLevel:     currentConsoleLevel,
+		DropMessages: []string{UserOutputMessage},
 	}
 
 	writers = append(writers, filteredConsole)
@@ -344,25 +506,9 @@ func rebuildLogger() {
 		writers = append(writers, filteredFile)
 	}
 
-	// Create multi-writer
-	multi := zerolog.MultiLevelWriter(writers...)
-
-	// Create logger with timestamp
-	logger := zerolog.New(multi).With().Timestamp().Logger()
-
-	// Apply sampling if enabled
-	if viper.GetBool(config.KeyAppLogSamplingEnabled) {
-		initial := viper.GetInt(config.KeyAppLogSamplingInitial)
-		thereafter := viper.GetInt(config.KeyAppLogSamplingThereafter)
-		logger = logger.Sample(&zerolog.BurstSampler{
-			Burst:       clampSamplingValue(initial),
-			Period:      time.Second,
-			NextSampler: &zerolog.BasicSampler{N: clampSamplingValue(thereafter)},
-		})
-	}
-
-	// Update global logger
-	log.Logger = logger
+	// Update global logger. Component loggers keep this sink, so the new
+	// levels apply to ones created before this rebuild.
+	log.Logger = newLogger(zerolog.MultiLevelWriter(writers...))
 
 	// Update global log level to the most verbose level
 	globalLevel := currentConsoleLevel
@@ -419,6 +565,16 @@ func GetFileLevel() zerolog.Level {
 //
 //	savedLogger, savedLevel := logger.SaveLoggerState()
 //	defer logger.RestoreLoggerState(savedLogger, savedLevel)
+//
+// AuditOpen reports whether the audit file handle is still held.
+// Execute's cleanup must leave this false. Tests use it to prove the file
+// was closed. Production code does not branch on it.
+func AuditOpen() bool {
+	loggerMu.Lock()
+	defer loggerMu.Unlock()
+	return logFile != nil
+}
+
 func SaveLoggerState() (zerolog.Logger, zerolog.Level) {
 	return log.Logger, zerolog.GlobalLevel()
 }
@@ -426,6 +582,9 @@ func SaveLoggerState() (zerolog.Logger, zerolog.Level) {
 // RestoreLoggerState restores the global logger and log level to a previously saved state.
 // This is useful in tests to avoid global state pollution.
 func RestoreLoggerState(logger zerolog.Logger, level zerolog.Level) {
+	// Close the audit file opened after the save. On Windows a test temp
+	// directory cannot be removed while lumberjack still holds that file.
+	Cleanup()
 	log.Logger = logger
 	zerolog.SetGlobalLevel(level)
 }
