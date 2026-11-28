@@ -7,9 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.33] - 2026-11-28
+
+Arcs whose principle sits under a `## The Principle` heading now arrive as that principle after a compaction, not as the opening lines of their story. In one 30-arc identity vault this was 11 arcs.
+
 ### Fixed
 
 - Arcs headed "The Principle" now deliver their principle instead of their opening story in arc recite --excerpt and ask excerpts.
+
+### Changed
+
+- Dependency updates since v0.10.32: Dependabot bumps of the go-dependencies group (imagemeta, go-pdfium, ckeletin-go module, go-diff, x/net) and of GitHub Actions (actions/setup-go 7.1.0, actions/dependency-review-action 5.0.1, anchore/scan-action 7.4.3, anchore/sbom-action/download-syft 0.24.4, github/codeql-action/upload-sarif 4.39.4); go-huggingface is held until hugot moves past v0.8.
 
 ## [0.10.32] - 2026-11-27
 
@@ -3319,7 +3327,8 @@ maintainer-only CI steps — both corrected in 0.1.3. Kept here for the record; 
 not install.
 
 
-[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.32...HEAD
+[Unreleased]: https://github.com/peiman/vaultmind/compare/v0.10.33...HEAD
+[0.10.33]: https://github.com/peiman/vaultmind/compare/v0.10.32...v0.10.33
 [0.10.32]: https://github.com/peiman/vaultmind/compare/v0.10.31...v0.10.32
 [0.10.31]: https://github.com/peiman/vaultmind/compare/v0.10.30...v0.10.31
 [0.10.30]: https://github.com/peiman/vaultmind/compare/v0.10.29...v0.10.30
