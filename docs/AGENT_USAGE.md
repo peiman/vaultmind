@@ -504,7 +504,7 @@ markers; `task check` fails if it drifts from the catalog. Everything outside th
 hand-written and stays.
 
 <!-- VAULTMIND:GENERATED:commands:START -->
-<!-- checksum:ff63b39dea19874554dfb5a6db9b866c3deaeb2b573753dfe1dabe7245c06b92 -->
+<!-- checksum:5c3c09f031ce3173f87644dacc1d1d1f7c551d9611bc08695dcd6c3fee2ddefe -->
 # VaultMind Commands
 
 Every user-facing command, grouped by intent, with its when-to-use trigger.
@@ -591,6 +591,8 @@ Generated from the command tree — do not edit by hand (run `task generate:docs
 | `vaultmind identity signer install` | Run the signer under launchd: start at login, restart if it dies (macOS) | your signer must survive logouts, reboots, and crashes — without it a dead signer fails every signed send until someone notices. |
 | `vaultmind init` | Scaffold a fresh vault — a project knowledge base by default, or an agent's identity vault | you are starting fresh: a project knowledge base by default, or an agent's identity vault with --profile persona. |
 | `vaultmind mcp` | Serve the vault to MCP clients (Claude Desktop, Cursor, any agent) over stdio | an agent without a shell (Claude Desktop, any MCP client) should use the vault — add it as an MCP server. |
+| `vaultmind persona` | Measure persona reconstruction | you want to measure whether a keeper reconstructed its persona after a context boundary. |
+| `vaultmind persona health` | Report whether keeper identity reached the current context | you need body-byte identity and arc coverage, Principle delivery, reload, and memory-truncation evidence for one or more keepers; use --name to label a single keeper. |
 
 ## Setup & introspection:
 

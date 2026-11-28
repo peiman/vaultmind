@@ -58,3 +58,10 @@ updates:
         versions: [">= 1.79.0"]
       - dependency-name: "github.com/pressly/goose/v3"
         versions: [">= 3.30.0"]
+      # go-huggingface v0.4.39 needs a gomlx that hugot v0.8.6 (the BGE-M3
+      # backend) does not build against: onnx-gomlx v0.5.31 fails to compile,
+      # and bumping it to v0.5.37 moves the error into hugot
+      # (shapes.AnonymousAxis). Hold it until hugot moves to v0.9, which is its
+      # own measured change because it is the embedding backend (#469).
+      - dependency-name: "github.com/gomlx/go-huggingface"
+        versions: [">= 0.4.33"]

@@ -1,0 +1,2 @@
+internal/ui/check.go count=1 hands os.Stdout to the checkmate renderer that draws the task check report
+internal/progress/terminal.go count=1 asks whether stdout is a terminal; it prints nothing
